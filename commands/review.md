@@ -163,22 +163,34 @@ Skipped:
 
 **RULE: Default is INCLUDE. Only skip if clearly irrelevant.**
 
-## Step 5: Launch Selected Agents (Parallel)
+## Step 5: Select Models
+
+Based on diff size and agent criticality:
+
+| Diff Size | Most Agents | Security | Architect | Compliance |
+|-----------|-------------|----------|-----------|------------|
+| < 100 lines | haiku | sonnet | haiku | haiku |
+| 100-500 lines | sonnet | sonnet | sonnet | haiku |
+| > 500 lines | sonnet | sonnet | opus | haiku |
+
+## Step 6: Launch Selected Agents (Parallel)
 
 **CRITICAL:** Launch ALL selected agents in a SINGLE message with multiple Task tool calls.
 
 For each selected agent, use the Task tool with:
 
 - **subagent_type**: The agent identifier from the catalog (e.g., `lets:architect`)
+- **model**: Based on diff size from Step 5
 - **prompt**: Provide review context (see below)
 
 ### Task Prompt Template
 
-Each agent receives this context in their task prompt:
+Each agent receives this context in their task prompt. Agents define their own expertise, confidence scoring, and output format in `agents/*.md` - do NOT duplicate those in the prompt.
 
 ```
 Review the following code changes from your expert perspective.
 Use your confidence scoring system. Only report findings >= 80 confidence.
+Follow your output format as defined in your system prompt.
 
 CLAUDE.MD RULES:
 {claude_md_content}
@@ -189,23 +201,21 @@ CHANGED FILES:
 DIFF:
 {diff_content}
 
-{agent-specific instructions if needed}
+{mandatory context - see table below}
 ```
 
-### Agent-Specific Instructions
+### Mandatory Agent Context
 
-Most agents need only the standard template above - their system prompt (from agents/*.md) defines their expertise, scoring, and output format.
+These instructions are **required** for agents that need project-specific context to function correctly. Always include them.
 
-Add extra instructions only when needed:
+| Agent | Why | Instruction |
+|-------|-----|-------------|
+| `lets:compliance-expert` | Needs rules to check against | "Only flag violations EXPLICITLY mentioned in CLAUDE.md. Quote the rule being violated." |
+| `lets:git-historian` | Needs to access project history | "Use git blame and git log to check historical context of modified files." |
+| `lets:docs-expert` | Needs to know what docs exist | "Check CLAUDE.md sync, docs/ sync, beads tracking, README/config docs." |
+| `lets:pragmatist` | Specific review lens | "Assess if the solution is proportional to the problem. Flag overengineering." |
 
-| Agent | Extra Instructions |
-|-------|-------------------|
-| `lets:compliance-expert` | "Only flag violations EXPLICITLY mentioned in CLAUDE.md. Quote the rule." |
-| `lets:git-historian` | "Use git blame and git log to check historical context of modified files." |
-| `lets:docs-expert` | "Check CLAUDE.md sync, docs/ sync, beads tracking, README/config docs." |
-| `lets:pragmatist` | "Assess if the solution is proportional to the problem. Flag overengineering." |
-
-## Step 6: Filter & Aggregate Results
+## Step 7: Filter & Aggregate Results
 
 Wait for all agents, then:
 
@@ -214,7 +224,7 @@ Wait for all agents, then:
 3. **Prioritize:** Sort by confidence (highest first)
 4. **Count:** Tally issues by category
 
-## Step 7: Determine Verdict
+## Step 8: Determine Verdict
 
 | Condition | Verdict |
 |-----------|---------|
@@ -222,7 +232,7 @@ Wait for all agents, then:
 | 1-3 issues, no critical | APPROVED WITH SUGGESTIONS |
 | > 3 issues OR any critical security | CHANGES REQUESTED |
 
-## Step 8: Save Review (BEFORE output)
+## Step 9: Save Review (BEFORE output)
 
 **CRITICAL: Save first, then show results.**
 
@@ -236,7 +246,7 @@ Save to:
 
 Content: Full review report with all issues, verdict, and summary.
 
-## Step 9: Output Results
+## Step 10: Output Results
 
 ### For GitHub PR Mode:
 
@@ -286,7 +296,7 @@ Display full report in console.
 
 **Always end with:** `Saved to: .claude/sessions/reviews/{filename}`
 
-## Step 10: Update Beads (if task linked)
+## Step 11: Update Beads (if task linked)
 
 If PR description, branch, or current task contains task ID:
 
