@@ -1,18 +1,18 @@
 ---
-description: Quick code sanity check (~30s). Single agent, 4 perspectives.
-argument-hint: "[--staged|--last]"
+description: Quick code sanity check. Single agent (opus), 5 perspectives.
+argument-hint: "[--staged|--last-commit]"
 ---
 
 # Quick Local Code Check
 
-Fast sanity check of local changes from 4 perspectives.
+Fast sanity check of local changes via single agent, 5 perspectives.
 
 ## Usage
 
 ```bash
 /lets:check              # uncommitted changes (default)
 /lets:check --staged     # only staged changes
-/lets:check --last       # last commit
+/lets:check --last-commit # last commit
 ```
 
 ## When to Use
@@ -22,7 +22,7 @@ Fast sanity check of local changes from 4 perspectives.
 - When unsure if code is ready
 - Spot check after refactoring
 
-**For full review:** Use `/lets:review` (local or PR).
+**For full review:** Use `/lets:review` (local or PR, up to 11 agents).
 
 ## Step 1: Get Changes
 
@@ -39,110 +39,98 @@ git diff HEAD~1
 
 If no changes, inform user and exit.
 
-## Step 2: Get Context (Quick)
+## Step 2: Gather Context
 
 ```bash
-# Just the essentials
+ROOT=$(git rev-parse --show-toplevel)
 git diff --stat
-cat CLAUDE.md 2>/dev/null | head -100
+cat "$ROOT/CLAUDE.md" 2>/dev/null | head -100
 ```
 
-## Step 3: Single Agent, 4 Perspectives
+## Step 3: Launch Agent
 
-**NO sub-agents.** You (Claude) review directly from 4 angles.
+Launch a single agent via Task tool:
 
-Review the diff and provide quick feedback:
+```
+Task(
+  subagent_type="general-purpose",
+  model="opus",
+  prompt="CHECK MODE. Quick code sanity check from 5 perspectives.
 
-### [Arch] Architecture (10 sec)
-- SOLID violations?
-- High coupling?
-- Code duplication?
-- Fits existing patterns?
+PROJECT CONTEXT:
+{CLAUDE.md summary}
 
-### [Sec] Security (10 sec)
-- Obvious vulnerabilities?
-- Input validation?
-- Secrets exposed?
-- SQL injection risk?
+CHANGED FILES:
+{git diff --stat output}
 
-### [Ops] DevOps (5 sec)
-- Config issues?
-- Error handling?
-- Logging adequate?
+DIFF:
+{diff content}
 
-### [Quality] Code Quality (5 sec)
-- Naming clear?
-- Complexity ok?
-- CLAUDE.md compliance?
+INSTRUCTIONS:
+Review this diff quickly from 5 angles. Be concise - this is a quick check, not a full review.
 
-## Step 4: Output Format
+### [Bug] Bugs & Logic
+- Logic errors, off-by-one, edge cases
+- Null/undefined access, missing checks
+- Broken control flow, unreachable code
+- Incorrect conditions or comparisons
 
-Keep it SHORT - this is a quick check, not full review.
+### [Sec] Security
+- Secrets or credentials exposed
+- SQL injection, XSS, command injection
+- Missing input validation at boundaries
+- Auth/permission issues
 
-```markdown
+### [Perf] Performance
+- N+1 queries, unnecessary DB calls
+- Expensive operations in loops
+- Missing pagination, unbounded queries
+- Memory leaks, large object copies
+
+### [Quality] Code Quality
+- Unclear naming, high complexity
+- Code duplication (3+ similar blocks)
+- Dead code, unused imports
+- Readability issues
+
+### [Compliance] Project Rules
+- CLAUDE.md violations (quote the rule)
+- Breaks existing patterns in codebase
+- Inconsistent with project conventions
+
+OUTPUT FORMAT:
+Keep it SHORT - max 5 issues, only actionable findings.
+
 ## Quick Check: {N files changed}
 
 ### Verdict: {[OK] GOOD | [!] REVIEW | [X] FIX}
 
 ### Issues
-{Only if found - bullet points, max 5}
-
-- [Arch] **[file:line]** {issue} - {fix}
-- [Sec] **[file:line]** {issue} - {fix}
+{Only if found}
+- [Tag] **file:line** {issue} - {fix suggestion}
 
 ### Looks Good
 {1-2 positive notes}
 
 ---
 {verdict suggestion}
+
+VERDICT LOGIC:
+- No issues -> [OK] GOOD
+- Minor issues only -> [!] REVIEW
+- Security or critical bugs -> [X] FIX
+
+RULES:
+- Max 5 issues - prioritize by severity
+- No false positives - when in doubt, skip it
+- Be direct, no hedging
+- Reference specific lines from the diff"
+)
 ```
 
-## Verdict Logic
+## Step 4: Present Results
 
-| Condition | Verdict | Suggestion |
-|-----------|---------|------------|
-| No issues | [OK] GOOD | "Looks clean" |
-| Minor issues only | [!] REVIEW | "Consider fixing, or proceed" |
-| Security/critical issues | [X] FIX | "Fix these issues first" |
-
-## Example Output
-
-```markdown
-## Quick Check: 3 files changed
-
-### Verdict: [!] REVIEW
-
-### Issues
-- [Sec] **UserController.php:45** Raw SQL with user input - Use parameterized query
-- [Arch] **helpers/Utils.php:12** Duplicates logic from StringHelper - Reuse existing
-
-### Looks Good
-- Error handling in ApiService
-- Clear naming conventions
-
----
-Consider fixing security issue before proceeding.
-```
-
-## What This Is NOT
-
-- NOT a full code review (use `/lets:review` for PRs)
-- NOT confidence scoring (that's for full review)
-- NOT multiple agents (single pass only)
-- NOT saved to file (console only)
-
-## Workflow Integration
-
-```
-Work -> /lets:check -> /lets:commit -> Push -> PR -> /lets:review
-         ^                                            |
-    Quick local                              Full PR review
-    ~30 seconds                              ~2-3 minutes
-```
-
-## Output
-
-End with LETS box based on verdict:
+Show the agent's response directly. Then add LETS box:
 
 **If GOOD or REVIEW:**
 ```
@@ -153,9 +141,24 @@ End with LETS box based on verdict:
 
 **If FIX:** No box. Say "Fix the issues above, then run `/lets:check` again."
 
+## What This Is NOT
+
+- NOT a full code review (use `/lets:review`)
+- NOT confidence scoring (that's for full review)
+- NOT specialized agents (uses single general-purpose agent, not lets: experts)
+- NOT saved to file (console only)
+
+## Workflow Integration
+
+```
+Work -> /lets:check -> /lets:commit -> Push -> PR -> /lets:review
+         ^                                            |
+    Quick check                               Full PR review
+    single agent                              up to 11 agents
+```
+
 ## Notes
 
-- Keep response under 20 lines
-- Focus on actionable issues only
-- No false positives - when in doubt, skip it
-- This is a helper, not a blocker
+- Uses opus for thorough single-pass analysis
+- Agent keeps diff out of main context window
+- Focus on actionable issues only - this is a helper, not a blocker

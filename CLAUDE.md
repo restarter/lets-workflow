@@ -15,7 +15,7 @@ reference/                    # Reference plugins for studying patterns (gitigno
 ## Key Concepts
 
 - **Commands** = user-initiated workflows (sessions, commits, reviews)
-- **Agents** = universal experts dispatched by `/lets:review`, `/lets:opinion`, `/lets:ask`
+- **Agents** = universal experts dispatched by `/lets:review`, `/lets:opinion`, `/lets:ask`. `/lets:check` uses general-purpose agent (not lets: experts)
 - **Hook** = injects workflow rules into every conversation via SessionStart
 - **No skills/** - plugin is workflow-focused, not knowledge-focused
 
