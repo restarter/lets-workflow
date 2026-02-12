@@ -6,7 +6,7 @@
 
 ## Overview
 
-10 universal expert agents that work like a real dev team. Same agent serves multiple contexts - review, opinion, direct consultation. Agent knows WHO it is, skill tells WHAT to do.
+11 universal expert agents that work like a real dev team. Same agent serves multiple contexts - review, opinion, direct consultation. Agent knows WHO it is, skill tells WHAT to do.
 
 ## Architecture
 
@@ -26,13 +26,14 @@
       │              │              │
       ▼              ▼              ▼
 ┌─────────────────────────────────────────────┐
-│           agents/ (10 expert files)         │
+│           agents/ (11 expert files)         │
 │                                             │
 │  architect.md      security-expert.md       │
 │  backend-expert.md frontend-expert.md       │
 │  database-expert.md devops-expert.md        │
 │  qa-expert.md      docs-expert.md           │
 │  compliance-expert.md git-historian.md      │
+│  pragmatist.md                              │
 │                                             │
 │  Each: base expertise + confidence scoring  │
 │  Model: sonnet default, overridden by skill │
@@ -55,6 +56,7 @@ agents/
   docs-expert.md
   compliance-expert.md
   git-historian.md
+  pragmatist.md
 skills/
   lets-review/SKILL.md    (updated - use Task tool with agents)
   lets-opinion/SKILL.md   (updated - launch agents for perspectives)
@@ -75,6 +77,7 @@ skills/
 | 8 | `docs-expert.md` | docs-expert | Read, Grep, Glob | Documentation sync, API docs, README, CLAUDE.md, changelogs |
 | 9 | `compliance-expert.md` | compliance-expert | Read, Grep, Glob | Project rules (CLAUDE.md), coding standards, conventions |
 | 10 | `git-historian.md` | git-historian | Read, Grep, Glob, Bash | Git blame, history analysis, past decisions, context recovery |
+| 11 | `pragmatist.md` | pragmatist | Read, Grep, Glob | ROI vs effort, time-to-market, scope creep, "good enough" vs perfect, business impact |
 
 **Tools logic:**
 - All have Read, Grep, Glob (read code)
@@ -121,6 +124,7 @@ Agent selection (same logic as current):
   Tests: qa-expert
   Any non-trivial: docs-expert
   Existing code modified: git-historian
+  Large changes (> 200 lines): pragmatist (overengineering check)
 ```
 
 ### Step 4: Launch Agents
@@ -153,17 +157,17 @@ Steps 5-9 unchanged (filter >= 80, dedup, verdict, save, output).
 ```
 Decision about...        -> Agents
 --------------------------------------------------
-Auth/tokens/encryption   -> security, architect, backend
-DB schema/migrations     -> database, architect, backend
-Docker/CI/deploy         -> devops, security, architect
-API design               -> architect, backend, security
-UI/UX/components         -> frontend, architect, qa
-Testing strategy         -> qa, backend, architect
-Performance              -> backend, database, devops
-General architecture     -> architect, security, backend
+Auth/tokens/encryption   -> security, architect, backend, pragmatist
+DB schema/migrations     -> database, architect, backend, pragmatist
+Docker/CI/deploy         -> devops, security, architect, pragmatist
+API design               -> architect, backend, security, pragmatist
+UI/UX/components         -> frontend, architect, qa, pragmatist
+Testing strategy         -> qa, backend, architect, pragmatist
+Performance              -> backend, database, devops, pragmatist
+General architecture     -> architect, security, backend, pragmatist
 ```
 
-Minimum 3, maximum 5 agents. Architect always included (tech lead role).
+Minimum 3, maximum 5 agents. Architect and pragmatist always included.
 All agents on sonnet. --deep flag upgrades architect/security to opus.
 
 ### Step 3: Launch Agents in Parallel
@@ -229,6 +233,7 @@ Who do you want to ask?
  8. docs          - Documentation, API docs
  9. compliance    - Project rules, standards
 10. git-historian - History, past decisions, blame
+11. pragmatist    - ROI, effort vs value, scope
 
 Expert (name or number):
 ```
@@ -291,7 +296,7 @@ LETS box with follow-up suggestions
 
 ## Implementation Order
 
-1. Create 10 agent files in `agents/`
+1. Create 11 agent files in `agents/`
 2. Create `/lets-ask` skill
 3. Update `/lets-review` - replace inline prompts with Task calls
 4. Update `/lets-opinion` - launch agents instead of single-pass
