@@ -80,7 +80,8 @@ Present this to the developer:
 | `/lets-review` | Full deep review (~2-3 min) |
 | `/lets-beads-finish` | Task done, need to document |
 | `/lets-beads-status` | Check tasks anytime |
-| `/lets-opinion` | Technical decision needed |
+| `/lets-ask` | Quick expert consultation (1 agent) |
+| `/lets-opinion` | Technical decision needed (3-5 agents) |
 
 ### Planning Skills (for bigger tasks)
 

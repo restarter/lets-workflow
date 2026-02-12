@@ -1,11 +1,11 @@
 ---
 name: lets-opinion
-description: Technical decision analysis from 5 expert perspectives with clear recommendation
+description: Technical decision analysis from 3-5 expert agents launched in parallel, with clear recommendation
 ---
 
 # Technical Decision Analysis
 
-Analyze technical decisions from multiple expert perspectives and give a clear recommendation.
+Analyze technical decisions by launching expert agents in parallel. Each agent provides their perspective, then results are aggregated into a clear recommendation.
 
 ## Instructions
 
@@ -19,45 +19,89 @@ Analyze technical decisions from multiple expert perspectives and give a clear r
 **Constraints:** {time, compatibility, legacy, budget}
 ```
 
-### Step 2: Quick Verdict (TL;DR)
+### Step 2: Select Experts
 
-Start with the conclusion:
+Based on the decision topic, select 3-5 agents from `.claude/agents/`:
+
+| Decision about... | Agents to launch |
+|-------------------|-----------------|
+| Auth/tokens/encryption | security-expert, architect, backend-expert, pragmatist |
+| DB schema/migrations | database-expert, architect, backend-expert, pragmatist |
+| Docker/CI/deploy | devops-expert, security-expert, architect, pragmatist |
+| API design | architect, backend-expert, security-expert, pragmatist |
+| UI/UX/components | frontend-expert, architect, qa-expert, pragmatist |
+| Testing strategy | qa-expert, backend-expert, architect, pragmatist |
+| Performance | backend-expert, database-expert, devops-expert, pragmatist |
+| General architecture | architect, security-expert, backend-expert, pragmatist |
+| Documentation | docs-expert, architect, compliance-expert, pragmatist |
+| Code quality | architect, compliance-expert, qa-expert, pragmatist |
+
+**Rules:**
+- Minimum 3 agents, maximum 5
+- `architect` and `pragmatist` always included
+- Default model: sonnet for all
+
+### Step 3: Gather Context
+
+```bash
+ROOT=$(git rev-parse --show-toplevel)
+cat "$ROOT/CLAUDE.md" 2>/dev/null | head -100
+```
+
+### Step 4: Launch Agents in Parallel
+
+**CRITICAL:** Launch ALL selected agents in a SINGLE message with multiple Task tool calls.
+
+For each selected agent:
+
+```
+Task(
+  subagent_type="{agent-file-name}",
+  model="sonnet",
+  prompt="OPINION MODE. Evaluate this technical decision.
+
+PROJECT CONTEXT:
+{CLAUDE.md summary}
+
+DECISION: {what needs to be decided}
+OPTIONS:
+A) {option A description}
+B) {option B description}
+C) {option C description - if applicable}
+CONSTRAINTS: {context, time, legacy, etc.}
+
+INSTRUCTIONS:
+- Give your expert perspective in 2-3 sentences
+- State which option you recommend and why
+- Flag risks from your area of expertise
+- Be direct - no hedging, no 'it depends without conclusion'
+- If you see a risk others might miss, highlight it"
+)
+```
+
+### Step 5: Aggregate Results
+
+After all agents respond, synthesize:
+
+#### Quick Verdict (TL;DR)
 
 ```
 **Recommendation:** Option X
 **One-liner:** {why in 10 words or less}
 ```
 
-### Step 3: Expert Panel
+#### Expert Opinions
 
-Get opinions from 5 experts (2-3 sentences each):
+For each agent, summarize their position:
 
-#### [DevOps] DevOps Engineer
-- Deployment, monitoring, configuration
-- Docker/container practices
-- Environment parity
+```
+**Architect:** Recommends B - cleaner separation, lower coupling
+**Security:** Recommends B - smaller attack surface, but warns about X
+**Backend:** Recommends A - faster to implement, but agrees B is better long-term
+**Pragmatist:** Recommends B - worth the extra day, saves weeks later
+```
 
-#### [Arch] Software Architect
-- Maintainability, coupling, patterns
-- Single source of truth
-- Future extensibility
-
-#### [Dev] Senior Developer
-- Code clarity, conventions
-- Debugging experience
-- Onboarding ease
-
-#### [Sec] Security Engineer
-- Attack surface
-- Data protection
-- Audit trail
-
-#### [Biz] Pragmatist
-- Time-to-market
-- ROI vs effort
-- "Good enough" vs perfect
-
-### Step 4: Comparison Table
+#### Comparison Table
 
 | Criterion | Option A | Option B | Winner |
 |-----------|----------|----------|--------|
@@ -67,16 +111,16 @@ Get opinions from 5 experts (2-3 sentences each):
 | Time to implement | ... | ... | ... |
 | Risk | ... | ... | ... |
 
-### Step 5: Final Recommendation
+#### Final Recommendation
 
 ```
 **Recommendation:** Option X
 
-**Reason:** [1-2 sentences - the deciding factor]
+**Reason:** {1-2 sentences - the deciding factor}
 
-**Risk:** [what could go wrong]
+**Risk:** {what could go wrong}
 
-**Action:** [specific next step]
+**Action:** {specific next step}
 ```
 
 ## Anti-patterns
@@ -100,10 +144,10 @@ Get opinions from 5 experts (2-3 sentences each):
 After recommendation:
 
 ```
-┌─ LETS ───────────────────────┐
-│  Continue?  /lets-commit     │
-│  Document?  /lets-beads-finish│
-└──────────────────────────────┘
+┌─ LETS ─────────────────────────┐
+│  Document?  /lets-beads-finish │
+│  Commit?    /lets-commit       │
+└────────────────────────────────┘
 ```
 
 ## Note

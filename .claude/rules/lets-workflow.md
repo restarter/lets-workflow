@@ -180,7 +180,8 @@ When user wants to end session:
 | `/lets-review` | Full deep review - local OR GitHub PR (~2-3 min) |
 | `/lets-beads-finish` | Task done, need to document |
 | `/lets-beads-status` | Check tasks anytime |
-| `/lets-opinion` | Technical decision needed |
+| `/lets-ask` | Quick expert consultation (1 agent) |
+| `/lets-opinion` | Technical decision needed (3-5 agents) |
 | `/lets-install` | First-time setup |
 | `/feature-dev` | Clear goal, need implementation plan |
 | `/brainstorming` | Unclear goal, need to figure out what to build |
