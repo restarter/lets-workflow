@@ -1,16 +1,14 @@
-# Plugin Capabilities - What's Supported
+# Plugin Capabilities
 
-Official reference for what a Claude Code plugin can and cannot do.
-
-Source: https://code.claude.com/docs/en/plugins
+What a Claude Code plugin can and cannot do.
 
 ## Supported Directories
 
 | Directory | Purpose | Example |
 |-----------|---------|---------|
-| `.claude-plugin/` | Plugin manifest (plugin.json only) | `{"name": "lets-workflow", ...}` |
-| `commands/` | Slash commands (user-invoked) | `/lets-workflow:develop` |
-| `agents/` | Custom subagents (Task tool) | `lets-workflow:codebase-explorer` |
+| `.claude-plugin/` | Plugin manifest (plugin.json only) | `{"name": "lets", ...}` |
+| `commands/` | Slash commands (user-invoked) | `/lets:develop` |
+| `agents/` | Custom subagents (Task tool) | `lets:architect` |
 | `skills/` | Agent skills (model-invoked, auto-triggered) | Claude invokes based on context |
 | `hooks/` | Event handlers (hooks.json) | Run linter after file edit |
 | `.mcp.json` | MCP server configs | External tool integrations |
@@ -32,40 +30,26 @@ Source: https://code.claude.com/docs/en/plugins
 
 ## Workaround: "Rules" via Skills
 
-Since `rules/` is not supported, use a skill with a broad description to simulate always-on rules:
-
-```
-skills/
-  workflow-rules/
-    SKILL.md
-```
+Since `rules/` is not supported in plugins, use a skill with a broad description to simulate always-on rules:
 
 ```yaml
 ---
 name: workflow-rules
 description: Use when starting any conversation, making code changes, or reviewing code. Provides LETS workflow conventions and code standards.
 ---
-
-# LETS Workflow Rules
-
-- Always show LETS box after completing work
-- Never commit without user approval
-- ...
 ```
 
-Claude will auto-invoke this skill when the description matches the current context. Not guaranteed to trigger every time (unlike real rules), but close enough for shared conventions.
+Claude will auto-invoke this skill when the description matches the current context. Not guaranteed to trigger every time (unlike real rules), but close enough.
 
 ## Plugin Naming
 
-After installation, all components are namespaced:
+After installation, all components are namespaced with the `name` from plugin.json:
 
-| Component | Standalone | Plugin |
-|-----------|-----------|--------|
-| Command | `/develop` | `/lets-workflow:develop` |
-| Agent | `codebase-explorer` | `lets-workflow:codebase-explorer` |
-| Skill | `workflow-rules` | `lets-workflow:workflow-rules` |
-
-The namespace = `name` field from plugin.json.
+| Component | Project-level | Plugin |
+|-----------|--------------|--------|
+| Command | N/A | `/lets:develop` |
+| Agent | `architect` | `lets:architect` |
+| Skill | `lets-review` | `lets:lets-review` |
 
 ## Testing Locally
 
@@ -85,6 +69,6 @@ Restart Claude Code after changes to pick up updates.
 # From local path
 claude plugins add /path/to/lets-plugin-claude
 
-# From git repo (marketplace)
+# From git repo
 claude plugins add github:user/lets-plugin-claude
 ```

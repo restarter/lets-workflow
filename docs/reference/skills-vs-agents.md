@@ -21,15 +21,15 @@
 
 ### Agents
 - Parallel independent work (multiple reviewers)
-- Specialized knowledge (Android expert, security expert)
+- Specialized knowledge (security expert, architect)
 - Protecting main context from large outputs
-- Example: `lets:android-reviewer`, `lets:security-reviewer`
+- Example: `architect`, `security-expert`, `qa-expert`
 
 ### Rules
 - Code standards (always apply)
 - Behavior rules (never commit without permission)
 - Language preferences
-- Example: `android-standards.md`, `workflow.md`
+- Example: `architecture.md`, `workflow.md`, `language.md`
 
 ## How They Work Together
 
@@ -38,21 +38,17 @@ User: /lets-review --local
 
 Skill (lets-review) activates:
   1. Analyzes diff
-  2. Selects relevant agents
+  2. Selects relevant expert agents (3-10 from pool of 11)
   3. Launches agents in parallel via Task tool:
-     - Task(subagent_type="lets:compliance-reviewer", prompt="...")
-     - Task(subagent_type="lets:bug-scanner", prompt="...")
-     - Task(subagent_type="lets:security-reviewer", prompt="...")
-  4. Aggregates results
-  5. Shows filtered report
+     - Task(subagent_type="architect", prompt="Review this diff...")
+     - Task(subagent_type="security-expert", prompt="Review for vulnerabilities...")
+     - Task(subagent_type="compliance-expert", prompt="Check project rules...")
+  4. Filters results (confidence >= 80)
+  5. Shows aggregated report
 
 Rules apply throughout:
   - language.md: respond in user's language
   - workflow.md: never commit without permission
 ```
 
-## Key Insight
-
-**Skills orchestrate, agents execute, rules constrain.**
-
-A skill like `/lets-review` is the orchestrator - it decides which agents to launch and how to present results. The agents do the actual review work. Rules ensure everything follows project conventions.
+**Key insight: Skills orchestrate, agents execute, rules constrain.**

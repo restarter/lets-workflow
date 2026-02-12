@@ -54,15 +54,14 @@ Available tools for `tools` field:
 | `~/.claude/agents/` (user) | All your projects | `agent-name` |
 | Plugin `agents/` dir | Anyone who installs plugin | `plugin-name:agent-name` |
 
-## Description Field - Critical
+**Important:** Only plugin agents register as `subagent_type` for the Task tool. Project-level agents (`.claude/agents/`) are available but not namespaced.
+
+## Description Field
 
 The `description` field determines WHEN Claude delegates to the agent. Write it as instructions:
 
-BAD: "Code reviewer"
-GOOD: "Reviews code for bugs, logic errors, and security vulnerabilities. Use proactively after code changes."
-
-BAD: "Android helper"
-GOOD: "Expert Android developer for WebView, proxy integration, and low-end device optimization. Use when reviewing or writing Android/Kotlin code."
+- BAD: "Code reviewer"
+- GOOD: "Reviews code for bugs, logic errors, and security vulnerabilities. Use proactively after code changes."
 
 ## Model Selection
 
@@ -72,30 +71,3 @@ GOOD: "Expert Android developer for WebView, proxy integration, and low-end devi
 | `sonnet` | Most tasks (code review, analysis, implementation) |
 | `opus` | Complex reasoning, architecture decisions |
 | `inherit` | Same model as parent conversation (default) |
-
-## Example: Code Review Agent
-
-```markdown
----
-name: code-reviewer
-description: Reviews code for bugs, logic errors, security vulnerabilities, and adherence to project conventions. Use proactively after code changes.
-tools: Read, Grep, Glob, Bash
-model: sonnet
----
-
-You are an expert code reviewer.
-
-For each issue found, rate confidence 0-100:
-- 0-25: Unlikely issue, false positive
-- 26-50: Possible issue, needs context
-- 51-75: Likely issue
-- 76-100: Definite issue, must fix
-
-Only report issues with confidence >= 75.
-
-Output format:
-1. [Confidence: X] **Issue title**
-   - File: path:line
-   - Impact: what breaks
-   - Fix: suggestion
-```
