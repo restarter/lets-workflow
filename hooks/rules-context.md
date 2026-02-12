@@ -41,6 +41,19 @@ User states goal -> Claude proposes approach -> User approves -> Claude executes
 /lets:start -> Work -> /lets:beads-finish -> /lets:check -> /lets:commit -> /lets:end
 ```
 
+**Review options:**
+- `/lets:check` - quick sanity check (~30 sec), before any commit
+- `/lets:review` - full deep review (~2-3 min), works locally OR on GitHub PR
+
+**When to use which:**
+- Small change -> `/lets:check` -> commit
+- Significant change -> `/lets:check` -> `/lets:review --local` -> fix -> commit -> PR
+- PR already exists -> `/lets:review <PR>` -> comment on PR
+
+### Session Start
+
+When conversation starts or user wants to begin working -> suggest `/lets:start`.
+
 ### Task Selection (MANDATORY)
 
 Never work without a tracked task. User must pick existing task or create new one via beads.
@@ -53,16 +66,36 @@ Never work without a tracked task. User must pick existing task or create new on
 | Medium (2-8 hrs) | Suggest `/feature-dev` or `/brainstorming` |
 | Large (> 8 hrs) | Require planning + break into subtasks |
 
+### Choosing Planning Skill
+
+| Goal clarity | Use |
+|--------------|-----|
+| Clear goal ("Add X to Y") | `/feature-dev` - structured implementation |
+| Unclear goal ("Improve Z", "Not sure how...") | `/brainstorming` - explores options first |
+
+**Quick test:** Can user write a 1-sentence requirement? YES -> `/feature-dev`. NO -> `/brainstorming` first.
+
 ### During Work
 
 - Technical decision needed -> Suggest `/lets:opinion`
 - Task completed -> Remind about `/lets:beads-finish`
-- Before commit -> Suggest `/lets:check`
-- Significant changes -> Suggest `/lets:review`
+- Multiple files changed -> Periodic reminder about committing
+- Before commit -> Suggest `/lets:check` for quick sanity check
+- Significant changes -> Suggest `/lets:review` for full deep review
+- Long conversation -> Suggest checking `/context`
 
-### LETS Box
+### Phase Detection & LETS Boxes
 
-Every milestone should show a LETS box with relevant next steps:
+Every milestone should show a LETS box with relevant next steps.
+
+| Phase | Trigger | LETS box |
+|-------|---------|----------|
+| **Active work** | AI just edited files | `opinion` + `check` |
+| **Work done** | Feature/fix complete | `review` + `beads-finish` + `commit` |
+| **After commit** | Commit succeeded | `end` + `push` |
+| **Decision point** | AI presents 2+ options | `opinion` |
+
+**Rule:** If AI made changes -> always suggest `/lets:check` first.
 
 **Active work:**
 ```
@@ -91,12 +124,23 @@ Every milestone should show a LETS box with relevant next steps:
 
 ### Decision Points
 
-When presenting 2+ options, always show:
+When presenting 2+ options, ALWAYS show:
 ```
 ┌─ LETS ─────────────────────────┐
 │  Analyze?  /lets:opinion       │
 └────────────────────────────────┘
 ```
+
+This applies when: presenting implementation approaches, choosing between solutions, trade-off decisions, architecture choices.
+
+### Commit & Session End
+
+**Commit:** ALWAYS use `/lets:commit` skill. Never commit directly.
+
+**Session end:**
+1. Check uncommitted changes -> suggest `/lets:commit`
+2. Check beads documentation -> suggest `/lets:beads-finish`
+3. Suggest `/lets:end` to close properly
 
 ## Skill Quick Reference
 
@@ -109,8 +153,17 @@ When presenting 2+ options, always show:
 | `/lets:review` | Full deep review (~2-3 min) |
 | `/lets:beads-finish` | Document completed work |
 | `/lets:beads-status` | Check tasks |
-| `/lets:opinion` | Technical decision |
+| `/lets:ask` | Quick expert consultation (1 agent) |
+| `/lets:opinion` | Technical decision (3-5 agents) |
 | `/lets:install` | First-time setup |
+
+## Key Principles
+
+1. **Every session has a task** - no random work without tracking
+2. **Big tasks need planning** - use `/feature-dev` or `/brainstorming`
+3. **Document everything** - beads is the source of truth
+4. **Skills guide the flow** - each skill prompts next step
+5. **Always suggest next step** - never end response without direction
 
 ## Warning Situations
 
@@ -118,4 +171,13 @@ When presenting 2+ options, always show:
 |-----------|--------|
 | Ending with uncommitted changes | Warn, suggest `/lets:commit` |
 | Ending without beads docs | Ask about `/lets:beads-finish` |
+| Task in progress, no recent commits | Remind about `/lets:commit` |
 | Context window > 70% | Warn, suggest `/lets:end` and new window |
+
+## Context Window Management
+
+| Usage | Action |
+|-------|--------|
+| < 50% | Safe to continue |
+| 50-70% | Proceed with caution |
+| > 70% | Split session: save plan to docs/, `/lets:end`, new window, `/lets:start` |
