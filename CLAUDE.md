@@ -7,7 +7,7 @@ Claude Code plugin for development workflow with session management, code review
 ```
 .claude-plugin/plugin.json   # Plugin manifest
 commands/                     # 10 slash commands (/lets:start, /lets:review, /lets:ask, etc.)
-agents/                       # 11 universal experts (architect, security-expert, etc.)
+agents/                       # 12 agents (11 experts + quick-reviewer for /lets:check)
 hooks/                        # SessionStart hook - injects workflow rules
 reference/                    # Reference plugins for studying patterns (gitignored)
 ```
@@ -15,14 +15,14 @@ reference/                    # Reference plugins for studying patterns (gitigno
 ## Key Concepts
 
 - **Commands** = user-initiated workflows (sessions, commits, reviews)
-- **Agents** = universal experts dispatched by `/lets:review`, `/lets:opinion`, `/lets:ask`. `/lets:check` uses general-purpose agent (not lets: experts)
+- **Agents** = experts dispatched by commands. `/lets:review`, `/lets:opinion`, `/lets:ask` use specialized experts. `/lets:check` uses `quick-reviewer` (single multi-perspective agent)
 - **Hook** = injects workflow rules into every conversation via SessionStart
 - **No skills/** - plugin is workflow-focused, not knowledge-focused
 
 ## Architecture Decisions
 
 - Agents define WHO (expertise, scoring, output format). Commands define WHAT to do (provide diff, context)
-- `/lets:review`, `/lets:opinion`, `/lets:ask` use `subagent_type: "lets:agent-name"` to dispatch agents via Task tool
+- `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:check` use `subagent_type: "lets:agent-name"` to dispatch agents via Task tool
 - All agents are read-only (Read, Grep, Glob, optionally Bash). No Edit/Write.
 - SessionStart hook injects rules from `hooks/rules-context.md`
 

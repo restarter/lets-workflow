@@ -38,7 +38,7 @@ Based on the decision topic, select 3-5 agents:
 **Rules:**
 - Minimum 3 agents, maximum 5
 - `architect` and `pragmatist` always included
-- Default model: sonnet for all
+- Agents use their own model from frontmatter (opus for critical agents, session model for others)
 
 ### Step 3: Gather Context
 
@@ -67,7 +67,6 @@ For each selected agent:
 ```
 Task(
   subagent_type="lets:{agent-name}",
-  model="sonnet",
   prompt="OPINION MODE. Evaluate this technical decision.
 
 PROJECT CONTEXT:

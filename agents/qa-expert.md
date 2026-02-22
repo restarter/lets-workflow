@@ -2,7 +2,6 @@
 name: qa-expert
 description: QA and testing expert for test strategy review, coverage analysis, assertion quality, mocking patterns, and TDD practices. Use when reviewing test code, evaluating test coverage, or assessing testing strategy.
 tools: Read, Grep, Glob, Bash
-model: sonnet
 color: green
 ---
 

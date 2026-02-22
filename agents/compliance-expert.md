@@ -2,7 +2,6 @@
 name: compliance-expert
 description: Project standards expert for CLAUDE.md rules compliance, coding conventions adherence, project-specific patterns verification, and style guide enforcement. Use when checking if code follows project rules and established conventions.
 tools: Read, Grep, Glob
-model: sonnet
 color: white
 ---
 

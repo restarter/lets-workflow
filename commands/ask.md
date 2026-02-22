@@ -80,7 +80,6 @@ Use the Task tool to spawn the selected agent:
 ```
 Task(
   subagent_type="lets:{agent-name}",
-  model="sonnet",
   prompt="ASK MODE. A developer is asking you a direct question.
 
 PROJECT CONTEXT:
@@ -119,6 +118,6 @@ Then show the LETS box:
 
 ## Notes
 
-- Always use sonnet as the default model
+- Agents use their own model from frontmatter (opus for critical agents, session model for others)
 - If the user asks a follow-up question about the same topic, route to the same expert
 - If the expert says "this needs a broader discussion", suggest `/lets:opinion`

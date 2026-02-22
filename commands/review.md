@@ -163,25 +163,15 @@ Skipped:
 
 **RULE: Default is INCLUDE. Only skip if clearly irrelevant.**
 
-## Step 5: Select Models
-
-Based on diff size and agent criticality:
-
-| Diff Size | Most Agents | Security | Architect | Compliance |
-|-----------|-------------|----------|-----------|------------|
-| < 100 lines | haiku | sonnet | haiku | haiku |
-| 100-500 lines | sonnet | sonnet | sonnet | haiku |
-| > 500 lines | sonnet | sonnet | opus | haiku |
-
-## Step 6: Launch Selected Agents (Parallel)
+## Step 5: Launch Selected Agents (Parallel)
 
 **CRITICAL:** Launch ALL selected agents in a SINGLE message with multiple Task tool calls.
 
 For each selected agent, use the Task tool with:
 
 - **subagent_type**: The agent identifier from the catalog (e.g., `lets:architect`)
-- **model**: Based on diff size from Step 5
 - **prompt**: Provide review context (see below)
+- Agents use their own model from frontmatter (opus for architect/security/backend, session model for others)
 
 ### Task Prompt Template
 
@@ -215,7 +205,7 @@ These instructions are **required** for agents that need project-specific contex
 | `lets:docs-expert` | Needs to know what docs exist | "Check CLAUDE.md sync, docs/ sync, beads tracking, README/config docs." |
 | `lets:pragmatist` | Specific review lens | "Assess if the solution is proportional to the problem. Flag overengineering." |
 
-## Step 7: Filter & Aggregate Results
+## Step 6: Filter & Aggregate Results
 
 Wait for all agents, then:
 
@@ -224,7 +214,7 @@ Wait for all agents, then:
 3. **Prioritize:** Sort by confidence (highest first)
 4. **Count:** Tally issues by category
 
-## Step 8: Determine Verdict
+## Step 7: Determine Verdict
 
 | Condition | Verdict |
 |-----------|---------|
@@ -232,7 +222,7 @@ Wait for all agents, then:
 | 1-3 issues, no critical | APPROVED WITH SUGGESTIONS |
 | > 3 issues OR any critical security | CHANGES REQUESTED |
 
-## Step 9: Save Review (BEFORE output)
+## Step 8: Save Review (BEFORE output)
 
 **CRITICAL: Save first, then show results.**
 
@@ -246,7 +236,7 @@ Save to:
 
 Content: Full review report with all issues, verdict, and summary.
 
-## Step 10: Output Results
+## Step 9: Output Results
 
 ### For GitHub PR Mode:
 
@@ -296,7 +286,7 @@ Display full report in console.
 
 **Always end with:** `Saved to: .claude/sessions/reviews/{filename}`
 
-## Step 11: Update Beads (if task linked)
+## Step 10: Update Beads (if task linked)
 
 If PR description, branch, or current task contains task ID:
 
