@@ -4,12 +4,12 @@ Things we discovered the hard way while building skills and workflows.
 
 ## 1. Relative Paths in Skills
 
-**Problem:** Skills use bash code blocks as examples for Claude. If Claude's working directory changed (e.g., after `cd code/letsbrowse`), relative paths like `.claude/sessions/` resolve to wrong location.
+**Problem:** Skills use bash code blocks as examples for Claude. If Claude's working directory changed (e.g., after `cd code/letsbrowse`), relative paths like `.lets/sessions/` resolve to wrong location.
 
 **Fix:** Always use `git rev-parse --show-toplevel` for repo-root-relative paths:
 ```bash
 ROOT=$(git rev-parse --show-toplevel)
-mkdir -p "$ROOT/.claude/sessions"
+mkdir -p "$ROOT/.lets/sessions"
 ```
 
 **Affected:** `lets-end` (session file creation), `lets-start` (session file reading).

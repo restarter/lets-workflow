@@ -10,7 +10,7 @@ Restore context and prepare for work. **User MUST select a task before working.*
 
 ```bash
 ROOT=$(git rev-parse --show-toplevel)
-cat "$ROOT/.claude/sessions/last-summary.md" 2>/dev/null || echo "No previous session"
+cat "$ROOT/.lets/sessions/last-summary.md" 2>/dev/null || echo "No previous session"
 ```
 
 Read and summarize what was done in the last session.

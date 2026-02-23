@@ -227,12 +227,13 @@ Wait for all agents, then:
 **CRITICAL: Save first, then show results.**
 
 ```bash
-mkdir -p .claude/sessions/reviews
+ROOT=$(git rev-parse --show-toplevel)
+mkdir -p "$ROOT/.lets/reviews"
 ```
 
 Save to:
-- PR mode: `.claude/sessions/reviews/{date}-PR-{number}.md`
-- Local mode: `.claude/sessions/reviews/{date}-local-review.md`
+- PR mode: `.lets/reviews/{date}-PR-{number}.md`
+- Local mode: `.lets/reviews/{date}-local-review.md`
 
 Content: Full review report with all issues, verdict, and summary.
 
@@ -284,7 +285,7 @@ EOF
 
 Display full report in console.
 
-**Always end with:** `Saved to: .claude/sessions/reviews/{filename}`
+**Always end with:** `Saved to: .lets/reviews/{filename}`
 
 ## Step 10: Update Beads (if task linked)
 

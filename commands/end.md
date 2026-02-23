@@ -65,16 +65,16 @@ Skip merge. Stay on feature branch. Note in summary that work continues.
 ## Step 6: Create Session Summary (LOCAL ONLY)
 
 Create TWO files:
-1. **Dated archive:** `.claude/sessions/YYYY-MM-DD-HHMM.md` (history preserved)
-2. **Latest:** `.claude/sessions/last-summary.md` (overwritten each session)
+1. **Dated archive:** `.lets/sessions/YYYY-MM-DD-HHMM.md` (history preserved)
+2. **Latest:** `.lets/sessions/last-summary.md` (overwritten each session)
 
 ```bash
 # Create sessions directory if needed (always relative to repo root)
 ROOT=$(git rev-parse --show-toplevel)
-mkdir -p "$ROOT/.claude/sessions"
+mkdir -p "$ROOT/.lets/sessions"
 
 # Write summary to both files
-DATED_FILE="$ROOT/.claude/sessions/$(date +%Y-%m-%d-%H%M).md"
+DATED_FILE="$ROOT/.lets/sessions/$(date +%Y-%m-%d-%H%M).md"
 ```
 
 **Summary template:**
@@ -114,7 +114,7 @@ Branch: {current branch}
 Beads: {local changes saved}
 Tasks closed: {list}
 Tasks in progress: {list}
-Summary saved: .claude/sessions/{dated}.md + last-summary.md
+Summary saved: .lets/sessions/{dated}.md + last-summary.md
 ```
 
 Then ask about sync/push in plain text (no LETS box):
