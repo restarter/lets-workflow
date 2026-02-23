@@ -127,6 +127,39 @@ Rules:
 
 ---
 
+## Phase 1.5: Discuss Findings with PM
+
+**This phase happens between consolidation and posting.** Do not skip it.
+
+The PM (or reviewer) goes through each finding one by one:
+
+1. **Deep dive** - look at the actual code together, explain the issue, verify it's real
+2. **Classify** - PM decides: inline or summary (see decision rule below)
+3. **Refine wording** - PM adjusts text, severity, tone for the team
+4. **Drop or merge** - some findings turn out to be non-issues, some get combined
+
+This is iterative and can take a full session for large PRs.
+
+### Decision rule: inline vs summary
+
+**Working code with a real bug → inline comment.**
+The issue exists in code that's part of this PR, and can be pointed to on a specific line.
+
+**Theoretical concern / code doesn't exist yet → summary observation.**
+The issue is about what *might* happen in the future (e.g. "when CRUD is built, $fillable will be a problem"). No point cluttering the PR with inline comments about code that isn't written yet.
+
+Examples:
+- `trustHosts` will crash in production → **inline** (code exists, bug is real)
+- `is_primary` in `$fillable` is a mass assignment risk → **summary** (no CRUD controller exists yet)
+- Docs reference non-existent config key → **inline** (the doc file is in the PR, line is real)
+- `scopePrimary()` is never used → **summary** (architectural observation, not a bug)
+
+### Store drafts in beads
+
+As comments are refined, save them to the beads task via `bd update <id> --notes="..."`. This way the draft text survives context window compaction and session restarts.
+
+---
+
 ## Phase 2: Post Comments
 
 See [pr-review-posting-workflow.md](pr-review-posting-workflow.md) for detailed posting instructions.
@@ -137,6 +170,7 @@ Key points:
 - Log every posted comment to beads immediately
 - User approves each comment before posting
 - Language: team's language for text, English for code and severity tags
+- **Task stays in_progress after posting** - do NOT close until Phase 4 (approve/reject)
 
 ---
 
@@ -328,6 +362,8 @@ bb-api pr comment <id> "LGTM. All critical issues resolved."
 
 ### Close the cycle
 
+**Only close the beads task after Phase 4** - not after posting comments (Phase 2).
+
 ```bash
 # Update beads task
 bd update <task-id> --notes="Follow-up complete. PR #19 approved. ..."
@@ -335,6 +371,14 @@ bd update <task-id> --notes="Follow-up complete. PR #19 approved. ..."
 # If all PRs in the review are done
 bd close <task-id> --reason="All PRs reviewed and approved"
 bd sync --flush-only
+```
+
+Task lifecycle:
+```
+Phase 1 (review)   → task in_progress
+Phase 2 (posting)  → task in_progress (comments posted, waiting for fixes)
+Phase 3 (follow-up) → task in_progress (checking fixes)
+Phase 4 (approve)  → task closed
 ```
 
 ---

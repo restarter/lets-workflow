@@ -103,23 +103,36 @@ Cross-references to related PRs if applicable.
 
 **Verdict: CHANGES REQUESTED**
 
-Review conducted with N specialized agents (list agents).
+Ревью проведено с помощью N специализированных агентов (list agents).
+
+### Scope
+What was expected vs what was delivered. Example:
+"В задаче предусмотрен CRUD доменов, но в PR реализован только бекенд.
+Страница остается статическим mockup без контроллера."
 
 ### Critical (N)
-1. **Issue** - brief description. See inline.
+1. **Issue** - brief description. See inline on `file.php`.
 
 ### Important (N)
-1. **Issue** - brief description. See inline.
+1. **Issue** - brief description. See inline on `file.php`.
 
-### Observations
-- Non-blocking notes, suggestions, questions
+### Менее критичные замечания
 
-### Systemic Patterns
-Cross-PR patterns worth highlighting.
+Ниже - замечания, которые не блокируют мерж. Не стал постить inline,
+чтобы не засорять PR. Прошу ознакомиться и учесть в дальнейшей работе.
+
+- **Issue** (`file.php:NN`) - description with file path and line reference.
+- **Issue** (`file.php:NN` vs `other.php:NN`) - description.
 
 ---
 Generated with Claude Code
 ```
+
+Key differences from the old template:
+- **Scope section** - sets expectations about what's in the PR vs what was planned
+- **"Менее критичные замечания"** - replaces "Observations". Explains WHY these are not inline.
+- **File:line references** - every observation points to specific code, not just abstract advice
+- **Language** - summary text in team's language (Russian), severity tags in English
 
 ## Language
 
@@ -156,7 +169,9 @@ N. ✅ **Summary** - [comment-ID](link)
 
 ### Update after each comment
 
-Update notes after EVERY posted comment, not in batches. If something goes wrong mid-posting, beads has the accurate state.
+For large reviews (5+ comments across multiple PRs): update notes after EVERY posted comment. If something goes wrong mid-posting, beads has the accurate state.
+
+For small reviews (2-3 comments on a single PR): acceptable to batch-log after all comments are posted.
 
 ## Slack Notification
 
@@ -258,8 +273,8 @@ For each PR (in dependency order):
   [ ] Move to next PR
 
 After all PRs:
-  [ ] Close beads task
-  [ ] Final bd sync --flush-only
+  [ ] DO NOT close beads task - it stays in_progress until fixes are verified (Phase 3-4 in lifecycle)
+  [ ] bd sync --flush-only
 ```
 
 ## Example Session Flow
