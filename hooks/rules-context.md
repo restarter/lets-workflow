@@ -33,6 +33,16 @@ User states goal -> Claude proposes approach -> User approves -> Claude executes
 - When launching expert agents for `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:check` - use ONLY `lets:*` agents (`lets:architect`, `lets:security-expert`, etc.)
 - Never use `general-purpose` or other non-lets subagent types for expert work
 
+## Task References
+
+- When mentioning beads tasks in conversation, ALWAYS use format: **Task Title** (`task-id`)
+- Never use bare IDs - the user doesn't memorize them
+- Examples:
+  - Good: "starting **LETS Planning & Execution Workflow** (`0nf`)?"
+  - Good: "closing **Review all commands for consistency** (`24o.2`)"
+  - Bad: "starting epic 0nf?"
+  - Bad: "closing 24o.2"
+
 ## Architecture Mindset
 
 - Study codebase first, follow existing patterns
