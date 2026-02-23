@@ -97,9 +97,9 @@ INSTRUCTIONS:
 )
 ```
 
-## Step 6: Output
+## Step 6: Present Results
 
-Present the agent's response:
+Show the agent's response:
 
 ```
 ## {Agent Name} says:
@@ -107,7 +107,7 @@ Present the agent's response:
 {agent response}
 ```
 
-Then show the LETS box:
+## Output
 
 ```
 ┌─ LETS ─────────────────────────┐

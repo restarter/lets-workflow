@@ -28,6 +28,11 @@ User states goal -> Claude proposes approach -> User approves -> Claude executes
 - Always `git status` before and after commit
 - Keep subject under 50 chars, imperative mood
 
+## Agent Rules
+
+- When launching expert agents for `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:check` - use ONLY `lets:*` agents (`lets:architect`, `lets:security-expert`, etc.)
+- Never use `general-purpose` or other non-lets subagent types for expert work
+
 ## Architecture Mindset
 
 - Study codebase first, follow existing patterns

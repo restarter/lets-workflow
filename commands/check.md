@@ -71,7 +71,9 @@ Be concise - this is a quick check, not a full review."
 
 ## Step 4: Present Results
 
-Show the agent's response directly. Then add LETS box:
+Show the agent's response directly.
+
+## Output
 
 **If GOOD or REVIEW:**
 ```

@@ -118,9 +118,11 @@ Once task is selected, assess complexity:
 - YES - `/feature-dev`
 - NO - `/brainstorming` first, then `/feature-dev`
 
-## Step 8: Output
+## Step 8: Ready to Work
 
-After task is selected and branch is ready, show reminders and welcome box:
+After task is selected and branch is ready, show reminders and welcome box.
+
+## Output
 
 ```
 ## Reminders

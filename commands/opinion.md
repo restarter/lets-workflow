@@ -1,16 +1,15 @@
 ---
 description: Technical decision analysis from 3-5 expert agents launched in parallel, with clear recommendation
+argument-hint: "[topic or question]"
 ---
 
 # Technical Decision Analysis
 
 Analyze technical decisions by launching expert agents in parallel. Each agent provides their perspective, then results are aggregated into a clear recommendation.
 
-## Instructions
-
 **DO NOT ask the user which option to choose.** Analyze and recommend.
 
-### Step 1: Frame the Problem
+## Step 1: Frame the Problem
 
 ```
 **Decision:** {what needs to be decided}
@@ -18,7 +17,7 @@ Analyze technical decisions by launching expert agents in parallel. Each agent p
 **Constraints:** {time, compatibility, legacy, budget}
 ```
 
-### Step 2: Select Experts
+## Step 2: Select Experts
 
 Based on the decision topic, select 3-5 agents:
 
@@ -40,14 +39,14 @@ Based on the decision topic, select 3-5 agents:
 - `architect` and `pragmatist` always included
 - Agents use their own model from frontmatter (opus for critical agents, session model for others)
 
-### Step 3: Gather Context
+## Step 3: Gather Context
 
 ```bash
 ROOT=$(git rev-parse --show-toplevel)
 cat "$ROOT/CLAUDE.md" 2>/dev/null | head -100
 ```
 
-### Step 4: Mandatory Agent Context
+## Step 4: Mandatory Agent Context
 
 If a selected agent appears in this table, append the instruction to its prompt:
 
@@ -58,7 +57,7 @@ If a selected agent appears in this table, append the instruction to its prompt:
 | `docs-expert` | "Check CLAUDE.md sync, docs/ sync, beads tracking, README/config docs." |
 | `pragmatist` | "Assess if the solution is proportional to the problem. Flag overengineering." |
 
-### Step 5: Launch Agents in Parallel
+## Step 5: Launch Agents in Parallel
 
 **CRITICAL:** Launch ALL selected agents in a SINGLE message with multiple Task tool calls.
 
@@ -88,18 +87,18 @@ INSTRUCTIONS:
 )
 ```
 
-### Step 6: Aggregate Results
+## Step 6: Aggregate Results
 
 After all agents respond, synthesize:
 
-#### Quick Verdict (TL;DR)
+### Quick Verdict (TL;DR)
 
 ```
 **Recommendation:** Option X
 **One-liner:** {why in 10 words or less}
 ```
 
-#### Expert Opinions
+### Expert Opinions
 
 For each agent, summarize their position:
 
@@ -110,7 +109,7 @@ For each agent, summarize their position:
 **Pragmatist:** Recommends B - worth the extra day, saves weeks later
 ```
 
-#### Comparison Table
+### Comparison Table
 
 | Criterion | Option A | Option B | Winner |
 |-----------|----------|----------|--------|
@@ -120,7 +119,7 @@ For each agent, summarize their position:
 | Time to implement | ... | ... | ... |
 | Risk | ... | ... | ... |
 
-#### Final Recommendation
+### Final Recommendation
 
 ```
 **Recommendation:** Option X

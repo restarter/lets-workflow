@@ -104,7 +104,7 @@ DATED_FILE="$ROOT/.claude/sessions/$(date +%Y-%m-%d-%H%M).md"
 - {any context AI needs to continue}
 ```
 
-## Step 7: Final Status
+## Output
 
 ```
 ## Session End Summary
@@ -117,14 +117,13 @@ Tasks in progress: {list}
 Summary saved: .claude/sessions/{dated}.md + last-summary.md
 ```
 
-## Step 8: Ask About Sync/Push
-
-**NEVER sync or push automatically.** Ask user in plain text (no LETS box):
+Then ask about sync/push in plain text (no LETS box):
 
 > "Ready to sync to remote? (`bd sync && git push`)"
 
 - If user says "sync" / "push" / "+" - run `bd sync` then `git push`
 - If user says "later" / "no" / "local" - skip, remind them to sync later
+- **NEVER sync or push automatically**
 
 ## Rules
 
