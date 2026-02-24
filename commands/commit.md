@@ -42,14 +42,34 @@ Summarize what changed:
 
 ## Step 4: Confirm with User
 
-Present the proposed commit as plain text (NOT in a code block or blockquote - it must be clearly readable):
+Present the proposed commit summary as plain text (NOT in a code block or blockquote):
 
-**Ready to commit?**
 `<type>: <description>`
 - {file1} - {what changed}
 - {file2} - {what changed}
 
-Wait for user approval before committing.
+Then use **AskUserQuestion** for structured confirmation:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Commit with this message?",
+    header: "Commit",
+    options: [
+      { label: "Commit", description: "Stage all changes and commit" },
+      { label: "Edit message", description: "Change the commit message before committing" },
+      { label: "Cancel", description: "Don't commit, keep changes unstaged" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Handle response:**
+- **Commit** -> proceed to Step 5
+- **Edit message** -> ask user for new message, then proceed to Step 5
+- **Cancel** -> stop, show LETS box with `/lets:check`
+- **Other** (free text) -> treat as edited commit message, proceed to Step 5
 
 ## Step 5: Commit
 
