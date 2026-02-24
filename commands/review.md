@@ -35,7 +35,7 @@ Comprehensive code review with dynamic agent selection based on change types. Up
 AskUserQuestion(
   questions=[{
     question: "What are we reviewing?",
-    header: "Review",
+    header: "LETS",
     options: [
       { label: "Local changes", description: "Uncommitted changes in working tree" },
       { label: "Staged", description: "Only staged changes (git diff --staged)" },

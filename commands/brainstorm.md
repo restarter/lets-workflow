@@ -469,7 +469,7 @@ Then use **AskUserQuestion**:
 AskUserQuestion(
   questions=[{
     question: "Which approach for the implementation?",
-    header: "Approach",
+    header: "LETS",
     options: [
       { label: "Minimal", description: "{1-line summary from architect 1}" },
       { label: "Maximal", description: "{1-line summary from architect 2}" },

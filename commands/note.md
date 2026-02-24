@@ -50,7 +50,7 @@ If not obvious from conversation context, use **AskUserQuestion**:
 AskUserQuestion(
   questions=[{
     question: "What kind of note?",
-    header: "Note",
+    header: "LETS",
     options: [
       { label: "Progress", description: "What's done and what remains" },
       { label: "Decision", description: "Record a choice and reasoning" },

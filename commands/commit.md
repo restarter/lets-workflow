@@ -35,7 +35,7 @@ If not found - commit normally without task link.
 AskUserQuestion(
   questions=[{
     question: "Multiple tasks in progress. Which one to link?",
-    header: "Task",
+    header: "LETS",
     options: [
       { label: "{task-id-1}", description: "{task title 1}" },
       { label: "{task-id-2}", description: "{task title 2}" },
@@ -72,10 +72,9 @@ Then use **AskUserQuestion** for structured confirmation:
 AskUserQuestion(
   questions=[{
     question: "Commit with this message?",
-    header: "Commit",
+    header: "LETS",
     options: [
       { label: "Commit", description: "Stage all changes and commit" },
-      { label: "Edit message", description: "Change the commit message before committing" },
       { label: "Cancel", description: "Don't commit, keep changes unstaged" }
     ],
     multiSelect: false
@@ -85,7 +84,6 @@ AskUserQuestion(
 
 **Handle response:**
 - **Commit** -> proceed to Step 5
-- **Edit message** -> ask user for new message, then proceed to Step 5
 - **Cancel** -> stop, show LETS box with `/lets:check`
 - **Other** (free text) -> treat as edited commit message, proceed to Step 5
 

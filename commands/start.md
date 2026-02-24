@@ -122,7 +122,7 @@ Use **AskUserQuestion**:
 AskUserQuestion(
   questions=[{
     question: "Uncommitted changes on current branch. What to do?",
-    header: "Changes",
+    header: "LETS",
     options: [
       { label: "Stash", description: "git stash, switch branch, remind to pop later" },
       { label: "Commit first", description: "Run /lets:commit, then switch branch" },

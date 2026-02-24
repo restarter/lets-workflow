@@ -49,15 +49,22 @@ User states goal -> Claude proposes approach -> User approves -> Claude executes
 - When launching expert agents for `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:check`, `/lets:brainstorm` - use ONLY `lets:*` agents (`lets:architect`, `lets:security-expert`, etc.)
 - Never use `general-purpose` or other non-lets subagent types for expert work
 
-## Task References
+## Task References (output rule)
 
-- When mentioning beads tasks in conversation, ALWAYS use format: **Task Title** (`task-id`)
-- Never use bare IDs - the user doesn't memorize them
-- Examples:
-  - Good: "starting **LETS Planning & Execution Workflow** (`0nf`)?"
-  - Good: "closing **Review all commands for consistency** (`24o.2`)"
-  - Bad: "starting epic 0nf?"
-  - Bad: "closing 24o.2"
+Every task mention in ANY output - conversation, reports, graphs, insights - MUST use:
+
+    **Task Title** (`task-id`)
+
+A bare ID like `0nf` or `proj-ffj` without the bold title is a formatting error.
+
+This applies everywhere:
+- Flowing text: "starting **LETS Planning & Execution Workflow** (`0nf`)?"
+- Report rows: `[P2] **Test Coverage** (`proj-1om`)`
+- Dependency graphs: `**Refactor Core** (`proj-ffj`) -> **Tests** (`proj-1om`)`
+- Insights: "Bottleneck: **Refactor Core** (`proj-ffj`) blocks 2 tasks"
+- Bad: "starting epic 0nf?", "closing 24o.2", "Bottleneck: proj-ffj blocks 2 tasks"
+
+If you don't know the task title, run `bd show <id>` to get it.
 
 ## Beads Best Practices
 

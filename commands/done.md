@@ -40,7 +40,7 @@ If uncommitted changes exist, use **AskUserQuestion**:
 AskUserQuestion(
   questions=[{
     question: "You have uncommitted changes. What to do?",
-    header: "Changes",
+    header: "LETS",
     options: [
       { label: "Commit first", description: "Run /lets:commit before finishing task" },
       { label: "Skip", description: "Continue without committing (changes stay unstaged)" },
@@ -92,7 +92,7 @@ Missing: {list}. Fix first or update task scope?
 AskUserQuestion(
   questions=[{
     question: "Some requirements are missing. How to proceed?",
-    header: "Scope",
+    header: "LETS",
     options: [
       { label: "Fix first", description: "Stop closing - go back and implement missing items" },
       { label: "Update scope", description: "Adjust task description to match what was actually done" }
@@ -141,7 +141,7 @@ Then use **AskUserQuestion**:
 AskUserQuestion(
   questions=[{
     question: "Ready to finish {task title}?",
-    header: "Finish",
+    header: "LETS",
     options: [
       { label: "Finish", description: "{action based on remote: 'Push branch and create PR' OR 'Merge to main and delete branch'}" },
       { label: "Keep working", description: "Not done yet - go back to the task" },
@@ -255,7 +255,7 @@ Then use **AskUserQuestion**:
 AskUserQuestion(
   questions=[{
     question: "Task done. What's next?",
-    header: "Next",
+    header: "LETS",
     options: [
       { label: "End session", description: "Run /lets:end - save context and wrap up" },
       { label: "Next task", description: "Pick another task to work on" },

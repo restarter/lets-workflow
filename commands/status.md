@@ -35,6 +35,8 @@ bd list --status=closed --limit 10
 
 ## Report Format
 
+**Every task mention uses `**Title** (id)` format. No bare IDs anywhere in this report.**
+
 Present the report in this structure:
 
 ```markdown
@@ -62,8 +64,8 @@ P4 Backlog:   {count with bar}
 ## Blocked
 {list from bd blocked with blocking reasons}
 Example:
-1. [P2] proj-1om: Test Coverage
-   blocked by: proj-ffj (Refactor CPA Core)
+1. [P2] **Test Coverage** (`proj-1om`)
+   blocked by: **Refactor CPA Core** (`proj-ffj`)
 
 ## Epics Progress
 {from bd epic status, with visual progress bars}
@@ -71,9 +73,9 @@ Example:
 ## Dependency Graph
 {show which tasks block others}
 Example:
-proj-ffj (Refactor)
-+-- -> proj-1om (Tests)
-+-- -> proj-az6 (Unified Selfhost)
+**Refactor CPA Core** (`proj-ffj`)
++-- -> **Test Coverage** (`proj-1om`)
++-- -> **Unified Selfhost** (`proj-az6`)
 
 ## Recently Closed (7 days)
 {list recently closed tasks with relative dates}
@@ -82,10 +84,14 @@ proj-ffj (Refactor)
 {AI-generated observations, examples:}
 - X tasks blocked by single epic - consider prioritizing
 - No P0/P1 tasks - runway is clear
-- Task X in progress > 3 days - may need attention
-- Bottleneck: proj-ffj blocks 2 other tasks
+- **Session Restore** (`proj-ch15`) in progress > 3 days - may need attention
+- Bottleneck: **Refactor CPA Core** (`proj-ffj`) blocks 2 other tasks
 - All epics at 0% - need to break down into subtasks
 ```
+
+## Before Presenting
+
+Scan your output for any bare task IDs (like `proj-xxx` or `0nf.x` without a bold title before them). Fix any you find.
 
 ## Insights to Look For
 

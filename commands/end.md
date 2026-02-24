@@ -24,7 +24,7 @@ If there are uncommitted changes, use **AskUserQuestion**:
 AskUserQuestion(
   questions=[{
     question: "Uncommitted changes detected. What to do?",
-    header: "Changes",
+    header: "LETS",
     options: [
       { label: "Commit", description: "Run /lets:commit before ending session" },
       { label: "Skip", description: "End without committing - changes stay on disk" }
@@ -81,7 +81,7 @@ For each in-progress task, use **AskUserQuestion**:
 AskUserQuestion(
   questions=[{
     question: "{task title} - still in progress?",
-    header: "Task",
+    header: "LETS",
     options: [
       { label: "In progress", description: "Leave open - continue next session" },
       { label: "Ready to finish", description: "Run /lets:done first, then come back to /lets:end" }

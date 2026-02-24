@@ -131,7 +131,7 @@ Then use **AskUserQuestion**:
 AskUserQuestion(
   questions=[{
     question: "Resume execution from Task {N+1}?",
-    header: "Resume",
+    header: "LETS",
     options: [
       { label: "Continue", description: "Pick up from where we left off" },
       { label: "Start fresh", description: "Re-execute from Task 1 (ignores previous progress)" },
@@ -165,7 +165,7 @@ Before executing ANY code, review the plan against current codebase state.
 AskUserQuestion(
   questions=[{
     question: "{OK: 'Plan matches codebase.' | Drift: 'Some files changed: {list}.'} Execute {N} tasks?",
-    header: "Execute",
+    header: "LETS",
     options: [
       { label: "Execute", description: "{OK: 'Start execution' | Drift: 'Adapt implementation to current state'}" },
       { label: "Cancel", description: "Don't execute" }
@@ -180,7 +180,7 @@ AskUserQuestion(
 AskUserQuestion(
   questions=[{
     question: "Major changes detected: {details}. What to do?",
-    header: "Mismatch",
+    header: "LETS",
     options: [
       { label: "Execute anyway", description: "Adapt implementation to current state" },
       { label: "Re-plan", description: "Run /lets:brainstorm to update the plan" },
@@ -222,7 +222,7 @@ Read ALL files listed in the task's "Files" section - both "Modify" and "Create"
 AskUserQuestion(
   questions=[{
     question: "Task {N}: Plan expected {X} but found {Y}. How to proceed?",
-    header: "Mismatch",
+    header: "LETS",
     options: [
       { label: "Adapt", description: "Adapt implementation to current state" },
       { label: "Skip", description: "Skip this task, continue with next" },
@@ -246,7 +246,7 @@ Present what failed (expected vs actual), then:
 AskUserQuestion(
   questions=[{
     question: "Verification failed for Task {N}. How to proceed?",
-    header: "Verify",
+    header: "LETS",
     options: [
       { label: "Fix & retry", description: "Fix the issue and re-run verification" },
       { label: "Skip", description: "Skip verification, continue with next task" },
@@ -325,7 +325,7 @@ Progress: {completed}/{total} tasks
 AskUserQuestion(
   questions=[{
     question: "Continue with next batch (Tasks {X}-{Z})?",
-    header: "Batch",
+    header: "LETS",
     options: [
       { label: "Continue", description: "Execute next batch of tasks" },
       { label: "Pause", description: "Save progress and end session (/lets:end)" }
