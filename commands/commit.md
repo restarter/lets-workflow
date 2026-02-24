@@ -42,10 +42,14 @@ Summarize what changed:
 
 ## Step 4: Confirm with User
 
-**Ask:**
-> "Ready to commit? Here's what changed: {summary}"
+Present the proposed commit as plain text (NOT in a code block or blockquote - it must be clearly readable):
 
-Wait for approval before committing.
+**Ready to commit?**
+`<type>: <description>`
+- {file1} - {what changed}
+- {file2} - {what changed}
+
+Wait for user approval before committing.
 
 ## Step 5: Commit
 
