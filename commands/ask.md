@@ -107,6 +107,25 @@ Show the agent's response:
 {agent response}
 ```
 
+## Step 7: Link Answer to Active Task
+
+```bash
+BRANCH=$(git branch --show-current)
+# Parse task ID from branch: feature/<task-id>-<slug>
+# Example: feature/ji2-beads-deep-integration -> lets-plugin-claude-ji2
+
+# Fallback: bd list --status=in_progress
+```
+
+If multiple in-progress tasks found via fallback, skip beads comment.
+If active task found:
+
+```bash
+bd comments add <task-id> "Asked {agent-name}: {question summary}. Answer: {1-sentence key takeaway}"
+```
+
+Skip if the question is generic (not related to the active task).
+
 ## Output
 
 ```
