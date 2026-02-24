@@ -144,18 +144,18 @@ AskUserQuestion(
     header: "LETS",
     options: [
       { label: "Finish", description: "{action based on remote: 'Push branch and create PR' OR 'Merge to main and delete branch'}" },
-      { label: "Keep working", description: "Not done yet - go back to the task" },
-      { label: "Check context", description: "Run /context to check window usage before deciding" }
+      { label: "Keep working", description: "Not done yet - go back to the task" }
     ],
     multiSelect: false
   }]
 )
 ```
 
+Before asking, remind: "Check context window usage: `/context`"
+
 **Handle response:**
 - **Finish** -> proceed to Step 6
 - **Keep working** -> stop, return to work
-- **Check context** -> run `/context`, then re-ask
 
 ## Step 6: Document in Beads
 
@@ -258,18 +258,18 @@ AskUserQuestion(
     header: "LETS",
     options: [
       { label: "End session", description: "Run /lets:end - save context and wrap up" },
-      { label: "Next task", description: "Pick another task to work on" },
-      { label: "Check context", description: "Run /context to check window usage" }
+      { label: "Next task", description: "Pick another task to work on" }
     ],
     multiSelect: false
   }]
 )
 ```
 
+Before asking, remind: "Check context window usage: `/context`"
+
 **Handle response:**
 - **End session** -> suggest `/lets:end`
 - **Next task** -> show `bd ready`, pick new task
-- **Check context** -> run `/context`, then re-ask
 
 ## Rules
 
