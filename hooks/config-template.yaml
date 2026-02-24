@@ -1,0 +1,5 @@
+# LETS plugin config
+# Copy to .lets/config.yaml and adjust for your project
+
+language: en          # Response language (en/uk/ru)
+merge-branch: main    # Target branch for merges and PR base

@@ -25,12 +25,14 @@ reference/                    # Reference plugins for studying patterns (gitigno
 - `/lets:check` reviews inline (no subagent) for speed
 - All agents are read-only (Read, Grep, Glob, optionally Bash). No Edit/Write.
 - SessionStart hook injects rules from `hooks/rules-context.md`
+- SessionStart hook reads `.lets/config.yaml` and injects settings into session context
 
 ## File Storage
 
 All plugin-generated files go to `.lets/` (gitignored). Never use `/tmp` or other external paths.
 
 ```
+.lets/config.yaml        # Per-project settings (language, merge-branch)
 .lets/sessions/          # Session summaries, session-start-ref
 .lets/reviews/           # Saved review reports
 .lets/plans/             # Implementation plans

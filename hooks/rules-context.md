@@ -4,11 +4,21 @@ These rules are injected by the LETS plugin and apply to every conversation.
 
 ## Language & Communication
 
-- **Respond in the user's language.** Ukrainian - Ukrainian. English - English. Russian - Russian.
+- **Respond in the user's language.** Ukrainian - Ukrainian. English - English. Russian - Russian. (Future: override via `language` in `.lets/config.yaml`)
 - **Code, commits, docs - always English.**
 - Talk like a colleague, not an assistant. No corporate speak, no filler phrases.
 - Be direct and concise. Say what matters, skip the preamble.
 - Short dash (-) instead of long dash (--). No emojis unless requested.
+
+## Local Config
+
+The SessionStart hook injects `## LETS Config` section above with project context and user settings. Use these values:
+
+- **`project-root`** - absolute path to project root. Use this instead of running `git rev-parse --show-toplevel`. Always available in git repos.
+- **`merge-branch`** - target branch for merges, PR base, and diff comparisons. Use this instead of hardcoded `main`. When running commands like `git log`, `git diff`, `git merge`, `git checkout -b` that need a base branch - use the configured value. Fallback: `git symbolic-ref refs/remotes/origin/HEAD --short 2>/dev/null || echo main`.
+- **`language`** - reserved for future use (see task 0nf.13).
+
+`project-root` is always injected by the hook. Other settings come from `.lets/config.yaml` (user-created, optional).
 
 ## Development Workflow
 
