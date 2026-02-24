@@ -44,6 +44,31 @@ User states goal -> Claude proposes approach -> User approves -> Claude executes
   - Bad: "starting epic 0nf?"
   - Bad: "closing 24o.2"
 
+## Beads Best Practices
+
+### Epics
+
+- Epics are **containers**, not blockers - NEVER add `bd dep` from child to its epic
+- Epics are **long-lived** - don't close just because all children are done
+- Only close an epic when the user explicitly says to
+- Every task MUST belong to an epic (`bd create --parent` or `bd update --parent`)
+- If no suitable epic exists - create one first or suggest to the user
+- When 2+ tasks emerge in the same area without an epic - propose a new epic
+- At project init: plan epic structure together with user (3-5 top-level epics)
+
+### Dependencies
+
+- Use `bd dep add` **sparingly** - only when task B literally cannot start without task A being done
+- Parent-child (epic -> task) uses `--parent`, NOT `bd dep`
+- Most tasks are independent - don't over-link
+- Before adding a dep, ask: "Can someone start this task right now without the other?" If yes - no dep needed
+
+### Task Hygiene
+
+- Every task belongs to an epic (no orphans)
+- Review epic structure every 5-10 sessions
+- Track existing epics and suggest the right parent when creating tasks
+
 ## Architecture Mindset
 
 - Study codebase first, follow existing patterns
