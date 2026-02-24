@@ -249,6 +249,28 @@ Branch {feature-branch} deleted
 └────────────────────────────────┘
 ```
 
+Then use **AskUserQuestion**:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Task done. What's next?",
+    header: "Next",
+    options: [
+      { label: "End session", description: "Run /lets:end - save context and wrap up" },
+      { label: "Next task", description: "Pick another task to work on" },
+      { label: "Check context", description: "Run /context to check window usage" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Handle response:**
+- **End session** -> suggest `/lets:end`
+- **Next task** -> show `bd ready`, pick new task
+- **Check context** -> run `/context`, then re-ask
+
 ## Rules
 
 - **NEVER push or create PR without user approval**
