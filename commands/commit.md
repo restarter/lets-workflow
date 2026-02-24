@@ -112,17 +112,53 @@ BAD: feat: Add user authentication system with JWT tokens and refresh logic and 
 - Body explains WHY, diff shows WHAT
 - Task ID footer is automatic - don't ask user about it
 
+## Step 6: Task Progress Check
+
+If active task detected, compare what was committed against the task scope:
+
+```bash
+bd show <task-id>
+```
+
+Brief assessment (2-3 lines max):
+
+```
+## Task Progress
+
+Committed: {what this commit covers}
+Remaining: {what's left from task description, or "nothing - task scope complete"}
+```
+
+- If task scope is fully covered -> suggest `/lets:done`
+- If work remains -> show what's left, suggest next step or `/lets:commit` later
+
 ## Output
 
 After successful commit:
 
+**If task scope complete:**
 ```
 Committed: <hash> <message>
   Files: X changed, Y insertions, Z deletions
   Task: <task-id> (linked)
 
+Task scope complete.
+
 ┌─ LETS ─────────────────────────┐
 │  Done?  /lets:done             │
-│  End?   /lets:end              │
+└────────────────────────────────┘
+```
+
+**If work remains:**
+```
+Committed: <hash> <message>
+  Files: X changed, Y insertions, Z deletions
+  Task: <task-id> (linked)
+
+Remaining: {brief list}
+
+┌─ LETS ─────────────────────────┐
+│  Check?  /lets:check           │
+│  End?    /lets:end             │
 └────────────────────────────────┘
 ```
