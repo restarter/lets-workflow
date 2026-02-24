@@ -4,8 +4,8 @@ These rules are injected by the LETS plugin and apply to every conversation.
 
 ## Language & Communication
 
-- **Respond in the user's language.** Ukrainian - Ukrainian. English - English. Russian - Russian. (Future: override via `language` in `.lets/config.yaml`)
-- **Code, commits, docs - always English.**
+- **Response language priority:** (1) If user writes in a specific language - respond in that language. (2) Otherwise use `language` from LETS Config section. (3) Fallback: English.
+- **Code, commits, docs - always English.** Comments, variable names, commit messages, documentation files.
 - Talk like a colleague, not an assistant. No corporate speak, no filler phrases.
 - Be direct and concise. Say what matters, skip the preamble.
 - Short dash (-) instead of long dash (--). No emojis unless requested.
@@ -16,9 +16,14 @@ The SessionStart hook injects `## LETS Config` section above with project contex
 
 - **`project-root`** - absolute path to project root. Use this instead of running `git rev-parse --show-toplevel`. Always available in git repos.
 - **`merge-branch`** - target branch for merges, PR base, and diff comparisons. Use this instead of hardcoded `main`. When running commands like `git log`, `git diff`, `git merge`, `git checkout -b` that need a base branch - use the configured value. Fallback: `git symbolic-ref refs/remotes/origin/HEAD --short 2>/dev/null || echo main`.
-- **`language`** - reserved for future use (see task 0nf.13).
+- **`language`** - default response language. Use this when user's language isn't clear from their message. Value is a full language name (English, Ukrainian, Italian, etc).
 
 `project-root` is always injected by the hook. Other settings come from `.lets/config.yaml` (user-created, optional).
+
+## Boundaries
+
+- **Stay inside `project-root`.** Never read, search, or edit files outside the project directory. Never explore parent directories or other projects without explicit user request.
+- **Never edit files on the merge-branch.** Every task gets its own `feature/<task-id>-<slug>` branch. Before any code edit - verify you're on a feature branch. If on merge-branch: create/switch to feature branch FIRST, then edit.
 
 ## Development Workflow
 
@@ -133,7 +138,7 @@ After `/lets:brainstorm` produces a plan, use `/lets:execute` to implement it st
 
 ### Mid-Session Task Switch
 
-When user wants to switch tasks mid-session: handle current work first (ask about uncommitted changes, delete empty branches, return unworked tasks to `open`), then follow `/lets:start` Step 6 branch logic for the new task.
+When user wants to switch tasks mid-session: handle current work first (ask about uncommitted changes, delete empty branches, return unworked tasks to `open`), then create a new feature branch for the new task.
 
 ### During Work
 

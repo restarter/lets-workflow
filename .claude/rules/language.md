@@ -2,7 +2,7 @@
 
 ## Language
 
-- **Respond in the user's language.** Ukrainian - Ukrainian. English - English. Russian - Russian.
+- **Response language priority:** (1) If user writes in a specific language - respond in that language. (2) Otherwise use `language` from LETS Config (injected by SessionStart hook). (3) Fallback: English.
 - **Code, commits, docs - always English.** Comments, variable names, commit messages, documentation files.
 
 ## Tone
