@@ -1,10 +1,12 @@
 ---
-description: End work session - check for missing steps, sync beads, save summary
+description: End work session - save progress, sync beads, create summary
 ---
 
 # Session End
 
-End a work session properly. Auto-detect and prompt for missing steps.
+End a work session properly. Save context for next session.
+
+**This is NOT task completion.** Use `/lets:done` to finish a task. `/lets:end` ends a SESSION.
 
 ## Step 1: Check State
 
@@ -14,14 +16,7 @@ git branch --show-current
 bd list --status=in_progress
 ```
 
-## Step 2: Check Beads Documentation
-
-**Ask:** "Did you document your work in beads? (task comments, description updates)"
-
-- If NO or unsure - "Let's do that first. Run `/lets:beads-finish`"
-- If YES - Continue
-
-## Step 3: Handle Uncommitted Changes
+## Step 2: Handle Uncommitted Changes
 
 If there are uncommitted changes:
 
@@ -30,50 +25,59 @@ If there are uncommitted changes:
 - If yes - Run `/lets:commit`
 - If no - Warn: "Changes will be lost if not committed!"
 
-## Step 4: Update Task Status
+## Step 3: Save Progress to Beads (task-level context for multi-session work)
 
-For each in-progress task, ask:
+For each in-progress task, record this session's work:
 
-> "Task `<id>`: `<title>` - complete or still in progress?"
+```bash
+# Get this session's commits
+ROOT=$(git rev-parse --show-toplevel)
+START_REF=$(cat "$ROOT/.lets/sessions/.session-start-ref" 2>/dev/null)
+if [ -n "$START_REF" ]; then
+  git log ${START_REF}..HEAD --oneline  # this session's commits
+else
+  git log --oneline -5  # fallback: recent commits
+fi
+```
 
-- **Complete:** `bd close <id> --reason="<brief summary>"`
-- **In progress:** Leave open, note in summary
+Add progress comment:
 
-## Step 5: Merge Feature Branch
+```bash
+bd comments add <task-id> "## Session progress {YYYY-MM-DD}
 
-**Only if** on a feature branch (not main/master):
+### Commits this session
+{git log from start-ref}
 
-### Task Completed
+### Done
+- {what was completed this session}
 
-If the current branch's task was closed in Step 4:
+### Remaining
+- {what's left to do}
 
-**Ask:** "Task done. Merge `{branch}` into master and delete branch?"
+### Context for next session
+- {important info for AI to recover context}"
+```
 
-- If yes:
-  ```bash
-  MAIN=$(git symbolic-ref refs/remotes/origin/HEAD --short 2>/dev/null || echo master)
-  git checkout $MAIN
-  git merge {branch}
-  git branch -d {branch}
-  ```
-- If no - stay on feature branch
+**Skip if** no meaningful work was done this session (no commits, no decisions).
 
-### Task Still In Progress
+## Step 4: Ask About Task Status
 
-Skip merge. Stay on feature branch. Note in summary that work continues.
+For each in-progress task:
 
-## Step 6: Create Session Summary (LOCAL ONLY)
+> "**{task title}** (`{task-id}`) - still in progress, or ready to finish?"
+
+- **Still in progress:** Leave open, progress already saved in Step 3
+- **Ready to finish:** Suggest `/lets:done` first, then come back to `/lets:end`
+
+## Step 5: Create Session Summary (session-level context for next session bootstrap)
 
 Create TWO files:
-1. **Dated archive:** `.lets/sessions/YYYY-MM-DD-HHMM.md` (history preserved)
+1. **Dated archive:** `.lets/sessions/YYYY-MM-DD-HHMM.md`
 2. **Latest:** `.lets/sessions/last-summary.md` (overwritten each session)
 
 ```bash
-# Create sessions directory if needed (always relative to repo root)
 ROOT=$(git rev-parse --show-toplevel)
 mkdir -p "$ROOT/.lets/sessions"
-
-# Write summary to both files
 DATED_FILE="$ROOT/.lets/sessions/$(date +%Y-%m-%d-%H%M).md"
 ```
 
@@ -87,7 +91,7 @@ DATED_FILE="$ROOT/.lets/sessions/$(date +%Y-%m-%d-%H%M).md"
 
 ### In Progress
 - {task id}: {what remains}
-- Branch: {branch name if still on feature branch}
+- Branch: {branch name if on feature branch}
 
 ### Commits
 - {hash} {message}
@@ -104,33 +108,37 @@ DATED_FILE="$ROOT/.lets/sessions/$(date +%Y-%m-%d-%H%M).md"
 - {any context AI needs to continue}
 ```
 
+## Step 6: Sync Beads
+
+```bash
+bd sync --flush-only
+```
+
 ## Output
 
 ```
-## Session End Summary
+## Session End
 
-Git: {clean / X uncommitted / X unpushed}
+Git: {clean / X uncommitted}
 Branch: {current branch}
-Beads: {local changes saved}
-Tasks closed: {list}
-Tasks in progress: {list}
-Summary saved: .lets/sessions/{dated}.md + last-summary.md
+Tasks in progress: {list with titles}
+Summary saved: .lets/sessions/{dated}.md
+Beads: synced
 ```
 
-Then ask about sync/push in plain text (no LETS box):
+Then ask about push in plain text (no LETS box):
 
-> "Ready to sync to remote? (`bd sync && git push`)"
+> "Push to remote? (`git push`)"
 
-- If user says "sync" / "push" / "+" - run `bd sync` then `git push`
-- If user says "later" / "no" / "local" - skip, remind them to sync later
-- **NEVER sync or push automatically**
+- If yes - `git push`
+- If no - skip
+- **NEVER push automatically**
 
 ## Rules
 
-- **Check beads documentation before closing**
-- **Check uncommitted changes before closing**
-- **Offer branch merge only when task is complete**
+- **Save progress to beads** for multi-session tasks
+- **Check uncommitted changes** before closing
+- **Suggest `/lets:done`** if task seems complete
 - **NEVER push without explicit user approval**
-- Always write summary (local)
-- Include branch info in session summary for context recovery
+- Always write session summary (local)
 - Respond in user's language

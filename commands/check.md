@@ -73,6 +73,27 @@ Be concise - this is a quick check, not a full review."
 
 Show the agent's response directly.
 
+## Step 5: Link to Active Task
+
+If issues were found, record in beads:
+
+```bash
+BRANCH=$(git branch --show-current)
+# Parse task ID from branch: feature/<task-id>-<slug>
+# Example: feature/ji2-beads-deep-integration -> lets-plugin-claude-ji2
+
+# Fallback: bd list --status=in_progress
+```
+
+If multiple in-progress tasks found via fallback, skip beads comment.
+If active task found AND issues detected:
+
+```bash
+bd comments add <task-id> "Quick check: {verdict}. {N} issues found."
+```
+
+If clean (no issues) - skip, don't add noise to the task.
+
 ## Output
 
 **If GOOD or REVIEW:**

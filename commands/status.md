@@ -1,8 +1,8 @@
 ---
-description: Full beads report with tasks, priorities, blockers, and insights
+description: Show task overview and project status
 ---
 
-# Beads Report
+# Task Status
 
 Generate a full overview of the task tracker state.
 
@@ -38,7 +38,7 @@ bd list --status=closed --limit 10
 Present the report in this structure:
 
 ```markdown
-# Beads Report - {project name}
+# Task Status - {project name}
 Generated: {current date}
 
 ## Summary
@@ -104,11 +104,29 @@ Present the full report directly to the user. Use the box-drawing characters for
 
 ## Suggested Next Action
 
-Based on current state, suggest next step in plain text:
+Based on current state, suggest next step with LETS box:
 
-- **No WIP tasks:** "Which task are you working on today?"
-- **Has WIP:** "Continue working, or `/lets:beads-finish` to document progress?"
-- **Uncommitted changes:** "Commit first? `/lets:commit`"
+**No WIP tasks:**
+```
+┌─ LETS ─────────────────────────┐
+│  Start?  /lets:start           │
+└────────────────────────────────┘
+```
+
+**Has WIP:**
+```
+┌─ LETS ─────────────────────────┐
+│  Note?    /lets:note           │
+│  Check?   /lets:check          │
+└────────────────────────────────┘
+```
+
+**Uncommitted changes:**
+```
+┌─ LETS ─────────────────────────┐
+│  Commit?  /lets:commit         │
+└────────────────────────────────┘
+```
 
 ## Language
 

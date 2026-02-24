@@ -55,21 +55,23 @@ Present this to the developer:
 ### Session Flow
 
 ```
-/lets:start -> Pick task -> Work -> /lets:beads-finish -> /lets:commit -> /lets:end
+/lets:start -> Work -> /lets:check -> /lets:commit -> /lets:done -> /lets:end
 ```
 
 ### Essential Skills
 
-| Skill | When to use |
-|-------|-------------|
-| `/lets:start` | Beginning of session |
-| `/lets:end` | End of session |
-| `/lets:commit` | Ready to commit changes |
-| `/lets:check` | Quick sanity check (~30 sec) |
-| `/lets:review` | Full deep review (~2-3 min) |
-| `/lets:beads-finish` | Task done, need to document |
-| `/lets:beads-status` | Check tasks anytime |
-| `/lets:opinion` | Technical decision needed |
+| Skill | Category | When to use |
+|-------|----------|-------------|
+| `/lets:start` | Session | Beginning of session |
+| `/lets:end` | Session | End of session |
+| `/lets:done` | Task | Task is complete (creates PR or merges) |
+| `/lets:commit` | Code | Ready to commit changes |
+| `/lets:check` | Code | Quick sanity check (~30 sec) |
+| `/lets:review` | Code | Full deep review (~2-3 min) |
+| `/lets:opinion` | Expert | Technical decision needed |
+| `/lets:ask` | Expert | Quick question to one expert |
+| `/lets:status` | Utility | Task overview anytime |
+| `/lets:note` | Utility | Add note to active task |
 
 ### Planning Skills (for bigger tasks)
 

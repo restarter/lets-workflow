@@ -25,9 +25,9 @@ git log --oneline -3
 
 Report: branch, uncommitted changes, recent commits.
 
-## Step 3: Beads Status
+## Step 3: Task Status
 
-Run `/lets:beads-status` command to show full task overview.
+Run `/lets:status` command to show full task overview.
 
 ## Step 4: Present Summary
 
@@ -41,7 +41,7 @@ Changes: {clean / X uncommitted files}
 Recent: {last 3 commits}
 
 ## Tasks
-{output from /lets:beads-status}
+{output from /lets:status}
 ```
 
 ## Step 5: Task Selection (MANDATORY)
@@ -84,8 +84,33 @@ Check current state:
   |
   +- Branch exists elsewhere - git checkout <branch>
   |
-  +- Branch doesn't exist - git checkout -b <branch> $(git symbolic-ref refs/remotes/origin/HEAD --short 2>/dev/null || echo master)
+  +- Branch doesn't exist - git checkout -b <branch> $(git symbolic-ref refs/remotes/origin/HEAD --short 2>/dev/null || echo main)
 ```
+
+### Context Recovery (resuming existing branch)
+
+If the branch already exists (continuing a multi-session task):
+
+```bash
+bd show <task-id>
+bd comments list <task-id>
+```
+
+Present: "Resuming **{task title}** (`{task-id}`). Last session: {summary from latest beads comment}"
+
+This recovers context even after conversation compaction.
+
+### Save Session Start Reference
+
+After branch is ready, save the starting point for this session:
+
+```bash
+ROOT=$(git rev-parse --show-toplevel)
+mkdir -p "$ROOT/.lets/sessions"
+git rev-parse HEAD > "$ROOT/.lets/sessions/.session-start-ref"
+```
+
+This lets `/lets:end` know which commits belong to this session.
 
 ### Handle Uncommitted Changes
 
@@ -128,7 +153,7 @@ After task is selected and branch is ready, show reminders and welcome box.
 ## Reminders
 - Check context window: `/context`
 - For technical decisions: `/lets:opinion`
-- When done: `/lets:beads-finish` - `/lets:commit` - `/lets:end`
+- When task done: `/lets:commit` - `/lets:done` - `/lets:end`
 
 ┌─ LETS ─────────────────────────┐
 │  Working on: {task-id}         │

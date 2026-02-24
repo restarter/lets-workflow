@@ -12,17 +12,20 @@ Development workflow plugin with session management, code review, and task track
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `/lets:start` | Start session - restore context, show tasks, select work item |
-| `/lets:end` | End session - check state, save summary, handle cleanup |
-| `/lets:commit` | Commit with review and conventional commit format |
-| `/lets:check` | Quick sanity check (~30s) - 4 perspectives, single pass |
-| `/lets:review` | Full code review (~2-3 min) - up to 11 specialized agents |
-| `/lets:opinion` | Technical decision analysis from 5 expert perspectives |
-| `/lets:install` | First-time setup guide |
-| `/lets:beads-finish` | Document completed work in beads |
-| `/lets:beads-status` | Full task report with priorities and blockers |
+| Command | Category | Description |
+|---------|----------|-------------|
+| `/lets:start` | Session | Start session - restore context, show tasks, select work item |
+| `/lets:end` | Session | End session - save progress, sync beads, create summary |
+| `/lets:done` | Task | Finish a task - document, create PR or merge, close |
+| `/lets:commit` | Code | Commit with review and conventional commit format |
+| `/lets:check` | Code | Quick sanity check (~30s) - 5 perspectives, single agent |
+| `/lets:review` | Code | Full code review (~2-3 min) - up to 11 specialized agents |
+| `/lets:opinion` | Expert | Technical decision analysis from 3-5 expert perspectives |
+| `/lets:ask` | Expert | Quick expert consultation - single agent |
+| `/lets:status` | Utility | Task overview and project status report |
+| `/lets:note` | Utility | Add note to active task |
+| `/lets:install` | Setup | First-time setup guide |
+| `/lets:migrate` | Setup | One-time storage migration to .lets/ |
 
 ## Review Agents
 
@@ -45,7 +48,7 @@ The review system uses 11 specialized agents that activate based on change types
 ## Session Flow
 
 ```
-/lets:start -> Pick task -> Work -> /lets:beads-finish -> /lets:commit -> /lets:end
+/lets:start -> Work -> /lets:check -> /lets:commit -> /lets:done -> /lets:end
 ```
 
 ## Dependencies

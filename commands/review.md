@@ -287,9 +287,18 @@ Display full report in console.
 
 **Always end with:** `Saved to: .lets/reviews/{filename}`
 
-## Step 10: Update Beads (if task linked)
+## Step 10: Link Review to Active Task
 
-If PR description, branch, or current task contains task ID:
+```bash
+BRANCH=$(git branch --show-current)
+# Parse task ID from branch: feature/<task-id>-<slug>
+# Example: feature/ji2-beads-deep-integration -> lets-plugin-claude-ji2
+
+# Fallback: bd list --status=in_progress
+```
+
+If multiple in-progress tasks found via fallback, skip beads comment.
+If active task found:
 
 ```bash
 bd comments add <task-id> "Code review ({PR #X | local}): {verdict}. {N} issues found."

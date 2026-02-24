@@ -25,6 +25,7 @@ User states goal -> Claude proposes approach -> User approves -> Claude executes
 ## Git Conventions
 
 - Commit messages: `<type>: <subject>` (feat, fix, refactor, docs, chore, test)
+- Commit footer: `Task: <task-id>` (automatic, links commit to active beads task)
 - Always `git status` before and after commit
 - Keep subject under 50 chars, imperative mood
 
@@ -53,8 +54,12 @@ User states goal -> Claude proposes approach -> User approves -> Claude executes
 ## Session Flow
 
 ```
-/lets:start -> Work -> /lets:beads-finish -> /lets:check -> /lets:commit -> /lets:end
+/lets:start -> Work -> /lets:check -> /lets:commit -> /lets:done -> /lets:end
 ```
+
+Two separate lifecycles:
+- **Session:** `/lets:start` ... `/lets:end` (one conversation)
+- **Task:** picked at start ... `/lets:done` (may span multiple sessions)
 
 **Review options:**
 - `/lets:check` - quick sanity check (~30 sec), before any commit
@@ -93,7 +98,7 @@ Never work without a tracked task. User must pick existing task or create new on
 ### During Work
 
 - Technical decision needed -> Suggest `/lets:opinion`
-- Task completed -> Remind about `/lets:beads-finish`
+- Task completed -> Suggest `/lets:done`
 - Multiple files changed -> Periodic reminder about committing
 - Before commit -> Suggest `/lets:check` for quick sanity check
 - Significant changes -> Suggest `/lets:review` for full deep review
@@ -106,8 +111,9 @@ Every milestone should show a LETS box with relevant next steps.
 | Phase | Trigger | LETS box |
 |-------|---------|----------|
 | **Active work** | AI just edited files | `opinion` + `check` |
-| **Work done** | Feature/fix complete | `review` + `beads-finish` + `commit` |
-| **After commit** | Commit succeeded | `end` + `push` |
+| **Work done** | Feature/fix complete | `review` + `commit` |
+| **After commit** | Commit succeeded | `done` or `end` |
+| **Task done** | `/lets:done` ran | `end` |
 | **Decision point** | AI presents 2+ options | `opinion` |
 
 **Rule:** If AI made changes -> always suggest `/lets:check` first.
@@ -123,17 +129,16 @@ Every milestone should show a LETS box with relevant next steps.
 **Work done:**
 ```
 ┌─ LETS ─────────────────────────┐
-│  Review?    /lets:review       │
-│  Document?  /lets:beads-finish │
-│  Commit?    /lets:commit       │
+│  Review?  /lets:review         │
+│  Commit?  /lets:commit         │
 └────────────────────────────────┘
 ```
 
 **After commit:**
 ```
 ┌─ LETS ─────────────────────────┐
+│  Done?  /lets:done             │
 │  End?   /lets:end              │
-│  Push?  git push               │
 └────────────────────────────────┘
 ```
 
@@ -148,44 +153,51 @@ When presenting 2+ options, ALWAYS show:
 
 This applies when: presenting implementation approaches, choosing between solutions, trade-off decisions, architecture choices.
 
-### Commit & Session End
+### Commit, Task Done & Session End
 
 **Commit:** ALWAYS use `/lets:commit` skill. Never commit directly.
 
+**Task done:**
+1. All code committed -> `/lets:done`
+2. Creates PR (if remote) or merges locally
+3. Closes task in beads
+
 **Session end:**
 1. Check uncommitted changes -> suggest `/lets:commit`
-2. Check beads documentation -> suggest `/lets:beads-finish`
-3. Suggest `/lets:end` to close properly
+2. Check if task is done -> suggest `/lets:done`
+3. Suggest `/lets:end` to close session properly
 
 ## Skill Quick Reference
 
-| Skill | When |
-|-------|------|
-| `/lets:start` | Beginning of session |
-| `/lets:end` | End of session |
-| `/lets:commit` | Ready to commit |
-| `/lets:check` | Quick sanity check (~30s) |
-| `/lets:review` | Full deep review (~2-3 min) |
-| `/lets:beads-finish` | Document completed work |
-| `/lets:beads-status` | Check tasks |
-| `/lets:ask` | Quick expert consultation (1 agent) |
-| `/lets:opinion` | Technical decision (3-5 agents) |
-| `/lets:install` | First-time setup |
+| Skill | Category | When |
+|-------|----------|------|
+| `/lets:start` | Session | Beginning of session |
+| `/lets:end` | Session | End of session |
+| `/lets:done` | Task | Task is complete |
+| `/lets:commit` | Code | Ready to commit |
+| `/lets:check` | Code | Quick sanity check (~30s) |
+| `/lets:review` | Code | Full deep review (~2-3 min) |
+| `/lets:opinion` | Expert | Technical decision (3-5 agents) |
+| `/lets:ask` | Expert | Quick expert consultation (1 agent) |
+| `/lets:status` | Utility | Task overview and project status |
+| `/lets:note` | Utility | Add note to active task |
+| `/lets:install` | Setup | First-time setup |
 
 ## Key Principles
 
 1. **Every session has a task** - no random work without tracking
 2. **Big tasks need planning** - use `/feature-dev` or `/brainstorming`
 3. **Document everything** - beads is the source of truth
-4. **Skills guide the flow** - each skill prompts next step
-5. **Always suggest next step** - never end response without direction
+4. **Git + Beads linked** - commits reference tasks, tasks track commits
+5. **Skills guide the flow** - each skill prompts next step
+6. **Always suggest next step** - never end response without direction
 
 ## Warning Situations
 
 | Situation | Action |
 |-----------|--------|
 | Ending with uncommitted changes | Warn, suggest `/lets:commit` |
-| Ending without beads docs | Ask about `/lets:beads-finish` |
+| Task seems complete but no `/lets:done` | Suggest `/lets:done` |
 | Task in progress, no recent commits | Remind about `/lets:commit` |
 | Context window > 70% | Warn, suggest `/lets:end` and new window |
 

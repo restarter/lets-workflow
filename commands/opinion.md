@@ -131,6 +131,25 @@ For each agent, summarize their position:
 **Action:** {specific next step}
 ```
 
+## Step 7: Link Decision to Active Task
+
+Record the decision in beads for future context recovery:
+
+```bash
+BRANCH=$(git branch --show-current)
+# Parse task ID from branch: feature/<task-id>-<slug>
+# Example: feature/ji2-beads-deep-integration -> lets-plugin-claude-ji2
+
+# Fallback: bd list --status=in_progress
+```
+
+If multiple in-progress tasks found via fallback, skip beads comment.
+If active task found:
+
+```bash
+bd comments add <task-id> "Decision: {topic}. Chose: {recommended option}. Reason: {1-sentence why}"
+```
+
 ## Anti-patterns
 
 - "Both options are valid, you decide"
@@ -160,10 +179,10 @@ After recommendation, show LETS box based on context:
 
 **If decision is about completed work:**
 ```
-┌─ LETS ───────────────────────────┐
-│  Document?  /lets:beads-finish   │
-│  Commit?    /lets:commit         │
-└──────────────────────────────────┘
+┌─ LETS ─────────────────────────┐
+│  Done?    /lets:done           │
+│  Commit?  /lets:commit         │
+└────────────────────────────────┘
 ```
 
 ## Note

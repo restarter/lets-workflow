@@ -1,0 +1,138 @@
+---
+description: Add a note to the active task - progress, decisions, context
+---
+
+# Task Note
+
+Add a note to the active beads task. For mid-work documentation - progress updates, research findings, decisions, context for future sessions.
+
+**This is a utility, not a flow step.** Main flow handles documentation automatically:
+- `/lets:commit` records commits to the task
+- `/lets:done` documents task completion
+- `/lets:end` saves session progress
+
+Use `/lets:note` when you want to add extra context that doesn't fit those flows.
+
+## When to Use
+
+- Research findings: "Investigated X, found Y"
+- Design decisions: "Chose approach A because..."
+- Blocker discovered: "Can't proceed until Z"
+- Context dump: "Important info for next session"
+
+## Step 1: Active Task Detection
+
+```bash
+BRANCH=$(git branch --show-current)
+# Parse task ID from branch: feature/<task-id>-<slug>
+# Example: feature/ji2-beads-deep-integration -> lets-plugin-claude-ji2
+
+# Fallback:
+bd list --status=in_progress
+```
+
+If no active task or multiple in-progress tasks found - ask user which task to add a note to.
+
+## Step 2: Review Current State
+
+```bash
+bd show <task-id>
+bd comments list <task-id>
+```
+
+Check existing comments to avoid duplicating info.
+
+## Step 3: Ask What to Note
+
+If not obvious from conversation context, ask:
+
+> "What do you want to note?"
+
+Options:
+- Progress update
+- Decision made
+- Research findings
+- Blocker / issue
+- Context for next session
+
+## Step 4: Add Note
+
+```bash
+bd comments add <task-id> "## {Note type} {YYYY-MM-DD}
+
+{content based on type}"
+```
+
+### Note Templates
+
+**Progress:**
+```markdown
+## Progress {date}
+
+### Done
+- {what was completed}
+
+### Remaining
+- {what's left to do}
+```
+
+**Decision:**
+```markdown
+## Decision {date}
+
+**Chose:** {option}
+**Over:** {alternatives}
+**Because:** {reasoning}
+```
+
+**Research:**
+```markdown
+## Research {date}
+
+### Findings
+- {key discoveries}
+
+### Recommendation
+- {suggested approach}
+```
+
+**Blocker:**
+```markdown
+## Blocker {date}
+
+**Issue:** {what's blocking}
+**Impact:** {what can't proceed}
+**Options:** {possible solutions}
+```
+
+## Step 5: Update Description (if needed)
+
+If the task scope or understanding changed significantly:
+
+```bash
+bd update <task-id> --description="<updated description>"
+```
+
+## Step 6: Verify
+
+```bash
+bd show <task-id>
+```
+
+## Output
+
+```
+Note added to **{task title}** ({task-id})
+
+┌─ LETS ─────────────────────────┐
+│  Check?   /lets:check          │
+│  Commit?  /lets:commit         │
+└────────────────────────────────┘
+```
+
+## Rules
+
+- **Be specific** - "Fixed bug" is useless, "Fixed null check in PaymentService.process()" is useful
+- **Record decisions** - future you will thank you
+- **Use markdown** - comments support formatting
+- Respond in user's language

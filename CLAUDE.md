@@ -6,7 +6,7 @@ Claude Code plugin for development workflow with session management, code review
 
 ```
 .claude-plugin/plugin.json   # Plugin manifest
-commands/                     # 10 slash commands (/lets:start, /lets:review, /lets:ask, etc.)
+commands/                     # 12 slash commands (/lets:start, /lets:done, /lets:review, etc.)
 agents/                       # 12 agents (11 experts + quick-reviewer for /lets:check)
 hooks/                        # SessionStart hook - injects workflow rules
 reference/                    # Reference plugins for studying patterns (gitignored)
@@ -25,6 +25,16 @@ reference/                    # Reference plugins for studying patterns (gitigno
 - `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:check` use `subagent_type: "lets:agent-name"` to dispatch agents via Task tool
 - All agents are read-only (Read, Grep, Glob, optionally Bash). No Edit/Write.
 - SessionStart hook injects rules from `hooks/rules-context.md`
+
+## File Storage
+
+All plugin-generated files go to `.lets/` (gitignored). Never use `/tmp` or other external paths.
+
+```
+.lets/sessions/          # Session summaries, session-start-ref
+.lets/reviews/           # Saved review reports
+.lets/plans/             # Implementation plans
+```
 
 ## Dependencies
 
@@ -59,7 +69,7 @@ Every lets:* command MUST end with branded LETS box:
 **Content guidelines:**
 - Short action word + `?` (e.g., "Commit?", "Next?", "Fix?")
 - **ONLY `/lets:*` commands** - never raw commands like `bd sync`, `bd update`
-- **Exception:** `git push` allowed after `/lets:commit`
+- **Exception:** `git push` allowed after `/lets:done` or `/lets:end`
 - **No command = no box** - if next step isn't a /lets:* command, just ask in plain text
 
 ### Command Checklist
@@ -67,5 +77,5 @@ Every lets:* command MUST end with branded LETS box:
 - [ ] Has LETS box in output section
 - [ ] Updates Skill Quick Reference in `hooks/rules-context.md`
 - [ ] Updates `/lets:install` tables
-- [ ] Follows session flow (start -> work -> finish -> commit -> end)
+- [ ] Follows session flow (start -> work -> commit -> done -> end)
 - [ ] Description is clear and actionable

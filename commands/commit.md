@@ -4,7 +4,7 @@ description: Commit changes with proper review and conventional commit message
 
 # Git Commit
 
-Review and commit changes with conventional commit format.
+Review and commit changes with conventional commit format. Links commits to the active beads task.
 
 ## Step 1: Check Status
 
@@ -15,7 +15,22 @@ git diff --stat
 
 If no changes - inform user and exit.
 
-## Step 2: Review Changes
+## Step 2: Active Task Detection
+
+```bash
+BRANCH=$(git branch --show-current)
+# Parse task ID from branch: feature/<task-id>-<slug>
+# Example: feature/ji2-beads-deep-integration -> lets-plugin-claude-ji2
+
+# Fallback:
+bd list --status=in_progress --format=ids 2>/dev/null | head -1
+```
+
+If found, the task ID will be used in commit footer.
+If multiple in-progress tasks found via fallback, ask user which to link.
+If not found - commit normally without task link.
+
+## Step 3: Review Changes
 
 ```bash
 git diff
@@ -25,21 +40,25 @@ Summarize what changed:
 - Files modified/added/deleted
 - Key changes in each file
 
-## Step 3: Confirm with User
+## Step 4: Confirm with User
 
 **Ask:**
 > "Ready to commit? Here's what changed: {summary}"
 
 Wait for approval before committing.
 
-## Step 4: Commit
+## Step 5: Commit
 
 ```bash
 git add -A
 git status  # Verify staging
-git commit -m "<type>: <description>"
+git commit -m "<type>: <description>
+
+Task: <task-id>"
 git status  # Verify clean
 ```
+
+If no active task detected, omit the `Task:` footer line.
 
 ### Commit Message Format
 
@@ -47,6 +66,8 @@ git status  # Verify clean
 <type>: <short description>
 
 <optional body - why, not what>
+
+Task: <task-id>
 ```
 
 **Types:**
@@ -61,10 +82,12 @@ git status  # Verify clean
 
 ```
 feat: Add user authentication with JWT
+
+Task: lets-plugin-claude-abc
+
 fix: Resolve null pointer in PaymentService
-refactor: Extract PostbackHandler from controller
-docs: Update API documentation
-chore: Upgrade Laravel to 10.x
+
+Task: proj-def
 ```
 
 ### Bad Examples
@@ -83,6 +106,7 @@ BAD: feat: Add user authentication system with JWT tokens and refresh logic and 
 - Keep subject line under 50 chars
 - Use imperative mood ("Add" not "Added")
 - Body explains WHY, diff shows WHAT
+- Task ID footer is automatic - don't ask user about it
 
 ## Output
 
@@ -91,9 +115,10 @@ After successful commit:
 ```
 Committed: <hash> <message>
   Files: X changed, Y insertions, Z deletions
+  Task: <task-id> (linked)
 
-┌─ LETS ─────────────────┐
-│  End?   /lets:end      │
-│  Push?  git push       │
-└────────────────────────┘
+┌─ LETS ─────────────────────────┐
+│  Done?  /lets:done             │
+│  End?   /lets:end              │
+└────────────────────────────────┘
 ```
