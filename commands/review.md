@@ -359,8 +359,13 @@ bd comments add <task-id> "Code review ({PR #X | local}): {verdict}. {N} issues 
 ROOT=$(git rev-parse --show-toplevel)
 
 # If path provided: use it
-# If no path: find latest plan
-ls -t "$ROOT/.lets/plans/"*.md 2>/dev/null | head -1
+# If no path: derive from branch name
+BRANCH=$(git branch --show-current)
+SLUG=${BRANCH#feature/}
+cat "$ROOT/.lets/plans/${SLUG}.md" 2>/dev/null
+
+# Fallback: glob match by task-id
+ls "$ROOT/.lets/plans/"*{task-id}* 2>/dev/null
 ```
 
 If no plan files found, inform user and exit:

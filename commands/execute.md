@@ -30,22 +30,18 @@ Verify not on main/master:
 
 ## Step 2: Load Plan
 
-Plan filename matches the task ID (short form from beads).
+Plan filename matches the branch slug (branch name without `feature/` prefix).
 
 ```bash
 ROOT=$(git rev-parse --show-toplevel)
 
-# Primary: short task-id
-# e.g., .lets/plans/4ef.md
-cat "$ROOT/.lets/plans/{task-id}.md" 2>/dev/null
-
-# Fallback: derive from branch name
-# feature/4ef-create-lets-execute-skill -> 4ef-create-lets-execute-skill.md
+# Primary: derive from branch name
+# feature/0nf.10-improve-brainstorm -> 0nf.10-improve-brainstorm.md
 BRANCH=$(git branch --show-current)
 SLUG=${BRANCH#feature/}
 cat "$ROOT/.lets/plans/${SLUG}.md" 2>/dev/null
 
-# Last resort: glob match by task-id
+# Fallback: glob match by task-id
 ls "$ROOT/.lets/plans/"*{task-id}* 2>/dev/null
 ```
 
@@ -65,14 +61,14 @@ Check for existing execution state (multi-session resume):
 
 ```bash
 ROOT=$(git rev-parse --show-toplevel)
-cat "$ROOT/.lets/execution/{task-id}.json" 2>/dev/null
+cat "$ROOT/.lets/execution/{branch-slug}.json" 2>/dev/null
 ```
 
-**State file format** (`.lets/execution/{task-id}.json`):
+**State file format** (`.lets/execution/{branch-slug}.json`):
 
 ```json
 {
-  "plan": ".lets/plans/{task-id}.md",
+  "plan": ".lets/plans/{branch-slug}.md",
   "total_tasks": 6,
   "completed": [
     {"task": 1, "name": "Create agent file", "commit": "abc1234"},
@@ -94,7 +90,7 @@ If argument is `--status`:
 ```
 ## Execution Status: **{task title}** (`{task-id}`)
 
-Plan: .lets/plans/{task-id}.md
+Plan: .lets/plans/{branch-slug}.md
 Progress: {completed}/{total} tasks
 
 {task list with [x] / [ ] markers}
@@ -223,7 +219,7 @@ If the plan has a `**Commit:**` section for this task:
 
 After each task completes (committed or not):
 
-Update `.lets/execution/{task-id}.json`:
+Update `.lets/execution/{branch-slug}.json`:
 ```bash
 ROOT=$(git rev-parse --show-toplevel)
 mkdir -p "$ROOT/.lets/execution"
@@ -292,11 +288,11 @@ Run the plan's `## Success Criteria` checks.
 
 ### Clean Up State File
 
-Delete `.lets/execution/{task-id}.json` - execution is complete, state no longer needed. Beads comment preserves the history.
+Delete `.lets/execution/{branch-slug}.json` - execution is complete, state no longer needed. Beads comment preserves the history.
 
 ```bash
 ROOT=$(git rev-parse --show-toplevel)
-rm "$ROOT/.lets/execution/{task-id}.json" 2>/dev/null
+rm "$ROOT/.lets/execution/{branch-slug}.json" 2>/dev/null
 ```
 
 ### Record Completion
@@ -338,7 +334,7 @@ Tasks: {N}/{N} completed
 - **NEVER skip verification** - if verify fails, stop and ask
 - **NEVER commit without user approval** - delegate to `/lets:commit`
 - **NEVER work on main/master** - verify feature branch in Step 1
-- **ALWAYS save state after each task** - `.lets/execution/{task-id}.json` is the resume mechanism
+- **ALWAYS save state after each task** - `.lets/execution/{branch-slug}.json` is the resume mechanism
 - **ALWAYS save beads comment after each batch** - human-readable progress mirror
 - **Adapt, don't paste** - plan intent matters more than plan text
 - **Stop on mismatch** - if reality diverges significantly from plan, surface it immediately

@@ -5,7 +5,7 @@ argument-hint: "[feature description]"
 
 # Brainstorm
 
-Turn a task or idea into a detailed implementation plan. Explores codebase with 3 agents, designs 3 architecture options, evaluates with expert panel, then writes a bite-sized plan.
+Turn a task or idea into a detailed implementation plan. Clarifies scope first, explores codebase, designs architecture options, evaluates with expert panel, then writes a bite-sized plan.
 
 **HARD-GATE: This command produces a plan, NOT code. No files are modified except .lets/plans/.**
 
@@ -41,7 +41,34 @@ If no task found, warn:
 
 Do not block - continue if user acknowledges.
 
-## Step 3: Codebase Exploration (3 Agents Parallel)
+## Step 3: Clarifying Questions
+
+**Ask questions BEFORE exploration.** Scope must be clear before launching expensive agents.
+
+Based on (goal + task description), identify unknowns that would change the architecture.
+
+Present ALL questions at once - max 5, min 2.
+
+Categories to draw from:
+- **Scope**: What's explicitly OUT of scope?
+- **Behavior**: Edge cases, error handling, user-facing behavior
+- **Constraints**: Performance, compatibility, must-not-break areas
+- **Success criteria**: How will we know it's done?
+- **Unknowns**: Technical unknowns that need spiking first
+
+```
+Before exploring the codebase, I need to clarify scope:
+
+1. {question}
+2. {question}
+...
+
+Answer all at once.
+```
+
+Wait for user answers before proceeding.
+
+## Step 4: Codebase Exploration
 
 Gather project context:
 
@@ -49,6 +76,41 @@ Gather project context:
 ROOT=$(git rev-parse --show-toplevel)
 cat "$ROOT/CLAUDE.md" 2>/dev/null | head -200
 ```
+
+### Size Heuristic
+
+Check project size before choosing exploration strategy:
+
+```bash
+find "$ROOT" -type f -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/vendor/*' | wc -l
+```
+
+| Project size | Strategy |
+|-------------|----------|
+| < 100 files | **Single agent** - one explorer with combined focus |
+| >= 100 files | **Full** - 3 parallel explorer agents |
+
+### Single Agent Exploration (< 100 files)
+
+```
+Task(
+  subagent_type="lets:explorer",
+  prompt="FULL EXPLORATION MODE. Map patterns, structure, and integration points for a new feature.
+
+FEATURE GOAL: {feature goal from Step 1}
+USER CLARIFICATIONS: {answers from Step 3}
+TASK CONTEXT: {task title and description from beads, if available}
+
+YOUR FOCUS:
+- Find existing features SIMILAR to what we're building (reusable patterns)
+- Map WHERE new code belongs (directory structure, naming conventions)
+- Identify HOW new code connects (APIs, entry points, dependencies, tests)
+
+Return a structured exploration report covering all three areas."
+)
+```
+
+### Full Exploration (>= 100 files, 3 Agents Parallel)
 
 **CRITICAL: Launch ALL 3 explorer agents in a SINGLE message with multiple Task tool calls.**
 
@@ -144,31 +206,6 @@ After all return, synthesize a combined codebase map:
 
 Show summary to user before proceeding.
 
-## Step 4: Clarifying Questions
-
-Based on (goal + task description + codebase map), identify unknowns that would change the architecture.
-
-Present ALL questions at once - max 5, min 2. Skip questions the explorers already answered.
-
-Categories to draw from:
-- **Scope**: What's explicitly OUT of scope?
-- **Behavior**: Edge cases, error handling, user-facing behavior
-- **Constraints**: Performance, compatibility, must-not-break areas
-- **Success criteria**: How will we know it's done?
-- **Unknowns**: Technical unknowns that need spiking first
-
-```
-Before designing architecture, I need to clarify a few things:
-
-1. {question}
-2. {question}
-...
-
-Answer all at once.
-```
-
-Wait for user answers before proceeding.
-
 ## Step 5: Architecture Design (3 Agents Parallel)
 
 **CRITICAL: Launch ALL 3 architect agents in a SINGLE message with multiple Task tool calls.**
@@ -188,10 +225,10 @@ PROJECT CONTEXT:
 {CLAUDE.md summary}
 
 FEATURE GOAL: {goal}
-USER CLARIFICATIONS: {answers from Step 4}
+USER CLARIFICATIONS: {answers from Step 3}
 
 CODEBASE MAP:
-{combined exploration output from Step 3}
+{combined exploration output from Step 4}
 
 INSTRUCTIONS:
 - Reuse existing patterns and modules as much as possible
@@ -236,10 +273,10 @@ PROJECT CONTEXT:
 {CLAUDE.md summary}
 
 FEATURE GOAL: {goal}
-USER CLARIFICATIONS: {answers from Step 4}
+USER CLARIFICATIONS: {answers from Step 3}
 
 CODEBASE MAP:
-{combined exploration output from Step 3}
+{combined exploration output from Step 4}
 
 INSTRUCTIONS:
 - Design for extensibility and long-term maintainability
@@ -284,10 +321,10 @@ PROJECT CONTEXT:
 {CLAUDE.md summary}
 
 FEATURE GOAL: {goal}
-USER CLARIFICATIONS: {answers from Step 4}
+USER CLARIFICATIONS: {answers from Step 3}
 
 CODEBASE MAP:
-{combined exploration output from Step 3}
+{combined exploration output from Step 4}
 
 INSTRUCTIONS:
 - Balance quality with effort - good architecture that doesn't over-engineer
@@ -449,7 +486,7 @@ Write a detailed implementation plan for the chosen option.
 ## Context
 
 ### Codebase Map
-{condensed from Step 3 - only parts relevant to chosen approach}
+{condensed from Step 4 - only parts relevant to chosen approach}
 
 ### Key Decisions
 - {decision 1}: {rationale}
@@ -519,12 +556,18 @@ Before saving, verify the plan passes these gates:
 
 ### Save Plan
 
+Derive plan filename from the current branch:
+
 ```bash
+BRANCH=$(git branch --show-current)
+SLUG="${BRANCH#feature/}"   # e.g., 0nf.10-improve-brainstorm
 ROOT=$(git rev-parse --show-toplevel)
 mkdir -p "$ROOT/.lets/plans"
 ```
 
-Write plan to: `.lets/plans/{task-id}.md`
+Write plan to: `.lets/plans/{branch-slug}.md`
+
+Example: branch `feature/0nf.10-improve-brainstorm` -> `.lets/plans/0nf.10-improve-brainstorm.md`
 
 ### Record in Beads
 
@@ -536,7 +579,7 @@ Approach: {chosen option name}
 Tasks: {N} implementation tasks
 Est. effort: {from pragmatist evaluation}
 Key files: {top 3-5 files}
-Plan: .lets/plans/{task-id}.md"
+Plan: .lets/plans/${SLUG}.md"
 ```
 
 ### Show Output
@@ -544,7 +587,7 @@ Plan: .lets/plans/{task-id}.md"
 ```
 ## Plan Ready: **{task title}** (`{task-id}`)
 
-Saved: `.lets/plans/{task-id}.md`
+Saved: `.lets/plans/{branch-slug}.md`
 
 ### Approach
 {chosen option - 2 sentences}
@@ -572,7 +615,7 @@ Start a new session to execute the plan with clean context.
 ## Rules
 
 - **NEVER write code** outside the plan document in `.lets/plans/`
-- **NEVER skip clarifying questions** (Step 4) - vague input produces vague plans
+- **NEVER skip clarifying questions** (Step 3) - vague input produces vague plans
 - **ALL parallel agents in a SINGLE message** - never sequential when parallel is possible
 - **Lead with recommendation** in Step 6 - never "it depends" without conclusion
 - **Exact file paths** in plan - verified against explorer findings
