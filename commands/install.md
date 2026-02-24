@@ -39,6 +39,18 @@ ls -la .beads/ 2>/dev/null || echo "Beads not initialized"
 bd init
 ```
 
+### Create .lets/ directory and gitignore
+
+```bash
+ROOT=$(git rev-parse --show-toplevel)
+mkdir -p "$ROOT/.lets/sessions" "$ROOT/.lets/reviews" "$ROOT/.lets/plans"
+
+# Add .lets/ to .gitignore if not already there
+if ! grep -q '^\.lets/' "$ROOT/.gitignore" 2>/dev/null; then
+  echo '.lets/' >> "$ROOT/.gitignore"
+fi
+```
+
 ## Step 4: Verify Setup
 
 Run these checks:
@@ -113,6 +125,7 @@ Run through and verify:
 - [ ] `feature-dev` plugin installed
 - [ ] Claude Code restarted after plugin install
 - [ ] `.beads/` directory exists
+- [ ] `.lets/` directory exists and gitignored
 - [ ] `bd ready` works
 
 **Setup complete when all checked.**

@@ -23,6 +23,11 @@ ls -la "$ROOT/.lets/" 2>/dev/null
 ROOT=$(git rev-parse --show-toplevel)
 mkdir -p "$ROOT/.lets/sessions" "$ROOT/.lets/reviews" "$ROOT/.lets/plans"
 
+# Add .lets/ to .gitignore if not already there
+if ! grep -q '^\.lets/' "$ROOT/.gitignore" 2>/dev/null; then
+  echo '.lets/' >> "$ROOT/.gitignore"
+fi
+
 # Move session files
 mv "$ROOT/.claude/sessions/"*.md "$ROOT/.lets/sessions/" 2>/dev/null
 
