@@ -144,7 +144,8 @@ AskUserQuestion(
     header: "Finish",
     options: [
       { label: "Finish", description: "{action based on remote: 'Push branch and create PR' OR 'Merge to main and delete branch'}" },
-      { label: "Keep working", description: "Not done yet - go back to the task" }
+      { label: "Keep working", description: "Not done yet - go back to the task" },
+      { label: "Check context", description: "Run /context to check window usage before deciding" }
     ],
     multiSelect: false
   }]
@@ -154,6 +155,7 @@ AskUserQuestion(
 **Handle response:**
 - **Finish** -> proceed to Step 6
 - **Keep working** -> stop, return to work
+- **Check context** -> run `/context`, then re-ask
 
 ## Step 6: Document in Beads
 
