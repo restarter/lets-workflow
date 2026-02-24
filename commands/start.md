@@ -137,11 +137,11 @@ Once task is selected, assess complexity:
 | Goal clarity | Use |
 |--------------|-----|
 | Clear goal ("Add X to Y") | `/feature-dev` - structured implementation |
-| Unclear goal ("Improve Z", "Not sure how...") | `/brainstorming` - explores options, asks questions |
+| Unclear goal ("Improve Z", "Not sure how...") | `/lets:brainstorm` - explores options, asks questions |
 
 **Quick test:** Can user write a 1-sentence requirement?
 - YES - `/feature-dev`
-- NO - `/brainstorming` first, then `/feature-dev`
+- NO - `/lets:brainstorm` first, then `/feature-dev`
 
 ## Step 8: Ready to Work
 
@@ -169,5 +169,5 @@ After task is selected and branch is ready, show reminders and welcome box.
 - If uncommitted changes exist, ask user what to do with them first
 - If previous session had in-progress work, highlight it
 - If user is already on the correct feature branch, skip branch creation
-- Suggest `/feature-dev` for medium/large tasks
+- Suggest `/feature-dev` or `/lets:brainstorm` for medium/large tasks
 - Respond in user's language (Ukrainian/Russian/English)

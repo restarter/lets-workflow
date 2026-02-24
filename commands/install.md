@@ -78,11 +78,11 @@ Present this to the developer:
 | Skill | When to use |
 |-------|-------------|
 | `/feature-dev` | Clear goal, need implementation plan ("Add X to Y") |
-| `/brainstorming` | Unclear goal, need to figure out what to build ("Improve Z", "Not sure how...") |
+| `/lets:brainstorm` | Unclear goal, need architecture + plan ("Improve Z", "Not sure how...") |
 
 **Rule of thumb:** Can you write a 1-sentence requirement?
 - YES -> `/feature-dev`
-- NO -> `/brainstorming` first
+- NO -> `/lets:brainstorm` first
 
 ### Key Rules
 

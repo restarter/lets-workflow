@@ -70,7 +70,7 @@ For medium and large tasks, LETS provides structured planning:
 
 ## Expert Agents
 
-11 specialized agents for code review and technical analysis:
+12 specialized agents for code review, exploration, and technical analysis:
 
 | Agent | Expertise |
 |-------|-----------|
@@ -85,6 +85,7 @@ For medium and large tasks, LETS provides structured planning:
 | docs-expert | API docs, README, inline documentation |
 | pragmatist | ROI analysis, overengineering detection |
 | git-historian | Blame analysis, change patterns, refactoring impact |
+| explorer | Codebase structure mapping, pattern identification, integration points |
 
 Agents are read-only - they analyze code but never modify it. Commands decide which agents to launch based on the type of changes being reviewed.
 

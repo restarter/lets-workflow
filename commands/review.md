@@ -1,6 +1,6 @@
 ---
-description: Full code review with dynamic agent selection (up to 11 specialized agents). Analyzes changes first, selects relevant experts.
-argument-hint: "[PR-url-or-number|--local|--staged|--last-commit]"
+description: Full code review with dynamic agent selection (up to 11 specialized agents). Analyzes changes first, selects relevant experts. Also reviews implementation plans.
+argument-hint: "[PR-url-or-number|--local|--staged|--last-commit|--plan]"
 ---
 
 # Full Code Review
@@ -8,6 +8,7 @@ argument-hint: "[PR-url-or-number|--local|--staged|--last-commit]"
 Comprehensive code review with dynamic agent selection based on change types. Up to 11 specialized agents, confidence scoring. Works with:
 - GitHub PRs (posts comment to PR)
 - Local changes (saves to file)
+- Implementation plans (reviews `.lets/plans/` files)
 
 ## Usage
 
@@ -17,6 +18,8 @@ Comprehensive code review with dynamic agent selection based on change types. Up
 /lets:review --local             # Uncommitted changes
 /lets:review --staged            # Staged changes only
 /lets:review --last-commit       # Last commit
+/lets:review --plan              # Review latest plan in .lets/plans/
+/lets:review --plan <path>       # Review specific plan file
 ```
 
 ## Step 1: Determine Review Mode
@@ -24,6 +27,7 @@ Comprehensive code review with dynamic agent selection based on change types. Up
 **If argument provided:**
 - PR URL/number -> GitHub PR mode
 - `--local` / `--staged` / `--last-commit` -> Local mode
+- `--plan` / `--plan <path>` -> **Plan review mode** (skip to Plan Review section below)
 
 **If no argument, ASK user:**
 
@@ -34,11 +38,14 @@ What are we reviewing?
 2. Local uncommitted changes
 3. Staged changes only
 4. Last commit
+5. Implementation plan (.lets/plans/)
 
 Choice:
 ```
 
 Wait for user response before proceeding.
+
+**If plan mode selected:** skip to **Plan Review** section below.
 
 ## Step 2: Get Changes
 
@@ -339,6 +346,172 @@ If active task found:
 ```bash
 bd comments add <task-id> "Code review ({PR #X | local}): {verdict}. {N} issues found."
 ```
+
+---
+
+## Plan Review
+
+**This section runs when `--plan` is detected. Skips all code review steps above.**
+
+### P1: Load Plan
+
+```bash
+ROOT=$(git rev-parse --show-toplevel)
+
+# If path provided: use it
+# If no path: find latest plan
+ls -t "$ROOT/.lets/plans/"*.md 2>/dev/null | head -1
+```
+
+If no plan files found, inform user and exit:
+> "No plans found in `.lets/plans/`. Run `/lets:brainstorm` first."
+
+Read the plan file and show title + task ID to user.
+
+### P2: Gather Context
+
+```bash
+cat "$ROOT/CLAUDE.md" 2>/dev/null | head -200
+```
+
+Read the codebase files referenced in the plan's "Files" sections (Create/Modify targets) to verify paths exist and understand current state.
+
+### P3: Launch Plan Review Agents (Parallel)
+
+**CRITICAL: Launch ALL agents in a SINGLE message.**
+
+Always launch exactly 2 agents:
+
+#### Architect
+
+```
+Task(
+  subagent_type="lets:architect",
+  prompt="PLAN REVIEW MODE. Review this implementation plan for quality and completeness.
+
+PROJECT CONTEXT:
+{CLAUDE.md summary}
+
+PLAN:
+{full plan content}
+
+REVIEW CRITERIA:
+- Are all tasks 15-60 minutes of work? (not too big, not trivial)
+- Are code snippets complete? (no // TODO, no // implement here, no placeholders)
+- Are file paths exact and verified? (do referenced existing files actually exist?)
+- Does every task have a verification step with expected output?
+- Does every logical unit have a commit point?
+- Are interfaces clearly defined? (function signatures, types, data flow)
+- Is the task ordering logical? (dependencies respected, builds incrementally)
+- Are edge cases addressed?
+- Is the codebase map accurate? (do referenced patterns actually exist?)
+
+OUTPUT FORMAT:
+## Plan Review: Architecture
+
+### Verdict: {APPROVED | NEEDS REVISION}
+
+### Findings (only report actual issues)
+1. **{issue}** [Task N]
+   {what's wrong and how to fix it}
+
+### Missing
+{things the plan should cover but doesn't}
+
+### Strengths
+{1-2 things done well - keep feedback balanced}"
+)
+```
+
+#### Pragmatist
+
+```
+Task(
+  subagent_type="lets:pragmatist",
+  prompt="PLAN REVIEW MODE. Review this implementation plan for feasibility and proportionality.
+
+PROJECT CONTEXT:
+{CLAUDE.md summary}
+
+PLAN:
+{full plan content}
+
+REVIEW CRITERIA:
+- Is the overall approach proportional to the problem? (not overengineered?)
+- Are there simpler alternatives for any task?
+- Is the effort estimate realistic?
+- Are there unnecessary abstractions or premature optimizations?
+- Does the plan follow existing codebase patterns or reinvent the wheel?
+- Is the scope well-defined? (clear what's in and out)
+- Are there tasks that could be cut without losing core value?
+- Will this plan survive contact with reality? (hidden dependencies, risky assumptions)
+
+OUTPUT FORMAT:
+## Plan Review: Pragmatism
+
+### Verdict: {APPROVED | NEEDS REVISION}
+
+### Findings (only report actual issues)
+1. **{issue}** [Task N]
+   {what's wrong and how to fix it}
+
+### Scope Check
+- Core value delivered: {yes/no, what}
+- Unnecessary extras: {if any}
+- Missing essentials: {if any}
+
+### Bottom Line
+{1-2 sentences: ship it or revise it, and why}"
+)
+```
+
+### P4: Aggregate & Output
+
+After both agents respond:
+
+```
+## Plan Review: **{plan title}** (`{task-id}`)
+
+**Verdict:** {APPROVED | NEEDS REVISION}
+
+### Architecture
+{architect findings summary}
+
+### Pragmatism
+{pragmatist findings summary}
+
+{if NEEDS REVISION}
+### Action Items
+1. {specific fix from architect}
+2. {specific fix from pragmatist}
+...
+{end if}
+
+Saved to: .lets/reviews/{date}-plan-review.md
+```
+
+### P5: Save & Link
+
+Save to `.lets/reviews/{date}-plan-review.md`
+
+If active task found:
+```bash
+bd comments add <task-id> "Plan review: {verdict}. {N} issues found."
+```
+
+### Plan Review Output
+
+**If approved:**
+```
+┌─ LETS ──────────────────────────────────┐
+│  Execute?     /lets:execute             │
+│  New session? /lets:start               │
+└─────────────────────────────────────────┘
+```
+
+**If needs revision:** No box. List action items to fix in the plan first.
+
+---
 
 ## Notes
 
