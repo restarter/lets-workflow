@@ -51,10 +51,13 @@ User states goal -> Claude proposes approach -> User approves -> Claude executes
 - Epics are **containers**, not blockers - NEVER add `bd dep` from child to its epic
 - Epics are **long-lived** - don't close just because all children are done
 - Only close an epic when the user explicitly says to
-- Every task MUST belong to an epic - no orphan tasks (`bd create --parent` or `bd update --parent`)
 - If no suitable epic exists - create one first or suggest to the user
 - Review epic structure every 5-10 sessions
 - Track existing epics and suggest the right parent when creating tasks
+
+### Task Creation
+
+Every `bd create` MUST include: `--title` (imperative mood), `--parent` (epic), `--priority` (0-4), `--description` (why + acceptance criteria), `--type` (task/bug/feature/epic).
 
 ### Dependencies
 
@@ -113,6 +116,10 @@ Never work without a tracked task. User must pick existing task or create new on
 | Unclear goal ("Improve Z", "Not sure how...") | `/brainstorming` - explores options first |
 
 **Quick test:** Can user write a 1-sentence requirement? YES -> `/feature-dev`. NO -> `/brainstorming` first.
+
+### Mid-Session Task Switch
+
+When user wants to switch tasks mid-session: handle current work first (ask about uncommitted changes, delete empty branches, return unworked tasks to `open`), then follow `/lets:start` Step 6 branch logic for the new task.
 
 ### During Work
 
