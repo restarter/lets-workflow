@@ -24,7 +24,7 @@ git clone https://github.com/nickolay-umbo/lets-plugin-claude ~/.claude/plugins/
 | `/lets:end` | End session - save progress, sync tasks, create summary |
 | `/lets:commit` | Commit with review and conventional commit format |
 | `/lets:done` | Finish task - create PR or merge, close task |
-| `/lets:check` | Quick sanity check (~30s, single multi-perspective agent) |
+| `/lets:check` | Quick inline sanity check (5-perspective review) |
 | `/lets:review` | Full code review (up to 11 specialized agents, ~2-3 min) |
 | `/lets:opinion` | Technical decision analysis (3-5 expert agents in parallel) |
 | `/lets:ask` | Quick expert consultation (single agent) |
@@ -70,7 +70,7 @@ For medium and large tasks, LETS provides structured planning:
 
 ## Expert Agents
 
-12 specialized agents for code review and technical analysis:
+11 specialized agents for code review and technical analysis:
 
 | Agent | Expertise |
 |-------|-----------|
@@ -85,9 +85,10 @@ For medium and large tasks, LETS provides structured planning:
 | docs-expert | API docs, README, inline documentation |
 | pragmatist | ROI analysis, overengineering detection |
 | git-historian | Blame analysis, change patterns, refactoring impact |
-| quick-reviewer | Fast 5-perspective review (used by `/lets:check`) |
 
 Agents are read-only - they analyze code but never modify it. Commands decide which agents to launch based on the type of changes being reviewed.
+
+`/lets:check` reviews inline (no subagent) for fast feedback.
 
 ## How It Works
 

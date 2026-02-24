@@ -1,11 +1,11 @@
 ---
-description: Quick code sanity check. Single agent, 5 perspectives.
+description: Quick code sanity check. Inline 5-perspective review.
 argument-hint: "[--staged|--last-commit]"
 ---
 
 # Quick Local Code Check
 
-Fast sanity check of local changes via single agent, 5 perspectives.
+Fast inline sanity check of local changes from 5 perspectives.
 
 ## Usage
 
@@ -47,31 +47,80 @@ git diff --stat
 cat "$ROOT/CLAUDE.md" 2>/dev/null | head -100
 ```
 
-## Step 3: Launch Agent
+## Step 3: Review with 5 Lenses
 
-Launch a single agent via Task tool:
+Review the diff directly using these 5 perspectives. Think like a senior dev doing a quick PR scan - catch real issues, skip noise.
 
-```
-Task(
-  subagent_type="lets:quick-reviewer",
-  prompt="CHECK MODE. Quick code sanity check.
+### [Bug] Bugs & Logic
+- Logic errors, off-by-one, edge cases
+- Null/undefined access, missing checks
+- Broken control flow, unreachable code
+- Incorrect conditions or comparisons
 
-PROJECT CONTEXT:
-{CLAUDE.md summary}
+### [Sec] Security
+- Secrets or credentials exposed
+- SQL injection, XSS, command injection
+- Missing input validation at boundaries
+- Auth/permission issues
 
-CHANGED FILES:
-{git diff --stat output}
+### [Perf] Performance
+- N+1 queries, unnecessary DB calls
+- Expensive operations in loops
+- Missing pagination, unbounded queries
+- Memory leaks, large object copies
 
-DIFF:
-{diff content}
+### [Quality] Code Quality
+- Unclear naming, high complexity
+- Code duplication (3+ similar blocks)
+- Dead code, unused imports
+- Readability issues
 
-Be concise - this is a quick check, not a full review."
-)
-```
+### [Compliance] Project Rules & Docs
+- CLAUDE.md violations (quote the rule)
+- Breaks existing patterns in codebase
+- Inconsistent with project conventions
+- Code changed but related docs/README not updated
+
+### Review Focus
+
+Ask yourself:
+- Will this break in production?
+- Can this be exploited?
+- Does this violate project rules?
+- Will the next developer be confused?
+
+### Confidence Filter
+
+Rate each finding 0-100:
+- **90-100**: Bug, security issue, or rule violation - report it
+- **70-89**: Concern that experienced developers would flag - report it
+- **Below 70**: Skip it
+
+**Only report findings with confidence >= 70. Max 5 issues.**
 
 ## Step 4: Present Results
 
-Show the agent's response directly.
+### Output Format
+
+```
+## Quick Check: {N files changed}
+
+### Verdict: {[OK] GOOD | [!] REVIEW | [X] FIX}
+
+### Issues
+{Only if found}
+- [Tag] **file:line** {issue} - {fix suggestion}
+  Confidence: {score}
+
+### Looks Good
+{1-2 positive notes}
+```
+
+### Verdict Logic
+
+- No issues -> [OK] GOOD
+- Minor issues only -> [!] REVIEW
+- Security or critical bugs -> [X] FIX
 
 ## Step 5: Link to Active Task
 
@@ -108,8 +157,7 @@ If clean (no issues) - skip, don't add noise to the task.
 ## What This Is NOT
 
 - NOT a full code review (use `/lets:review`)
-- NOT confidence scoring (that's for full review)
-- NOT multi-agent (uses single quick-reviewer, not a panel of lets: experts)
+- NOT multi-agent (no subagents, inline review only)
 - NOT saved to file (console only)
 
 ## Workflow Integration
@@ -117,12 +165,14 @@ If clean (no issues) - skip, don't add noise to the task.
 ```
 Work -> /lets:check -> /lets:commit -> Push -> PR -> /lets:review
          ^                                            |
-    Quick check                               Full PR review
-    single agent                              up to 11 agents
+    Quick inline check                         Full PR review
+    5 perspectives                             up to 11 agents
 ```
 
 ## Notes
 
-- Uses lets:quick-reviewer agent (opus) for thorough single-pass analysis
-- Agent keeps diff out of main context window
+- Inline review - no subagent overhead, fast feedback
 - Focus on actionable issues only - this is a helper, not a blocker
+- No false positives - when in doubt, skip it
+- Be direct, no hedging
+- Reference specific lines from the diff

@@ -9,7 +9,7 @@ lets-plugin-claude/
 ├── .claude/
 │   └── rules/              # Always-on project instructions (5 files)
 ├── commands/               # 12 slash commands (/lets:start, /lets:done, etc.)
-├── agents/                 # 12 agents (11 experts + quick-reviewer)
+├── agents/                 # 11 expert agents (review, opinion, ask)
 ├── hooks/                  # SessionStart hook - injects workflow rules
 │   └── rules-context.md
 ├── .lets/                  # Plugin-generated files (gitignored)
