@@ -34,6 +34,7 @@ All plugin-generated files go to `.lets/` (gitignored). Never use `/tmp` or othe
 .lets/sessions/          # Session summaries, session-start-ref
 .lets/reviews/           # Saved review reports
 .lets/plans/             # Implementation plans
+.lets/execution/         # Execution state for multi-session plan resume
 ```
 
 ## Dependencies

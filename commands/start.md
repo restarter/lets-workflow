@@ -141,7 +141,7 @@ Once task is selected, assess complexity:
 
 **Quick test:** Can user write a 1-sentence requirement?
 - YES - `/feature-dev`
-- NO - `/lets:brainstorm` first, then `/feature-dev`
+- NO - `/lets:brainstorm` first, then `/lets:execute`
 
 ## Step 8: Ready to Work
 

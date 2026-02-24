@@ -79,6 +79,8 @@ Every `bd create` MUST include: `--title` (imperative mood), `--parent` (epic), 
 /lets:start -> Work -> /lets:check -> /lets:commit -> /lets:done -> /lets:end
 ```
 
+If a plan exists from `/lets:brainstorm`, use `/lets:execute` to implement it. Execute handles check/commit cycles internally.
+
 Two separate lifecycles:
 - **Session:** `/lets:start` ... `/lets:end` (one conversation)
 - **Task:** picked at start ... `/lets:done` (may span multiple sessions)
@@ -116,6 +118,8 @@ Never work without a tracked task. User must pick existing task or create new on
 | Unclear goal ("Improve Z", "Not sure how...") | `/lets:brainstorm` - explores options first |
 
 **Quick test:** Can user write a 1-sentence requirement? YES -> `/feature-dev`. NO -> `/lets:brainstorm` first.
+
+After `/lets:brainstorm` produces a plan, use `/lets:execute` to implement it step by step.
 
 ### Mid-Session Task Switch
 
@@ -206,6 +210,7 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:opinion` | Expert | Technical decision (3-5 agents) |
 | `/lets:ask` | Expert | Quick expert consultation (1 agent) |
 | `/lets:brainstorm` | Planning | Idea needs architecture + implementation plan |
+| `/lets:execute` | Planning | Execute plan from /lets:brainstorm step by step |
 | `/lets:status` | Utility | Task overview and project status |
 | `/lets:note` | Utility | Add note to active task |
 | `/lets:install` | Setup | First-time setup |

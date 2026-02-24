@@ -77,17 +77,18 @@ Present this to the developer:
 
 | Skill | When to use |
 |-------|-------------|
-| `/feature-dev` | Clear goal, need implementation plan ("Add X to Y") |
 | `/lets:brainstorm` | Unclear goal, need architecture + plan ("Improve Z", "Not sure how...") |
+| `/lets:execute` | Have a plan from /lets:brainstorm, ready to implement step by step |
 
 **Rule of thumb:** Can you write a 1-sentence requirement?
-- YES -> `/feature-dev`
+- YES, small task -> work directly
+- YES, medium/large -> `/lets:brainstorm` then `/lets:execute`
 - NO -> `/lets:brainstorm` first
 
 ### Key Rules
 
 1. **Every session has a task** - no random work without tracking
-2. **Big tasks need planning** - use `/feature-dev` for 2+ hour tasks
+2. **Big tasks need planning** - use `/lets:brainstorm` + `/lets:execute` for 2+ hour tasks
 3. **Document everything** - beads is the source of truth
 4. **End properly** - `/lets:end` saves context for next session
 
