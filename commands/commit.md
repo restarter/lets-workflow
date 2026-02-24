@@ -27,8 +27,26 @@ bd list --status=in_progress --format=ids 2>/dev/null | head -1
 ```
 
 If found, the task ID will be used in commit footer.
-If multiple in-progress tasks found via fallback, ask user which to link.
 If not found - commit normally without task link.
+
+**If multiple in-progress tasks found via fallback**, use AskUserQuestion to pick:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Multiple tasks in progress. Which one to link?",
+    header: "Task",
+    options: [
+      { label: "{task-id-1}", description: "{task title 1}" },
+      { label: "{task-id-2}", description: "{task title 2}" },
+      { label: "None", description: "Commit without task link" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Note:** Max 4 options in AskUserQuestion. If more than 3 tasks - show top 3 by most recent activity + "None".
 
 ## Step 3: Review Changes
 
