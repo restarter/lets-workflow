@@ -44,16 +44,25 @@ Check existing comments to avoid duplicating info.
 
 ## Step 3: Ask What to Note
 
-If not obvious from conversation context, ask:
+If not obvious from conversation context, use **AskUserQuestion**:
 
-> "What do you want to note?"
+```
+AskUserQuestion(
+  questions=[{
+    question: "What kind of note?",
+    header: "Note",
+    options: [
+      { label: "Progress", description: "What's done and what remains" },
+      { label: "Decision", description: "Record a choice and reasoning" },
+      { label: "Research", description: "Findings and recommendations" },
+      { label: "Blocker", description: "What's blocking and possible solutions" }
+    ],
+    multiSelect: false
+  }]
+)
+```
 
-Options:
-- Progress update
-- Decision made
-- Research findings
-- Blocker / issue
-- Context for next session
+**Other** (free text) -> use as note content directly, infer type.
 
 ## Step 4: Add Note
 

@@ -463,7 +463,28 @@ After all experts respond, present:
 **Recommendation:** Option {X} because {deciding factor}.
 ```
 
-Ask user: "Which approach? Or want to adjust scope?"
+Then use **AskUserQuestion**:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Which approach for the implementation?",
+    header: "Approach",
+    options: [
+      { label: "Minimal", description: "{1-line summary from architect 1}" },
+      { label: "Maximal", description: "{1-line summary from architect 2}" },
+      { label: "Pragmatic (Recommended)", description: "{1-line summary from architect 3}" },
+      { label: "Adjust scope", description: "Change requirements before choosing" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Handle response:**
+- **Minimal/Maximal/Pragmatic** -> proceed to Step 7 with chosen approach
+- **Adjust scope** -> ask what to change, loop back to relevant step
+- **Other** (free text) -> treat as custom requirements, adapt
 
 Wait for user decision before writing the plan.
 

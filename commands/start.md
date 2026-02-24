@@ -116,10 +116,27 @@ This lets `/lets:end` know which commits belong to this session.
 
 If switching branches with uncommitted changes:
 
-**Ask:** "You have uncommitted changes. What to do?"
-- **Stash** - `git stash` - switch - remind to `git stash pop` later
-- **Commit first** - run `/lets:commit` - then switch
-- **Stay on current branch** - skip branch switch, warn about mixed work
+Use **AskUserQuestion**:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Uncommitted changes on current branch. What to do?",
+    header: "Changes",
+    options: [
+      { label: "Stash", description: "git stash, switch branch, remind to pop later" },
+      { label: "Commit first", description: "Run /lets:commit, then switch branch" },
+      { label: "Stay", description: "Skip branch switch - work on current branch" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Handle response:**
+- **Stash** -> `git stash`, switch branch, remind to `git stash pop` later
+- **Commit first** -> run `/lets:commit`, then switch
+- **Stay** -> skip branch switch, warn about mixed work
 
 ## Step 7: Task Size Assessment
 

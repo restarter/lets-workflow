@@ -18,12 +18,25 @@ bd list --status=in_progress
 
 ## Step 2: Handle Uncommitted Changes
 
-If there are uncommitted changes:
+If there are uncommitted changes, use **AskUserQuestion**:
 
-**Ask:** "Uncommitted changes detected. Commit now?"
+```
+AskUserQuestion(
+  questions=[{
+    question: "Uncommitted changes detected. What to do?",
+    header: "Changes",
+    options: [
+      { label: "Commit", description: "Run /lets:commit before ending session" },
+      { label: "Skip", description: "End without committing - changes stay on disk" }
+    ],
+    multiSelect: false
+  }]
+)
+```
 
-- If yes - Run `/lets:commit`
-- If no - Warn: "Changes will be lost if not committed!"
+**Handle response:**
+- **Commit** -> run `/lets:commit`, then continue
+- **Skip** -> continue
 
 ## Step 3: Save Progress to Beads (task-level context for multi-session work)
 
@@ -62,12 +75,25 @@ bd comments add <task-id> "## Session progress {YYYY-MM-DD}
 
 ## Step 4: Ask About Task Status
 
-For each in-progress task:
+For each in-progress task, use **AskUserQuestion**:
 
-> "**{task title}** (`{task-id}`) - still in progress, or ready to finish?"
+```
+AskUserQuestion(
+  questions=[{
+    question: "{task title} - still in progress?",
+    header: "Task",
+    options: [
+      { label: "In progress", description: "Leave open - continue next session" },
+      { label: "Ready to finish", description: "Run /lets:done first, then come back to /lets:end" }
+    ],
+    multiSelect: false
+  }]
+)
+```
 
-- **Still in progress:** Leave open, progress already saved in Step 3
-- **Ready to finish:** Suggest `/lets:done` first, then come back to `/lets:end`
+**Handle response:**
+- **In progress** -> leave open, progress already saved in Step 3
+- **Ready to finish** -> suggest `/lets:done` first, then come back to `/lets:end`
 
 ## Step 5: Create Session Summary (session-level context for next session bootstrap)
 

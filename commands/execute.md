@@ -123,10 +123,29 @@ Completed: {N}/{total} tasks
 ...
 
 Last good commit: {hash}
-Continue from Task {N+1}?
 ```
 
-Wait for user confirmation before proceeding.
+Then use **AskUserQuestion**:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Resume execution from Task {N+1}?",
+    header: "Resume",
+    options: [
+      { label: "Continue", description: "Pick up from where we left off" },
+      { label: "Start fresh", description: "Re-execute from Task 1 (ignores previous progress)" },
+      { label: "Cancel", description: "Don't execute - return to work" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Handle response:**
+- **Continue** -> proceed from next incomplete task
+- **Start fresh** -> clear state file, start from Task 1
+- **Cancel** -> stop
 
 **If no state file (fresh start):** proceed to Step 4.
 
@@ -139,13 +158,38 @@ Before executing ANY code, review the plan against current codebase state.
 2. Files listed as "Create" - verify target path doesn't already exist (could indicate partial execution without state file)
 3. Check if file content has changed significantly since plan was written
 
-**Present findings:**
+**Present findings**, then use **AskUserQuestion**:
 
-- **OK**: "Plan looks current. Files match expectations. Ready to execute {N} tasks."
-- **Drift detected**: "Some files changed since plan was written: {list}. Will adapt implementation to current state. Proceed?"
-- **Significant mismatch**: "Major changes detected: {details}. Recommend re-running `/lets:brainstorm` to update the plan."
+**If OK or drift detected:**
+```
+AskUserQuestion(
+  questions=[{
+    question: "{OK: 'Plan matches codebase.' | Drift: 'Some files changed: {list}.'} Execute {N} tasks?",
+    header: "Execute",
+    options: [
+      { label: "Execute", description: "{OK: 'Start execution' | Drift: 'Adapt implementation to current state'}" },
+      { label: "Cancel", description: "Don't execute" }
+    ],
+    multiSelect: false
+  }]
+)
+```
 
-Wait for user acknowledgment before executing.
+**If significant mismatch:**
+```
+AskUserQuestion(
+  questions=[{
+    question: "Major changes detected: {details}. What to do?",
+    header: "Mismatch",
+    options: [
+      { label: "Execute anyway", description: "Adapt implementation to current state" },
+      { label: "Re-plan", description: "Run /lets:brainstorm to update the plan" },
+      { label: "Cancel", description: "Don't execute" }
+    ],
+    multiSelect: false
+  }]
+)
+```
 
 ## Step 5: Execute Batch
 
@@ -172,40 +216,45 @@ Read ALL files listed in the task's "Files" section - both "Modify" and "Create"
 
 - If actual file state matches plan assumptions -> follow plan closely
 - If file has changed (imports moved, functions renamed, lines shifted) -> adapt the plan's INTENT to the current code
-- If the gap is too large to adapt confidently -> STOP:
+- If the gap is too large to adapt confidently -> STOP and use **AskUserQuestion**:
 
 ```
-Task {N} mismatch: Plan expected {X} but found {Y}.
-
-Options:
-1. I'll adapt the implementation to current state
-2. Skip this task, continue with next
-3. Stop execution entirely
-
-Which one?
+AskUserQuestion(
+  questions=[{
+    question: "Task {N}: Plan expected {X} but found {Y}. How to proceed?",
+    header: "Mismatch",
+    options: [
+      { label: "Adapt", description: "Adapt implementation to current state" },
+      { label: "Skip", description: "Skip this task, continue with next" },
+      { label: "Stop", description: "Stop execution entirely" }
+    ],
+    multiSelect: false
+  }]
+)
 ```
-
-Wait for user decision.
 
 ### 5c: Verification
 
 Run the task's `**Verify:**` step from the plan.
 
 - If verification passes -> continue
-- If verification fails -> STOP:
+- If verification fails -> STOP and use **AskUserQuestion**:
+
+Present what failed (expected vs actual), then:
 
 ```
-Verification failed for Task {N}.
-
-Expected: {from plan}
-Actual: {what happened}
-
-Options:
-1. Let me fix and retry
-2. Skip verification, continue
-3. Stop execution
-
-Which one?
+AskUserQuestion(
+  questions=[{
+    question: "Verification failed for Task {N}. How to proceed?",
+    header: "Verify",
+    options: [
+      { label: "Fix & retry", description: "Fix the issue and re-run verification" },
+      { label: "Skip", description: "Skip verification, continue with next task" },
+      { label: "Stop", description: "Stop execution entirely" }
+    ],
+    multiSelect: false
+  }]
+)
 ```
 
 ### 5d: Commit Point
@@ -263,19 +312,32 @@ Next: Task {M+1}: {name}
 
 ### Continue or Pause
 
-If more tasks remain:
+If more tasks remain, show batch summary then use **AskUserQuestion**:
+
 ```
 ## Batch {N} Complete
 
 Done: {list with commit hashes}
 Progress: {completed}/{total} tasks
-
-Continue with next batch (Tasks {X}-{Z})?
 ```
 
-Wait for user decision.
+```
+AskUserQuestion(
+  questions=[{
+    question: "Continue with next batch (Tasks {X}-{Z})?",
+    header: "Batch",
+    options: [
+      { label: "Continue", description: "Execute next batch of tasks" },
+      { label: "Pause", description: "Save progress and end session (/lets:end)" }
+    ],
+    multiSelect: false
+  }]
+)
+```
 
-If user wants to pause -> suggest `/lets:end`.
+**Handle response:**
+- **Continue** -> proceed with next batch
+- **Pause** -> suggest `/lets:end`
 
 ## Step 7: Completion
 

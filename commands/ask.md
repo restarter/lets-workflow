@@ -27,7 +27,7 @@ Quick consultation with a single expert agent. Like pinging a colleague on Slack
 
 ## Step 1: Determine Expert
 
-If specified in arguments - use it. Otherwise show picker using AskUserQuestion.
+If specified in arguments - use it. Otherwise use **AskUserQuestion** to pick.
 
 Available experts (map to `lets:*` agents):
 
@@ -46,6 +46,26 @@ Available experts (map to `lets:*` agents):
 | 11 | pragmatist | lets:pragmatist | ROI, effort vs value, scope |
 
 **Shorthand mapping:** User can type short names like "security" or "sec" - map to the correct agent subagent_type.
+
+**If no expert specified**, select top 4 most relevant based on conversation context and use **AskUserQuestion**:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Which expert to ask?",
+    header: "Expert",
+    options: [
+      { label: "{expert 1}", description: "{expertise}" },
+      { label: "{expert 2}", description: "{expertise}" },
+      { label: "{expert 3}", description: "{expertise}" },
+      { label: "{expert 4}", description: "{expertise}" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Other** (free text) -> match to expert shorthand from table above.
 
 ## Step 2: Determine Question
 

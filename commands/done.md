@@ -34,10 +34,27 @@ If type is **epic** - do NOT close it automatically:
 git status --short
 ```
 
-If uncommitted changes exist:
-- **Ask:** "You have uncommitted changes. Commit first?"
-- If yes -> run `/lets:commit`, then continue
-- If no -> warn and continue
+If uncommitted changes exist, use **AskUserQuestion**:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "You have uncommitted changes. What to do?",
+    header: "Changes",
+    options: [
+      { label: "Commit first", description: "Run /lets:commit before finishing task" },
+      { label: "Skip", description: "Continue without committing (changes stay unstaged)" },
+      { label: "Cancel", description: "Stop - go back to working on the task" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Handle response:**
+- **Commit first** -> run `/lets:commit`, then continue
+- **Skip** -> warn and continue
+- **Cancel** -> stop, return to work
 
 ## Step 3: Verify Task Scope
 
@@ -69,11 +86,25 @@ All requirements met. Proceeding.
 Missing: {list}. Fix first or update task scope?
 ```
 
-**If any requirement is missing:**
-- Do NOT proceed to closing
-- Ask user: "Fix missing items, or update task description to match actual scope?"
-- If user says fix - stop and work on missing items
-- If user says update scope - update task description with `bd update`, then proceed
+**If any requirement is missing**, use **AskUserQuestion**:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Some requirements are missing. How to proceed?",
+    header: "Scope",
+    options: [
+      { label: "Fix first", description: "Stop closing - go back and implement missing items" },
+      { label: "Update scope", description: "Adjust task description to match what was actually done" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Handle response:**
+- **Fix first** -> stop, do NOT proceed to closing
+- **Update scope** -> update task description with `bd update`, then proceed
 
 **Only continue to Step 4 when all requirements are verified.**
 
@@ -98,18 +129,31 @@ Files: X changed, Y insertions, Z deletions
 
 ## Step 5: Confirm with User
 
-**Ask:** "Ready to finish **{task title}** (`{task-id}`)?"
-
 Show what will happen (based on remote detection):
 
 ```bash
 git remote -v
 ```
 
-- **Has remote:** "Will push branch and create PR"
-- **No remote:** "Will merge to main and delete branch"
+Then use **AskUserQuestion**:
 
-Wait for user approval.
+```
+AskUserQuestion(
+  questions=[{
+    question: "Ready to finish {task title}?",
+    header: "Finish",
+    options: [
+      { label: "Finish", description: "{action based on remote: 'Push branch and create PR' OR 'Merge to main and delete branch'}" },
+      { label: "Keep working", description: "Not done yet - go back to the task" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Handle response:**
+- **Finish** -> proceed to Step 6
+- **Keep working** -> stop, return to work
 
 ## Step 6: Document in Beads
 

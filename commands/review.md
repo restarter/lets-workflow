@@ -29,21 +29,30 @@ Comprehensive code review with dynamic agent selection based on change types. Up
 - `--local` / `--staged` / `--last-commit` -> Local mode
 - `--plan` / `--plan <path>` -> **Plan review mode** (skip to Plan Review section below)
 
-**If no argument, ASK user:**
+**If no argument**, use **AskUserQuestion**:
 
 ```
-What are we reviewing?
-
-1. GitHub PR (enter PR number or URL)
-2. Local uncommitted changes
-3. Staged changes only
-4. Last commit
-5. Implementation plan (.lets/plans/)
-
-Choice:
+AskUserQuestion(
+  questions=[{
+    question: "What are we reviewing?",
+    header: "Review",
+    options: [
+      { label: "Local changes", description: "Uncommitted changes in working tree" },
+      { label: "Staged", description: "Only staged changes (git diff --staged)" },
+      { label: "Last commit", description: "Review the most recent commit" },
+      { label: "Plan", description: "Review implementation plan from .lets/plans/" }
+    ],
+    multiSelect: false
+  }]
+)
 ```
 
-Wait for user response before proceeding.
+**Handle response:**
+- **Local changes** -> local mode with `git diff`
+- **Staged** -> local mode with `git diff --staged`
+- **Last commit** -> local mode with `git diff HEAD~1`
+- **Plan** -> skip to Plan Review section
+- **Other** (free text) -> treat as PR number or URL, use GitHub PR mode
 
 **If plan mode selected:** skip to **Plan Review** section below.
 
