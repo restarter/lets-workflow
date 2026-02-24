@@ -182,6 +182,15 @@ Review the following code changes from your expert perspective.
 Use your confidence scoring system. Only report findings >= 80 confidence.
 Follow your output format as defined in your system prompt.
 
+SYSTEMIC PATTERN CHECK:
+For each finding, grep the codebase to check if the same pattern exists in other files.
+If the pattern is used in 2+ other places - it's a systemic issue, not a PR bug.
+Still report it, but:
+- Prefix with [SYSTEMIC]
+- Note how many other files follow the same pattern
+- Frame as "project-wide tech debt" not "bug in this PR"
+- Reduce confidence by 15 points (it's not wrong here specifically)
+
 CLAUDE.MD RULES:
 {claude_md_content}
 
@@ -211,10 +220,27 @@ Wait for all agents, then:
 
 1. **Filter:** Keep only issues with confidence >= 80
 2. **Dedupe:** Remove duplicate issues found by multiple agents
-3. **Prioritize:** Sort by confidence (highest first)
-4. **Count:** Tally issues by category
+3. **Separate:** Split into regular findings and `[SYSTEMIC]` findings
+4. **Prioritize:** Sort by confidence (highest first)
+5. **Count:** Tally issues by category
+
+## Step 6.5: Verify Systemic Findings
+
+For each `[SYSTEMIC]` finding from agents, quick-verify with grep:
+
+```bash
+# Example: agent flagged delete() without auth check
+grep -r "delete(" --include="*.php" -l | head -10
+```
+
+- If confirmed systemic (2+ other files) - keep as systemic, note count
+- If agent was wrong (only this file does it) - reclassify as regular finding, restore confidence
+
+Systemic findings go into a separate section in the final report (see Step 9).
 
 ## Step 7: Determine Verdict
+
+**Note:** Systemic findings do NOT count toward the verdict - they're informational.
 
 | Condition | Verdict |
 |-----------|---------|
@@ -258,6 +284,16 @@ Found {N} issues (filtered from {M} with confidence >= 80):
    {description and fix suggestion}
 
 2. ...
+
+{if systemic findings exist}
+### Systemic Issues
+
+These patterns exist across the project, not just in this PR:
+
+1. **{issue title}** - found in {N} files
+   {brief description and scope}
+
+{end if}
 
 ---
 
