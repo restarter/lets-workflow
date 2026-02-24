@@ -6,8 +6,9 @@ Claude Code plugin for development workflow with session management, code review
 
 ```
 .claude-plugin/plugin.json   # Plugin manifest
-commands/                     # 12 slash commands (/lets:start, /lets:done, /lets:review, etc.)
-agents/                       # 12 agents (11 experts + quick-reviewer for /lets:check)
+commands/                     # Slash commands (/lets:start, /lets:done, /lets:review, etc.)
+agents/                       # Expert agents (review, opinion, ask, check)
+skills/                       # Planning workflows (brainstorm, plan execution)
 hooks/                        # SessionStart hook - injects workflow rules
 reference/                    # Reference plugins for studying patterns (gitignored)
 ```
@@ -17,7 +18,7 @@ reference/                    # Reference plugins for studying patterns (gitigno
 - **Commands** = user-initiated workflows (sessions, commits, reviews)
 - **Agents** = experts dispatched by commands. `/lets:review`, `/lets:opinion`, `/lets:ask` use specialized experts. `/lets:check` uses `quick-reviewer` (single multi-perspective agent)
 - **Hook** = injects workflow rules into every conversation via SessionStart
-- **No skills/** - plugin is workflow-focused, not knowledge-focused
+- **Skills** = planning workflows (brainstorm, plan execution) - invoked by commands, not directly by users
 
 ## Architecture Decisions
 
@@ -39,7 +40,6 @@ All plugin-generated files go to `.lets/` (gitignored). Never use `/tmp` or othe
 ## Dependencies
 
 - beads plugin (task tracking)
-- superpowers plugin (recommended - brainstorming, TDD, debugging)
 
 ## When Adding/Modifying Commands
 
