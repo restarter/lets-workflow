@@ -29,7 +29,7 @@ Install these plugins (check Claude Code docs for current installation method):
 
 **After installation, restart Claude Code.**
 
-## Step 4: Initialize Project (if needed)
+## Step 3: Initialize Project (if needed)
 
 ```bash
 # Check if beads is initialized
@@ -39,7 +39,7 @@ ls -la .beads/ 2>/dev/null || echo "Beads not initialized"
 bd init
 ```
 
-## Step 5: Verify Setup
+## Step 4: Verify Setup
 
 Run these checks:
 
@@ -48,7 +48,7 @@ bd ready        # Should show tasks (or empty list)
 bd status       # Should show database stats
 ```
 
-## Step 6: Explain Workflow
+## Step 5: Explain Workflow
 
 Present this to the developer:
 

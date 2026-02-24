@@ -21,6 +21,13 @@ bd list --status=in_progress
 
 If no active task found - ask user which task to close.
 
+### Epic Guard
+
+Check detected task type with `bd show <task-id>`.
+If type is **epic** - do NOT close it automatically:
+- Inform user: "This is an epic. Epics stay open for future tasks."
+- Offer: close a specific child task instead, or confirm epic closure if user insists.
+
 ## Step 2: Check Uncommitted Changes
 
 ```bash
