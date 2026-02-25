@@ -114,6 +114,20 @@ Present this to the developer:
 | `bd close <id>` | Complete task |
 | `bd create --title="..."` | New task |
 
+## Step 6: Configure Settings
+
+### Disable Auto Compact
+
+Auto compact reduces available context by automatically compressing conversation history. Disabling it gives you more control and more context to work with.
+
+In Claude Code settings, disable auto compact:
+
+```bash
+claude config set --global autoCompact false
+```
+
+This keeps the full conversation history until you manually compact with `/compact`.
+
 ## Checklist
 
 Run through and verify:
@@ -127,6 +141,7 @@ Run through and verify:
 - [ ] `.beads/` directory exists
 - [ ] `.lets/` directory exists and gitignored
 - [ ] `bd ready` works
+- [ ] Auto compact disabled
 
 **Setup complete when all checked.**
 
