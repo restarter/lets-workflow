@@ -1,116 +1,232 @@
 ---
-description: Show task overview and project status
+description: Quick session status - what's done and what's planned (short summary, no file output)
 ---
 
 # Task Status
 
-Generate a full overview of the task tracker state.
+Show task tracker state. Supports focused views via argument or interactive selection.
 
-## Instructions
+## Step 1: Determine View
 
-Run all these commands and compile into a single report:
+**If argument is provided** (e.g., `/lets:status overview`), use that view directly.
+
+**If no argument**, ask the user:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "What do you want to see?",
+    header: "Status",
+    options: [
+      { label: "Overview", description: "Summary, epics progress, top ready tasks" },
+      { label: "Ready", description: "All tasks ready to work (no blockers)" },
+      { label: "Epics", description: "Detailed epic progress with children" },
+      { label: "Blocked", description: "Blocked tasks and dependency graph" },
+      { label: "Full", description: "Everything - summary, ready, blocked, deps, insights" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+## Step 2: Run Commands for Selected View
+
+### View: overview
+
+Compact view. Used by `/lets:start`.
 
 ```bash
-# 1. Summary statistics
-bd status
-
-# 2. Ready to work
-bd ready --limit 20
-
-# 3. In progress
-bd list --status=in_progress
-
-# 4. Blocked tasks
-bd blocked
-
-# 5. Epic progress
+bd stats
 bd epic status
+bd ready --limit 5
+bd list --status=in_progress
+```
 
-# 6. Priority breakdown
+Output format:
+
+```
+## Project Health
+
+{total} tasks  {wide progress bar 24 chars}  X% done
+               {closed} closed · {wip} wip · {ready} ready · {blocked} blocked
+
+### Epics
+{epic name, left-padded}  ({id})  {progress bar 24 chars}  XX%  NN/MM
+{epic name, left-padded}  ({id})  {progress bar 24 chars}  XX%  NN/MM
+...
+
+### In Progress
+{list if any, otherwise skip section}
+
+### Top Ready
+| Prio | Task |
+|------|------|
+| P2 | **Title** (`id`) |
+...
+(showing top 5, {N} more ready)
+```
+
+### View: ready
+
+```bash
+bd ready --limit 0
+bd epic status
+```
+
+Group ready tasks by epic. Tasks without an epic go under "Other".
+
+Output format:
+
+```
+## Ready Tasks (no blockers)
+
+### {Epic Name} ({id})
+  P2  **Title** (`id`)
+  P2  **Title** (`id`)
+  P3  **Title** (`id`)
+
+### {Epic Name} ({id})
+  P2  **Title** (`id`)
+  P3  **Title** (`id`)
+
+### Other
+  P3  **Title** (`id`)
+
+{N} ready tasks total
+```
+
+### View: epics
+
+```bash
+bd epic status
+# For each epic:
+bd show <epic-id>
+```
+
+Output format:
+
+```
+## Epics
+
+### {Epic Name} (`id`)  {progress bar 24 chars}  XX%  NN/MM
+
+**Open children:**
+| Prio | Task | Status |
+|------|------|--------|
+| P2 | **Title** (`id`) | ready / blocked / wip |
+...
+
+(repeat for each epic, sorted by progress % descending)
+```
+
+### View: blocked
+
+```bash
+bd blocked
+```
+
+Show dependency graph as ASCII tree. Group by root blocker - the task that ultimately blocks others.
+
+Output format:
+
+```
+## Dependency Graph
+
+**Root Blocker Title** (`id`) [status]
+ ├── **Blocked Task** (`id`) [blocked]
+ │    └── **Transitively Blocked** (`id`) [blocked]
+ └── **Another Blocked** (`id`) [blocked]
+
+**Another Root** (`id`) [status]
+ └── **Blocked Task** (`id`) [blocked]
+
+{N} blocked tasks, {M} root blockers
+```
+
+If no blocked tasks: "No blocked tasks."
+
+### View: full
+
+Run all commands:
+
+```bash
+bd stats
+bd ready --limit 0
+bd list --status=in_progress
+bd blocked
+bd epic status
 bd list --status=open --json | jq -r '.[].priority' | sort | uniq -c | sort -rn
-
-# 7. Recently closed (last 7 days)
 bd list --status=closed --limit 10
 ```
 
-## Report Format
+Output format - full report:
 
-**Every task mention uses `**Title** (id)` format. No bare IDs anywhere in this report.**
-
-Present the report in this structure:
-
-```markdown
+```
 # Task Status - {project name}
-Generated: {current date}
 
-## Summary
-Total: X   Open: X   Closed: X
-Epics: X   Tasks: X   Bugs: X
-Ready: X   Blocked: X  WIP: X
+## Project Health
+
+{total} tasks  {wide progress bar 24 chars}  X% done
+               {closed} closed · {wip} wip · {ready} ready · {blocked} blocked
 
 ## Priority Distribution
-P0 Critical:  {count with bar}
-P1 High:      {count with bar}
-P2 Medium:    {count with bar}
-P3 Low:       {count with bar}
-P4 Backlog:   {count with bar}
-
-## Ready to Work (no blockers)
-{list from bd ready, mark epics with <- EPIC}
-
-## In Progress
-{list from bd list --status=in_progress, show assignee}
-
-## Blocked
-{list from bd blocked with blocking reasons}
-Example:
-1. [P2] **Test Coverage** (`proj-1om`)
-   blocked by: **Refactor CPA Core** (`proj-ffj`)
+P0 Critical:  {bar} N
+P1 High:      {bar} N
+P2 Medium:    {bar} N
+P3 Low:       {bar} N
+P4 Backlog:   {bar} N
+(only show priorities that have tasks)
 
 ## Epics Progress
-{from bd epic status, with visual progress bars}
+{epic name, left-padded}  ({id})  {progress bar 24 chars}  XX%  NN/MM
+{epic name, left-padded}  ({id})  {progress bar 24 chars}  XX%  NN/MM
+...
+(sorted by progress % descending)
+
+## Ready to Work
+
+### {Epic Name}
+  P2  **Title** (`id`)
+  P3  **Title** (`id`)
+
+### {Another Epic}
+  P2  **Title** (`id`)
+...
+
+## In Progress
+{list or "None"}
 
 ## Dependency Graph
-{show which tasks block others}
-Example:
-**Refactor CPA Core** (`proj-ffj`)
-+-- -> **Test Coverage** (`proj-1om`)
-+-- -> **Unified Selfhost** (`proj-az6`)
+{ASCII tree as in blocked view, or "No blocked tasks."}
 
-## Recently Closed (7 days)
-{list recently closed tasks with relative dates}
+## Recent Activity
+{last 5-10 closed tasks with dates}
+  2026-02-25  **Title** (`id`)
+  2026-02-24  **Title** (`id`)
+  2026-02-23  **Title** (`id`)
+  ...
 
 ## Insights
-{AI-generated observations, examples:}
-- X tasks blocked by single epic - consider prioritizing
-- No P0/P1 tasks - runway is clear
-- **Session Restore** (`proj-ch15`) in progress > 3 days - may need attention
-- Bottleneck: **Refactor CPA Core** (`proj-ffj`) blocks 2 other tasks
-- All epics at 0% - need to break down into subtasks
+{AI-generated observations:}
+- Bottlenecks: tasks that block many others
+- Stale work: in_progress too long
+- Priority imbalance
+- Quick wins: small ready P3/P4 tasks
+- Epic progress comparison
 ```
 
-## Before Presenting
+## Visual Format Rules
 
-Scan your output for any bare task IDs (like `proj-xxx` or `0nf.x` without a bold title before them). Fix any you find.
+- **Task references:** always `**Title** (id)` format. No bare IDs anywhere.
+- Scan output before presenting - fix any bare IDs.
+- **Progress bars:** `████████████░░░░░░░░░░░░` style, **24 chars** wide.
+- **Alignment:** pad epic names to same width so progress bars align vertically.
+- **Sorting:** epics by progress % descending (most complete first). Ready tasks by priority ascending (P0 first).
+- Report structure in English, respond to user in their language.
 
-## Insights to Look For
+## LETS Box
 
-Analyze the data and report:
-
-1. **Bottlenecks** - tasks that block many others
-2. **Stale work** - in_progress too long without updates
-3. **Priority imbalance** - too many P1s or empty P1
-4. **Empty epics** - epics without children tasks
-5. **Dependency chains** - long chains that slow progress
-6. **Quick wins** - P3/P4 tasks that are ready and small
-
-## Output
-
-Present the full report directly to the user. Use the box-drawing characters for visual appeal in terminal.
-
-## Suggested Next Action
-
-Based on current state, suggest next step with LETS box:
+Based on current state:
 
 **No WIP tasks:**
 ```
@@ -134,6 +250,4 @@ Based on current state, suggest next step with LETS box:
 └────────────────────────────────┘
 ```
 
-## Language
-
-Report structure in English, but respond to user in their language (Ukrainian/Russian/English).
+**When called as `overview` from `/lets:start`** - no LETS box (start.md handles next steps).

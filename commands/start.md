@@ -27,7 +27,7 @@ Report: branch, uncommitted changes, recent commits.
 
 ## Step 3: Task Status
 
-Run `/lets:status` command to show full task overview.
+Run `/lets:status overview` to show compact task overview.
 
 ## Step 4: Present Summary
 
