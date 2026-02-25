@@ -58,6 +58,21 @@ Output format:
 ### In Progress
 {list if any, otherwise skip section}
 
+### If github: true:
+
+```bash
+gh pr list --state open --author @me --json number,title,headRefName,url,reviewDecision --limit 5 2>/dev/null
+```
+
+Add to output after "### In Progress":
+
+```
+### Open PRs
+#42 **{title}** ({branch}) - {reviewDecision or "pending"}
+#38 **{title}** ({branch}) - {reviewDecision or "pending"}
+(skip section entirely if no open PRs or github: false/missing)
+```
+
 ### Top Ready
 | Prio | Task |
 |------|------|
@@ -195,6 +210,23 @@ P4 Backlog:   {bar} N
 
 ## In Progress
 {list or "None"}
+
+### If github: true:
+
+```bash
+gh pr list --state open --json number,title,headRefName,author,url,reviewDecision --limit 20 2>/dev/null
+```
+
+Add to output after "## In Progress":
+
+```
+## Pull Requests
+| PR | Branch | Review |
+|----|--------|--------|
+| #42 **{title}** | feature/... | APPROVED / CHANGES_REQUESTED / pending |
+...
+(skip section entirely if github: false/missing)
+```
 
 ## Dependency Graph
 {ASCII tree as in blocked view, or "No blocked tasks."}

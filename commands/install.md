@@ -14,6 +14,10 @@ claude --version
 
 # Installed plugins
 claude plugin list
+
+# GitHub CLI (optional - for GitHub PR workflow)
+gh --version 2>/dev/null || echo "gh CLI not found (optional - needed for github: true)"
+gh auth status 2>/dev/null || echo "gh not authenticated (optional)"
 ```
 
 ## Step 2: Install Required Plugins
@@ -51,6 +55,36 @@ if ! grep -q '^\.lets/' "$ROOT/.gitignore" 2>/dev/null; then
 fi
 ```
 
+### GitHub Workflow (optional)
+
+If `gh auth status` succeeded in Step 1, ask:
+
+> "Enable GitHub PR workflow? When enabled:
+> - `/lets:done` creates PR instead of local merge
+> - `/lets:status` shows open PRs
+>
+> Requires `gh` CLI to stay authenticated."
+
+If user agrees:
+
+```bash
+ROOT=$(git rev-parse --show-toplevel)
+CONFIG="$ROOT/.lets/config.yaml"
+if [ -f "$CONFIG" ]; then
+  # Replace existing github line or append if missing
+  if grep -q '^github:' "$CONFIG"; then
+    sed 's/^github:.*/github: true/' "$CONFIG" > "$CONFIG.tmp" && mv "$CONFIG.tmp" "$CONFIG"
+  else
+    echo "github: true" >> "$CONFIG"
+  fi
+else
+  cp "${CLAUDE_PLUGIN_ROOT}/hooks/config-template.yaml" "$CONFIG"
+  sed 's/^github:.*/github: true/' "$CONFIG" > "$CONFIG.tmp" && mv "$CONFIG.tmp" "$CONFIG"
+fi
+```
+
+If user declines or gh not available: skip (default `github: false` or omitted = false).
+
 ## Step 4: Verify Setup
 
 Run these checks:
@@ -76,7 +110,7 @@ Present this to the developer:
 |-------|----------|-------------|
 | `/lets:start` | Session | Beginning of session |
 | `/lets:end` | Session | End of session |
-| `/lets:done` | Task | Task is complete (creates PR or merges) |
+| `/lets:done` | Task | Task is complete (creates PR if github mode, or merges locally) |
 | `/lets:commit` | Code | Ready to commit changes |
 | `/lets:check` | Code | Quick sanity check (~30 sec) |
 | `/lets:review` | Code | Full deep review (~2-3 min) |
@@ -142,6 +176,9 @@ Run through and verify:
 - [ ] `.lets/` directory exists and gitignored
 - [ ] `bd ready` works
 - [ ] Auto compact disabled
+- [ ] (Optional) `gh` CLI installed for GitHub workflow
+- [ ] (Optional) `gh auth status` passes
+- [ ] (Optional) `github: true` set in `.lets/config.yaml`
 
 **Setup complete when all checked.**
 
