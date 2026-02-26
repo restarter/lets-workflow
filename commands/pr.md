@@ -174,15 +174,17 @@ If checkout fails:
 ```bash
 ROOT=$(git rev-parse --show-toplevel)
 mkdir -p "$ROOT/.lets/execution"
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 ```
 
-Write initial state to `.lets/execution/pr-{number}.json` with Phase 1 fields:
+Write initial state to `.lets/execution/pr-{number}.json` with Phase 1 fields.
+**IMPORTANT:** Use `REPO` from `gh repo view` above - do NOT guess from directory name.
 
 ```json
 {
   "pr_number": 42,
-  "pr_url": "https://github.com/owner/repo/pull/42",
-  "repo": "owner/repo",
+  "pr_url": "https://github.com/${REPO}/pull/42",
+  "repo": "${REPO}",
   "title": "Add feature X",
   "branch": "feature/xyz",
   "base_branch": "main",
@@ -338,10 +340,12 @@ The `line` field in the API = line number in the NEW version of the file (RIGHT 
 
 For each finding marked as "inline":
 
-1. Get the diff for that file:
+1. Get the full PR diff and filter by file:
 
 ```bash
-gh pr diff <PR> -- {file_path}
+# gh pr diff does NOT support -- file_path syntax
+# Filter the diff output to extract hunks for the target file
+gh pr diff <PR> | awk '/^diff --git.*{file_path}$/,/^diff --git/'
 ```
 
 2. Parse diff hunks to determine which new-side line numbers are present:
