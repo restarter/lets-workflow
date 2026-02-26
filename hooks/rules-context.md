@@ -59,7 +59,7 @@ Not every search needs an agent. Choose the right tool for the task type:
   Examples: understand how a feature works across files, compare patterns, find all places affected by a change.
 
 **When to escalate from direct search to agent:**
-- Directed search needs 3+ sequential tool calls to get an answer
+- Directed search needs 3+ read-then-decide rounds to get an answer
 - You need to compare or synthesize content from 3+ files
 - The question is open-ended ("how does X work?" vs "where is X defined?")
 
