@@ -1,6 +1,6 @@
 ---
-description: GitHub PR review lifecycle - analyze, discuss, post inline comments, follow-up, approve
-argument-hint: "[PR-url-or-number|--follow-up|--approve|--merge|--status|--cancel]"
+description: GitHub PR review lifecycle - analyze, discuss, post inline comments, follow-up, respond, approve
+argument-hint: "[PR-url-or-number|--respond|--follow-up|--approve|--merge|--status|--cancel]"
 ---
 
 # PR Review Lifecycle
@@ -15,6 +15,7 @@ Full GitHub PR review lifecycle: analyze code, discuss findings with user, post 
 /lets:pr <PR-url-or-number>     # Start new review
 /lets:pr                        # Resume from saved state
 /lets:pr --follow-up            # Check if fixes addressed comments
+/lets:pr --respond [PR]         # Author: triage review comments, fix, reply
 /lets:pr --approve              # Approve PR
 /lets:pr --merge                # Merge PR
 /lets:pr --status               # Show current review state
@@ -36,6 +37,7 @@ If gh not available or not authenticated, stop: "gh CLI required. Run `gh auth l
 Interpret user intent:
 - PR URL or number -> extract PR number
 - `--follow-up` -> Phase 3
+- `--respond` -> Phase R (author respond)
 - `--approve` -> Phase 4
 - `--merge` -> merge only
 - `--status` -> show state and exit
@@ -46,7 +48,8 @@ Interpret user intent:
 
 ```bash
 ROOT=$(git rev-parse --show-toplevel)
-STATE_FILE="$ROOT/.lets/execution/pr-{number}.json"
+PR_DIR="$ROOT/.lets/execution/pr-{number}"
+STATE_FILE="$PR_DIR/review.json"
 ```
 
 ### --status flag (exit early)
@@ -57,20 +60,24 @@ If no state file: "No active PR review. Run `/lets:pr <PR>` to start one."
 ### --cancel flag (cleanup and exit)
 
 If --cancel:
-1. Delete state file and any temp files (`.pr-review-payload.json`, `.pr-summary.md`, `.pr-verdict.md`)
+1. Delete PR folder: `rm -rf "$PR_DIR"` (removes state + all temp files)
 2. If `stashed: true` in state, warn: "You have a stash from before the PR review. Run `git stash pop` to restore."
 3. Switch back to previous_branch if stored
 4. Inform user, exit.
 
 ### Route to phase
 
-**State guard:** If `--follow-up`, `--approve`, or `--merge` is specified but no state file exists:
+**State guard:** If `--follow-up`, `--approve`, `--merge`, or `--respond` is specified but no state file exists:
 1. If a PR number is also provided (e.g., `/lets:pr --approve 2`), create a minimal state from `gh pr view`:
    ```bash
    REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
    gh pr view <PR> --json title,headRefOid,headRefName,baseRefName
    ```
    Write minimal state (pr_number, repo, title, branch, head_sha, findings: [], findings_posted: false) and continue.
+
+   For `--respond` specifically, create a minimal response state (not review state):
+   - If PR number provided: fetch PR info, create `$PR_DIR/response.json`, continue to Phase R
+   - If no PR number: check for existing `pr-[0-9]*/response.json` files, or stop
 2. If no PR number - stop: "No active PR review found. Run `/lets:pr <PR>` to start one."
 
 | State | Action |
@@ -81,6 +88,7 @@ If --cancel:
 | State exists, findings_posted: true, no new commits | Show status, ask what to do |
 | --follow-up flag (state required) | Phase 3 |
 | --approve flag (state required) | Phase 4 |
+| --respond flag (PR number or existing state) | Phase R |
 | --merge flag (state required) | Merge only (Step 5.4) |
 
 ### No argument, no flag
@@ -88,11 +96,14 @@ If --cancel:
 Look for existing state files:
 
 ```bash
-ls "$ROOT/.lets/execution/pr-*.json" 2>/dev/null
+ls -d "$ROOT/.lets/execution/pr-"[0-9]*/ 2>/dev/null
 ```
 
-- One state file -> resume it
-- Multiple -> AskUserQuestion which PR to resume
+For each found folder, check which state files exist:
+- `review.json` only -> resume review (Phase 2/3/4)
+- `response.json` only -> resume respond (Phase R)
+- Both exist -> AskUserQuestion: "PR #{number} has both review and response state. Resume as reviewer or author?"
+- Multiple PR folders -> AskUserQuestion which PR to resume
 - None -> ask user for PR number
 
 ## Step 2: Phase 1 - Analyze
@@ -180,11 +191,11 @@ If checkout fails:
 
 ```bash
 ROOT=$(git rev-parse --show-toplevel)
-mkdir -p "$ROOT/.lets/execution"
+mkdir -p "$PR_DIR"
 REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 ```
 
-Write initial state to `.lets/execution/pr-{number}.json` with Phase 1 fields.
+Write initial state to `.lets/execution/pr-{number}/review.json` with Phase 1 fields.
 **IMPORTANT:** Use `REPO` from `gh repo view` above - do NOT guess from directory name.
 
 ```json
@@ -383,7 +394,7 @@ REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 HEAD_SHA=$(gh pr view <PR> --json headRefOid -q .headRefOid)
 ```
 
-Write the FULL payload to `$ROOT/.lets/execution/.pr-review-payload.json`:
+Write the FULL payload to `$PR_DIR/payload.json`:
 
 ```json
 {
@@ -421,7 +432,7 @@ Step 2: Post the review.
 ```bash
 gh api repos/${REPO}/pulls/{PR}/reviews \
   --method POST \
-  --input "$ROOT/.lets/execution/.pr-review-payload.json"
+  --input "$PR_DIR/payload.json"
 ```
 
 Step 3: Parse response.
@@ -436,7 +447,7 @@ If gh api returns error (400/422):
 4. Fallback command:
 
 ```bash
-gh pr comment <PR> --body-file "$ROOT/.lets/execution/.pr-review-fallback.md"
+gh pr comment <PR> --body-file "$PR_DIR/fallback.md"
 ```
 
 (Write all findings as a formatted list in the fallback file)
@@ -449,7 +460,7 @@ If there are findings with disposition "summary" or "edited" that weren't includ
 ROOT=$(git rev-parse --show-toplevel)
 ```
 
-Write to `$ROOT/.lets/execution/.pr-summary.md`:
+Write to `$PR_DIR/summary.md`:
 
 ```
 ### Additional Observations
@@ -463,7 +474,7 @@ These items don't warrant inline comments but are worth noting:
 ```
 
 ```bash
-gh pr comment <PR> --body-file "$ROOT/.lets/execution/.pr-summary.md"
+gh pr comment <PR> --body-file "$PR_DIR/summary.md"
 ```
 
 Save summary_comment_id from output (parse the URL or ID from gh output).
@@ -473,7 +484,7 @@ Save summary_comment_id from output (parse the URL or ID from gh output).
 - Set findings_posted: true
 - Save posted_comment_id for each inline finding
 - Save review_id and summary_comment_id
-- Delete temp files (.pr-review-payload.json, .pr-summary.md, .pr-review-fallback.md)
+- Temp files (payload.json, summary.md, fallback.md) stay in PR folder for reference
 
 Log to beads:
 
@@ -630,7 +641,7 @@ AskUserQuestion(
 ROOT=$(git rev-parse --show-toplevel)
 ```
 
-Write verdict body to `$ROOT/.lets/execution/.pr-verdict.md`:
+Write verdict body to `$PR_DIR/verdict.md`:
 
 For approve:
 ```
@@ -648,10 +659,10 @@ Then:
 
 ```bash
 # Approve
-gh pr review <PR> --approve --body-file "$ROOT/.lets/execution/.pr-verdict.md"
+gh pr review <PR> --approve --body-file "$PR_DIR/verdict.md"
 
 # OR Request changes
-gh pr review <PR> --request-changes --body-file "$ROOT/.lets/execution/.pr-verdict.md"
+gh pr review <PR> --request-changes --body-file "$PR_DIR/verdict.md"
 ```
 
 **Handle self-approve error:** If `gh pr review --approve` fails with "Can not approve your own pull request":
@@ -700,7 +711,7 @@ git checkout {previous_branch from state}
 
 2. If `stashed: true` in state, warn: "You have a stash from before the PR review. Run `git stash pop` to restore your changes."
 
-3. Delete state file (`pr-{number}.json`) and any temp files (`.pr-review-payload.json`, `.pr-summary.md`, `.pr-review-fallback.md`, `.pr-verdict.md`) from `.lets/execution/`.
+3. Delete PR folder: `rm -rf "$PR_DIR"`
 
 4. Log to beads (using task_id from state):
 
@@ -714,7 +725,345 @@ If not merging and not cleaning up (review posted, waiting for fixes):
 - Keep state file for follow-up
 - Switch back to previous_branch
 
-## Step 6: Output
+## Step 6: Phase R - Author Respond
+
+Triggered by `--respond` flag. This is the author's flow - mirror of reviewer phases.
+
+### 6.1 Verify author context
+
+```bash
+CURRENT_BRANCH=$(git branch --show-current)
+PR_BRANCH=$(gh pr view <PR> --json headRefName -q .headRefName)
+```
+
+If not on PR branch:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "You're on '{CURRENT_BRANCH}', PR branch is '{PR_BRANCH}'. Switch?",
+    header: "LETS",
+    options: [
+      { label: "Checkout", description: "Switch to {PR_BRANCH}" },
+      { label: "Stay", description: "Continue on current branch" },
+      { label: "Cancel", description: "Abort" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+If Checkout: `gh pr checkout <PR>` (same stash handling as Step 2.3).
+
+**Detect active task** (before branch switch, same logic as Step 2.2):
+```bash
+BRANCH=$(git branch --show-current)
+# Parse task ID from branch: feature/<task-id>-<slug>
+# Fallback: bd list --status=in_progress
+```
+Store detected task_id for beads logging in 6.6.
+
+Check for existing `$PR_DIR/response.json`:
+- If exists and `replies_posted: false` -> offer to resume (skip to 6.3, only triage comments where `decision == null`)
+- If exists and `replies_posted: true` -> "Already responded to this PR. Run again to respond to new comments since last response."
+- If not exists -> continue to 6.2
+
+### 6.2 Fetch review comments from GitHub
+
+Three API calls to get all comment types. Use `--paginate` on all calls.
+
+```bash
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+HEAD_SHA=$(gh pr view <PR> --json headRefOid -q .headRefOid)
+
+# 1. Review submissions (review body text + verdict)
+gh api repos/${REPO}/pulls/{PR}/reviews --paginate
+
+# 2. Inline review comments (attached to specific lines)
+gh api repos/${REPO}/pulls/{PR}/comments --paginate
+
+# 3. General PR comments (issue-style, flat thread)
+gh api repos/${REPO}/issues/{PR}/comments --paginate
+```
+
+**Filter reviews:** Exclude `PENDING` state reviews (drafts not yet submitted). Keep: `APPROVED`, `CHANGES_REQUESTED`, `COMMENTED`, `DISMISSED`.
+
+**No self-filter:** Fetch all comments for full context. Author skips their own during triage if needed.
+
+**Thread context for inline comments:**
+- If a comment has `in_reply_to_id`, fetch the thread for display during triage (show conversation context).
+- Always reply directly to the comment's own `github_id` via `in_reply_to`. No thread chain reconstruction needed - GitHub handles threading.
+
+**Build comment list for triage:**
+
+For each comment, create an entry:
+
+```json
+{
+  "id": "inline-{comment_id}" | "general-{comment_id}" | "review-{review_id}",
+  "github_id": 12345678,
+  "type": "inline" | "general" | "review_body",
+  "reviewer": "username",
+  "path": "src/file.py",
+  "line": 42,
+  "body": "Full comment text",
+  "decision": null,
+  "decision_note": null,
+  "reply_text": null,
+  "reply_posted": false,
+  "reply_posted_id": null
+}
+```
+
+Field details:
+- `reply_posted`: per-comment flag for idempotent resume.
+
+Write to `$PR_DIR/response.json`:
+
+```json
+{
+  "pr_number": 42,
+  "repo": "owner/repo",
+  "title": "Add feature X",
+  "branch": "feature/xyz",
+  "head_sha": "abc1234",
+  "previous_branch": "feature/my-current-work",
+  "stashed": false,
+  "task_id": "project-0nf.26",
+  "respond_started": "2026-02-26",
+  "comments": [ ... ],
+  "fixes_committed": false,
+  "fix_commit_sha": null,
+  "replies_posted": false
+}
+```
+
+### 6.3 Show overview and triage
+
+Show summary table:
+
+```
+## PR #{number}: {title} - Responding to Review
+
+Comments: {N} inline threads, {M} general, {K} review notes
+
+| # | Type | Location | Reviewer | Preview |
+|---|------|----------|----------|---------|
+| 1 | inline | src/search.py:42 | @user | SQL injection risk... |
+| 2 | inline | src/auth.py:15 | @user | Missing rate limiting... |
+| 3 | general | - | @user | Additional observations... |
+| 4 | review | - | @user | Verdict: CHANGES_REQUESTED |
+```
+
+Then offer bulk vs individual triage:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "{N} review comments. How to triage?",
+    header: "PR Response",
+    options: [
+      { label: "Agree to all", description: "Mark all as 'Agree' - will fix everything" },
+      { label: "Triage individually", description: "Decide per comment (fix/agree/disagree/skip)" },
+      { label: "Skip all", description: "No replies needed" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Agree to all:** Set all comments to `decision: "agree"`, generate default reply "Agreed, will fix." for each. Skip to 6.4.
+
+**Skip all:** Set all to `decision: "skip"`, `reply_posted: true`. Skip to output (done).
+
+**Triage individually:** For each comment (inline first grouped by file, then general, then review bodies):
+
+```
+## Comment {N}/{total}: [{type}] by @{reviewer}
+
+{If inline with thread:}
+File: `{path}:{line}`
+
+Thread:
+> **@{author1}:** {message 1}
+> **@{author2}:** {reply 1}
+> **@{author3}:** {latest message}
+
+{If inline without thread:}
+File: `{path}:{line}`
+```{language}
+{Read 5-10 lines of actual code around the line using Read tool}
+```
+> {comment body}
+
+{If general:}
+> {comment body}
+
+{If review_body:}
+Review verdict: {state}
+> {body}
+```
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Comment {N}: {first 60 chars of body}",
+    header: "PR Response",
+    options: [
+      { label: "Fix", description: "AI will fix this (mechanical change)" },
+      { label: "Agree", description: "Will reply 'agreed' (manual fix or no code change needed)" },
+      { label: "Disagree", description: "Push back with your explanation" },
+      { label: "Skip", description: "No reply needed" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+Handle response:
+- **Fix**: Set `decision: "fix"`. AI will fix in step 6.4. Reply text: "Fixed." (updated with commit SHA after push)
+- **Agree**: Set `decision: "agree"`. Ask: "Brief note? (optional, Enter to skip)". Reply: "Agreed." or "Agreed - {note}."
+- **Disagree**: Set `decision: "disagree"`. Ask: "Why? (this becomes your reply)". Reply: user's text directly.
+- **Skip**: Set `decision: "skip"`, `reply_posted: true`.
+
+Save state after each decision (crash recovery).
+
+### 6.4 Fix code
+
+If any comments have `decision: "fix"`:
+
+Show fix summary:
+
+```
+## Fix Plan
+
+{N} items marked for AI fix:
+1. {path}:{line} - {first line of comment}
+2. ...
+
+{M} items agreed (reply only, no code change):
+1. {comment preview}
+...
+```
+
+For each "fix" comment:
+- Read the file and code context
+- Understand the reviewer's suggestion
+- Make the fix using Edit tool
+- **Guard rail:** Only attempt mechanical fixes. If the comment is architectural, inform user: "This comment is too broad for auto-fix. Changing to 'Agree' - you may want to fix manually."
+  - **Mechanical (AI fixes):** typo, null check, missing import, variable rename, add error handling, fix off-by-one, add missing validation
+  - **Too complex (decline):** redesign module, change architecture, refactor approach, "consider using X instead", performance optimization
+
+After all fixes:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Fixes ready. How to proceed?",
+    header: "LETS",
+    options: [
+      { label: "Commit & push", description: "git add, commit, push to PR branch" },
+      { label: "Commit only", description: "Commit locally, push later" },
+      { label: "Review first", description: "Show diff before committing" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+If "Review first": show `git diff`, then ask again.
+
+If "Commit & push" or "Commit only":
+```bash
+git add -A
+git commit -m "fix: Address PR review comments"
+```
+
+If "Commit & push": `git push`
+
+Save `fix_commit_sha` in response.json. Update "fix" reply texts: "Fixed in {short_sha}."
+Set `fixes_committed: true`.
+
+If no "fix" comments (all agree/disagree/skip): skip this step entirely.
+
+### 6.5 Post replies
+
+Show reply plan (skip entries with `decision: "skip"`):
+
+```
+## Reply Plan
+
+| # | Type | Decision | Reply |
+|---|------|----------|-------|
+| 1 | inline | Fix | "Fixed in abc1234." |
+| 2 | inline | Disagree | "This is intentional because..." |
+| 3 | general | Agree | "Agreed, good catch." |
+```
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Post {N} replies to PR #{number}?",
+    header: "LETS",
+    options: [
+      { label: "Post all", description: "Post {N} replies to GitHub" },
+      { label: "Review individually", description: "Edit each reply before posting" },
+      { label: "Save for later", description: "Keep state, post next session" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+If "Review individually": show each reply, allow editing via AskUserQuestion (Other option) before posting.
+
+If "Save for later": save state, exit with resume LETS box.
+
+If "Post all": post each reply by type.
+
+**Inline comments** (threaded reply):
+```bash
+gh api repos/${REPO}/pulls/{PR}/comments \
+  --method POST \
+  -F body="{reply_text}" \
+  -F in_reply_to={github_id}
+```
+
+**General comments** (new top-level comment with quote):
+```bash
+gh api repos/${REPO}/issues/{PR}/comments \
+  --method POST \
+  -F body="> {first 2 lines of original}\n\n{reply_text}"
+```
+
+**Review body** (new comment with attribution):
+```bash
+gh api repos/${REPO}/issues/{PR}/comments \
+  --method POST \
+  -F body="Re: review by @{reviewer}\n\n{reply_text}"
+```
+
+**Per-reply error handling:** If a reply fails (404 - comment deleted, 422 - validation error):
+1. Log: "Reply to comment {id} failed: {error}. Skipping."
+2. Mark entry with error in state, continue with remaining replies.
+3. Do NOT abort the batch.
+
+Mark each as `reply_posted: true` and save `reply_posted_id` after successful post. Save state after each reply (idempotent resume).
+
+### 6.6 Update state
+
+After all replies posted:
+- Set `replies_posted: true`
+- Log to beads:
+
+```bash
+bd comments add {task_id} "Responded to PR #{number} review: {N} fixed, {M} agreed, {K} disagreed"
+# Skip if task_id is null
+```
+
+Switch back to previous branch if we checked out the PR branch in 6.1.
+
+## Step 7: Output
 
 ### After Phase 1 (findings shown):
 Transition directly to Phase 2 (discuss findings).
@@ -751,6 +1100,27 @@ PR #{number} {approved/merged/changes requested}
 └────────────────────────────────┘
 ```
 
+### After Phase R (replies posted):
+
+```
+Replied to {N} comments on PR #{number} ({X} fixed, {Y} agreed, {Z} disagreed)
+
+┌─ LETS ─────────────────────────┐
+│  Done?    /lets:done           │
+│  Status?  /lets:pr --status    │
+└────────────────────────────────┘
+```
+
+### After Phase R (saved for later):
+
+```
+Response saved to .lets/execution/pr-{number}/response.json
+
+┌─ LETS ──────────────────────────────┐
+│  Resume?  /lets:pr --respond {PR}   │
+└─────────────────────────────────────┘
+```
+
 ### After --status:
 
 ```
@@ -779,7 +1149,7 @@ Review state cleaned up.
 - **Use --body-file** for all multiline comment posting (never heredoc)
 - **Single JSON payload** for batch inline comments via --input (never mix -f and --input)
 - **Fallback on failure** - if gh api fails, offer to post as single comment instead
-- **Clean up temp files** after posting (.pr-review-payload.json, .pr-summary.md, etc.)
+- **Per-PR folders** - all state and temp files live in `.lets/execution/pr-{number}/`
 - **Restore previous branch** on cleanup/cancel/merge
 - **Error recovery** - if gh pr checkout fails after stash, pop stash before exiting
 - Respond in user's language

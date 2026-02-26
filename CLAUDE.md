@@ -23,7 +23,7 @@ reference/                    # Reference plugins for studying patterns (gitigno
 
 - Agents define WHO (expertise, scoring, output format). Commands define WHAT to do (provide diff, context)
 - `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:brainstorm` use `subagent_type: "lets:agent-name"` to dispatch agents via Task tool
-- `/lets:pr` orchestrates `/lets:review` (delegates analysis) and handles GitHub posting, follow-up, and approval directly via gh CLI
+- `/lets:pr` orchestrates `/lets:review` (delegates analysis) and handles GitHub posting, follow-up, respond, and approval directly via gh CLI
 - `/lets:check` reviews inline (no subagent) for speed
 - All agents are read-only (Read, Grep, Glob, optionally Bash). No Edit/Write.
 - SessionStart hook injects rules from `hooks/rules-context.md`
@@ -38,7 +38,7 @@ All plugin-generated files go to `.lets/` (gitignored). Never use `/tmp` or othe
 .lets/sessions/          # Session summaries, session-start-ref
 .lets/reviews/           # Saved review reports
 .lets/plans/             # Implementation plans
-.lets/execution/         # Execution state for multi-session plan resume
+.lets/execution/         # Execution state (plan resume + PR review: pr-{number}/)
 ```
 
 ## Dependencies

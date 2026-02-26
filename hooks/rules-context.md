@@ -101,6 +101,7 @@ Every `bd create` MUST include: `--title` (imperative mood), `--parent` (epic), 
 /lets:start -> Work -> /lets:check -> /lets:commit -> /lets:done -> /lets:end
 
 PR review:  /lets:pr <PR> -> discuss -> post -> /lets:pr --follow-up -> /lets:pr --approve
+PR respond: /lets:pr --respond <PR> -> triage -> fix -> reply
 ```
 
 If a plan exists from `/lets:brainstorm`, use `/lets:execute` to implement it. Execute handles check/commit cycles internally.
@@ -232,7 +233,7 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:commit` | Code | Ready to commit |
 | `/lets:check` | Code | Quick sanity check (~30s) |
 | `/lets:review` | Code | Full deep review (~2-3 min) |
-| `/lets:pr` | Code | PR review lifecycle (inline comments, follow-up, approve) |
+| `/lets:pr` | Code | PR review lifecycle (review, respond, follow-up, approve) |
 | `/lets:opinion` | Expert | Technical decision (3-5 agents) |
 | `/lets:ask` | Expert | Quick expert consultation (1 agent) |
 | `/lets:brainstorm` | Planning | Idea needs architecture + implementation plan |

@@ -80,7 +80,7 @@ Present this to the developer:
 | `/lets:commit` | Code | Ready to commit changes |
 | `/lets:check` | Code | Quick sanity check (~30 sec) |
 | `/lets:review` | Code | Full deep review (~2-3 min) |
-| `/lets:pr` | Code | PR review lifecycle with inline comments |
+| `/lets:pr` | Code | PR review lifecycle (review, respond, follow-up, approve) |
 | `/lets:opinion` | Expert | Technical decision needed |
 | `/lets:ask` | Expert | Quick question to one expert |
 | `/lets:status` | Utility | Task overview anytime |
