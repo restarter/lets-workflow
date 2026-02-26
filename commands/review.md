@@ -136,6 +136,7 @@ Scan the diff for file patterns:
 | `config/*`, `.env*`, `*.yml` | Configuration | security-expert, devops-expert, docs-expert |
 | `migrations/*`, `*.sql` | Database | database-expert, security-expert, architect |
 | `tests/*`, `*.test.*`, `*.spec.*` | Tests | qa-expert, architect |
+| `commands/*.md`, `agents/*.md`, `hooks/*.md` | Skill/Command | compliance-expert, docs-expert, pragmatist |
 | `docs/*`, `*.md`, `CLAUDE.md` | Documentation | docs-expert only |
 | `package.json`, `composer.json` | Dependencies | security-expert, devops-expert |
 

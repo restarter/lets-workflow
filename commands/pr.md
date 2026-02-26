@@ -64,7 +64,14 @@ If --cancel:
 
 ### Route to phase
 
-**State guard:** If `--follow-up`, `--approve`, or `--merge` is specified but no state file exists, stop: "No active PR review found. Start one with `/lets:pr <PR>`."
+**State guard:** If `--follow-up`, `--approve`, or `--merge` is specified but no state file exists:
+1. If a PR number is also provided (e.g., `/lets:pr --approve 2`), create a minimal state from `gh pr view`:
+   ```bash
+   REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+   gh pr view <PR> --json title,headRefOid,headRefName,baseRefName
+   ```
+   Write minimal state (pr_number, repo, title, branch, head_sha, findings: [], findings_posted: false) and continue.
+2. If no PR number - stop: "No active PR review found. Run `/lets:pr <PR>` to start one."
 
 | State | Action |
 |-------|--------|
@@ -647,7 +654,12 @@ gh pr review <PR> --approve --body-file "$ROOT/.lets/execution/.pr-verdict.md"
 gh pr review <PR> --request-changes --body-file "$ROOT/.lets/execution/.pr-verdict.md"
 ```
 
-Save verdict to state. Clean up temp file.
+**Handle self-approve error:** If `gh pr review --approve` fails with "Can not approve your own pull request":
+1. Inform user: "GitHub doesn't allow approving your own PR."
+2. Offer fallback: post verdict as a regular comment instead (`gh pr comment <PR> --body-file ...`)
+3. Do NOT retry --approve.
+
+Save verdict to state.
 
 ### 5.4 Optional merge
 
