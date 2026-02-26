@@ -181,7 +181,7 @@ Every milestone should show a LETS box with relevant next steps.
 | **Active work** | AI just edited files | `opinion` + `check` |
 | **Work done** | Feature/fix complete | `review` + `commit` |
 | **After commit** | Commit succeeded | `done` or `end` |
-| **Task done** | `/lets:done` ran | `end` |
+| **Task done** | `/lets:done` ran | AskUserQuestion: stay / next / end |
 | **Decision point** | AI presents 2+ options | `opinion` |
 
 **Rule:** If AI made changes -> always suggest `/lets:check` first.
