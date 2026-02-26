@@ -770,12 +770,16 @@ Check for existing `$PR_DIR/response.json`:
 
 ### 6.2 Fetch review comments from GitHub
 
-Three API calls to get all comment types. Use `--paginate` on all calls.
+**Step 1: Resolve REPO first.** All subsequent API calls depend on this value. Do NOT run API calls in parallel with this - resolve REPO, then use it.
 
 ```bash
 REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 HEAD_SHA=$(gh pr view <PR> --json headRefOid -q .headRefOid)
+```
 
+**Step 2: Fetch comments.** Three API calls (can run in parallel - they all use REPO). Use `--paginate` on all calls.
+
+```bash
 # 1. Review submissions (review body text + verdict)
 gh api repos/${REPO}/pulls/{PR}/reviews --paginate
 
@@ -794,15 +798,19 @@ gh api repos/${REPO}/issues/{PR}/comments --paginate
 - If a comment has `in_reply_to_id`, fetch the thread for display during triage (show conversation context).
 - Always reply directly to the comment's own `github_id` via `in_reply_to`. No thread chain reconstruction needed - GitHub handles threading.
 
-**Build comment list for triage:**
+**Separate review verdicts from actionable comments:**
+- Review submissions (type `review_body`) are **context, not actionable items**. They contain the reviewer's overall verdict and summary. Show them as a header in the overview (Step 6.3), but do NOT include them in the triage loop.
+- Only inline comments and general comments go into the `comments` array for triage.
 
-For each comment, create an entry:
+**Build comment list for triage (inline + general only):**
+
+For each inline or general comment, create an entry:
 
 ```json
 {
-  "id": "inline-{comment_id}" | "general-{comment_id}" | "review-{review_id}",
+  "id": "inline-{comment_id}" | "general-{comment_id}",
   "github_id": 12345678,
-  "type": "inline" | "general" | "review_body",
+  "type": "inline" | "general",
   "reviewer": "username",
   "path": "src/file.py",
   "line": 42,
@@ -831,6 +839,9 @@ Write to `$PR_DIR/response.json`:
   "stashed": false,
   "task_id": "project-0nf.26",
   "respond_started": "2026-02-26",
+  "reviews": [
+    { "reviewer": "username", "state": "CHANGES_REQUESTED", "body": "Review summary..." }
+  ],
   "comments": [ ... ],
   "fixes_committed": false,
   "fix_commit_sha": null,
@@ -838,21 +849,27 @@ Write to `$PR_DIR/response.json`:
 }
 ```
 
+Note: `reviews` array stores review verdicts for display context. `comments` array stores only triageable items (inline + general).
+
 ### 6.3 Show overview and triage
 
-Show summary table:
+Show review context (from `reviews` array), then comment table (from `comments` array):
 
 ```
 ## PR #{number}: {title} - Responding to Review
 
-Comments: {N} inline threads, {M} general, {K} review notes
+**Review by @{reviewer}:** {state} (e.g., CHANGES_REQUESTED)
+> {review body, first 2-3 lines}
+
+---
+
+Comments to triage: {N} inline, {M} general
 
 | # | Type | Location | Reviewer | Preview |
 |---|------|----------|----------|---------|
 | 1 | inline | src/search.py:42 | @user | SQL injection risk... |
 | 2 | inline | src/auth.py:15 | @user | Missing rate limiting... |
 | 3 | general | - | @user | Additional observations... |
-| 4 | review | - | @user | Verdict: CHANGES_REQUESTED |
 ```
 
 Then offer bulk vs individual triage:
@@ -876,7 +893,7 @@ AskUserQuestion(
 
 **Skip all:** Set all to `decision: "skip"`, `reply_posted: true`. Skip to output (done).
 
-**Triage individually:** For each comment (inline first grouped by file, then general, then review bodies):
+**Triage individually:** For each comment (inline first grouped by file, then general):
 
 ```
 ## Comment {N}/{total}: [{type}] by @{reviewer}
@@ -898,10 +915,6 @@ File: `{path}:{line}`
 
 {If general:}
 > {comment body}
-
-{If review_body:}
-Review verdict: {state}
-> {body}
 ```
 
 ```
@@ -1034,13 +1047,6 @@ gh api repos/${REPO}/pulls/{PR}/comments \
 gh api repos/${REPO}/issues/{PR}/comments \
   --method POST \
   -F body="> {first 2 lines of original}\n\n{reply_text}"
-```
-
-**Review body** (new comment with attribution):
-```bash
-gh api repos/${REPO}/issues/{PR}/comments \
-  --method POST \
-  -F body="Re: review by @{reviewer}\n\n{reply_text}"
 ```
 
 **Per-reply error handling:** If a reply fails (404 - comment deleted, 422 - validation error):
