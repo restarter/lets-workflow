@@ -49,6 +49,22 @@ User states goal -> Claude proposes approach -> User approves -> Claude executes
 - When launching expert agents for `/lets:review`, `/lets:pr`, `/lets:opinion`, `/lets:ask`, `/lets:check`, `/lets:brainstorm` - use ONLY `lets:*` agents (`lets:architect`, `lets:security-expert`, etc.)
 - Never use `general-purpose` or other non-lets subagent types for expert work
 
+### Directed Search vs Exploration
+
+Not every search needs an agent. Choose the right tool for the task type:
+
+- **Directed search** - you know WHAT to find and roughly WHERE. Use Glob/Grep/Read directly.
+  Examples: find a function definition, check a config value, read a specific file.
+- **Exploration** - you need to synthesize, compare, or discover patterns across the codebase. Use an explorer sub-agent.
+  Examples: understand how a feature works across files, compare patterns, find all places affected by a change.
+
+**When to escalate from direct search to agent:**
+- Directed search needs 3+ read-then-decide rounds to get an answer
+- You need to compare or synthesize content from 3+ files
+- The question is open-ended ("how does X work?" vs "where is X defined?")
+
+**Cost of getting this wrong:** sequential direct reads burn context window tokens. One agent call returns a focused summary. When in doubt - agent.
+
 ## Task References (output rule)
 
 Every task mention in ANY output - conversation, reports, graphs, insights - MUST use:
@@ -169,7 +185,7 @@ Every milestone should show a LETS box with relevant next steps.
 | **Active work** | AI just edited files | `opinion` + `check` |
 | **Work done** | Feature/fix complete | `review` + `commit` |
 | **After commit** | Commit succeeded | `done` or `end` |
-| **Task done** | `/lets:done` ran | `end` |
+| **Task done** | `/lets:done` ran | AskUserQuestion: stay / next / end |
 | **Decision point** | AI presents 2+ options | `opinion` |
 
 **Rule:** If AI made changes -> always suggest `/lets:check` first.
