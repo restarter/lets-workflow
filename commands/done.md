@@ -129,13 +129,9 @@ Files: X changed, Y insertions, Z deletions
 
 ## Step 5: Confirm with User
 
-Show what will happen (based on remote detection):
+Show what will happen based on `github` config value from LETS Config:
 
-```bash
-git remote -v
-```
-
-Then use **AskUserQuestion**:
+### If github: true:
 
 ```
 AskUserQuestion(
@@ -143,7 +139,23 @@ AskUserQuestion(
     question: "Ready to finish {task title}?",
     header: "LETS",
     options: [
-      { label: "Finish", description: "{action based on remote: 'Push branch and create PR' OR 'Merge to main and delete branch'}" },
+      { label: "Finish", description: "Push branch and create PR to {merge-branch}" },
+      { label: "Keep working", description: "Not done yet - go back to the task" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+### If github: false (or missing):
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Ready to finish {task title}?",
+    header: "LETS",
+    options: [
+      { label: "Finish", description: "Merge to {merge-branch} and delete branch" },
       { label: "Keep working", description: "Not done yet - go back to the task" }
     ],
     multiSelect: false
@@ -179,7 +191,35 @@ bd comments add <task-id> "## Completed {YYYY-MM-DD}
 
 ## Step 7: Finish Task
 
-### If remote exists (PR flow):
+### If github: true (PR flow):
+
+**Guard: verify gh CLI first**
+
+```bash
+gh auth status 2>&1
+```
+
+If gh is not installed or not authenticated, use **AskUserQuestion**:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "gh CLI is not available but github mode is enabled. What to do?",
+    header: "LETS",
+    options: [
+      { label: "Local merge", description: "Fall back to local merge for this task" },
+      { label: "Cancel", description: "Stop - fix gh auth first (gh auth login)" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Handle response:**
+- **Local merge** -> jump to "If github: false" section below
+- **Cancel** -> stop, return to work
+
+**If gh is available, proceed with PR:**
 
 ```bash
 # Push branch
@@ -211,7 +251,7 @@ Task stays **open** until PR is merged.
 
 **Do NOT switch branches yet** - user decides in Step 8.
 
-### If no remote (local merge):
+### If github: false (local merge):
 
 ```bash
 MAIN=$(git symbolic-ref refs/remotes/origin/HEAD --short 2>/dev/null || echo main)
@@ -227,12 +267,20 @@ bd close <task-id> --reason="Merged locally. Commits: {list}"
 
 ## Step 8: Output
 
-### After PR:
+### After PR (github: true):
 
 ```
 Task: **{title}** ({task-id})
 PR: #{number} - {PR URL}
 Status: open (close after PR merge)
+```
+
+### After local merge (github: false):
+
+```
+Task: **{title}** ({task-id}) - CLOSED
+Merged to {main branch}
+Branch {feature-branch} deleted
 ```
 
 Then use **AskUserQuestion**:

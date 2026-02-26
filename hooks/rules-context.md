@@ -17,6 +17,7 @@ The SessionStart hook injects `## LETS Config` section above with project contex
 - **`project-root`** - absolute path to project root. Use this instead of running `git rev-parse --show-toplevel`. Always available in git repos.
 - **`merge-branch`** - target branch for merges, PR base, and diff comparisons. Use this instead of hardcoded `main`. When running commands like `git log`, `git diff`, `git merge`, `git checkout -b` that need a base branch - use the configured value. Fallback: `git symbolic-ref refs/remotes/origin/HEAD --short 2>/dev/null || echo main`.
 - **`language`** - default response language. Use this when user's language isn't clear from their message. Value is a full language name (English, Ukrainian, Italian, etc).
+- **`github`** - GitHub PR workflow mode (`true`/`false`, default `false`). When `true`: `/lets:done` pushes branch and creates PR via `gh pr create` instead of local merge, `/lets:status` shows open PRs. Requires `gh` CLI installed and authenticated (`gh auth login`). When `false` or missing: local merge workflow. Note: `github: false` means local merge even if a git remote exists - the config flag is the source of truth, not remote detection.
 
 `project-root` is always injected by the hook. Other settings come from `.lets/config.yaml` (user-created, optional).
 
@@ -114,7 +115,8 @@ Every `bd create` MUST include: `--title` (imperative mood), `--parent` (epic), 
 ## Session Flow
 
 ```
-/lets:start -> Work -> /lets:check -> /lets:commit -> /lets:done -> /lets:end
+github: false  /lets:start -> Work -> /lets:check -> /lets:commit -> /lets:done (merge) -> /lets:end
+github: true   /lets:start -> Work -> /lets:check -> /lets:commit -> /lets:done (push + PR) -> /lets:end
 
 PR review:  /lets:pr <PR> -> discuss -> post -> /lets:pr --follow-up -> /lets:pr --approve
 PR respond: /lets:pr --respond <PR> -> triage -> fix -> reply
@@ -231,8 +233,8 @@ This applies when: presenting implementation approaches, choosing between soluti
 
 **Task done:**
 1. All code committed -> `/lets:done`
-2. Creates PR (if remote) or merges locally
-3. Closes task in beads
+2. If `github: true`: pushes branch and creates PR on GitHub (task stays open until PR merge)
+3. If `github: false` or missing: merges to merge-branch locally, closes task
 
 **Session end:**
 1. Check uncommitted changes -> suggest `/lets:commit`

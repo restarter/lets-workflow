@@ -3,3 +3,4 @@
 
 language: English      # Response language (English/Ukrainian/Italian/etc)
 merge-branch: main    # Target branch for merges and PR base
+github: false         # GitHub PR workflow: PR on done instead of local merge (requires gh CLI)
