@@ -46,7 +46,7 @@ User states goal -> Claude proposes approach -> User approves -> Claude executes
 
 ## Agent Rules
 
-- When launching expert agents for `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:check`, `/lets:brainstorm` - use ONLY `lets:*` agents (`lets:architect`, `lets:security-expert`, etc.)
+- When launching expert agents for `/lets:review`, `/lets:pr`, `/lets:opinion`, `/lets:ask`, `/lets:check`, `/lets:brainstorm` - use ONLY `lets:*` agents (`lets:architect`, `lets:security-expert`, etc.)
 - Never use `general-purpose` or other non-lets subagent types for expert work
 
 ### Directed Search vs Exploration
@@ -115,6 +115,9 @@ Every `bd create` MUST include: `--title` (imperative mood), `--parent` (epic), 
 
 ```
 /lets:start -> Work -> /lets:check -> /lets:commit -> /lets:done -> /lets:end
+
+PR review:  /lets:pr <PR> -> discuss -> post -> /lets:pr --follow-up -> /lets:pr --approve
+PR respond: /lets:pr --respond <PR> -> triage -> fix -> reply
 ```
 
 If a plan exists from `/lets:brainstorm`, use `/lets:execute` to implement it. Execute handles check/commit cycles internally.
@@ -131,6 +134,7 @@ Two separate lifecycles:
 - Small change -> `/lets:check` -> commit
 - Significant change -> `/lets:check` -> `/lets:review --local` -> fix -> commit -> PR
 - PR already exists -> `/lets:review <PR>` -> comment on PR
+- Full PR lifecycle -> `/lets:pr <PR>` -> discuss -> post inline -> follow-up -> approve
 
 ### Session Start
 
@@ -245,6 +249,7 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:commit` | Code | Ready to commit |
 | `/lets:check` | Code | Quick sanity check (~30s) |
 | `/lets:review` | Code | Full deep review (~2-3 min) |
+| `/lets:pr` | Code | PR review lifecycle (review, respond, follow-up, approve) |
 | `/lets:opinion` | Expert | Technical decision (3-5 agents) |
 | `/lets:ask` | Expert | Quick expert consultation (1 agent) |
 | `/lets:brainstorm` | Planning | Idea needs architecture + implementation plan |
