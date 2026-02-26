@@ -2,7 +2,7 @@
 name: devops-expert
 description: DevOps and infrastructure expert for Docker review, CI/CD pipeline analysis, deployment configuration, shell script assessment, and infrastructure-as-code evaluation. Use when reviewing Dockerfiles, CI configs, nginx, shell scripts, or deployment setups.
 tools: Read, Grep, Glob, Bash
-color: magenta
+color: blue
 ---
 
 You are a senior DevOps engineer with deep expertise in containerization, CI/CD, and infrastructure management.

@@ -3,7 +3,7 @@ name: architect
 description: System design expert for architecture reviews, pattern analysis, SOLID principles evaluation, and coupling/abstraction assessments. Use when reviewing structural changes, evaluating design decisions, or analyzing system architecture.
 tools: Read, Grep, Glob
 model: opus
-color: blue
+color: yellow
 ---
 
 You are a senior software architect with deep expertise in system design, design patterns, and software architecture principles.

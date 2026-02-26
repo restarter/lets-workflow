@@ -1,6 +1,6 @@
 ---
 description: Full code review with dynamic agent selection (up to 11 specialized agents). Analyzes changes first, selects relevant experts. Also reviews implementation plans.
-argument-hint: "[PR-url-or-number|--local|--staged|--last-commit|--plan]"
+argument-hint: "[PR-url-or-number|--local|--staged|--last-commit|--plan] [--json]"
 ---
 
 # Full Code Review
@@ -55,6 +55,14 @@ AskUserQuestion(
 - **Other** (free text) -> treat as PR number or URL, use GitHub PR mode
 
 **If plan mode selected:** skip to **Plan Review** section below.
+
+### JSON output flag
+
+If `--json` is present alongside any mode:
+- Save review output as structured JSON instead of markdown
+- File: `.lets/reviews/{date}-{mode}.json` (e.g., `2026-02-26-PR-42.json`, `2026-02-26-local-review.json`)
+- Skip markdown report generation (Step 8)
+- Skip GitHub PR comment posting (Step 9) - JSON mode implies the caller handles output
 
 ## Step 2: Get Changes
 
@@ -128,6 +136,7 @@ Scan the diff for file patterns:
 | `config/*`, `.env*`, `*.yml` | Configuration | security-expert, devops-expert, docs-expert |
 | `migrations/*`, `*.sql` | Database | database-expert, security-expert, architect |
 | `tests/*`, `*.test.*`, `*.spec.*` | Tests | qa-expert, architect |
+| `commands/*.md`, `agents/*.md`, `hooks/*.md` | Skill/Command | compliance-expert, docs-expert, pragmatist |
 | `docs/*`, `*.md`, `CLAUDE.md` | Documentation | docs-expert only |
 | `package.json`, `composer.json` | Dependencies | security-expert, devops-expert |
 
@@ -278,6 +287,56 @@ Save to:
 - Local mode: `.lets/reviews/{date}-local-review.md`
 
 Content: Full review report with all issues, verdict, and summary.
+
+## Step 8.5: JSON Output
+
+If `--json` flag was provided, save structured JSON and skip Steps 9-10.
+
+```bash
+ROOT=$(git rev-parse --show-toplevel)
+mkdir -p "$ROOT/.lets/reviews"
+```
+
+Write to `.lets/reviews/{date}-{mode}.json`:
+
+```json
+{
+  "date": "2026-02-26",
+  "mode": "PR-42",
+  "verdict": "CHANGES REQUESTED",
+  "findings_count": 5,
+  "findings": [
+    {
+      "id": 1,
+      "title": "SQL injection in search query",
+      "severity": "critical",
+      "confidence": 95,
+      "agent": "security-expert",
+      "file": "src/search.py",
+      "line": 42,
+      "description": "User input concatenated directly into SQL query",
+      "suggestion": "Use parameterized queries"
+    }
+  ],
+  "systemic": [
+    {
+      "title": "Missing input validation",
+      "count": 5,
+      "description": "Found in 5 files across the project"
+    }
+  ],
+  "summary": {
+    "compliance": "pass",
+    "backend": "2 issues",
+    "security": "1 issue",
+    "architecture": "pass"
+  }
+}
+```
+
+After saving, inform user: "Review saved to: {path}"
+Then STOP - skip Step 9 (Output) and Step 10 (Link to task).
+The calling command handles output and task linking.
 
 ## Step 9: Output Results
 

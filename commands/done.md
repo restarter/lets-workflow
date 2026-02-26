@@ -163,7 +163,7 @@ AskUserQuestion(
 )
 ```
 
-Before asking, remind: "Check context window usage: `/context`"
+Next steps presented via AskUserQuestion (replaces LETS box).
 
 **Handle response:**
 - **Finish** -> proceed to Step 6
@@ -249,6 +249,8 @@ bd comments add <task-id> "PR #XX created: <PR URL>"
 
 Task stays **open** until PR is merged.
 
+**Do NOT switch branches yet** - user decides in Step 8.
+
 ### If github: false (local merge):
 
 ```bash
@@ -271,10 +273,6 @@ bd close <task-id> --reason="Merged locally. Commits: {list}"
 Task: **{title}** ({task-id})
 PR: #{number} - {PR URL}
 Status: open (close after PR merge)
-
-┌─ LETS ─────────────────────────┐
-│  End?  /lets:end               │
-└────────────────────────────────┘
 ```
 
 ### After local merge (github: false):
@@ -283,10 +281,6 @@ Status: open (close after PR merge)
 Task: **{title}** ({task-id}) - CLOSED
 Merged to {main branch}
 Branch {feature-branch} deleted
-
-┌─ LETS ─────────────────────────┐
-│  End?  /lets:end               │
-└────────────────────────────────┘
 ```
 
 Then use **AskUserQuestion**:
@@ -297,19 +291,49 @@ AskUserQuestion(
     question: "Task done. What's next?",
     header: "LETS",
     options: [
-      { label: "End session", description: "Run /lets:end - save context and wrap up" },
-      { label: "Next task", description: "Pick another task to work on" }
+      { label: "Stay on branch", description: "Stay on feature branch - for PR fixes or follow-up work" },
+      { label: "Next task", description: "Switch to {merge-branch}, pick another task" },
+      { label: "End session", description: "Switch to {merge-branch}, run /lets:end" }
     ],
     multiSelect: false
   }]
 )
 ```
 
-Before asking, remind: "Check context window usage: `/context`"
+Next steps presented via AskUserQuestion (replaces LETS box).
 
 **Handle response:**
-- **End session** -> suggest `/lets:end`
+- **Stay on branch** -> stay on current branch, no checkout. User continues working freely.
+- **Next task** -> `git checkout {merge-branch}`, then show `bd ready`, pick new task
+- **End session** -> `git checkout {merge-branch}`, then suggest `/lets:end`
+
+### After local merge:
+
+```
+Task: **{title}** ({task-id}) - CLOSED
+Merged to {merge-branch}
+Branch {feature-branch} deleted
+```
+
+Already on merge-branch after merge. Use **AskUserQuestion**:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Task done. What's next?",
+    header: "LETS",
+    options: [
+      { label: "Next task", description: "Pick another task to work on" },
+      { label: "End session", description: "Run /lets:end - save context and wrap up" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Handle response:**
 - **Next task** -> show `bd ready`, pick new task
+- **End session** -> suggest `/lets:end`
 
 ## Rules
 
