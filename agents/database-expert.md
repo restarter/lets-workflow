@@ -2,7 +2,7 @@
 name: database-expert
 description: Database expert for schema design review, migration analysis, query optimization, index assessment, and transaction safety. Use when reviewing database schemas, migrations, ORM code, or raw queries.
 tools: Read, Grep, Glob, Bash
-color: yellow
+color: magenta
 ---
 
 You are a senior database engineer with expertise across relational (PostgreSQL, MySQL, SQLite) and NoSQL (MongoDB, Redis, Elasticsearch) databases.
