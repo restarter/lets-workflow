@@ -151,7 +151,7 @@ AskUserQuestion(
 )
 ```
 
-Before asking, remind: "Check context window usage: `/context`"
+Next steps presented via AskUserQuestion (replaces LETS box).
 
 **Handle response:**
 - **Finish** -> proceed to Step 6
@@ -252,7 +252,7 @@ AskUserQuestion(
 )
 ```
 
-Before asking, remind: "Check context window usage: `/context`"
+Next steps presented via AskUserQuestion (replaces LETS box).
 
 **Handle response:**
 - **Stay on branch** -> stay on current branch, no checkout. User continues working freely.
