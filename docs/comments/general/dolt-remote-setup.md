@@ -1,20 +1,37 @@
 # Dolt Remote Setup - Research & Implementation Notes
 
-## Current State (2026-02-27, session 2)
+## Current State (2026-02-28, session 5)
 
 ### What works
 - Script `scripts/dolt/setup-remote.sh` deploys Dolt in Docker on VPS (one command)
-- Remote server running at `144.124.255.40:50051` with `beads-demo` repo
-- **Password auth over HTTP works** - `DOLT_REMOTE_USER=root DOLT_REMOTE_PASSWORD=xxx bd dolt push`
-- `bd dolt push` and `bd dolt pull` both work with credentials
+- Remote server running at `144.124.255.40` with ports 3306 (SQL) and 50051 (remotesapi)
+- **Password auth over HTTP works** for remotesapi (push/pull) with root user
+- **Direct SQL server mode works** - bd connects to remote Dolt via MySQL protocol (port 3306)
 - Script is idempotent - re-run reuses existing password from `.env`
 - Per-user accounts via `--add-user name:password`
 - Input validation prevents SQL injection and path traversal
 
+### Direct SQL server mode (RECOMMENDED)
+
+The simpler approach - no push/pull needed. bd connects directly to remote SQL:
+
+```yaml
+# .beads/config.yaml
+dolt:
+  server_mode: true
+  server_host: "144.124.255.40"
+  server_port: 3306
+  server_user: "root"
+  server_pass: "fuxfStvOVeRW1IJG"
+```
+
+Full CRUD tested and working: create, update, dep add, list, show, blocked, close, stats.
+All writes go directly to remote - no sync, no conflicts, no "forgot to push".
+
 ### What needs to be done
-- Persist `DOLT_REMOTE_USER`/`DOLT_REMOTE_PASSWORD` for bd (so you don't type them every time)
-- Test full cycle: create task -> push -> pull from another machine
-- Set up remote for main lets-workflow project (not just beads-demo)
+- Configure main lets-workflow project for remote SQL server mode
+- Configure Artem's machine
+- Consider non-root SQL user for day-to-day work (root has too many privileges)
 
 ## Key Discoveries
 
@@ -224,9 +241,39 @@ bd dolt stop                      # Stop local sql-server
 - `reference/beads/docs/DOLT.md` - beads federation, credentials, env vars
 - `reference/beads/docs/DOLT-BACKEND.md` - sync modes, server config
 
+## Session 4 findings (2026-02-28): Direct SQL server mode
+
+### Discovery: config.yaml dolt section
+
+DOLT-BACKEND.md documents `dolt:` section in config.yaml with `server_mode`, `server_host`, `server_port`, `server_user`, `server_pass`. This works via viper config parsing.
+
+DOLT.md documents a slightly different format (`mode`, `host`, `port`, `user`) and says password only via `BEADS_DOLT_PASSWORD` env var.
+
+**What actually works (tested):** DOLT-BACKEND.md format with `server_pass` in config.yaml. No env vars needed.
+
+### Why previous sessions failed with remote server mode
+
+1. We put config in `metadata.json` (`dolt_mode: server`, `dolt_server_host`, etc.) - this partially works but password is NOT read from metadata.json
+2. We used `BEADS_DOLT_PASSWORD` env var via shell wrapper - but this also set the password for local dolt server which has no password, causing Access denied
+3. The correct approach: put everything in `.beads/config.yaml` `dolt:` section as documented in DOLT-BACKEND.md
+
+### Clean beads-demo setup from scratch
+
+```bash
+mkdir beads-demo && cd beads-demo && git init
+bd init --prefix demo
+# Edit .beads/config.yaml - add dolt: section with remote host
+bd dolt stop  # stop local server
+bd list       # connects to remote, creates database if needed
+```
+
+### remotesapi (port 50051) non-root auth still broken
+
+remotesapi only authenticates root user. Non-root SQL users get Unauthenticated even with correct password. This is a Dolt limitation, not our config. Irrelevant for direct SQL server mode.
+
 ## TODO
 
-1. Persist `DOLT_REMOTE_USER`/`DOLT_REMOTE_PASSWORD` for bd (config.yaml? .env? shell alias?)
-2. Test full cycle: create task on machine A -> push -> pull on machine B -> verify
-3. Set up remote for main lets-workflow project (add repo via `--add-repo lets-workflow`)
+1. Configure main lets-workflow project for remote SQL server mode
+2. Fix main project's local dolt server auth issue (privileges.db has root with password?)
+3. Configure Artem's machine
 4. Consider DOCKER-USER iptables rules if team grows beyond trusted devs
