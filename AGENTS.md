@@ -28,4 +28,3 @@ bd sync               # Sync with git
 - NEVER push without explicit user approval
 - NEVER commit without explicit user approval
 - Always suggest `/lets:end` for proper session closure
-
