@@ -1,6 +1,7 @@
 .DS_Store
 /reference/
 .lets/
-.beads/hooks/
 .idea/
-.beads/dolt-server.log
+AGENTS.md
+.dolt/
+*.db
