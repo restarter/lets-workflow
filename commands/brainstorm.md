@@ -5,7 +5,7 @@ argument-hint: "[feature description]"
 
 # Brainstorm
 
-Turn a task or idea into a detailed implementation plan. Clarifies scope first, explores codebase, designs architecture options, evaluates with expert panel, then writes a bite-sized plan.
+Turn a task or idea into a detailed implementation plan. Clarifies scope, explores codebase, discusses approaches with user, designs architecture for selected approaches, evaluates with experts, then writes a bite-sized plan.
 
 **HARD-GATE: This command produces a plan, NOT code. No files are modified except .lets/plans/.**
 
@@ -204,41 +204,118 @@ After all return, synthesize a combined codebase map:
 {entry points, APIs, test patterns, risks}
 ```
 
-Show summary to user before proceeding.
+### Checkpoint: Exploration Review
 
-## Step 5: Architecture Design (3 Agents Parallel)
+Show the codebase map to user, then ask:
 
-**CRITICAL: Launch ALL 3 architect agents in a SINGLE message with multiple Task tool calls.**
+```
+AskUserQuestion(
+  questions=[{
+    question: "Codebase map ready. How to proceed?",
+    header: "LETS",
+    options: [
+      { label: "Continue", description: "Looks good, let's discuss approaches" },
+      { label: "Questions", description: "I have questions about the findings" },
+      { label: "Re-explore", description: "Missing context, explore a specific area" }
+    ],
+    multiSelect: false
+  }]
+)
+```
 
-Each gets the same context but a different design philosophy:
+**Handle response:**
+- **Continue** -> proceed to Step 5
+- **Questions** -> answer user's questions about findings, then ask checkpoint again
+- **Re-explore** -> ask what area to explore, launch targeted explorer, update codebase map, ask checkpoint again
+- **Other** (free text) -> treat as question or correction, address it, ask checkpoint again
 
-### Architect 1: Minimal
+## Step 5: Approach Discussion
+
+Based on (codebase map + goal + user clarifications), propose concrete implementation approaches.
+
+### Formulate Approaches
+
+Analyze exploration findings and propose 2-4 approaches. Each approach must be:
+- **Concrete** - derived from what explorers found in THIS codebase, not abstract labels
+- **Distinct** - each takes a meaningfully different path (not just "do more" / "do less")
+- **Named** - short descriptive name based on the key differentiator
+
+**Bad approach names:** "Minimal", "Maximal", "Pragmatic" (generic, not project-specific)
+**Good approach names:** "Extend existing parser", "New module with shared helpers", "Plugin architecture"
+
+### Present to User
+
+```
+## Possible Approaches
+
+Based on exploration, I see {N} approaches:
+
+### A: {name}
+{2-3 sentences: what it does, key trade-off}
+
+### B: {name}
+{2-3 sentences: what it does, key trade-off}
+
+### C: {name} (if applicable)
+{2-3 sentences: what it does, key trade-off}
+```
+
+Then ask which to develop into full architecture designs:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Which approaches should I develop into full architecture designs?",
+    header: "LETS",
+    options: [
+      { label: "A: {name}", description: "{1-line summary}" },
+      { label: "B: {name}", description: "{1-line summary}" },
+      { label: "C: {name}", description: "{1-line summary}" (if applicable) },
+      { label: "Discuss first", description: "I have questions or want to adjust" }
+    ],
+    multiSelect: true
+  }]
+)
+```
+
+**Handle response:**
+- **1+ approaches selected** -> proceed to Step 6 with selected approaches
+- **Discuss first** -> open discussion, user asks questions or suggests modifications, then present updated approaches and ask again
+- **Other** (free text) -> treat as new approach idea or modification, incorporate and re-present
+
+## Step 6: Architecture Design
+
+Launch one architect agent per selected approach. Each gets a focused brief with user's decisions baked in.
+
+### Architect Brief
+
+For each selected approach:
 
 ```
 Task(
   subagent_type="lets:architect",
-  prompt="DESIGN MODE: MINIMAL APPROACH.
+  prompt="DESIGN MODE: {approach name}.
 
-Design the SMALLEST possible change. Maximum reuse of existing code, minimum new files, minimum abstractions.
+Design a detailed architecture for this specific approach.
 
 PROJECT CONTEXT:
 {CLAUDE.md summary}
 
 FEATURE GOAL: {goal}
 USER CLARIFICATIONS: {answers from Step 3}
+APPROACH TO DEVELOP: {approach description from Step 5, including any user input from discussion}
 
 CODEBASE MAP:
 {combined exploration output from Step 4}
 
 INSTRUCTIONS:
-- Reuse existing patterns and modules as much as possible
-- Prefer extending existing files over creating new ones
-- Avoid new abstractions - use what exists
-- Design for: 'What is the least code that solves this?'
+- Develop THIS specific approach into a full architecture
 - Be specific: exact files, exact functions, exact interfaces
+- Follow existing codebase patterns found by explorers
+- Include user's decisions and preferences from the discussion
 
 OUTPUT:
-## Minimal Approach: {name}
+## {Approach Name}
 
 ### Summary
 {2-3 sentences - what and why}
@@ -260,140 +337,80 @@ OUTPUT:
 )
 ```
 
-### Architect 2: Maximal
+**CRITICAL: Launch ALL architect agents in a SINGLE message with multiple Task tool calls.**
+
+**If any architect fails:** Note which approach failed. If 2+ remain, continue. If only 1 remains, present it and ask user if they want to re-run the failed one or proceed.
+
+### Checkpoint: Architecture Review
+
+After all architects return, present results.
+
+**If multiple approaches were developed:**
 
 ```
-Task(
-  subagent_type="lets:architect",
-  prompt="DESIGN MODE: MAXIMAL APPROACH.
+## Architecture Designs
 
-Design the BEST possible architecture without effort constraints. Full extensibility, proper abstractions, clean boundaries.
+### {Approach A name}
+{summary}
+- Files: {N} create, {M} modify
+- Key trade-off: {main pro vs con}
 
-PROJECT CONTEXT:
-{CLAUDE.md summary}
+### {Approach B name}
+{summary}
+- Files: {N} create, {M} modify
+- Key trade-off: {main pro vs con}
+```
 
-FEATURE GOAL: {goal}
-USER CLARIFICATIONS: {answers from Step 3}
-
-CODEBASE MAP:
-{combined exploration output from Step 4}
-
-INSTRUCTIONS:
-- Design for extensibility and long-term maintainability
-- Use proper abstractions and clean module boundaries
-- Consider future requirements (but don't speculate wildly)
-- Design for: 'What is the ideal architecture for this?'
-- Be specific: exact files, exact functions, exact interfaces
-
-OUTPUT:
-## Maximal Approach: {name}
-
-### Summary
-{2-3 sentences - what and why}
-
-### Components
-{each component: file path, responsibility, key interface}
-
-### Files
-- Create: {list with purpose}
-- Modify: {list with what changes}
-
-### Data Flow
-{entry -> processing -> output}
-
-### Trade-offs
-- Pro: {advantages}
-- Con: {limitations, effort cost}
-- Risk: {what could go wrong}"
+```
+AskUserQuestion(
+  questions=[{
+    question: "Which architecture to proceed with?",
+    header: "LETS",
+    options: [
+      { label: "{Approach A name}", description: "{1-line summary}" },
+      { label: "{Approach B name}", description: "{1-line summary}" },
+      { label: "Combine", description: "Mix ideas from multiple approaches" },
+      { label: "Adjust", description: "Change requirements and re-design" }
+    ],
+    multiSelect: false
+  }]
 )
 ```
 
-### Architect 3: Pragmatic
+**Handle response:**
+- **Approach selected** -> proceed to Step 7 with chosen architecture
+- **Combine** -> discuss which parts to take from each, create merged brief, re-run single architect
+- **Adjust** -> discuss what to change, loop back to relevant step
+- **Other** (free text) -> treat as modification request, adapt
+
+**If only 1 approach was developed:**
+
+Show the architecture design and ask:
 
 ```
-Task(
-  subagent_type="lets:architect",
-  prompt="DESIGN MODE: PRAGMATIC APPROACH.
-
-Design the BALANCED solution. Good architecture that ships in reasonable time. Not minimal, not maximal - the sweet spot.
-
-PROJECT CONTEXT:
-{CLAUDE.md summary}
-
-FEATURE GOAL: {goal}
-USER CLARIFICATIONS: {answers from Step 3}
-
-CODEBASE MAP:
-{combined exploration output from Step 4}
-
-INSTRUCTIONS:
-- Balance quality with effort - good architecture that doesn't over-engineer
-- Follow existing patterns where they work, deviate where they don't
-- Design for: 'What would a senior developer build in a weekend?'
-- Consider: what's the simplest thing that won't need rewriting in 6 months?
-- Be specific: exact files, exact functions, exact interfaces
-
-OUTPUT:
-## Pragmatic Approach: {name}
-
-### Summary
-{2-3 sentences - what and why}
-
-### Components
-{each component: file path, responsibility, key interface}
-
-### Files
-- Create: {list with purpose}
-- Modify: {list with what changes}
-
-### Data Flow
-{entry -> processing -> output}
-
-### Trade-offs
-- Pro: {advantages}
-- Con: {limitations}
-- Risk: {what could go wrong}"
+AskUserQuestion(
+  questions=[{
+    question: "Architecture design ready. Proceed?",
+    header: "LETS",
+    options: [
+      { label: "Continue", description: "Looks good, proceed to expert evaluation" },
+      { label: "Adjust", description: "I want to change something first" }
+    ],
+    multiSelect: false
+  }]
 )
 ```
 
-**If any architect fails or returns no useful data:**
-- Present the remaining options (2 is enough to compare)
-- Note which approach is missing: "Architect {N} ({approach}) failed - comparing remaining options"
+## Step 7: Expert Evaluation
 
-After all return, present available options side by side:
+Evaluate the chosen architecture with domain experts.
 
-```
-## Architecture Options
+### Suggest Experts
 
-### Option 1: Minimal - {name}
-{summary}
-- Files: {N} create, {M} modify
-- Effort: S
-- Risk: {main risk}
+Based on what the feature touches, suggest relevant experts:
 
-### Option 2: Maximal - {name}
-{summary}
-- Files: {N} create, {M} modify
-- Effort: L
-- Risk: {main risk}
-
-### Option 3: Pragmatic - {name}
-{summary}
-- Files: {N} create, {M} modify
-- Effort: M
-- Risk: {main risk}
-```
-
-## Step 6: Opinion - Expert Evaluation (Inline)
-
-Run an inline `/lets:opinion`-style evaluation of the 3 architecture options.
-
-### Select Domain Experts
-
-Based on the feature type, pick 1-3 domain experts from this table (same logic as `/lets:opinion` Step 2):
-
-| Feature touches... | Add expert |
-|--------------------|-----------|
+| Feature touches... | Suggest expert |
+|--------------------|---------------|
 | Auth/security | `lets:security-expert` |
 | Database/schema | `lets:database-expert` |
 | API endpoints | `lets:backend-expert` |
@@ -401,8 +418,31 @@ Based on the feature type, pick 1-3 domain experts from this table (same logic a
 | Docker/CI/deploy | `lets:devops-expert` |
 | Tests/coverage | `lets:qa-expert` |
 
-**Always include:** `lets:pragmatist`
-**Never include:** `lets:architect` (already designed the options - can't evaluate own work)
+**Always suggest:** `lets:pragmatist`
+**Never suggest:** `lets:architect` (designed the option - can't evaluate own work)
+
+### Checkpoint: Expert Selection
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Which experts should evaluate the architecture?",
+    header: "LETS",
+    options: [
+      { label: "Recommended", description: "{pragmatist + N domain experts based on feature}" },
+      { label: "Pragmatist only", description: "Quick evaluation, just overengineering check" },
+      { label: "Skip evaluation", description: "Architecture is solid, go straight to plan" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Handle response:**
+- **Recommended** -> dispatch recommended experts
+- **Pragmatist only** -> dispatch only pragmatist
+- **Skip evaluation** -> proceed directly to Step 8
+- **Other** (free text) -> parse expert names from text, dispatch selected
 
 ### Dispatch Experts
 
@@ -413,18 +453,17 @@ For each expert:
 ```
 Task(
   subagent_type="lets:{agent-name}",
-  prompt="OPINION MODE. Evaluate 3 architecture options for a feature.
+  prompt="OPINION MODE. Evaluate an architecture design for a feature.
 
 FEATURE GOAL: {goal}
 
-OPTION 1 - MINIMAL: {architect 1 output summary}
-OPTION 2 - MAXIMAL: {architect 2 output summary}
-OPTION 3 - PRAGMATIC: {architect 3 output summary}
+CHOSEN ARCHITECTURE:
+{full architect output for chosen approach}
 
 INSTRUCTIONS:
-- Evaluate all 3 options from your area of expertise
-- State which option you recommend and why (1-2 sentences)
-- Flag risks from your perspective that others might miss
+- Evaluate this architecture from your area of expertise
+- Flag risks that others might miss
+- Suggest specific improvements (not vague concerns)
 - Be direct - no hedging, no 'it depends' without conclusion
 {mandatory agent context - see table below}"
 )
@@ -441,40 +480,31 @@ If a selected agent appears in this table, append the instruction to its prompt:
 | `docs-expert` | "Check CLAUDE.md sync, docs/ sync, beads tracking, README/config docs." |
 | `pragmatist` | "Assess if the solution is proportional to the problem. Flag overengineering." |
 
-### Aggregate
+### Checkpoint: Evaluation Results
 
-After all experts respond, present:
+After all experts respond, present findings:
 
 ```
 ## Expert Evaluation
 
-**Pragmatist:** Recommends Option {X} - {reason}
-**{Domain Expert 1}:** Recommends Option {X} - {reason}
-**{Domain Expert 2}:** Recommends Option {X} - {reason}
+**Pragmatist:** {verdict} - {key point}
+**{Expert 1}:** {verdict} - {key point}
+**{Expert 2}:** {verdict} - {key point}
 
-### Comparison
-
-| Criterion | Minimal | Maximal | Pragmatic |
-|-----------|---------|---------|-----------|
-| Effort | ... | ... | ... |
-| Risk | ... | ... | ... |
-| {domain-specific} | ... | ... | ... |
-
-**Recommendation:** Option {X} because {deciding factor}.
+### Risks & Suggestions
+{consolidated list of actionable items from all experts}
 ```
 
-Then use **AskUserQuestion**:
+Then:
 
 ```
 AskUserQuestion(
   questions=[{
-    question: "Which approach for the implementation?",
+    question: "Proceed to plan generation?",
     header: "LETS",
     options: [
-      { label: "Minimal", description: "{1-line summary from architect 1}" },
-      { label: "Maximal", description: "{1-line summary from architect 2}" },
-      { label: "Pragmatic (Recommended)", description: "{1-line summary from architect 3}" },
-      { label: "Adjust scope", description: "Change requirements before choosing" }
+      { label: "Generate plan", description: "Architecture approved, write the implementation plan" },
+      { label: "Adjust architecture", description: "Incorporate expert feedback first" }
     ],
     multiSelect: false
   }]
@@ -482,15 +512,13 @@ AskUserQuestion(
 ```
 
 **Handle response:**
-- **Minimal/Maximal/Pragmatic** -> proceed to Step 7 with chosen approach
-- **Adjust scope** -> ask what to change, loop back to relevant step
-- **Other** (free text) -> treat as custom requirements, adapt
+- **Generate plan** -> proceed to Step 8
+- **Adjust architecture** -> discuss changes, update architecture, ask again
+- **Other** (free text) -> treat as adjustment request
 
-Wait for user decision before writing the plan.
+## Step 8: Plan Generation
 
-## Step 7: Plan Generation
-
-Write a detailed implementation plan for the chosen option.
+Write a detailed implementation plan for the chosen architecture.
 
 ### Plan Format
 
@@ -573,7 +601,7 @@ Before saving, verify the plan passes these gates:
 - Every logical unit has a commit point
 - File paths are exact and verified against explorer findings
 
-## Step 8: Save & Output
+## Step 9: Save & Output
 
 ### Save Plan
 
@@ -598,7 +626,6 @@ bd comments add <task-id> "## Plan: {feature name}
 
 Approach: {chosen option name}
 Tasks: {N} implementation tasks
-Est. effort: {from pragmatist evaluation}
 Key files: {top 3-5 files}
 Plan: .lets/plans/${SLUG}.md"
 ```
@@ -614,8 +641,8 @@ Saved: `.lets/plans/{branch-slug}.md`
 {chosen option - 2 sentences}
 
 ### Tasks
-1. {task 1 name} ({est. time})
-2. {task 2 name} ({est. time})
+1. {task 1 name}
+2. {task 2 name}
 ...
 
 ### Key Decisions
@@ -637,8 +664,9 @@ Start a new session to execute the plan with clean context.
 
 - **NEVER write code** outside the plan document in `.lets/plans/`
 - **NEVER skip clarifying questions** (Step 3) - vague input produces vague plans
+- **EVERY phase transition requires user approval** via AskUserQuestion
+- **NEVER hardcode approach names** like "Minimal/Maximal/Pragmatic" - derive from exploration context
 - **ALL parallel agents in a SINGLE message** - never sequential when parallel is possible
-- **Lead with recommendation** in Step 6 - never "it depends" without conclusion
 - **Exact file paths** in plan - verified against explorer findings
 - **Complete code snippets** - no stubs, no "implement X here"
 - **Plan is the artifact** - session ends when plan is saved
