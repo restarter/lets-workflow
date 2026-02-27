@@ -160,6 +160,10 @@ Then ask about push in plain text (no LETS box):
 - If no - skip
 - **NEVER push automatically**
 
+After everything is done, suggest context reset:
+
+> "Start fresh? `/clear` and then `/lets:start`"
+
 ## Rules
 
 - **Save progress to beads** for multi-session tasks
