@@ -4,3 +4,7 @@
 .beads/hooks/
 .idea/
 .beads/dolt-server.log
+
+# Dolt database files (added by bd init)
+.dolt/
+*.db
