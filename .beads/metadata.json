@@ -1,5 +1,6 @@
 {
   "database": "dolt",
   "backend": "dolt",
-  "prefix": "lets"
+  "dolt_mode": "server",
+  "dolt_database": "lets"
 }
