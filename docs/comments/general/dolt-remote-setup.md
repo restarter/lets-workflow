@@ -1,279 +1,129 @@
-# Dolt Remote Setup - Research & Implementation Notes
+# Dolt Remote for Beads - Setup Guide
 
-## Current State (2026-02-28, session 5)
+Shared beads database over a remote Dolt SQL server. Team members connect directly - no push/pull, no sync.
 
-### What works
-- Script `scripts/dolt/setup-remote.sh` deploys Dolt in Docker on VPS (one command)
-- Remote server running at `144.124.255.40` with ports 3306 (SQL) and 50051 (remotesapi)
-- **Password auth over HTTP works** for remotesapi (push/pull) with root user
-- **Direct SQL server mode works** - bd connects to remote Dolt via MySQL protocol (port 3306)
-- Script is idempotent - re-run reuses existing password from `.env`
-- Per-user accounts via `--add-user name:password`
-- Input validation prevents SQL injection and path traversal
+```
+Developer A  --->  VPS: Dolt SQL :3306  <---  Developer B
+(config.yaml)      /opt/dolt-remote/          (config.yaml)
+(.env creds)       └── dolt-home/data/        (.env creds)
+                       └── project/
+```
 
-### Direct SQL server mode (RECOMMENDED)
+## 1. Deploy Server (one-time)
 
-The simpler approach - no push/pull needed. bd connects directly to remote SQL:
+Need a VPS with root SSH access. Script handles Docker, Dolt, everything.
+
+```bash
+# Install + create repo + expose SQL port
+ssh root@VPS "bash -s -- --expose-sql my-project" < scripts/dolt/setup-remote.sh
+
+# Create accounts for the team
+ssh root@VPS "bash -s -- --add-user alice:$(openssl rand -base64 12)" < scripts/dolt/setup-remote.sh
+ssh root@VPS "bash -s -- --add-user bob:$(openssl rand -base64 12)" < scripts/dolt/setup-remote.sh
+```
+
+`--expose-sql` opens port 3306 externally (default is localhost-only). Root password auto-generated, saved to `/opt/dolt-remote/.env`.
+
+Multiple repos at once:
+```bash
+ssh root@VPS "bash -s -- --expose-sql project-a project-b" < scripts/dolt/setup-remote.sh
+```
+
+## 2. Configure Project
+
+### Init beads
+
+```bash
+bd init --prefix myproj
+```
+
+### Shared config (`.beads/config.yaml`, tracked in git)
+
+Add at the end:
 
 ```yaml
-# .beads/config.yaml
 dolt:
   server_mode: true
-  server_host: "144.124.255.40"
+  server_host: "YOUR_VPS_IP"
   server_port: 3306
-  server_user: "root"
-  server_pass: "fuxfStvOVeRW1IJG"
 ```
 
-Full CRUD tested and working: create, update, dep add, list, show, blocked, close, stats.
-All writes go directly to remote - no sync, no conflicts, no "forgot to push".
+### Per-developer credentials (`.beads/.env`, gitignored)
 
-### What needs to be done
-- Configure main lets-workflow project for remote SQL server mode
-- Configure Artem's machine
-- Consider non-root SQL user for day-to-day work (root has too many privileges)
-
-## Key Discoveries
-
-### 1. Password auth DOES work over HTTP
-
-Previous session concluded that HTTP remotesapi doesn't support password auth. **This was wrong.**
-
-The actual issue was a Docker volume mount problem - `DOLT_ROOT_PASSWORD` was never applied because `privileges.db` lived in an anonymous Docker volume, not in our mounted directory.
-
-After fixing the volume mount, password auth works fine:
 ```bash
-bd dolt stop && DOLT_REMOTE_USER=root DOLT_REMOTE_PASSWORD=xxx bd dolt push
+BEADS_DOLT_SERVER_USER=alice
+BEADS_DOLT_PASSWORD=secret123
 ```
 
-### 2. How bd dolt push works (double-hop architecture)
+`.env` is already in `.beads/.gitignore`. Create a template for the team:
 
-`bd dolt push` does NOT call `dolt push` CLI directly. It goes through a local sql-server:
-
-```
-bd dolt push -> LOCAL dolt sql-server -> CALL dolt_push() -> remote:50051
-```
-
-The **local** server needs `DOLT_REMOTE_USER`/`DOLT_REMOTE_PASSWORD` in its environment. bd auto-starts the server, so these env vars must be set before calling `bd dolt push`.
-
-Pattern that works:
 ```bash
-bd dolt stop && DOLT_REMOTE_USER=root DOLT_REMOTE_PASSWORD=xxx bd dolt push
+# .beads/.env.example (tracked)
+# Copy to .env and fill in your values:
+#   cp .env.example .env
+BEADS_DOLT_SERVER_USER=
+BEADS_DOLT_PASSWORD=
 ```
 
-### 3. The volume mount problem (root cause of auth failures)
+### Test
 
-The Docker image `dolthub/dolt-sql-server` stores data in different locations:
-
-| What | Path | Purpose |
-|------|------|---------|
-| Repositories | `/var/lib/dolt/data/` | Actual dolt repos |
-| Privileges | `/var/lib/dolt/.doltcfg/privileges.db` | User passwords, grants |
-| Init flag | `/var/lib/dolt/.init_completed` | Prevents re-init |
-| Config | `/var/lib/dolt/.doltcfg/` | Global dolt config |
-
-**Wrong mount** (session 1):
-```yaml
-volumes:
-  - ./data:/var/lib/dolt/data    # Only repos! Privileges in anonymous volume
-```
-Result: `privileges.db` lives in an anonymous Docker volume. Password set via `DOLT_ROOT_PASSWORD` gets written there on first init, but on container recreate the anonymous volume may persist with old (empty) password, or get lost entirely. Unpredictable behavior.
-
-**Correct mount** (session 2):
-```yaml
-volumes:
-  - ./dolt-home:/var/lib/dolt    # Everything: repos + privileges + config
-```
-Result: All state under our control. `DOLT_ROOT_PASSWORD` applied on first init, persisted in `dolt-home/.doltcfg/privileges.db`, survives container restarts and re-creates.
-
-### 4. Dolt auth model (SQL users, not SSH keys)
-
-Dolt remotesapi uses MySQL-style SQL users for authentication. No SSH key auth, no token auth.
-
-- Create users: `CREATE USER 'name'@'%' IDENTIFIED BY 'pass'`
-- Grant push/pull: `GRANT ALL ON *.* TO 'name'@'%'` (superuser needed for push)
-- Grant pull only: `GRANT CLONE_ADMIN ON *.* TO 'name'@'%'`
-- Client side: `DOLT_REMOTE_USER=name DOLT_REMOTE_PASSWORD=pass`
-
-### 5. TLS/HTTPS status
-
-- Self-signed certs fail with Go's x509 validator (`certificate is not standards compliant`)
-- Let's Encrypt requires a domain (not available for this VPS)
-- Client certificate auth exists since Nov 2025 but complex to set up
-- **Conclusion:** HTTP + password is sufficient for internal use
-
-### 6. Docker iptables gotcha
-
-Docker publishes ports via FORWARD/DOCKER chains, completely bypassing iptables INPUT chain. This means:
-- `iptables -A INPUT -p tcp --dport 50051 -j ACCEPT` does nothing
-- To restrict Docker ports by IP, use DOCKER-USER chain:
 ```bash
-iptables -I DOCKER-USER -p tcp --dport 50051 -s <allowed-ip> -j ACCEPT
-iptables -A DOCKER-USER -p tcp --dport 50051 -j DROP
+bd list
+bd create --title="Test" --type=task --priority=4
+bd list
+bd close <id>
 ```
 
-## Architecture
+## 3. Onboarding New Developer
 
-### Remote (VPS: proxy-master 144.124.255.40)
-```
-/opt/dolt-remote/
-├── .env                  # ROOT_PASSWORD, ports (chmod 600)
-├── docker-compose.yml    # References .env vars (not inlined)
-├── servercfg.d/
-│   └── config.yaml       # remotesapi:50051, data_dir, listener
-└── dolt-home/            # Mounted as /var/lib/dolt (entire dolt home)
-    ├── .doltcfg/         # privileges.db, global config
-    ├── .init_completed   # Prevents re-init
-    └── data/
-        └── beads-demo/   # dolt init'd repo
-```
+1. Clone the repo (config.yaml already there)
+2. `cp .beads/.env.example .beads/.env`
+3. Fill in username and password from admin
+4. `bd list` - done
 
-Container: `dolthub/dolt-sql-server:latest`
-- Port 3306 (SQL) - bound to localhost only
-- Port 50051 (remotesapi) - public, password-protected
-- `DOLT_ROOT_HOST=%` + `DOLT_ROOT_PASSWORD` from .env
-- Config auto-detected from `/etc/dolt/servercfg.d/*.yaml`
+No dolt install needed. No local database.
 
-### Local (beads-demo)
-```
-reference/beads-demo/.beads/dolt/  # local dolt database
-  - remote "origin" -> http://144.124.255.40:50051/beads-demo
-  - bd dolt set user root
-```
+## 4. Day-to-Day VPS Management
 
-## Script: setup-dolt-remote.sh
-
-### Usage
 ```bash
-# Full install
-ssh root@vps "bash -s -- beads-demo" < scripts/setup-dolt-remote.sh
-ssh root@vps "bash -s -- --root-password s3cret beads-demo" < scripts/setup-dolt-remote.sh
-
-# Add repo to existing
-ssh root@vps "bash -s -- --add-repo new-project" < scripts/setup-dolt-remote.sh
+# Add repo
+ssh root@VPS "bash -s -- --add-repo new-project" < scripts/dolt/setup-remote.sh
 
 # Add user
-ssh root@vps "bash -s -- --add-user dima:mypass123" < scripts/setup-dolt-remote.sh
+ssh root@VPS "bash -s -- --add-user newdev:pass123" < scripts/dolt/setup-remote.sh
+
+# Check status
+ssh root@VPS "cd /opt/dolt-remote && docker compose ps"
+
+# Logs
+ssh root@VPS "cd /opt/dolt-remote && docker compose logs --tail 20"
+
+# Restart
+ssh root@VPS "cd /opt/dolt-remote && docker compose restart"
 ```
 
-### What the script does (5 steps)
-1. Install Docker + Compose v2
-2. Create config (servercfg.d/config.yaml, docker-compose.yml)
-3. Save credentials to .env (chmod 600), reuse on re-run
-4. Init repos (docker run --entrypoint dolt ... init)
-5. Start container, verify running
+## 5. What's on the Server
 
-### Security measures (from code review)
-- Input validation: username `^[a-zA-Z0-9_-]+$`, password rejects `' " ; $ \ ``
-- No `WITH GRANT OPTION` for added users
-- Password not inlined in docker-compose.yml (uses .env interpolation)
-- Re-run reads existing password from .env instead of generating new one
-- SQL port localhost only
-
-## Docker Image: dolthub/dolt-sql-server
-
-### Environment Variables
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DOLT_ROOT_PASSWORD` | (empty) | Root user password (applied on first init) |
-| `DOLT_ROOT_HOST` | localhost | Root user host (`%` for any) |
-| `DOLT_USER` | - | Create additional user |
-| `DOLT_PASSWORD` | - | Password for DOLT_USER |
-| `DOLT_USER_HOST` | (DOLT_ROOT_HOST) | Host for DOLT_USER |
-| `DOLT_DATABASE` | - | Create database on init |
-| `DOLT_SERVER_TIMEOUT` | 300 | Startup timeout (seconds) |
-
-### Key paths inside container
-- `/etc/dolt/servercfg.d/` - server config yaml (auto-detected)
-- `/etc/dolt/doltcfg.d/` - dolt config json
-- `/docker-entrypoint-initdb.d/` - SQL files executed on first start
-- `/var/lib/dolt/` - dolt home (repos, privileges, config)
-- `/var/lib/dolt/.init_completed` - flag file, prevents re-init
-- `/var/lib/dolt/.doltcfg/privileges.db` - user passwords and grants
-
-### Init behavior
-- `DOLT_ROOT_PASSWORD` applied only when `.init_completed` doesn't exist
-- After init, `.init_completed` created to prevent re-running
-- To reset: delete `.init_completed` and restart container
-- `--entrypoint dolt` required for `dolt init` (default entrypoint starts sql-server)
-- `DOLT_SILENCE_USER_REQ_FOR_TESTING=1` needed for non-interactive init
-
-## Beads Dolt Integration
-
-### Key env vars for beads
-| Variable | Purpose |
-|----------|---------|
-| `DOLT_REMOTE_USER` | Push/pull auth user (passed to local sql-server) |
-| `DOLT_REMOTE_PASSWORD` | Push/pull auth password |
-| `BEADS_DOLT_PASSWORD` | Server mode password |
-| `BEADS_DOLT_SERVER_MODE` | Enable server mode ("1") |
-| `BEADS_DOLT_SERVER_HOST` | Server host |
-| `BEADS_DOLT_SERVER_PORT` | Server port |
-| `BEADS_DOLT_SERVER_USER` | MySQL connection user |
-
-### bd dolt commands
-```bash
-bd dolt remote add origin <url>   # Add remote
-bd dolt remote remove <name>      # Remove remote
-bd dolt remote list               # List remotes
-bd dolt push                      # Push to remote (via sql-server)
-bd dolt push --force              # Force push (needed for first push to empty remote)
-bd dolt pull                      # Pull from remote
-bd dolt commit                    # Commit pending changes
-bd dolt show                      # Show config
-bd dolt set <key> <value>         # Set config (database, host, port, user, data-dir)
-bd dolt stop                      # Stop local sql-server
+```
+/opt/dolt-remote/
+├── .env                  # ROOT_PASSWORD, ports
+├── docker-compose.yml
+├── servercfg.d/
+│   └── config.yaml       # Dolt listener, remotesapi, data_dir
+└── dolt-home/            # Mounted as /var/lib/dolt
+    ├── .doltcfg/
+    │   └── privileges.db # User accounts
+    └── data/
+        └── my-project/   # Repo data
 ```
 
-### bd sync is DEPRECATED
-`bd sync` is now a no-op. Use `bd dolt push` / `bd dolt pull` directly.
+## 6. What's in the Project
 
-## Documentation Sources
-
-- [Using Remotes - Dolt Docs](https://docs.dolthub.com/sql-reference/version-control/remotes) - remotesapi auth, CLONE_ADMIN, push permissions
-- [Dolt SQL Server Push Support (blog)](https://www.dolthub.com/blog/2023-12-29-sql-server-push-support/) - push examples, DOLT_REMOTE_PASSWORD
-- [Advanced config.yaml (blog)](https://www.dolthub.com/blog/2024-12-18-advanced-config-yaml/) - remotesapi config, read_only
-- [Docker Installation - Dolt Docs](https://docs.dolthub.com/introduction/installation/docker) - Docker setup
-- [dolthub/dolt-sql-server - Docker Hub](https://hub.docker.com/r/dolthub/dolt-sql-server) - env vars, entrypoint
-- [Root Superuser Changes (blog)](https://www.dolthub.com/blog/2025-01-15-root-superuser-change/) - DOLT_ROOT_HOST, security changes
-- [Access Management - Dolt Docs](https://docs.dolthub.com/sql-reference/server/access-management) - CREATE USER, GRANT, privileges
-- [Client certificate auth - GitHub #10008](https://github.com/dolthub/dolt/issues/10008) - TLS mutual auth (implemented Nov 2025)
-- `reference/beads/docs/DOLT.md` - beads federation, credentials, env vars
-- `reference/beads/docs/DOLT-BACKEND.md` - sync modes, server config
-
-## Session 4 findings (2026-02-28): Direct SQL server mode
-
-### Discovery: config.yaml dolt section
-
-DOLT-BACKEND.md documents `dolt:` section in config.yaml with `server_mode`, `server_host`, `server_port`, `server_user`, `server_pass`. This works via viper config parsing.
-
-DOLT.md documents a slightly different format (`mode`, `host`, `port`, `user`) and says password only via `BEADS_DOLT_PASSWORD` env var.
-
-**What actually works (tested):** DOLT-BACKEND.md format with `server_pass` in config.yaml. No env vars needed.
-
-### Why previous sessions failed with remote server mode
-
-1. We put config in `metadata.json` (`dolt_mode: server`, `dolt_server_host`, etc.) - this partially works but password is NOT read from metadata.json
-2. We used `BEADS_DOLT_PASSWORD` env var via shell wrapper - but this also set the password for local dolt server which has no password, causing Access denied
-3. The correct approach: put everything in `.beads/config.yaml` `dolt:` section as documented in DOLT-BACKEND.md
-
-### Clean beads-demo setup from scratch
-
-```bash
-mkdir beads-demo && cd beads-demo && git init
-bd init --prefix demo
-# Edit .beads/config.yaml - add dolt: section with remote host
-bd dolt stop  # stop local server
-bd list       # connects to remote, creates database if needed
 ```
-
-### remotesapi (port 50051) non-root auth still broken
-
-remotesapi only authenticates root user. Non-root SQL users get Unauthenticated even with correct password. This is a Dolt limitation, not our config. Irrelevant for direct SQL server mode.
-
-## TODO
-
-1. Configure main lets-workflow project for remote SQL server mode
-2. Fix main project's local dolt server auth issue (privileges.db has root with password?)
-3. Configure Artem's machine
-4. Consider DOCKER-USER iptables rules if team grows beyond trusted devs
+.beads/
+├── config.yaml      # Tracked: dolt server_mode, host, port
+├── .env             # Gitignored: user + password
+├── .env.example     # Tracked: template for team
+├── .gitignore       # Tracked: ignores .env, runtime files
+└── metadata.json    # Tracked: backend=dolt, dolt_database=myproj
+```
