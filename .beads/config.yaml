@@ -53,11 +53,3 @@
 # - linear.api-key
 # - github.org
 # - github.repo
-
-dolt:
-  server_mode: true
-  server_host: "144.124.255.40"
-  server_port: 3306
-  # User and password via .beads/.env (per-developer, gitignored):
-  #   BEADS_DOLT_SERVER_USER=dima
-  #   BEADS_DOLT_PASSWORD=xxx
