@@ -15,6 +15,9 @@
 #   # Add user to existing install
 #   ssh root@vps "bash -s -- --add-user dima:mypass123" < scripts/setup-dolt-remote.sh
 #
+#   # Expose SQL port externally (for direct server mode)
+#   ssh root@vps "bash -s -- --expose-sql beads-demo" < scripts/setup-dolt-remote.sh
+#
 # Architecture:
 #   One Dolt container serves ALL repos via data_dir volume.
 #   Per-user SQL accounts for push/pull auth over HTTP.
@@ -63,6 +66,7 @@ validate_password() {
 ADD_REPO_ONLY=false
 ADD_USER=""
 ROOT_PASSWORD=""
+EXPOSE_SQL=false
 REPOS=()
 
 while [[ $# -gt 0 ]]; do
@@ -70,6 +74,7 @@ while [[ $# -gt 0 ]]; do
     --add-repo) ADD_REPO_ONLY=true; shift ;;
     --add-user) ADD_USER="$2"; shift 2 ;;
     --root-password) ROOT_PASSWORD="$2"; shift 2 ;;
+    --expose-sql) EXPOSE_SQL=true; shift ;;
     --) shift ;;
     *) REPOS+=("$1"); shift ;;
   esac
@@ -198,25 +203,35 @@ EOF
   # all persist alongside repo data. This ensures DOLT_ROOT_PASSWORD is applied
   # correctly on first start and preserved across restarts.
   # Password and ports are read from .env file (not inlined).
-  cat > "$INSTALL_DIR/docker-compose.yml" <<'EOF'
+  if [[ "$EXPOSE_SQL" == true ]]; then
+    SQL_BIND='${SQL_PORT}:3306'
+  else
+    SQL_BIND='127.0.0.1:${SQL_PORT}:3306'
+  fi
+
+  cat > "$INSTALL_DIR/docker-compose.yml" <<EOF
 services:
   dolt:
     image: dolthub/dolt-sql-server:latest
     container_name: dolt
     restart: unless-stopped
     ports:
-      - "127.0.0.1:${SQL_PORT}:3306"
-      - "${REMOTESAPI_PORT}:50051"
+      - "${SQL_BIND}"
+      - "\${REMOTESAPI_PORT}:50051"
     volumes:
       - ./dolt-home:/var/lib/dolt
       - ./servercfg.d:/etc/dolt/servercfg.d:ro
     environment:
       - DOLT_ROOT_HOST=%
-      - DOLT_ROOT_PASSWORD=${ROOT_PASSWORD}
+      - DOLT_ROOT_PASSWORD=\${ROOT_PASSWORD}
 EOF
 
   echo "  ✓ Config written to $INSTALL_DIR/"
-  echo "  ✓ SQL port bound to localhost only"
+  if [[ "$EXPOSE_SQL" == true ]]; then
+    echo "  ✓ SQL port exposed externally (for direct server mode)"
+  else
+    echo "  ✓ SQL port bound to localhost only"
+  fi
 }
 
 # ============================================
@@ -287,7 +302,11 @@ print_summary() {
   echo -e "${GREEN}========================================${NC}"
   echo ""
   echo "  Host:           $PUBLIC_IP"
-  echo "  SQL:            localhost:$SQL_PORT (local only)"
+  if [[ "$EXPOSE_SQL" == true ]]; then
+    echo "  SQL:            $PUBLIC_IP:$SQL_PORT (external)"
+  else
+    echo "  SQL:            localhost:$SQL_PORT (local only)"
+  fi
   echo "  RemotesAPI:     $PUBLIC_IP:$REMOTESAPI_PORT"
   echo "  Root password:  (see $INSTALL_DIR/.env)"
   echo "  Data dir:       $INSTALL_DIR/dolt-home/"
@@ -304,6 +323,16 @@ print_summary() {
   echo "Add user:"
   echo "  ssh root@$PUBLIC_IP \"bash -s -- --add-user dima:pass123\" < setup-dolt-remote.sh"
   echo ""
+  if [[ "$EXPOSE_SQL" == true ]]; then
+    echo "Direct server mode (.beads/config.yaml):"
+    echo "  dolt:"
+    echo "    server_mode: true"
+    echo "    server_host: \"$PUBLIC_IP\""
+    echo "    server_port: $SQL_PORT"
+    echo "    server_user: \"root\""
+    echo "    server_pass: \"$ROOT_PASSWORD\""
+    echo ""
+  fi
   echo "Add repo:"
   echo "  ssh root@$PUBLIC_IP \"bash -s -- --add-repo <name>\" < setup-dolt-remote.sh"
   echo ""

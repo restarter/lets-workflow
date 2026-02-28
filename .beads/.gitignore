@@ -30,6 +30,13 @@ ephemeral.sqlite3-shm
 dolt-server.pid
 dolt-server.log
 dolt-server.lock
+dolt-server.activity
+dolt-server.port
+dolt-monitor.pid
+dolt-config.log
+
+# Credentials (password for remote Dolt server)
+.env
 
 # Legacy files (from pre-Dolt versions)
 *.db
