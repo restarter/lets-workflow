@@ -1,129 +1,121 @@
-# Dolt Remote for Beads - Setup Guide
+# Beads Remote Sync via GitHub
 
-Shared beads database over a remote Dolt SQL server. Team members connect directly - no push/pull, no sync.
+Shared beads database synced through a GitHub repo. Each developer works locally, syncs via push/pull.
 
 ```
-Developer A  --->  VPS: Dolt SQL :3306  <---  Developer B
-(config.yaml)      /opt/dolt-remote/          (config.yaml)
-(.env creds)       └── dolt-home/data/        (.env creds)
-                       └── project/
+Developer A                          Developer B
+.beads/dolt/ (local)                 .beads/dolt/ (local)
+     |                                    |
+     +--- bd dolt push --->  GitHub  <--- bd dolt pull ---+
+                          (refs/dolt/data)
 ```
 
-## 1. Deploy Server (one-time)
+No VPS, no Docker, no SQL server. Just a private GitHub repo as remote storage.
 
-Need a VPS with root SSH access. Script handles Docker, Dolt, everything.
+## How It Works
+
+- Dolt v1.81.10+ can use any git repo as a remote
+- Data stored on a special ref `refs/dolt/data` (invisible in GitHub UI, doesn't affect normal branches)
+- Auth via your existing git/gh credentials (HTTPS) or SSH keys
+- Each developer has a full local copy, syncs with push/pull - like git
+
+## Initial Setup (one-time, project admin)
+
+### 1. Create a private GitHub repo for beads data
 
 ```bash
-# Install + create repo + expose SQL port
-ssh root@VPS "bash -s -- --expose-sql my-project" < scripts/dolt/setup-remote.sh
-
-# Create accounts for the team
-ssh root@VPS "bash -s -- --add-user alice:$(openssl rand -base64 12)" < scripts/dolt/setup-remote.sh
-ssh root@VPS "bash -s -- --add-user bob:$(openssl rand -base64 12)" < scripts/dolt/setup-remote.sh
+gh repo create myorg/myproject-beads --private --description "Beads issue database"
+# Init with a README (required - dolt can't push to empty repo)
+cd /tmp && git clone https://github.com/myorg/myproject-beads.git
+cd myproject-beads && echo "# Beads data" > README.md && git add . && git commit -m "init" && git push
+cd - && rm -rf /tmp/myproject-beads
 ```
 
-`--expose-sql` opens port 3306 externally (default is localhost-only). Root password auto-generated, saved to `/opt/dolt-remote/.env`.
-
-Multiple repos at once:
-```bash
-ssh root@VPS "bash -s -- --expose-sql project-a project-b" < scripts/dolt/setup-remote.sh
-```
-
-## 2. Configure Project
-
-### Init beads
+### 2. Init beads in your project
 
 ```bash
+cd myproject
 bd init --prefix myproj
 ```
 
-### Shared config (`.beads/config.yaml`, tracked in git)
-
-Add at the end:
-
-```yaml
-dolt:
-  server_mode: true
-  server_host: "YOUR_VPS_IP"
-  server_port: 3306
-```
-
-### Per-developer credentials (`.beads/.env`, gitignored)
+### 3. Connect to GitHub remote
 
 ```bash
-BEADS_DOLT_SERVER_USER=alice
-BEADS_DOLT_PASSWORD=secret123
+# Add remote via dolt directly (bd dolt remote add has auto-push issues)
+cd .beads/dolt/myproj
+dolt remote add origin https://github.com/myorg/myproject-beads.git
+cd -
+
+# First push needs --force (empty remote, no common ancestor)
+bd dolt push --force
 ```
 
-`.env` is already in `.beads/.gitignore`. Create a template for the team:
+### 4. Verify
 
 ```bash
-# .beads/.env.example (tracked)
-# Copy to .env and fill in your values:
-#   cp .env.example .env
-BEADS_DOLT_SERVER_USER=
-BEADS_DOLT_PASSWORD=
+gh api repos/myorg/myproject-beads/git/refs --jq '.[].ref'
+# Should show: refs/dolt/data
 ```
 
-### Test
+### 5. Commit and push your project
+
+The project repo (not beads repo) should have these tracked files:
+- `.beads/config.yaml` - shared config
+- `.beads/metadata.json` - backend config
+- `.beads/.gitignore` - ignores local dolt data
+
+## Onboarding New Developer
+
+After cloning the project:
 
 ```bash
+scripts/beads/setup-beads-remote.sh
+```
+
+That's it. The script handles everything:
+1. Inits beads locally (`bd init`)
+2. Connects to the GitHub remote
+3. Fetches and syncs the remote database
+
+### What the script does (if you prefer manual steps)
+
+```bash
+# 1. Init beads (creates local dolt database with schema)
+rm -f .beads/metadata.json    # clean slate
+rm -rf .beads/dolt
+bd init --force --prefix lets
+bd dolt stop
+
+# 2. Add remote + fetch + reset (via dolt directly, not bd)
+cd .beads/dolt/lets           # prefix = database directory name
+dolt remote add origin https://github.com/restarter/lets-workflow-beads.git
+dolt fetch origin
+dolt reset --hard origin/main
+cd -
+
+# 3. Verify
 bd list
-bd create --title="Test" --type=task --priority=4
-bd list
-bd close <id>
 ```
 
-## 3. Onboarding New Developer
-
-1. Clone the repo (config.yaml already there)
-2. `cp .beads/.env.example .beads/.env`
-3. Fill in username and password from admin
-4. `bd list` - done
-
-No dolt install needed. No local database.
-
-## 4. Day-to-Day VPS Management
+## Daily Workflow
 
 ```bash
-# Add repo
-ssh root@VPS "bash -s -- --add-repo new-project" < scripts/dolt/setup-remote.sh
-
-# Add user
-ssh root@VPS "bash -s -- --add-user newdev:pass123" < scripts/dolt/setup-remote.sh
-
-# Check status
-ssh root@VPS "cd /opt/dolt-remote && docker compose ps"
-
-# Logs
-ssh root@VPS "cd /opt/dolt-remote && docker compose logs --tail 20"
-
-# Restart
-ssh root@VPS "cd /opt/dolt-remote && docker compose restart"
+bd dolt pull          # pull latest from team
+# ... work normally with bd create, bd update, bd close ...
+bd dolt push          # push your changes
 ```
 
-## 5. What's on the Server
+Push/pull happen automatically in some bd operations (e.g. `bd dolt remote add` triggers auto-push). For explicit sync, use the commands above.
 
-```
-/opt/dolt-remote/
-├── .env                  # ROOT_PASSWORD, ports
-├── docker-compose.yml
-├── servercfg.d/
-│   └── config.yaml       # Dolt listener, remotesapi, data_dir
-└── dolt-home/            # Mounted as /var/lib/dolt
-    ├── .doltcfg/
-    │   └── privileges.db # User accounts
-    └── data/
-        └── my-project/   # Repo data
-```
-
-## 6. What's in the Project
+## Project Files
 
 ```
 .beads/
-├── config.yaml      # Tracked: dolt server_mode, host, port
-├── .env             # Gitignored: user + password
-├── .env.example     # Tracked: template for team
-├── .gitignore       # Tracked: ignores .env, runtime files
-└── metadata.json    # Tracked: backend=dolt, dolt_database=myproj
+├── config.yaml      # Tracked: shared settings
+├── metadata.json    # Tracked: backend=dolt, prefix
+├── .gitignore       # Tracked: ignores dolt/, runtime files
+├── dolt/            # Gitignored: local dolt database
+│   └── lets/        #   database with all issues
+│       └── .dolt/   #   dolt internals + remote config
+└── ...
 ```
