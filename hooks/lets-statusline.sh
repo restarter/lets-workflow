@@ -102,15 +102,16 @@ else
   printf "\033[38;2;232;160;144m%s\033[0m" "$dir_name"
 fi
 
-# line 2: model › ctx › usage
+# line 2: model » ctx · usage
 printf "\n"
 printf "\033[1;38;2;255;175;50m%s\033[0m" "$model"
+printf "%b" "$SEP"
 
-# Context
+# Context (hidden when unavailable)
 if [ -n "$ctx_str" ]; then
-  printf "%b" "$SEP"
   printf "\033[38;2;190;176;140mwindow %s\033[0m" "$ctx_str"
   [ -n "$ctx_tokens_str" ] && printf " \033[2;38;2;190;176;140m(%s)\033[0m" "$ctx_tokens_str"
+  printf "\033[90m \xc2\xb7 \033[0m"
 fi
 
 # Usage stats (color-coded: green <50%, yellow 50-80%, red >80%)
@@ -130,15 +131,14 @@ usage_color() {
 }
 
 if [ -n "$five_h" ]; then
-  printf "\033[90m \xc2\xb7 \033[0m"
   printf "%b5h %s%%\033[0m" "$(usage_color "$five_h")" "$five_h"
   if [ -n "$five_h_reset" ]; then
     delta=$(compute_delta "$five_h_reset")
     [ -n "$delta" ] && printf " \033[2;38;2;190;176;140m(%s)\033[0m" "$delta"
   fi
+  [ -n "$seven_d" ] && printf "\033[90m \xc2\xb7 \033[0m"
 fi
 if [ -n "$seven_d" ]; then
-  printf "\033[90m \xc2\xb7 \033[0m"
   printf "%b7d %s%%\033[0m" "$(usage_color "$seven_d")" "$seven_d"
   if [ -n "$seven_d_reset" ]; then
     delta=$(compute_delta "$seven_d_reset")
