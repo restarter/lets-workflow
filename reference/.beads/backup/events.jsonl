@@ -90,3 +90,15 @@
 {"actor":"Dima Slep","comment":null,"created_at":"2026-03-01T13:23:23Z","event_type":"closed","id":91,"issue_id":"lets-dnk.11","new_value":"Already implemented - lets-statusline.sh in hooks/, statusLine config in .claude/settings.json (project scope)","old_value":""}
 {"actor":"Dima Slep","comment":null,"created_at":"2026-03-01T13:42:10Z","event_type":"created","id":92,"issue_id":"lets-z3y.26","new_value":"","old_value":""}
 {"actor":"Dima Slep","comment":null,"created_at":"2026-03-01T13:48:40Z","event_type":"created","id":93,"issue_id":"lets-ydd.10","new_value":"","old_value":""}
+{"actor":"Dima Slep","comment":null,"created_at":"2026-03-01T13:48:51Z","event_type":"created","id":94,"issue_id":"lets-dnk.18","new_value":"","old_value":""}
+{"actor":"Dima Slep","comment":null,"created_at":"2026-03-01T14:06:17Z","event_type":"created","id":95,"issue_id":"lets-hpi","new_value":"","old_value":""}
+{"actor":"Dima Slep","comment":null,"created_at":"2026-03-01T14:06:50Z","event_type":"created","id":96,"issue_id":"lets-hpi.1","new_value":"","old_value":""}
+{"actor":"Dima Slep","comment":null,"created_at":"2026-03-01T14:07:00Z","event_type":"created","id":97,"issue_id":"lets-hpi.2","new_value":"","old_value":""}
+{"actor":"Dima Slep","comment":null,"created_at":"2026-03-01T14:07:12Z","event_type":"created","id":98,"issue_id":"lets-hpi.3","new_value":"","old_value":""}
+{"actor":"Dima Slep","comment":null,"created_at":"2026-03-01T14:07:22Z","event_type":"created","id":99,"issue_id":"lets-hpi.4","new_value":"","old_value":""}
+{"actor":"Dima Slep","comment":null,"created_at":"2026-03-01T14:07:32Z","event_type":"created","id":100,"issue_id":"lets-hpi.5","new_value":"","old_value":""}
+{"actor":"Dima Slep","comment":null,"created_at":"2026-03-01T14:07:43Z","event_type":"created","id":101,"issue_id":"lets-hpi.6","new_value":"","old_value":""}
+{"actor":"Dima Slep","comment":null,"created_at":"2026-03-01T14:07:53Z","event_type":"created","id":102,"issue_id":"lets-hpi.7","new_value":"","old_value":""}
+{"actor":"Dima Slep","comment":null,"created_at":"2026-03-01T14:08:03Z","event_type":"created","id":103,"issue_id":"lets-hpi.8","new_value":"","old_value":""}
+{"actor":"Dima Slep","comment":null,"created_at":"2026-03-01T14:08:14Z","event_type":"created","id":104,"issue_id":"lets-hpi.9","new_value":"","old_value":""}
+{"actor":"Dima Slep","comment":null,"created_at":"2026-03-01T14:11:32Z","event_type":"closed","id":105,"issue_id":"lets-dnk.4","new_value":"Evolved into epic lets-hpi (Worktree \u0026 Parallel Work Support) with 9 subtasks. Research completed, guide written: docs/knowledge/worktree-and-agent-teams-guide.md","old_value":""}
