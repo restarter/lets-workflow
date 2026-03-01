@@ -47,6 +47,9 @@ if [ -f "$CACHE_FILE" ]; then
   seven_d=$(sed -n '2p' "$CACHE_FILE")
   five_h_reset=$(sed -n '3p' "$CACHE_FILE")
   seven_d_reset=$(sed -n '4p' "$CACHE_FILE")
+  # Validate reset timestamps look like ISO dates
+  case "$five_h_reset" in [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T*) ;; *) five_h_reset="" ;; esac
+  case "$seven_d_reset" in [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T*) ;; *) seven_d_reset="" ;; esac
 fi
 
 # Background refresh if cache missing or stale

@@ -32,7 +32,7 @@ fi
 if [ -z "$token" ]; then
   # macOS: try Keychain first (newer Claude Code stores creds here)
   if [ "$(uname)" = "Darwin" ]; then
-    keychain_json=$(security find-generic-password -s "Claude Code-credentials" -g 2>&1 | grep '^password:' | sed 's/^password: "//' | sed 's/"$//')
+    keychain_json=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null)
     if [ -n "$keychain_json" ]; then
       token=$(printf '%s' "$keychain_json" | jq -r '.claudeAiOauth.accessToken // empty' 2>/dev/null)
     fi
@@ -46,7 +46,7 @@ if [ -z "$token" ]; then
   if [ -z "$token" ]; then
     exit 0
   fi
-  printf '%s' "$token" > "$TOKEN_CACHE"
+  (umask 077; printf '%s' "$token" > "$TOKEN_CACHE")
 fi
 
 usage_json=$(curl -s -m 3 \
