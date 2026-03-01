@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.2.2] - 2026-03-01
+
+Worktree support for parallel Claude Code sessions.
+
+### Added
+- `/lets:worktree` command - create/list/remove/info for interactive worktrees
+- Worktree detection in `/lets:start` - skips branch creation, uses worktree branch as-is
+- Per-branch session refs - parallel sessions don't collide
+- Worktree section in workflow rules (rules-context.md)
+- Agent sandboxing prototype (`validate-readonly.sh`) + prompt-level constraints
+- Worktree & agent teams research guide (docs/knowledge/)
+- `/lets:execute` - plan execution with batch checkpoints (from 0.2.1, now documented)
+- `/lets:pr` - full PR review lifecycle (from 0.2.1, now documented)
+
+### Changed
+- CLAUDE.md architecture decisions updated to reflect actual enforcement state
+- Boundaries rule updated: `worktree-<name>` recognized as valid working branch
+- Session start ref now per-branch (`.session-start-ref-<branch-slug>`)
+- Session end reads per-branch ref with backwards compatibility fallback
+- Commit task ID parsing handles worktree branch formats
+
+### Fixed
+- CLAUDE.md no longer claims hook-based enforcement that wasn't registered
+- Hook prototypes (worktree-setup.sh, worktree-cleanup.sh) archived as .old
+
 ## [0.2.1] - 2026-03-01
 
 LETS-branded statusline with usage stats.
@@ -70,6 +95,7 @@ Initial release with expert agents team.
 - SessionStart hook injecting workflow rules
 - Plugin structure: commands, agents, hooks
 
+[0.2.2]: https://github.com/restarter/lets-workflow/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/restarter/lets-workflow/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/restarter/lets-workflow/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/restarter/lets-workflow/releases/tag/v0.1.0

@@ -29,6 +29,9 @@ git clone https://github.com/nickolay-umbo/lets-plugin-claude ~/.claude/plugins/
 | `/lets:opinion` | Technical decision analysis (3-5 expert agents in parallel) |
 | `/lets:ask` | Quick expert consultation (single agent) |
 | `/lets:brainstorm` | Explore ideas and requirements before implementation |
+| `/lets:execute` | Execute plan from `/lets:brainstorm` step by step |
+| `/lets:pr` | PR review lifecycle - analyze, discuss, post inline, follow-up, approve |
+| `/lets:worktree` | Create/manage worktrees for parallel sessions |
 | `/lets:status` | Task overview and project status |
 | `/lets:note` | Add note to active task |
 | `/lets:install` | First-time setup and dependency check |
@@ -56,6 +59,7 @@ git clone https://github.com/nickolay-umbo/lets-plugin-claude ~/.claude/plugins/
 | Quick pre-commit check | `/lets:check` | ~30s |
 | Full review of local changes | `/lets:review --local` | ~2-3 min |
 | Review a GitHub PR | `/lets:review <PR-url>` | ~2-3 min |
+| Full PR lifecycle | `/lets:pr <PR>` | Analyze, discuss, post, follow-up, approve |
 
 ### Planning
 
@@ -66,7 +70,27 @@ For medium and large tasks, LETS provides structured planning:
 | Clear goal ("Add X to Y") | `/lets:brainstorm` - define requirements, then execute plan |
 | Unclear goal ("Improve Z") | `/lets:brainstorm` - explore options and constraints first |
 
-`/lets:brainstorm` helps clarify what needs to be built before writing code. Once the plan is ready, LETS guides execution step by step with review checkpoints.
+`/lets:brainstorm` helps clarify what needs to be built before writing code. Once the plan is ready, `/lets:execute` implements it step by step with review checkpoints.
+
+### Parallel Sessions (Worktrees)
+
+Work on multiple tasks simultaneously in separate terminals:
+
+```bash
+# Terminal 1 (main repo)
+/lets:worktree create auth-feature
+
+# Terminal 2
+cd .worktrees/auth-feature
+claude
+/lets:start   # picks task, uses worktree branch as-is
+# ... work, commit, done ...
+
+# Terminal 1 - cleanup
+/lets:worktree remove auth-feature
+```
+
+Each worktree gets its own branch (`worktree-<name>`), shares the task database and config via symlinks. Sessions run independently with per-branch tracking.
 
 ## Expert Agents
 
@@ -127,7 +151,11 @@ All generated files go to `.lets/` (gitignored):
 .lets/sessions/     Session summaries and start references
 .lets/reviews/      Saved review reports
 .lets/plans/        Implementation plans
+.lets/execution/    Plan execution state and PR review state
+.lets/cache/        Usage stats and cached data
 ```
+
+Interactive worktrees are stored in `.worktrees/` (gitignored). Each gets a `.lets/` symlink for shared state.
 
 ## Dependencies
 
