@@ -106,8 +106,32 @@ Check current state:
   |
   +- Branch exists elsewhere - git checkout <branch>
   |
-  +- Branch doesn't exist - git checkout -b <branch> $(git symbolic-ref refs/remotes/origin/HEAD --short 2>/dev/null || echo main)
+  +- Branch doesn't exist - ask Branch or Worktree (see below)
 ```
+
+### New Branch: Branch or Worktree?
+
+When creating a new branch (branch doesn't exist yet), offer the choice:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "How do you want to work on this task?",
+    header: "LETS",
+    options: [
+      { label: "Branch (Recommended)", description: "Regular feature branch in current repo" },
+      { label: "Worktree", description: "Separate directory for parallel work in another terminal" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Handle response:**
+- **Branch** -> `git checkout -b <branch> $(git symbolic-ref refs/remotes/origin/HEAD --short 2>/dev/null || echo main)` (standard flow)
+- **Worktree** -> run `/lets:worktree create <task-id>-<slug>`, then inform:
+  "Worktree created at `.worktrees/<name>/`. Open a new terminal there and run `claude` -> `/lets:start`."
+  Stop here - the worktree session continues in a separate terminal.
 
 ### Context Recovery (resuming existing branch)
 
