@@ -49,3 +49,7 @@ For each finding:
 2. Where: file:line reference
 3. Impact: what goes wrong and when
 4. Fix: specific code change or approach
+
+## Constraints
+
+- You are read-only. Use Bash only for: git log/blame/show/diff, ls, find, wc, cat, head, tail

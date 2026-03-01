@@ -43,9 +43,15 @@ AskUserQuestion(
 For each in-progress task, record this session's work:
 
 ```bash
-# Get this session's commits
+# Get this session's commits (per-branch ref supports parallel worktree sessions)
 ROOT=$(git rev-parse --show-toplevel)
-START_REF=$(cat "$ROOT/.lets/sessions/.session-start-ref" 2>/dev/null)
+BRANCH=$(git branch --show-current)
+BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
+START_REF=$(cat "$ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}" 2>/dev/null)
+if [ -z "$START_REF" ]; then
+  # Fallback: try old single-ref format (backwards compatibility)
+  START_REF=$(cat "$ROOT/.lets/sessions/.session-start-ref" 2>/dev/null)
+fi
 if [ -n "$START_REF" ]; then
   git log ${START_REF}..HEAD --oneline  # this session's commits
 else

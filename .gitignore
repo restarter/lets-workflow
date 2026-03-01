@@ -1,8 +1,11 @@
 .DS_Store
 /reference/
+.lets
 .lets/
 .idea/
 AGENTS.md
 .dolt/
 *.db
 *.old
+.worktrees/
+.claude/worktrees/

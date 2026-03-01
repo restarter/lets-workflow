@@ -65,6 +65,23 @@ Recent: {last 3 commits}
 
 After task is selected (e.g., `proj-ch15` "Fix proxy config"):
 
+### Worktree Detection
+
+First, check if we're in a worktree:
+
+```bash
+GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
+```
+
+**If in a worktree** (`$GIT_DIR` contains `worktrees/`, i.e. is NOT `.git`):
+- Skip branch creation entirely - use the current worktree branch as-is
+- The worktree already has its own branch (e.g., `worktree-auth-feature`)
+- Present: "In worktree, using branch: {branch}"
+- Jump directly to **Save Session Start Reference** below
+
+**If in main repo** (`$GIT_DIR` is `.git`):
+- Continue with normal branch logic below
+
 ### Branch Naming
 
 Format: `feature/<task-id>-<slugified-title>`
@@ -102,15 +119,17 @@ This recovers context even after conversation compaction.
 
 ### Save Session Start Reference
 
-After branch is ready, save the starting point for this session:
+After branch is ready, save the starting point for this session. Uses per-branch naming to support parallel sessions in worktrees:
 
 ```bash
 ROOT=$(git rev-parse --show-toplevel)
+BRANCH=$(git branch --show-current)
+BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
 mkdir -p "$ROOT/.lets/sessions"
-git rev-parse HEAD > "$ROOT/.lets/sessions/.session-start-ref"
+git rev-parse HEAD > "$ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}"
 ```
 
-This lets `/lets:end` know which commits belong to this session.
+This lets `/lets:end` know which commits belong to this session, even when multiple sessions run in parallel.
 
 ### Handle Uncommitted Changes
 

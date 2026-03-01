@@ -19,10 +19,16 @@ If no changes - inform user and exit.
 
 ```bash
 BRANCH=$(git branch --show-current)
-# Parse task ID from branch: feature/<task-id>-<slug>
-# Example: feature/ji2-beads-deep-integration -> lets-plugin-claude-ji2
+# Extract task ID from branch name. Handles all branch formats:
+#   feature/<task-id>-<slug>     -> standard LETS branches
+#   worktree-<task-id>-<slug>   -> worktree branches (from /lets:worktree create)
+#   worktree-<custom-name>      -> no task ID, use fallback
+#
+# Strategy: look for beads task ID pattern anywhere in branch name.
+# Beads IDs look like: lets-abc, lets-abc.1, proj-xyz.42
+# Pattern: <prefix>-<alphanum>[.<number>]
 
-# Fallback:
+# Fallback (always works, also primary method for worktree branches without task ID):
 bd list --status=in_progress --format=ids 2>/dev/null | head -1
 ```
 
