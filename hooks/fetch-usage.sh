@@ -1,13 +1,16 @@
 #!/bin/sh
-# Fetches Claude API usage stats and writes them to /tmp/.claude_usage_cache.
+# Fetches Claude API usage stats and writes to .lets/cache/usage.
+# Usage: fetch-usage.sh <cache-dir>
 # Line 1: five_hour.utilization (integer %)
 # Line 2: seven_day.utilization (integer %)
 # Line 3: five_hour.resets_at (raw ISO string)
 # Line 4: seven_day.resets_at (raw ISO string)
 # All output is suppressed; meant to be run in background.
 
-CACHE_FILE="/tmp/.claude_usage_cache"
-TOKEN_CACHE="/tmp/.claude_token_cache"
+CACHE_DIR="${1:?Usage: fetch-usage.sh <cache-dir>}"
+mkdir -p "$CACHE_DIR" 2>/dev/null
+CACHE_FILE="${CACHE_DIR}/usage"
+TOKEN_CACHE="${CACHE_DIR}/token"
 CREDS_FILE="$HOME/.claude/.credentials.json"
 TOKEN_TTL=900  # 15 minutes
 

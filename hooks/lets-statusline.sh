@@ -23,7 +23,9 @@ if [ -d "${dir}/.git" ] || git -C "$dir" rev-parse --git-dir > /dev/null 2>&1; t
 fi
 
 # --- usage stats (5h / 7d) from cache ---
-CACHE_FILE="/tmp/.claude_usage_cache"
+CACHE_DIR="${dir}/.lets/cache"
+mkdir -p "$CACHE_DIR" 2>/dev/null
+CACHE_FILE="${CACHE_DIR}/usage"
 five_h=""
 seven_d=""
 five_h_reset=""
@@ -48,7 +50,7 @@ if [ -f "$CACHE_FILE" ]; then
 fi
 
 # Background refresh if cache missing or stale
-[ "$cache_fresh" -eq 0 ] && bash "$SCRIPT_DIR/fetch-usage.sh" > /dev/null 2>&1 &
+[ "$cache_fresh" -eq 0 ] && bash "$SCRIPT_DIR/fetch-usage.sh" "$CACHE_DIR" > /dev/null 2>&1 &
 
 # --- compute_delta: given a raw ISO timestamp, returns human-readable time until reset ---
 compute_delta() {
