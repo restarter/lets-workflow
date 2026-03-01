@@ -80,20 +80,29 @@ That's it. The script handles everything:
 ### What the script does (if you prefer manual steps)
 
 ```bash
-# 1. Init beads (creates local dolt database with schema)
+# 1. Init dolt database + beads schema
 rm -f .beads/metadata.json    # clean slate
 rm -rf .beads/dolt
-bd init --force --prefix lets
-bd dolt stop
+mkdir -p .beads/dolt/lets
+cd .beads/dolt/lets
+dolt init --name "beads" --email "beads@local"
+cd -
 
-# 2. Add remote + fetch + reset (via dolt directly, not bd)
+# 2. Start dolt server, run bd init
+dolt sql-server --port 3307 --host 127.0.0.1 &
+sleep 2
+bd init --force --prefix lets
+kill %1  # stop dolt server
+
+# 3. Add remote (use SSH or HTTPS depending on your auth)
 cd .beads/dolt/lets           # prefix = database directory name
-dolt remote add origin https://github.com/restarter/lets-workflow-beads.git
+# SSH:   dolt remote add origin git@github.com:restarter/lets-workflow-beads.git
+# HTTPS: dolt remote add origin https://github.com/restarter/lets-workflow-beads.git
 dolt fetch origin
 dolt reset --hard origin/main
 cd -
 
-# 3. Verify
+# 4. Verify (needs dolt server running)
 bd list
 ```
 
