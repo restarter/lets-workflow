@@ -128,7 +128,7 @@ AskUserQuestion(
 ```
 
 **Handle response:**
-- **Branch** -> `git checkout -b <branch> $(git symbolic-ref refs/remotes/origin/HEAD --short 2>/dev/null || echo main)` (standard flow)
+- **Branch** -> `git checkout -b <branch> {merge-branch}` (standard flow, use `merge-branch` from LETS Config)
 - **Worktree** -> run `/lets:worktree create <task-id>-<slug>`, then inform:
   "Worktree created at `.worktrees/<name>/`. Open a new terminal there and run `claude` -> `/lets:start`."
   Stop here - the worktree session continues in a separate terminal.

@@ -177,17 +177,26 @@ If in worktree and task is done, add:
 Worktree: {name} - after PR merges, clean up with `/lets:worktree remove {name}` from main repo
 ```
 
-Then ask about push in plain text (no LETS box):
+Then use **AskUserQuestion** for next steps:
 
-> "Push to remote? (`git push`)"
+```
+AskUserQuestion(
+  questions=[{
+    question: "Session saved. What now?",
+    header: "LETS",
+    options: [
+      { label: "Push", description: "git push to remote" },
+      { label: "Done", description: "All done - start fresh with /clear + /lets:start" }
+    ],
+    multiSelect: false
+  }]
+)
+```
 
-- If yes - `git push`
-- If no - skip
+**Handle response:**
+- **Push** -> `git push`, then suggest `/clear` + `/lets:start`
+- **Done** -> suggest `/clear` + `/lets:start`
 - **NEVER push automatically**
-
-After everything is done, suggest context reset:
-
-> "Start fresh? `/clear` and then `/lets:start`"
 
 ## Rules
 

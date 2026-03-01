@@ -114,10 +114,11 @@ AskUserQuestion(
 
 ## Step 4: Collect Commits
 
+Use `merge-branch` from LETS Config. Fallback: `git symbolic-ref refs/remotes/origin/HEAD --short 2>/dev/null || echo main`
+
 ```bash
-MAIN=$(git symbolic-ref refs/remotes/origin/HEAD --short 2>/dev/null || echo main)
-git log ${MAIN}..HEAD --oneline
-git diff --stat ${MAIN}..HEAD
+git log ${MERGE_BRANCH}..HEAD --oneline
+git diff --stat ${MERGE_BRANCH}..HEAD
 ```
 
 Show summary:
@@ -273,9 +274,10 @@ Task stays **open** until PR is merged.
 
 ### If github: false (local merge) AND NOT in worktree:
 
+Use `merge-branch` from LETS Config for target branch.
+
 ```bash
-MAIN=$(git symbolic-ref refs/remotes/origin/HEAD --short 2>/dev/null || echo main)
-git checkout $MAIN
+git checkout {merge-branch}
 git merge <branch>
 git branch -d <branch>
 ```
@@ -289,16 +291,16 @@ bd close <task-id> --reason="Merged locally. Commits: {list}"
 
 Cannot `git checkout` or `git branch -d` from inside a worktree. Use `git -C` to operate on the main repo:
 
+Use `merge-branch` from LETS Config for target branch.
+
 ```bash
 MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." 2>/dev/null && pwd)
 BRANCH=$(git branch --show-current)
-MAIN=$(git -C "$MAIN_ROOT" symbolic-ref refs/remotes/origin/HEAD --short 2>/dev/null || echo main)
-MAIN_BRANCH="${MAIN#origin/}"  # strip origin/ prefix if present
 
 # Ensure main repo is on the merge branch before merging
 MAIN_CURRENT=$(git -C "$MAIN_ROOT" branch --show-current)
-if [ "$MAIN_CURRENT" != "$MAIN_BRANCH" ]; then
-  git -C "$MAIN_ROOT" checkout "$MAIN_BRANCH"
+if [ "$MAIN_CURRENT" != "{merge-branch}" ]; then
+  git -C "$MAIN_ROOT" checkout {merge-branch}
 fi
 
 git -C "$MAIN_ROOT" merge "$BRANCH"
