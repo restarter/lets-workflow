@@ -122,13 +122,13 @@ bd worktree create .worktrees/feature-auth --branch feature/auth
 | Feature | `--worktree` flag | `isolation: worktree` | Manual |
 |---------|-------------------|----------------------|--------|
 | Created by | User (CLI) | Automatic (agent dispatch) | User (shell) |
-| Location | `.claude/worktrees/<name>/` | Temporary (system-managed) | Anywhere |
-| Branch name | `worktree-<name>` | Auto-generated | Any |
+| Location | `.claude/worktrees/<name>/` | `.claude/worktrees/<name>/` (native) | Anywhere |
+| Branch name | `worktree-<name>` | `worktree-agent-<id>` (auto) | Any |
 | Lifecycle | Session-scoped | Agent-scoped | Manual |
 | Cleanup | Prompt on exit | Auto if no changes | Manual |
-| Beads support | Needs manual `bd worktree` | Via WorktreeCreate hook | Via `bd worktree create` |
-| `.lets/` support | Not needed (agents don't use LETS commands) | Not needed (agents don't use LETS commands) | Not available (gitignored) |
-| Hooks | N/A | WorktreeCreate/Remove | N/A |
+| Beads support | Needs manual `bd worktree` | None (agents use stale JSONL copy) | Via `bd worktree create` |
+| `.lets/` support | Needs symlink for LETS commands | Not needed (agents don't run LETS commands) | Not available (gitignored) |
+| Hooks | WorktreeCreate/Remove (optional) | None needed (native works) | N/A |
 | Best for | Interactive parallel sessions | Automated parallel agents | Full control |
 
 ---
@@ -421,10 +421,13 @@ Change canonical ROOT to use `git rev-parse --git-common-dir`. Requires updating
 **Option D: WorktreeCreate hook does setup**
 The hook creates symlink or redirect automatically.
 
-**Option E: No .lets/ in worktrees (CHOSEN)**
-Agents with `isolation: worktree` do code work only - they don't run LETS commands (/lets:start, /lets:review, etc.). They only need code + `.beads/redirect` for task context. No `.lets/` access needed at all.
+**Option E: No .lets/ in worktrees (CHOSEN for agents)**
+Agents with `isolation: worktree` do code work only - they don't run LETS commands (/lets:start, /lets:review, etc.). They only need code. No `.lets/` access needed at all.
 
-Worktrees stored in `.worktrees/` at project root (gitignored). Outside `.lets/` to avoid circular symlinks when `.lets/` is symlinked into worktree for interactive sessions.
+**Option F: Native Claude Code worktrees (FINAL for agents, 2026-03-01)**
+Don't register any hooks. Let Claude Code handle worktree creation/cleanup natively at `.claude/worktrees/`. Custom hooks (bd worktree create + .lets/ symlink) add files that git sees as "changes", blocking auto-cleanup. Native behavior = clean git status = auto-cleanup works.
+
+For interactive worktrees (`/lets:worktree` command): use `.worktrees/` at project root with .lets/ symlink + bd worktree create. This is done by the command, not by hooks.
 
 ### 4.5 Race Conditions
 
@@ -795,3 +798,89 @@ Lead synthesizes and reviews.
 - **`session-start.sh` injects worktree path as `project-root`** - correct for git, wrong for `.lets/`
 - **Statusline creates separate cache per worktree** - wasteful but harmless
 - **No worktree identity in statusline** - can't tell which worktree you're in
+
+---
+
+## 11. Lessons Learned (2026-03-01 prototype)
+
+### Don't fight native behavior
+
+Custom WorktreeCreate/WorktreeRemove hooks were built to add .beads/redirect and .lets/ symlink to agent worktrees. But these additions made git see "changes" in the worktree, which blocked Claude Code's auto-cleanup. The hooks solved a problem that didn't exist (agents don't need .beads/ or .lets/) while creating a real problem (broken cleanup).
+
+**Rule:** start with native behavior, only customize when there's a proven need.
+
+### Agent frontmatter hooks don't work
+
+Despite our research docs listing `hooks:` as a supported agent frontmatter field, runtime testing proved it's silently ignored. Official Claude Code docs only document hooks in:
+1. Plugin `hooks/hooks.json`
+2. User `.claude/settings.json`
+
+**Rule:** verify features with runtime tests, not just documentation research.
+
+### .gitignore trailing slash matters
+
+`.lets/` (with trailing slash) ignores directories but NOT symlinks. When our hook created a `.lets` symlink in a worktree, git saw it as untracked. Fix: add `.lets` (without slash) alongside `.lets/`.
+
+**Rule:** when gitignoring something that might be both a directory and a symlink, add both patterns.
+
+### WorktreeRemove fires during removal, not to trigger it
+
+WorktreeRemove hook fires as part of the removal process. If Claude Code decides to keep the worktree (because of changes), WorktreeRemove never fires. This is by design - the hook is for cleanup during removal, not for deciding whether to remove.
+
+### Two worktree use cases need different solutions
+
+| Use case | What's needed | Solution |
+|----------|--------------|----------|
+| Agent isolation (isolation:worktree) | Code only | Native Claude Code (.claude/worktrees/) |
+| Interactive parallel sessions (claude --worktree) | Code + .lets/ + .beads/ | /lets:worktree command with manual setup |
+
+Don't try to unify them with a single hook - the requirements are different.
+
+---
+
+## 12. Real-World Multi-Agent Setup (Beadbox, 2026-03)
+
+Source: reddit.com/r/vibecoding - "I Ship Software with 13 AI Agents"
+
+Production setup running 13 Claude Code agents building Beadbox (a dashboard for monitoring AI agent fleets). Uses beads as coordination backbone.
+
+### Architecture
+
+Not Agent Teams - 13 separate `claude` sessions in tmux panes, each with its own CLAUDE.md.
+
+| Group | Agents | What they own |
+|-------|--------|---------------|
+| Coordination | super, pm, owner | Work dispatch, product specs, business priorities |
+| Engineering | eng1, eng2, arch | Implementation, system design, test suites |
+| Quality | qa1, qa2 | Independent validation, release gates |
+| Operations | ops, shipper | Platform testing, builds, release execution |
+| Growth | growth, pmm, pmm2 | Analytics, positioning, public content |
+
+### Coordination tools
+
+- **beads** (`bd`) - task tracking, claims, comments. `bd update --claim --actor eng2`, `bd comments add --author eng2 "PLAN: ..."`
+- **gn/gp/ga** - tmux messaging. gn sends, gp peeks, ga queues async messages
+- **super patrol loop** - every 5-10 min checks all agents for stalls, dispatches work
+- **CLAUDE.md protocols** - identity paragraph + boundary section per agent. Defines what each agent owns and can't touch
+
+### Key insight: boundaries, not hooks
+
+Sandboxing through CLAUDE.md protocols, not technical enforcement:
+> "eng2 can't close issues. qa1 doesn't write code. pmm never touches the app source."
+
+Works at scale (13 agents, production). Validates prompt-level rules over hook-based enforcement.
+
+### Key insight: QA uses separate repo clone
+
+QA tests pushed code, not working tree. Independent validation = catches bugs eng missed.
+
+### What breaks at scale
+
+- Rate limits with 13 concurrent agents on same API account
+- Context windows fill up (65% threshold = "save your work" protocol)
+- Agents get stuck in error loops (super's patrol loop catches this)
+- QA bounces add cycles but catch real bugs
+
+### Minimum viable fleet
+
+"Two engineers and a QA agent, coordinated through beads, will change how you think about what a single developer can ship."

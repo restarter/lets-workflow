@@ -29,7 +29,7 @@ The agent receives this as its base instructions.
 | `model` | No | `sonnet`, `opus`, `haiku`, `inherit` | Model for this agent (default: inherit from parent) |
 | `permissionMode` | No | `default`, `acceptEdits`, `dontAsk`, `bypassPermissions`, `plan` | Permission level |
 | `skills` | No | list | Skills to preload into agent context |
-| `hooks` | No | object | Lifecycle hooks (PreToolUse, PostToolUse, Stop) |
+| ~~`hooks`~~ | ~~No~~ | ~~object~~ | NOT SUPPORTED in runtime (tested 2026-03-01, silently ignored). Use plugin hooks.json instead |
 | `memory` | No | `user`, `project`, `local` | Persistent memory scope |
 
 ## Tool Options
