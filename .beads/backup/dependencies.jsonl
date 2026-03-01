@@ -15,6 +15,7 @@
 {"created_at":"2026-03-01T03:48:32Z","created_by":"Dima Slep","depends_on_id":"lets-dnk","issue_id":"lets-dnk.17","type":"parent-child"}
 {"created_at":"2026-03-01T13:48:51Z","created_by":"Dima Slep","depends_on_id":"lets-dnk","issue_id":"lets-dnk.18","type":"parent-child"}
 {"created_at":"2026-03-01T13:49:04Z","created_by":"Dima Slep","depends_on_id":"lets-ydd.10","issue_id":"lets-dnk.18","type":"blocks"}
+{"created_at":"2026-03-01T22:22:54Z","created_by":"Dima Slep","depends_on_id":"lets-dnk","issue_id":"lets-dnk.19","type":"parent-child"}
 {"created_at":"2026-02-28T23:15:12Z","created_by":"Dima Slep","depends_on_id":"lets-dnk","issue_id":"lets-dnk.2","type":"parent-child"}
 {"created_at":"2026-02-28T23:15:23Z","created_by":"Dima Slep","depends_on_id":"lets-dnk","issue_id":"lets-dnk.3","type":"parent-child"}
 {"created_at":"2026-02-28T23:15:34Z","created_by":"Dima Slep","depends_on_id":"lets-dnk","issue_id":"lets-dnk.4","type":"parent-child"}
@@ -25,6 +26,7 @@
 {"created_at":"2026-02-28T23:27:12Z","created_by":"Dima Slep","depends_on_id":"lets-dnk","issue_id":"lets-dnk.9","type":"parent-child"}
 {"created_at":"2026-03-01T14:06:50Z","created_by":"Dima Slep","depends_on_id":"lets-hpi","issue_id":"lets-hpi.1","type":"parent-child"}
 {"created_at":"2026-03-01T14:09:56Z","created_by":"Dima Slep","depends_on_id":"lets-hpi.2","issue_id":"lets-hpi.1","type":"blocks"}
+{"created_at":"2026-03-01T22:42:14Z","created_by":"Dima Slep","depends_on_id":"lets-hpi","issue_id":"lets-hpi.10","type":"parent-child"}
 {"created_at":"2026-03-01T14:07:00Z","created_by":"Dima Slep","depends_on_id":"lets-hpi","issue_id":"lets-hpi.2","type":"parent-child"}
 {"created_at":"2026-03-01T14:07:12Z","created_by":"Dima Slep","depends_on_id":"lets-hpi","issue_id":"lets-hpi.3","type":"parent-child"}
 {"created_at":"2026-03-01T14:10:06Z","created_by":"Dima Slep","depends_on_id":"lets-hpi.1","issue_id":"lets-hpi.3","type":"blocks"}
