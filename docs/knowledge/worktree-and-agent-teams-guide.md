@@ -424,7 +424,7 @@ The hook creates symlink or redirect automatically.
 **Option E: No .lets/ in worktrees (CHOSEN)**
 Agents with `isolation: worktree` do code work only - they don't run LETS commands (/lets:start, /lets:review, etc.). They only need code + `.beads/redirect` for task context. No `.lets/` access needed at all.
 
-Worktrees stored in `.lets/worktrees/` - already gitignored, no extra .gitignore entries needed.
+Worktrees stored in `.worktrees/` at project root (gitignored). Outside `.lets/` to avoid circular symlinks when `.lets/` is symlinked into worktree for interactive sessions.
 
 ### 4.5 Race Conditions
 
