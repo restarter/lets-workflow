@@ -6,5 +6,6 @@
 AGENTS.md
 .dolt/
 *.db
+*.old
 .worktrees/
 .claude/worktrees/

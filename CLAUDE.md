@@ -8,7 +8,7 @@ Claude Code plugin for development workflow with session management, code review
 .claude-plugin/plugin.json   # Plugin manifest
 commands/                     # Slash commands (/lets:start, /lets:done, /lets:review, etc.)
 agents/                       # Expert agents (review, opinion, ask, brainstorm)
-hooks/                        # SessionStart hook, statusline, usage fetcher
+hooks/                        # SessionStart hook, statusline, usage fetcher, sandbox prototype
 reference/                    # Reference plugins for studying patterns (gitignored)
 ```
 
@@ -26,8 +26,8 @@ reference/                    # Reference plugins for studying patterns (gitigno
 - `/lets:pr` orchestrates `/lets:review` (delegates analysis) and handles GitHub posting, follow-up, respond, and approval directly via gh CLI
 - `/lets:check` reviews inline (no subagent) for speed
 - All agents are read-only (Read, Grep, Glob, optionally Bash). No Edit/Write.
-- Agents with Bash are sandboxed via PreToolUse hooks (`hooks/validate-readonly.sh`) - blocks destructive commands at enforcement level
-- WorktreeCreate/WorktreeRemove hooks in `.claude/settings.json` (NOT plugin hooks.json - unsupported for these events)
+- Agents with Bash have prompt-level read-only constraints (`## Constraints` section in agent `.md` files). `hooks/validate-readonly.sh.old` exists as a PreToolUse hook prototype (not yet registered - agent frontmatter hooks silently ignored)
+- Interactive worktrees managed via `/lets:worktree` command. WorktreeCreate/WorktreeRemove hook prototypes in `hooks/*.old` (deferred - caused agent auto-cleanup issues)
 - Worktrees stored in `.worktrees/` at project root - `.lets/` symlinked for interactive sessions
 - SessionStart hook injects rules from `hooks/rules-context.md`
 - SessionStart hook reads `.lets/config.yaml` and injects settings into session context
