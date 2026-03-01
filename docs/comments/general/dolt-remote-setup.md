@@ -35,7 +35,18 @@ cd - && rm -rf /tmp/myproject-beads
 
 ```bash
 cd myproject
+
+# Init dolt database first
+mkdir -p .beads/dolt/myproj
+cd .beads/dolt/myproj
+dolt init --name "beads" --email "beads@local"
+cd -
+
+# Start dolt server, then run bd init
+cd .beads/dolt/myproj && dolt sql-server --port 3307 --host 127.0.0.1 & cd -
+sleep 2
 bd init --prefix myproj
+kill %1
 ```
 
 ### 3. Connect to GitHub remote
@@ -73,8 +84,8 @@ scripts/beads/setup-beads-remote.sh
 ```
 
 That's it. The script handles everything:
-1. Inits beads locally (`bd init`)
-2. Connects to the GitHub remote
+1. Inits dolt database + beads schema (dolt init, dolt sql-server, bd init)
+2. Detects git auth method (SSH vs HTTPS) and connects to the GitHub remote
 3. Fetches and syncs the remote database
 
 ### What the script does (if you prefer manual steps)
@@ -89,7 +100,9 @@ dolt init --name "beads" --email "beads@local"
 cd -
 
 # 2. Start dolt server, run bd init
+cd .beads/dolt/lets
 dolt sql-server --port 3307 --host 127.0.0.1 &
+cd -
 sleep 2
 bd init --force --prefix lets
 kill %1  # stop dolt server

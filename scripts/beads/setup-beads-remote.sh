@@ -5,9 +5,10 @@
 #   scripts/beads/setup-beads-remote.sh
 #
 # What it does:
-#   1. bd init (creates local dolt database with schema)
-#   2. Adds GitHub repo as dolt remote
-#   3. Fetches remote data and resets local to match
+#   1. Inits dolt database, starts sql-server, runs bd init
+#   2. Detects git protocol (SSH vs HTTPS)
+#   3. Adds GitHub repo as dolt remote
+#   4. Fetches remote data and resets local to match
 #
 # Prerequisites:
 #   - bd (beads CLI) installed
@@ -64,8 +65,8 @@ detect_remote_url() {
 
 # Start dolt sql-server if not already running on DOLT_PORT.
 ensure_dolt_server() {
-  if ss -tlnp 2>/dev/null | grep -q ":${DOLT_PORT} " || \
-     lsof -iTCP:${DOLT_PORT} -sTCP:LISTEN &>/dev/null; then
+  if lsof -iTCP:${DOLT_PORT} -sTCP:LISTEN &>/dev/null; then
+    echo -e "  ${YELLOW}Warning: port ${DOLT_PORT} already in use, assuming dolt server${NC}"
     return 0
   fi
 
@@ -90,6 +91,8 @@ stop_dolt_server() {
     DOLT_SERVER_PID=""
   fi
 }
+
+trap 'stop_dolt_server' EXIT
 
 # ============================================
 # Checks

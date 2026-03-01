@@ -31,6 +31,9 @@ ephemeral.sqlite3-journal
 ephemeral.sqlite3-wal
 ephemeral.sqlite3-shm
 
+# Credentials (password for remote Dolt server)
+.env
+
 # Legacy files (from pre-Dolt versions)
 *.db
 *.db?*
