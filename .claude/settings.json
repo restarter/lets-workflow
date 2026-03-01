@@ -5,5 +5,27 @@
   "statusLine": {
     "type": "command",
     "command": "bash -c 'cat | bash \"$(git rev-parse --show-toplevel 2>/dev/null)/hooks/lets-statusline.sh\"'"
+  },
+  "hooks": {
+    "WorktreeCreate": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/hooks/worktree-setup.sh\""
+          }
+        ]
+      }
+    ],
+    "WorktreeRemove": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/hooks/worktree-cleanup.sh\""
+          }
+        ]
+      }
+    ]
   }
 }

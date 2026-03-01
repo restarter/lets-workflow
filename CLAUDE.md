@@ -32,6 +32,7 @@ reference/                    # Reference plugins for studying patterns (gitigno
 ## File Storage
 
 All plugin-generated files go to `.lets/` (gitignored). Never use `/tmp` or other external paths.
+This includes hook debug logs, temp files, and any runtime artifacts.
 
 ```
 .lets/config.yaml        # Per-project settings (language, merge-branch)
@@ -39,7 +40,7 @@ All plugin-generated files go to `.lets/` (gitignored). Never use `/tmp` or othe
 .lets/reviews/           # Saved review reports
 .lets/plans/             # Implementation plans
 .lets/execution/         # Execution state (plan resume + PR review: pr-{number}/)
-.lets/cache/             # Cached data (usage stats, OAuth token)
+.lets/cache/             # Cached data (usage stats, OAuth token, hook debug logs)
 ```
 
 ## Dependencies
