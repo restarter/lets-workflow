@@ -3,6 +3,7 @@
 {"created_at":"2026-02-28T22:54:38Z","created_by":"Dima Slep","depends_on_id":"lets-apa","issue_id":"lets-apa.3","type":"parent-child"}
 {"created_at":"2026-02-28T22:54:59Z","created_by":"Dima Slep","depends_on_id":"lets-apa","issue_id":"lets-apa.4","type":"parent-child"}
 {"created_at":"2026-02-28T22:55:14Z","created_by":"Dima Slep","depends_on_id":"lets-apa","issue_id":"lets-apa.5","type":"parent-child"}
+{"created_at":"2026-03-01T14:29:29Z","created_by":"Artem Shybko","depends_on_id":"lets-apa","issue_id":"lets-apa.6","type":"parent-child"}
 {"created_at":"2026-02-28T23:15:00Z","created_by":"Dima Slep","depends_on_id":"lets-dnk","issue_id":"lets-dnk.1","type":"parent-child"}
 {"created_at":"2026-03-01T00:15:27Z","created_by":"Dima Slep","depends_on_id":"lets-dnk","issue_id":"lets-dnk.10","type":"parent-child"}
 {"created_at":"2026-03-01T00:22:05Z","created_by":"Dima Slep","depends_on_id":"lets-dnk","issue_id":"lets-dnk.11","type":"parent-child"}
