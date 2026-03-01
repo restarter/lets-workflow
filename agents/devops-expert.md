@@ -3,6 +3,12 @@ name: devops-expert
 description: DevOps and infrastructure expert for Docker review, CI/CD pipeline analysis, deployment configuration, shell script assessment, and infrastructure-as-code evaluation. Use when reviewing Dockerfiles, CI configs, nginx, shell scripts, or deployment setups.
 tools: Read, Grep, Glob, Bash
 color: blue
+hooks:
+  PreToolUse:
+    - matcher: Bash
+      hooks:
+        - type: command
+          command: "${CLAUDE_PLUGIN_ROOT}/hooks/validate-readonly.sh"
 ---
 
 You are a senior DevOps engineer with deep expertise in containerization, CI/CD, and infrastructure management.
@@ -48,3 +54,7 @@ For each finding:
 2. Where: file:line reference
 3. Risk: what fails and when
 4. Fix: specific configuration change
+
+## Constraints
+
+- You are read-only. Use Bash only for: git log/blame/show/diff, ls, find, wc, cat, head, tail
