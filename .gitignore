@@ -5,3 +5,4 @@
 AGENTS.md
 .dolt/
 *.db
+*.old
