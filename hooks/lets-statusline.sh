@@ -29,14 +29,26 @@ seven_d=""
 five_h_reset=""
 seven_d_reset=""
 
+CACHE_TTL=300  # refresh if older than 5 minutes
+cache_fresh=0
+
 if [ -f "$CACHE_FILE" ]; then
+  if [ "$(uname)" = "Darwin" ]; then
+    cache_age=$(( $(date -u +%s) - $(stat -f %m "$CACHE_FILE" 2>/dev/null || echo 0) ))
+  else
+    cache_age=$(( $(date -u +%s) - $(stat -c %Y "$CACHE_FILE" 2>/dev/null || echo 0) ))
+  fi
+  if [ "$cache_age" -lt "$CACHE_TTL" ]; then
+    cache_fresh=1
+  fi
   five_h=$(sed -n '1p' "$CACHE_FILE")
   seven_d=$(sed -n '2p' "$CACHE_FILE")
   five_h_reset=$(sed -n '3p' "$CACHE_FILE")
   seven_d_reset=$(sed -n '4p' "$CACHE_FILE")
-else
-  bash "$SCRIPT_DIR/fetch-usage.sh" > /dev/null 2>&1 &
 fi
+
+# Background refresh if cache missing or stale
+[ "$cache_fresh" -eq 0 ] && bash "$SCRIPT_DIR/fetch-usage.sh" > /dev/null 2>&1 &
 
 # --- compute_delta: given a raw ISO timestamp, returns human-readable time until reset ---
 compute_delta() {
@@ -101,10 +113,25 @@ if [ -n "$ctx_str" ]; then
   [ -n "$ctx_tokens_str" ] && printf " \033[2;38;2;190;176;140m(%s)\033[0m" "$ctx_tokens_str"
 fi
 
-# Usage stats
+# Usage stats (color-coded: green <50%, yellow 50-80%, red >80%)
+usage_color() {
+  val="$1"
+  case "$val" in
+    [0-9]*) ;;
+    *) printf "\033[38;2;130;200;130m"; return ;;
+  esac
+  if [ "$val" -ge 80 ]; then
+    printf "\033[38;2;255;100;100m"
+  elif [ "$val" -ge 50 ]; then
+    printf "\033[38;2;255;200;80m"
+  else
+    printf "\033[38;2;130;200;130m"
+  fi
+}
+
 if [ -n "$five_h" ]; then
   printf "\033[90m \xc2\xb7 \033[0m"
-  printf "\033[38;2;190;176;140m5h %s%%\033[0m" "$five_h"
+  printf "%b5h %s%%\033[0m" "$(usage_color "$five_h")" "$five_h"
   if [ -n "$five_h_reset" ]; then
     delta=$(compute_delta "$five_h_reset")
     [ -n "$delta" ] && printf " \033[2;38;2;190;176;140m(%s)\033[0m" "$delta"
@@ -112,7 +139,7 @@ if [ -n "$five_h" ]; then
 fi
 if [ -n "$seven_d" ]; then
   printf "\033[90m \xc2\xb7 \033[0m"
-  printf "\033[38;2;190;176;140m7d %s%%\033[0m" "$seven_d"
+  printf "%b7d %s%%\033[0m" "$(usage_color "$seven_d")" "$seven_d"
   if [ -n "$seven_d_reset" ]; then
     delta=$(compute_delta "$seven_d_reset")
     [ -n "$delta" ] && printf " \033[2;38;2;190;176;140m(%s)\033[0m" "$delta"
