@@ -12,10 +12,14 @@ Complete the current task. Document work, create PR or merge locally, close in b
 
 ```bash
 BRANCH=$(git branch --show-current)
-# Parse task ID from branch: feature/<task-id>-<slug>
-# Example: feature/ji2-beads-deep-integration -> lets-plugin-claude-ji2
+# Extract task ID from branch name. Handles all branch formats:
+#   feature/<task-id>-<slug>     -> standard LETS branches
+#   worktree-<task-id>-<slug>   -> worktree branches (from /lets:worktree create)
+#   worktree-<custom-name>      -> no task ID, use fallback
+#
+# Beads ID pattern: <prefix>-<alphanum>[.<number>]
 
-# Fallback:
+# Fallback (always works, also primary method for worktree branches without task ID):
 bd list --status=in_progress
 ```
 
@@ -110,10 +114,11 @@ AskUserQuestion(
 
 ## Step 4: Collect Commits
 
+Use `merge-branch` from LETS Config. Fallback: `git symbolic-ref refs/remotes/origin/HEAD --short 2>/dev/null || echo main`
+
 ```bash
-MAIN=$(git symbolic-ref refs/remotes/origin/HEAD --short 2>/dev/null || echo main)
-git log ${MAIN}..HEAD --oneline
-git diff --stat ${MAIN}..HEAD
+git log ${MERGE_BRANCH}..HEAD --oneline
+git diff --stat ${MERGE_BRANCH}..HEAD
 ```
 
 Show summary:
@@ -191,6 +196,22 @@ bd comments add <task-id> "## Completed {YYYY-MM-DD}
 
 ## Step 7: Finish Task
 
+### Worktree Detection
+
+Before finishing, check if we're in a worktree:
+
+```bash
+GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
+```
+
+Set `IN_WORKTREE=true` if `$GIT_DIR` contains `worktrees/` (is NOT `.git`).
+
+If in a worktree, resolve the main repo path:
+
+```bash
+MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." 2>/dev/null && pwd)
+```
+
 ### If github: true (PR flow):
 
 **Guard: verify gh CLI first**
@@ -251,11 +272,12 @@ Task stays **open** until PR is merged.
 
 **Do NOT switch branches yet** - user decides in Step 8.
 
-### If github: false (local merge):
+### If github: false (local merge) AND NOT in worktree:
+
+Use `merge-branch` from LETS Config for target branch.
 
 ```bash
-MAIN=$(git symbolic-ref refs/remotes/origin/HEAD --short 2>/dev/null || echo main)
-git checkout $MAIN
+git checkout {merge-branch}
 git merge <branch>
 git branch -d <branch>
 ```
@@ -265,22 +287,40 @@ After merge:
 bd close <task-id> --reason="Merged locally. Commits: {list}"
 ```
 
+### If github: false (local merge) AND in worktree:
+
+Cannot `git checkout` or `git branch -d` from inside a worktree. Use `git -C` to operate on the main repo:
+
+Use `merge-branch` from LETS Config for target branch.
+
+```bash
+MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." 2>/dev/null && pwd)
+BRANCH=$(git branch --show-current)
+
+# Ensure main repo is on the merge branch before merging
+MAIN_CURRENT=$(git -C "$MAIN_ROOT" branch --show-current)
+if [ "$MAIN_CURRENT" != "{merge-branch}" ]; then
+  git -C "$MAIN_ROOT" checkout {merge-branch}
+fi
+
+git -C "$MAIN_ROOT" merge "$BRANCH"
+```
+
+After merge:
+```bash
+bd close <task-id> --reason="Merged locally from worktree. Commits: {list}"
+```
+
+Do NOT delete the branch or remove the worktree here - `/lets:worktree remove` handles cleanup.
+
 ## Step 8: Output
 
-### After PR (github: true):
+### After PR (github: true), NOT in worktree:
 
 ```
 Task: **{title}** ({task-id})
 PR: #{number} - {PR URL}
 Status: open (close after PR merge)
-```
-
-### After local merge (github: false):
-
-```
-Task: **{title}** ({task-id}) - CLOSED
-Merged to {main branch}
-Branch {feature-branch} deleted
 ```
 
 Then use **AskUserQuestion**:
@@ -300,14 +340,44 @@ AskUserQuestion(
 )
 ```
 
-Next steps presented via AskUserQuestion (replaces LETS box).
-
 **Handle response:**
 - **Stay on branch** -> stay on current branch, no checkout. User continues working freely.
 - **Next task** -> `git checkout {merge-branch}`, then show `bd ready`, pick new task
 - **End session** -> `git checkout {merge-branch}`, then suggest `/lets:end`
 
-### After local merge:
+### After PR (github: true), IN worktree:
+
+```
+Task: **{title}** ({task-id})
+PR: #{number} - {PR URL}
+Status: open (close after PR merge)
+Worktree: {worktree path}
+```
+
+Then use **AskUserQuestion**:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "PR created. What's next?",
+    header: "LETS",
+    options: [
+      { label: "Stay here", description: "Stay in this worktree for PR fixes or follow-up" },
+      { label: "End session", description: "Run /lets:end - save context and wrap up" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+No "Next task" option - can't switch branches in a worktree. To start a new task, user opens a different terminal.
+
+**Handle response:**
+- **Stay here** -> stay in worktree. User continues working.
+- **End session** -> suggest `/lets:end`. After session ends, remind:
+  "After PR merges, clean up: `/lets:worktree remove {name}` from the main repo terminal."
+
+### After local merge (github: false), NOT in worktree:
 
 ```
 Task: **{title}** ({task-id}) - CLOSED
@@ -334,6 +404,33 @@ AskUserQuestion(
 **Handle response:**
 - **Next task** -> show `bd ready`, pick new task
 - **End session** -> suggest `/lets:end`
+
+### After local merge (github: false), IN worktree:
+
+```
+Task: **{title}** ({task-id}) - CLOSED
+Merged to {merge-branch} (from worktree via git -C)
+```
+
+Then use **AskUserQuestion**:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Merged. Clean up worktree?",
+    header: "LETS",
+    options: [
+      { label: "Remove worktree", description: "Switch to main repo and run /lets:worktree remove {name}" },
+      { label: "Keep", description: "Keep worktree for now - clean up later with /lets:worktree remove" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Handle response:**
+- **Remove worktree** -> inform: "Switch to main repo terminal and run `/lets:worktree remove {name}`" (cannot remove worktree from inside it)
+- **Keep** -> suggest `/lets:end` to save session context
 
 ## Rules
 
