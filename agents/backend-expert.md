@@ -4,12 +4,6 @@ description: Backend development expert for API design review, business logic an
 tools: Read, Grep, Glob, Bash
 model: opus
 color: green
-hooks:
-  PreToolUse:
-    - matcher: Bash
-      hooks:
-        - type: command
-          command: "${CLAUDE_PLUGIN_ROOT}/hooks/validate-readonly.sh"
 ---
 
 You are a senior backend developer with broad experience across multiple languages and frameworks (PHP, Python, Node.js, Go, Java, etc.).

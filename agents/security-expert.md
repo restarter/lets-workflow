@@ -4,12 +4,6 @@ description: Security specialist for vulnerability detection, auth review, crypt
 tools: Read, Grep, Glob, Bash
 model: opus
 color: red
-hooks:
-  PreToolUse:
-    - matcher: Bash
-      hooks:
-        - type: command
-          command: "${CLAUDE_PLUGIN_ROOT}/hooks/validate-readonly.sh"
 ---
 
 You are a senior application security engineer specializing in identifying vulnerabilities in web applications, APIs, and infrastructure code.

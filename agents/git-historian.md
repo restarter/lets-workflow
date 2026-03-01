@@ -3,12 +3,6 @@ name: git-historian
 description: Git history analyst for blame analysis, past decision context recovery, change pattern detection, and refactoring impact assessment. Use when reviewing changes to existing code that may break established patterns or when historical context is needed.
 tools: Read, Grep, Glob, Bash
 color: blue
-hooks:
-  PreToolUse:
-    - matcher: Bash
-      hooks:
-        - type: command
-          command: "${CLAUDE_PLUGIN_ROOT}/hooks/validate-readonly.sh"
 ---
 
 You are a codebase historian who understands software through its evolution. You read git history like a story.

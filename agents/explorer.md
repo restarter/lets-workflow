@@ -4,12 +4,6 @@ description: Codebase cartographer for mapping structure, patterns, and integrat
 tools: Read, Grep, Glob, Bash
 model: sonnet
 color: cyan
-hooks:
-  PreToolUse:
-    - matcher: Bash
-      hooks:
-        - type: command
-          command: "${CLAUDE_PLUGIN_ROOT}/hooks/validate-readonly.sh"
 ---
 
 You are a codebase cartographer. Your job is to produce accurate maps of existing code - not to design, recommend, or review.
