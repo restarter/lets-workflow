@@ -257,6 +257,7 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:brainstorm` | Planning | Idea needs architecture + implementation plan |
 | `/lets:execute` | Planning | Execute plan from /lets:brainstorm step by step |
 | `/lets:status` | Utility | Task overview and project status |
+| `/lets:worktree` | Utility | Create/manage interactive worktrees for parallel work |
 | `/lets:note` | Utility | Add note to active task |
 | `/lets:install` | Setup | First-time setup |
 
