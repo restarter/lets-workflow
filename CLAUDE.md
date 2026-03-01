@@ -28,7 +28,7 @@ reference/                    # Reference plugins for studying patterns (gitigno
 - All agents are read-only (Read, Grep, Glob, optionally Bash). No Edit/Write.
 - Agents with Bash are sandboxed via PreToolUse hooks (`hooks/validate-readonly.sh`) - blocks destructive commands at enforcement level
 - WorktreeCreate/WorktreeRemove hooks in `.claude/settings.json` (NOT plugin hooks.json - unsupported for these events)
-- Worktrees stored in `.lets/worktrees/` - no `.lets/` symlink needed (agents don't use LETS commands)
+- Worktrees stored in `.worktrees/` at project root - `.lets/` symlinked for interactive sessions
 - SessionStart hook injects rules from `hooks/rules-context.md`
 - SessionStart hook reads `.lets/config.yaml` and injects settings into session context
 
@@ -44,7 +44,8 @@ This includes hook debug logs, temp files, and any runtime artifacts.
 .lets/plans/             # Implementation plans
 .lets/execution/         # Execution state (plan resume + PR review: pr-{number}/)
 .lets/cache/             # Cached data (usage stats, OAuth token, hook debug logs)
-.lets/worktrees/         # Agent worktrees (isolation:worktree via WorktreeCreate hook)
+# Worktrees (outside .lets/ to avoid circular symlinks):
+# .worktrees/            # All worktrees (agents + interactive), .lets/ symlinked inside
 ```
 
 ## Dependencies

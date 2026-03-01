@@ -30,6 +30,12 @@ if [ ! -d "$WORKTREE_PATH" ]; then
   exit 0
 fi
 
+# Remove .lets/ symlink first (points outside worktree)
+if [ -L "${WORKTREE_PATH}/.lets" ]; then
+  echo "[worktree-cleanup] removing .lets/ symlink" >&2
+  rm "${WORKTREE_PATH}/.lets"
+fi
+
 # Resolve main repo root from worktree
 MAIN_ROOT=$(cd "$WORKTREE_PATH" && git rev-parse --git-common-dir 2>/dev/null | xargs dirname)
 

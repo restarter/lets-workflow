@@ -7,8 +7,9 @@
 #   OUTPUT (stdout): absolute path to created worktree
 #   If registered, Claude Code skips built-in git worktree add.
 #
-# Worktrees are stored in .lets/worktrees/ (already gitignored via .lets/).
-# Only .beads/ redirect is set up - agents don't need .lets/ access.
+# Worktrees stored in .worktrees/ at project root.
+# .lets/ symlinked for interactive sessions (harmless for agents).
+# .beads/ redirect via bd worktree create.
 
 set -euo pipefail
 
@@ -35,7 +36,7 @@ fi
 
 echo "[worktree-setup] name=$NAME" >&2
 
-WORKTREE_DIR="${MAIN_ROOT}/.lets/worktrees"
+WORKTREE_DIR="${MAIN_ROOT}/.worktrees"
 WORKTREE_PATH="${WORKTREE_DIR}/${NAME}"
 BRANCH_NAME="worktree-${NAME}"
 
@@ -52,6 +53,12 @@ if command -v bd &>/dev/null && [ -d "${MAIN_ROOT}/.beads" ]; then
 else
   echo "[worktree-setup] bd not available, using git worktree add" >&2
   git worktree add -b "$BRANCH_NAME" "$WORKTREE_PATH" 2>&1 >&2
+fi
+
+# Symlink .lets/ for shared state (interactive sessions need it, harmless for agents)
+if [ -d "${MAIN_ROOT}/.lets" ] && [ ! -e "${WORKTREE_PATH}/.lets" ]; then
+  echo "[worktree-setup] creating .lets/ symlink" >&2
+  ln -s "${MAIN_ROOT}/.lets" "${WORKTREE_PATH}/.lets"
 fi
 
 echo "[worktree-setup] done" >&2
