@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.2.1] - 2026-03-01
+
+LETS-branded statusline with usage stats.
+
+### Added
+- Statusline with warm flow design (gold branding, coral branch, sand metrics)
+- OAuth usage fetcher with macOS Keychain + credentials.json fallback
+- Context window and 5h/7d usage stats with color-coded thresholds and reset timers
+- Background cache refresh (5min TTL) - never blocks rendering
+- Project-scoped statusline config in `.claude/settings.json`
+
+### Fixed
+- Token cache restricted to owner-only permissions (umask 077)
+- Keychain parsing uses `security -w` instead of fragile grep/sed
+- Cache timestamp validation before shell command use
+
+### Changed
+- Usage cache moved from `/tmp` to `.lets/cache/`
+- CLAUDE.md updated with hooks and cache documentation
+
 ## [0.2.0] - 2026-02-28
 
 Full workflow with PR lifecycle, planning skills, and structured task tracking.
@@ -50,5 +70,6 @@ Initial release with expert agents team.
 - SessionStart hook injecting workflow rules
 - Plugin structure: commands, agents, hooks
 
+[0.2.1]: https://github.com/restarter/lets-workflow/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/restarter/lets-workflow/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/restarter/lets-workflow/releases/tag/v0.1.0
