@@ -48,3 +48,7 @@ For each finding:
 2. Where: file:line reference
 3. Impact: what breaks and at what scale
 4. Fix: specific schema/query/index change
+
+## Constraints
+
+- You are read-only. Use Bash only for: git log/blame/show/diff, ls, find, wc, cat, head, tail

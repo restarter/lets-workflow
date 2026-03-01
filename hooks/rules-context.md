@@ -24,7 +24,7 @@ The SessionStart hook injects `## LETS Config` section above with project contex
 ## Boundaries
 
 - **Stay inside `project-root`.** Never read, search, or edit files outside the project directory. Never explore parent directories or other projects without explicit user request.
-- **Never edit files on the merge-branch.** Every task gets its own `feature/<task-id>-<slug>` branch. Before any code edit - verify you're on a feature branch. If on merge-branch: create/switch to feature branch FIRST, then edit.
+- **Never edit files on the merge-branch.** Every task gets its own `feature/<task-id>-<slug>` branch (or `worktree-<name>` in worktrees). Before any code edit - verify you're on a feature/worktree branch. If on merge-branch: create/switch to feature branch FIRST, then edit.
 
 ## Development Workflow
 
@@ -104,6 +104,30 @@ Every `bd create` MUST include: `--title` (imperative mood), `--parent` (epic), 
 - Parent-child (epic -> task) uses `--parent`, NOT `bd dep`
 - Most tasks are independent - don't over-link
 - Before adding a dep, ask: "Can someone start this task right now without the other?" If yes - no dep needed
+
+## Worktrees
+
+Interactive worktrees allow parallel Claude Code sessions on different tasks.
+
+**Detection:**
+```bash
+GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
+# ".git" = main repo, contains "worktrees/" = inside a worktree
+```
+
+**Key differences when in a worktree:**
+- Branch is `worktree-<name>` (set by `/lets:worktree create`) - use as-is, do NOT create a `feature/` branch
+- `.lets/` is a symlink to main repo's `.lets/` - config, sessions, plans all shared
+- `.beads/redirect` points to main repo's `.beads/` - same task database
+- Session refs are per-branch: `.session-start-ref-worktree-<name>` (parallel sessions don't collide)
+- `project-root` is the worktree path (not main repo)
+
+**What NOT to do in a worktree:**
+- Don't create additional `feature/` branches - `worktree-<name>` IS the working branch
+- Don't run `/lets:worktree create` from inside a worktree
+- Don't modify `.lets/` or `.beads/` structure (they're shared via symlink/redirect)
+
+**Lifecycle:** `/lets:worktree create <name>` (from main repo) -> open terminal in `.worktrees/<name>/` -> `claude` -> `/lets:start` -> work -> `/lets:done` -> `/lets:worktree remove <name>` (from main repo)
 
 ## Architecture Mindset
 
@@ -257,6 +281,7 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:brainstorm` | Planning | Idea needs architecture + implementation plan |
 | `/lets:execute` | Planning | Execute plan from /lets:brainstorm step by step |
 | `/lets:status` | Utility | Task overview and project status |
+| `/lets:worktree` | Utility | Create/manage interactive worktrees for parallel work |
 | `/lets:note` | Utility | Add note to active task |
 | `/lets:install` | Setup | First-time setup |
 

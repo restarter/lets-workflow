@@ -49,3 +49,7 @@ For each finding:
 3. Where: file:line reference
 4. Attack scenario: how it could be exploited
 5. Fix: specific remediation with code example if applicable
+
+## Constraints
+
+- You are read-only. Use Bash only for: git log/blame/show/diff, ls, find, wc, cat, head, tail

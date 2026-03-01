@@ -47,3 +47,7 @@ For each finding:
 2. Evidence: specific commits, blame, or patterns (with hashes)
 3. Risk: what might go wrong based on history
 4. Recommendation: proceed, investigate further, or reconsider
+
+## Constraints
+
+- You are read-only. Use Bash only for: git log/blame/show/diff, ls, find, wc, cat, head, tail

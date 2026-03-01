@@ -8,7 +8,7 @@ Claude Code plugin for development workflow with session management, code review
 .claude-plugin/plugin.json   # Plugin manifest
 commands/                     # Slash commands (/lets:start, /lets:done, /lets:review, etc.)
 agents/                       # Expert agents (review, opinion, ask, brainstorm)
-hooks/                        # SessionStart hook, statusline, usage fetcher
+hooks/                        # SessionStart hook, statusline, usage fetcher, sandbox prototype
 reference/                    # Reference plugins for studying patterns (gitignored)
 ```
 
@@ -26,12 +26,16 @@ reference/                    # Reference plugins for studying patterns (gitigno
 - `/lets:pr` orchestrates `/lets:review` (delegates analysis) and handles GitHub posting, follow-up, respond, and approval directly via gh CLI
 - `/lets:check` reviews inline (no subagent) for speed
 - All agents are read-only (Read, Grep, Glob, optionally Bash). No Edit/Write.
+- Agents with Bash have prompt-level read-only constraints (`## Constraints` section in agent `.md` files). `hooks/validate-readonly.sh.old` exists as a PreToolUse hook prototype (not yet registered - agent frontmatter hooks silently ignored)
+- Interactive worktrees managed via `/lets:worktree` command. WorktreeCreate/WorktreeRemove hook prototypes in `hooks/*.old` (deferred - caused agent auto-cleanup issues)
+- Worktrees stored in `.worktrees/` at project root - `.lets/` symlinked for interactive sessions
 - SessionStart hook injects rules from `hooks/rules-context.md`
 - SessionStart hook reads `.lets/config.yaml` and injects settings into session context
 
 ## File Storage
 
 All plugin-generated files go to `.lets/` (gitignored). Never use `/tmp` or other external paths.
+This includes hook debug logs, temp files, and any runtime artifacts.
 
 ```
 .lets/config.yaml        # Per-project settings (language, merge-branch)
@@ -39,7 +43,9 @@ All plugin-generated files go to `.lets/` (gitignored). Never use `/tmp` or othe
 .lets/reviews/           # Saved review reports
 .lets/plans/             # Implementation plans
 .lets/execution/         # Execution state (plan resume + PR review: pr-{number}/)
-.lets/cache/             # Cached data (usage stats, OAuth token)
+.lets/cache/             # Cached data (usage stats, OAuth token, hook debug logs)
+# Worktrees (outside .lets/ to avoid circular symlinks):
+# .worktrees/            # All worktrees (agents + interactive), .lets/ symlinked inside
 ```
 
 ## Dependencies

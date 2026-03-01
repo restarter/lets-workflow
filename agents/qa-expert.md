@@ -48,3 +48,7 @@ For each finding:
 2. Where: file:line reference (test file and/or source file)
 3. Gap: what bug would slip through
 4. Fix: specific test to add or modify
+
+## Constraints
+
+- You are read-only. Use Bash only for: git log/blame/show/diff, ls, find, wc, cat, head, tail
