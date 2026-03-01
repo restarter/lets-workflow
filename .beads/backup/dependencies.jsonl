@@ -70,6 +70,7 @@
 {"created_at":"2026-03-01T00:02:25Z","created_by":"Dima Slep","depends_on_id":"lets-z3y","issue_id":"lets-z3y.24","type":"parent-child"}
 {"created_at":"2026-03-01T00:12:53Z","created_by":"Dima Slep","depends_on_id":"lets-z3y","issue_id":"lets-z3y.25","type":"parent-child"}
 {"created_at":"2026-03-01T14:06:31Z","created_by":"Dima Slep","depends_on_id":"lets-hpi","issue_id":"lets-z3y.26","type":"parent-child"}
+{"created_at":"2026-03-01T17:45:28Z","created_by":"Dima Slep","depends_on_id":"lets-z3y","issue_id":"lets-z3y.27","type":"parent-child"}
 {"created_at":"2026-02-28T22:01:18Z","created_by":"Dima Slep","depends_on_id":"lets-z3y","issue_id":"lets-z3y.3","type":"parent-child"}
 {"created_at":"2026-02-28T22:01:47Z","created_by":"Dima Slep","depends_on_id":"lets-z3y","issue_id":"lets-z3y.4","type":"parent-child"}
 {"created_at":"2026-02-28T22:02:27Z","created_by":"Dima Slep","depends_on_id":"lets-z3y","issue_id":"lets-z3y.5","type":"parent-child"}
