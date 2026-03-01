@@ -142,6 +142,8 @@ GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
 github: false  /lets:start -> Work -> /lets:check -> /lets:commit -> /lets:done (merge) -> /lets:end
 github: true   /lets:start -> Work -> /lets:check -> /lets:commit -> /lets:done (push + PR) -> /lets:end
 
+Worktree:  /lets:worktree create -> terminal -> /lets:start -> Work -> /lets:done -> /lets:end -> /lets:worktree remove (main repo)
+
 PR review:  /lets:pr <PR> -> discuss -> post -> /lets:pr --follow-up -> /lets:pr --approve
 PR respond: /lets:pr --respond <PR> -> triage -> fix -> reply
 ```

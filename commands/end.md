@@ -146,6 +146,19 @@ DATED_FILE="$ROOT/.lets/sessions/$(date +%Y-%m-%d-%H%M).md"
 bd sync --flush-only
 ```
 
+## Step 7: Worktree Cleanup Reminder
+
+Check if in a worktree:
+
+```bash
+GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
+```
+
+If `$GIT_DIR` contains `worktrees/`:
+- Extract worktree name from path (last segment of worktree directory)
+- If task was completed this session (PR created or merged via `/lets:done`): remind about cleanup
+- If task is still in progress: no reminder needed - user will return to this worktree
+
 ## Output
 
 ```
@@ -156,6 +169,12 @@ Branch: {current branch}
 Tasks in progress: {list with titles}
 Summary saved: .lets/sessions/{dated}.md
 Beads: synced
+```
+
+If in worktree and task is done, add:
+
+```
+Worktree: {name} - after PR merges, clean up with `/lets:worktree remove {name}` from main repo
 ```
 
 Then ask about push in plain text (no LETS box):

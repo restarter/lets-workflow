@@ -102,6 +102,8 @@ Present this to the developer:
 
 ```
 /lets:start -> Work -> /lets:check -> /lets:commit -> /lets:done -> /lets:end
+
+Worktree: /lets:worktree create -> terminal -> /lets:start -> Work -> /lets:done -> /lets:end -> /lets:worktree remove
 ```
 
 ### Essential Skills
