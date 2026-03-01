@@ -127,7 +127,7 @@ bd worktree create .worktrees/feature-auth --branch feature/auth
 | Lifecycle | Session-scoped | Agent-scoped | Manual |
 | Cleanup | Prompt on exit | Auto if no changes | Manual |
 | Beads support | Needs manual `bd worktree` | Via WorktreeCreate hook | Via `bd worktree create` |
-| `.lets/` support | Not available (gitignored) | Not available (gitignored) | Not available (gitignored) |
+| `.lets/` support | Not needed (agents don't use LETS commands) | Not needed (agents don't use LETS commands) | Not available (gitignored) |
 | Hooks | N/A | WorktreeCreate/Remove | N/A |
 | Best for | Interactive parallel sessions | Automated parallel agents | Full control |
 
@@ -137,12 +137,15 @@ bd worktree create .worktrees/feature-auth --branch feature/auth
 
 **Source:** Official docs (code.claude.com/docs/en/agent-teams)
 
-**Status:** Experimental. Requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`.
+**Status:** Available out of the box (as of 2026-03). No env var needed.
 
 ### 2.1 Enable
 
+No configuration needed - Agent Teams are available by default.
+
+Previously required (no longer needed):
 ```json
-// settings.json
+// settings.json - NOT REQUIRED ANYMORE
 {
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
@@ -407,39 +410,21 @@ MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
 ### 4.4 Solution Options
 
 **Option A: Redirect (like beads)**
-Create `.lets/redirect` file in worktree pointing to main `.lets/`:
-```
-../../.lets
-```
-Requires modifying all commands to follow redirect.
+Create `.lets/redirect` file in worktree pointing to main `.lets/`. Requires modifying all commands.
 
 **Option B: Symlink**
-```bash
-ln -s "$(cd "$(git rev-parse --git-common-dir)/.." && pwd)/.lets" "$WORKTREE_ROOT/.lets"
-```
-Transparent to all commands - no code changes needed.
+Transparent to all commands - no code changes needed. But creates circular path if worktrees are inside `.lets/`.
 
 **Option C: Detect and resolve in ROOT derivation**
-Change canonical ROOT pattern from:
-```bash
-ROOT=$(git rev-parse --show-toplevel)
-```
-To:
-```bash
-# Always resolve to main repo root for .lets/ access
-MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
-```
-Requires updating all commands.
+Change canonical ROOT to use `git rev-parse --git-common-dir`. Requires updating all commands.
 
 **Option D: WorktreeCreate hook does setup**
-The `WorktreeCreate` hook automatically creates symlink or redirect when any worktree is created:
-```bash
-#!/bin/bash
-# hooks/worktree-setup.sh
-WORKTREE_PATH="$1"
-MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
-ln -s "$MAIN_ROOT/.lets" "$WORKTREE_PATH/.lets"
-```
+The hook creates symlink or redirect automatically.
+
+**Option E: No .lets/ in worktrees (CHOSEN)**
+Agents with `isolation: worktree` do code work only - they don't run LETS commands (/lets:start, /lets:review, etc.). They only need code + `.beads/redirect` for task context. No `.lets/` access needed at all.
+
+Worktrees stored in `.lets/worktrees/` - already gitignored, no extra .gitignore entries needed.
 
 ### 4.5 Race Conditions
 
