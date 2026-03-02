@@ -47,7 +47,7 @@ User states goal -> Claude proposes approach -> User approves -> Claude executes
 
 ## Agent Rules
 
-- When launching expert agents for `/lets:review`, `/lets:pr`, `/lets:opinion`, `/lets:ask`, `/lets:check`, `/lets:brainstorm` - use ONLY `lets:*` agents (`lets:architect`, `lets:security-expert`, etc.)
+- When launching expert agents for `/lets:review`, `/lets:pr`, `/lets:opinion`, `/lets:ask`, `/lets:check`, `/lets:brainstorm` - use ONLY `lets:*` agents (`lets:architect`, `lets:security`, etc.)
 - Never use `general-purpose` or other non-lets subagent types for expert work
 
 ### Directed Search vs Exploration
@@ -144,7 +144,7 @@ github: true   /lets:start -> Work -> /lets:check -> /lets:commit -> /lets:done 
 
 Worktree:  /lets:worktree create -> terminal -> /lets:start -> Work -> /lets:done -> /lets:end -> /lets:worktree remove (main repo)
 
-Team:      /lets:brainstorm -> /lets:team run -> monitor -> review branches -> merge
+Team:      /lets:brainstorm -> /lets:team run -> monitor -> /lets:review --local -> /lets:done
 
 PR review:  /lets:pr <PR> -> discuss -> post -> /lets:pr --follow-up -> /lets:pr --approve
 PR respond: /lets:pr --respond <PR> -> triage -> fix -> reply

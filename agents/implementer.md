@@ -1,6 +1,6 @@
 ---
 name: implementer
-description: Implementation agent for parallel team execution. Works in isolated worktree, implements a single task independently. Use for /lets:team parallel implementation.
+description: Full-stack implementation specialist for isolated worktree work. Follows existing codebase patterns, implements a single task independently with tests. Use for /lets:team parallel implementation.
 tools: Read, Grep, Glob, Bash, Edit, Write
 model: sonnet
 color: orange

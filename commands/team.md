@@ -1,6 +1,6 @@
 ---
 description: Parallel implementation with Agent Teams - spawn teammates in isolated worktrees
-argument-hint: "[run|status|stop]"
+argument-hint: "[run|status|stop] [--tasks A,B,C]"
 ---
 
 # Team Execution
@@ -12,7 +12,7 @@ Spawn teammates in isolated worktrees for parallel implementation. Each teammate
 ## Step 1: Determine Subcommand
 
 **If argument provided** (e.g., `/lets:team run`), parse it:
-- `run` -> go to Run
+- `run` -> go to Run (pass remaining flags like `--tasks A,B,C` to Step R2)
 - `status` -> go to Status
 - `stop` -> go to Stop
 
