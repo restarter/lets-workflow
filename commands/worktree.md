@@ -182,8 +182,8 @@ git worktree list
 For each worktree (skip the main one):
 
 ```bash
-# Check .beads/redirect
-cat "${WORKTREE_PATH}/.beads/redirect" 2>/dev/null && echo "beads: shared" || echo "beads: local/stale"
+# Check .beads/redirect (use -f test, NOT cat - cat output breaks chaining)
+[ -f "${WORKTREE_PATH}/.beads/redirect" ] && echo "beads: shared" || echo "beads: local/stale"
 
 # Check .lets/ symlink
 [ -L "${WORKTREE_PATH}/.lets" ] && echo "lets: symlinked" || echo "lets: not available"
