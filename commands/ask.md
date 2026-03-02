@@ -34,14 +34,14 @@ Available experts (map to `lets:*` agents):
 | # | Shorthand | Agent (subagent_type) | Expertise |
 |---|-----------|----------------------|-----------|
 | 1 | architect | lets:architect | System design, patterns, SOLID |
-| 2 | security | lets:security-expert | Vulnerabilities, auth, crypto |
-| 3 | backend | lets:backend-expert | API, logic, performance |
-| 4 | frontend | lets:frontend-expert | UI, React/Vue, a11y |
-| 5 | database | lets:database-expert | Schema, queries, migrations |
-| 6 | devops | lets:devops-expert | Docker, CI/CD, infrastructure |
-| 7 | qa | lets:qa-expert | Testing, coverage, strategy |
-| 8 | docs | lets:docs-expert | Documentation, API docs |
-| 9 | compliance | lets:compliance-expert | Project rules, standards |
+| 2 | security | lets:security | Vulnerabilities, auth, crypto |
+| 3 | backend | lets:backend | API, logic, performance |
+| 4 | frontend | lets:frontend | UI, React/Vue, a11y |
+| 5 | database | lets:database | Schema, queries, migrations |
+| 6 | devops | lets:devops | Docker, CI/CD, infrastructure |
+| 7 | qa | lets:qa | Testing, coverage, strategy |
+| 8 | docs | lets:docs | Documentation, API docs |
+| 9 | compliance | lets:compliance | Project rules, standards |
 | 10 | git-historian | lets:git-historian | History, past decisions, blame |
 | 11 | pragmatist | lets:pragmatist | ROI, effort vs value, scope |
 
@@ -88,9 +88,9 @@ If the selected agent appears in this table, append the instruction to the promp
 
 | Agent | Instruction |
 |-------|-------------|
-| `compliance-expert` | "Only flag violations EXPLICITLY mentioned in CLAUDE.md. Quote the rule being violated." |
+| `compliance` | "Only flag violations EXPLICITLY mentioned in CLAUDE.md. Quote the rule being violated." |
 | `git-historian` | "Use git blame and git log to analyze historical context." |
-| `docs-expert` | "Check CLAUDE.md sync, docs/ sync, beads tracking, README/config docs." |
+| `docs` | "Check CLAUDE.md sync, docs/ sync, beads tracking, README/config docs." |
 | `pragmatist` | "Assess if the solution is proportional to the problem. Flag overengineering." |
 
 ## Step 5: Launch Agent

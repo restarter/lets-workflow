@@ -411,12 +411,12 @@ Based on what the feature touches, suggest relevant experts:
 
 | Feature touches... | Suggest expert |
 |--------------------|---------------|
-| Auth/security | `lets:security-expert` |
-| Database/schema | `lets:database-expert` |
-| API endpoints | `lets:backend-expert` |
-| UI/components | `lets:frontend-expert` |
-| Docker/CI/deploy | `lets:devops-expert` |
-| Tests/coverage | `lets:qa-expert` |
+| Auth/security | `lets:security` |
+| Database/schema | `lets:database` |
+| API endpoints | `lets:backend` |
+| UI/components | `lets:frontend` |
+| Docker/CI/deploy | `lets:devops` |
+| Tests/coverage | `lets:qa` |
 
 **Always suggest:** `lets:pragmatist`
 **Never suggest:** `lets:architect` (designed the option - can't evaluate own work)
@@ -475,9 +475,9 @@ If a selected agent appears in this table, append the instruction to its prompt:
 
 | Agent | Instruction |
 |-------|-------------|
-| `compliance-expert` | "Only flag violations EXPLICITLY mentioned in CLAUDE.md. Quote the rule being violated." |
+| `compliance` | "Only flag violations EXPLICITLY mentioned in CLAUDE.md. Quote the rule being violated." |
 | `git-historian` | "Use git blame and git log to analyze historical context." |
-| `docs-expert` | "Check CLAUDE.md sync, docs/ sync, beads tracking, README/config docs." |
+| `docs` | "Check CLAUDE.md sync, docs/ sync, beads tracking, README/config docs." |
 | `pragmatist` | "Assess if the solution is proportional to the problem. Flag overengineering." |
 
 ### Checkpoint: Evaluation Results

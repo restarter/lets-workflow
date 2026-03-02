@@ -1,5 +1,5 @@
 ---
-name: backend-expert
+name: backend
 description: Backend development expert for API design review, business logic analysis, error handling assessment, and performance evaluation. Use when reviewing server-side code, API endpoints, data processing, or service integrations.
 tools: Read, Grep, Glob, Bash
 model: opus

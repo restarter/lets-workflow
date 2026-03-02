@@ -47,7 +47,7 @@ User states goal -> Claude proposes approach -> User approves -> Claude executes
 
 ## Agent Rules
 
-- When launching expert agents for `/lets:review`, `/lets:pr`, `/lets:opinion`, `/lets:ask`, `/lets:check`, `/lets:brainstorm` - use ONLY `lets:*` agents (`lets:architect`, `lets:security-expert`, etc.)
+- When launching expert agents for `/lets:review`, `/lets:pr`, `/lets:opinion`, `/lets:ask`, `/lets:check`, `/lets:brainstorm` - use ONLY `lets:*` agents (`lets:architect`, `lets:security`, etc.)
 - Never use `general-purpose` or other non-lets subagent types for expert work
 
 ### Directed Search vs Exploration

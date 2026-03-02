@@ -99,14 +99,14 @@ Each worktree gets its own branch (`worktree-<name>`), shares the task database 
 | Agent | Expertise |
 |-------|-----------|
 | architect | System design, patterns, SOLID principles |
-| backend-expert | APIs, business logic, error handling |
-| frontend-expert | UI components, state management, accessibility |
-| security-expert | Vulnerabilities, auth, crypto, input validation |
-| database-expert | Schema design, migrations, query optimization |
-| devops-expert | Docker, CI/CD, deployment, infrastructure |
-| qa-expert | Test strategy, coverage, assertions, mocking |
-| compliance-expert | Project standards and coding conventions |
-| docs-expert | API docs, README, inline documentation |
+| backend | APIs, business logic, error handling |
+| frontend | UI components, state management, accessibility |
+| security | Vulnerabilities, auth, crypto, input validation |
+| database | Schema design, migrations, query optimization |
+| devops | Docker, CI/CD, deployment, infrastructure |
+| qa | Test strategy, coverage, assertions, mocking |
+| compliance | Project standards and coding conventions |
+| docs | API docs, README, inline documentation |
 | pragmatist | ROI analysis, overengineering detection |
 | git-historian | Blame analysis, change patterns, refactoring impact |
 | explorer | Codebase structure mapping, pattern identification, integration points |
