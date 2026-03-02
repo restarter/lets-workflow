@@ -23,7 +23,7 @@
 - Parallel independent work (multiple reviewers)
 - Specialized knowledge (security expert, architect)
 - Protecting main context from large outputs
-- Example: `architect`, `security-expert`, `qa-expert`
+- Example: `architect`, `security`, `qa`
 
 ### Rules
 - Code standards (always apply)
@@ -41,8 +41,8 @@ Skill (lets-review) activates:
   2. Selects relevant expert agents (3-10 from pool of 11)
   3. Launches agents in parallel via Task tool:
      - Task(subagent_type="architect", prompt="Review this diff...")
-     - Task(subagent_type="security-expert", prompt="Review for vulnerabilities...")
-     - Task(subagent_type="compliance-expert", prompt="Check project rules...")
+     - Task(subagent_type="security", prompt="Review for vulnerabilities...")
+     - Task(subagent_type="compliance", prompt="Check project rules...")
   4. Filters results (confidence >= 80)
   5. Shows aggregated report
 

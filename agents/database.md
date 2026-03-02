@@ -1,5 +1,5 @@
 ---
-name: database-expert
+name: database
 description: Database expert for schema design review, migration analysis, query optimization, index assessment, and transaction safety. Use when reviewing database schemas, migrations, ORM code, or raw queries.
 tools: Read, Grep, Glob, Bash
 color: magenta

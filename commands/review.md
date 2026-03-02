@@ -128,32 +128,32 @@ Scan the diff for file patterns:
 
 | Pattern | Change Type | Relevant Agents |
 |---------|-------------|-----------------|
-| `Dockerfile`, `docker-compose`, `Makefile` | Infrastructure | devops-expert, security-expert, docs-expert |
-| `*.php` (Laravel/Yii) | Backend PHP | backend-expert, security-expert, architect |
-| `*.py`, `*.go`, `*.java`, `*.rb` | Backend | backend-expert, security-expert, architect |
-| `*.ts`, `*.tsx`, `*.vue`, `*.jsx` | Frontend | frontend-expert, security-expert, docs-expert |
-| `*.kt`, `*.swift` | Mobile | backend-expert, security-expert, architect |
-| `config/*`, `.env*`, `*.yml` | Configuration | security-expert, devops-expert, docs-expert |
-| `migrations/*`, `*.sql` | Database | database-expert, security-expert, architect |
-| `tests/*`, `*.test.*`, `*.spec.*` | Tests | qa-expert, architect |
-| `commands/*.md`, `agents/*.md`, `hooks/*.md` | Skill/Command | compliance-expert, docs-expert, pragmatist |
-| `docs/*`, `*.md`, `CLAUDE.md` | Documentation | docs-expert only |
-| `package.json`, `composer.json` | Dependencies | security-expert, devops-expert |
+| `Dockerfile`, `docker-compose`, `Makefile` | Infrastructure | devops, security, docs |
+| `*.php` (Laravel/Yii) | Backend PHP | backend, security, architect |
+| `*.py`, `*.go`, `*.java`, `*.rb` | Backend | backend, security, architect |
+| `*.ts`, `*.tsx`, `*.vue`, `*.jsx` | Frontend | frontend, security, docs |
+| `*.kt`, `*.swift` | Mobile | backend, security, architect |
+| `config/*`, `.env*`, `*.yml` | Configuration | security, devops, docs |
+| `migrations/*`, `*.sql` | Database | database, security, architect |
+| `tests/*`, `*.test.*`, `*.spec.*` | Tests | qa, architect |
+| `commands/*.md`, `agents/*.md`, `hooks/*.md` | Skill/Command | compliance, docs, pragmatist |
+| `docs/*`, `*.md`, `CLAUDE.md` | Documentation | docs only |
+| `package.json`, `composer.json` | Dependencies | security, devops |
 
 ### 4.2 Agent Catalog
 
 | Agent (subagent_type) | When to Include | Skip If |
 |----------------------|-----------------|---------|
-| `lets:compliance-expert` | ALWAYS | Never skip |
-| `lets:backend-expert` | Any code changes | Docs-only changes |
-| `lets:security-expert` | Code, config, deps | Docs-only, test-only |
+| `lets:compliance` | ALWAYS | Never skip |
+| `lets:backend` | Any code changes | Docs-only changes |
+| `lets:security` | Code, config, deps | Docs-only, test-only |
 | `lets:architect` | Code changes > 50 lines | Small fixes, docs |
 | `lets:git-historian` | Changes to existing code | New files only |
-| `lets:docs-expert` | Any non-trivial change | Tiny fixes |
-| `lets:devops-expert` | Docker, CI, Makefile, scripts | App code only |
-| `lets:database-expert` | Migrations, queries, ORM | No DB changes |
-| `lets:frontend-expert` | JS/TS/CSS changes | Backend only |
-| `lets:qa-expert` | Test file changes | No test changes |
+| `lets:docs` | Any non-trivial change | Tiny fixes |
+| `lets:devops` | Docker, CI, Makefile, scripts | App code only |
+| `lets:database` | Migrations, queries, ORM | No DB changes |
+| `lets:frontend` | JS/TS/CSS changes | Backend only |
+| `lets:qa` | Test file changes | No test changes |
 | `lets:pragmatist` | Large changes (> 200 lines) | Small changes |
 
 ### 4.3 Select Agents
@@ -171,19 +171,19 @@ Changes detected:
 - [ ] Documentation
 
 Selected agents (7 of 11):
-1. compliance-expert (always)
-2. backend-expert (PHP code + bug scanning)
-3. security-expert (PHP + DB + Docker)
+1. compliance (always)
+2. backend (PHP code + bug scanning)
+3. security (PHP + DB + Docker)
 4. architect (>50 lines changed)
-5. database-expert (migrations detected)
-6. devops-expert (Docker changes)
+5. database (migrations detected)
+6. devops (Docker changes)
 7. pragmatist (>200 lines total)
 
 Skipped:
-- frontend-expert (no frontend changes)
-- qa-expert (no test files)
+- frontend (no frontend changes)
+- qa (no test files)
 - git-historian (mostly new files)
-- docs-expert (will check inline)
+- docs (will check inline)
 ```
 
 **RULE: Default is INCLUDE. Only skip if clearly irrelevant.**
@@ -234,9 +234,9 @@ These instructions are **required** for agents that need project-specific contex
 
 | Agent | Why | Instruction |
 |-------|-----|-------------|
-| `lets:compliance-expert` | Needs rules to check against | "Only flag violations EXPLICITLY mentioned in CLAUDE.md. Quote the rule being violated." |
+| `lets:compliance` | Needs rules to check against | "Only flag violations EXPLICITLY mentioned in CLAUDE.md. Quote the rule being violated." |
 | `lets:git-historian` | Needs to access project history | "Use git blame and git log to check historical context of modified files." |
-| `lets:docs-expert` | Needs to know what docs exist | "Check CLAUDE.md sync, docs/ sync, beads tracking, README/config docs." |
+| `lets:docs` | Needs to know what docs exist | "Check CLAUDE.md sync, docs/ sync, beads tracking, README/config docs." |
 | `lets:pragmatist` | Specific review lens | "Assess if the solution is proportional to the problem. Flag overengineering." |
 
 ## Step 6: Filter & Aggregate Results
@@ -311,7 +311,7 @@ Write to `.lets/reviews/{date}-{mode}.json`:
       "title": "SQL injection in search query",
       "severity": "critical",
       "confidence": 95,
-      "agent": "security-expert",
+      "agent": "security",
       "file": "src/search.py",
       "line": 42,
       "description": "User input concatenated directly into SQL query",

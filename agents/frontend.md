@@ -1,5 +1,5 @@
 ---
-name: frontend-expert
+name: frontend
 description: Frontend development expert for UI component review, state management analysis, accessibility assessment, and bundle optimization. Use when reviewing React, Vue, TypeScript, CSS, or any client-side code.
 tools: Read, Grep, Glob
 color: magenta
