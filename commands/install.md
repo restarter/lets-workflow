@@ -26,11 +26,6 @@ Install these plugins (check Claude Code docs for current installation method):
 
 **Required:**
 - **beads** - task tracking across sessions (by steveyegge)
-- **superpowers** - development workflows: brainstorming, TDD, debugging (by obra)
-
-**Recommended:**
-- **feature-dev** - guided feature development with codebase understanding
-
 **After installation, restart Claude Code.**
 
 ## Step 3: Initialize Project (if needed)
@@ -104,6 +99,8 @@ Present this to the developer:
 /lets:start -> Work -> /lets:check -> /lets:commit -> /lets:done -> /lets:end
 
 Worktree: /lets:worktree create -> terminal -> /lets:start -> Work -> /lets:done -> /lets:end -> /lets:worktree remove
+
+Team:     /lets:brainstorm -> /lets:team run -> monitor -> /lets:review --local -> /lets:done
 ```
 
 ### Essential Skills
@@ -174,8 +171,6 @@ Run through and verify:
 - [ ] Claude Code installed and running
 - [ ] Marketplace added (`claude plugin marketplace list`)
 - [ ] `beads` plugin installed
-- [ ] `superpowers` plugin installed
-- [ ] `feature-dev` plugin installed
 - [ ] Claude Code restarted after plugin install
 - [ ] `.beads/` directory exists
 - [ ] `.lets/` directory exists and gitignored

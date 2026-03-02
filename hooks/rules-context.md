@@ -47,7 +47,7 @@ User states goal -> Claude proposes approach -> User approves -> Claude executes
 
 ## Agent Rules
 
-- When launching expert agents for `/lets:review`, `/lets:pr`, `/lets:opinion`, `/lets:ask`, `/lets:check`, `/lets:brainstorm` - use ONLY `lets:*` agents (`lets:architect`, `lets:security`, etc.)
+- When launching expert agents for `/lets:review`, `/lets:pr`, `/lets:opinion`, `/lets:ask`, `/lets:brainstorm` - use ONLY `lets:*` agents (`lets:architect`, `lets:security`, etc.)
 - Never use `general-purpose` or other non-lets subagent types for expert work
 
 ### Directed Search vs Exploration
@@ -179,17 +179,8 @@ Never work without a tracked task. User must pick existing task or create new on
 | Size | Action |
 |------|--------|
 | Quick/Small (< 2 hrs) | Work directly |
-| Medium (2-8 hrs) | Suggest `/feature-dev` or `/lets:brainstorm` |
-| Large (> 8 hrs) | Require planning + break into subtasks |
-
-### Choosing Planning Skill
-
-| Goal clarity | Use |
-|--------------|-----|
-| Clear goal ("Add X to Y") | `/feature-dev` - structured implementation |
-| Unclear goal ("Improve Z", "Not sure how...") | `/lets:brainstorm` - explores options first |
-
-**Quick test:** Can user write a 1-sentence requirement? YES -> `/feature-dev`. NO -> `/lets:brainstorm` first.
+| Medium (2-8 hrs) | Suggest `/lets:brainstorm` then `/lets:execute` |
+| Large (> 8 hrs) | Require `/lets:brainstorm` + break into subtasks |
 
 After `/lets:brainstorm` produces a plan, use `/lets:execute` to implement it step by step.
 
@@ -293,7 +284,7 @@ This applies when: presenting implementation approaches, choosing between soluti
 ## Key Principles
 
 1. **Every session has a task** - no random work without tracking
-2. **Big tasks need planning** - use `/feature-dev` or `/lets:brainstorm`
+2. **Big tasks need planning** - use `/lets:brainstorm` + `/lets:execute`
 3. **Document everything** - beads is the source of truth
 4. **Git + Beads linked** - commits reference tasks, tasks track commits
 5. **Skills guide the flow** - each skill prompts next step
