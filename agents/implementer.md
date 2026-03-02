@@ -49,5 +49,3 @@ When complete, provide:
 - List of files created/modified
 - Test results (if applicable)
 - Any concerns or follow-up items for the lead
-
-# Sonnet debug test
