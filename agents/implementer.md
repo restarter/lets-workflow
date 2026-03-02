@@ -49,8 +49,3 @@ When complete, provide:
 - List of files created/modified
 - Test results (if applicable)
 - Any concerns or follow-up items for the lead
-
-## Architecture Note
-
-This agent is spawned exclusively by /lets:team in isolated worktrees.
-# Debug test
