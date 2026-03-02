@@ -50,20 +50,6 @@ When complete, provide:
 - Test results (if applicable)
 - Any concerns or follow-up items for the lead
 
-## Usage Example
+## Note
 
-Spawned by `/lets:team` during parallel execution. Each implementer gets one task and an isolated worktree:
-
-```
-Agent(
-  subagent_type="lets:implementer",
-  name="{task-slug}-{index}",
-  team_name="lets-team-{timestamp}",
-  description="Implement {task-id}",
-  prompt="{teammate prompt with task details, boundaries, project rules}",
-  isolation="worktree",
-  mode="plan"
-)
-```
-
-The agent starts in plan mode - the team lead reviews and approves the plan before implementation begins.
+This agent is spawned exclusively by `/lets:team` command in isolated worktrees with plan approval required.
