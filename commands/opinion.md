@@ -23,16 +23,16 @@ Based on the decision topic, select 3-5 agents:
 
 | Decision about... | Agents to launch |
 |-------------------|-----------------|
-| Auth/tokens/encryption | security-expert, architect, backend-expert, pragmatist |
-| DB schema/migrations | database-expert, architect, backend-expert, pragmatist |
-| Docker/CI/deploy | devops-expert, security-expert, architect, pragmatist |
-| API design | architect, backend-expert, security-expert, pragmatist |
-| UI/UX/components | frontend-expert, architect, qa-expert, pragmatist |
-| Testing strategy | qa-expert, backend-expert, architect, pragmatist |
-| Performance | backend-expert, database-expert, devops-expert, pragmatist |
-| General architecture | architect, security-expert, backend-expert, pragmatist |
-| Documentation | docs-expert, architect, compliance-expert, pragmatist |
-| Code quality | architect, compliance-expert, qa-expert, pragmatist |
+| Auth/tokens/encryption | security, architect, backend, pragmatist |
+| DB schema/migrations | database, architect, backend, pragmatist |
+| Docker/CI/deploy | devops, security, architect, pragmatist |
+| API design | architect, backend, security, pragmatist |
+| UI/UX/components | frontend, architect, qa, pragmatist |
+| Testing strategy | qa, backend, architect, pragmatist |
+| Performance | backend, database, devops, pragmatist |
+| General architecture | architect, security, backend, pragmatist |
+| Documentation | docs, architect, compliance, pragmatist |
+| Code quality | architect, compliance, qa, pragmatist |
 
 **Rules:**
 - Minimum 3 agents, maximum 5
@@ -52,9 +52,9 @@ If a selected agent appears in this table, append the instruction to its prompt:
 
 | Agent | Instruction |
 |-------|-------------|
-| `compliance-expert` | "Only flag violations EXPLICITLY mentioned in CLAUDE.md. Quote the rule being violated." |
+| `compliance` | "Only flag violations EXPLICITLY mentioned in CLAUDE.md. Quote the rule being violated." |
 | `git-historian` | "Use git blame and git log to analyze historical context." |
-| `docs-expert` | "Check CLAUDE.md sync, docs/ sync, beads tracking, README/config docs." |
+| `docs` | "Check CLAUDE.md sync, docs/ sync, beads tracking, README/config docs." |
 | `pragmatist` | "Assess if the solution is proportional to the problem. Flag overengineering." |
 
 ## Step 5: Launch Agents in Parallel
