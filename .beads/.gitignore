@@ -20,6 +20,9 @@ dolt-monitor.*
 # Must not be committed as paths would be wrong in other clones
 redirect
 
+# JSONL backup (disabled - using dolt remote for sync)
+backup/
+
 # Sync state (local-only, per-machine)
 # These files are machine-specific and should not be shared across clones
 .sync.lock
