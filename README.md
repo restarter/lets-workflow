@@ -23,15 +23,16 @@ git clone https://github.com/nickolay-umbo/lets-plugin-claude ~/.claude/plugins/
 | `/lets:start` | Start session - restore context, show tasks, select work item |
 | `/lets:end` | End session - save progress, sync tasks, create summary |
 | `/lets:commit` | Commit with review and conventional commit format |
-| `/lets:done` | Finish task - create PR or merge, close task |
+| `/lets:done` | Finish task - create PR (github mode) or merge locally |
 | `/lets:check` | Quick inline sanity check (5-perspective review) |
 | `/lets:review` | Full code review (up to 11 specialized agents, ~2-3 min) |
 | `/lets:opinion` | Technical decision analysis (3-5 expert agents in parallel) |
 | `/lets:ask` | Quick expert consultation (single agent) |
 | `/lets:brainstorm` | Explore ideas and requirements before implementation |
 | `/lets:execute` | Execute plan from `/lets:brainstorm` step by step |
-| `/lets:pr` | PR review lifecycle - analyze, discuss, post inline, follow-up, approve |
+| `/lets:pr` | PR review lifecycle - analyze, discuss, post inline, follow-up, respond, approve |
 | `/lets:worktree` | Create/manage worktrees for parallel sessions |
+| `/lets:team` | Parallel implementation with Agent Teams (run, status, stop) |
 | `/lets:status` | Task overview and project status |
 | `/lets:note` | Add note to active task |
 | `/lets:install` | First-time setup and dependency check |
@@ -58,6 +59,7 @@ git clone https://github.com/nickolay-umbo/lets-plugin-claude ~/.claude/plugins/
 |------|---------|------|
 | Quick pre-commit check | `/lets:check` | ~30s |
 | Full review of local changes | `/lets:review --local` | ~2-3 min |
+| Review an implementation plan | `/lets:review --plan` | ~2-3 min |
 | Review a GitHub PR | `/lets:review <PR-url>` | ~2-3 min |
 | Full PR lifecycle | `/lets:pr <PR>` | Analyze, discuss, post, follow-up, approve |
 
@@ -92,9 +94,19 @@ claude
 
 Each worktree gets its own branch (`worktree-<name>`), shares the task database and config via symlinks. Sessions run independently with per-branch tracking.
 
+### Parallel Implementation (Teams)
+
+For multiple independent tasks, `/lets:team` spawns parallel agents in isolated worktrees:
+
+```
+/lets:brainstorm -> /lets:team run -> monitor & approve plans -> /lets:review --local -> /lets:done
+```
+
+Each teammate gets one task, works in an isolated worktree with plan approval from the lead, and commits are auto cherry-picked back to the current branch.
+
 ## Expert Agents
 
-12 specialized agents for code review, exploration, and technical analysis:
+13 specialized agents for code review, exploration, implementation, and technical analysis:
 
 | Agent | Expertise |
 |-------|-----------|
@@ -110,8 +122,9 @@ Each worktree gets its own branch (`worktree-<name>`), shares the task database 
 | pragmatist | ROI analysis, overengineering detection |
 | git-historian | Blame analysis, change patterns, refactoring impact |
 | explorer | Codebase structure mapping, pattern identification, integration points |
+| implementer | Full-stack implementation in isolated worktrees for `/lets:team` |
 
-Agents are read-only - they analyze code but never modify it. Commands decide which agents to launch based on the type of changes being reviewed.
+Agents are read-only - they analyze code but never modify it. Exception: the implementer agent has Edit/Write/Bash for parallel implementation in isolated worktrees via `/lets:team`. Commands decide which agents to launch based on the type of changes being reviewed.
 
 `/lets:check` reviews inline (no subagent) for fast feedback.
 

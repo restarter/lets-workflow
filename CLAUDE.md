@@ -7,7 +7,7 @@ Claude Code plugin for development workflow with session management, code review
 ```
 .claude-plugin/plugin.json   # Plugin manifest
 commands/                     # Slash commands (/lets:start, /lets:done, /lets:review, etc.)
-agents/                       # Expert agents (review, opinion, ask, brainstorm)
+agents/                       # Expert agents (review, opinion, ask, brainstorm, team implementation)
 hooks/                        # SessionStart hook, statusline, usage fetcher, sandbox prototype
 reference/                    # Reference plugins for studying patterns (gitignored)
 ```
@@ -15,7 +15,7 @@ reference/                    # Reference plugins for studying patterns (gitigno
 ## Key Concepts
 
 - **Commands** = user-initiated workflows (sessions, commits, reviews)
-- **Agents** = experts dispatched by commands. `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:brainstorm` use specialized agents
+- **Agents** = experts dispatched by commands. `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:brainstorm`, `/lets:team` use specialized agents
 - **Orchestrators** = commands that delegate to other commands. `/lets:pr` orchestrates `/lets:review` for full PR lifecycle
 - **Hooks** = SessionStart injects workflow rules; statusline renders branded status bar with usage stats
 
@@ -28,7 +28,7 @@ reference/                    # Reference plugins for studying patterns (gitigno
 - All agents are read-only (Read, Grep, Glob, optionally Bash). No Edit/Write. Exception: `agents/implementer.md` has Edit/Write/Bash for `/lets:team` parallel implementation in isolated worktrees.
 - `/lets:team` uses Agent Teams (TeamCreate, Agent with isolation: worktree) for parallel implementation. All other commands use subagents for analysis.
 - Agents with Bash have prompt-level read-only constraints (`## Constraints` section in agent `.md` files). `hooks/validate-readonly.sh.old` exists as a PreToolUse hook prototype (not yet registered - agent frontmatter hooks silently ignored)
-- Interactive worktrees managed via `/lets:worktree` command. WorktreeCreate/WorktreeRemove hook prototypes in `hooks/*.old` (deferred - caused agent auto-cleanup issues)
+- Interactive worktrees managed via `/lets:worktree` command. Hook prototypes `hooks/worktree-setup.sh.old` and `hooks/worktree-cleanup.sh.old` (deferred - caused agent auto-cleanup issues)
 - Worktrees stored in `.worktrees/` at project root - `.lets/` symlinked for interactive sessions
 - SessionStart hook injects rules from `hooks/rules-context.md`
 - SessionStart hook reads `.lets/config.yaml` and injects settings into session context
@@ -43,10 +43,10 @@ This includes hook debug logs, temp files, and any runtime artifacts.
 .lets/sessions/          # Session summaries, session-start-ref
 .lets/reviews/           # Saved review reports
 .lets/plans/             # Implementation plans
-.lets/execution/         # Execution state (plan resume + PR review: pr-{number}/)
+.lets/execution/         # Execution state (plan resume, PR review: pr-{number}/, team records: team-*.json)
 .lets/cache/             # Cached data (usage stats, OAuth token, hook debug logs)
 # Worktrees (outside .lets/ to avoid circular symlinks):
-# .worktrees/            # All worktrees (agents + interactive), .lets/ symlinked inside
+# .worktrees/            # Interactive worktrees only (agent worktrees use native Claude Code behavior)
 ```
 
 ## Dependencies

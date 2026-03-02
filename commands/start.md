@@ -194,19 +194,8 @@ Once task is selected, assess complexity:
 |------|--------|
 | Quick fix (< 30 min) | "OK, let's do it" |
 | Small (< 2 hrs) | "OK, let's do it" |
-| Medium (2-8 hrs) | Suggest planning skill (see below) |
-| Large (> 8 hrs) | Require planning + break into subtasks |
-
-### Which Planning Skill?
-
-| Goal clarity | Use |
-|--------------|-----|
-| Clear goal ("Add X to Y") | `/feature-dev` - structured implementation |
-| Unclear goal ("Improve Z", "Not sure how...") | `/lets:brainstorm` - explores options, asks questions |
-
-**Quick test:** Can user write a 1-sentence requirement?
-- YES - `/feature-dev`
-- NO - `/lets:brainstorm` first, then `/lets:execute`
+| Medium (2-8 hrs) | Suggest `/lets:brainstorm` then `/lets:execute` |
+| Large (> 8 hrs) | Require `/lets:brainstorm` + break into subtasks |
 
 ## Step 8: Ready to Work
 
@@ -234,5 +223,5 @@ After task is selected and branch is ready, show reminders and welcome box.
 - If uncommitted changes exist, ask user what to do with them first
 - If previous session had in-progress work, highlight it
 - If user is already on the correct feature branch, skip branch creation
-- Suggest `/feature-dev` or `/lets:brainstorm` for medium/large tasks
+- Suggest `/lets:brainstorm` for medium/large tasks
 - Respond in user's language (Ukrainian/Russian/English)
