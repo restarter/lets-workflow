@@ -25,7 +25,8 @@ reference/                    # Reference plugins for studying patterns (gitigno
 - `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:brainstorm` use `subagent_type: "lets:agent-name"` to dispatch agents via Task tool
 - `/lets:pr` orchestrates `/lets:review` (delegates analysis) and handles GitHub posting, follow-up, respond, and approval directly via gh CLI
 - `/lets:check` reviews inline (no subagent) for speed
-- All agents are read-only (Read, Grep, Glob, optionally Bash). No Edit/Write.
+- All agents are read-only (Read, Grep, Glob, optionally Bash). No Edit/Write. Exception: `agents/implementer.md` has Edit/Write/Bash for `/lets:team` parallel implementation in isolated worktrees.
+- `/lets:team` uses Agent Teams (TeamCreate, Agent with isolation: worktree) for parallel implementation. All other commands use subagents for analysis.
 - Agents with Bash have prompt-level read-only constraints (`## Constraints` section in agent `.md` files). `hooks/validate-readonly.sh.old` exists as a PreToolUse hook prototype (not yet registered - agent frontmatter hooks silently ignored)
 - Interactive worktrees managed via `/lets:worktree` command. WorktreeCreate/WorktreeRemove hook prototypes in `hooks/*.old` (deferred - caused agent auto-cleanup issues)
 - Worktrees stored in `.worktrees/` at project root - `.lets/` symlinked for interactive sessions

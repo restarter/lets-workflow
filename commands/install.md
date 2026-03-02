@@ -120,6 +120,7 @@ Worktree: /lets:worktree create -> terminal -> /lets:start -> Work -> /lets:done
 | `/lets:opinion` | Expert | Technical decision needed |
 | `/lets:ask` | Expert | Quick question to one expert |
 | `/lets:worktree` | Utility | Create/manage worktrees for parallel sessions |
+| `/lets:team` | Utility | Parallel implementation with Agent Teams |
 | `/lets:status` | Utility | Task overview anytime |
 | `/lets:note` | Utility | Add note to active task |
 

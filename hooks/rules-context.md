@@ -144,6 +144,8 @@ github: true   /lets:start -> Work -> /lets:check -> /lets:commit -> /lets:done 
 
 Worktree:  /lets:worktree create -> terminal -> /lets:start -> Work -> /lets:done -> /lets:end -> /lets:worktree remove (main repo)
 
+Team:      /lets:brainstorm -> /lets:team run -> monitor -> /lets:review --local -> /lets:done
+
 PR review:  /lets:pr <PR> -> discuss -> post -> /lets:pr --follow-up -> /lets:pr --approve
 PR respond: /lets:pr --respond <PR> -> triage -> fix -> reply
 ```
@@ -284,6 +286,7 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:execute` | Planning | Execute plan from /lets:brainstorm step by step |
 | `/lets:status` | Utility | Task overview and project status |
 | `/lets:worktree` | Utility | Create/manage interactive worktrees for parallel work |
+| `/lets:team` | Utility | Parallel implementation with Agent Teams (run, status, stop) |
 | `/lets:note` | Utility | Add note to active task |
 | `/lets:install` | Setup | First-time setup |
 
