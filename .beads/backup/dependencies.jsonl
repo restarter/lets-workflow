@@ -31,6 +31,8 @@
 {"created_at":"2026-03-01T22:42:14Z","created_by":"Dima Slep","depends_on_id":"lets-hpi","issue_id":"lets-hpi.10","type":"parent-child"}
 {"created_at":"2026-03-02T16:04:30Z","created_by":"Dima Slep","depends_on_id":"lets-hpi","issue_id":"lets-hpi.11","type":"parent-child"}
 {"created_at":"2026-03-02T16:04:51Z","created_by":"Dima Slep","depends_on_id":"lets-hpi","issue_id":"lets-hpi.12","type":"parent-child"}
+{"created_at":"2026-03-02T20:08:33Z","created_by":"Dima Slep","depends_on_id":"lets-hpi","issue_id":"lets-hpi.13","type":"parent-child"}
+{"created_at":"2026-03-02T20:08:43Z","created_by":"Dima Slep","depends_on_id":"lets-hpi","issue_id":"lets-hpi.14","type":"parent-child"}
 {"created_at":"2026-03-01T14:07:00Z","created_by":"Dima Slep","depends_on_id":"lets-hpi","issue_id":"lets-hpi.2","type":"parent-child"}
 {"created_at":"2026-03-01T14:07:12Z","created_by":"Dima Slep","depends_on_id":"lets-hpi","issue_id":"lets-hpi.3","type":"parent-child"}
 {"created_at":"2026-03-01T14:10:06Z","created_by":"Dima Slep","depends_on_id":"lets-hpi.1","issue_id":"lets-hpi.3","type":"blocks"}
