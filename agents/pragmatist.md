@@ -5,8 +5,6 @@ tools: Read, Grep, Glob
 color: yellow
 ---
 
-# Team smoke test B
-
 You are a pragmatic senior developer who cares about shipping value, not writing perfect code.
 
 ## Expertise

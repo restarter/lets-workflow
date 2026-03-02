@@ -142,6 +142,11 @@ AskUserQuestion(
 
 ### Step R6: Create Team
 
+Save the current HEAD as base for later commit verification:
+```bash
+BASE_SHA=$(git rev-parse HEAD)
+```
+
 ```
 TeamCreate(team_name="lets-team-{YYYYMMDD-HHMM}")
 ```
@@ -310,10 +315,14 @@ Waiting for: {list of teammates still planning}
 
 After plan approval, teammates implement and go idle when done.
 
-For each idle notification:
-- Check `TaskList()` - is the teammate's task marked `completed`?
-- If completed: note it, show progress
-- If NOT completed but idle - teammate may be stuck:
+**Idle notification handling:**
+- Teammates send idle notifications after every turn - this is normal
+- **Ignore idle from teammates whose task is already `completed`** in TaskList - they're just waiting for shutdown
+- Only act on idle notifications when the teammate's task is still `in_progress`
+
+For each idle notification (task still in_progress):
+- First idle: ignore, give more time (normal between turns)
+- Second idle with no progress: ask user
 
 ```
 AskUserQuestion(
@@ -334,7 +343,7 @@ AskUserQuestion(
 - **Message** -> `SendMessage(type: "message", recipient: "{name}", content: "Status check - are you blocked on something?")`
 - **Stop** -> `SendMessage(type: "shutdown_request", recipient: "{name}", content: "Lead stopping this task.")`
 
-**Progress display** (update after each completion):
+**Progress display** (update after each task completion):
 ```
 ## Team Progress
 
@@ -363,93 +372,36 @@ SendMessage(
 
 Wait for shutdown confirmations.
 
-**10.2: Discover teammate branches**
+**10.2: Verify commits on current branch**
 
-Branch discovery algorithm (in order of reliability):
-
-1. **Read team config** (primary):
-```bash
-cat ~/.claude/teams/{team-name}/config.json 2>/dev/null
-```
-Parse `members` array - map teammate names to their agent info.
-
-2. **Git worktree list** (reliable fallback):
-```bash
-git worktree list --porcelain | grep -A2 "/.claude/worktrees/" | grep "branch" | sed 's/branch refs\/heads\///'
-```
-
-3. **Recent branches** (last resort):
-```bash
-git branch --sort=-committerdate --format='%(refname:short) %(committerdate:iso)' | head -20
-```
-
-Store `{teammate-name -> branch-name}` mapping for trial merge and reporting.
-
-**10.3: Trial merge for conflict detection**
-
-**IMPORTANT:** All teammates MUST be shut down before trial merge. Worktrees hold a ref on their branch.
+`isolation: "worktree"` auto cherry-picks teammate commits onto the current branch when worktrees are cleaned up. No separate branches survive - all work lands directly on the branch you started from.
 
 ```bash
-# Verify no active worktrees remain
-ACTIVE_WORKTREES=$(git worktree list --porcelain | grep -c "/.claude/worktrees/")
-if [ "$ACTIVE_WORKTREES" -gt 0 ]; then
-  echo "WARNING: $ACTIVE_WORKTREES worktrees still active. Wait for teammate shutdown."
-  # Do NOT proceed with trial merge
-fi
+# BASE_SHA was saved at team start (R6)
+# Show all commits since team started
+git log --oneline ${BASE_SHA}..HEAD
 ```
 
-Run trial merge using configured merge-branch:
+Verify each teammate's commit is present. If a commit is missing (teammate was stopped mid-work), note it.
 
-```bash
-MERGE_BRANCH={merge-branch from LETS Config}
-BRANCHES="{space-separated list of teammate branches}"
-
-git stash --include-untracked 2>/dev/null
-git checkout -b lets-trial-merge "$MERGE_BRANCH"
-
-CLEAN=true
-CONFLICT_BRANCH=""
-for BRANCH in $BRANCHES; do
-  if ! git merge --no-ff "$BRANCH" -m "trial merge $BRANCH" 2>/dev/null; then
-    CLEAN=false
-    CONFLICT_BRANCH="$BRANCH"
-    git merge --abort
-    break
-  fi
-done
-
-# Report result
-if [ "$CLEAN" = true ]; then
-  echo "All branches merge cleanly"
-else
-  echo "Conflict detected merging: $CONFLICT_BRANCH"
-fi
-
-# Cleanup - return to original branch
-git checkout -
-git branch -D lets-trial-merge
-git stash pop 2>/dev/null
-```
-
-**10.4: Record in beads**
+**10.3: Record in beads**
 
 For each completed task:
 ```bash
 bd comments add <task-id> "## Team execution {YYYY-MM-DD}
 
 Teammate: {name}
-Branch: {branch}
 Commits:
-$(git log {merge-branch}..{branch} --oneline)"
+$(git log --oneline ${BASE_SHA}..HEAD --grep='Task: {task-id}')"
 ```
 
-**10.5: Cleanup team**
+**10.4: Cleanup team**
 
 ```
 TeamDelete()
 ```
 
-**10.6: Save completion record**
+**10.5: Save completion record**
 
 Write `.lets/execution/team-{team-name}.json`:
 
@@ -458,17 +410,14 @@ Write `.lets/execution/team-{team-name}.json`:
   "team_name": "lets-team-{timestamp}",
   "created": "{ISO timestamp}",
   "completed": "{ISO timestamp}",
-  "merge_branch": "{configured merge-branch}",
   "base_sha": "{HEAD at team start}",
   "status": "completed",
-  "trial_merge": "clean|conflict:{branch}",
   "tasks": [
     {
       "task_id": "{beads-id}",
       "teammate": "{name}",
-      "branch": "{worktree-branch}",
       "status": "completed|stopped",
-      "commits": 3
+      "commits": ["abc1234"]
     }
   ]
 }
@@ -479,27 +428,17 @@ Write `.lets/execution/team-{team-name}.json`:
 ```
 ## Team Complete
 
-| Task | Branch | Commits | Status |
-|------|--------|---------|--------|
-| **Fix auth flow** (`proj-a1`) | worktree-abc | 3 | done |
-| **Add search API** (`proj-b2`) | worktree-def | 5 | done |
+| Task | Teammate | Commits | Status |
+|------|----------|---------|--------|
+| **Fix auth flow** (`proj-a1`) | fix-auth-1 | 3 | done |
+| **Add search API** (`proj-b2`) | add-search-2 | 5 | done |
 
-Trial merge: {clean / conflict in {branch}}
-
-{if clean}
-All branches merge cleanly with {merge-branch}.
-{end if}
-
-{if conflict}
-Conflict detected merging {branch}. Merge branches manually in order, resolving conflicts.
-{end if}
-
-Branches ready for review. Each branch has independent changes on top of {merge-branch}.
+All commits landed on current branch ({branch-name}).
 ```
 
 ```
 ┌─ LETS ──────────────────────────────────┐
-│  Review?  /lets:review {branch}         │
+│  Review?  /lets:review --local          │
 │  Done?    /lets:done                    │
 └─────────────────────────────────────────┘
 ```
@@ -522,8 +461,8 @@ If no active team found:
 > "No active team. Use `/lets:team run` to start one."
 
 If team dir exists but session is different (orphaned):
-> "Found orphaned team {name}. Teammates may be stopped. Branches preserved."
-> Show branches from state file or `git branch --list "worktree-*"`
+> "Found orphaned team {name}. Teammates may be stopped. Check state file for details."
+> Show task status from `.lets/execution/team-*.json` if available
 
 ### Step S2: Read Team State
 
@@ -538,18 +477,18 @@ Read `~/.claude/teams/{team-name}/config.json` for member list.
 If state file exists with `status: "running"` but team dir is gone:
 - Mark as orphaned
 - Show which tasks were completed vs failed
-- List preserved branches
-- Suggest: "Run `/lets:team stop` to clean up, or manually review branches."
+- Note: teammate commits are on the branch where the team was started (auto cherry-picked on worktree cleanup)
+- Suggest: "Run `/lets:team stop` to clean up, or check `git log` for teammate commits."
 
 ### Step S4: Output
 
 ```
 ## Team Status: {team-name}
 
-| Teammate | Task | Status | Branch |
-|----------|------|--------|--------|
-| fix-auth-1 | **Fix auth** (`proj-a1`) | completed | worktree-abc |
-| add-search-2 | **Search** (`proj-b2`) | in_progress | worktree-def |
+| Teammate | Task | Status |
+|----------|------|--------|
+| fix-auth-1 | **Fix auth** (`proj-a1`) | completed |
+| add-search-2 | **Search** (`proj-b2`) | in_progress |
 
 Progress: 1/2 completed
 Started: {time}
@@ -617,14 +556,13 @@ Include list of completed and in-progress tasks for recovery reference.
 ## Team Stopped
 
 Teammates stopped: {N}
-Branches preserved: {list}
+Completed commits are on the current branch (auto cherry-picked on worktree cleanup).
+In-progress work from stopped teammates may be lost if they didn't commit before shutdown.
 
-In-progress work is on worktree branches. Review or discard:
-  git diff {merge-branch}...{branch}  # review changes
-  git branch -D {branch}              # discard
+Check teammate commits: git log --oneline ${BASE_SHA}..HEAD
 
 ┌─ LETS ──────────────────────────────────┐
-│  Review?  /lets:review                  │
+│  Review?  /lets:review --local          │
 └─────────────────────────────────────────┘
 ```
 
@@ -637,6 +575,6 @@ In-progress work is on worktree branches. Review or discard:
 - **Lead handles beads** - teammates don't touch beads, lead records everything
 - **Plan approval required** - all teammates spawn with `mode: "plan"`, lead reviews before implementation
 - **Parallel spawn** - all teammates launched in a single message for concurrent work
-- **Graceful shutdown** - always request shutdown before cleanup, preserve branches
-- **Trial merge before reporting** - detect conflicts early, report to user
+- **Graceful shutdown** - always request shutdown before cleanup
+- **Auto cherry-pick** - `isolation: "worktree"` auto cherry-picks commits onto current branch on cleanup. No separate branches to merge.
 - Respond in user's language
