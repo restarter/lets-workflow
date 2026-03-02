@@ -10,6 +10,8 @@ bd.sock
 bd.sock.startlock
 sync-state.json
 last-touched
+dolt-server.*
+dolt-monitor.*
 
 # Local version tracking (prevents upgrade notification spam after git ops)
 .local_version
