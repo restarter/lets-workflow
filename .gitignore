@@ -7,5 +7,7 @@ AGENTS.md
 .dolt/
 *.db
 *.old
+dolt-server.*
+dolt-monitor.*
 .worktrees/
 .claude/worktrees/
