@@ -5,7 +5,10 @@
 .idea/
 AGENTS.md
 .dolt/
+.beads/hooks/
 *.db
 *.old
+dolt-server.*
+dolt-monitor.*
 .worktrees/
 .claude/worktrees/
