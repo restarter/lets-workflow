@@ -5,6 +5,7 @@
 .idea/
 AGENTS.md
 .dolt/
+.beads/hooks/
 *.db
 *.old
 dolt-server.*
