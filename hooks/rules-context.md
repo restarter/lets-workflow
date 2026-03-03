@@ -14,7 +14,7 @@ These rules are injected by the LETS plugin and apply to every conversation.
 
 The SessionStart hook injects `## LETS Config` section above with project context and user settings. Use these values:
 
-- **`project-root`** - absolute path to project root. Use this instead of running `git rev-parse --show-toplevel`. Always available in git repos.
+- **`project-root`** - absolute path to project root. Use this instead of running `git rev-parse --show-toplevel`. Always available in git repos. In command bash snippets, use as `$ROOT`. Never run `git rev-parse --show-toplevel` to obtain the project root.
 - **`merge-branch`** - target branch for merges, PR base, and diff comparisons. Use this instead of hardcoded `main`. When running commands like `git log`, `git diff`, `git merge`, `git checkout -b` that need a base branch - use the configured value. Fallback: `git symbolic-ref refs/remotes/origin/HEAD --short 2>/dev/null || echo main`.
 - **`language`** - default response language. Use this when user's language isn't clear from their message. Value is a full language name (English, Ukrainian, Italian, etc).
 - **`github`** - GitHub PR workflow mode (`true`/`false`, default `false`). When `true`: `/lets:done` pushes branch and creates PR via `gh pr create` instead of local merge, `/lets:status` shows open PRs. Requires `gh` CLI installed and authenticated (`gh auth login`). When `false` or missing: local merge workflow. Note: `github: false` means local merge even if a git remote exists - the config flag is the source of truth, not remote detection.

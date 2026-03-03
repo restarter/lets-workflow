@@ -278,7 +278,7 @@ Systemic findings go into a separate section in the final report (see Step 9).
 **CRITICAL: Save first, then show results.**
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 mkdir -p "$ROOT/.lets/reviews"
 ```
 
@@ -293,7 +293,7 @@ Content: Full review report with all issues, verdict, and summary.
 If `--json` flag was provided, save structured JSON and skip Steps 9-10.
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 mkdir -p "$ROOT/.lets/reviews"
 ```
 
@@ -424,7 +424,7 @@ bd comments add <task-id> "Code review ({PR #X | local}): {verdict}. {N} issues 
 ### P1: Load Plan
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 
 # If path provided: use it
 # If no path: derive from branch name

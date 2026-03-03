@@ -9,7 +9,7 @@ One-time migration. Run once per project, then delete this command.
 ## Step 1: Check State
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 ls -la "$ROOT/.claude/sessions/" 2>/dev/null
 ls -la "$ROOT/.lets/" 2>/dev/null
 ```
@@ -20,7 +20,7 @@ ls -la "$ROOT/.lets/" 2>/dev/null
 ## Step 2: Migrate
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 mkdir -p "$ROOT/.lets/sessions" "$ROOT/.lets/reviews" "$ROOT/.lets/plans"
 
 # Add .lets/ to .gitignore if not already there
@@ -43,7 +43,7 @@ rm -rf "$ROOT/.claude/sessions"
 ## Step 3: Verify
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 echo "Sessions:" && ls "$ROOT/.lets/sessions/" 2>/dev/null
 echo "Reviews:" && ls "$ROOT/.lets/reviews/" 2>/dev/null
 echo "Old folder:" && ls "$ROOT/.claude/sessions/" 2>/dev/null || echo "removed"

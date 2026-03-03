@@ -41,7 +41,7 @@ bd init
 ### Create .lets/ directory and gitignore
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 mkdir -p "$ROOT/.lets/sessions" "$ROOT/.lets/reviews" "$ROOT/.lets/plans"
 
 # Add .lets/ to .gitignore if not already there
@@ -63,7 +63,7 @@ If `gh auth status` succeeded in Step 1, ask:
 If user agrees:
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 CONFIG="$ROOT/.lets/config.yaml"
 if [ -f "$CONFIG" ]; then
   # Replace existing github line or append if missing

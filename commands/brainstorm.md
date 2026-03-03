@@ -73,7 +73,7 @@ Wait for user answers before proceeding.
 Gather project context:
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 cat "$ROOT/CLAUDE.md" 2>/dev/null | head -200
 ```
 
@@ -610,7 +610,7 @@ Derive plan filename from the current branch:
 ```bash
 BRANCH=$(git branch --show-current)
 SLUG="${BRANCH#feature/}"   # e.g., 0nf.10-improve-brainstorm
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 mkdir -p "$ROOT/.lets/plans"
 ```
 

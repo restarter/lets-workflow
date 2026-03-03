@@ -33,7 +33,7 @@ Verify not on main/master:
 Plan filename matches the branch slug (branch name without `feature/` prefix).
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 
 # Primary: derive from branch name
 # feature/0nf.10-improve-brainstorm -> 0nf.10-improve-brainstorm.md
@@ -60,7 +60,7 @@ Parse plan structure:
 Check for existing execution state (multi-session resume):
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 cat "$ROOT/.lets/execution/{branch-slug}.json" 2>/dev/null
 ```
 
@@ -270,7 +270,7 @@ After each task completes (committed or not):
 
 Update `.lets/execution/{branch-slug}.json`:
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 mkdir -p "$ROOT/.lets/execution"
 # Write updated state with newly completed task
 ```
@@ -353,7 +353,7 @@ Run the plan's `## Success Criteria` checks.
 Delete `.lets/execution/{branch-slug}.json` - execution is complete, state no longer needed. Beads comment preserves the history.
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 rm "$ROOT/.lets/execution/{branch-slug}.json" 2>/dev/null
 ```
 

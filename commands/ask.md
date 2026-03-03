@@ -76,7 +76,7 @@ If passed as argument - use it. Otherwise ask the user.
 Before launching the agent, gather relevant context:
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 cat "$ROOT/CLAUDE.md" 2>/dev/null | head -100
 ```
 

@@ -93,7 +93,7 @@ Check:
 ### Step R4: Gather Context
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 cat "$ROOT/CLAUDE.md" 2>/dev/null | head -200
 
 # For each task:
