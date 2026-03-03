@@ -114,12 +114,12 @@ bd comments add <task-id> "## {Note type} {YYYY-MM-DD}
 **Options:** {possible solutions}
 ```
 
-## Step 5: Update Description (if needed)
+## Step 5: Record Scope Change (if needed)
 
-If the task scope or understanding changed significantly:
+If the task scope or understanding changed significantly, record it as a comment (never overwrite the description):
 
 ```bash
-bd update <task-id> --description="<updated description>"
+bd comments add <task-id> "[scope-change] <what changed and why>"
 ```
 
 ## Step 6: Verify

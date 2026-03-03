@@ -236,7 +236,7 @@ These instructions are **required** for agents that need project-specific contex
 |-------|-----|-------------|
 | `lets:compliance` | Needs rules to check against | "Only flag violations EXPLICITLY mentioned in CLAUDE.md. Quote the rule being violated." |
 | `lets:git-historian` | Needs to access project history | "Use git blame and git log to check historical context of modified files." |
-| `lets:docs` | Needs to know what docs exist | "Check CLAUDE.md sync, docs/ sync, beads tracking, README/config docs." |
+| `lets:docs` | Needs to know what docs exist | "Check LETS plugin doc sync: (1) CLAUDE.md structure and architecture sections match actual files, (2) hooks/rules-context.md Skill Quick Reference table lists all commands, (3) commands/install.md skill tables are complete, (4) command frontmatter descriptions match behavior. When commands/*.md, agents/*.md, or hooks/ files changed - these docs MUST be verified." |
 | `lets:pragmatist` | Specific review lens | "Assess if the solution is proportional to the problem. Flag overengineering." |
 
 ## Step 6: Filter & Aggregate Results

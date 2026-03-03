@@ -152,12 +152,13 @@ Check if in a worktree:
 
 ```bash
 GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
+WORKTREE_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 ```
 
 If `$GIT_DIR` contains `worktrees/`:
 - Extract worktree name from path (last segment of worktree directory)
 - If task was completed this session (PR created or merged via `/lets:done`): remind about cleanup
-- If task is still in progress: no reminder needed - user will return to this worktree
+- If task is still in progress: show the worktree path so user can resume next session with a copy-paste command
 
 ## Output
 
@@ -175,6 +176,13 @@ If in worktree and task is done, add:
 
 ```
 Worktree: {name} - after PR merges, clean up with `/lets:worktree remove {name}` from main repo
+```
+
+If in worktree and task is still in progress, add:
+
+```
+Worktree: {name}
+Resume:   cd $WORKTREE_ROOT && claude -> /lets:start
 ```
 
 Then use **AskUserQuestion** for next steps:

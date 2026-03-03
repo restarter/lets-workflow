@@ -143,7 +143,7 @@ Key differences from the old template:
 
 ## Tracking in Beads
 
-All posted comments are logged in the beads task via `bd update <task-id> --notes="..."`.
+All posted comments are logged in the beads task via `bd comments add <task-id> "..."`.
 
 ### Notes format
 

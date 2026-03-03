@@ -39,7 +39,7 @@ Compact view. Used by `/lets:start`.
 bd stats
 bd label list-all
 # For each epic:* label:
-bd list --label <label> --json
+bd list --label <label> --json --all
 bd ready --limit 5
 bd list --status=in_progress
 ```
@@ -117,7 +117,7 @@ Output format:
 ```bash
 bd label list-all
 # For each epic:* label:
-bd list --label <label> --json
+bd list --label <label> --json --all
 ```
 
 Output format:
@@ -174,7 +174,7 @@ bd ready --limit 0
 bd list --status=in_progress
 bd blocked
 bd label list-all
-# For each epic:* label: bd list --label <label> --json
+# For each epic:* label: bd list --label <label> --json --all
 bd list --status=open --json | jq -r '.[].priority' | sort | uniq -c | sort -rn
 bd list --status=closed --limit 10
 ```

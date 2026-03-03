@@ -156,7 +156,7 @@ Examples:
 
 ### Store drafts in beads
 
-As comments are refined, save them to the beads task via `bd update <id> --notes="..."`. This way the draft text survives context window compaction and session restarts.
+As comments are refined, save them to the beads task via `bd comments add <id> "..."`. This way the draft text survives context window compaction and session restarts.
 
 ---
 
@@ -366,7 +366,7 @@ bb-api pr comment <id> "LGTM. All critical issues resolved."
 
 ```bash
 # Update beads task
-bd update <task-id> --notes="Follow-up complete. PR #19 approved. ..."
+bd comments add <task-id> "Follow-up complete. PR #19 approved. ..."
 
 # If all PRs in the review are done
 bd close <task-id> --reason="All PRs reviewed and approved"
@@ -424,11 +424,11 @@ git diff <prev>..<fix>                      # Full fix diff
 # Create review task
 bd create --title="Code Review: PR #X, #Y - Feature name" --type=task --priority=1
 
-# Track posted comments in notes (after each comment)
-bd update <id> --notes="## Posted Comments Log ..."
+# Track posted comments (after each comment)
+bd comments add <id> "## Posted Comments Log ..."
 
 # Track follow-up
-bd update <id> --notes="## Follow-up Review ..."
+bd comments add <id> "## Follow-up Review ..."
 
 # Close when done
 bd close <id> --reason="All PRs reviewed and approved"

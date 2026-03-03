@@ -92,6 +92,10 @@ If you don't know the task title, run `bd show <id>` to get it.
 - Use `--labels epic:<name>` to group tasks by theme
 - Every `bd create` MUST include: `--title` (imperative mood), `--labels` (epic grouping), `--priority` (0-4), `--description` (why + acceptance criteria), `--type` (task/bug/feature/epic)
 
+### Updating Tasks
+
+- **Never use `bd update --notes` or `bd update --description` to append info** - these overwrite existing content. Use `bd comments add` for all incremental updates.
+
 ### Dependencies
 
 - Use `bd dep add` **sparingly** - only when task B literally cannot start without task A being done
