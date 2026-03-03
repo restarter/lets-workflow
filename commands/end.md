@@ -1,5 +1,6 @@
 ---
 description: End work session - save progress, sync beads, create summary
+argument-hint: "[--fast]"
 ---
 
 # Session End
@@ -7,6 +8,61 @@ description: End work session - save progress, sync beads, create summary
 End a work session properly. Save context for next session.
 
 **This is NOT task completion.** Use `/lets:done` to finish a task. `/lets:end` ends a SESSION.
+
+## Fast Mode
+
+If `--fast` argument provided, skip to Fast Close below and do NOT run Steps 1-7.
+
+### Fast Close
+
+1. `git status --short` - check uncommitted changes
+2. If uncommitted changes exist -> warn: "Uncommitted changes on disk. Run /lets:commit in next session."
+   Do NOT run /lets:commit or AskUserQuestion (saves tokens)
+3. Save minimal summary:
+   ```bash
+   # ROOT = project-root from LETS Config
+   BRANCH=$(git branch --show-current)
+   BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
+   GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
+   mkdir -p "$ROOT/.lets/sessions"
+   # If in worktree, use branch-slug filename; otherwise use default
+   if echo "$GIT_DIR" | grep -q "worktrees/"; then
+     SUMMARY_FILE="$ROOT/.lets/sessions/last-summary-${BRANCH_SLUG}.md"
+   else
+     SUMMARY_FILE="$ROOT/.lets/sessions/last-summary.md"
+   fi
+   ```
+   Write to `$SUMMARY_FILE`:
+   ```
+   ## Fast close {YYYY-MM-DD HH:MM}
+   Branch: {branch}
+   Task: {task-id or "none"}
+   Status: fast close
+   ```
+4. Save session-start-ref:
+   ```bash
+   git rev-parse HEAD > "$ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}"
+   ```
+5. Worktree detection: check `GIT_DIR` as in Step 7. If in worktree and task in progress, add resume path. If task completed, add cleanup reminder.
+6. Output fast close block and stop - no AskUserQuestion, no bd sync
+
+### Fast Close Output
+
+```
+## Session End (fast)
+
+Branch: {branch}
+Task: {task-id or "none"}
+Worktree: {name} (if in worktree)
+Resume:   cd $ROOT && claude -> /lets:start (if task in progress)
+Cleanup:  /lets:worktree remove {name} (if task completed)
+
+┌─ LETS ─────────────────────────┐
+│  Resume?  /lets:start          │
+└────────────────────────────────┘
+```
+
+---
 
 ## Step 1: Check State
 
@@ -44,7 +100,7 @@ For each in-progress task, record this session's work:
 
 ```bash
 # Get this session's commits (per-branch ref supports parallel worktree sessions)
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 BRANCH=$(git branch --show-current)
 BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
 START_REF=$(cat "$ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}" 2>/dev/null)
@@ -105,13 +161,24 @@ AskUserQuestion(
 
 Create TWO files:
 1. **Dated archive:** `.lets/sessions/YYYY-MM-DD-HHMM.md`
-2. **Latest:** `.lets/sessions/last-summary.md` (overwritten each session)
+2. **Latest:** `last-summary-{branch-slug}.md` in worktree, `last-summary.md` in main repo
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
+BRANCH=$(git branch --show-current)
+BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
+GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
 mkdir -p "$ROOT/.lets/sessions"
 DATED_FILE="$ROOT/.lets/sessions/$(date +%Y-%m-%d-%H%M).md"
+# If in worktree, use branch-slug filename; otherwise use default
+if echo "$GIT_DIR" | grep -q "worktrees/"; then
+  LATEST_FILE="$ROOT/.lets/sessions/last-summary-${BRANCH_SLUG}.md"
+else
+  LATEST_FILE="$ROOT/.lets/sessions/last-summary.md"
+fi
 ```
+
+Write summary to both `$DATED_FILE` and `$LATEST_FILE`.
 
 **Summary template:**
 
@@ -152,12 +219,13 @@ Check if in a worktree:
 
 ```bash
 GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
+# ROOT = project-root from LETS Config
 ```
 
 If `$GIT_DIR` contains `worktrees/`:
 - Extract worktree name from path (last segment of worktree directory)
 - If task was completed this session (PR created or merged via `/lets:done`): remind about cleanup
-- If task is still in progress: no reminder needed - user will return to this worktree
+- If task is still in progress: show the worktree path so user can resume next session with a copy-paste command
 
 ## Output
 
@@ -175,6 +243,13 @@ If in worktree and task is done, add:
 
 ```
 Worktree: {name} - after PR merges, clean up with `/lets:worktree remove {name}` from main repo
+```
+
+If in worktree and task is still in progress, add:
+
+```
+Worktree: {name}
+Resume:   cd $ROOT && claude -> /lets:start
 ```
 
 Then use **AskUserQuestion** for next steps:

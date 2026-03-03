@@ -42,7 +42,7 @@ Based on the decision topic, select 3-5 agents:
 ## Step 3: Gather Context
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 cat "$ROOT/CLAUDE.md" 2>/dev/null | head -100
 ```
 

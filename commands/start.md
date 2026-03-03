@@ -9,8 +9,12 @@ Restore context and prepare for work. **User MUST select a task before working.*
 ## Step 1: Previous Session Context
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
-cat "$ROOT/.lets/sessions/last-summary.md" 2>/dev/null || echo "No previous session"
+# ROOT = project-root from LETS Config
+BRANCH=$(git branch --show-current)
+BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
+cat "$ROOT/.lets/sessions/last-summary-${BRANCH_SLUG}.md" 2>/dev/null \
+  || cat "$ROOT/.lets/sessions/last-summary.md" 2>/dev/null \
+  || echo "No previous session"
 ```
 
 Read and summarize what was done in the last session.
@@ -151,7 +155,7 @@ This recovers context even after conversation compaction.
 After branch is ready, save the starting point for this session. Uses per-branch naming to support parallel sessions in worktrees:
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 BRANCH=$(git branch --show-current)
 BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
 mkdir -p "$ROOT/.lets/sessions"

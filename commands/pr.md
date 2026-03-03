@@ -47,7 +47,7 @@ Interpret user intent:
 ### Check for existing state
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 PR_DIR="$ROOT/.lets/execution/pr-{number}"
 STATE_FILE="$PR_DIR/review.json"
 ```
@@ -146,7 +146,23 @@ BRANCH=$(git branch --show-current)
 
 Store detected task-id for use in `bd comments add` calls throughout the lifecycle.
 
-### 2.3 Save current branch and checkout PR
+### 2.3 Worktree check and branch handling
+
+Detect whether we are running inside a git worktree:
+
+```bash
+GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
+```
+
+**If `$GIT_DIR` contains `worktrees/`** (we are in a worktree):
+- Set `IN_WORKTREE=true`
+- Do NOT run `gh pr checkout` - it would replace the worktree branch
+- Skip all stash handling (no branch switch = no conflicts)
+- Use `gh pr diff <PR>` for diff data
+- Use `gh pr view <PR> --json` for all metadata (fetched in 2.1)
+- Proceed directly to state file creation
+
+**If not in worktree:** Continue with existing checkout flow below.
 
 IMPORTANT: Before checking out the PR branch, save current state.
 
@@ -187,10 +203,10 @@ If checkout fails:
 - Show error and exit: "Failed to checkout PR branch. Check for conflicts."
 - Do NOT create state file on checkout failure.
 
-### 2.3 Create state file
+### 2.4 Create state file
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 mkdir -p "$PR_DIR"
 REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 ```
@@ -209,6 +225,7 @@ Write initial state to `.lets/execution/pr-{number}/review.json` with Phase 1 fi
   "head_sha": "abc1234def5678",
   "previous_branch": "feature/my-current-work",
   "stashed": false,
+  "in_worktree": false,  // set to true if worktree detected in 2.3
   "task_id": "lets-plugin-claude-0nf.26",
   "review_started": "2026-02-26",
   "findings": [],
@@ -231,7 +248,7 @@ Write initial state to `.lets/execution/pr-{number}/review.json` with Phase 1 fi
 - `stashed`: true if user chose "Stash" before checkout - cleanup must warn or pop
 - `task_id`: detected before branch switch, used for `bd comments add` calls
 
-### 2.4 Run review analysis
+### 2.5 Run review analysis
 
 Invoke `/lets:review <PR> --json`.
 
@@ -242,7 +259,7 @@ Copy findings array into state file.
 Copy verdict into state file.
 Save review_json path in state file.
 
-### 2.5 Show findings summary
+### 2.6 Show findings summary
 
 ```
 ## PR #{number}: {title}
@@ -389,7 +406,7 @@ All inline comments go in a single review submission via gh api.
 Step 1: Build the complete review JSON payload.
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 HEAD_SHA=$(gh pr view <PR> --json headRefOid -q .headRefOid)
 ```
@@ -457,7 +474,7 @@ gh pr comment <PR> --body-file "$PR_DIR/fallback.md"
 If there are findings with disposition "summary" or "edited" that weren't included in inline:
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 ```
 
 Write to `$PR_DIR/summary.md`:
@@ -512,9 +529,19 @@ If REVIEW_SHA == CURRENT_SHA:
 
 ### 4.2 Checkout updated PR and get fix delta
 
+If `in_worktree` in state:
+- Skip `gh pr checkout` - use remote ref instead
+- `git fetch origin && git diff ${REVIEW_SHA}..origin/{PR_branch}` for fix delta
+
+If not in worktree:
+
 ```bash
 gh pr checkout <PR>
+```
 
+Then get the fix delta:
+
+```bash
 git log --oneline ${REVIEW_SHA}..HEAD
 git diff ${REVIEW_SHA}..HEAD --stat
 git diff ${REVIEW_SHA}..HEAD
@@ -638,7 +665,7 @@ AskUserQuestion(
 ### 5.3 Submit verdict
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 ```
 
 Write verdict body to `$PR_DIR/verdict.md`:
@@ -703,13 +730,15 @@ gh pr merge <PR> --merge --delete-branch
 
 After merge or after approve (if not merging):
 
-1. Switch back to previous_branch:
+1. If NOT `in_worktree` in state:
 
 ```bash
 git checkout {previous_branch from state}
 ```
 
-2. If `stashed: true` in state, warn: "You have a stash from before the PR review. Run `git stash pop` to restore your changes."
+   If `stashed: true` in state, warn: "You have a stash from before the PR review. Run `git stash pop` to restore your changes."
+
+2. If `in_worktree` in state: Skip branch restore - already on the correct worktree branch.
 
 3. Delete PR folder: `rm -rf "$PR_DIR"`
 
@@ -753,7 +782,12 @@ AskUserQuestion(
 )
 ```
 
-If Checkout: `gh pr checkout <PR>` (same stash handling as Step 2.3).
+If Checkout:
+```bash
+GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
+```
+If in worktree (`$GIT_DIR` contains `worktrees/`): warn "Already in a worktree - cannot checkout PR branch here. Proceeding on current branch." Stay on current branch, skip stash handling.
+Else: `gh pr checkout <PR>` (same stash handling as Step 2.3).
 
 **Detect active task** (before branch switch, same logic as Step 2.2):
 ```bash

@@ -42,7 +42,7 @@ If no changes, inform user and exit.
 ## Step 2: Gather Context
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 git diff --stat
 cat "$ROOT/CLAUDE.md" 2>/dev/null | head -100
 ```
