@@ -18,9 +18,9 @@ AskUserQuestion(
     question: "What do you want to see?",
     header: "Status",
     options: [
-      { label: "Overview", description: "Summary, epics progress, top ready tasks" },
+      { label: "Overview", description: "Summary, label groups progress, top ready tasks" },
       { label: "Ready", description: "All tasks ready to work (no blockers)" },
-      { label: "Epics", description: "Detailed epic progress with children" },
+      { label: "Labels", description: "Detailed progress by epic:* label group" },
       { label: "Blocked", description: "Blocked tasks and dependency graph" },
       { label: "Full", description: "Everything - summary, ready, blocked, deps, insights" }
     ],
@@ -37,7 +37,9 @@ Compact view. Used by `/lets:start`.
 
 ```bash
 bd stats
-bd epic status
+bd label list-all
+# For each epic:* label:
+bd list --label <label> --json
 bd ready --limit 5
 bd list --status=in_progress
 ```
@@ -50,9 +52,9 @@ Output format:
 {total} tasks  {wide progress bar 24 chars}  X% done
                {closed} closed · {wip} wip · {ready} ready · {blocked} blocked
 
-### Epics
-{epic name, left-padded}  ({id})  {progress bar 24 chars}  XX%  NN/MM
-{epic name, left-padded}  ({id})  {progress bar 24 chars}  XX%  NN/MM
+### Label Groups
+{label name, left-padded}  {progress bar 24 chars}  XX%  NN/MM
+{label name, left-padded}  {progress bar 24 chars}  XX%  NN/MM
 ...
 
 ### In Progress
@@ -85,22 +87,22 @@ Add to output after "### In Progress":
 
 ```bash
 bd ready --limit 0
-bd epic status
+bd label list-all
 ```
 
-Group ready tasks by epic. Tasks without an epic go under "Other".
+Group ready tasks by `epic:*` label. Tasks without a label go under "Other".
 
 Output format:
 
 ```
 ## Ready Tasks (no blockers)
 
-### {Epic Name} ({id})
+### {label}
   P2  **Title** (`id`)
   P2  **Title** (`id`)
   P3  **Title** (`id`)
 
-### {Epic Name} ({id})
+### {another label}
   P2  **Title** (`id`)
   P3  **Title** (`id`)
 
@@ -110,28 +112,30 @@ Output format:
 {N} ready tasks total
 ```
 
-### View: epics
+### View: labels
 
 ```bash
-bd epic status
-# For each epic:
-bd show <epic-id>
+bd label list-all
+# For each epic:* label:
+bd list --label <label> --json
 ```
 
 Output format:
 
 ```
-## Epics
+## Label Groups
 
-### {Epic Name} (`id`)  {progress bar 24 chars}  XX%  NN/MM
+### {label}  {progress bar 24 chars}  XX%  NN/MM
 
-**Open children:**
 | Prio | Task | Status |
 |------|------|--------|
 | P2 | **Title** (`id`) | ready / blocked / wip |
 ...
 
-(repeat for each epic, sorted by progress % descending)
+### {another label}  {progress bar 24 chars}  XX%  NN/MM
+...
+
+(repeat for each epic:* label, sorted by progress % descending)
 ```
 
 ### View: blocked
@@ -169,7 +173,8 @@ bd stats
 bd ready --limit 0
 bd list --status=in_progress
 bd blocked
-bd epic status
+bd label list-all
+# For each epic:* label: bd list --label <label> --json
 bd list --status=open --json | jq -r '.[].priority' | sort | uniq -c | sort -rn
 bd list --status=closed --limit 10
 ```
@@ -192,19 +197,19 @@ P3 Low:       {bar} N
 P4 Backlog:   {bar} N
 (only show priorities that have tasks)
 
-## Epics Progress
-{epic name, left-padded}  ({id})  {progress bar 24 chars}  XX%  NN/MM
-{epic name, left-padded}  ({id})  {progress bar 24 chars}  XX%  NN/MM
+## Label Groups
+{label name, left-padded}  {progress bar 24 chars}  XX%  NN/MM
+{label name, left-padded}  {progress bar 24 chars}  XX%  NN/MM
 ...
 (sorted by progress % descending)
 
 ## Ready to Work
 
-### {Epic Name}
+### {label}
   P2  **Title** (`id`)
   P3  **Title** (`id`)
 
-### {Another Epic}
+### {another label}
   P2  **Title** (`id`)
 ...
 

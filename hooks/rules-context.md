@@ -85,23 +85,16 @@ If you don't know the task title, run `bd show <id>` to get it.
 
 ## Beads Best Practices
 
-### Epics
-
-- Epics are **containers**, not blockers - NEVER add `bd dep` from child to its epic
-- Epics are **long-lived** - don't close just because all children are done
-- Only close an epic when the user explicitly says to
-- If no suitable epic exists - create one first or suggest to the user
-- Review epic structure every 5-10 sessions
-- Track existing epics and suggest the right parent when creating tasks
-
 ### Task Creation
 
-Every `bd create` MUST include: `--title` (imperative mood), `--parent` (epic), `--priority` (0-4), `--description` (why + acceptance criteria), `--type` (task/bug/feature/epic).
+- **NEVER use `--parent`** - child sequential IDs (e.g. `.28`, `.29`) cause merge collisions in multi-user setup
+- All tasks are **top-level** with hash-based IDs (collision-free)
+- Use `--labels epic:<name>` to group tasks by theme
+- Every `bd create` MUST include: `--title` (imperative mood), `--labels` (epic grouping), `--priority` (0-4), `--description` (why + acceptance criteria), `--type` (task/bug/feature/epic)
 
 ### Dependencies
 
 - Use `bd dep add` **sparingly** - only when task B literally cannot start without task A being done
-- Parent-child (epic -> task) uses `--parent`, NOT `bd dep`
 - Most tasks are independent - don't over-link
 - Before adding a dep, ask: "Can someone start this task right now without the other?" If yes - no dep needed
 
