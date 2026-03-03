@@ -43,7 +43,7 @@ If `--fast` argument provided, skip to Fast Close below and do NOT run Steps 1-7
    ```bash
    git rev-parse HEAD > "$ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}"
    ```
-5. Worktree detection - same as Step 7: if in worktree and task in progress, show resume path
+5. Worktree detection: check `GIT_DIR` as in Step 7. If in worktree and task in progress, add resume path. If task completed, add cleanup reminder.
 6. Output fast close block and stop - no AskUserQuestion, no bd sync
 
 ### Fast Close Output
@@ -53,7 +53,9 @@ If `--fast` argument provided, skip to Fast Close below and do NOT run Steps 1-7
 
 Branch: {branch}
 Task: {task-id or "none"}
-{worktree block if applicable - same format as normal output}
+Worktree: {name} (if in worktree)
+Resume:   cd $ROOT && claude -> /lets:start (if task in progress)
+Cleanup:  /lets:worktree remove {name} (if task completed)
 
 ┌─ LETS ─────────────────────────┐
 │  Resume?  /lets:start          │
@@ -217,7 +219,7 @@ Check if in a worktree:
 
 ```bash
 GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
-WORKTREE_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+# ROOT = project-root from LETS Config
 ```
 
 If `$GIT_DIR` contains `worktrees/`:
@@ -247,7 +249,7 @@ If in worktree and task is still in progress, add:
 
 ```
 Worktree: {name}
-Resume:   cd $WORKTREE_ROOT && claude -> /lets:start
+Resume:   cd $ROOT && claude -> /lets:start
 ```
 
 Then use **AskUserQuestion** for next steps:

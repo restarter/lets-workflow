@@ -203,7 +203,7 @@ If checkout fails:
 - Show error and exit: "Failed to checkout PR branch. Check for conflicts."
 - Do NOT create state file on checkout failure.
 
-### 2.3 Create state file
+### 2.4 Create state file
 
 ```bash
 # ROOT = project-root from LETS Config
@@ -225,7 +225,7 @@ Write initial state to `.lets/execution/pr-{number}/review.json` with Phase 1 fi
   "head_sha": "abc1234def5678",
   "previous_branch": "feature/my-current-work",
   "stashed": false,
-  "in_worktree": false,
+  "in_worktree": false,  // set to true if worktree detected in 2.3
   "task_id": "lets-plugin-claude-0nf.26",
   "review_started": "2026-02-26",
   "findings": [],
@@ -248,7 +248,7 @@ Write initial state to `.lets/execution/pr-{number}/review.json` with Phase 1 fi
 - `stashed`: true if user chose "Stash" before checkout - cleanup must warn or pop
 - `task_id`: detected before branch switch, used for `bd comments add` calls
 
-### 2.4 Run review analysis
+### 2.5 Run review analysis
 
 Invoke `/lets:review <PR> --json`.
 
@@ -259,7 +259,7 @@ Copy findings array into state file.
 Copy verdict into state file.
 Save review_json path in state file.
 
-### 2.5 Show findings summary
+### 2.6 Show findings summary
 
 ```
 ## PR #{number}: {title}
@@ -529,9 +529,19 @@ If REVIEW_SHA == CURRENT_SHA:
 
 ### 4.2 Checkout updated PR and get fix delta
 
+If `in_worktree` in state:
+- Skip `gh pr checkout` - use remote ref instead
+- `git fetch origin && git diff ${REVIEW_SHA}..origin/{PR_branch}` for fix delta
+
+If not in worktree:
+
 ```bash
 gh pr checkout <PR>
+```
 
+Then get the fix delta:
+
+```bash
 git log --oneline ${REVIEW_SHA}..HEAD
 git diff ${REVIEW_SHA}..HEAD --stat
 git diff ${REVIEW_SHA}..HEAD
@@ -728,7 +738,7 @@ git checkout {previous_branch from state}
 
    If `stashed: true` in state, warn: "You have a stash from before the PR review. Run `git stash pop` to restore your changes."
 
-   If `in_worktree` in state: Skip - already on the correct worktree branch.
+2. If `in_worktree` in state: Skip branch restore - already on the correct worktree branch.
 
 3. Delete PR folder: `rm -rf "$PR_DIR"`
 

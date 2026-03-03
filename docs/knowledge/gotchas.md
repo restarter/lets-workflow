@@ -6,11 +6,13 @@ Things we discovered the hard way while building skills and workflows.
 
 **Problem:** Skills use bash code blocks as examples for Claude. If Claude's working directory changed (e.g., after `cd code/letsbrowse`), relative paths like `.lets/sessions/` resolve to wrong location.
 
-**Fix:** Always use `git rev-parse --show-toplevel` for repo-root-relative paths:
+**Fix:** Use `$ROOT` from LETS Config (injected by SessionStart hook as `project-root`):
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 mkdir -p "$ROOT/.lets/sessions"
 ```
+
+In real bash scripts/hooks where LETS Config is not available, `git rev-parse --show-toplevel` is fine.
 
 **Affected:** `lets-end` (session file creation), `lets-start` (session file reading).
 
