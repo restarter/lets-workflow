@@ -1,6 +1,6 @@
 #!/bin/sh
 # LETS-branded statusline for Claude Code
-# Install: curl -fsSL https://raw.githubusercontent.com/nickolay-umbo/lets-plugin-claude/main/scripts/lets/install.sh | bash
+# Copied to .lets/statusline.sh by /lets:install
 # Receives JSON from Claude Code via stdin, outputs formatted status lines.
 #
 # Layout:
@@ -9,50 +9,40 @@
 
 input=$(cat)
 
-# --- global cache (usage is per-account, not per-project) ---
-LETS_CACHE="${HOME}/.lets/cache"
+# --- per-project cache in .lets/cache/ ---
+dir=$(echo "$input" | jq -r '.workspace.current_dir // .cwd // ""')
+PROJECT_ROOT=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)
+if [ -z "$PROJECT_ROOT" ]; then
+  PROJECT_ROOT="$dir"
+fi
+LETS_CACHE="${PROJECT_ROOT}/.lets/cache"
 mkdir -p "$LETS_CACHE" 2>/dev/null
 
 # --- background fetch function (inlined from fetch-usage.sh) ---
-# Fetches Claude API usage stats and writes to ~/.lets/cache/usage.
+# Fetches Claude API usage stats and writes to .lets/cache/usage (per-project).
 # Cache format (4 lines): 5h%, 7d%, 5h_resets_at, 7d_resets_at
 _fetch_usage() {
   _fu_cache_file="${LETS_CACHE}/usage"
-  _fu_token_cache="${LETS_CACHE}/token"
   _fu_creds_file="$HOME/.claude/.credentials.json"
-  _fu_token_ttl=900  # 15 minutes
 
+  # Read token fresh each time (no caching - it's a credential)
   _fu_token=""
-  if [ -f "$_fu_token_cache" ]; then
-    if [ "$(uname)" = "Darwin" ]; then
-      _fu_mtime=$(stat -f %m "$_fu_token_cache" 2>/dev/null || echo 0)
-    else
-      _fu_mtime=$(stat -c %Y "$_fu_token_cache" 2>/dev/null || echo 0)
-    fi
-    _fu_age=$(( $(date -u +%s) - _fu_mtime ))
-    if [ "$_fu_age" -lt "$_fu_token_ttl" ]; then
-      _fu_token=$(cat "$_fu_token_cache" 2>/dev/null)
+
+  # macOS: try Keychain first (newer Claude Code stores creds here)
+  if [ "$(uname)" = "Darwin" ]; then
+    _fu_keychain=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null)
+    if [ -n "$_fu_keychain" ]; then
+      _fu_token=$(printf '%s' "$_fu_keychain" | jq -r '.claudeAiOauth.accessToken // empty' 2>/dev/null)
     fi
   fi
 
+  # All platforms: fall back to credentials.json file
+  if [ -z "$_fu_token" ] && [ -f "$_fu_creds_file" ]; then
+    _fu_token=$(jq -r '.claudeAiOauth.accessToken // empty' "$_fu_creds_file" 2>/dev/null)
+  fi
+
   if [ -z "$_fu_token" ]; then
-    # macOS: try Keychain first (newer Claude Code stores creds here)
-    if [ "$(uname)" = "Darwin" ]; then
-      _fu_keychain=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null)
-      if [ -n "$_fu_keychain" ]; then
-        _fu_token=$(printf '%s' "$_fu_keychain" | jq -r '.claudeAiOauth.accessToken // empty' 2>/dev/null)
-      fi
-    fi
-
-    # All platforms: fall back to credentials.json file
-    if [ -z "$_fu_token" ] && [ -f "$_fu_creds_file" ]; then
-      _fu_token=$(jq -r '.claudeAiOauth.accessToken // empty' "$_fu_creds_file" 2>/dev/null)
-    fi
-
-    if [ -z "$_fu_token" ]; then
-      return
-    fi
-    (umask 077; printf '%s' "$_fu_token" > "$_fu_token_cache")
+    return
   fi
 
   _fu_json=$(curl -s -m 3 \
@@ -81,8 +71,7 @@ _fetch_usage() {
 # --- model ---
 model=$(echo "$input" | jq -r '.model.display_name // ""')
 
-# --- folder ---
-dir=$(echo "$input" | jq -r '.workspace.current_dir // .cwd // ""')
+# --- folder (reuse $dir from cache section above) ---
 dir_name=$(basename "$dir")
 
 # --- git branch ---

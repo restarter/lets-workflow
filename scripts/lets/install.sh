@@ -1,12 +1,21 @@
 #!/bin/bash
+# Per-project LETS setup script
+# Run from project root: bash path/to/install.sh
+# Or via plugin: /lets:install
 set -e
 
-LETS_DIR="${HOME}/.lets"
-LETS_CACHE="${LETS_DIR}/cache"
-REPO_RAW="https://raw.githubusercontent.com/nickolay-umbo/lets-plugin-claude/main/scripts/lets"
-SETTINGS_FILE="${HOME}/.claude/settings.json"
+PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+if [ -z "$PROJECT_ROOT" ]; then
+  echo "Error: not in a git repository." >&2
+  exit 1
+fi
 
-echo "Installing LETS statusline..."
+LETS_DIR="${PROJECT_ROOT}/.lets"
+LETS_CACHE="${LETS_DIR}/cache"
+SETTINGS="${PROJECT_ROOT}/.claude/settings.json"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+echo "Setting up LETS in ${PROJECT_ROOT}..."
 
 # Check jq (hard dependency - statusline needs it)
 if ! command -v jq >/dev/null 2>&1; then
@@ -15,55 +24,41 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 1
 fi
 
-# Create directories
-mkdir -p "$LETS_DIR" "$LETS_CACHE"
+# Create .lets/ structure
+mkdir -p "$LETS_DIR/sessions" "$LETS_DIR/reviews" "$LETS_DIR/plans" "$LETS_DIR/execution" "$LETS_CACHE"
 chmod 700 "$LETS_CACHE"
 
-# Download statusline
-echo "Downloading statusline.sh..."
-curl -sfL "${REPO_RAW}/statusline.sh" -o "${LETS_DIR}/statusline.sh" \
-  || { echo "Failed to download statusline.sh" >&2; exit 1; }
-chmod +x "${LETS_DIR}/statusline.sh"
-
-echo "Installed: ${LETS_DIR}/statusline.sh"
-
-# Configure GLOBAL settings.json
-mkdir -p "${HOME}/.claude"
-
-if [ ! -f "$SETTINGS_FILE" ]; then
-  # Create new settings.json
-  cat > "$SETTINGS_FILE" <<'SETTINGS'
-{
-  "statusLine": {
-    "type": "command",
-    "command": "bash -c 'cat | bash ~/.lets/statusline.sh'"
-  }
-}
-SETTINGS
-  echo "Created: ${SETTINGS_FILE}"
-elif grep -q '\.lets/statusline' "$SETTINGS_FILE" 2>/dev/null; then
-  echo "Already configured: ${SETTINGS_FILE}"
-else
-  # Atomic merge with jq: write to tmp, validate, then move
-  jq '.statusLine = {"type": "command", "command": "bash -c '\''cat | bash ~/.lets/statusline.sh'\''"}' \
-    "$SETTINGS_FILE" > "${SETTINGS_FILE}.tmp" \
-    && jq empty "${SETTINGS_FILE}.tmp" \
-    && mv "${SETTINGS_FILE}.tmp" "$SETTINGS_FILE"
-  echo "Updated: ${SETTINGS_FILE}"
+# Add .lets/ to .gitignore
+if ! grep -q '^\.lets/' "${PROJECT_ROOT}/.gitignore" 2>/dev/null; then
+  echo '.lets/' >> "${PROJECT_ROOT}/.gitignore"
+  echo "Added .lets/ to .gitignore"
 fi
 
-# Warn about old project-level statusLine configs
-_check_old_config() {
-  project_root=$(git rev-parse --show-toplevel 2>/dev/null || true)
-  if [ -n "$project_root" ] && [ -f "${project_root}/.claude/settings.json" ]; then
-    if grep -q 'rev-parse.*statusline\|hooks/lets-statusline' "${project_root}/.claude/settings.json" 2>/dev/null; then
-      echo ""
-      echo "Warning: old statusLine config found in ${project_root}/.claude/settings.json"
-      echo "Remove the statusLine block from that file - global config will be used instead."
-    fi
-  fi
-}
-_check_old_config
+# Copy statusline
+if [ -f "${SCRIPT_DIR}/statusline.sh" ]; then
+  cp "${SCRIPT_DIR}/statusline.sh" "${LETS_DIR}/statusline.sh"
+  chmod +x "${LETS_DIR}/statusline.sh"
+  echo "Installed: ${LETS_DIR}/statusline.sh"
+else
+  echo "Warning: statusline.sh not found at ${SCRIPT_DIR}/statusline.sh" >&2
+fi
+
+# Configure .claude/settings.json
+mkdir -p "${PROJECT_ROOT}/.claude"
+STATUSLINE_CMD='bash -c '\''cat | bash "$(git rev-parse --show-toplevel 2>/dev/null)/.lets/statusline.sh" 2>/dev/null'\'''
+
+if [ ! -f "$SETTINGS" ]; then
+  printf '{\n  "statusLine": {\n    "type": "command",\n    "command": "%s"\n  }\n}\n' "$STATUSLINE_CMD" > "$SETTINGS"
+  echo "Created: ${SETTINGS}"
+elif grep -q 'statusLine' "$SETTINGS" 2>/dev/null; then
+  echo "Already configured: ${SETTINGS}"
+else
+  jq --arg cmd "$STATUSLINE_CMD" '.statusLine = {"type": "command", "command": $cmd}' \
+    "$SETTINGS" > "${SETTINGS}.tmp" \
+    && jq empty "${SETTINGS}.tmp" \
+    && mv "${SETTINGS}.tmp" "$SETTINGS"
+  echo "Updated: ${SETTINGS}"
+fi
 
 echo ""
-echo "Done! Restart Claude Code to see the new statusline."
+echo "Done! Restart Claude Code to see the statusline."

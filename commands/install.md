@@ -30,24 +30,45 @@ Install these plugins (check Claude Code docs for current installation method):
 
 ## Step 2.5: Install Statusline
 
-Check if LETS statusline is installed:
+Check if LETS statusline is installed in this project:
 
 ```bash
-if [ -f "$HOME/.lets/statusline.sh" ]; then
+# ROOT = project-root from LETS Config
+if [ -f "$ROOT/.lets/statusline.sh" ]; then
   echo "Statusline: installed"
 else
   echo "Statusline not found."
 fi
 ```
 
-If not installed, show:
+If not installed, copy from plugin source:
 
-> Install the LETS statusline for Claude Code:
-> ```
-> curl -fsSL https://raw.githubusercontent.com/nickolay-umbo/lets-plugin-claude/main/scripts/lets/install.sh | bash
-> ```
-> This installs `~/.lets/statusline.sh` and configures `~/.claude/settings.json`.
-> Restart Claude Code after installation.
+```bash
+# ROOT = project-root from LETS Config
+mkdir -p "$ROOT/.lets/cache"
+chmod 700 "$ROOT/.lets/cache"
+cp "${CLAUDE_PLUGIN_ROOT}/scripts/lets/statusline.sh" "$ROOT/.lets/statusline.sh"
+chmod +x "$ROOT/.lets/statusline.sh"
+echo "Installed: $ROOT/.lets/statusline.sh"
+```
+
+Then configure statusLine in project `.claude/settings.json`:
+
+```bash
+# ROOT = project-root from LETS Config
+mkdir -p "$ROOT/.claude"
+SETTINGS="$ROOT/.claude/settings.json"
+STATUSLINE_CMD='bash -c '\''cat | bash "$(git rev-parse --show-toplevel 2>/dev/null)/.lets/statusline.sh" 2>/dev/null'\'''
+
+if [ ! -f "$SETTINGS" ]; then
+  printf '{\n  "statusLine": {\n    "type": "command",\n    "command": "%s"\n  }\n}\n' "$STATUSLINE_CMD" > "$SETTINGS"
+elif ! grep -q 'statusLine' "$SETTINGS" 2>/dev/null; then
+  jq --arg cmd "$STATUSLINE_CMD" '.statusLine = {"type": "command", "command": $cmd}' "$SETTINGS" > "$SETTINGS.tmp" \
+    && jq empty "$SETTINGS.tmp" && mv "$SETTINGS.tmp" "$SETTINGS"
+fi
+```
+
+Inform user: "Statusline installed. Restart Claude Code to see it."
 
 ## Step 3: Initialize Project (if needed)
 
@@ -204,8 +225,8 @@ Run through and verify:
 - [ ] (Optional) `gh` CLI installed for GitHub workflow
 - [ ] (Optional) `gh auth status` passes
 - [ ] (Optional) `github: true` set in `.lets/config.yaml`
-- [ ] `~/.lets/statusline.sh` exists (run curl installer if missing)
-- [ ] `~/.claude/settings.json` has statusLine config
+- [ ] `.lets/statusline.sh` exists (copied from plugin)
+- [ ] `.claude/settings.json` has statusLine config
 
 **Setup complete when all checked.**
 

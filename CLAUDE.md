@@ -9,7 +9,7 @@ Claude Code plugin for development workflow with session management, code review
 commands/                     # Slash commands (/lets:start, /lets:done, /lets:review, etc.)
 agents/                       # Expert agents (review, opinion, ask, brainstorm, team implementation)
 hooks/                        # SessionStart hook, sandbox prototype
-scripts/lets/                 # Standalone statusline + installer (curl|bash, installed to ~/.lets/)
+scripts/lets/                 # Statusline source (copied to .lets/ per-project by /lets:install)
 reference/                    # Reference plugins for studying patterns (gitignored)
 ```
 
@@ -19,7 +19,7 @@ reference/                    # Reference plugins for studying patterns (gitigno
 - **Agents** = experts dispatched by commands. `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:brainstorm`, `/lets:team` use specialized agents
 - **Orchestrators** = commands that delegate to other commands. `/lets:pr` orchestrates `/lets:review` for full PR lifecycle
 - **Hooks** = SessionStart injects workflow rules
-- **Statusline** = standalone `~/.lets/statusline.sh` installed via `scripts/lets/install.sh`
+- **Statusline** = per-project `.lets/statusline.sh`, source in `scripts/lets/statusline.sh`, copied by `/lets:install`
 
 ## Architecture Decisions
 
@@ -34,7 +34,7 @@ reference/                    # Reference plugins for studying patterns (gitigno
 - Worktrees stored in `.worktrees/` at project root - `.lets/` symlinked for interactive sessions
 - SessionStart hook injects rules from `hooks/rules-context.md`
 - SessionStart hook reads `.lets/config.yaml` and injects settings into session context
-- Statusline installed globally to `~/.lets/statusline.sh` via `scripts/lets/install.sh`. Decoupled from plugin - `CLAUDE_PLUGIN_ROOT` not available in settings.json statusLine config.
+- Statusline source in `scripts/lets/statusline.sh`, copied to `.lets/statusline.sh` per-project by `/lets:install`. Project `.claude/settings.json` uses `git rev-parse --show-toplevel` to locate it.
 
 ## File Storage
 
@@ -47,10 +47,7 @@ This includes hook debug logs, temp files, and any runtime artifacts.
 .lets/reviews/           # Saved review reports
 .lets/plans/             # Implementation plans
 .lets/execution/         # Execution state (plan resume, PR review: pr-{number}/, team records: team-*.json)
-.lets/cache/             # Cached data (hook debug logs)
-# Global cache (not per-project):
-# ~/.lets/cache/usage    # API usage stats
-# ~/.lets/cache/token    # OAuth token (umask 077)
+.lets/cache/             # Cached data (usage stats, OAuth token, hook debug logs)
 # Worktrees (outside .lets/ to avoid circular symlinks):
 # .worktrees/            # Interactive worktrees only (agent worktrees use native Claude Code behavior)
 ```

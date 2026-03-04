@@ -2,5 +2,9 @@
   "enabledPlugins": {
     "plugin-dev@claude-plugins-official": true
   },
+  "statusLine": {
+    "type": "command",
+    "command": "bash -c 'cat | bash \"$(git rev-parse --show-toplevel 2>/dev/null)/.lets/statusline.sh\" 2>/dev/null'"
+  },
   "hooks": {}
 }
