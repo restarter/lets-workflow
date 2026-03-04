@@ -2,7 +2,7 @@
 
 ## Permission Required
 
-**Never commit or push without explicit user approval.** Also applies to any command that sends data to a remote (`bd sync`, etc).
+**Never commit or push without explicit user approval.** Also applies to any command that sends data to a remote (`bd dolt push`, etc).
 
 ```
 Claude: "Done. Ready to commit?"

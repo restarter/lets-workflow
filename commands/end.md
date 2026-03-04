@@ -207,13 +207,7 @@ Write summary to both `$DATED_FILE` and `$LATEST_FILE`.
 - {any context AI needs to continue}
 ```
 
-## Step 6: Sync Beads
-
-```bash
-bd sync --flush-only
-```
-
-## Step 7: Worktree Cleanup Reminder
+## Step 6: Worktree Cleanup Reminder
 
 Check if in a worktree:
 
