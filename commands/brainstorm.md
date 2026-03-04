@@ -294,7 +294,9 @@ For each selected approach:
 ```
 Task(
   subagent_type="lets:architect",
-  prompt="DESIGN MODE: {approach name}.
+  prompt="ultrathink
+
+DESIGN MODE: {approach name}.
 
 Design a detailed architecture for this specific approach.
 
@@ -453,7 +455,9 @@ For each expert:
 ```
 Task(
   subagent_type="lets:{agent-name}",
-  prompt="OPINION MODE. Evaluate an architecture design for a feature.
+  prompt="ultrathink
+
+OPINION MODE. Evaluate an architecture design for a feature.
 
 FEATURE GOAL: {goal}
 

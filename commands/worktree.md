@@ -154,10 +154,11 @@ LETS: {symlinked / not available}
 
 Open a new terminal and run:
 
-  cd {absolute-worktree-path}
-  claude
+```bash
+cd {absolute-worktree-path} && claude
+```
 
-Then use /lets:start to pick a task and begin working.
+Then use `/lets:start` to pick a task and begin working.
 
 ┌─ LETS ─────────────────────────┐
 │  List?    /lets:worktree list  │

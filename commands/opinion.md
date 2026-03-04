@@ -66,7 +66,9 @@ For each selected agent:
 ```
 Task(
   subagent_type="lets:{agent-name}",
-  prompt="OPINION MODE. Evaluate this technical decision.
+  prompt="ultrathink
+
+OPINION MODE. Evaluate this technical decision.
 
 PROJECT CONTEXT:
 {CLAUDE.md summary}

@@ -134,7 +134,11 @@ AskUserQuestion(
 **Handle response:**
 - **Branch** -> `git checkout -b <branch> {merge-branch}` (standard flow, use `merge-branch` from LETS Config)
 - **Worktree** -> run `/lets:worktree create <task-id>-<slug>`, then inform:
-  "Worktree created at `.worktrees/<name>/`. Open a new terminal there and run `claude` -> `/lets:start`."
+  "Worktree created. Open a new terminal and run:"
+  ```bash
+  cd {absolute-worktree-path} && claude
+  ```
+  "Then use `/lets:start` to pick a task."
   Stop here - the worktree session continues in a separate terminal.
 
 ### Context Recovery (resuming existing branch)

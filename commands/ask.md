@@ -100,7 +100,9 @@ Use the Task tool to spawn the selected agent:
 ```
 Task(
   subagent_type="lets:{agent-name}",
-  prompt="ASK MODE. A developer is asking you a direct question.
+  prompt="ultrathink
+
+ASK MODE. A developer is asking you a direct question.
 
 PROJECT CONTEXT:
 {CLAUDE.md summary - stack, conventions, key rules}

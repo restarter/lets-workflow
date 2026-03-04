@@ -203,6 +203,8 @@ For each selected agent, use the Task tool with:
 Each agent receives this context in their task prompt. Agents define their own expertise, confidence scoring, and output format in `agents/*.md` - do NOT duplicate those in the prompt.
 
 ```
+ultrathink
+
 Review the following code changes from your expert perspective.
 Use your confidence scoring system. Only report findings >= 80 confidence.
 Follow your output format as defined in your system prompt.
@@ -460,7 +462,9 @@ Always launch exactly 2 agents:
 ```
 Task(
   subagent_type="lets:architect",
-  prompt="PLAN REVIEW MODE. Review this implementation plan for quality and completeness.
+  prompt="ultrathink
+
+PLAN REVIEW MODE. Review this implementation plan for quality and completeness.
 
 PROJECT CONTEXT:
 {CLAUDE.md summary}
@@ -501,7 +505,9 @@ OUTPUT FORMAT:
 ```
 Task(
   subagent_type="lets:pragmatist",
-  prompt="PLAN REVIEW MODE. Review this implementation plan for feasibility and proportionality.
+  prompt="ultrathink
+
+PLAN REVIEW MODE. Review this implementation plan for feasibility and proportionality.
 
 PROJECT CONTEXT:
 {CLAUDE.md summary}
