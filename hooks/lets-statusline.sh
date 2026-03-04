@@ -99,7 +99,7 @@ fi
 SEP="\033[38;2;153;122;0m \xc2\xbb \033[0m"
 
 # line 1: LETS › branch or folder
-printf "\xf0\x9f\x8c\xb1\033[1;38;2;255;215;0mLETS Workflow\033[0m"
+printf "\xf0\x9f\x8c\xb1 \033[1;38;2;255;215;0mLETS Workflow\033[0m"
 printf "%b" "$SEP"
 if [ -n "$branch" ]; then
   printf "\033[38;2;232;160;144m%s\033[0m" "$branch"
