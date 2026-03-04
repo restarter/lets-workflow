@@ -64,7 +64,8 @@ _fetch_usage() {
   if [ -n "$_fu_5h_raw" ] && [ -n "$_fu_7d_raw" ]; then
     _fu_5h=$(printf "%.0f" "$_fu_5h_raw")
     _fu_7d=$(printf "%.0f" "$_fu_7d_raw")
-    printf '%s\n%s\n%s\n%s\n' "$_fu_5h" "$_fu_7d" "$_fu_5h_reset" "$_fu_7d_reset" > "$_fu_cache_file"
+    printf '%s\n%s\n%s\n%s\n' "$_fu_5h" "$_fu_7d" "$_fu_5h_reset" "$_fu_7d_reset" > "${_fu_cache_file}.tmp"
+    mv "${_fu_cache_file}.tmp" "$_fu_cache_file"
   fi
 }
 

@@ -56,7 +56,8 @@ else
   jq --arg cmd "$STATUSLINE_CMD" '.statusLine = {"type": "command", "command": $cmd}' \
     "$SETTINGS" > "${SETTINGS}.tmp" \
     && jq empty "${SETTINGS}.tmp" \
-    && mv "${SETTINGS}.tmp" "$SETTINGS"
+    && mv "${SETTINGS}.tmp" "$SETTINGS" \
+    || { rm -f "${SETTINGS}.tmp"; echo "Error: failed to update ${SETTINGS} - is it valid JSON?" >&2; exit 1; }
   echo "Updated: ${SETTINGS}"
 fi
 

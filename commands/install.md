@@ -41,31 +41,11 @@ else
 fi
 ```
 
-If not installed, copy from plugin source:
+If not installed, run the install script (creates `.lets/` structure, copies statusline, configures settings.json):
 
 ```bash
-# ROOT = project-root from LETS Config
-mkdir -p "$ROOT/.lets/cache"
-chmod 700 "$ROOT/.lets/cache"
-cp "${CLAUDE_PLUGIN_ROOT}/scripts/lets/statusline.sh" "$ROOT/.lets/statusline.sh"
-chmod +x "$ROOT/.lets/statusline.sh"
-echo "Installed: $ROOT/.lets/statusline.sh"
-```
-
-Then configure statusLine in project `.claude/settings.json`:
-
-```bash
-# ROOT = project-root from LETS Config
-mkdir -p "$ROOT/.claude"
-SETTINGS="$ROOT/.claude/settings.json"
-STATUSLINE_CMD='bash -c '\''cat | bash "$(git rev-parse --show-toplevel 2>/dev/null)/.lets/statusline.sh" 2>/dev/null'\'''
-
-if [ ! -f "$SETTINGS" ]; then
-  printf '{\n  "statusLine": {\n    "type": "command",\n    "command": "%s"\n  }\n}\n' "$STATUSLINE_CMD" > "$SETTINGS"
-elif ! grep -q 'statusLine' "$SETTINGS" 2>/dev/null; then
-  jq --arg cmd "$STATUSLINE_CMD" '.statusLine = {"type": "command", "command": $cmd}' "$SETTINGS" > "$SETTINGS.tmp" \
-    && jq empty "$SETTINGS.tmp" && mv "$SETTINGS.tmp" "$SETTINGS"
-fi
+# CLAUDE_PLUGIN_ROOT is set by Claude Code plugin runtime
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/lets/install.sh"
 ```
 
 Inform user: "Statusline installed. Restart Claude Code to see it."

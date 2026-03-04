@@ -8,7 +8,7 @@ Claude Code plugin for development workflow with session management, code review
 .claude-plugin/plugin.json   # Plugin manifest
 commands/                     # Slash commands (/lets:start, /lets:done, /lets:review, etc.)
 agents/                       # Expert agents (review, opinion, ask, brainstorm, team implementation)
-hooks/                        # SessionStart hook, sandbox prototype
+hooks/                        # SessionStart hook, workflow rules, config template
 scripts/lets/                 # Statusline source (copied to .lets/ per-project by /lets:install)
 reference/                    # Reference plugins for studying patterns (gitignored)
 ```
@@ -47,7 +47,7 @@ This includes hook debug logs, temp files, and any runtime artifacts.
 .lets/reviews/           # Saved review reports
 .lets/plans/             # Implementation plans
 .lets/execution/         # Execution state (plan resume, PR review: pr-{number}/, team records: team-*.json)
-.lets/cache/             # Cached data (usage stats, OAuth token, hook debug logs)
+.lets/cache/             # Cached data (usage stats)
 # Worktrees (outside .lets/ to avoid circular symlinks):
 # .worktrees/            # Interactive worktrees only (agent worktrees use native Claude Code behavior)
 ```
