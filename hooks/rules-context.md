@@ -124,7 +124,7 @@ GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
 - Don't run `/lets:worktree create` from inside a worktree
 - Don't modify `.lets/` or `.beads/` structure (they're shared via symlink/redirect)
 
-**Lifecycle:** `/lets:worktree create <name>` (from main repo) -> open terminal in `.worktrees/<name>/` -> `claude` -> `/lets:start` -> work -> `/lets:done` -> `/lets:worktree remove <name>` (from main repo)
+**Lifecycle:** `/lets:worktree create <name>` (from main repo) -> new terminal: `cd .worktrees/<name>/ && claude` -> `/lets:start` -> work -> `/lets:done` -> `/lets:worktree remove <name>` (from main repo)
 
 ## Architecture Mindset
 
@@ -139,7 +139,7 @@ GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
 github: false  /lets:start -> Work -> /lets:check -> /lets:commit -> /lets:done (merge) -> /lets:end
 github: true   /lets:start -> Work -> /lets:check -> /lets:commit -> /lets:done (push + PR) -> /lets:end
 
-Worktree:  /lets:worktree create -> terminal -> /lets:start -> Work -> /lets:done -> /lets:end -> /lets:worktree remove (main repo)
+Worktree:  /lets:worktree create -> `cd .worktrees/<name>/ && claude` -> /lets:start -> Work -> /lets:done -> /lets:end -> /lets:worktree remove (main repo)
 
 Team:      /lets:brainstorm -> /lets:team run -> monitor -> /lets:review --local -> /lets:done
 

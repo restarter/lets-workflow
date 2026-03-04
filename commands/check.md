@@ -49,6 +49,8 @@ cat "$ROOT/CLAUDE.md" 2>/dev/null | head -100
 
 ## Step 3: Review with 5 Lenses
 
+ultrathink
+
 Review the diff directly using these 5 perspectives. Think like a senior dev doing a quick PR scan - catch real issues, skip noise.
 
 ### [Bug] Bugs & Logic
