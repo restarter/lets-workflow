@@ -1,13 +1,82 @@
 #!/bin/sh
-# LETS-branded statusline
+# LETS-branded statusline for Claude Code
+# Install: curl -fsSL https://raw.githubusercontent.com/nickolay-umbo/lets-plugin-claude/main/scripts/lets/install.sh | bash
 # Receives JSON from Claude Code via stdin, outputs formatted status lines.
 #
 # Layout:
 #   Line 1: [LETS] feature/branch-name
-#   Line 2: Opus 4.6 │ ctx 38% (76k/200k) │ 5h 0% · 7d 22%
+#   Line 2: Opus 4.6 » ctx 38% (76k/200k) » 5h 0% · 7d 22%
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 input=$(cat)
+
+# --- global cache (usage is per-account, not per-project) ---
+LETS_CACHE="${HOME}/.lets/cache"
+mkdir -p "$LETS_CACHE" 2>/dev/null
+
+# --- background fetch function (inlined from fetch-usage.sh) ---
+# Fetches Claude API usage stats and writes to ~/.lets/cache/usage.
+# Cache format (4 lines): 5h%, 7d%, 5h_resets_at, 7d_resets_at
+_fetch_usage() {
+  _fu_cache_file="${LETS_CACHE}/usage"
+  _fu_token_cache="${LETS_CACHE}/token"
+  _fu_creds_file="$HOME/.claude/.credentials.json"
+  _fu_token_ttl=900  # 15 minutes
+
+  _fu_token=""
+  if [ -f "$_fu_token_cache" ]; then
+    if [ "$(uname)" = "Darwin" ]; then
+      _fu_mtime=$(stat -f %m "$_fu_token_cache" 2>/dev/null || echo 0)
+    else
+      _fu_mtime=$(stat -c %Y "$_fu_token_cache" 2>/dev/null || echo 0)
+    fi
+    _fu_age=$(( $(date -u +%s) - _fu_mtime ))
+    if [ "$_fu_age" -lt "$_fu_token_ttl" ]; then
+      _fu_token=$(cat "$_fu_token_cache" 2>/dev/null)
+    fi
+  fi
+
+  if [ -z "$_fu_token" ]; then
+    # macOS: try Keychain first (newer Claude Code stores creds here)
+    if [ "$(uname)" = "Darwin" ]; then
+      _fu_keychain=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null)
+      if [ -n "$_fu_keychain" ]; then
+        _fu_token=$(printf '%s' "$_fu_keychain" | jq -r '.claudeAiOauth.accessToken // empty' 2>/dev/null)
+      fi
+    fi
+
+    # All platforms: fall back to credentials.json file
+    if [ -z "$_fu_token" ] && [ -f "$_fu_creds_file" ]; then
+      _fu_token=$(jq -r '.claudeAiOauth.accessToken // empty' "$_fu_creds_file" 2>/dev/null)
+    fi
+
+    if [ -z "$_fu_token" ]; then
+      return
+    fi
+    (umask 077; printf '%s' "$_fu_token" > "$_fu_token_cache")
+  fi
+
+  _fu_json=$(curl -s -m 3 \
+    -H "accept: application/json" \
+    -H "anthropic-beta: oauth-2025-04-20" \
+    -H "authorization: Bearer $_fu_token" \
+    -H "user-agent: claude-code/2.1.11" \
+    "https://api.anthropic.com/oauth/usage" 2>/dev/null)
+
+  if [ -z "$_fu_json" ]; then
+    return
+  fi
+
+  _fu_5h_raw=$(printf '%s' "$_fu_json" | jq -r '.five_hour.utilization // empty' 2>/dev/null)
+  _fu_7d_raw=$(printf '%s' "$_fu_json" | jq -r '.seven_day.utilization // empty' 2>/dev/null)
+  _fu_5h_reset=$(printf '%s' "$_fu_json" | jq -r '.five_hour.resets_at // ""' 2>/dev/null)
+  _fu_7d_reset=$(printf '%s' "$_fu_json" | jq -r '.seven_day.resets_at // ""' 2>/dev/null)
+
+  if [ -n "$_fu_5h_raw" ] && [ -n "$_fu_7d_raw" ]; then
+    _fu_5h=$(printf "%.0f" "$_fu_5h_raw")
+    _fu_7d=$(printf "%.0f" "$_fu_7d_raw")
+    printf '%s\n%s\n%s\n%s\n' "$_fu_5h" "$_fu_7d" "$_fu_5h_reset" "$_fu_7d_reset" > "$_fu_cache_file"
+  fi
+}
 
 # --- model ---
 model=$(echo "$input" | jq -r '.model.display_name // ""')
@@ -23,9 +92,7 @@ if [ -d "${dir}/.git" ] || git -C "$dir" rev-parse --git-dir > /dev/null 2>&1; t
 fi
 
 # --- usage stats (5h / 7d) from cache ---
-CACHE_DIR="${dir}/.lets/cache"
-mkdir -p "$CACHE_DIR" 2>/dev/null
-CACHE_FILE="${CACHE_DIR}/usage"
+CACHE_FILE="${LETS_CACHE}/usage"
 five_h=""
 seven_d=""
 five_h_reset=""
@@ -53,7 +120,7 @@ if [ -f "$CACHE_FILE" ]; then
 fi
 
 # Background refresh if cache missing or stale
-[ "$cache_fresh" -eq 0 ] && bash "$SCRIPT_DIR/fetch-usage.sh" "$CACHE_DIR" > /dev/null 2>&1 &
+[ "$cache_fresh" -eq 0 ] && _fetch_usage > /dev/null 2>&1 &
 
 # --- compute_delta: given a raw ISO timestamp, returns human-readable time until reset ---
 compute_delta() {
@@ -98,7 +165,7 @@ fi
 # --- assemble output ---
 SEP="\033[38;2;153;122;0m \xc2\xbb \033[0m"
 
-# line 1: LETS › branch or folder
+# line 1: LETS » branch or folder
 printf "\xf0\x9f\x8c\xb1 \033[1;38;2;255;215;0mLETS Workflow\033[0m"
 printf "%b" "$SEP"
 if [ -n "$branch" ]; then
