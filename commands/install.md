@@ -28,6 +28,28 @@ Install these plugins (check Claude Code docs for current installation method):
 - **beads** - task tracking across sessions (by steveyegge)
 **After installation, restart Claude Code.**
 
+## Step 2.5: Install Statusline
+
+Check if LETS statusline is installed in this project:
+
+```bash
+# ROOT = project-root from LETS Config
+if [ -f "$ROOT/.lets/statusline.sh" ]; then
+  echo "Statusline: installed"
+else
+  echo "Statusline not found."
+fi
+```
+
+If not installed, run the install script (creates `.lets/` structure, copies statusline, configures settings.json):
+
+```bash
+# CLAUDE_PLUGIN_ROOT is set by Claude Code plugin runtime
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/lets/install.sh"
+```
+
+Inform user: "Statusline installed. Restart Claude Code to see it."
+
 ## Step 3: Initialize Project (if needed)
 
 ```bash
@@ -73,8 +95,12 @@ if [ -f "$CONFIG" ]; then
     echo "github: true" >> "$CONFIG"
   fi
 else
-  cp "${CLAUDE_PLUGIN_ROOT}/hooks/config-template.yaml" "$CONFIG"
-  sed 's/^github:.*/github: true/' "$CONFIG" > "$CONFIG.tmp" && mv "$CONFIG.tmp" "$CONFIG"
+  cat > "$CONFIG" <<'YAML'
+# LETS plugin config
+language: English
+merge-branch: main
+github: true
+YAML
 fi
 ```
 
@@ -179,6 +205,8 @@ Run through and verify:
 - [ ] (Optional) `gh` CLI installed for GitHub workflow
 - [ ] (Optional) `gh auth status` passes
 - [ ] (Optional) `github: true` set in `.lets/config.yaml`
+- [ ] `.lets/statusline.sh` exists (copied from plugin)
+- [ ] `.claude/settings.json` has statusLine config
 
 **Setup complete when all checked.**
 

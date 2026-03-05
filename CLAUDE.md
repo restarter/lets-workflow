@@ -8,7 +8,8 @@ Claude Code plugin for development workflow with session management, code review
 .claude-plugin/plugin.json   # Plugin manifest
 commands/                     # Slash commands (/lets:start, /lets:done, /lets:review, etc.)
 agents/                       # Expert agents (review, opinion, ask, brainstorm, team implementation)
-hooks/                        # SessionStart hook, statusline, usage fetcher, sandbox prototype
+hooks/                        # SessionStart hook, workflow rules, config template
+scripts/lets/                 # Statusline source (copied to .lets/ per-project by /lets:install)
 reference/                    # Reference plugins for studying patterns (gitignored)
 ```
 
@@ -17,7 +18,8 @@ reference/                    # Reference plugins for studying patterns (gitigno
 - **Commands** = user-initiated workflows (sessions, commits, reviews)
 - **Agents** = experts dispatched by commands. `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:brainstorm`, `/lets:team` use specialized agents
 - **Orchestrators** = commands that delegate to other commands. `/lets:pr` orchestrates `/lets:review` for full PR lifecycle
-- **Hooks** = SessionStart injects workflow rules; statusline renders branded status bar with usage stats
+- **Hooks** = SessionStart injects workflow rules
+- **Statusline** = per-project `.lets/statusline.sh`, source in `scripts/lets/statusline.sh`, copied by `/lets:install`
 
 ## Architecture Decisions
 
@@ -32,6 +34,7 @@ reference/                    # Reference plugins for studying patterns (gitigno
 - Worktrees stored in `.worktrees/` at project root - `.lets/` symlinked for interactive sessions
 - SessionStart hook injects rules from `hooks/rules-context.md`
 - SessionStart hook reads `.lets/config.yaml` and injects settings into session context
+- Statusline source in `scripts/lets/statusline.sh`, copied to `.lets/statusline.sh` per-project by `/lets:install`. Project `.claude/settings.json` uses `git rev-parse --show-toplevel` to locate it.
 
 ## File Storage
 
@@ -44,7 +47,7 @@ This includes hook debug logs, temp files, and any runtime artifacts.
 .lets/reviews/           # Saved review reports
 .lets/plans/             # Implementation plans
 .lets/execution/         # Execution state (plan resume, PR review: pr-{number}/, team records: team-*.json)
-.lets/cache/             # Cached data (usage stats, OAuth token, hook debug logs)
+.lets/cache/             # Cached data (usage stats)
 # Worktrees (outside .lets/ to avoid circular symlinks):
 # .worktrees/            # Interactive worktrees only (agent worktrees use native Claude Code behavior)
 ```
