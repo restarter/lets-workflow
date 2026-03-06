@@ -23,7 +23,7 @@ Wait for answer before proceeding.
 
 ```bash
 BRANCH=$(git branch --show-current)
-# Parse task ID from branch: feature/<task-id>-<slug>
+# Extract task ID from branch name (feature/<id>-<slug> or worktree-<id>-<slug>)
 
 # Fallback:
 bd list --status=in_progress

@@ -1,6 +1,6 @@
 ---
 description: Quick code sanity check. Inline 5-perspective review.
-argument-hint: "[--staged|--last-commit]"
+argument-hint: "[--staged|--last-commit|--plan]"
 ---
 
 # Quick Local Code Check
@@ -13,6 +13,7 @@ Fast inline sanity check of local changes from 5 perspectives.
 /lets:check              # uncommitted changes (default)
 /lets:check --staged     # only staged changes
 /lets:check --last-commit # last commit
+/lets:check --plan       # quick plan sanity check
 ```
 
 ## When to Use
@@ -23,6 +24,38 @@ Fast inline sanity check of local changes from 5 perspectives.
 - Spot check after refactoring
 
 **For full review:** Use `/lets:review` (local or PR, up to 11 agents).
+
+## Plan Mode (--plan)
+
+If `--plan` flag detected, switch to plan review mode. Skip all code review steps below.
+
+```bash
+# ROOT = project-root from LETS Config
+# Find latest plan
+PLAN=$(ls -t "$ROOT/.lets/plans/"*.md 2>/dev/null | head -1)
+# Or specific path: /lets:check --plan path/to/plan.md
+```
+
+If no plan found: "No plans found in `.lets/plans/`. Run `/lets:brainstorm` first."
+
+Read the plan and review with 5 lenses (same confidence filter):
+
+- **[Feasibility]** Can this be implemented as described? Missing steps, impossible constraints?
+- **[Completeness]** Are all requirements covered? Edge cases? Error handling?
+- **[Risk]** What could go wrong? Dependencies, breaking changes, migration risks?
+- **[Scope]** Is the plan proportional to the problem? Overengineered? Underspecified?
+- **[Clarity]** Can a developer follow this without guessing? Ambiguous steps?
+
+Output same format as code check, then:
+
+```
+┌─ LETS ─────────────────────────┐
+│  Full review?  /lets:review --plan  │
+│  Execute?      /lets:execute        │
+└─────────────────────────────────────┘
+```
+
+---
 
 ## Step 1: Get Changes
 
@@ -130,8 +163,8 @@ If issues were found, record in beads:
 
 ```bash
 BRANCH=$(git branch --show-current)
-# Parse task ID from branch: feature/<task-id>-<slug>
-# Example: feature/ji2-beads-deep-integration -> lets-plugin-claude-ji2
+# Extract task ID from branch name (feature/<id>-<slug> or worktree-<id>-<slug>)
+# Strategy: look for beads ID pattern anywhere in branch name
 
 # Fallback: bd list --status=in_progress
 ```

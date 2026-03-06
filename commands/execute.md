@@ -13,8 +13,8 @@ Execute an implementation plan step by step. Reads plan from `.lets/plans/`, ada
 
 ```bash
 BRANCH=$(git branch --show-current)
-# Parse task ID from branch: feature/<task-id>-<slug>
-# Example: feature/4ef-create-lets-execute-skill -> lets-plugin-claude-4ef
+# Extract task ID from branch name (feature/<id>-<slug> or worktree-<id>-<slug>)
+# Strategy: look for beads ID pattern anywhere in branch name
 
 # Fallback:
 bd list --status=in_progress
