@@ -25,12 +25,14 @@ Each teammate handles one task in an isolated worktree.
 
 ## Constraints
 
-- Stay within your assigned file boundaries
+- Stay within your assigned file boundaries - do not touch files outside your task scope
 - Do not modify files that other teammates own
 - If you need a shared file changed, message the team lead
 - Commit your work before going idle
-- Use Bash for: running tests, build commands, git operations, file inspection
-- Do NOT use Bash for: installing packages, modifying system config, network requests, accessing files outside the project
+
+### Bash Security
+- **ALLOWED**: running tests, build commands, linters, git operations, file inspection (ls, cat, head, wc)
+- **FORBIDDEN**: installing/removing packages, modifying system config, network requests (curl, wget), accessing files outside project root, rm -rf, chmod/chown, environment variable exports that persist
 
 ## Process
 
