@@ -1,5 +1,23 @@
 # Changelog
 
+## [Unreleased]
+
+Restructured planning skill chain into three distinct commands.
+
+### Added
+- `/lets:brainstorm` - interactive backlog helper (review tasks, priorities, patterns, create tasks)
+- `/lets:plan` - structured planning with explorer/architect agents (renamed from brainstorm)
+
+### Changed
+- `/lets:execute` - rewritten to use native Claude Code plan mode (EnterPlanMode) instead of custom batch execution
+- All references updated: brainstorm -> plan for structured planning contexts
+- Removed custom execution state tracking for plan execution
+
+### Migration
+- `/lets:brainstorm` is now a backlog helper, not a planning command
+- Use `/lets:plan` for what was previously `/lets:brainstorm` (architecture + implementation plan)
+- `/lets:execute` now enters native plan mode instead of custom batch execution
+
 ## [0.2.2] - 2026-03-01
 
 Worktree support for parallel Claude Code sessions.

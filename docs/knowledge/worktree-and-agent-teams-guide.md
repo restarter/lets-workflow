@@ -387,7 +387,7 @@ Step by step (from `worktree_cmd.go:142-251`):
 | `start.md` | Reads recent session files via `ls -t` glob | No previous session context (resolved: dated files + branch slug) |
 | `start.md` | Writes `.session-start-ref` | Written to worktree (isolated) |
 | `end.md` | Reads `.session-start-ref`, writes summaries | Isolated from main session history |
-| `brainstorm.md` | Saves plans to `$ROOT/.lets/plans/` | Plans invisible from main repo |
+| `plan.md` | Saves plans to `$ROOT/.lets/plans/` | Plans invisible from main repo |
 | `execute.md` | Reads/writes execution state | State not shared |
 | `review.md` | Saves reports to `$ROOT/.lets/reviews/` | Reports isolated |
 | `pr.md` | PR state in `$ROOT/.lets/execution/pr-N/` | PR state split |
@@ -547,8 +547,8 @@ Reviewer reads ACTUAL code, not the implementer's report.
 |---------|-------|-----|
 | `end.md` | ~~`last-summary.md` race condition~~ (resolved) | Uses dated files with branch slug: `YYYY-MM-DD-HHMM-{branch}.md` |
 | `commit.md` | Task ID parsing from branch name | Verify works with `bd worktree create` branch naming |
-| `execute.md` | Execution state in `.lets/execution/` | Needs shared `.lets/` |
-| `brainstorm.md` | Plans in `.lets/plans/` | Needs shared `.lets/` |
+| `execute.md` | Reads plans from `.lets/plans/` | Needs shared `.lets/` |
+| `plan.md` | Plans in `.lets/plans/` | Needs shared `.lets/` |
 
 **No changes needed:**
 

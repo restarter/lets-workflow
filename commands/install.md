@@ -28,6 +28,28 @@ Install these plugins (check Claude Code docs for current installation method):
 - **beads** - task tracking across sessions (by steveyegge)
 **After installation, restart Claude Code.**
 
+## Step 2.5: Install Statusline
+
+Check if LETS statusline is installed in this project:
+
+```bash
+# ROOT = project-root from LETS Config
+if [ -f "$ROOT/.lets/statusline.sh" ]; then
+  echo "Statusline: installed"
+else
+  echo "Statusline not found."
+fi
+```
+
+If not installed, run the install script (creates `.lets/` structure, copies statusline, configures settings.json):
+
+```bash
+# CLAUDE_PLUGIN_ROOT is set by Claude Code plugin runtime
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/lets/install.sh"
+```
+
+Inform user: "Statusline installed. Restart Claude Code to see it."
+
 ## Step 3: Initialize Project (if needed)
 
 ```bash
@@ -76,8 +98,12 @@ if [ -f "$CONFIG" ]; then
     echo "github: true" >> "$CONFIG"
   fi
 else
-  cp "${CLAUDE_PLUGIN_ROOT}/hooks/config-template.yaml" "$CONFIG"
-  sed 's/^github:.*/github: true/' "$CONFIG" > "$CONFIG.tmp" && mv "$CONFIG.tmp" "$CONFIG"
+  cat > "$CONFIG" <<'YAML'
+# LETS plugin config
+language: English
+merge-branch: main
+github: true
+YAML
 fi
 ```
 
@@ -103,7 +129,7 @@ Present this to the developer:
 
 Worktree: /lets:worktree create -> terminal -> /lets:start -> Work -> /lets:done -> /lets:end -> /lets:worktree remove
 
-Team:     /lets:brainstorm -> /lets:team run -> monitor -> /lets:review --local -> /lets:done
+Team:     /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /lets:done
 ```
 
 ### Essential Skills
@@ -123,23 +149,24 @@ Team:     /lets:brainstorm -> /lets:team run -> monitor -> /lets:review --local 
 | `/lets:team` | Utility | Parallel implementation with Agent Teams |
 | `/lets:status` | Utility | Task overview anytime |
 | `/lets:note` | Utility | Add note to active task |
+| `/lets:brainstorm` | Planning | Interactive backlog helper - review, prioritize, spot patterns, create tasks |
 
 ### Planning Skills (for bigger tasks)
 
 | Skill | When to use |
 |-------|-------------|
-| `/lets:brainstorm` | Unclear goal, need architecture + plan ("Improve Z", "Not sure how...") |
-| `/lets:execute` | Have a plan from /lets:brainstorm, ready to implement step by step |
+| `/lets:plan` | Task needs architecture + implementation plan |
+| `/lets:execute` | Have a plan from /lets:plan, ready to execute via native plan mode |
 
 **Rule of thumb:** Can you write a 1-sentence requirement?
 - YES, small task -> work directly
-- YES, medium/large -> `/lets:brainstorm` then `/lets:execute`
-- NO -> `/lets:brainstorm` first
+- YES, medium/large -> `/lets:plan` then `/lets:execute`
+- NO -> `/lets:brainstorm` to clarify, then `/lets:plan`
 
 ### Key Rules
 
 1. **Every session has a task** - no random work without tracking
-2. **Big tasks need planning** - use `/lets:brainstorm` + `/lets:execute` for 2+ hour tasks
+2. **Big tasks need planning** - use `/lets:plan` + `/lets:execute` for 2+ hour tasks
 3. **Document everything** - beads is the source of truth
 4. **End properly** - `/lets:end` saves context for next session
 
@@ -182,6 +209,8 @@ Run through and verify:
 - [ ] (Optional) `gh` CLI installed for GitHub workflow
 - [ ] (Optional) `gh auth status` passes
 - [ ] (Optional) `github: true` set in `.lets/config.yaml`
+- [ ] `.lets/statusline.sh` exists (copied from plugin)
+- [ ] `.claude/settings.json` has statusLine config
 
 **Setup complete when all checked.**
 

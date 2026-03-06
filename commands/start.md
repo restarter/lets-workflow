@@ -232,8 +232,8 @@ Once task is selected, assess complexity:
 |------|--------|
 | Quick fix (< 30 min) | "OK, let's do it" |
 | Small (< 2 hrs) | "OK, let's do it" |
-| Medium (2-8 hrs) | Suggest `/lets:brainstorm` then `/lets:execute` |
-| Large (> 8 hrs) | Require `/lets:brainstorm` + break into subtasks |
+| Medium (2-8 hrs) | Suggest `/lets:plan` then `/lets:execute` |
+| Large (> 8 hrs) | Require `/lets:plan` + break into subtasks |
 
 ## Step 8: Ready to Work
 
@@ -261,5 +261,5 @@ After task is selected and branch is ready, show reminders and welcome box.
 - If uncommitted changes exist, ask user what to do with them first
 - If previous session had in-progress work, highlight it
 - If user is already on the correct feature branch, skip branch creation
-- Suggest `/lets:brainstorm` for medium/large tasks
+- Suggest `/lets:plan` for medium/large tasks
 - Respond in user's language

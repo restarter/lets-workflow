@@ -33,7 +33,7 @@
 - **UI layout decisions** - ASCII mockups
 - **Config format options** - show example YAML/JSON for each variant
 - `/lets:opinion` - agents could present options with preview
-- `/lets:brainstorm` - approach comparison during planning phases
+- `/lets:plan` - approach comparison during planning phases
 
 ## Constraints
 
