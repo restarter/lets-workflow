@@ -24,6 +24,7 @@ reference/                    # Reference plugins for studying patterns (gitigno
 - Agents define WHO (expertise, scoring, output format). Commands define WHAT to do (provide diff, context)
 - `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan` use `subagent_type: "lets:agent-name"` to dispatch agents via Task tool
 - `/lets:pr` orchestrates `/lets:review` (delegates analysis) and handles GitHub posting, follow-up, respond, and approval directly via gh CLI
+- `/lets:execute` uses EnterPlanMode for native plan mode execution with user approval gates. No subagents.
 - `/lets:check` reviews inline (no subagent) for speed
 - All agents are read-only (Read, Grep, Glob, optionally Bash). No Edit/Write. Exception: `agents/implementer.md` has Edit/Write/Bash for `/lets:team` parallel implementation in isolated worktrees.
 - `/lets:team` uses Agent Teams (TeamCreate, Agent with isolation: worktree) for parallel implementation. All other commands use subagents for analysis.
@@ -43,7 +44,7 @@ This includes hook debug logs, temp files, and any runtime artifacts.
 .lets/sessions/          # Session summaries, session-start-ref
 .lets/reviews/           # Saved review reports
 .lets/plans/             # Implementation plans
-.lets/execution/         # Execution state (plan resume, PR review: pr-{number}/, team records: team-*.json)
+.lets/execution/         # Execution state (PR review: pr-{number}/, team records: team-*.json)
 .lets/cache/             # Cached data (usage stats, OAuth token, hook debug logs)
 # Worktrees (outside .lets/ to avoid circular symlinks):
 # .worktrees/            # Interactive worktrees only (agent worktrees use native Claude Code behavior)

@@ -165,7 +165,7 @@ All generated files go to `.lets/` (gitignored):
 .lets/sessions/     Session summaries and start references
 .lets/reviews/      Saved review reports
 .lets/plans/        Implementation plans
-.lets/execution/    Plan execution state and PR review state
+.lets/execution/    PR review state and team records
 .lets/cache/        Usage stats and cached data
 ```
 
