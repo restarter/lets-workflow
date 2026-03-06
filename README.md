@@ -10,11 +10,12 @@ LETS turns Claude Code into a disciplined development partner. Every session has
 # Clone into Claude Code plugins directory
 git clone https://github.com/nickolay-umbo/lets-plugin-claude ~/.claude/plugins/lets
 
-# Run setup (inside Claude Code)
+# First-time global setup (inside Claude Code)
 /lets:install
-```
 
-`/lets:install` checks dependencies and walks you through initial configuration.
+# Or just initialize current project (if plugins already installed)
+/lets:init
+```
 
 ## Commands
 
@@ -36,7 +37,8 @@ git clone https://github.com/nickolay-umbo/lets-plugin-claude ~/.claude/plugins/
 | `/lets:team` | Parallel implementation with Agent Teams (run, status, stop) |
 | `/lets:status` | Task overview and project status |
 | `/lets:note` | Add note to active task |
-| `/lets:install` | First-time setup and dependency check |
+| `/lets:install` | First-time global setup - plugins, environment, workflow |
+| `/lets:init` | Initialize LETS in current project |
 
 ## Workflow
 

@@ -13,3 +13,4 @@ dolt-server.*
 dolt-monitor.*
 .worktrees/
 .claude/worktrees/
+.beads/
