@@ -1,6 +1,6 @@
 ---
 description: Full code review with dynamic agent selection (up to 11 specialized agents). Analyzes changes first, selects relevant experts. Also reviews implementation plans.
-argument-hint: "[PR-url-or-number|--local|--staged|--last-commit|--plan] [--json]"
+argument-hint: "[PR-url-or-number|--local|--staged|--last-commit|--plan|--file <path>] [--json]"
 ---
 
 # Full Code Review
@@ -20,6 +20,7 @@ Comprehensive code review with dynamic agent selection based on change types. Up
 /lets:review --last-commit       # Last commit
 /lets:review --plan              # Review latest plan in .lets/plans/
 /lets:review --plan <path>       # Review specific plan file
+/lets:review --file <path>       # Review an existing file (full content, not diff)
 ```
 
 ## Step 1: Determine Review Mode
@@ -28,6 +29,7 @@ Comprehensive code review with dynamic agent selection based on change types. Up
 - PR URL/number -> GitHub PR mode
 - `--local` / `--staged` / `--last-commit` -> Local mode
 - `--plan` / `--plan <path>` -> **Plan review mode** (skip to Plan Review section below)
+- `--file <path>` -> **File review mode** - reviews entire file content, not a diff
 
 **If no argument**, use **AskUserQuestion**:
 
@@ -92,6 +94,17 @@ git diff HEAD~1
 ```
 
 If no changes found, inform user and exit.
+
+### For File Review (--file):
+
+```bash
+# ROOT = project-root from LETS Config
+cat "$ROOT/{path}"
+```
+
+Read the entire file. Use file content as "diff" for agents. No git diff needed - this reviews existing code, not changes.
+
+If file not found, inform user and exit.
 
 ## Step 3: Gather Context
 
@@ -208,7 +221,7 @@ ultrathink
 RESPONSE LANGUAGE: {language from LETS Config, e.g. "English"}
 PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
 
-Review the following code changes from your expert perspective.
+Review the following code from your expert perspective.
 Use your confidence scoring system. Only report findings >= 80 confidence.
 Follow your output format as defined in your system prompt.
 
@@ -225,10 +238,10 @@ CLAUDE.MD RULES:
 {claude_md_content}
 
 CHANGED FILES:
-{list of modified files with stats}
+{list of modified files with stats, or single file path for --file mode}
 
-DIFF:
-{diff_content}
+CODE:
+{diff_content, or full file content for --file mode}
 
 {mandatory context - see table below}
 ```
