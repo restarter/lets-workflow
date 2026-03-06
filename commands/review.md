@@ -206,6 +206,7 @@ Each agent receives this context in their task prompt. Agents define their own e
 ultrathink
 
 RESPONSE LANGUAGE: {language from LETS Config, e.g. "English"}
+PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
 
 Review the following code changes from your expert perspective.
 Use your confidence scoring system. Only report findings >= 80 confidence.

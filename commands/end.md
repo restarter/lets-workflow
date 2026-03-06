@@ -23,14 +23,8 @@ If `--fast` argument provided, skip to Fast Close below and do NOT run Steps 1-7
    # ROOT = project-root from LETS Config
    BRANCH=$(git branch --show-current)
    BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
-   GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
    mkdir -p "$ROOT/.lets/sessions"
-   # If in worktree, use branch-slug filename; otherwise use default
-   if echo "$GIT_DIR" | grep -q "worktrees/"; then
-     SUMMARY_FILE="$ROOT/.lets/sessions/last-summary-${BRANCH_SLUG}.md"
-   else
-     SUMMARY_FILE="$ROOT/.lets/sessions/last-summary.md"
-   fi
+   SUMMARY_FILE="$ROOT/.lets/sessions/$(date +%Y-%m-%d-%H%M)-${BRANCH_SLUG}.md"
    ```
    Write to `$SUMMARY_FILE`:
    ```
@@ -159,26 +153,17 @@ AskUserQuestion(
 
 ## Step 5: Create Session Summary (session-level context for next session bootstrap)
 
-Create TWO files:
-1. **Dated archive:** `.lets/sessions/YYYY-MM-DD-HHMM.md`
-2. **Latest:** `last-summary-{branch-slug}.md` in worktree, `last-summary.md` in main repo
+Single dated file with branch slug in the name. No `last-summary` files - `/lets:start` reads recent sessions by date.
 
 ```bash
 # ROOT = project-root from LETS Config
 BRANCH=$(git branch --show-current)
 BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
-GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
 mkdir -p "$ROOT/.lets/sessions"
-DATED_FILE="$ROOT/.lets/sessions/$(date +%Y-%m-%d-%H%M).md"
-# If in worktree, use branch-slug filename; otherwise use default
-if echo "$GIT_DIR" | grep -q "worktrees/"; then
-  LATEST_FILE="$ROOT/.lets/sessions/last-summary-${BRANCH_SLUG}.md"
-else
-  LATEST_FILE="$ROOT/.lets/sessions/last-summary.md"
-fi
+SUMMARY_FILE="$ROOT/.lets/sessions/$(date +%Y-%m-%d-%H%M)-${BRANCH_SLUG}.md"
 ```
 
-Write summary to both `$DATED_FILE` and `$LATEST_FILE`.
+Write summary to `$SUMMARY_FILE`.
 
 **Summary template:**
 

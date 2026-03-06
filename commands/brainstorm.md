@@ -97,6 +97,8 @@ Task(
   subagent_type="lets:explorer",
   prompt="FULL EXPLORATION MODE. Map patterns, structure, and integration points for a new feature.
 
+PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
+
 FEATURE GOAL: {feature goal from Step 1}
 USER CLARIFICATIONS: {answers from Step 3}
 TASK CONTEXT: {task title and description from beads, if available}
@@ -121,6 +123,8 @@ Task(
   subagent_type="lets:explorer",
   prompt="PATTERN SCOUT MODE. Find existing features SIMILAR to what we're building.
 
+PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
+
 FEATURE GOAL: {feature goal from Step 1}
 
 TASK CONTEXT:
@@ -143,6 +147,8 @@ Focus ONLY on similar existing patterns - leave structure mapping and integratio
 Task(
   subagent_type="lets:explorer",
   prompt="STRUCTURE MAPPER MODE. Map WHERE the new feature fits in the codebase.
+
+PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
 
 FEATURE GOAL: {feature goal from Step 1}
 
@@ -167,6 +173,8 @@ Focus ONLY on structure and conventions - leave patterns and integration to othe
 Task(
   subagent_type="lets:explorer",
   prompt="INTEGRATION ANALYST MODE. Map HOW new code connects to existing code.
+
+PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
 
 FEATURE GOAL: {feature goal from Step 1}
 
@@ -295,6 +303,8 @@ For each selected approach:
 Task(
   subagent_type="lets:architect",
   prompt="ultrathink
+
+PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
 
 DESIGN MODE: {approach name}.
 
@@ -458,6 +468,7 @@ Task(
   prompt="ultrathink
 
 RESPONSE LANGUAGE: {language from LETS Config, e.g. "English"}
+PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
 
 OPINION MODE. Evaluate an architecture design for a feature.
 

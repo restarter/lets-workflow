@@ -103,6 +103,7 @@ Task(
   prompt="ultrathink
 
 RESPONSE LANGUAGE: {language from LETS Config, e.g. "English"}
+PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
 
 ASK MODE. A developer is asking you a direct question.
 
