@@ -443,7 +443,7 @@ AskUserQuestion(
 **Handle response:**
 - **Recommended** -> dispatch recommended experts
 - **Pragmatist only** -> dispatch only pragmatist
-- **Skip evaluation** -> proceed directly to Step 8
+- **Skip evaluation** -> proceed directly to Step 9 (Plan Generation)
 - **Other** (free text) -> parse expert names from text, dispatch selected
 
 ### Dispatch Experts
@@ -507,9 +507,10 @@ Then:
 ```
 AskUserQuestion(
   questions=[{
-    question: "Proceed to plan generation?",
+    question: "How to proceed?",
     header: "LETS",
     options: [
+      { label: "Discuss", description: "Explore trade-offs, challenge assumptions, probe deeper" },
       { label: "Generate plan", description: "Architecture approved, write the implementation plan" },
       { label: "Adjust architecture", description: "Incorporate expert feedback first" }
     ],
@@ -519,11 +520,103 @@ AskUserQuestion(
 ```
 
 **Handle response:**
-- **Generate plan** -> proceed to Step 8
+- **Discuss** -> proceed to Step 8 (Interactive Exploration)
+- **Generate plan** -> skip to Step 9 (Plan Generation)
 - **Adjust architecture** -> discuss changes, update architecture, ask again
 - **Other** (free text) -> treat as adjustment request
 
-## Step 8: Plan Generation
+## Step 8: Interactive Exploration
+
+Deep-dive discussion to stress-test the architecture before committing to a plan. Ask probing questions, share insights, challenge assumptions.
+
+**This step is opt-in** - user chooses "Discuss" after evaluation. For simple tasks users skip straight to plan generation.
+
+### How It Works
+
+This is a **conversation, not a checklist**. One question or insight at a time, building on user's responses.
+
+### Start with Insights
+
+Open with 2-3 insights derived from exploration + evaluation. Format:
+
+```
+## Let's explore this deeper
+
+**Insight:** {non-obvious implication from the architecture or expert feedback}
+
+**Insight:** {connection the user might not have considered - "X already almost exists because Y"}
+
+**Question:** {probing question that challenges an assumption or surfaces a trade-off}
+```
+
+### Conversation Loop
+
+After each user response:
+
+1. **Acknowledge** - brief, no fluff ("Good point." / "That changes things.")
+2. **Build** - add an insight or connection based on their answer
+3. **Probe** - ask the next question that goes deeper or shifts angle
+
+### Question Types to Draw From
+
+- **Assumption challenges:** "You're assuming X - what if Y instead?"
+- **Edge case probes:** "What happens when Z?"
+- **Trade-off surfacing:** "This gives you A but costs B - is that worth it?"
+- **Scope questions:** "Do you actually need X, or is Y enough for now?"
+- **Integration risks:** "How does this interact with {existing thing from exploration}?"
+- **Future-proofing:** "If requirements change to include X, does this design bend or break?"
+- **User perspective:** "From the end user's view, what changes?"
+
+### What Makes Good Insights
+
+- Connect dots between exploration findings and user's goals
+- Surface things that "almost exist" in the codebase
+- Flag where the architecture diverges from existing patterns (and whether that's intentional)
+- Note when expert feedback contradicts each other
+- Highlight decisions that are easy to change now but expensive later
+
+### Exit Condition
+
+After each exchange, gauge whether to continue or wrap up. Signals to wrap up:
+- User gives short answers (topic exhausted)
+- Key questions have been covered
+- User explicitly says "enough" / "let's move on"
+
+When ready to wrap up:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Ready to generate the plan?",
+    header: "LETS",
+    options: [
+      { label: "Generate plan", description: "Discussion complete, write the implementation plan" },
+      { label: "Keep exploring", description: "More to discuss" },
+      { label: "Adjust architecture", description: "Change the approach based on what we discussed" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Handle response:**
+- **Generate plan** -> proceed to Step 9
+- **Keep exploring** -> continue conversation loop
+- **Adjust architecture** -> go back to Step 6 with updated context from discussion
+- **Other** (free text) -> treat as continuation of discussion
+
+### Record Key Findings
+
+After exploration ends, if active task exists:
+
+```bash
+bd comments add <task-id> "Exploration insights:
+- {key insight 1}
+- {key insight 2}
+- {decision or trade-off confirmed}"
+```
+
+## Step 9: Plan Generation
 
 Write a detailed implementation plan for the chosen architecture.
 
@@ -608,7 +701,7 @@ Before saving, verify the plan passes these gates:
 - Every logical unit has a commit point
 - File paths are exact and verified against explorer findings
 
-## Step 9: Save & Output
+## Step 10: Save & Output
 
 ### Save Plan
 
