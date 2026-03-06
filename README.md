@@ -28,8 +28,9 @@ git clone https://github.com/nickolay-umbo/lets-plugin-claude ~/.claude/plugins/
 | `/lets:review` | Full code review (up to 11 specialized agents, ~2-3 min) |
 | `/lets:opinion` | Technical decision analysis (3-5 expert agents in parallel) |
 | `/lets:ask` | Quick expert consultation (single agent) |
-| `/lets:brainstorm` | Explore ideas and requirements before implementation |
-| `/lets:execute` | Execute plan from `/lets:brainstorm` step by step |
+| `/lets:brainstorm` | Interactive backlog helper - review tasks, priorities, patterns |
+| `/lets:plan` | Structured planning - explore codebase, design architecture, write plan |
+| `/lets:execute` | Execute plan from `/lets:plan` via native plan mode |
 | `/lets:pr` | PR review lifecycle - analyze, discuss, post inline, follow-up, respond, approve |
 | `/lets:worktree` | Create/manage worktrees for parallel sessions |
 | `/lets:team` | Parallel implementation with Agent Teams (run, status, stop) |
@@ -69,10 +70,10 @@ For medium and large tasks, LETS provides structured planning:
 
 | Situation | Approach |
 |-----------|----------|
-| Clear goal ("Add X to Y") | `/lets:brainstorm` - define requirements, then execute plan |
-| Unclear goal ("Improve Z") | `/lets:brainstorm` - explore options and constraints first |
+| Clear goal ("Add X to Y") | `/lets:plan` - explore codebase, design architecture, write plan |
+| Unclear goal ("Improve Z") | `/lets:brainstorm` to clarify, then `/lets:plan` |
 
-`/lets:brainstorm` helps clarify what needs to be built before writing code. Once the plan is ready, `/lets:execute` implements it step by step with review checkpoints.
+`/lets:brainstorm` helps think through what to build (backlog review, priorities, task creation). `/lets:plan` designs how to build it (codebase exploration, architecture, implementation plan). `/lets:execute` implements the plan via native plan mode with approval gates.
 
 ### Parallel Sessions (Worktrees)
 
@@ -99,7 +100,7 @@ Each worktree gets its own branch (`worktree-<name>`), shares the task database 
 For multiple independent tasks, `/lets:team` spawns parallel agents in isolated worktrees:
 
 ```
-/lets:brainstorm -> /lets:team run -> monitor & approve plans -> /lets:review --local -> /lets:done
+/lets:plan -> /lets:team run -> monitor & approve plans -> /lets:review --local -> /lets:done
 ```
 
 Each teammate gets one task, works in an isolated worktree with plan approval from the lead, and commits are auto cherry-picked back to the current branch.
@@ -164,7 +165,7 @@ All generated files go to `.lets/` (gitignored):
 .lets/sessions/     Session summaries and start references
 .lets/reviews/      Saved review reports
 .lets/plans/        Implementation plans
-.lets/execution/    Plan execution state and PR review state
+.lets/execution/    PR review state and team records
 .lets/cache/        Usage stats and cached data
 ```
 

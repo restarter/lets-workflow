@@ -439,7 +439,7 @@ ls "$ROOT/.lets/plans/"*{task-id}* 2>/dev/null
 ```
 
 If no plan files found, inform user and exit:
-> "No plans found in `.lets/plans/`. Run `/lets:brainstorm` first."
+> "No plans found in `.lets/plans/`. Run `/lets:plan` first."
 
 Read the plan file and show title + task ID to user.
 

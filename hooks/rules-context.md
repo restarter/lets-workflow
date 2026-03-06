@@ -47,7 +47,7 @@ User states goal -> Claude proposes approach -> User approves -> Claude executes
 
 ## Agent Rules
 
-- When launching expert agents for `/lets:review`, `/lets:pr`, `/lets:opinion`, `/lets:ask`, `/lets:brainstorm` - use ONLY `lets:*` agents (`lets:architect`, `lets:security`, etc.)
+- When launching expert agents for `/lets:review`, `/lets:pr`, `/lets:opinion`, `/lets:ask`, `/lets:plan` - use ONLY `lets:*` agents (`lets:architect`, `lets:security`, etc.)
 - Never use `general-purpose` or other non-lets subagent types for expert work
 
 ### Directed Search vs Exploration
@@ -141,13 +141,13 @@ github: true   /lets:start -> Work -> /lets:check -> /lets:commit -> /lets:done 
 
 Worktree:  /lets:worktree create -> `cd .worktrees/<name>/ && claude` -> /lets:start -> Work -> /lets:done -> /lets:end -> /lets:worktree remove (main repo)
 
-Team:      /lets:brainstorm -> /lets:team run -> monitor -> /lets:review --local -> /lets:done
+Team:      /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /lets:done
 
 PR review:  /lets:pr <PR> -> discuss -> post -> /lets:pr --follow-up -> /lets:pr --approve
 PR respond: /lets:pr --respond <PR> -> triage -> fix -> reply
 ```
 
-If a plan exists from `/lets:brainstorm`, use `/lets:execute` to implement it. Execute handles check/commit cycles internally.
+If a plan exists from `/lets:plan`, use `/lets:execute` to implement it. Execute enters native plan mode; use `/lets:commit` at natural commit points.
 
 Two separate lifecycles:
 - **Session:** `/lets:start` ... `/lets:end` (one conversation)
@@ -176,10 +176,10 @@ Never work without a tracked task. User must pick existing task or create new on
 | Size | Action |
 |------|--------|
 | Quick/Small (< 2 hrs) | Work directly |
-| Medium (2-8 hrs) | Suggest `/lets:brainstorm` then `/lets:execute` |
-| Large (> 8 hrs) | Require `/lets:brainstorm` + break into subtasks |
+| Medium (2-8 hrs) | Suggest `/lets:plan` then `/lets:execute` |
+| Large (> 8 hrs) | Require `/lets:plan` + break into subtasks |
 
-After `/lets:brainstorm` produces a plan, use `/lets:execute` to implement it step by step.
+After `/lets:plan` produces a plan, use `/lets:execute` to implement it step by step.
 
 ### Mid-Session Task Switch
 
@@ -270,8 +270,9 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:pr` | Code | PR review lifecycle (review, respond, follow-up, approve) |
 | `/lets:opinion` | Expert | Technical decision (3-5 agents) |
 | `/lets:ask` | Expert | Quick expert consultation (1 agent) |
-| `/lets:brainstorm` | Planning | Idea needs architecture + implementation plan |
-| `/lets:execute` | Planning | Execute plan from /lets:brainstorm step by step |
+| `/lets:brainstorm` | Planning | Interactive backlog helper - review, prioritize, spot patterns, create tasks |
+| `/lets:plan` | Planning | Structured planning with agents - architecture + implementation plan |
+| `/lets:execute` | Planning | Execute plan from /lets:plan via native plan mode |
 | `/lets:status` | Utility | Task overview and project status |
 | `/lets:worktree` | Utility | Create/manage interactive worktrees for parallel work |
 | `/lets:team` | Utility | Parallel implementation with Agent Teams (run, status, stop) |
@@ -281,7 +282,7 @@ This applies when: presenting implementation approaches, choosing between soluti
 ## Key Principles
 
 1. **Every session has a task** - no random work without tracking
-2. **Big tasks need planning** - use `/lets:brainstorm` + `/lets:execute`
+2. **Big tasks need planning** - use `/lets:plan` + `/lets:execute`
 3. **Document everything** - beads is the source of truth
 4. **Git + Beads linked** - commits reference tasks, tasks track commits
 5. **Skills guide the flow** - each skill prompts next step

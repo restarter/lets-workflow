@@ -1,6 +1,6 @@
 ---
 name: explorer
-description: Codebase cartographer for mapping structure, patterns, and integration points relevant to a proposed feature. Use during brainstorming to understand what exists before designing what to add.
+description: Codebase cartographer for mapping structure, patterns, and integration points relevant to a proposed feature. Use during planning to understand what exists before designing what to add.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 color: cyan

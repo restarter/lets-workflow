@@ -7,7 +7,7 @@ Claude Code plugin for development workflow with session management, code review
 ```
 .claude-plugin/plugin.json   # Plugin manifest
 commands/                     # Slash commands (/lets:start, /lets:done, /lets:review, etc.)
-agents/                       # Expert agents (review, opinion, ask, brainstorm, team implementation)
+agents/                       # Expert agents (review, opinion, ask, plan, team implementation)
 hooks/                        # SessionStart hook, workflow rules, config template
 scripts/lets/                 # Statusline source (copied to .lets/ per-project by /lets:install)
 reference/                    # Reference plugins for studying patterns (gitignored)
@@ -16,7 +16,7 @@ reference/                    # Reference plugins for studying patterns (gitigno
 ## Key Concepts
 
 - **Commands** = user-initiated workflows (sessions, commits, reviews)
-- **Agents** = experts dispatched by commands. `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:brainstorm`, `/lets:team` use specialized agents
+- **Agents** = experts dispatched by commands. `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:team` use specialized agents
 - **Orchestrators** = commands that delegate to other commands. `/lets:pr` orchestrates `/lets:review` for full PR lifecycle
 - **Hooks** = SessionStart injects workflow rules
 - **Statusline** = per-project `.lets/statusline.sh`, source in `scripts/lets/statusline.sh`, copied by `/lets:install`
@@ -24,8 +24,9 @@ reference/                    # Reference plugins for studying patterns (gitigno
 ## Architecture Decisions
 
 - Agents define WHO (expertise, scoring, output format). Commands define WHAT to do (provide diff, context)
-- `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:brainstorm` use `subagent_type: "lets:agent-name"` to dispatch agents via Task tool
+- `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan` use `subagent_type: "lets:agent-name"` to dispatch agents via Task tool
 - `/lets:pr` orchestrates `/lets:review` (delegates analysis) and handles GitHub posting, follow-up, respond, and approval directly via gh CLI
+- `/lets:execute` uses EnterPlanMode for native plan mode execution with user approval gates. No subagents.
 - `/lets:check` reviews inline (no subagent) for speed
 - All agents are read-only (Read, Grep, Glob, optionally Bash). No Edit/Write. Exception: `agents/implementer.md` has Edit/Write/Bash for `/lets:team` parallel implementation in isolated worktrees.
 - `/lets:team` uses Agent Teams (TeamCreate, Agent with isolation: worktree) for parallel implementation. All other commands use subagents for analysis.
@@ -46,7 +47,7 @@ This includes hook debug logs, temp files, and any runtime artifacts.
 .lets/sessions/          # Session summaries, session-start-ref
 .lets/reviews/           # Saved review reports
 .lets/plans/             # Implementation plans
-.lets/execution/         # Execution state (plan resume, PR review: pr-{number}/, team records: team-*.json)
+.lets/execution/         # Execution state (PR review: pr-{number}/, team records: team-*.json)
 .lets/cache/             # Cached data (usage stats)
 # Worktrees (outside .lets/ to avoid circular symlinks):
 # .worktrees/            # Interactive worktrees only (agent worktrees use native Claude Code behavior)
