@@ -400,7 +400,7 @@ Tasks: {N}/{N} completed
 - **ALWAYS save beads comment after each batch** - human-readable progress mirror
 - **Adapt, don't paste** - plan intent matters more than plan text
 - **Stop on mismatch** - if reality diverges significantly from plan, surface it immediately
-- Respond in user's language (Ukrainian/Russian/English)
+- Respond in user's language
 
 ## Output
 

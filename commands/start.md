@@ -232,4 +232,4 @@ After task is selected and branch is ready, show reminders and welcome box.
 - If previous session had in-progress work, highlight it
 - If user is already on the correct feature branch, skip branch creation
 - Suggest `/lets:brainstorm` for medium/large tasks
-- Respond in user's language (Ukrainian/Russian/English)
+- Respond in user's language

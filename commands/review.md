@@ -205,6 +205,8 @@ Each agent receives this context in their task prompt. Agents define their own e
 ```
 ultrathink
 
+RESPONSE LANGUAGE: {language from LETS Config, e.g. "English"}
+
 Review the following code changes from your expert perspective.
 Use your confidence scoring system. Only report findings >= 80 confidence.
 Follow your output format as defined in your system prompt.
@@ -621,6 +623,10 @@ Work -> /lets:commit -> Push -> PR -> /lets:review <PR>
 /lets:check  = Quick sanity check (~30 sec), before any commit
 /lets:review = Full deep review (~2-3 min), before PR or on PR
 ```
+
+## Rules
+
+- Respond in user's language
 
 ## Output
 

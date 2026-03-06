@@ -457,6 +457,8 @@ Task(
   subagent_type="lets:{agent-name}",
   prompt="ultrathink
 
+RESPONSE LANGUAGE: {language from LETS Config, e.g. "English"}
+
 OPINION MODE. Evaluate an architecture design for a feature.
 
 FEATURE GOAL: {goal}
@@ -674,4 +676,4 @@ Start a new session to execute the plan with clean context.
 - **Exact file paths** in plan - verified against explorer findings
 - **Complete code snippets** - no stubs, no "implement X here"
 - **Plan is the artifact** - session ends when plan is saved
-- Respond in user's language (Ukrainian/Russian/English)
+- Respond in user's language

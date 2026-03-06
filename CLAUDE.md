@@ -37,6 +37,7 @@ reference/                    # Reference plugins for studying patterns (gitigno
 
 All plugin-generated files go to `.lets/` (gitignored). Never use `/tmp` or other external paths.
 This includes hook debug logs, temp files, and any runtime artifacts.
+**WARNING:** Always use `.lets/` (with dot prefix), never `lets/`. The dot is easy to miss in manual paths.
 
 ```
 .lets/config.yaml        # Per-project settings (language, merge-branch)

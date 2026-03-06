@@ -75,7 +75,7 @@ AskUserQuestion(
 ### Step C3: Verify .gitignore
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 git check-ignore -q "${ROOT}/.worktrees/test" 2>/dev/null
 echo $?
 ```
@@ -87,7 +87,7 @@ If exit code is not 0 (not ignored):
 ### Step C4: Create Worktree
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 WORKTREE_PATH="${ROOT}/.worktrees/${NAME}"
 BRANCH_NAME="worktree-${NAME}"
 ```
@@ -113,7 +113,7 @@ git worktree add -b "$BRANCH_NAME" "$WORKTREE_PATH"
 ### Step C5: Symlink .lets/
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 WORKTREE_PATH="${ROOT}/.worktrees/${NAME}"
 
 if [ -d "${ROOT}/.lets" ] && [ ! -e "${WORKTREE_PATH}/.lets" ]; then
@@ -126,7 +126,7 @@ This gives the worktree access to: config.yaml, session history, plans, reviews,
 ### Step C6: Verify
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 WORKTREE_PATH="${ROOT}/.worktrees/${NAME}"
 
 # Worktree exists
@@ -236,7 +236,7 @@ If none exist in `.worktrees/`, check `git worktree list` and show all non-main 
 ### Step R2: Safety Check
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 WORKTREE_PATH="${ROOT}/.worktrees/${NAME}"
 cd "$WORKTREE_PATH"
 git status --short
@@ -265,7 +265,7 @@ AskUserQuestion(
 ### Step R3: Remove
 
 ```bash
-ROOT=$(git rev-parse --show-toplevel)
+# ROOT = project-root from LETS Config
 WORKTREE_PATH="${ROOT}/.worktrees/${NAME}"
 
 # Remove .lets/ symlink first (points outside worktree)

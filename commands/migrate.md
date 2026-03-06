@@ -49,6 +49,10 @@ echo "Reviews:" && ls "$ROOT/.lets/reviews/" 2>/dev/null
 echo "Old folder:" && ls "$ROOT/.claude/sessions/" 2>/dev/null || echo "removed"
 ```
 
+## Rules
+
+- Respond in user's language
+
 ## Output
 
 ```

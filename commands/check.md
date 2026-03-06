@@ -156,6 +156,10 @@ If clean (no issues) - skip, don't add noise to the task.
 
 **If FIX:** No box. Say "Fix the issues above, then run `/lets:check` again."
 
+## Rules
+
+- Respond in user's language
+
 ## What This Is NOT
 
 - NOT a full code review (use `/lets:review`)

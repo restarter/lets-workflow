@@ -68,6 +68,8 @@ Task(
   subagent_type="lets:{agent-name}",
   prompt="ultrathink
 
+RESPONSE LANGUAGE: {language from LETS Config, e.g. "English"}
+
 OPINION MODE. Evaluate this technical decision.
 
 PROJECT CONTEXT:
@@ -151,6 +153,10 @@ If active task found:
 ```bash
 bd comments add <task-id> "Decision: {topic}. Chose: {recommended option}. Reason: {1-sentence why}"
 ```
+
+## Rules
+
+- Respond in user's language
 
 ## Anti-patterns
 

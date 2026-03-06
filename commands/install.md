@@ -36,6 +36,9 @@ ls -la .beads/ 2>/dev/null || echo "Beads not initialized"
 
 # Initialize beads if missing
 bd init
+
+# Set hash length to 5 (default 4 is too short for readability)
+bd config set hash_length 5
 ```
 
 ### Create .lets/ directory and gitignore
@@ -181,6 +184,10 @@ Run through and verify:
 - [ ] (Optional) `github: true` set in `.lets/config.yaml`
 
 **Setup complete when all checked.**
+
+## Rules
+
+- Respond in user's language
 
 ## Output
 

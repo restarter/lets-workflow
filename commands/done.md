@@ -331,6 +331,7 @@ AskUserQuestion(
     question: "Task done. What's next?",
     header: "LETS",
     options: [
+      { label: "Merge & close", description: "Merge PR #{number}, close task, switch to {merge-branch}" },
       { label: "Stay on branch", description: "Stay on feature branch - for PR fixes or follow-up work" },
       { label: "Next task", description: "Switch to {merge-branch}, pick another task" },
       { label: "End session", description: "Switch to {merge-branch}, run /lets:end" }
@@ -341,6 +342,11 @@ AskUserQuestion(
 ```
 
 **Handle response:**
+- **Merge & close**:
+  1. `gh pr merge {number} --squash --delete-branch`
+  2. `bd close {task-id}`
+  3. `git checkout {merge-branch} && git pull`
+  4. If merge fails (conflicts, checks not passed) -> inform user, fall back to "Stay on branch"
 - **Stay on branch** -> stay on current branch, no checkout. User continues working freely.
 - **Next task** -> `git checkout {merge-branch}`, then show `bd ready`, pick new task
 - **End session** -> `git checkout {merge-branch}`, then suggest `/lets:end`
@@ -362,6 +368,7 @@ AskUserQuestion(
     question: "PR created. What's next?",
     header: "LETS",
     options: [
+      { label: "Merge & close", description: "Merge PR #{number}, close task" },
       { label: "Stay here", description: "Stay in this worktree for PR fixes or follow-up" },
       { label: "End session", description: "Run /lets:end - save context and wrap up" }
     ],
@@ -373,6 +380,11 @@ AskUserQuestion(
 No "Next task" option - can't switch branches in a worktree. To start a new task, user opens a different terminal.
 
 **Handle response:**
+- **Merge & close**:
+  1. `gh pr merge {number} --squash --delete-branch`
+  2. `bd close {task-id}`
+  3. If merge fails (conflicts, checks not passed) -> inform user, fall back to "Stay here"
+  4. After merge, remind: "Worktree can be removed: `/lets:worktree remove {name}` from the main repo terminal."
 - **Stay here** -> stay in worktree. User continues working.
 - **End session** -> suggest `/lets:end`. After session ends, remind:
   "After PR merges, clean up: `/lets:worktree remove {name}` from the main repo terminal."

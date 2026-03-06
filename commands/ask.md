@@ -102,6 +102,8 @@ Task(
   subagent_type="lets:{agent-name}",
   prompt="ultrathink
 
+RESPONSE LANGUAGE: {language from LETS Config, e.g. "English"}
+
 ASK MODE. A developer is asking you a direct question.
 
 PROJECT CONTEXT:
@@ -156,6 +158,10 @@ Skip if the question is generic (not related to the active task).
 │  Check code?   /lets:check     │
 └────────────────────────────────┘
 ```
+
+## Rules
+
+- Respond in user's language
 
 ## Notes
 
