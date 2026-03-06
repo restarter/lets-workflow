@@ -291,7 +291,8 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:worktree` | Utility | Create/manage interactive worktrees for parallel work |
 | `/lets:team` | Utility | Parallel implementation with Agent Teams (run, status, stop) |
 | `/lets:note` | Utility | Add note to active task |
-| `/lets:install` | Setup | First-time setup |
+| `/lets:install` | Setup | First-time global setup |
+| `/lets:init`    | Setup | Per-project initialization |
 
 ## Key Principles
 

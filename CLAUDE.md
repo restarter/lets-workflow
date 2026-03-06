@@ -9,7 +9,7 @@ Claude Code plugin for development workflow with session management, code review
 commands/                     # Slash commands (/lets:start, /lets:done, /lets:review, etc.)
 agents/                       # Expert agents (review, opinion, ask, plan, team implementation)
 hooks/                        # SessionStart hook, workflow rules, config template
-scripts/lets/                 # Statusline source (copied to .lets/ per-project by /lets:install)
+scripts/lets/                 # Statusline + init script (copied/run per-project by /lets:init)
 reference/                    # Reference plugins for studying patterns (gitignored)
 ```
 
@@ -19,7 +19,7 @@ reference/                    # Reference plugins for studying patterns (gitigno
 - **Agents** = experts dispatched by commands. `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:team` use specialized agents
 - **Orchestrators** = commands that delegate to other commands. `/lets:pr` orchestrates `/lets:review` for full PR lifecycle
 - **Hooks** = SessionStart injects workflow rules
-- **Statusline** = per-project `.lets/statusline.sh`, source in `scripts/lets/statusline.sh`, copied by `/lets:install`
+- **Statusline** = per-project `.lets/statusline.sh`, source in `scripts/lets/statusline.sh`, copied by `/lets:init`
 
 ## Architecture Decisions
 
@@ -35,7 +35,7 @@ reference/                    # Reference plugins for studying patterns (gitigno
 - Worktrees stored in `.worktrees/` at project root - `.lets/` symlinked for interactive sessions
 - SessionStart hook injects rules from `hooks/rules-context.md`
 - SessionStart hook reads `.lets/config.yaml` and injects settings into session context
-- Statusline source in `scripts/lets/statusline.sh`, copied to `.lets/statusline.sh` per-project by `/lets:install`. Project `.claude/settings.json` uses `git rev-parse --show-toplevel` to locate it.
+- Statusline source in `scripts/lets/statusline.sh`, copied to `.lets/statusline.sh` per-project by `/lets:init`. Project `.claude/settings.json` uses `git rev-parse --show-toplevel` to locate it.
 
 ## File Storage
 
@@ -94,6 +94,6 @@ Every lets:* command MUST end with branded LETS box:
 
 - [ ] Has LETS box in output section
 - [ ] Updates Skill Quick Reference in `hooks/rules-context.md`
-- [ ] Updates `/lets:install` tables
+- [ ] Updates `/lets:install` and `/lets:init` tables
 - [ ] Follows session flow (start -> work -> commit -> done -> end)
 - [ ] Description is clear and actionable

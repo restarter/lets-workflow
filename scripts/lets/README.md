@@ -21,21 +21,23 @@ Opus 4.6 » window 38% (76k/200k) · 5h 12% (4h 32m) · 7d 45% (5d 18h)
 **Via plugin (recommended):**
 
 ```bash
-/lets:install
+/lets:init
 ```
 
 **Manual:**
 
 ```bash
 # From any project root (must be a git repo)
-bash path/to/lets-workflow/scripts/lets/install.sh
+bash path/to/lets-workflow/scripts/lets/init.sh
 ```
 
-The install script:
+The init script:
 1. Creates `.lets/` directory structure
 2. Copies `statusline.sh` to `.lets/statusline.sh`
-3. Adds `.lets/` to `.gitignore`
+3. Adds `.lets/`, `.beads/`, `.worktrees/` to `.gitignore`
 4. Configures `.claude/settings.json` with statusLine command
+5. Creates `.lets/config.yaml` with defaults
+6. Initializes beads (if `bd` is available)
 
 Restart Claude Code after install.
 
@@ -61,15 +63,15 @@ Claude Code pipes JSON context (model, context window, workspace) to the statusl
 | `statusline.sh` | `scripts/lets/` (source) | Source script, copied by install |
 | `statusline.sh` | `.lets/statusline.sh` (installed) | Per-project copy, referenced by settings.json |
 | `usage` | `.lets/cache/usage` | Cached API usage stats (4 lines) |
-| `install.sh` | `scripts/lets/` | One-time setup script |
+| `init.sh` | `scripts/lets/` | Per-project setup script |
 
 ### Updating
 
 To update the statusline after a plugin update:
 
 ```bash
-# Re-run install (safe to run multiple times)
-bash path/to/lets-workflow/scripts/lets/install.sh
+# Re-run init (safe to run multiple times)
+bash path/to/lets-workflow/scripts/lets/init.sh
 ```
 
 Or copy manually:

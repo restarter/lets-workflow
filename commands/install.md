@@ -1,10 +1,10 @@
 ---
-description: First-time setup - install plugins, explain workflow, verify environment
+description: First-time global setup - install plugins, configure environment, explain workflow
 ---
 
-# Workspace Setup
+# Global Setup
 
-One-time setup for new developers or new projects.
+One-time setup for new developers. Checks environment, installs plugins, then delegates to `/lets:init` for project setup.
 
 ## Step 1: Check Environment
 
@@ -12,10 +12,7 @@ One-time setup for new developers or new projects.
 # Claude Code version
 claude --version
 
-# Installed plugins
-claude plugin list
-
-# GitHub CLI (optional - for GitHub PR workflow)
+# GitHub CLI (optional)
 gh --version 2>/dev/null || echo "gh CLI not found (optional - needed for github: true)"
 gh auth status 2>/dev/null || echo "gh not authenticated (optional)"
 ```
@@ -28,99 +25,21 @@ Install these plugins (check Claude Code docs for current installation method):
 - **beads** - task tracking across sessions (by steveyegge)
 **After installation, restart Claude Code.**
 
-## Step 2.5: Install Statusline
+## Step 3: Global Settings
 
-Check if LETS statusline is installed in this project:
-
-```bash
-# ROOT = project-root from LETS Config
-if [ -f "$ROOT/.lets/statusline.sh" ]; then
-  echo "Statusline: installed"
-else
-  echo "Statusline not found."
-fi
-```
-
-If not installed, run the install script (creates `.lets/` structure, copies statusline, configures settings.json):
+### Disable Auto Compact
 
 ```bash
-# CLAUDE_PLUGIN_ROOT is set by Claude Code plugin runtime
-bash "${CLAUDE_PLUGIN_ROOT}/scripts/lets/install.sh"
+claude config set --global autoCompact false
 ```
 
-Inform user: "Statusline installed. Restart Claude Code to see it."
+## Step 4: Initialize Current Project
 
-## Step 3: Initialize Project (if needed)
+Delegate to `/lets:init` for per-project setup (`.lets/` structure, config, statusline, beads).
 
-```bash
-# Check if beads is initialized
-ls -la .beads/ 2>/dev/null || echo "Beads not initialized"
-
-# Initialize beads if missing
-bd init
-
-# Set hash length to 5 (default 4 is too short for readability)
-bd config set hash_length 5
-```
-
-### Create .lets/ directory and gitignore
-
-```bash
-# ROOT = project-root from LETS Config
-mkdir -p "$ROOT/.lets/sessions" "$ROOT/.lets/reviews" "$ROOT/.lets/plans"
-
-# Add .lets/ to .gitignore if not already there
-if ! grep -q '^\.lets/' "$ROOT/.gitignore" 2>/dev/null; then
-  echo '.lets/' >> "$ROOT/.gitignore"
-fi
-```
-
-### GitHub Workflow (optional)
-
-If `gh auth status` succeeded in Step 1, ask:
-
-> "Enable GitHub PR workflow? When enabled:
-> - `/lets:done` creates PR instead of local merge
-> - `/lets:status` shows open PRs
->
-> Requires `gh` CLI to stay authenticated."
-
-If user agrees:
-
-```bash
-# ROOT = project-root from LETS Config
-CONFIG="$ROOT/.lets/config.yaml"
-if [ -f "$CONFIG" ]; then
-  # Replace existing github line or append if missing
-  if grep -q '^github:' "$CONFIG"; then
-    sed 's/^github:.*/github: true/' "$CONFIG" > "$CONFIG.tmp" && mv "$CONFIG.tmp" "$CONFIG"
-  else
-    echo "github: true" >> "$CONFIG"
-  fi
-else
-  cat > "$CONFIG" <<'YAML'
-# LETS plugin config
-language: English
-merge-branch: main
-github: true
-YAML
-fi
-```
-
-If user declines or gh not available: skip (default `github: false` or omitted = false).
-
-## Step 4: Verify Setup
-
-Run these checks:
-
-```bash
-bd ready        # Should show tasks (or empty list)
-bd status       # Should show database stats
-```
+Run: `/lets:init`
 
 ## Step 5: Explain Workflow
-
-Present this to the developer:
 
 ### Session Flow
 
@@ -145,6 +64,7 @@ Team:     /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /le
 | `/lets:pr` | Code | PR review lifecycle (review, respond, follow-up, approve) |
 | `/lets:opinion` | Expert | Technical decision needed |
 | `/lets:ask` | Expert | Quick question to one expert |
+| `/lets:init` | Setup | Initialize LETS in a new project |
 | `/lets:worktree` | Utility | Create/manage worktrees for parallel sessions |
 | `/lets:team` | Utility | Parallel implementation with Agent Teams |
 | `/lets:status` | Utility | Task overview anytime |
@@ -180,37 +100,23 @@ Team:     /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /le
 | `bd close <id>` | Complete task |
 | `bd create --title="..."` | New task |
 
-## Step 6: Configure Settings
-
-### Disable Auto Compact
-
-Auto compact reduces available context by automatically compressing conversation history. Disabling it gives you more control and more context to work with.
-
-In Claude Code settings, disable auto compact:
-
-```bash
-claude config set --global autoCompact false
-```
-
-This keeps the full conversation history until you manually compact with `/compact`.
-
 ## Checklist
 
-Run through and verify:
-
+### Global
 - [ ] Claude Code installed and running
-- [ ] Marketplace added (`claude plugin marketplace list`)
 - [ ] `beads` plugin installed
 - [ ] Claude Code restarted after plugin install
-- [ ] `.beads/` directory exists
-- [ ] `.lets/` directory exists and gitignored
-- [ ] `bd ready` works
 - [ ] Auto compact disabled
-- [ ] (Optional) `gh` CLI installed for GitHub workflow
+- [ ] (Optional) `gh` CLI installed
 - [ ] (Optional) `gh auth status` passes
-- [ ] (Optional) `github: true` set in `.lets/config.yaml`
-- [ ] `.lets/statusline.sh` exists (copied from plugin)
+
+### Per-project (via /lets:init)
+- [ ] `.lets/` directory exists and gitignored
+- [ ] `.lets/config.yaml` configured
+- [ ] `.lets/statusline.sh` installed
 - [ ] `.claude/settings.json` has statusLine config
+- [ ] `.beads/` initialized
+- [ ] `bd ready` works
 
 **Setup complete when all checked.**
 
@@ -219,8 +125,6 @@ Run through and verify:
 - Respond in user's language
 
 ## Output
-
-After setup complete:
 
 ```
 ┌─ LETS ─────────────────┐
