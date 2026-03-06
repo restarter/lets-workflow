@@ -2,21 +2,55 @@
 
 ## [Unreleased]
 
-Restructured planning skill chain into three distinct commands.
+## [0.2.4] - 2026-03-06
+
+Quality, consistency, and planning restructure.
 
 ### Added
-- `/lets:brainstorm` - interactive backlog helper (review tasks, priorities, patterns, create tasks)
-- `/lets:plan` - structured planning with explorer/architect agents (renamed from brainstorm)
+- `/lets:plan` - structured planning with explorer/architect agents (extracted from brainstorm)
+- `/lets:check --plan` - quick plan sanity check (5 lenses: feasibility, completeness, risk, scope, clarity)
+- `/lets:review --file <path>` - review existing file quality (not just diffs)
+- `Merge & close` option in `/lets:done` post-PR menu
+- Discovery Logging rule in workflow rules - capture insights via `bd comments add` as they happen
+- Implementer agent Bash Security with explicit ALLOWED/FORBIDDEN lists
+- PROJECT ROOT boundary enforcement in agent prompts (ask, brainstorm, opinion, review)
+- RESPONSE LANGUAGE propagation to agent prompts
+- `.gitignore` safety net for `lets/` (without dot prefix)
+- Per-project statusline install script (`scripts/lets/install.sh`)
+- `bd config set hash_length 5` in `/lets:install`
 
 ### Changed
-- `/lets:execute` - rewritten to use native Claude Code plan mode (EnterPlanMode) instead of custom batch execution
-- All references updated: brainstorm -> plan for structured planning contexts
-- Removed custom execution state tracking for plan execution
+- `/lets:brainstorm` - repurposed as interactive backlog helper (review tasks, priorities, patterns)
+- `/lets:execute` - rewritten to use native Claude Code plan mode (EnterPlanMode)
+- Session files: single dated file with branch slug (no more `last-summary` files)
+- `/lets:start` reads recent sessions via `ls -t` glob, supports `<task-id>` and `--continue` args
+- Statusline moved from `hooks/` to `scripts/lets/`, install via standalone script
+- Language rule standardized to "Respond in user's language" across all 17 commands
+- Branch parsing updated to handle `worktree-<id>-<slug>` format in 9 commands
+- `git rev-parse --show-toplevel` replaced with LETS Config `project-root` in worktree.md
+- Usage fetcher removed (replaced by statusline install script)
+
+### Fixed
+- Statusline emoji spacing for Linux compatibility
+- Stale `last-summary.md` references in worktree guide
+- `status.md` missing language rule
 
 ### Migration
 - `/lets:brainstorm` is now a backlog helper, not a planning command
 - Use `/lets:plan` for what was previously `/lets:brainstorm` (architecture + implementation plan)
 - `/lets:execute` now enters native plan mode instead of custom batch execution
+- Statusline: re-run `/lets:install` to get per-project install
+
+## [0.2.3] - 2026-03-04
+
+Ultrathink and review quality improvements.
+
+### Added
+- `ultrathink` keyword in 5 commands: review, opinion, brainstorm, ask, check (high-effort reasoning)
+
+### Changed
+- Worktree open recommendation: single-line `cd && claude` format
+- Explorer and implementer agents excluded from ultrathink (speed > depth)
 
 ## [0.2.2] - 2026-03-01
 
@@ -113,6 +147,8 @@ Initial release with expert agents team.
 - SessionStart hook injecting workflow rules
 - Plugin structure: commands, agents, hooks
 
+[0.2.4]: https://github.com/restarter/lets-workflow/compare/v0.2.3...v0.2.4
+[0.2.3]: https://github.com/restarter/lets-workflow/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/restarter/lets-workflow/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/restarter/lets-workflow/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/restarter/lets-workflow/compare/v0.1.0...v0.2.0
