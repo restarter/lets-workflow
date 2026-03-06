@@ -38,6 +38,18 @@ User states goal -> Claude proposes approach -> User approves -> Claude executes
 - Never silently switch approaches when something fails - stop, explain, present options, wait
 - Don't touch code without explicit approval: no deleting, commenting out, or "simplifying" existing code user didn't ask about
 
+## Discovery Logging
+
+When you discover something important during work - capture it immediately via `bd comments add <task-id>`:
+
+- Architecture decisions and trade-offs made
+- Gotchas and unexpected behavior ("X doesn't work because Y")
+- Infrastructure facts (URLs, configs, versions)
+- Tool/command quirks discovered
+- Patterns confirmed across multiple files
+
+Don't wait for `/lets:note` - write insights as they happen. If no active task, mention it to the user.
+
 ## Git Conventions
 
 - Commit messages: `<type>: <subject>` (feat, fix, refactor, docs, chore, test)
@@ -162,6 +174,8 @@ Two separate lifecycles:
 - Significant change -> `/lets:check` -> `/lets:review --local` -> fix -> commit -> PR
 - PR already exists -> `/lets:review <PR>` -> comment on PR
 - Full PR lifecycle -> `/lets:pr <PR>` -> discuss -> post inline -> follow-up -> approve
+- Existing file quality -> `/lets:review --file <path>`
+- Quick plan check -> `/lets:check --plan`
 
 ### Session Start
 
@@ -265,7 +279,7 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:end` | Session | End of session |
 | `/lets:done` | Task | Task is complete |
 | `/lets:commit` | Code | Ready to commit |
-| `/lets:check` | Code | Quick sanity check (~30s) |
+| `/lets:check` | Code | Quick sanity check - code (~30s) or plan (--plan) |
 | `/lets:review` | Code | Full deep review (~2-3 min) |
 | `/lets:pr` | Code | PR review lifecycle (review, respond, follow-up, approve) |
 | `/lets:opinion` | Expert | Technical decision (3-5 agents) |

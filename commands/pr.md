@@ -139,7 +139,7 @@ Resolve task-id now - after checkout the branch name changes to the PR branch.
 
 ```bash
 BRANCH=$(git branch --show-current)
-# Parse task ID from branch: feature/<task-id>-<slug>
+# Extract task ID from branch name (feature/<id>-<slug> or worktree-<id>-<slug>)
 # Fallback: bd list --status=in_progress
 # If ambiguous or not found: skip beads logging later
 ```
@@ -792,7 +792,7 @@ Else: `gh pr checkout <PR>` (same stash handling as Step 2.3).
 **Detect active task** (before branch switch, same logic as Step 2.2):
 ```bash
 BRANCH=$(git branch --show-current)
-# Parse task ID from branch: feature/<task-id>-<slug>
+# Extract task ID from branch name (feature/<id>-<slug> or worktree-<id>-<slug>)
 # Fallback: bd list --status=in_progress
 ```
 Store detected task_id for beads logging in 6.6.

@@ -24,8 +24,8 @@ Use `/lets:note` when you want to add extra context that doesn't fit those flows
 
 ```bash
 BRANCH=$(git branch --show-current)
-# Parse task ID from branch: feature/<task-id>-<slug>
-# Example: feature/ji2-beads-deep-integration -> lets-plugin-claude-ji2
+# Extract task ID from branch name (feature/<id>-<slug> or worktree-<id>-<slug>)
+# Strategy: look for beads ID pattern anywhere in branch name
 
 # Fallback:
 bd list --status=in_progress

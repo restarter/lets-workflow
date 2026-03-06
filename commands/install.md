@@ -58,6 +58,9 @@ ls -la .beads/ 2>/dev/null || echo "Beads not initialized"
 
 # Initialize beads if missing
 bd init
+
+# Set hash length to 5 (default 4 is too short for readability)
+bd config set hash_length 5
 ```
 
 ### Create .lets/ directory and gitignore
@@ -137,7 +140,7 @@ Team:     /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /le
 | `/lets:end` | Session | End of session |
 | `/lets:done` | Task | Task is complete (creates PR if github mode, or merges locally) |
 | `/lets:commit` | Code | Ready to commit changes |
-| `/lets:check` | Code | Quick sanity check (~30 sec) |
+| `/lets:check` | Code | Quick sanity check - code (~30s) or plan (--plan) |
 | `/lets:review` | Code | Full deep review (~2-3 min) |
 | `/lets:pr` | Code | PR review lifecycle (review, respond, follow-up, approve) |
 | `/lets:opinion` | Expert | Technical decision needed |
@@ -210,6 +213,10 @@ Run through and verify:
 - [ ] `.claude/settings.json` has statusLine config
 
 **Setup complete when all checked.**
+
+## Rules
+
+- Respond in user's language
 
 ## Output
 

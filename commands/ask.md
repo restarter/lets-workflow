@@ -102,6 +102,9 @@ Task(
   subagent_type="lets:{agent-name}",
   prompt="ultrathink
 
+RESPONSE LANGUAGE: {language from LETS Config, e.g. "English"}
+PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
+
 ASK MODE. A developer is asking you a direct question.
 
 PROJECT CONTEXT:
@@ -133,8 +136,8 @@ Show the agent's response:
 
 ```bash
 BRANCH=$(git branch --show-current)
-# Parse task ID from branch: feature/<task-id>-<slug>
-# Example: feature/ji2-beads-deep-integration -> lets-plugin-claude-ji2
+# Extract task ID from branch name (feature/<id>-<slug> or worktree-<id>-<slug>)
+# Strategy: look for beads ID pattern anywhere in branch name
 
 # Fallback: bd list --status=in_progress
 ```
@@ -156,6 +159,10 @@ Skip if the question is generic (not related to the active task).
 │  Check code?   /lets:check     │
 └────────────────────────────────┘
 ```
+
+## Rules
+
+- Respond in user's language
 
 ## Notes
 

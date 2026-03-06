@@ -384,7 +384,7 @@ Step by step (from `worktree_cmd.go:142-251`):
 
 | Command | What breaks | Impact |
 |---------|------------|--------|
-| `start.md` | Reads `$ROOT/.lets/sessions/last-summary.md` | No previous session context |
+| `start.md` | Reads recent session files via `ls -t` glob | No previous session context (resolved: dated files + branch slug) |
 | `start.md` | Writes `.session-start-ref` | Written to worktree (isolated) |
 | `end.md` | Reads `.session-start-ref`, writes summaries | Isolated from main session history |
 | `plan.md` | Saves plans to `$ROOT/.lets/plans/` | Plans invisible from main repo |
@@ -545,7 +545,7 @@ Reviewer reads ACTUAL code, not the implementer's report.
 
 | Command | Issue | Fix |
 |---------|-------|-----|
-| `end.md` | `last-summary.md` race condition with parallel sessions | Use session-unique names or accept last-writer-wins |
+| `end.md` | ~~`last-summary.md` race condition~~ (resolved) | Uses dated files with branch slug: `YYYY-MM-DD-HHMM-{branch}.md` |
 | `commit.md` | Task ID parsing from branch name | Verify works with `bd worktree create` branch naming |
 | `execute.md` | Reads plans from `.lets/plans/` | Needs shared `.lets/` |
 | `plan.md` | Plans in `.lets/plans/` | Needs shared `.lets/` |
@@ -792,7 +792,7 @@ Lead synthesizes and reviews.
 
 ### 10.4 LETS Plugin-specific
 
-- **`last-summary.md` is a single file** - race condition if parallel sessions
+- **~~`last-summary.md` race condition~~** - resolved: `end.md` now writes dated files with branch slug, `start.md` reads via `ls -t` glob
 - **Session start ref is per-worktree** - correct behavior but different from main
 - **Plans, execution state, reviews** - all in `.lets/`, need sharing mechanism
 - **`session-start.sh` injects worktree path as `project-root`** - correct for git, wrong for `.lets/`

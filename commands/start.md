@@ -1,10 +1,36 @@
 ---
 description: Start session - restore context, show tasks, select work item
+argument-hint: "[task-id|--continue]"
 ---
 
 # Session Start
 
 Restore context and prepare for work. **User MUST select a task before working.**
+
+## Usage
+
+```bash
+/lets:start                # Full flow - show history, tasks, select work
+/lets:start <task-id>      # Quick start - jump to specific task
+/lets:start --continue     # Resume last in_progress task with session context
+```
+
+## Step 0: Argument Parsing
+
+**If `<task-id>` provided** (e.g., `/lets:start lets-rmcwo`):
+- Skip Steps 1, 3, 5 (session history, status overview, task selection)
+- Run Step 2 (git state) briefly
+- `bd show <task-id>` + `bd comments list <task-id> --limit 3` for context
+- Jump to Step 6 (branch) with this task
+
+**If `--continue`:**
+- Run Step 1 (session history) - important for context recovery
+- `bd list --status=in_progress` - find task(s)
+- If exactly 1 in_progress -> use it, skip Step 5
+- If multiple -> show selection with context from recent sessions
+- If none -> fall through to full flow
+
+**If no arguments** -> full flow (Steps 1-8 as below)
 
 ## Step 1: Previous Session Context
 
@@ -12,12 +38,16 @@ Restore context and prepare for work. **User MUST select a task before working.*
 # ROOT = project-root from LETS Config
 BRANCH=$(git branch --show-current)
 BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
-cat "$ROOT/.lets/sessions/last-summary-${BRANCH_SLUG}.md" 2>/dev/null \
-  || cat "$ROOT/.lets/sessions/last-summary.md" 2>/dev/null \
-  || echo "No previous session"
+mkdir -p "$ROOT/.lets/sessions"
+
+# Read last 3 sessions for this branch (or all branches if none found)
+SESSIONS=$(ls -t "$ROOT/.lets/sessions/"*"-${BRANCH_SLUG}.md" 2>/dev/null | head -3)
+if [ -z "$SESSIONS" ]; then
+  SESSIONS=$(ls -t "$ROOT/.lets/sessions/"*.md 2>/dev/null | head -3)
+fi
 ```
 
-Read and summarize what was done in the last session.
+Read and present a compact summary of recent sessions (last 1-3). Focus on: what was done, key decisions, next steps suggested.
 
 ## Step 2: Git State
 
@@ -36,8 +66,8 @@ Run `/lets:status overview` to show compact task overview.
 ## Step 4: Present Summary
 
 ```
-## Previous Session
-{summary from last-summary.md}
+## Recent Sessions
+{compact summary from last 1-3 session files}
 
 ## Git
 Branch: {branch}
@@ -232,4 +262,4 @@ After task is selected and branch is ready, show reminders and welcome box.
 - If previous session had in-progress work, highlight it
 - If user is already on the correct feature branch, skip branch creation
 - Suggest `/lets:plan` for medium/large tasks
-- Respond in user's language (Ukrainian/Russian/English)
+- Respond in user's language

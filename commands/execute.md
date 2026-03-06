@@ -13,7 +13,8 @@ Load an implementation plan and execute it using Claude Code's native plan mode.
 
 ```bash
 BRANCH=$(git branch --show-current)
-# Parse task ID from branch: feature/<task-id>-<slug> or worktree-<task-id>-<slug>
+# Extract task ID from branch name (feature/<id>-<slug> or worktree-<id>-<slug>)
+# Strategy: look for beads ID pattern anywhere in branch name
 
 # Fallback:
 bd list --status=in_progress
@@ -164,7 +165,8 @@ $(git log --oneline ${START_REF}..HEAD)"
 - **NEVER commit without user approval** - use `/lets:commit` at plan commit points
 - **NEVER work on main/master** - verify feature/worktree branch in Step 1
 - **Adapt, don't paste** - plan intent matters more than plan text
-- Respond in user's language (Ukrainian/Russian/English)
+- **Stop on mismatch** - if reality diverges significantly from plan, surface it immediately
+- Respond in user's language
 
 ## Output
 

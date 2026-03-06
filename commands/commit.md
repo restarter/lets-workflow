@@ -147,6 +147,7 @@ BAD: feat: Add user authentication system with JWT tokens and refresh logic and 
 
 ## Rules
 
+- Respond in user's language
 - **NEVER** commit without user approval
 - **ALWAYS** run `git status` before and after commit
 - Keep subject line under 50 chars

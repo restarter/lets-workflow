@@ -261,6 +261,10 @@ Add to output after "## In Progress":
 - **Sorting:** epics by progress % descending (most complete first). Ready tasks by priority ascending (P0 first).
 - Report structure in English, respond to user in their language.
 
+## Rules
+
+- Respond in user's language
+
 ## LETS Box
 
 Based on current state:
