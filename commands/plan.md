@@ -479,10 +479,13 @@ If a selected agent appears in this table, append the instruction to its prompt:
 
 | Agent | Instruction |
 |-------|-------------|
-| `compliance` | "Only flag violations EXPLICITLY mentioned in CLAUDE.md. Quote the rule being violated." |
-| `git-historian` | "Use git blame and git log to analyze historical context." |
-| `docs` | "Check CLAUDE.md sync, docs/ sync, beads tracking, README/config docs." |
 | `pragmatist` | "Assess if the solution is proportional to the problem. Flag overengineering." |
+| `security` | "Focus on auth flows, data validation, and secrets handling in the proposed architecture." |
+| `database` | "Evaluate schema design, migration strategy, and query patterns." |
+| `backend` | "Review API design, error handling, and service integration points." |
+| `frontend` | "Assess component architecture, state management, and accessibility." |
+| `devops` | "Review deployment impact, CI/CD changes, and infrastructure requirements." |
+| `qa` | "Evaluate testability, coverage strategy, and edge case handling." |
 
 ### Checkpoint: Evaluation Results
 

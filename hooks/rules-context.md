@@ -147,7 +147,7 @@ PR review:  /lets:pr <PR> -> discuss -> post -> /lets:pr --follow-up -> /lets:pr
 PR respond: /lets:pr --respond <PR> -> triage -> fix -> reply
 ```
 
-If a plan exists from `/lets:plan`, use `/lets:execute` to implement it. Execute handles check/commit cycles internally.
+If a plan exists from `/lets:plan`, use `/lets:execute` to implement it. Execute enters native plan mode; use `/lets:commit` at natural commit points.
 
 Two separate lifecycles:
 - **Session:** `/lets:start` ... `/lets:end` (one conversation)
@@ -270,7 +270,7 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:pr` | Code | PR review lifecycle (review, respond, follow-up, approve) |
 | `/lets:opinion` | Expert | Technical decision (3-5 agents) |
 | `/lets:ask` | Expert | Quick expert consultation (1 agent) |
-| `/lets:brainstorm` | Planning | Interactive backlog helper - review, prioritize, create tasks |
+| `/lets:brainstorm` | Planning | Interactive backlog helper - review, prioritize, spot patterns, create tasks |
 | `/lets:plan` | Planning | Structured planning with agents - architecture + implementation plan |
 | `/lets:execute` | Planning | Execute plan from /lets:plan via native plan mode |
 | `/lets:status` | Utility | Task overview and project status |

@@ -135,7 +135,15 @@ Call `EnterPlanMode`.
 
 **After user approves**, Claude implements step by step. Use `/lets:commit` at natural commit points as indicated in the plan.
 
-**Fallback:** If `EnterPlanMode` doesn't work as expected, skip plan mode tools entirely. Instead: present the plan tasks one by one, implement each with user approval at commit points. The plan file provides the roadmap; explicit user approval provides the gates.
+**Progress tracking:** After completing each plan task, append `[DONE]` to its `### Task N:` heading in the plan file. This makes resume self-documenting - on re-entry, skip tasks already marked `[DONE]`.
+
+**Fallback:** If `EnterPlanMode` tool is not available or returns an error, skip plan mode tools entirely. Instead:
+1. Present each plan task one by one with files to change and expected outcome
+2. Implement the task, then ask user to review before moving on
+3. Use `/lets:commit` at commit points indicated in the plan
+4. Track completed tasks by appending `[DONE]` markers in the plan file
+
+The plan file provides the roadmap; explicit user approval provides the gates.
 
 ## Step 6: Record Completion
 

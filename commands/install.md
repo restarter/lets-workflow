@@ -120,7 +120,7 @@ Team:     /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /le
 | `/lets:team` | Utility | Parallel implementation with Agent Teams |
 | `/lets:status` | Utility | Task overview anytime |
 | `/lets:note` | Utility | Add note to active task |
-| `/lets:brainstorm` | Planning | Interactive backlog helper - review tasks and priorities |
+| `/lets:brainstorm` | Planning | Interactive backlog helper - review, prioritize, spot patterns, create tasks |
 
 ### Planning Skills (for bigger tasks)
 
