@@ -114,7 +114,7 @@ Team:     /lets:brainstorm -> /lets:team run -> monitor -> /lets:review --local 
 | `/lets:end` | Session | End of session |
 | `/lets:done` | Task | Task is complete (creates PR if github mode, or merges locally) |
 | `/lets:commit` | Code | Ready to commit changes |
-| `/lets:check` | Code | Quick sanity check (~30 sec) |
+| `/lets:check` | Code | Quick sanity check - code (~30s) or plan (--plan) |
 | `/lets:review` | Code | Full deep review (~2-3 min) |
 | `/lets:pr` | Code | PR review lifecycle (review, respond, follow-up, approve) |
 | `/lets:opinion` | Expert | Technical decision needed |

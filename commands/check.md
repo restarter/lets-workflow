@@ -1,5 +1,5 @@
 ---
-description: Quick code sanity check. Inline 5-perspective review.
+description: Quick sanity check - code (inline 5-perspective) or plan (--plan).
 argument-hint: "[--staged|--last-commit|--plan]"
 ---
 

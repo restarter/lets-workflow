@@ -174,6 +174,8 @@ Two separate lifecycles:
 - Significant change -> `/lets:check` -> `/lets:review --local` -> fix -> commit -> PR
 - PR already exists -> `/lets:review <PR>` -> comment on PR
 - Full PR lifecycle -> `/lets:pr <PR>` -> discuss -> post inline -> follow-up -> approve
+- Existing file quality -> `/lets:review --file <path>`
+- Quick plan check -> `/lets:check --plan`
 
 ### Session Start
 
@@ -277,7 +279,7 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:end` | Session | End of session |
 | `/lets:done` | Task | Task is complete |
 | `/lets:commit` | Code | Ready to commit |
-| `/lets:check` | Code | Quick sanity check (~30s) |
+| `/lets:check` | Code | Quick sanity check - code (~30s) or plan (--plan) |
 | `/lets:review` | Code | Full deep review (~2-3 min) |
 | `/lets:pr` | Code | PR review lifecycle (review, respond, follow-up, approve) |
 | `/lets:opinion` | Expert | Technical decision (3-5 agents) |
