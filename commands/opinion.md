@@ -175,9 +175,55 @@ bd comments add <task-id> "Decision: {topic}. Chose: {recommended option}. Reaso
 4. **Reversible > Perfect** - can change later
 5. **Working > Elegant** - ship first, refactor later
 
+## Step 8: Discuss (opt-in)
+
+After presenting the recommendation, offer to explore it deeper:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "What's next?",
+    header: "LETS",
+    options: [
+      { label: "Discuss", description: "Explore the recommendation - questions, trade-offs, assumptions" },
+      { label: "Accept", description: "Recommendation is clear, move on" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Handle response:**
+- **Discuss** -> enter exploration loop (see below)
+- **Accept** -> proceed to Output
+- **Other** (free text) -> treat as question about the recommendation
+
+### Exploration Loop
+
+Interactive discussion about the recommendation. One question/insight at a time.
+
+After each user response:
+1. **Acknowledge** - brief, no fluff
+2. **Build** - add an insight or connection based on their answer
+3. **Probe** - ask the next question that goes deeper
+
+Question types:
+- Challenge the recommendation: "The agents recommended X, but what about Y?"
+- Probe edge cases: "This works for the common case, but what happens when Z?"
+- Surface hidden trade-offs: "Option A is faster, but does it lock you into W?"
+- Connect to project context: "Given {existing pattern}, does this recommendation still hold?"
+
+When user is satisfied, proceed to Output.
+
+If active task exists, record the discussion outcome:
+
+```bash
+bd comments add <task-id> "Decision discussion: {topic}. Explored: {what was discussed}. Conclusion: {final stance}"
+```
+
 ## Output
 
-After recommendation, show LETS box based on context:
+After recommendation (or after discussion), show LETS box based on context:
 
 **If decision is about code changes:**
 ```
