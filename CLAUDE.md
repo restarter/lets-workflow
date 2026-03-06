@@ -7,7 +7,7 @@ Claude Code plugin for development workflow with session management, code review
 ```
 .claude-plugin/plugin.json   # Plugin manifest
 commands/                     # Slash commands (/lets:start, /lets:done, /lets:review, etc.)
-agents/                       # Expert agents (review, opinion, ask, brainstorm, team implementation)
+agents/                       # Expert agents (review, opinion, ask, plan, team implementation)
 hooks/                        # SessionStart hook, statusline, usage fetcher, sandbox prototype
 reference/                    # Reference plugins for studying patterns (gitignored)
 ```
@@ -15,14 +15,14 @@ reference/                    # Reference plugins for studying patterns (gitigno
 ## Key Concepts
 
 - **Commands** = user-initiated workflows (sessions, commits, reviews)
-- **Agents** = experts dispatched by commands. `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:brainstorm`, `/lets:team` use specialized agents
+- **Agents** = experts dispatched by commands. `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:team` use specialized agents
 - **Orchestrators** = commands that delegate to other commands. `/lets:pr` orchestrates `/lets:review` for full PR lifecycle
 - **Hooks** = SessionStart injects workflow rules; statusline renders branded status bar with usage stats
 
 ## Architecture Decisions
 
 - Agents define WHO (expertise, scoring, output format). Commands define WHAT to do (provide diff, context)
-- `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:brainstorm` use `subagent_type: "lets:agent-name"` to dispatch agents via Task tool
+- `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan` use `subagent_type: "lets:agent-name"` to dispatch agents via Task tool
 - `/lets:pr` orchestrates `/lets:review` (delegates analysis) and handles GitHub posting, follow-up, respond, and approval directly via gh CLI
 - `/lets:check` reviews inline (no subagent) for speed
 - All agents are read-only (Read, Grep, Glob, optionally Bash). No Edit/Write. Exception: `agents/implementer.md` has Edit/Write/Bash for `/lets:team` parallel implementation in isolated worktrees.

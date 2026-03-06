@@ -100,7 +100,7 @@ Present this to the developer:
 
 Worktree: /lets:worktree create -> terminal -> /lets:start -> Work -> /lets:done -> /lets:end -> /lets:worktree remove
 
-Team:     /lets:brainstorm -> /lets:team run -> monitor -> /lets:review --local -> /lets:done
+Team:     /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /lets:done
 ```
 
 ### Essential Skills
@@ -120,23 +120,24 @@ Team:     /lets:brainstorm -> /lets:team run -> monitor -> /lets:review --local 
 | `/lets:team` | Utility | Parallel implementation with Agent Teams |
 | `/lets:status` | Utility | Task overview anytime |
 | `/lets:note` | Utility | Add note to active task |
+| `/lets:brainstorm` | Planning | Interactive backlog helper - review tasks and priorities |
 
 ### Planning Skills (for bigger tasks)
 
 | Skill | When to use |
 |-------|-------------|
-| `/lets:brainstorm` | Unclear goal, need architecture + plan ("Improve Z", "Not sure how...") |
-| `/lets:execute` | Have a plan from /lets:brainstorm, ready to implement step by step |
+| `/lets:plan` | Task needs architecture + implementation plan |
+| `/lets:execute` | Have a plan from /lets:plan, ready to execute via native plan mode |
 
 **Rule of thumb:** Can you write a 1-sentence requirement?
 - YES, small task -> work directly
-- YES, medium/large -> `/lets:brainstorm` then `/lets:execute`
-- NO -> `/lets:brainstorm` first
+- YES, medium/large -> `/lets:plan` then `/lets:execute`
+- NO -> `/lets:brainstorm` to clarify, then `/lets:plan`
 
 ### Key Rules
 
 1. **Every session has a task** - no random work without tracking
-2. **Big tasks need planning** - use `/lets:brainstorm` + `/lets:execute` for 2+ hour tasks
+2. **Big tasks need planning** - use `/lets:plan` + `/lets:execute` for 2+ hour tasks
 3. **Document everything** - beads is the source of truth
 4. **End properly** - `/lets:end` saves context for next session
 

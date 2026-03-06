@@ -7,7 +7,7 @@ argument-hint: "[run|status|stop] [--tasks A,B,C]"
 
 Spawn teammates in isolated worktrees for parallel implementation. Each teammate gets one task, works independently, and reports back.
 
-**This is for parallel implementation of independent tasks.** For analysis (review, opinion, brainstorm) - use their dedicated commands.
+**This is for parallel implementation of independent tasks.** For analysis (review, opinion, plan) - use their dedicated commands.
 
 ## Step 1: Determine Subcommand
 
