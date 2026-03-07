@@ -71,40 +71,30 @@ Then start working:
 /lets:start ─── choose how to work ─── /lets:commit ─── /lets:done ─── /lets:end
 ```
 
-**Start** - `/lets:start` restores context, shows tasks, creates a feature branch.
+**Start** - `/lets:start` restores context from the previous session, shows available tasks, and creates a feature branch. Context survives conversation compaction via beads task comments.
 
-**Work** - depending on the task, you pick the approach:
+**Choose how to work** - depending on the task, you pick the approach:
 
-#### Write code yourself
-Write code with Claude. Use expert helpers along the way:
+```
+┌─ You write code yourself ─────────────────────────────────────────────────┐
+│  Write code with Claude. Use helpers along the way:                      │
+│  /lets:opinion   Technical decision with 3-5 expert agents               │
+│  /lets:ask       Quick question to a single expert                       │
+│  /lets:check     Quick sanity check (5 perspectives, ~30s)               │
+│  /lets:review    Full multi-agent code review (~2-3 min)                 │
+├─ You plan, Claude builds ─────────────────────────────────────────────────┤
+│  /lets:brainstorm  Think through what to build - backlog, priorities      │
+│  /lets:plan        Design how to build it - codebase exploration, arch    │
+│  /lets:execute     Claude implements the plan with your approval gates    │
+├─ Agents work in parallel ─────────────────────────────────────────────────┤
+│  /lets:team        Spawn agents that implement multiple tasks at once     │
+│  /lets:worktree    Open parallel sessions in separate terminals           │
+└───────────────────────────────────────────────────────────────────────────┘
+```
 
-| Command | What it does |
-|---------|-------------|
-| `/lets:opinion` | Technical decision with 3-5 expert agents |
-| `/lets:ask` | Quick question to a single expert |
-| `/lets:check` | Quick sanity check (5 perspectives, ~30s) |
-| `/lets:review` | Full multi-agent code review (~2-3 min) |
+**Commit** - `/lets:commit` reviews changes and creates a conventional commit (`feat:`, `fix:`, `refactor:`) linked to the active task.
 
-#### Plan first, then build
-Think through the problem before writing code:
-
-| Command | What it does |
-|---------|-------------|
-| `/lets:brainstorm` | Think through *what* to build - backlog, priorities |
-| `/lets:plan` | Design *how* to build it - codebase exploration, architecture |
-| `/lets:execute` | Claude implements the plan with your approval gates |
-
-#### Parallelize
-Multiple tasks at once:
-
-| Command | What it does |
-|---------|-------------|
-| `/lets:team` | Spawn agents that implement multiple tasks in parallel |
-| `/lets:worktree` | Open parallel interactive sessions in separate terminals |
-
-**Commit** - `/lets:commit` reviews changes, creates a conventional commit linked to the task.
-
-**Finish** - `/lets:done` creates a PR (or merges locally). `/lets:end` saves session summary.
+**Finish** - `/lets:done` creates a PR on GitHub (or merges locally). `/lets:end` saves a session summary so the next conversation picks up where you left off.
 
 ### Under the Hood
 
