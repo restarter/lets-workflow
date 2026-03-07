@@ -15,7 +15,7 @@
 
 Claude Code is powerful, but without structure it drifts - forgets context between sessions, commits without linking to tasks, reviews its own code with no outside perspective, and loses track of what was decided and why.
 
-LETS fixes that. Every session has a task. Every commit links to it. Expert agents review your code and help with technical decisions. Context survives across sessions and conversation compaction. Built for teams - task tracking syncs across developers via [Dolt](https://github.com/dolthub/dolt) remotes.
+LETS fixes that. Every session has a task. Every commit links to it. Expert agents review your code and help with technical decisions. Context survives across sessions and conversation compaction.
 
 You get a team of 13 expert agents and a structured workflow - but you stay in control. You define the task, approve the plan, review every commit. Agents don't go off on their own - they work within boundaries you set, and report back for your decision.
 
@@ -27,7 +27,7 @@ You get a team of 13 expert agents and a structured workflow - but you stay in c
 - **Expert agents on demand** - architect, security, QA, backend, devops and others join automatically when needed
 - **Agent Teams** - spawn autonomous agents that implement multiple tasks in parallel
 - **Worktrees** - parallel interactive sessions in separate terminals, one task per worktree
-- **Team sync** - shared task database, multiple developers see the same backlog in real time
+- **Built for teams** - shared task database via [Dolt](https://github.com/dolthub/dolt) remotes, multiple developers see the same backlog in real time
 - **One-command workflow** - Claude suggests the next step, you decide
 
 <div align="center">
