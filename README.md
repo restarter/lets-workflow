@@ -17,9 +17,12 @@ Claude Code is powerful, but without structure it drifts - forgets context betwe
 
 LETS fixes that. It turns Claude Code into a disciplined development partner with a clear workflow: every session has a task, every commit links to it, every review is done by specialized expert agents, and context survives across sessions and conversation compaction.
 
+Built for teams. Task tracking via [beads](https://github.com/steveyegge/beads) syncs across developers through [Dolt](https://github.com/dolthub/dolt) remotes - everyone sees the same tasks, dependencies, and progress. Multiple developers work on the same codebase with shared context, not duplicated effort.
+
 **What you get:**
 - **Session continuity** - context restored automatically, even after compaction
 - **Task-driven development** - no random work, everything tracked via [beads](https://github.com/steveyegge/beads)
+- **Team sync** - shared task database via Dolt remotes, no merge conflicts on task state
 - **Expert review panel** - up to 11 specialized agents (security, architecture, backend, QA...) review your code
 - **Parallel execution** - multiple agents working on different tasks simultaneously via worktrees
 - **Structured planning** - agent-powered codebase exploration and architecture design before coding
@@ -64,11 +67,11 @@ Then start working:
 ```
 /lets:start ─── work ─── /lets:commit ─── /lets:done ─── /lets:end
                  │
-                 ├── /lets:check     Quick sanity check (5 perspectives, ~30s)
-                 ├── /lets:review    Full multi-agent code review (~2-3 min)
-                 ├── /lets:opinion   Technical decision with 3-5 expert agents
-                 ├── /lets:ask       Quick question to a single expert
-                 ├── /lets:plan      Codebase exploration + architecture design
+                 ├── /lets:check       Quick sanity check (5 perspectives, ~30s)
+                 ├── /lets:review      Full multi-agent code review (~2-3 min)
+                 ├── /lets:opinion     Technical decision with 3-5 expert agents
+                 ├── /lets:ask         Quick question to a single expert
+                 ├── /lets:plan        Codebase exploration + architecture design
                  └── /lets:brainstorm  Backlog review, priorities, task creation
 ```
 
