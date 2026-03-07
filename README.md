@@ -15,19 +15,15 @@
 
 Claude Code is powerful, but without structure it drifts - forgets context between sessions, commits without linking to tasks, reviews its own code with no outside perspective, and loses track of what was decided and why.
 
-LETS fixes that. It gives you a team of 13 expert agents - architect, security engineer, QA, backend, devops and others - that automatically join your workflow when needed. Code review? The right experts are selected based on what you changed. Technical decision? Agents debate the trade-offs and give you a recommendation. Planning? They explore the codebase before you write a line of code.
-
-On top of that - a disciplined workflow where every session has a task, every commit links to it, and context survives across sessions and conversation compaction.
-
-Built for teams. Task tracking via [beads](https://github.com/steveyegge/beads) syncs across developers through [Dolt](https://github.com/dolthub/dolt) remotes - everyone sees the same tasks, dependencies, and progress. Multiple developers work on the same codebase with shared context, not duplicated effort.
+LETS fixes that. It adds a disciplined workflow on top of Claude Code: every session has a task, every commit links to it, 13 specialized expert agents review your code and help with decisions, and context survives across sessions and conversation compaction. Built for teams - task tracking syncs across developers via [Dolt](https://github.com/dolthub/dolt) remotes.
 
 **What you get:**
+- **Expert agents on demand** - architect, security, QA, backend, devops and others join automatically when needed
 - **Session continuity** - context restored automatically, even after compaction
 - **Task-driven development** - no random work, everything tracked via [beads](https://github.com/steveyegge/beads)
-- **Team sync** - shared task database via Dolt remotes, multiple developers see the same backlog in real time
-- **Expert review panel** - up to 11 specialized agents (security, architecture, backend, QA...) review your code
-- **Parallel execution** - multiple agents working on different tasks simultaneously via worktrees
-- **Structured planning** - agent-powered codebase exploration and architecture design before coding
+- **Team sync** - shared task database, multiple developers see the same backlog in real time
+- **Structured planning** - codebase exploration and architecture design before coding
+- **Parallel execution** - multiple agents working on different tasks simultaneously
 - **One-command workflow** - Claude suggests the next step, you decide
 
 <div align="center">
