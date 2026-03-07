@@ -15,18 +15,19 @@
 
 Claude Code is powerful, but without structure it drifts - forgets context between sessions, commits without linking to tasks, reviews its own code with no outside perspective, and loses track of what was decided and why.
 
-LETS fixes that. You get a team of 13 expert agents and a structured workflow - but you stay in control. You define the task, approve the plan, review every commit. Agents don't go off on their own - they work within boundaries you set, and report back for your decision.
+LETS fixes that. Every session has a task. Every commit links to it. Expert agents review your code and help with technical decisions. Context survives across sessions and conversation compaction. Built for teams - task tracking syncs across developers via [Dolt](https://github.com/dolthub/dolt) remotes.
 
-Every session has a task. Every commit links to it. Expert agents review your code and help with technical decisions. Context survives across sessions and conversation compaction. Built for teams - task tracking syncs across developers via [Dolt](https://github.com/dolthub/dolt) remotes.
+You get a team of 13 expert agents and a structured workflow - but you stay in control. You define the task, approve the plan, review every commit. Agents don't go off on their own - they work within boundaries you set, and report back for your decision.
 
 **What you get:**
-- **Expert agents on demand** - architect, security, QA, backend, devops and others join automatically when needed
 - **Session continuity** - context restored automatically, even after compaction
 - **Task-driven development** - no random work, everything tracked via [beads](https://github.com/steveyegge/beads)
 - **Structured planning** - codebase exploration and architecture design before coding
-- **Team sync** - shared task database, multiple developers see the same backlog in real time
-- **Worktrees** - parallel interactive sessions in separate terminals, one task per worktree
+- **GitHub integration** - PR creation, inline code review comments, follow-up and approval - all from the terminal
+- **Expert agents on demand** - architect, security, QA, backend, devops and others join automatically when needed
 - **Agent Teams** - spawn autonomous agents that implement multiple tasks in parallel
+- **Worktrees** - parallel interactive sessions in separate terminals, one task per worktree
+- **Team sync** - shared task database, multiple developers see the same backlog in real time
 - **One-command workflow** - Claude suggests the next step, you decide
 
 <div align="center">
@@ -124,7 +125,7 @@ Then start working:
 
 | Command | Description |
 |---------|-------------|
-| `/lets:brainstorm` | Interactive backlog helper - review tasks, priorities, patterns |
+| `/lets:brainstorm` | Interactive backlog helper - because the backlog must grow! |
 | `/lets:plan` | Structured planning - explore codebase, design architecture, write plan |
 | `/lets:execute` | Execute plan from `/lets:plan` via native plan mode |
 | `/lets:team` | Parallel implementation with Agent Teams |
