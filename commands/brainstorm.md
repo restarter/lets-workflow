@@ -585,6 +585,7 @@ No agents. Direct interactive triage of stale/messy backlog items.
 bd stats
 bd list --status=open -n 50
 bd list --status=done -n 20
+bd label list 2>/dev/null
 ```
 
 ### Step C2: Present Cleanup Targets
@@ -608,6 +609,14 @@ Analyze loaded data and group:
 
 ### Done but Not Closed
 - **{title}** (`id`) - status done
+...
+
+### Orphan Tasks (no labels/epic grouping)
+- **{title}** (`id`) - no labels, suggest: epic:{suggestion based on title}
+...
+
+### Unassigned Tasks (open, no assignee)
+- **{title}** (`id`) - P{N}, suggest assignee based on domain
 ...
 ```
 
@@ -637,6 +646,12 @@ For closing:
 - `bd close <id>`
 - If closing as duplicate: `bd comments add <other-id> "Absorbed from {closed-id}: {title}"` then `bd close <id>`
 
+For orphan tasks (no labels), suggest a label and ask:
+- `bd label add <id> epic:{name}` - assign to epic
+
+For unassigned tasks, suggest an assignee based on task domain and ask:
+- `bd update <id> --assignee={name}` - assign to person
+
 All mutations require user approval.
 Continue until all groups processed or user says "enough".
 
@@ -647,13 +662,15 @@ Continue until all groups processed or user says "enough".
 
 - Closed: {N} tasks
 - Reprioritized: {M} tasks
+- Labeled: {L} tasks
+- Assigned: {A} tasks
 - Skipped: {K} tasks
 ```
 
 If active task:
 
 ```bash
-bd comments add <task-id> "Cleanup: closed {N}, reprioritized {M}"
+bd comments add <task-id> "Cleanup: closed {N}, reprioritized {M}, labeled {L}, assigned {A}"
 ```
 
 ---
