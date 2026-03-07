@@ -47,7 +47,7 @@ if [ -z "$SESSIONS" ]; then
 fi
 ```
 
-Read and present a compact summary of recent sessions (last 1-3). Focus on: what was done, key decisions, next steps suggested.
+**Read EACH session file** found above using the Read tool (up to 3 files in parallel). Then present a compact summary of all sessions. Focus on: what was done, key decisions, next steps suggested.
 
 ## Step 2: Git State
 
