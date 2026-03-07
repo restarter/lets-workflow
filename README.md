@@ -19,11 +19,13 @@ LETS fixes that. It adds a disciplined workflow on top of Claude Code: every ses
 
 **What you get:**
 - **Expert agents on demand** - architect, security, QA, backend, devops and others join automatically when needed
+- **Expert agents on demand** - architect, security, QA, backend, devops and others join automatically when needed
 - **Session continuity** - context restored automatically, even after compaction
 - **Task-driven development** - no random work, everything tracked via [beads](https://github.com/steveyegge/beads)
-- **Team sync** - shared task database, multiple developers see the same backlog in real time
 - **Structured planning** - codebase exploration and architecture design before coding
-- **Parallel execution** - multiple agents working on different tasks simultaneously
+- **Team sync** - shared task database, multiple developers see the same backlog in real time
+- **Worktrees** - parallel interactive sessions in separate terminals, one task per worktree
+- **Agent Teams** - spawn autonomous agents that implement multiple tasks in parallel
 - **One-command workflow** - Claude suggests the next step, you decide
 
 <div align="center">
@@ -60,35 +62,42 @@ Then start working:
 
 ## How It Works
 
-### Workflow
+### Session Lifecycle
 
 ```
-/lets:start ─── work ─── /lets:commit ─── /lets:done ─── /lets:end
-                 │
-                 ├── /lets:check       Quick sanity check (5 perspectives, ~30s)
-                 ├── /lets:review      Full multi-agent code review (~2-3 min)
-                 ├── /lets:opinion     Technical decision with 3-5 expert agents
-                 ├── /lets:ask         Quick question to a single expert
-                 ├── /lets:plan        Codebase exploration + architecture design
-                 └── /lets:brainstorm  Backlog review, priorities, task creation
+/lets:start ─── choose how to work ─── /lets:commit ─── /lets:done ─── /lets:end
 ```
 
 **Start** - `/lets:start` restores context from the previous session, shows available tasks, and creates a feature branch. Context survives conversation compaction via beads task comments.
 
-**Work** - Write code. When you need help along the way:
-- Hit a technical decision? `/lets:opinion` launches 3-5 expert agents in parallel and returns a recommendation with trade-offs.
-- Need a quick answer? `/lets:ask security "Is this auth flow safe?"` pings one expert.
-- Task feels big? `/lets:plan` explores the codebase and designs an architecture before you write a line of code.
+**Choose how to work** - depending on the task, you pick the approach:
 
-**Review** - `/lets:check` for a quick 30-second inline scan, or `/lets:review --local` for a full multi-agent deep review with dynamic expert selection.
+```
+┌─ You write code yourself ─────────────────────────────────────────────────┐
+│  Write code with Claude. Use helpers along the way:                      │
+│  /lets:opinion   Technical decision with 3-5 expert agents               │
+│  /lets:ask       Quick question to a single expert                       │
+│  /lets:check     Quick sanity check (5 perspectives, ~30s)               │
+│  /lets:review    Full multi-agent code review (~2-3 min)                 │
+├─ You plan, Claude builds ─────────────────────────────────────────────────┤
+│  /lets:brainstorm  Think through what to build - backlog, priorities      │
+│  /lets:plan        Design how to build it - codebase exploration, arch    │
+│  /lets:execute     Claude implements the plan with your approval gates    │
+├─ Agents work in parallel ─────────────────────────────────────────────────┤
+│  /lets:team        Spawn agents that implement multiple tasks at once     │
+│  /lets:worktree    Open parallel sessions in separate terminals           │
+└───────────────────────────────────────────────────────────────────────────┘
+```
 
 **Commit** - `/lets:commit` reviews changes and creates a conventional commit (`feat:`, `fix:`, `refactor:`) linked to the active task.
 
 **Finish** - `/lets:done` creates a PR on GitHub (or merges locally). `/lets:end` saves a session summary so the next conversation picks up where you left off.
 
-### LETS Boxes
+### Under the Hood
 
-After key actions, Claude shows contextual next-step suggestions - you always know what to do next:
+**SessionStart Hook** - injects workflow rules into every Claude Code conversation: development practices, git conventions, session flow, discovery logging. This is what makes Claude follow the LETS workflow without you having to remind it.
+
+**LETS Boxes** - after key actions, Claude shows contextual next-step suggestions so you always know what to do next:
 
 ```
 ┌─ LETS ─────────────────────────┐
@@ -96,10 +105,6 @@ After key actions, Claude shows contextual next-step suggestions - you always kn
 │  Commit?  /lets:commit         │
 └────────────────────────────────┘
 ```
-
-### SessionStart Hook
-
-A hook injects workflow rules into every Claude Code conversation - development practices, git conventions, session flow, discovery logging. This is what makes Claude follow the LETS workflow without you having to remind it.
 
 ## Commands
 
@@ -114,6 +119,16 @@ A hook injects workflow rules into every Claude Code conversation - development 
 | `/lets:status` | Task overview and project status |
 | `/lets:note` | Add note to active task |
 
+### Planning & Execution
+
+| Command | Description |
+|---------|-------------|
+| `/lets:brainstorm` | Interactive backlog helper - review tasks, priorities, patterns |
+| `/lets:plan` | Structured planning - explore codebase, design architecture, write plan |
+| `/lets:execute` | Execute plan from `/lets:plan` via native plan mode |
+| `/lets:team` | Parallel implementation with Agent Teams |
+| `/lets:worktree` | Create/manage worktrees for parallel sessions |
+
 ### Review & Analysis
 
 | Command | Description |
@@ -123,16 +138,6 @@ A hook injects workflow rules into every Claude Code conversation - development 
 | `/lets:pr` | PR review lifecycle - analyze, discuss, post inline, follow-up, approve |
 | `/lets:opinion` | Technical decision analysis (3-5 expert agents in parallel) |
 | `/lets:ask` | Quick expert consultation (single agent) |
-
-### Planning & Execution
-
-| Command | Description |
-|---------|-------------|
-| `/lets:brainstorm` | Interactive backlog helper - review tasks, priorities, patterns |
-| `/lets:plan` | Structured planning - explore codebase, design architecture, write plan |
-| `/lets:execute` | Execute plan from `/lets:plan` via native plan mode |
-| `/lets:worktree` | Create/manage worktrees for parallel sessions |
-| `/lets:team` | Parallel implementation with Agent Teams |
 
 ### Setup
 
