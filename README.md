@@ -15,10 +15,11 @@
 
 Claude Code is powerful, but without structure it drifts - forgets context between sessions, commits without linking to tasks, reviews its own code with no outside perspective, and loses track of what was decided and why.
 
-LETS fixes that. It adds a disciplined workflow on top of Claude Code: every session has a task, every commit links to it, 13 specialized expert agents review your code and help with decisions, and context survives across sessions and conversation compaction. Built for teams - task tracking syncs across developers via [Dolt](https://github.com/dolthub/dolt) remotes.
+LETS fixes that. You get a team of 13 expert agents and a structured workflow - but you stay in control. You define the task, approve the plan, review every commit. Agents don't go off on their own - they work within boundaries you set, and report back for your decision.
+
+Every session has a task. Every commit links to it. Expert agents review your code and help with technical decisions. Context survives across sessions and conversation compaction. Built for teams - task tracking syncs across developers via [Dolt](https://github.com/dolthub/dolt) remotes.
 
 **What you get:**
-- **Expert agents on demand** - architect, security, QA, backend, devops and others join automatically when needed
 - **Expert agents on demand** - architect, security, QA, backend, devops and others join automatically when needed
 - **Session continuity** - context restored automatically, even after compaction
 - **Task-driven development** - no random work, everything tracked via [beads](https://github.com/steveyegge/beads)
