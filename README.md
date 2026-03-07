@@ -71,22 +71,40 @@ Then start working:
 /lets:start ─── choose how to work ─── /lets:commit ─── /lets:done ─── /lets:end
 ```
 
-1. **Start** - `/lets:start` restores context, shows tasks, creates a feature branch
-2. **Choose how to work** - depending on the task, you pick the approach:
-   - **You write code yourself** - with expert helpers along the way:
-     - `/lets:opinion` - technical decision with 3-5 expert agents
-     - `/lets:ask` - quick question to a single expert
-     - `/lets:check` - quick sanity check (5 perspectives, ~30s)
-     - `/lets:review` - full multi-agent code review (~2-3 min)
-   - **You plan, Claude builds:**
-     - `/lets:brainstorm` - think through what to build - backlog, priorities
-     - `/lets:plan` - design how to build it - codebase exploration, architecture
-     - `/lets:execute` - Claude implements the plan with your approval gates
-   - **Agents work in parallel:**
-     - `/lets:team` - spawn agents that implement multiple tasks at once
-     - `/lets:worktree` - open parallel sessions in separate terminals
-3. **Commit** - `/lets:commit` reviews changes, creates a conventional commit linked to the task
-4. **Finish** - `/lets:done` creates a PR (or merges locally), `/lets:end` saves session summary
+**Start** - `/lets:start` restores context, shows tasks, creates a feature branch.
+
+**Work** - depending on the task, you pick the approach:
+
+#### Write code yourself
+Write code with Claude. Use expert helpers along the way:
+
+| Command | What it does |
+|---------|-------------|
+| `/lets:opinion` | Technical decision with 3-5 expert agents |
+| `/lets:ask` | Quick question to a single expert |
+| `/lets:check` | Quick sanity check (5 perspectives, ~30s) |
+| `/lets:review` | Full multi-agent code review (~2-3 min) |
+
+#### Plan first, then build
+Think through the problem before writing code:
+
+| Command | What it does |
+|---------|-------------|
+| `/lets:brainstorm` | Think through *what* to build - backlog, priorities |
+| `/lets:plan` | Design *how* to build it - codebase exploration, architecture |
+| `/lets:execute` | Claude implements the plan with your approval gates |
+
+#### Parallelize
+Multiple tasks at once:
+
+| Command | What it does |
+|---------|-------------|
+| `/lets:team` | Spawn agents that implement multiple tasks in parallel |
+| `/lets:worktree` | Open parallel interactive sessions in separate terminals |
+
+**Commit** - `/lets:commit` reviews changes, creates a conventional commit linked to the task.
+
+**Finish** - `/lets:done` creates a PR (or merges locally). `/lets:end` saves session summary.
 
 ### Under the Hood
 
