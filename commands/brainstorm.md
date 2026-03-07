@@ -1,5 +1,5 @@
 ---
-description: Interactive ideation - review backlog with agents, explore ideas, quick brainstorm, cleanup stale tasks
+description: Interactive ideation - review backlog, explore ideas, quick brainstorm, cleanup
 argument-hint: "[topic or epic name]"
 ---
 
@@ -166,7 +166,11 @@ Mandatory agent context (append to prompt based on agent):
 |-------|-----------------|
 | pragmatist | "Focus on ROI. Which ideas deliver the most value for least effort? Flag overengineering or premature optimization." |
 | architect | "Focus on structural opportunities. Where could the system be simplified, better decomposed, or made more extensible?" |
+| backend | "Focus on API gaps, performance bottlenecks, and missing error handling. What backend patterns could be improved?" |
+| frontend | "Focus on UX gaps, component reuse opportunities, and accessibility. What frontend patterns need attention?" |
 | security | "Focus on security debt and missing protections. What attack surfaces are unprotected?" |
+| database | "Focus on schema evolution opportunities, query patterns that could be simplified, and data model gaps." |
+| devops | "Focus on CI/CD gaps, deployment friction, and infrastructure debt. What automation is missing?" |
 | docs | "Focus on documentation debt. What's undocumented, stale, or missing for onboarding?" |
 | qa | "Focus on quality gaps. What's untested? Where would tests catch real bugs?" |
 
@@ -256,7 +260,7 @@ DIALOG_QUESTION = "What catches your eye?"
 ```
 "ultrathink
 
-BRAINSTORM SCOUT MODE. Gather project context for a brainstorm session.
+BRAINSTORM SCOUT MODE. In this mode, your mapping role extends to surfacing signals and gaps - not just structure. Gather project context for a brainstorm session.
 
 RESPONSE LANGUAGE: {language from LETS Config}
 PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
@@ -338,6 +342,9 @@ BRAINSTORM MODE. Generate ideas and surface gaps from your area of expertise.
 You are NOT reviewing code or evaluating a decision. You are looking at a project's
 current state and generating actionable insights about what to build, fix, or improve.
 
+PROJECT RULES (from CLAUDE.md):
+{CLAUDE.md summary, first 100 lines - architecture decisions and structure}
+
 PROJECT STATE PROFILE:
 {explorer output from Phase 1}
 
@@ -393,7 +400,7 @@ DIALOG_QUESTION = "What resonates?"
 ```
 "ultrathink
 
-BRAINSTORM SCOUT MODE. Gather project context relevant to a specific topic.
+BRAINSTORM SCOUT MODE. In this mode, your mapping role extends to surfacing signals and gaps - not just structure. Gather project context relevant to a specific topic.
 
 RESPONSE LANGUAGE: {language from LETS Config}
 PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
@@ -464,6 +471,9 @@ an idea and generating insights, questions, and angles from your domain.
 
 TOPIC: {user's topic}
 
+PROJECT RULES (from CLAUDE.md):
+{CLAUDE.md summary, first 100 lines - architecture decisions and structure}
+
 TOPIC CONTEXT PROFILE:
 {explorer output from Phase 1}
 
@@ -509,7 +519,11 @@ bd stats
 bd list --status=open -n 30
 bd list --status=in_progress
 git log --oneline -15
-grep -rn "TODO\|FIXME\|HACK\|XXX" --include="*.md" --include="*.ts" --include="*.py" --include="*.php" --include="*.go" --include="*.js" --include="*.sh" "$ROOT" 2>/dev/null | head -20
+```
+
+Also use Grep tool (not bash grep) to scan for tech debt signals:
+```
+Grep(pattern="TODO|FIXME|HACK|XXX", path="$ROOT", output_mode="content", head_limit=20)
 ```
 
 If argument provided (topic/epic):
@@ -661,7 +675,7 @@ bd comments add <task-id> "Cleanup: closed {N}, reprioritized {M}"
 ┌─ LETS ──────────────────────────────────┐
 │  Go deeper?  /lets:brainstorm           │
 │  Plan?       /lets:plan                 │
-│  Start?      /lets:start               │
+│  Start?      /lets:start                │
 └─────────────────────────────────────────┘
 ```
 

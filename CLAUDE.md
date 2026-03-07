@@ -7,7 +7,7 @@ Claude Code plugin for development workflow with session management, code review
 ```
 .claude-plugin/plugin.json   # Plugin manifest
 commands/                     # Slash commands (/lets:start, /lets:done, /lets:review, etc.)
-agents/                       # Expert agents (review, opinion, ask, plan, team implementation)
+agents/                       # Expert agents (review, opinion, ask, plan, brainstorm, team implementation)
 hooks/                        # SessionStart hook, workflow rules, config template
 scripts/lets/                 # Statusline + init script (copied/run per-project by /lets:init)
 reference/                    # Reference plugins for studying patterns (gitignored)
