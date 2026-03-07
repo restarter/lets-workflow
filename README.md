@@ -15,7 +15,7 @@
 
 Claude Code is powerful, but without structure it drifts - forgets context between sessions, silently changes approach when something fails, reviews its own code with no outside perspective, and loses track of what was decided and why.
 
-LETS fixes that. Every session has a task. Every commit links to it. Expert agents review your code and help with technical decisions. Context survives across sessions and conversation compaction.
+**LETS fix this!** Every session has a task. Every commit links to it. Expert agents review your code and help with technical decisions. Context survives across sessions and conversation compaction.
 
 You get a team of 13 expert agents and a structured workflow - but you stay in control. You define the task, approve the plan, review every commit. Agents don't go off on their own - they work within boundaries you set, and report back for your decision.
 
@@ -71,30 +71,22 @@ Then start working:
 /lets:start ─── choose how to work ─── /lets:commit ─── /lets:done ─── /lets:end
 ```
 
-**Start** - `/lets:start` restores context from the previous session, shows available tasks, and creates a feature branch. Context survives conversation compaction via beads task comments.
-
-**Choose how to work** - depending on the task, you pick the approach:
-
-```
-┌─ You write code yourself ─────────────────────────────────────────────────┐
-│  Write code with Claude. Use helpers along the way:                      │
-│  /lets:opinion   Technical decision with 3-5 expert agents               │
-│  /lets:ask       Quick question to a single expert                       │
-│  /lets:check     Quick sanity check (5 perspectives, ~30s)               │
-│  /lets:review    Full multi-agent code review (~2-3 min)                 │
-├─ You plan, Claude builds ─────────────────────────────────────────────────┤
-│  /lets:brainstorm  Think through what to build - backlog, priorities      │
-│  /lets:plan        Design how to build it - codebase exploration, arch    │
-│  /lets:execute     Claude implements the plan with your approval gates    │
-├─ Agents work in parallel ─────────────────────────────────────────────────┤
-│  /lets:team        Spawn agents that implement multiple tasks at once     │
-│  /lets:worktree    Open parallel sessions in separate terminals           │
-└───────────────────────────────────────────────────────────────────────────┘
-```
-
-**Commit** - `/lets:commit` reviews changes and creates a conventional commit (`feat:`, `fix:`, `refactor:`) linked to the active task.
-
-**Finish** - `/lets:done` creates a PR on GitHub (or merges locally). `/lets:end` saves a session summary so the next conversation picks up where you left off.
+1. **Start** - `/lets:start` restores context, shows tasks, creates a feature branch
+2. **Choose how to work** - depending on the task, you pick the approach:
+   - **You write code yourself** - with expert helpers along the way:
+     - `/lets:opinion` - technical decision with 3-5 expert agents
+     - `/lets:ask` - quick question to a single expert
+     - `/lets:check` - quick sanity check (5 perspectives, ~30s)
+     - `/lets:review` - full multi-agent code review (~2-3 min)
+   - **You plan, Claude builds:**
+     - `/lets:brainstorm` - think through what to build - backlog, priorities
+     - `/lets:plan` - design how to build it - codebase exploration, architecture
+     - `/lets:execute` - Claude implements the plan with your approval gates
+   - **Agents work in parallel:**
+     - `/lets:team` - spawn agents that implement multiple tasks at once
+     - `/lets:worktree` - open parallel sessions in separate terminals
+3. **Commit** - `/lets:commit` reviews changes, creates a conventional commit linked to the task
+4. **Finish** - `/lets:done` creates a PR (or merges locally), `/lets:end` saves session summary
 
 ### Under the Hood
 
