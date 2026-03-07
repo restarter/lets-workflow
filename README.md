@@ -7,7 +7,7 @@
 *Stop babysitting your AI. Start shipping with it.*
 
 [![Claude Code](https://img.shields.io/badge/Claude_Code-plugin-blueviolet)](https://claude.com/claude-code)
-[![Version](https://img.shields.io/badge/version-0.2.4-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue)](CHANGELOG.md)
 
 </div>
 

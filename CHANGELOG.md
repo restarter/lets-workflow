@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-03-07
+
+README rewrite, install/init split, and interactive planning.
+
+### Added
+- `/lets:init` command - per-project setup (creates .lets/, config, statusline, beads)
+- `scripts/lets/lets_init.sh` - bash script for project initialization
+- Interactive exploration phase in `/lets:plan`, `/lets:brainstorm`, `/lets:opinion`
+- AskUserQuestion with markdown preview for architecture choices
+
+### Changed
+- `/lets:install` rewritten - global setup only, delegates per-project work to `/lets:init`
+- `scripts/lets/install.sh` replaced by `lets_init.sh`
+- README fully rewritten: marketing intro, workflow modes diagram, section emojis, updated screenshots
+- CLAUDE.md references updated for install/init split
+
+### Removed
+- `scripts/lets/install.sh` (replaced by `lets_init.sh`)
+
 ## [0.2.4] - 2026-03-06
 
 Quality, consistency, and planning restructure.
