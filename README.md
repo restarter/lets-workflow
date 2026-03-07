@@ -1,6 +1,6 @@
 <div align="center">
 
-# LETS Workflow
+# 🌱 LETS Workflow
 
 **A development workflow plugin for Claude Code**
 
@@ -59,17 +59,27 @@ Then start working:
 
 ## How It Works
 
-### The Loop
+### Workflow
 
 ```
-/lets:start -> work -> /lets:check -> /lets:commit -> /lets:done -> /lets:end
+/lets:start ─── work ─── /lets:commit ─── /lets:done ─── /lets:end
+                 │
+                 ├── /lets:check     Quick sanity check (5 perspectives, ~30s)
+                 ├── /lets:review    Full multi-agent code review (~2-3 min)
+                 ├── /lets:opinion   Technical decision with 3-5 expert agents
+                 ├── /lets:ask       Quick question to a single expert
+                 ├── /lets:plan      Codebase exploration + architecture design
+                 └── /lets:brainstorm  Backlog review, priorities, task creation
 ```
 
-**Start** - `/lets:start` reads the previous session summary, shows available tasks, and creates a feature branch. If your conversation was compacted, the context is recovered from beads task comments.
+**Start** - `/lets:start` restores context from the previous session, shows available tasks, and creates a feature branch. Context survives conversation compaction via beads task comments.
 
-**Work** - Write code. Use `/lets:opinion` when you face a technical decision - it launches 3-5 expert agents in parallel and gives you an aggregated recommendation with trade-offs.
+**Work** - Write code. When you need help along the way:
+- Hit a technical decision? `/lets:opinion` launches 3-5 expert agents in parallel and returns a recommendation with trade-offs.
+- Need a quick answer? `/lets:ask security "Is this auth flow safe?"` pings one expert.
+- Task feels big? `/lets:plan` explores the codebase and designs an architecture before you write a line of code.
 
-**Review** - `/lets:check` for a quick 30-second inline review (5 perspectives), or `/lets:review --local` for a full multi-agent deep review.
+**Review** - `/lets:check` for a quick 30-second inline scan, or `/lets:review --local` for a full multi-agent deep review with dynamic expert selection.
 
 **Commit** - `/lets:commit` reviews changes and creates a conventional commit (`feat:`, `fix:`, `refactor:`) linked to the active task.
 
@@ -150,7 +160,11 @@ For medium and large tasks, LETS provides structured planning:
 | Clear goal ("Add X to Y") | `/lets:plan` - explore codebase, design architecture, write plan |
 | Unclear goal ("Improve Z") | `/lets:brainstorm` to clarify, then `/lets:plan` |
 
-`/lets:brainstorm` helps think through *what* to build (backlog review, priorities, task creation). `/lets:plan` designs *how* to build it (codebase exploration, architecture, implementation plan). `/lets:execute` implements the plan via native plan mode with approval gates.
+> **Think** → **Design** → **Build**
+>
+> `/lets:brainstorm` helps think through *what* to build.
+> `/lets:plan` designs *how* to build it.
+> `/lets:execute` implements the plan with approval gates.
 
 ## Parallel Work
 
@@ -246,6 +260,8 @@ Interactive worktrees are stored in `.worktrees/` (gitignored).
 
 | Dependency | Required | Purpose |
 |------------|----------|---------|
+| [Claude Code](https://claude.com/claude-code) | Yes | AI coding agent (the thing LETS plugs into) |
+| [git](https://git-scm.com/) | Yes | Version control, branching, worktrees |
 | [beads](https://github.com/steveyegge/beads) | Yes | Task tracking and issue management (Claude Code plugin) |
 | [gh](https://cli.github.com/) | Optional | GitHub PR workflow (when `github: true`) |
 | [jq](https://jqlang.github.io/jq/) | Optional | Statusline JSON parsing |
