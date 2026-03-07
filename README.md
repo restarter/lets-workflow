@@ -76,22 +76,22 @@ Then start working:
 **Choose how to work** - depending on the task, you pick the approach:
 
 ```
-┌─ You write code yourself ─────────────────────────────────────────────────┐
-│  Write code with Claude. Use helpers along the way:                      │
-│  /lets:opinion   Technical decision with 3-5 expert agents               │
-│  /lets:ask       Quick question to a single expert                       │
-│  /lets:check     Quick sanity check (5 perspectives, ~30s)               │
-│  /lets:review    Full multi-agent code review (~2-3 min)                 │
-│                                                                          │
-├─ You plan, Claude builds ─────────────────────────────────────────────────┤
-│  /lets:brainstorm  Think through what to build - backlog, priorities      │
-│  /lets:plan        Design how to build it - codebase exploration, arch    │
-│  /lets:execute     Claude implements the plan with your approval gates    │
-│                                                                          │
-├─ Agents work in parallel ─────────────────────────────────────────────────┤
-│  /lets:team        Spawn agents that implement multiple tasks at once     │
-│  /lets:worktree    Open parallel sessions in separate terminals           │
-└───────────────────────────────────────────────────────────────────────────┘
+┌─ You write code yourself ──────────────────────────────────────────────┐
+│  Write code with Claude. Use helpers along the way:                   │
+│  /lets:opinion   Technical decision with 3-5 expert agents            │
+│  /lets:ask       Quick question to a single expert                    │
+│  /lets:check     Quick sanity check (5 perspectives, ~30s)            │
+│  /lets:review    Full multi-agent code review (~2-3 min)              │
+│                                                                       │
+├─ You plan, Claude builds ─────────────────────────────────────────────┤
+│  /lets:brainstorm  Think through what to build - backlog, priorities   │
+│  /lets:plan        Design how to build it - codebase exploration, arch │
+│  /lets:execute     Claude implements the plan with your approval gates │
+│                                                                       │
+├─ Agents work in parallel ─────────────────────────────────────────────┤
+│  /lets:team        Spawn agents that implement multiple tasks at once  │
+│  /lets:worktree    Open parallel sessions in separate terminals        │
+└───────────────────────────────────────────────────────────────────────┘
 ```
 
 **Commit** - `/lets:commit` reviews changes and creates a conventional commit (`feat:`, `fix:`, `refactor:`) linked to the active task.
