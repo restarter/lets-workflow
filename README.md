@@ -1,62 +1,136 @@
-# lets - Development Workflow Plugin for Claude Code
+<div align="center">
 
-Structured development workflow with session management, expert code review, and task tracking for Claude Code.
+# LETS Workflow
 
-LETS turns Claude Code into a disciplined development partner. Every session has a task. Every commit links to a task. Every review is done by specialized experts. Claude suggests the next step - you decide.
+**A development workflow plugin for Claude Code**
+
+*Stop babysitting your AI. Start shipping with it.*
+
+[![Claude Code](https://img.shields.io/badge/Claude_Code-plugin-blueviolet)](https://claude.com/claude-code)
+[![Version](https://img.shields.io/badge/version-0.2.4-blue)](CHANGELOG.md)
+
+</div>
+
+---
+
+Claude Code is powerful, but without structure it drifts - forgets context between sessions, commits without linking to tasks, reviews its own code with no outside perspective, and loses track of what was decided and why.
+
+LETS fixes that. It turns Claude Code into a disciplined development partner with a clear workflow: every session has a task, every commit links to it, every review is done by specialized expert agents, and context survives across sessions and conversation compaction.
+
+**What you get:**
+- **Session continuity** - context restored automatically, even after compaction
+- **Task-driven development** - no random work, everything tracked via [beads](https://github.com/steveyegge/beads)
+- **Expert review panel** - up to 11 specialized agents (security, architecture, backend, QA...) review your code
+- **Parallel execution** - multiple agents working on different tasks simultaneously via worktrees
+- **Structured planning** - agent-powered codebase exploration and architecture design before coding
+- **One-command workflow** - Claude suggests the next step, you decide
+
+<div align="center">
+
+<img src="docs/images/review.png" alt="LETS Review" width="600">
+
+*LETS statusline and `/lets:review` command in action*
+
+</div>
 
 ## Quick Start
 
 ```bash
-# Clone into Claude Code plugins directory
-git clone https://github.com/nickolay-umbo/lets-plugin-claude ~/.claude/plugins/lets
+# 1. Add plugin to Claude Code
+git clone https://github.com/restarter/lets-workflow ~/.claude/plugins/lets
 
-# First-time global setup (inside Claude Code)
+# 2. First-time global setup (installs beads plugin, verifies environment)
 /lets:install
 
-# Or just initialize current project (if plugins already installed)
+# 3. Initialize current project (creates .lets/ structure, config, statusline)
 /lets:init
 ```
 
-## Commands
+Then start working:
 
-| Command | Description |
-|---------|-------------|
-| `/lets:start` | Start session - restore context, show tasks, select work item |
-| `/lets:end` | End session - save progress, sync tasks, create summary |
-| `/lets:commit` | Commit with review and conventional commit format |
-| `/lets:done` | Finish task - create PR (github mode) or merge locally |
-| `/lets:check` | Quick inline sanity check (5-perspective review) |
-| `/lets:review` | Full code review (up to 11 specialized agents, ~2-3 min) |
-| `/lets:opinion` | Technical decision analysis (3-5 expert agents in parallel) |
-| `/lets:ask` | Quick expert consultation (single agent) |
-| `/lets:brainstorm` | Interactive backlog helper - review tasks, priorities, patterns |
-| `/lets:plan` | Structured planning - explore codebase, design architecture, write plan |
-| `/lets:execute` | Execute plan from `/lets:plan` via native plan mode |
-| `/lets:pr` | PR review lifecycle - analyze, discuss, post inline, follow-up, respond, approve |
-| `/lets:worktree` | Create/manage worktrees for parallel sessions |
-| `/lets:team` | Parallel implementation with Agent Teams (run, status, stop) |
-| `/lets:status` | Task overview and project status |
-| `/lets:note` | Add note to active task |
-| `/lets:install` | First-time global setup - plugins, environment, workflow |
-| `/lets:init` | Initialize LETS in current project |
+```bash
+/lets:start          # Restore context, pick a task, create feature branch
+# ... write code ...
+/lets:check          # Quick sanity check before commit
+/lets:commit         # Review + conventional commit linked to task
+/lets:done           # Create PR (or merge locally) and close task
+/lets:end            # Save session summary for next time
+```
 
-## Workflow
+## How It Works
+
+### The Loop
 
 ```
 /lets:start -> work -> /lets:check -> /lets:commit -> /lets:done -> /lets:end
 ```
 
-**Start a session** - `/lets:start` restores context from the previous session, shows available tasks, and creates a feature branch.
+**Start** - `/lets:start` reads the previous session summary, shows available tasks, and creates a feature branch. If your conversation was compacted, the context is recovered from beads task comments.
 
-**Work** - Write code. Use `/lets:opinion` when you face a technical decision - it launches 3-5 expert agents in parallel and returns an aggregated recommendation.
+**Work** - Write code. Use `/lets:opinion` when you face a technical decision - it launches 3-5 expert agents in parallel and gives you an aggregated recommendation with trade-offs.
 
-**Review before commit** - `/lets:check` for a quick 30-second sanity check, or `/lets:review --local` for a full multi-agent review.
+**Review** - `/lets:check` for a quick 30-second inline review (5 perspectives), or `/lets:review --local` for a full multi-agent deep review.
 
-**Commit** - `/lets:commit` reviews your changes and creates a conventional commit linked to the active task.
+**Commit** - `/lets:commit` reviews changes and creates a conventional commit (`feat:`, `fix:`, `refactor:`) linked to the active task.
 
-**Finish** - `/lets:done` creates a PR (or merges locally) and closes the task. `/lets:end` saves a session summary for the next conversation.
+**Finish** - `/lets:done` creates a PR on GitHub (or merges locally). `/lets:end` saves a session summary so the next conversation picks up where you left off.
 
-### Review Options
+### LETS Boxes
+
+After key actions, Claude shows contextual next-step suggestions - you always know what to do next:
+
+```
+┌─ LETS ─────────────────────────┐
+│  Review?  /lets:review         │
+│  Commit?  /lets:commit         │
+└────────────────────────────────┘
+```
+
+### SessionStart Hook
+
+A hook injects workflow rules into every Claude Code conversation - development practices, git conventions, session flow, discovery logging. This is what makes Claude follow the LETS workflow without you having to remind it.
+
+## Commands
+
+### Session & Task
+
+| Command | Description |
+|---------|-------------|
+| `/lets:start` | Start session - restore context, show tasks, create feature branch |
+| `/lets:end` | End session - save progress, sync tasks, create summary |
+| `/lets:commit` | Commit with review and conventional commit format |
+| `/lets:done` | Finish task - create PR (GitHub mode) or merge locally |
+| `/lets:status` | Task overview and project status |
+| `/lets:note` | Add note to active task |
+
+### Review & Analysis
+
+| Command | Description |
+|---------|-------------|
+| `/lets:check` | Quick inline sanity check (~30s, 5-perspective review) |
+| `/lets:review` | Full code review with dynamic agent selection (~2-3 min) |
+| `/lets:pr` | PR review lifecycle - analyze, discuss, post inline, follow-up, approve |
+| `/lets:opinion` | Technical decision analysis (3-5 expert agents in parallel) |
+| `/lets:ask` | Quick expert consultation (single agent) |
+
+### Planning & Execution
+
+| Command | Description |
+|---------|-------------|
+| `/lets:brainstorm` | Interactive backlog helper - review tasks, priorities, patterns |
+| `/lets:plan` | Structured planning - explore codebase, design architecture, write plan |
+| `/lets:execute` | Execute plan from `/lets:plan` via native plan mode |
+| `/lets:worktree` | Create/manage worktrees for parallel sessions |
+| `/lets:team` | Parallel implementation with Agent Teams |
+
+### Setup
+
+| Command | Description |
+|---------|-------------|
+| `/lets:install` | First-time global setup - plugins, environment, workflow |
+| `/lets:init` | Initialize LETS in current project |
+
+## Review Options
 
 | Need | Command | Time |
 |------|---------|------|
@@ -64,9 +138,10 @@ git clone https://github.com/nickolay-umbo/lets-plugin-claude ~/.claude/plugins/
 | Full review of local changes | `/lets:review --local` | ~2-3 min |
 | Review an implementation plan | `/lets:review --plan` | ~2-3 min |
 | Review a GitHub PR | `/lets:review <PR-url>` | ~2-3 min |
-| Full PR lifecycle | `/lets:pr <PR>` | Analyze, discuss, post, follow-up, approve |
+| Full PR lifecycle | `/lets:pr <PR>` | Interactive |
+| Review a single file | `/lets:review --file <path>` | ~2-3 min |
 
-### Planning
+## Planning
 
 For medium and large tasks, LETS provides structured planning:
 
@@ -75,9 +150,11 @@ For medium and large tasks, LETS provides structured planning:
 | Clear goal ("Add X to Y") | `/lets:plan` - explore codebase, design architecture, write plan |
 | Unclear goal ("Improve Z") | `/lets:brainstorm` to clarify, then `/lets:plan` |
 
-`/lets:brainstorm` helps think through what to build (backlog review, priorities, task creation). `/lets:plan` designs how to build it (codebase exploration, architecture, implementation plan). `/lets:execute` implements the plan via native plan mode with approval gates.
+`/lets:brainstorm` helps think through *what* to build (backlog review, priorities, task creation). `/lets:plan` designs *how* to build it (codebase exploration, architecture, implementation plan). `/lets:execute` implements the plan via native plan mode with approval gates.
 
-### Parallel Sessions (Worktrees)
+## Parallel Work
+
+### Worktrees (Interactive)
 
 Work on multiple tasks simultaneously in separate terminals:
 
@@ -86,8 +163,7 @@ Work on multiple tasks simultaneously in separate terminals:
 /lets:worktree create auth-feature
 
 # Terminal 2
-cd .worktrees/auth-feature
-claude
+cd .worktrees/auth-feature && claude
 /lets:start   # picks task, uses worktree branch as-is
 # ... work, commit, done ...
 
@@ -95,9 +171,9 @@ claude
 /lets:worktree remove auth-feature
 ```
 
-Each worktree gets its own branch (`worktree-<name>`), shares the task database and config via symlinks. Sessions run independently with per-branch tracking.
+Each worktree gets its own branch, shares the task database and config via symlinks.
 
-### Parallel Implementation (Teams)
+### Teams (Autonomous)
 
 For multiple independent tasks, `/lets:team` spawns parallel agents in isolated worktrees:
 
@@ -105,7 +181,7 @@ For multiple independent tasks, `/lets:team` spawns parallel agents in isolated 
 /lets:plan -> /lets:team run -> monitor & approve plans -> /lets:review --local -> /lets:done
 ```
 
-Each teammate gets one task, works in an isolated worktree with plan approval from the lead, and commits are auto cherry-picked back to the current branch.
+Each teammate gets one task, works in isolation with plan approval from the lead, and commits are auto cherry-picked back.
 
 ## Expert Agents
 
@@ -124,60 +200,55 @@ Each teammate gets one task, works in an isolated worktree with plan approval fr
 | docs | API docs, README, inline documentation |
 | pragmatist | ROI analysis, overengineering detection |
 | git-historian | Blame analysis, change patterns, refactoring impact |
-| explorer | Codebase structure mapping, pattern identification, integration points |
-| implementer | Full-stack implementation in isolated worktrees for `/lets:team` |
+| explorer | Codebase structure mapping, pattern identification |
+| implementer | Full-stack implementation in isolated worktrees |
 
-Agents are read-only - they analyze code but never modify it. Exception: the implementer agent has Edit/Write/Bash for parallel implementation in isolated worktrees via `/lets:team`. Commands decide which agents to launch based on the type of changes being reviewed.
+Agents are read-only - they analyze code but never modify it. Exception: the implementer agent has write access for parallel implementation via `/lets:team`.
 
-`/lets:check` reviews inline (no subagent) for fast feedback.
+Commands decide which agents to launch based on the type of changes being reviewed. `/lets:check` reviews inline (no subagent) for fast feedback.
 
-## How It Works
-
-### SessionStart Hook
-
-A hook injects workflow rules into every Claude Code conversation - development practices, git conventions, session flow guidance. This is what makes Claude follow the LETS workflow automatically.
-
-### LETS Boxes
-
-After key actions, Claude shows contextual next-step suggestions:
-
-```
-┌─ LETS ─────────────────────────┐
-│  Review?  /lets:review         │
-│  Commit?  /lets:commit         │
-└────────────────────────────────┘
-```
-
-These boxes appear at natural transition points - after writing code, after committing, after completing a task.
-
-### Task Integration
+## Task Integration
 
 LETS integrates with [beads](https://github.com/steveyegge/beads) for persistent task tracking:
 
 - Every session starts by selecting a task
 - Every commit is linked to the active task
-- Session summaries and notes are saved to the task
+- Session summaries and discovery notes are saved to the task
 - Context survives conversation compaction and new sessions
+- Task dependencies and blocking relationships are tracked
 
-### File Storage
+## Configuration
+
+After `/lets:init`, edit `.lets/config.yaml`:
+
+```yaml
+language: English       # Response language (English/Ukrainian/Italian/etc)
+merge-branch: main      # Target branch for merges and PR base
+github: true            # true: PR on done, false: local merge
+```
+
+## File Storage
 
 All generated files go to `.lets/` (gitignored):
 
 ```
-.lets/sessions/     Session summaries and start references
-.lets/reviews/      Saved review reports
-.lets/plans/        Implementation plans
-.lets/execution/    PR review state and team records
-.lets/cache/        Usage stats and cached data
+.lets/config.yaml       Project settings
+.lets/sessions/         Session summaries and start references
+.lets/reviews/          Saved review reports
+.lets/plans/            Implementation plans
+.lets/execution/        PR review state and team records
+.lets/cache/            Usage stats and cached data
 ```
 
-Interactive worktrees are stored in `.worktrees/` (gitignored). Each gets a `.lets/` symlink for shared state.
+Interactive worktrees are stored in `.worktrees/` (gitignored).
 
 ## Dependencies
 
-| Plugin | Required | Purpose |
-|--------|----------|---------|
-| [beads](https://github.com/steveyegge/beads) | Yes | Task tracking and issue management |
+| Dependency | Required | Purpose |
+|------------|----------|---------|
+| [beads](https://github.com/steveyegge/beads) | Yes | Task tracking and issue management (Claude Code plugin) |
+| [gh](https://cli.github.com/) | Optional | GitHub PR workflow (when `github: true`) |
+| [jq](https://jqlang.github.io/jq/) | Optional | Statusline JSON parsing |
 
 ## License
 
