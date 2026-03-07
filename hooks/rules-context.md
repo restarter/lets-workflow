@@ -59,7 +59,7 @@ Don't wait for `/lets:note` - write insights as they happen. If no active task, 
 
 ## Agent Rules
 
-- When launching expert agents for `/lets:review`, `/lets:pr`, `/lets:opinion`, `/lets:ask`, `/lets:plan` - use ONLY `lets:*` agents (`lets:architect`, `lets:security`, etc.)
+- When launching expert agents for `/lets:review`, `/lets:pr`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:brainstorm` - use ONLY `lets:*` agents (`lets:architect`, `lets:security`, etc.)
 - Never use `general-purpose` or other non-lets subagent types for expert work
 
 ### Directed Search vs Exploration
@@ -130,6 +130,7 @@ GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
 - `.beads/redirect` points to main repo's `.beads/` - same task database
 - Session refs are per-branch: `.session-start-ref-worktree-<name>` (parallel sessions don't collide)
 - `project-root` is the worktree path (not main repo)
+- **Glob tool does NOT follow symlinks.** Always use Bash (`ls`, `cat`) to find/read files in `.lets/` and `.beads/` - never use Glob for symlinked paths
 
 **What NOT to do in a worktree:**
 - Don't create additional `feature/` branches - `worktree-<name>` IS the working branch
@@ -284,7 +285,7 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:pr` | Code | PR review lifecycle (review, respond, follow-up, approve) |
 | `/lets:opinion` | Expert | Technical decision (3-5 agents) |
 | `/lets:ask` | Expert | Quick expert consultation (1 agent) |
-| `/lets:brainstorm` | Planning | Interactive backlog helper - review, prioritize, spot patterns, create tasks |
+| `/lets:brainstorm` | Planning | Interactive ideation - review backlog, explore ideas, quick brainstorm, cleanup |
 | `/lets:plan` | Planning | Structured planning with agents - architecture + implementation plan |
 | `/lets:execute` | Planning | Execute plan from /lets:plan via native plan mode |
 | `/lets:status` | Utility | Task overview and project status |

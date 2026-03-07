@@ -152,15 +152,17 @@ LETS: {symlinked / not available}
 
 ## Next Steps
 
-Open a new terminal and run:
+You can continue working right here - Claude Code automatically switches to the worktree directory.
+Use `/lets:start` to pick a task and begin.
+
+Or open a **new terminal** for parallel work:
 
 ```bash
 cd {absolute-worktree-path} && claude
 ```
 
-Then use `/lets:start` to pick a task and begin working.
-
 ┌─ LETS ─────────────────────────┐
+│  Start?   /lets:start          │
 │  List?    /lets:worktree list  │
 │  Info?    /lets:worktree info  │
 └────────────────────────────────┘

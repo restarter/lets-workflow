@@ -39,7 +39,7 @@ cat "$ROOT/.lets/plans/${SLUG}.md" 2>/dev/null
 # Fallback: try without feature/ prefix (worktrees)
 cat "$ROOT/.lets/plans/${BRANCH}.md" 2>/dev/null
 
-# Fallback: glob match by task-id
+# Fallback: match by task-id
 ls "$ROOT/.lets/plans/"*${TASK_ID}* 2>/dev/null
 ```
 

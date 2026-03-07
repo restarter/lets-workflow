@@ -69,7 +69,7 @@ Team:     /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /le
 | `/lets:team` | Utility | Parallel implementation with Agent Teams |
 | `/lets:status` | Utility | Task overview anytime |
 | `/lets:note` | Utility | Add note to active task |
-| `/lets:brainstorm` | Planning | Interactive backlog helper - review, prioritize, spot patterns, create tasks |
+| `/lets:brainstorm` | Planning | Interactive ideation - review backlog, explore ideas, quick brainstorm, cleanup |
 
 ### Planning Skills (for bigger tasks)
 
@@ -81,7 +81,7 @@ Team:     /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /le
 **Rule of thumb:** Can you write a 1-sentence requirement?
 - YES, small task -> work directly
 - YES, medium/large -> `/lets:plan` then `/lets:execute`
-- NO -> `/lets:brainstorm` to clarify, then `/lets:plan`
+- NO -> `/lets:brainstorm` to explore and clarify, then `/lets:plan`
 
 ### Key Rules
 
