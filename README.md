@@ -20,6 +20,7 @@ LETS fixes that. Every session has a task. Every commit links to it. Expert agen
 You get a team of 13 expert agents and a structured workflow - but you stay in control. You define the task, approve the plan, review every commit. Agents don't go off on their own - they work within boundaries you set, and report back for your decision.
 
 **What you get:**
+- **One-command workflow** - Claude suggests the next step, you decide
 - **Session continuity** - context restored automatically, even after compaction
 - **Task-driven development** - no random work, everything tracked via [beads](https://github.com/steveyegge/beads)
 - **Structured planning** - codebase exploration and architecture design before coding
@@ -28,7 +29,7 @@ You get a team of 13 expert agents and a structured workflow - but you stay in c
 - **Agent Teams** - spawn autonomous agents that implement multiple tasks in parallel
 - **Worktrees** - parallel interactive sessions in separate terminals, one task per worktree
 - **Built for teams** - shared task database via [Dolt](https://github.com/dolthub/dolt) remotes, multiple developers see the same backlog in real time
-- **One-command workflow** - Claude suggests the next step, you decide
+- **Uses latest Claude Code features** - ultrathink for deep analysis, interactive UI for decisions, native plan mode for execution
 
 <div align="center">
 
