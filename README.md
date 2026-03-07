@@ -24,12 +24,12 @@ You get a team of 13 expert agents and a structured workflow - but you stay in c
 - **Task-driven development** - no random work, everything tracked via [beads](https://github.com/steveyegge/beads)
 - **Structured planning** - codebase exploration and architecture design before coding
 - **One-command workflow** - Claude suggests the next step, you decide
-- **GitHub integration** - PR creation, inline code review comments, follow-up and approval - all from the terminal
 - **Expert agents on demand** - architect, security, QA, backend, devops and others join automatically when needed
 - **Agent Teams** - spawn autonomous agents that implement multiple tasks in parallel
 - **Worktrees** - parallel interactive sessions in separate terminals, one task per worktree
-- **Built for teams** - shared task database via [Dolt](https://github.com/dolthub/dolt) remotes, multiple developers see the same backlog in real time
 - **Uses latest Claude Code features** - ultrathink for deep analysis, interactive UI for decisions, native plan mode for execution
+- **Built for teams** - shared task database via [Dolt](https://github.com/dolthub/dolt) remotes, multiple developers see the same backlog in real time
+- **GitHub integration** - PR creation, inline code review comments, follow-up and approval - all from the terminal
 
 <div align="center">
 
