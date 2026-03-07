@@ -99,7 +99,8 @@ AskUserQuestion(
     header: "LETS",
     options: [
       { label: "Fix first", description: "Stop closing - go back and implement missing items" },
-      { label: "Update scope", description: "Adjust task description to match what was actually done" }
+      { label: "Update scope", description: "Adjust task description to match what was actually done" },
+      { label: "PR only, keep open", description: "Create PR but keep task open - remaining work tracked in task" }
     ],
     multiSelect: false
   }]
@@ -109,8 +110,9 @@ AskUserQuestion(
 **Handle response:**
 - **Fix first** -> stop, do NOT proceed to closing
 - **Update scope** -> update task description with `bd update`, then proceed
+- **PR only, keep open** -> proceed to Step 4. In Step 7, create PR but do NOT close the task. In Step 8, skip "Merge & close" option - user explicitly chose to keep the task open for remaining work.
 
-**Only continue to Step 4 when all requirements are verified.**
+**Only continue to Step 4 when all requirements are verified OR user chose "PR only, keep open".**
 
 ## Step 4: Collect Commits
 
@@ -323,7 +325,9 @@ PR: #{number} - {PR URL}
 Status: open (close after PR merge)
 ```
 
-Then use **AskUserQuestion**:
+**If user chose "PR only, keep open" in Step 3**, skip "Merge & close" - task has remaining work. Use same AskUserQuestion below but WITHOUT the "Merge & close" option.
+
+**Normal flow** - use **AskUserQuestion**:
 
 ```
 AskUserQuestion(
@@ -360,7 +364,9 @@ Status: open (close after PR merge)
 Worktree: {worktree path}
 ```
 
-Then use **AskUserQuestion**:
+**If user chose "PR only, keep open" in Step 3**, skip "Merge & close" - task has remaining work. Use same AskUserQuestion below but WITHOUT the "Merge & close" option.
+
+**Normal flow** - use **AskUserQuestion**:
 
 ```
 AskUserQuestion(
