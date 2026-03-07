@@ -130,6 +130,7 @@ GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
 - `.beads/redirect` points to main repo's `.beads/` - same task database
 - Session refs are per-branch: `.session-start-ref-worktree-<name>` (parallel sessions don't collide)
 - `project-root` is the worktree path (not main repo)
+- **Glob tool does NOT follow symlinks.** Always use Bash (`ls`, `cat`) to find/read files in `.lets/` and `.beads/` - never use Glob for symlinked paths
 
 **What NOT to do in a worktree:**
 - Don't create additional `feature/` branches - `worktree-<name>` IS the working branch
