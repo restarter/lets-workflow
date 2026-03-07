@@ -13,7 +13,7 @@
 
 ---
 
-Claude Code is powerful, but without structure it drifts - forgets context between sessions, commits without linking to tasks, reviews its own code with no outside perspective, and loses track of what was decided and why.
+Claude Code is powerful, but without structure it drifts - forgets context between sessions, silently changes approach when something fails, reviews its own code with no outside perspective, and loses track of what was decided and why.
 
 LETS fixes that. Every session has a task. Every commit links to it. Expert agents review your code and help with technical decisions. Context survives across sessions and conversation compaction.
 
@@ -39,7 +39,7 @@ You get a team of 13 expert agents and a structured workflow - but you stay in c
 
 </div>
 
-## Quick Start
+## 🚀 Quick Start
 
 ```bash
 # 1. Add plugin to Claude Code
@@ -63,7 +63,7 @@ Then start working:
 /lets:end            # Save session summary for next time
 ```
 
-## How It Works
+## 🔧 How It Works
 
 ### Session Lifecycle
 
@@ -109,7 +109,7 @@ Then start working:
 └────────────────────────────────┘
 ```
 
-## Commands
+## 📖 Commands
 
 ### Session & Task
 
@@ -149,7 +149,7 @@ Then start working:
 | `/lets:install` | First-time global setup - plugins, environment, workflow |
 | `/lets:init` | Initialize LETS in current project |
 
-## Review Options
+## 🔍 Review Options
 
 | Need | Command | Time |
 |------|---------|------|
@@ -160,7 +160,7 @@ Then start working:
 | Full PR lifecycle | `/lets:pr <PR>` | Interactive |
 | Review a single file | `/lets:review --file <path>` | ~2-3 min |
 
-## Planning
+## 🏗️ Planning
 
 For medium and large tasks, LETS provides structured planning:
 
@@ -175,7 +175,7 @@ For medium and large tasks, LETS provides structured planning:
 > `/lets:plan` designs *how* to build it.
 > `/lets:execute` implements the plan with approval gates.
 
-## Parallel Work
+## ⚡ Parallel Work
 
 ### Worktrees (Interactive)
 
@@ -206,7 +206,7 @@ For multiple independent tasks, `/lets:team` spawns parallel agents in isolated 
 
 Each teammate gets one task, works in isolation with plan approval from the lead, and commits are auto cherry-picked back.
 
-## Expert Agents
+## 🤖 Expert Agents
 
 13 specialized agents for code review, exploration, implementation, and technical analysis:
 
@@ -230,7 +230,7 @@ Agents are read-only - they analyze code but never modify it. Exception: the imp
 
 Commands decide which agents to launch based on the type of changes being reviewed. `/lets:check` reviews inline (no subagent) for fast feedback.
 
-## Task Integration
+## 📋 Task Integration
 
 LETS integrates with [beads](https://github.com/steveyegge/beads) for persistent task tracking:
 
@@ -240,7 +240,7 @@ LETS integrates with [beads](https://github.com/steveyegge/beads) for persistent
 - Context survives conversation compaction and new sessions
 - Task dependencies and blocking relationships are tracked
 
-## Configuration
+## ⚙️ Configuration
 
 After `/lets:init`, edit `.lets/config.yaml`:
 
@@ -265,7 +265,7 @@ All generated files go to `.lets/` (gitignored):
 
 Interactive worktrees are stored in `.worktrees/` (gitignored).
 
-## Dependencies
+## 📦 Dependencies
 
 | Dependency | Required | Purpose |
 |------------|----------|---------|
