@@ -7,7 +7,7 @@
 *Stop babysitting your AI. Start shipping with it.*
 
 [![Claude Code](https://img.shields.io/badge/Claude_Code-plugin-blueviolet)](https://claude.com/claude-code)
-[![Version](https://img.shields.io/badge/version-0.3.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/github/v/tag/restarter/lets-workflow?label=version&color=blue)](CHANGELOG.md)
 
 </div>
 
@@ -41,14 +41,35 @@ You get a team of 13 expert agents and a structured workflow - but you stay in c
 
 ## 🚀 Quick Start
 
-```bash
-# 1. Add plugin to Claude Code
-git clone https://github.com/restarter/lets-workflow ~/.claude/plugins/lets
+### Install
 
-# 2. First-time global setup (installs beads plugin, verifies environment)
+**Option A: From marketplace (recommended)**
+
+In Claude Code:
+```
+/plugin marketplace add restarter/lets-workflow
+/plugin install lets
+```
+
+**Option B: From local clone**
+
+```bash
+git clone https://github.com/restarter/lets-workflow
+```
+
+Then in Claude Code:
+```
+/plugin marketplace add ./lets-workflow
+/plugin install lets
+```
+
+### Setup
+
+```bash
+# First-time global setup (installs beads plugin, verifies environment)
 /lets:install
 
-# 3. Initialize current project (creates .lets/ structure, config, statusline)
+# Initialize current project (creates .lets/ structure, config, statusline)
 /lets:init
 ```
 
@@ -266,6 +287,8 @@ All generated files go to `.lets/` (gitignored):
 ```
 
 Interactive worktrees are stored in `.worktrees/` (gitignored).
+
+> **Note:** LETS requires the [beads](https://github.com/steveyegge/beads) plugin for task tracking. `/lets:install` will guide you through installing it.
 
 ## 📦 Dependencies
 

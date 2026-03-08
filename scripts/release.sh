@@ -62,6 +62,12 @@ if ! grep -q "\[$NEW_VERSION\]" CHANGELOG.md 2>/dev/null; then
     exit 1
 fi
 
+# Verify repo URLs are consistent
+if grep -q 'lets-plugin-claude' .claude-plugin/plugin.json; then
+    echo -e "${RED}Error: plugin.json still references old repo name 'lets-plugin-claude'${NC}"
+    exit 1
+fi
+
 # Update plugin.json
 echo "  Updating .claude-plugin/plugin.json"
 python3 -c "
@@ -74,9 +80,23 @@ with open('.claude-plugin/plugin.json', 'w') as f:
     f.write('\n')
 "
 
+# Update marketplace.json
+echo "  Updating .claude-plugin/marketplace.json"
+python3 -c "
+import json
+with open('.claude-plugin/marketplace.json', 'r') as f:
+    data = json.load(f)
+for p in data['plugins']:
+    if p['name'] == 'lets':
+        p['version'] = '$NEW_VERSION'
+with open('.claude-plugin/marketplace.json', 'w') as f:
+    json.dump(data, f, indent=2)
+    f.write('\n')
+"
+
 # Commit, tag, push
 echo "  Committing..."
-git add .claude-plugin/plugin.json
+git add .claude-plugin/plugin.json .claude-plugin/marketplace.json
 git commit -m "chore: Bump version to $NEW_VERSION"
 
 echo "  Tagging v$NEW_VERSION..."

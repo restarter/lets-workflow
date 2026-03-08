@@ -1,4 +1,4 @@
-# lets-plugin-claude
+# lets-workflow
 
 Claude Code plugin for development workflow with session management, code review, and task tracking.
 

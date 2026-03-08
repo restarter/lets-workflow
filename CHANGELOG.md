@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-03-08
+
+Marketplace release - plugin available via Claude Code marketplace.
+
+### Added
+- `.claude-plugin/marketplace.json` for marketplace distribution
+- `LICENSE` file (MIT)
+- Marketplace and local install paths in README
+
+### Changed
+- `plugin.json`: added homepage, fixed repository URL to `restarter/lets-workflow`, bumped version
+- `CLAUDE.md`: fixed header from old repo name
+- README Quick Start rewritten with marketplace install instructions
+- README version badge now dynamic (from GitHub tags)
+- `scripts/release.sh`: syncs marketplace.json version on release
+
 ## [0.3.0] - 2026-03-07
 
 README rewrite, install/init split, and interactive planning.
@@ -166,6 +182,9 @@ Initial release with expert agents team.
 - SessionStart hook injecting workflow rules
 - Plugin structure: commands, agents, hooks
 
+[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/restarter/lets-workflow/compare/v0.3.0...v0.3.1
+[0.3.0]: https://github.com/restarter/lets-workflow/compare/v0.2.4...v0.3.0
 [0.2.4]: https://github.com/restarter/lets-workflow/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/restarter/lets-workflow/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/restarter/lets-workflow/compare/v0.2.1...v0.2.2

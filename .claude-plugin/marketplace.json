@@ -1,0 +1,16 @@
+{
+  "name": "lets-workflow",
+  "description": "Development workflow plugin for Claude Code with session management, expert code review, and task tracking",
+  "owner": {
+    "name": "umbo",
+    "url": "https://github.com/nickolay-umbo"
+  },
+  "plugins": [
+    {
+      "name": "lets",
+      "source": "./",
+      "description": "Development workflow with session management, code review, and task tracking",
+      "version": "0.3.1"
+    }
+  ]
+}
