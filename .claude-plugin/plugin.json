@@ -1,11 +1,13 @@
 {
   "name": "lets",
   "description": "Development workflow with session management, code review, and task tracking",
-  "version": "0.2.2",
+  "version": "0.3.1",
   "author": {
-    "name": "umbo"
+    "name": "umbo",
+    "url": "https://github.com/nickolay-umbo"
   },
   "license": "MIT",
-  "repository": "https://github.com/nickolay-umbo/lets-plugin-claude",
+  "homepage": "https://github.com/restarter/lets-workflow",
+  "repository": "https://github.com/restarter/lets-workflow",
   "keywords": ["workflow", "review", "sessions", "beads", "code-review", "task-tracking"]
 }
