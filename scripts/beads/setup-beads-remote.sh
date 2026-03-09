@@ -1,4 +1,8 @@
 #!/bin/bash
+# DEPRECATED: For Direct SQL mode (recommended), edit .beads/metadata.json directly.
+# See scripts/dolt/README.md for instructions.
+# This script sets up GitHub remote push/pull mode - kept for reference.
+#
 # Beads Remote Setup - connects local beads to shared GitHub remote.
 #
 # Run after cloning the project:
