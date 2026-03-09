@@ -1,29 +1,31 @@
 #!/bin/bash
 # Dolt Remote Server - Docker Installation
-# Serves beads repos via remotesapi for push/pull from local machines.
+# Serves beads databases via Direct SQL (primary) or remotesapi (legacy).
 #
 # Usage:
-#   # Full install with one repo
-#   ssh root@vps "bash -s -- beads-demo" < scripts/setup-dolt-remote.sh
+#   # Full install with Direct SQL exposed
+#   ssh root@vps "bash -s -- --expose-sql lets aff test" < scripts/dolt/setup-remote.sh
 #
 #   # Full install with custom root password
-#   ssh root@vps "bash -s -- --root-password s3cret beads-demo" < scripts/setup-dolt-remote.sh
+#   ssh root@vps "bash -s -- --root-password s3cret --expose-sql lets" < scripts/dolt/setup-remote.sh
 #
-#   # Add repo to existing install
-#   ssh root@vps "bash -s -- --add-repo new-project" < scripts/setup-dolt-remote.sh
+#   # Add database to existing install
+#   ssh root@vps "bash -s -- --add-repo new-project" < scripts/dolt/setup-remote.sh
 #
 #   # Add user to existing install
-#   ssh root@vps "bash -s -- --add-user dima:mypass123" < scripts/setup-dolt-remote.sh
+#   ssh root@vps "bash -s -- --add-user dima:mypass123" < scripts/dolt/setup-remote.sh
 #
-#   # Expose SQL port externally (for direct server mode)
-#   ssh root@vps "bash -s -- --expose-sql beads-demo" < scripts/setup-dolt-remote.sh
+#   # Manage IP allowlist (for Direct SQL access control)
+#   ssh root@vps "bash -s -- --allow-ip 1.2.3.4" < scripts/dolt/setup-remote.sh
+#   ssh root@vps "bash -s -- --remove-ip 1.2.3.4" < scripts/dolt/setup-remote.sh
 #
 # Architecture:
-#   One Dolt container serves ALL repos via data_dir volume.
-#   Per-user SQL accounts for push/pull auth over HTTP.
+#   One Dolt container serves ALL databases via data_dir volume.
+#   Direct SQL: clients connect to port 3306 via MySQL protocol.
+#   RemotesAPI: legacy push/pull over HTTP (port 50051, localhost-only when --expose-sql).
 #
 # Auth:
-#   remotesapi uses SQL user credentials (DOLT_REMOTE_USER + DOLT_REMOTE_PASSWORD).
+#   Per-user SQL accounts for both Direct SQL and remotesapi.
 #   Each team member gets their own account via --add-user.
 
 set -e
@@ -67,6 +69,8 @@ ADD_REPO_ONLY=false
 ADD_USER=""
 ROOT_PASSWORD=""
 EXPOSE_SQL=false
+ALLOW_IP=""
+REMOVE_IP=""
 REPOS=()
 
 while [[ $# -gt 0 ]]; do
@@ -75,10 +79,58 @@ while [[ $# -gt 0 ]]; do
     --add-user) ADD_USER="$2"; shift 2 ;;
     --root-password) ROOT_PASSWORD="$2"; shift 2 ;;
     --expose-sql) EXPOSE_SQL=true; shift ;;
+    --allow-ip) ALLOW_IP="$2"; shift 2 ;;
+    --remove-ip) REMOVE_IP="$2"; shift 2 ;;
     --) shift ;;
     *) REPOS+=("$1"); shift ;;
   esac
 done
+
+# ============================================
+# IP allowlist management
+# ============================================
+manage_ip_allowlist() {
+  local action="$1" ip="$2" port="${SQL_PORT:-3306}"
+
+  if ! dpkg -s iptables-persistent &>/dev/null; then
+    echo "Installing iptables-persistent..."
+    DEBIAN_FRONTEND=noninteractive apt-get install -y iptables-persistent
+  fi
+
+  if [[ "$action" == "add" ]]; then
+    if iptables -C DOCKER-USER -p tcp --dport "$port" -s "$ip" -j ACCEPT 2>/dev/null; then
+      echo -e "${YELLOW}IP $ip already allowed${NC}"
+      return 0
+    fi
+    iptables -I DOCKER-USER -p tcp --dport "$port" -s "$ip" -j ACCEPT
+    echo -e "${GREEN}Allowed IP: $ip on port $port${NC}"
+  elif [[ "$action" == "remove" ]]; then
+    iptables -D DOCKER-USER -p tcp --dport "$port" -s "$ip" -j ACCEPT 2>/dev/null || true
+    echo -e "${GREEN}Removed IP: $ip${NC}"
+  fi
+
+  if ! iptables -C DOCKER-USER -p tcp --dport "$port" -j DROP 2>/dev/null; then
+    iptables -A DOCKER-USER -p tcp --dport "$port" -j DROP
+  fi
+
+  netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
+
+  echo ""
+  echo "Current allowlist for port $port:"
+  iptables -L DOCKER-USER -n --line-numbers 2>/dev/null | grep -E "dpt:$port|Chain"
+}
+
+# --allow-ip mode
+if [[ -n "$ALLOW_IP" ]]; then
+  manage_ip_allowlist "add" "$ALLOW_IP"
+  exit 0
+fi
+
+# --remove-ip mode
+if [[ -n "$REMOVE_IP" ]]; then
+  manage_ip_allowlist "remove" "$REMOVE_IP"
+  exit 0
+fi
 
 # --add-user mode: create user and exit
 if [[ -n "$ADD_USER" ]]; then
@@ -106,15 +158,17 @@ for repo in "${REPOS[@]}"; do
 done
 
 if [[ ${#REPOS[@]} -eq 0 ]]; then
-  echo "Usage: $0 [options] <repo-name> [repo-name...]"
+  echo "Usage: $0 [options] <db-name> [db-name...]"
   echo ""
-  echo "Full install:"
-  echo "  $0 beads-demo lets-workflow"
-  echo "  $0 --root-password s3cret beads-demo"
+  echo "Full install (Direct SQL):"
+  echo "  $0 --expose-sql lets aff test"
+  echo "  $0 --root-password s3cret --expose-sql lets"
   echo ""
   echo "Manage existing:"
   echo "  $0 --add-repo new-project"
   echo "  $0 --add-user dima:mypass123"
+  echo "  $0 --allow-ip 1.2.3.4"
+  echo "  $0 --remove-ip 1.2.3.4"
   exit 1
 fi
 
@@ -137,6 +191,12 @@ if [[ -z "$ROOT_PASSWORD" ]]; then
   ROOT_PASSWORD=$(openssl rand -base64 18 | tr -d '/+=' | head -c 16)
   echo -e "${YELLOW}Generated root password: ${ROOT_PASSWORD}${NC}"
 fi
+
+# Resolve DOLT_VERSION: existing .env > default "latest"
+if [[ -z "$DOLT_VERSION" && -f "$INSTALL_DIR/.env" ]]; then
+  DOLT_VERSION=$(grep '^DOLT_VERSION=' "$INSTALL_DIR/.env" | cut -d= -f2)
+fi
+DOLT_VERSION="${DOLT_VERSION:-latest}"
 
 echo ""
 echo -e "${GREEN}=== Dolt Remote Server Setup ===${NC}"
@@ -205,25 +265,41 @@ EOF
   # Password and ports are read from .env file (not inlined).
   if [[ "$EXPOSE_SQL" == true ]]; then
     SQL_BIND='${SQL_PORT}:3306'
+    # When SQL is exposed, restrict remotesapi to localhost (not needed externally)
+    REMOTESAPI_BIND='127.0.0.1:${REMOTESAPI_PORT}:50051'
   else
     SQL_BIND='127.0.0.1:${SQL_PORT}:3306'
+    REMOTESAPI_BIND='${REMOTESAPI_PORT}:50051'
   fi
 
   cat > "$INSTALL_DIR/docker-compose.yml" <<EOF
 services:
   dolt:
-    image: dolthub/dolt-sql-server:latest
+    image: dolthub/dolt-sql-server:\${DOLT_VERSION:-latest}
     container_name: dolt
     restart: unless-stopped
     ports:
       - "${SQL_BIND}"
-      - "\${REMOTESAPI_PORT}:50051"
+      - "${REMOTESAPI_BIND}"
     volumes:
       - ./dolt-home:/var/lib/dolt
       - ./servercfg.d:/etc/dolt/servercfg.d:ro
     environment:
       - DOLT_ROOT_HOST=%
       - DOLT_ROOT_PASSWORD=\${ROOT_PASSWORD}
+    healthcheck:
+      test: ["CMD", "dolt", "sql", "-q", "SELECT 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2.0"
+        reservations:
+          memory: 512M
 EOF
 
   echo "  ✓ Config written to $INSTALL_DIR/"
@@ -303,38 +379,40 @@ print_summary() {
   echo ""
   echo "  Host:           $PUBLIC_IP"
   if [[ "$EXPOSE_SQL" == true ]]; then
-    echo "  SQL:            $PUBLIC_IP:$SQL_PORT (external)"
+    echo "  SQL:            $PUBLIC_IP:$SQL_PORT (external - use IP allowlist)"
+    echo "  RemotesAPI:     localhost:$REMOTESAPI_PORT (local only)"
   else
     echo "  SQL:            localhost:$SQL_PORT (local only)"
+    echo "  RemotesAPI:     $PUBLIC_IP:$REMOTESAPI_PORT"
   fi
-  echo "  RemotesAPI:     $PUBLIC_IP:$REMOTESAPI_PORT"
   echo "  Root password:  (see $INSTALL_DIR/.env)"
   echo "  Data dir:       $INSTALL_DIR/dolt-home/"
-  echo "  Repos:          ${REPOS[*]}"
-  echo ""
-  echo "Connect from local machine:"
-  for repo in "${REPOS[@]}"; do
-    echo "  bd dolt remote add origin http://$PUBLIC_IP:$REMOTESAPI_PORT/$repo"
-  done
-  echo ""
-  echo "Push/pull:"
-  echo "  DOLT_REMOTE_USER=root DOLT_REMOTE_PASSWORD='$ROOT_PASSWORD' bd dolt push"
-  echo ""
-  echo "Add user:"
-  echo "  ssh root@$PUBLIC_IP \"bash -s -- --add-user dima:pass123\" < setup-dolt-remote.sh"
+  echo "  Databases:      ${REPOS[*]}"
   echo ""
   if [[ "$EXPOSE_SQL" == true ]]; then
-    echo "Direct server mode (.beads/config.yaml):"
-    echo "  dolt:"
-    echo "    server_mode: true"
-    echo "    server_host: \"$PUBLIC_IP\""
-    echo "    server_port: $SQL_PORT"
-    echo "    server_user: \"root\""
-    echo "    server_pass: \"$ROOT_PASSWORD\""
+    echo "Direct SQL mode (.beads/metadata.json):"
+    echo "  {"
+    echo "    \"dolt_mode\": \"server\","
+    echo "    \"dolt_server_host\": \"$PUBLIC_IP\","
+    echo "    \"dolt_server_port\": $SQL_PORT,"
+    echo "    \"dolt_server_user\": \"<your-username>\","
+    echo "    \"dolt_database\": \"<db-name>\""
+    echo "  }"
     echo ""
+    echo "Set password: export BEADS_DOLT_PASSWORD=<your-password>"
+    echo ""
+    echo "Manage IP allowlist:"
+    echo "  --allow-ip <IP>    Allow a developer's IP"
+    echo "  --remove-ip <IP>   Remove an IP from allowlist"
+  else
+    echo "Connect from local machine:"
+    for repo in "${REPOS[@]}"; do
+      echo "  bd dolt remote add origin http://$PUBLIC_IP:$REMOTESAPI_PORT/$repo"
+    done
   fi
-  echo "Add repo:"
-  echo "  ssh root@$PUBLIC_IP \"bash -s -- --add-repo <name>\" < setup-dolt-remote.sh"
+  echo ""
+  echo "Add user:     --add-user dima:pass123"
+  echo "Add database: --add-repo new-project"
   echo ""
   echo -e "${GREEN}========================================${NC}"
 }
@@ -344,10 +422,11 @@ print_summary() {
 # ============================================
 save_credentials() {
   cat > "$INSTALL_DIR/.env" <<EOF
-# Generated by setup-dolt-remote.sh
+# Generated by setup-remote.sh
 ROOT_PASSWORD=${ROOT_PASSWORD}
 REMOTESAPI_PORT=${REMOTESAPI_PORT}
 SQL_PORT=${SQL_PORT}
+DOLT_VERSION=${DOLT_VERSION:-latest}
 EOF
   chmod 600 "$INSTALL_DIR/.env"
   echo "  ✓ Credentials saved to $INSTALL_DIR/.env"
