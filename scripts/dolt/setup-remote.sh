@@ -12,9 +12,6 @@
 #   # Add database to existing install
 #   ssh root@vps "bash -s -- --add-repo new-project" < scripts/dolt/setup-remote.sh
 #
-#   # Add user to existing install
-#   ssh root@vps "bash -s -- --add-user dima:mypass123" < scripts/dolt/setup-remote.sh
-#
 #   # Manage IP allowlist (for Direct SQL access control)
 #   ssh root@vps "bash -s -- --allow-ip 1.2.3.4" < scripts/dolt/setup-remote.sh
 #   ssh root@vps "bash -s -- --remove-ip 1.2.3.4" < scripts/dolt/setup-remote.sh
@@ -25,8 +22,7 @@
 #   RemotesAPI: legacy push/pull over HTTP (port 50051, localhost-only when --expose-sql).
 #
 # Auth:
-#   Per-user SQL accounts for both Direct SQL and remotesapi.
-#   Each team member gets their own account via --add-user.
+#   Per-user SQL accounts. Create users via MySQL protocol (see README).
 
 set -e
 
@@ -54,10 +50,14 @@ validate_name() {
   fi
 }
 
-validate_password() {
-  local value="$1"
-  if [[ "$value" =~ [\'\"\;\`\$\\] ]]; then
-    echo -e "${RED}Error: Password contains disallowed characters (' \" ; \` \$ \\)${NC}"
+validate_ip() {
+  local ip="$1"
+  if [[ ! "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(/[0-9]+)?$ ]]; then
+    echo -e "${RED}Error: Invalid IP address format: $ip${NC}"
+    exit 1
+  fi
+  if [[ "$ip" == "0.0.0.0/0" || "$ip" == "0.0.0.0" ]]; then
+    echo -e "${RED}Error: Refusing 0.0.0.0 - this would open the port to everyone${NC}"
     exit 1
   fi
 }
@@ -66,7 +66,6 @@ validate_password() {
 # Parse args
 # ============================================
 ADD_REPO_ONLY=false
-ADD_USER=""
 ROOT_PASSWORD=""
 EXPOSE_SQL=false
 ALLOW_IP=""
@@ -76,7 +75,6 @@ REPOS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --add-repo) ADD_REPO_ONLY=true; shift ;;
-    --add-user) ADD_USER="$2"; shift 2 ;;
     --root-password) ROOT_PASSWORD="$2"; shift 2 ;;
     --expose-sql) EXPOSE_SQL=true; shift ;;
     --allow-ip) ALLOW_IP="$2"; shift 2 ;;
@@ -122,33 +120,15 @@ manage_ip_allowlist() {
 
 # --allow-ip mode
 if [[ -n "$ALLOW_IP" ]]; then
+  validate_ip "$ALLOW_IP"
   manage_ip_allowlist "add" "$ALLOW_IP"
   exit 0
 fi
 
 # --remove-ip mode
 if [[ -n "$REMOVE_IP" ]]; then
+  validate_ip "$REMOVE_IP"
   manage_ip_allowlist "remove" "$REMOVE_IP"
-  exit 0
-fi
-
-# --add-user mode: create user and exit
-if [[ -n "$ADD_USER" ]]; then
-  USERNAME="${ADD_USER%%:*}"
-  PASSWORD="${ADD_USER#*:}"
-
-  if [[ "$USERNAME" == "$PASSWORD" ]] || [[ -z "$PASSWORD" ]]; then
-    echo -e "${RED}Error: Use --add-user name:password${NC}"
-    exit 1
-  fi
-
-  validate_name "$USERNAME" "Username"
-  validate_password "$PASSWORD"
-
-  echo -e "${YELLOW}Creating user '$USERNAME'...${NC}"
-  docker exec dolt dolt sql -q "CREATE USER '${USERNAME}'@'%' IDENTIFIED BY '${PASSWORD}';"
-  docker exec dolt dolt sql -q "GRANT ALL ON *.* TO '${USERNAME}'@'%';"
-  echo -e "${GREEN}  ✓ User '$USERNAME' created with push/pull access${NC}"
   exit 0
 fi
 
@@ -166,7 +146,6 @@ if [[ ${#REPOS[@]} -eq 0 ]]; then
   echo ""
   echo "Manage existing:"
   echo "  $0 --add-repo new-project"
-  echo "  $0 --add-user dima:mypass123"
   echo "  $0 --allow-ip 1.2.3.4"
   echo "  $0 --remove-ip 1.2.3.4"
   exit 1
@@ -200,7 +179,7 @@ DOLT_VERSION="${DOLT_VERSION:-latest}"
 
 echo ""
 echo -e "${GREEN}=== Dolt Remote Server Setup ===${NC}"
-echo -e "${GREEN}    Docker + remotesapi${NC}"
+echo -e "${GREEN}    Docker + Direct SQL${NC}"
 echo ""
 
 # ============================================
@@ -390,16 +369,16 @@ print_summary() {
   echo "  Databases:      ${REPOS[*]}"
   echo ""
   if [[ "$EXPOSE_SQL" == true ]]; then
-    echo "Direct SQL mode (.beads/metadata.json):"
-    echo "  {"
-    echo "    \"dolt_mode\": \"server\","
-    echo "    \"dolt_server_host\": \"$PUBLIC_IP\","
-    echo "    \"dolt_server_port\": $SQL_PORT,"
-    echo "    \"dolt_server_user\": \"<your-username>\","
-    echo "    \"dolt_database\": \"<db-name>\""
-    echo "  }"
+    echo "Direct SQL mode:"
     echo ""
-    echo "Set password: export BEADS_DOLT_PASSWORD=<your-password>"
+    echo "  .beads/metadata.json (committed to git):"
+    echo "    dolt_mode: server, dolt_database: <db-name>"
+    echo ""
+    echo "  Environment variables (per developer):"
+    echo "    export BEADS_DOLT_SERVER_HOST=$PUBLIC_IP"
+    echo "    export BEADS_DOLT_SERVER_PORT=$SQL_PORT"
+    echo "    export BEADS_DOLT_SERVER_USER=<your-username>"
+    echo "    export BEADS_DOLT_PASSWORD=<your-password>"
     echo ""
     echo "Manage IP allowlist:"
     echo "  --allow-ip <IP>    Allow a developer's IP"
@@ -411,7 +390,7 @@ print_summary() {
     done
   fi
   echo ""
-  echo "Add user:     --add-user dima:pass123"
+  echo "Add user:     See README (MySQL protocol)"
   echo "Add database: --add-repo new-project"
   echo ""
   echo -e "${GREEN}========================================${NC}"

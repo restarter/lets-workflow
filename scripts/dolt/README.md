@@ -19,7 +19,7 @@ Developer A (Linux)                                     Developer B (Mac)
                            └── test/          # project 3
 ```
 
-One dolt container serves all project databases. Each project has its own database, accessed by the same SQL user. IP allowlist restricts access to known developer IPs.
+One dolt container serves all project databases. Each project has its own database. Users get per-database grants (not superuser). IP allowlist restricts access to known developer IPs.
 
 ## VPS Setup
 
@@ -46,7 +46,7 @@ Then restart: `ssh root@vps "cd /opt/dolt-remote && docker compose up -d"`
 
 ### Add SQL user
 
-Connect as root and create a user:
+Connect as root and create a user with per-database grants:
 
 ```bash
 # Get root password
@@ -55,7 +55,17 @@ ssh root@vps "grep ROOT_PASSWORD /opt/dolt-remote/.env"
 # Create user (from any machine that can connect)
 mysql -h <vps-ip> -u root -p<root-password> -e "
   CREATE USER 'username'@'%' IDENTIFIED BY 'password';
-  GRANT ALL ON *.* TO 'username'@'%';
+  GRANT ALL ON lets.* TO 'username'@'%';
+  GRANT ALL ON aff.* TO 'username'@'%';
+  FLUSH PRIVILEGES;
+"
+```
+
+Grant access to specific databases only. Add more grants as needed:
+
+```bash
+mysql -h <vps-ip> -u root -p<root-password> -e "
+  GRANT ALL ON new_project.* TO 'username'@'%';
   FLUSH PRIVILEGES;
 "
 ```
@@ -89,47 +99,58 @@ Rules persist across reboots via `iptables-persistent`.
 
 ### 1. Configure beads
 
-Edit `.beads/metadata.json` in your project root:
+The project's `.beads/metadata.json` contains shared config (committed to git):
 
 ```json
 {
   "database": "dolt",
   "backend": "dolt",
   "dolt_mode": "server",
-  "dolt_server_host": "<vps-ip>",
-  "dolt_server_port": 3306,
-  "dolt_server_user": "<username>",
   "dolt_database": "<project-database>"
 }
 ```
 
-### 2. Set password
+Server connection details are set via environment variables (not committed to git):
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `BEADS_DOLT_SERVER_HOST` | VPS IP address | `144.124.255.40` |
+| `BEADS_DOLT_SERVER_PORT` | SQL port (default 3306) | `3306` |
+| `BEADS_DOLT_SERVER_USER` | Your SQL username | `myuser` |
+| `BEADS_DOLT_PASSWORD` | Your SQL password | `mypassword` |
+
+### 2. Set connection environment variables
 
 #### Linux / macOS (bash)
 
 ```bash
-echo 'export BEADS_DOLT_PASSWORD=<password>' >> ~/.bashrc
+cat >> ~/.bashrc << 'EOF'
+export BEADS_DOLT_SERVER_HOST=<vps-ip>
+export BEADS_DOLT_SERVER_PORT=3306
+export BEADS_DOLT_SERVER_USER=<username>
+export BEADS_DOLT_PASSWORD=<password>
+EOF
 source ~/.bashrc
 ```
 
 #### Linux / macOS (zsh)
 
 ```bash
-echo 'export BEADS_DOLT_PASSWORD=<password>' >> ~/.zshrc
+cat >> ~/.zshrc << 'EOF'
+export BEADS_DOLT_SERVER_HOST=<vps-ip>
+export BEADS_DOLT_SERVER_PORT=3306
+export BEADS_DOLT_SERVER_USER=<username>
+export BEADS_DOLT_PASSWORD=<password>
+EOF
 source ~/.zshrc
 ```
 
 #### Windows (PowerShell, run as Administrator)
 
 ```powershell
-setx BEADS_DOLT_PASSWORD "<password>"
-```
-
-Restart the terminal after running `setx`.
-
-#### Windows (CMD)
-
-```cmd
+setx BEADS_DOLT_SERVER_HOST "<vps-ip>"
+setx BEADS_DOLT_SERVER_PORT "3306"
+setx BEADS_DOLT_SERVER_USER "<username>"
 setx BEADS_DOLT_PASSWORD "<password>"
 ```
 
@@ -147,9 +168,9 @@ If connection works, you'll see tasks. No local dolt server needed.
 ## Onboarding New Developer
 
 1. **Get access:** Admin adds developer's IP to the allowlist (`--allow-ip`)
-2. **Get credentials:** Admin creates SQL user or shares existing credentials
-3. **Configure:** Create `.beads/metadata.json` with server details (see Client Setup)
-4. **Set password:** Add `BEADS_DOLT_PASSWORD` to shell profile (see Client Setup)
+2. **Get credentials:** Admin creates SQL user with per-database grants (see Add SQL user)
+3. **Configure:** Verify `.beads/metadata.json` has `dolt_database` set (should be committed in repo)
+4. **Set env vars:** Add `BEADS_DOLT_SERVER_HOST`, `BEADS_DOLT_SERVER_PORT`, `BEADS_DOLT_SERVER_USER`, `BEADS_DOLT_PASSWORD` to shell profile (see Client Setup)
 5. **Verify:** Run `bd list` - should show project tasks
 
 ## Adding New Project
@@ -158,10 +179,17 @@ If connection works, you'll see tasks. No local dolt server needed.
    ```bash
    ssh root@vps "bash -s -- --add-repo my-project" < scripts/dolt/setup-remote.sh
    ```
-2. In the new project, run `bd init` to create `.beads/` directory
-3. Configure `.beads/metadata.json` with `"dolt_database": "my-project"`
-4. Set `BEADS_DOLT_PASSWORD` if not already in shell profile
-5. Run `bd list` to verify
+2. Grant access to existing users:
+   ```bash
+   mysql -h <vps-ip> -u root -p<root-password> -e "
+     GRANT ALL ON my_project.* TO 'username'@'%';
+     FLUSH PRIVILEGES;
+   "
+   ```
+3. In the new project, run `bd init` to create `.beads/` directory
+4. Verify `.beads/metadata.json` has `"dolt_database": "my-project"`
+5. Set env vars if not already in shell profile (see Client Setup)
+6. Run `bd list` to verify
 
 ## Backup
 
@@ -206,7 +234,12 @@ ssh root@vps "crontab -l | grep dolt"
 - **SQL accounts** - per-user authentication
 - **Password** via environment variable (`BEADS_DOLT_PASSWORD`) - not stored in git
 - **remotesapi** restricted to localhost when Direct SQL is enabled
-- **No TLS** - acceptable for trusted developer network with IP allowlist. For TLS: needs a domain (Let's Encrypt) or reverse proxy
+- **No TLS** - acceptable for trusted developer network with IP allowlist. For additional encryption, use SSH tunneling:
+  ```bash
+  ssh -L 3306:localhost:3306 root@vps
+  # Then connect to localhost:3306 instead of vps-ip:3306
+  ```
+  For full TLS: needs a domain (Let's Encrypt) or reverse proxy
 
 ## Troubleshooting
 
@@ -217,7 +250,21 @@ User was created via `docker exec dolt dolt sql` instead of through SQL protocol
 ```bash
 mysql -h <vps-ip> -u root -p<root-password> -e "
   CREATE USER IF NOT EXISTS 'username'@'%' IDENTIFIED BY 'password';
-  GRANT ALL ON *.* TO 'username'@'%';
+  GRANT ALL ON lets.* TO 'username'@'%';
+  FLUSH PRIVILEGES;
+"
+```
+
+### Changing user grants (REVOKE not supported)
+
+Dolt does not support `REVOKE ALL PRIVILEGES ON *.* FROM ...`. To change grants, drop and recreate the user:
+
+```bash
+mysql -h <vps-ip> -u root -p<root-password> -e "
+  DROP USER 'username'@'%';
+  CREATE USER 'username'@'%' IDENTIFIED BY 'password';
+  GRANT ALL ON lets.* TO 'username'@'%';
+  GRANT ALL ON aff.* TO 'username'@'%';
   FLUSH PRIVILEGES;
 "
 ```

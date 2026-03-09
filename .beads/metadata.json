@@ -2,8 +2,5 @@
   "database": "dolt",
   "backend": "dolt",
   "dolt_mode": "server",
-  "dolt_server_host": "144.124.255.40",
-  "dolt_server_port": 3306,
-  "dolt_server_user": "Jkd5sgUq90",
   "dolt_database": "lets"
 }
