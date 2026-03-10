@@ -279,6 +279,14 @@ services:
           cpus: "2.0"
         reservations:
           memory: 512M
+    networks:
+      - default
+      - dolt-net
+
+networks:
+  dolt-net:
+    name: dolt-net
+    driver: bridge
 EOF
 
   echo "  ✓ Config written to $INSTALL_DIR/"
