@@ -23,6 +23,7 @@ services:
       - ./data/.beads:/app/.beads
     environment:
       - PORT=${BEADS_UI_PORT:-9080}
+      - HOST=0.0.0.0
       - BD_BIN=/usr/local/bin/bd
       - BEADS_DOLT_SERVER_HOST=${DOLT_HOST:-dolt}
       - BEADS_DOLT_SERVER_PORT=${DOLT_PORT:-3306}

@@ -121,14 +121,17 @@ manage_ip_allowlist() {
     echo -e "${GREEN}Removed IP: $ip from port $port${NC}"
   fi
 
-  # Ensure DROP rule exists at end
-  if ! iptables -C DOCKER-USER -p tcp --dport "$port" -j DROP 2>/dev/null; then
-    iptables -A DOCKER-USER -p tcp --dport "$port" -j DROP
+  # Ensure REJECT rule exists at end (tcp-reset gives immediate "Connection refused")
+  if ! iptables -C DOCKER-USER -p tcp --dport "$port" -j REJECT --reject-with tcp-reset 2>/dev/null; then
+    # Remove old DROP rule if exists (upgrade path)
+    iptables -D DOCKER-USER -p tcp --dport "$port" -j DROP 2>/dev/null || true
+    iptables -A DOCKER-USER -p tcp --dport "$port" -j REJECT --reject-with tcp-reset
   fi
 
   # Block IPv6 for this port
-  if ! ip6tables -C DOCKER-USER -p tcp --dport "$port" -j DROP 2>/dev/null; then
-    ip6tables -A DOCKER-USER -p tcp --dport "$port" -j DROP
+  if ! ip6tables -C DOCKER-USER -p tcp --dport "$port" -j REJECT --reject-with tcp-reset 2>/dev/null; then
+    ip6tables -D DOCKER-USER -p tcp --dport "$port" -j DROP 2>/dev/null || true
+    ip6tables -A DOCKER-USER -p tcp --dport "$port" -j REJECT --reject-with tcp-reset
   fi
 
   netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
@@ -238,6 +241,8 @@ create_network() {
 create_config() {
   echo -e "${YELLOW}[2/4] Creating configuration...${NC}"
   mkdir -p "$INSTALL_DIR/data/.beads"
+  # Container runs as node (uid 1000) - data dir must be writable
+  chown -R 1000:1000 "$INSTALL_DIR/data"
 
   # Dockerfile
   cat > "$INSTALL_DIR/Dockerfile" <<'DOCKERFILE'
@@ -245,15 +250,7 @@ FROM node:22-slim
 
 ARG BEADS_UI_VERSION=0.11.1
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN curl -fsSL https://beads.sh | bash \
-    && mv /root/.local/bin/bd /usr/local/bin/bd \
-    && chmod +x /usr/local/bin/bd
-
-RUN npm install -g beads-ui@${BEADS_UI_VERSION}
+RUN npm install -g @beads/bd beads-ui@${BEADS_UI_VERSION}
 
 RUN mkdir -p /app/.beads && chown -R node:node /app
 
@@ -265,7 +262,7 @@ ENV BD_BIN=/usr/local/bin/bd
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=15s \
   CMD node -e "fetch('http://localhost:'+(process.env.PORT||9080)+'/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
 
-CMD ["sh", "-c", "exec bdui start --host 0.0.0.0 --port ${PORT:-9080}"]
+CMD ["sh", "-c", "exec node /usr/local/lib/node_modules/beads-ui/server/index.js"]
 DOCKERFILE
 
   # docker-compose.yml
@@ -285,6 +282,7 @@ services:
       - ./data/.beads:/app/.beads
     environment:
       - PORT=\${BEADS_UI_PORT:-9080}
+      - HOST=0.0.0.0
       - BD_BIN=/usr/local/bin/bd
       - BEADS_DOLT_SERVER_HOST=\${DOLT_HOST:-dolt}
       - BEADS_DOLT_SERVER_PORT=\${DOLT_PORT:-3306}
