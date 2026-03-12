@@ -107,8 +107,17 @@ manage_ip_allowlist() {
     echo -e "${GREEN}Removed IP: $ip${NC}"
   fi
 
-  if ! iptables -C DOCKER-USER -p tcp --dport "$port" -j DROP 2>/dev/null; then
-    iptables -A DOCKER-USER -p tcp --dport "$port" -j DROP
+  # Ensure REJECT rule exists at end (tcp-reset gives immediate "Connection refused")
+  if ! iptables -C DOCKER-USER -p tcp --dport "$port" -j REJECT --reject-with tcp-reset 2>/dev/null; then
+    # Remove old DROP rule if exists (upgrade path)
+    iptables -D DOCKER-USER -p tcp --dport "$port" -j DROP 2>/dev/null || true
+    iptables -A DOCKER-USER -p tcp --dport "$port" -j REJECT --reject-with tcp-reset
+  fi
+
+  # Block IPv6 for this port
+  if ! ip6tables -C DOCKER-USER -p tcp --dport "$port" -j REJECT --reject-with tcp-reset 2>/dev/null; then
+    ip6tables -D DOCKER-USER -p tcp --dport "$port" -j DROP 2>/dev/null || true
+    ip6tables -A DOCKER-USER -p tcp --dport "$port" -j REJECT --reject-with tcp-reset
   fi
 
   netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
@@ -279,6 +288,13 @@ services:
           cpus: "2.0"
         reservations:
           memory: 512M
+    networks:
+      - default
+      - dolt-net
+
+networks:
+  dolt-net:
+    external: true
 EOF
 
   echo "  ✓ Config written to $INSTALL_DIR/"
@@ -318,6 +334,7 @@ init_repos() {
 start_containers() {
   echo -e "${YELLOW}[4/5] Starting Dolt server...${NC}"
   cd "$INSTALL_DIR"
+  docker network create dolt-net 2>/dev/null && echo "  Created dolt-net network" || echo "  dolt-net network exists"
   docker compose up -d
   sleep 5
 

@@ -221,6 +221,10 @@ ssh root@vps "crontab -l | grep dolt"
         └── test/         # Database: test
 ```
 
+## Docker Network
+
+Dolt container joins an external `dolt-net` network (created automatically by setup script). Other services (e.g. beads-ui) connect to Dolt through this shared network. The network is not managed by any single docker-compose - it persists independently.
+
 ## Ports
 
 | Port | Binding | Purpose |
