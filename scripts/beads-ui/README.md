@@ -26,13 +26,7 @@ iptables DOCKER-USER (IP allowlist)
 
 ### 1. Create SQL user in Dolt (if not exists)
 
-```bash
-ssh root@vps "docker exec dolt dolt sql -q \"
-  CREATE USER 'bdui'@'%' IDENTIFIED BY 'your-password';
-  GRANT ALL ON lets.* TO 'bdui'@'%';
-  CALL dolt_commit('-Am', 'Add beads-ui user');
-\""
-```
+See [scripts/dolt/README.md - Add SQL user](../dolt/README.md#add-sql-user).
 
 ### 2. Deploy beads-ui
 
@@ -97,18 +91,30 @@ The script is idempotent - it rebuilds the container with the new version.
 
 ## CLI Reference
 
+**Full install** (all required):
+
 | Argument | Default | Description |
 |----------|---------|-------------|
-| --sql-user | (required) | SQL username |
-| --sql-password | (required) | SQL password |
-| --database | (required) | Dolt database name |
+| --sql-user | - | SQL username |
+| --sql-password | - | SQL password |
+| --database | - | Dolt database name |
+| --allow-ip | - | Restrict access to this IP (repeatable) |
+| --no-firewall | - | Leave port open to all (NOT recommended) |
 | --port | 9080 | Web UI port |
 | --install-dir | /opt/beads-ui | Installation directory |
 | --dolt-host | dolt | Dolt container hostname |
 | --dolt-port | 3306 | Dolt SQL port |
 | --version | 0.11.1 | beads-ui npm version |
-| --allow-ip | - | Add IP to allowlist (repeatable) |
+
+Either `--allow-ip` or `--no-firewall` is required - dashboard has no built-in auth.
+
+**IP management** (standalone, without --database):
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| --allow-ip | - | Add IP to allowlist |
 | --remove-ip | - | Remove IP from allowlist |
+| --port | 9080 | Target port |
 
 ## Security
 
