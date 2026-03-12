@@ -95,7 +95,7 @@ fi
 
 # Configure .claude/settings.json
 mkdir -p "${PROJECT_ROOT}/.claude"
-STATUSLINE_CMD='bash -c '\''cat | bash "$(git rev-parse --show-toplevel 2>/dev/null)/.lets/statusline.sh" 2>/dev/null'\'''
+STATUSLINE_CMD='bash -c '\''cat | bash $(git rev-parse --show-toplevel 2>/dev/null)/.lets/statusline.sh 2>/dev/null'\'''
 
 if [ ! -f "$SETTINGS" ]; then
   printf '{\n  "statusLine": {\n    "type": "command",\n    "command": "%s"\n  }\n}\n' "$STATUSLINE_CMD" > "$SETTINGS"
