@@ -118,10 +118,8 @@ When creating multiple tasks (e.g., during brainstorm or planning):
 - **Never** skip user approval for task creation
 - **Never** use priority words ("high", "medium") - use numbers 0-4
 
-## Integration with Commands
+## Integration
 
-This skill is referenced by:
-- `/lets:start` - when auto-creating a task from user description
-- `/lets:brainstorm` - when creating tasks from ideas
-- `/lets:plan` - when breaking work into subtasks
-- Any conversation where user asks to create a task
+User-facing skill. Auto-triggers on "create task", "new task", "bd create".
+Commands that create tasks (`/lets:start`, `/lets:brainstorm`, `/lets:plan`) trigger this skill implicitly via description match.
+See: `grep -r "bd create" commands/` for commands that create tasks.

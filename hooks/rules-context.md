@@ -279,7 +279,7 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:start` | Session | Beginning of session |
 | `/lets:end` | Session | End of session |
 | `/lets:done` | Task | Task is complete |
-| `/lets:commit` | Code | Ready to commit |
+| `/lets:commit` | Code | Ready to commit (also auto-triggers on "commit", "закоміть") |
 | `/lets:check` | Code | Quick sanity check - code (~30s) or plan (--plan) |
 | `/lets:review` | Code | Full deep review (~2-3 min) |
 | `/lets:pr` | Code | PR review lifecycle (review, respond, follow-up, approve) |
@@ -294,6 +294,17 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:note` | Utility | Add note to active task |
 | `/lets:install` | Setup | First-time global setup |
 | `/lets:init`    | Setup | Per-project initialization |
+| `/lets:migrate` | Setup | One-time migration from .claude/sessions/ to .lets/ |
+
+### Auto-triggered Skills
+
+These skills fire automatically when you describe the action in conversation:
+
+| Skill | Triggers on |
+|-------|-------------|
+| `create-task` | "create task", "new task", "bd create" and variations |
+| `commit` | "commit", "закоміть", "git commit" and variations |
+| `take-task` | "take task X", "візьми таск", "work on X", "claim task" and variations |
 
 ## Key Principles
 

@@ -8,6 +8,7 @@ Claude Code plugin for development workflow with session management, code review
 .claude-plugin/plugin.json   # Plugin manifest
 commands/                     # Slash commands (/lets:start, /lets:done, /lets:review, etc.)
 agents/                       # Expert agents (review, opinion, ask, plan, brainstorm, team implementation)
+skills/                       # Reusable skills (user-facing auto-triggered + internal referenced by commands)
 hooks/                        # SessionStart hook, workflow rules, config template
 scripts/lets/                 # Statusline + init script (copied/run per-project by /lets:init)
 reference/                    # Reference plugins for studying patterns (gitignored)
@@ -20,6 +21,7 @@ reference/                    # Reference plugins for studying patterns (gitigno
 - **Orchestrators** = commands that delegate to other commands. `/lets:pr` orchestrates `/lets:review` for full PR lifecycle
 - **Hooks** = SessionStart injects workflow rules
 - **Statusline** = per-project `.lets/statusline.sh`, source in `scripts/lets/statusline.sh`, copied by `/lets:init`
+- **Skills** = reusable actions in `skills/<name>/SKILL.md`. Two types: user-facing (auto-discovered, triggered via description match or Skill tool) and internal (not auto-discovered, read by commands via Read tool when needed). Examples: `create-task`, `commit`, `take-task` (user-facing), `detect-task` (internal)
 
 ## Architecture Decisions
 
@@ -36,6 +38,10 @@ reference/                    # Reference plugins for studying patterns (gitigno
 - SessionStart hook injects rules from `hooks/rules-context.md`
 - SessionStart hook reads `.lets/config.yaml` and injects settings into session context
 - Statusline source in `scripts/lets/statusline.sh`, copied to `.lets/statusline.sh` per-project by `/lets:init`. Project `.claude/settings.json` uses `git rev-parse --show-toplevel` to locate it.
+- User-facing skills: auto-discovered by Claude Code, appear in skill list, trigger on description match. Frontmatter description must NOT use YAML quotes.
+- Internal skills: NOT auto-discovered. Commands reference with "use the X skill" - Claude reads the SKILL.md via Read tool. No accidental triggering, no context cost until needed.
+- Commands define WHAT to do and orchestrate the flow. User-facing skills define full reusable flows (steps, user gates) that auto-trigger on natural language. Internal skills define shared procedures read by commands on demand. Commands delegate to skills for shared operations.
+- Gate for new skills: extract only if (a) user-facing with standalone trigger value, or (b) internal logic duplicated in 3+ commands.
 
 ## File Storage
 
@@ -58,7 +64,7 @@ This includes hook debug logs, temp files, and any runtime artifacts.
 
 - beads plugin (task tracking)
 
-## When Adding/Modifying Commands
+## When Adding/Modifying Commands or Skills
 
 Update these files:
 
@@ -66,6 +72,7 @@ Update these files:
 |------|----------------|
 | `hooks/rules-context.md` | Skill Quick Reference table |
 | `commands/install.md` | Essential Skills / Planning Skills tables |
+| `CLAUDE.md` Key Concepts | If adding a new skill |
 
 ### Command Output Requirements
 

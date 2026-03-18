@@ -140,15 +140,8 @@ For each agent, summarize their position:
 
 Record the decision in beads for future context recovery:
 
-```bash
-BRANCH=$(git branch --show-current)
-# Extract task ID from branch name (feature/<id>-<slug> or worktree-<id>-<slug>)
-# Strategy: look for beads ID pattern anywhere in branch name
-
-# Fallback: bd list --status=in_progress
-```
-
-If multiple in-progress tasks found via fallback, skip beads comment.
+Use the **detect-task** skill to find the active task (read `skills/detect-task/SKILL.md` and follow its detection flow).
+If multiple tasks found, skip beads comment.
 If active task found:
 
 ```bash
