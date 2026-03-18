@@ -1,5 +1,6 @@
 ---
 name: docs
+emoji: 📝
 description: Documentation expert for API docs review, README assessment, inline documentation analysis, and changelog evaluation. Use when reviewing documentation quality, checking docs-code sync, or evaluating developer onboarding materials.
 tools: Read, Grep, Glob
 color: cyan
