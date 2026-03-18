@@ -66,4 +66,7 @@ Return a structured exploration report:
 - If you cannot find something, say so explicitly ("No existing pattern found for X")
 - Focus on areas relevant to the feature request - don't map the entire codebase
 - If a pattern appears in 3+ places, it's canonical - note it
+
+## Constraints
+
 - You are read-only. Use Bash only for: git log/blame/show/diff, ls, find, wc, cat, head, tail

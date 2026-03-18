@@ -154,25 +154,12 @@ The prompt template is set by the calling mode (Step R0 or Step E0). Both templa
 
 - ultrathink prefix
 - RESPONSE LANGUAGE + PROJECT ROOT
-- BRAINSTORM MODE header (review or explore variant)
+- `MODE: brainstorm`
 - Context profile from explorer (keep concise - pass summary, not raw data)
 - Instructions specific to the mode
-- Mandatory agent context from table below
 - Output format
 
-Mandatory agent context (append to prompt based on agent):
-
-| Agent | Append to prompt |
-|-------|-----------------|
-| pragmatist | "Focus on ROI. Which ideas deliver the most value for least effort? Flag overengineering or premature optimization." |
-| architect | "Focus on structural opportunities. Where could the system be simplified, better decomposed, or made more extensible?" |
-| backend | "Focus on API gaps, performance bottlenecks, and missing error handling. What backend patterns could be improved?" |
-| frontend | "Focus on UX gaps, component reuse opportunities, and accessibility. What frontend patterns need attention?" |
-| security | "Focus on security debt and missing protections. What attack surfaces are unprotected?" |
-| database | "Focus on schema evolution opportunities, query patterns that could be simplified, and data model gaps." |
-| devops | "Focus on CI/CD gaps, deployment friction, and infrastructure debt. What automation is missing?" |
-| docs | "Focus on documentation debt. What's undocumented, stale, or missing for onboarding?" |
-| qa | "Focus on quality gaps. What's untested? Where would tests catch real bugs?" |
+Agents define their own brainstorm focus in their `## Modes` section - no mandatory context table needed.
 
 ### Phase 4: Aggregate & Present
 
@@ -337,7 +324,9 @@ OUTPUT FORMAT - Project State Profile:
 RESPONSE LANGUAGE: {language from LETS Config}
 PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
 
-BRAINSTORM MODE. Generate ideas and surface gaps from your area of expertise.
+MODE: brainstorm
+
+Generate ideas and surface gaps from your area of expertise.
 
 You are NOT reviewing code or evaluating a decision. You are looking at a project's
 current state and generating actionable insights about what to build, fix, or improve.
@@ -357,8 +346,6 @@ INSTRUCTIONS:
 - Flag gaps: areas with no tasks but clear need from your perspective
 - Connect to existing tasks when relevant ('task X could be extended to also cover Y')
 - Be opinionated - rank and recommend, don't just list
-
-{mandatory agent context}
 
 OUTPUT FORMAT:
 
@@ -464,7 +451,9 @@ OUTPUT FORMAT - Topic Context Profile:
 RESPONSE LANGUAGE: {language from LETS Config}
 PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
 
-BRAINSTORM MODE. Explore a specific topic from your area of expertise.
+MODE: brainstorm
+
+Explore a specific topic from your area of expertise.
 
 You are NOT reviewing code or evaluating a decision. You are thinking through
 an idea and generating insights, questions, and angles from your domain.
@@ -485,8 +474,6 @@ INSTRUCTIONS:
 - Suggest approaches or patterns from your domain that apply
 - If this topic has been partially explored before (see context), build on it
 - Be specific to THIS project, not generic advice
-
-{mandatory agent context}
 
 OUTPUT FORMAT:
 

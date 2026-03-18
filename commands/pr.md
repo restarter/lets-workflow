@@ -261,7 +261,7 @@ Save review_json path in state file.
 ## PR #{number}: {title}
 
 **Verdict:** {verdict}
-**Findings:** {N} issues (confidence >= 80)
+**Findings:** {N} issues ([BLOCKER] + [SUGGESTION])
 
 | # | Severity | Title | File | Line |
 |---|----------|-------|------|------|

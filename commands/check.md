@@ -124,14 +124,14 @@ Ask yourself:
 - Does this violate project rules?
 - Will the next developer be confused?
 
-### Confidence Filter
+### Severity Filter
 
-Rate each finding 0-100:
-- **90-100**: Bug, security issue, or rule violation - report it
-- **70-89**: Concern that experienced developers would flag - report it
-- **Below 70**: Skip it
+Classify each finding:
+- **[BLOCKER]** - Bug, security issue, or rule violation - always report
+- **[SUGGESTION]** - Concern experienced developers would flag - report
+- **[NIT]** - Minor improvement - skip in quick check
 
-**Only report findings with confidence >= 70. Max 5 issues.**
+**Only report [BLOCKER] and [SUGGESTION]. Max 5 issues.**
 
 ## Step 4: Present Results
 
@@ -144,8 +144,7 @@ Rate each finding 0-100:
 
 ### Issues
 {Only if found}
-- [Tag] **file:line** {issue} - {fix suggestion}
-  Confidence: {score}
+- [{TIER}][Tag] **file:line** {issue} - {fix suggestion}
 
 ### Looks Good
 {1-2 positive notes}

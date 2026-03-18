@@ -451,35 +451,16 @@ Task(
   subagent_type="lets:{agent-name}",
   prompt="ultrathink
 
-OPINION MODE. Evaluate an architecture design for a feature.
+MODE: plan
+
+Evaluate an architecture design for a feature.
 
 FEATURE GOAL: {goal}
 
 CHOSEN ARCHITECTURE:
-{full architect output for chosen approach}
-
-INSTRUCTIONS:
-- Evaluate this architecture from your area of expertise
-- Flag risks that others might miss
-- Suggest specific improvements (not vague concerns)
-- Be direct - no hedging, no 'it depends' without conclusion
-{mandatory agent context - see table below}"
+{full architect output for chosen approach}"
 )
 ```
-
-### Mandatory Agent Context
-
-If a selected agent appears in this table, append the instruction to its prompt:
-
-| Agent | Instruction |
-|-------|-------------|
-| `pragmatist` | "Assess if the solution is proportional to the problem. Flag overengineering." |
-| `security` | "Focus on auth flows, data validation, and secrets handling in the proposed architecture." |
-| `database` | "Evaluate schema design, migration strategy, and query patterns." |
-| `backend` | "Review API design, error handling, and service integration points." |
-| `frontend` | "Assess component architecture, state management, and accessibility." |
-| `devops` | "Review deployment impact, CI/CD changes, and infrastructure requirements." |
-| `qa` | "Evaluate testability, coverage strategy, and edge case handling." |
 
 ### Checkpoint: Evaluation Results
 
