@@ -46,18 +46,7 @@ Based on the decision topic, select 3-5 agents:
 cat "$ROOT/CLAUDE.md" 2>/dev/null | head -100
 ```
 
-## Step 4: Mandatory Agent Context
-
-If a selected agent appears in this table, append the instruction to its prompt:
-
-| Agent | Instruction |
-|-------|-------------|
-| `compliance` | "Only flag violations EXPLICITLY mentioned in CLAUDE.md. Quote the rule being violated." |
-| `git-historian` | "Use git blame and git log to analyze historical context." |
-| `docs` | "Check CLAUDE.md sync, docs/ sync, beads tracking, README/config docs." |
-| `pragmatist` | "Assess if the solution is proportional to the problem. Flag overengineering." |
-
-## Step 5: Launch Agents in Parallel
+## Step 4: Launch Agents in Parallel
 
 **CRITICAL:** Launch ALL selected agents in a SINGLE message with multiple Task tool calls.
 
@@ -71,7 +60,7 @@ Task(
 RESPONSE LANGUAGE: {language from LETS Config, e.g. "English"}
 PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
 
-OPINION MODE. Evaluate this technical decision.
+MODE: opinion
 
 PROJECT CONTEXT:
 {CLAUDE.md summary}
@@ -81,18 +70,11 @@ OPTIONS:
 A) {option A description}
 B) {option B description}
 C) {option C description - if applicable}
-CONSTRAINTS: {context, time, legacy, etc.}
-
-INSTRUCTIONS:
-- Give your expert perspective in 2-3 sentences
-- State which option you recommend and why
-- Flag risks from your area of expertise
-- Be direct - no hedging, no 'it depends without conclusion'
-- If you see a risk others might miss, highlight it"
+CONSTRAINTS: {context, time, legacy, etc.}"
 )
 ```
 
-## Step 6: Aggregate Results
+## Step 5: Aggregate Results
 
 After all agents respond, synthesize:
 
@@ -136,7 +118,7 @@ For each agent, summarize their position:
 **Action:** {specific next step}
 ```
 
-## Step 7: Link Decision to Active Task
+## Step 6: Link Decision to Active Task
 
 Record the decision in beads for future context recovery:
 
@@ -168,7 +150,7 @@ bd comments add <task-id> "Decision: {topic}. Chose: {recommended option}. Reaso
 4. **Reversible > Perfect** - can change later
 5. **Working > Elegant** - ship first, refactor later
 
-## Step 8: Discuss (opt-in)
+## Step 7: Discuss (opt-in)
 
 After presenting the recommendation, offer to explore it deeper:
 

@@ -5,7 +5,7 @@ argument-hint: "[PR-url-or-number|--local|--staged|--last-commit|--plan|--file <
 
 # Full Code Review
 
-Comprehensive code review with dynamic agent selection based on change types. Up to 11 specialized agents, confidence scoring. Works with:
+Comprehensive code review with dynamic agent selection based on change types. Up to 11 specialized agents, tiered severity scoring. Works with:
 - GitHub PRs (posts comment to PR)
 - Local changes (saves to file)
 - Implementation plans (reviews `.lets/plans/` files)
@@ -213,7 +213,7 @@ For each selected agent, use the Task tool with:
 
 ### Task Prompt Template
 
-Each agent receives this context in their task prompt. Agents define their own expertise, confidence scoring, and output format in `agents/*.md` - do NOT duplicate those in the prompt.
+Each agent receives this context in their task prompt. Agents define their own expertise, tiered scoring, output format, and mode-specific behavior in `agents/*.md` - do NOT duplicate those in the prompt.
 
 ```
 ultrathink
@@ -221,9 +221,9 @@ ultrathink
 RESPONSE LANGUAGE: {language from LETS Config, e.g. "English"}
 PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
 
+MODE: review
+
 Review the following code from your expert perspective.
-Use your confidence scoring system. Only report findings >= 80 confidence.
-Follow your output format as defined in your system prompt.
 
 SYSTEMIC PATTERN CHECK:
 For each finding, grep the codebase to check if the same pattern exists in other files.
@@ -232,7 +232,7 @@ Still report it, but:
 - Prefix with [SYSTEMIC]
 - Note how many other files follow the same pattern
 - Frame as "project-wide tech debt" not "bug in this PR"
-- Reduce confidence by 15 points (it's not wrong here specifically)
+- Downgrade tier by one level (e.g. [SUGGESTION] becomes [NIT])
 
 CLAUDE.MD RULES:
 {claude_md_content}
@@ -243,28 +243,16 @@ CHANGED FILES:
 CODE:
 {diff_content, or full file content for --file mode}
 
-{mandatory context - see table below}
 ```
-
-### Mandatory Agent Context
-
-These instructions are **required** for agents that need project-specific context to function correctly. Always include them.
-
-| Agent | Why | Instruction |
-|-------|-----|-------------|
-| `lets:compliance` | Needs rules to check against | "Only flag violations EXPLICITLY mentioned in CLAUDE.md. Quote the rule being violated." |
-| `lets:git-historian` | Needs to access project history | "Use git blame and git log to check historical context of modified files." |
-| `lets:docs` | Needs to know what docs exist | "Check LETS plugin doc sync: (1) CLAUDE.md structure and architecture sections match actual files, (2) hooks/rules-context.md Skill Quick Reference table lists all commands, (3) commands/install.md skill tables are complete, (4) command frontmatter descriptions match behavior. When commands/*.md, agents/*.md, or hooks/ files changed - these docs MUST be verified." |
-| `lets:pragmatist` | Specific review lens | "Assess if the solution is proportional to the problem. Flag overengineering." |
 
 ## Step 6: Filter & Aggregate Results
 
 Wait for all agents, then:
 
-1. **Filter:** Keep only issues with confidence >= 80
-2. **Dedupe:** Remove duplicate issues found by multiple agents
+1. **Filter:** Keep [BLOCKER] and [SUGGESTION]. Include [NIT] only for small diffs (<50 lines)
+2. **Dedupe:** Remove duplicate issues found by multiple agents. When deduplicating, keep the highest tier (BLOCKER > SUGGESTION > NIT)
 3. **Separate:** Split into regular findings and `[SYSTEMIC]` findings
-4. **Prioritize:** Sort by confidence (highest first)
+4. **Prioritize:** Sort by tier ([BLOCKER] first, then [SUGGESTION], then [NIT])
 5. **Count:** Tally issues by category
 
 ## Step 6.5: Verify Systemic Findings
@@ -277,7 +265,7 @@ grep -r "delete(" --include="*.php" -l | head -10
 ```
 
 - If confirmed systemic (2+ other files) - keep as systemic, note count
-- If agent was wrong (only this file does it) - reclassify as regular finding, restore confidence
+- If agent was wrong (only this file does it) - reclassify as regular finding, restore original tier
 
 Systemic findings go into a separate section in the final report (see Step 9).
 
@@ -287,9 +275,9 @@ Systemic findings go into a separate section in the final report (see Step 9).
 
 | Condition | Verdict |
 |-----------|---------|
-| 0 critical security, <= 2 total issues | APPROVED |
-| 1-3 issues, no critical | APPROVED WITH SUGGESTIONS |
-| > 3 issues OR any critical security | CHANGES REQUESTED |
+| 0 [BLOCKER]s, 0-2 [SUGGESTION]s | APPROVED |
+| 0 [BLOCKER]s, 3+ [SUGGESTION]s | APPROVED WITH SUGGESTIONS |
+| 1+ [BLOCKER]s | CHANGES REQUESTED |
 
 ## Step 8: Save Review (BEFORE output)
 
@@ -327,8 +315,7 @@ Write to `.lets/reviews/{date}-{mode}.json`:
     {
       "id": 1,
       "title": "SQL injection in search query",
-      "severity": "critical",
-      "confidence": 95,
+      "tier": "BLOCKER",
       "agent": "security",
       "file": "src/search.py",
       "line": 42,
@@ -368,9 +355,9 @@ gh pr comment <PR> --body "$(cat <<'EOF'
 
 **Verdict:** {APPROVED | APPROVED WITH SUGGESTIONS | CHANGES REQUESTED}
 
-Found {N} issues (filtered from {M} with confidence >= 80):
+Found {N} issues:
 
-1. **{issue title}** [Confidence: {X}]
+1. **[{TIER}] {issue title}**
 
    {file link with full SHA}
 
@@ -473,6 +460,8 @@ Task(
   subagent_type="lets:architect",
   prompt="ultrathink
 
+MODE: plan
+
 PLAN REVIEW MODE. Review this implementation plan for quality and completeness.
 
 PROJECT CONTEXT:
@@ -515,6 +504,8 @@ OUTPUT FORMAT:
 Task(
   subagent_type="lets:pragmatist",
   prompt="ultrathink
+
+MODE: plan
 
 PLAN REVIEW MODE. Review this implementation plan for feasibility and proportionality.
 
@@ -605,10 +596,10 @@ bd comments add <task-id> "Plan review: {verdict}. {N} issues found."
 
 - Use `gh` CLI for GitHub operations
 - Always use full git SHA in links
-- Filter to >= 80 confidence to reduce noise
+- Filter by tier: keep [BLOCKER] and [SUGGESTION], skip [NIT] for large diffs
 - For PR: post comment even if no issues (confirms review happened)
 - For local: show full report in console + save to file
-- Agents define their own expertise, scoring, and output format in agents/*.md
+- Agents define their own expertise, tiered scoring, output format, and mode behavior in agents/*.md
 - The review command only provides context (diff, CLAUDE.md) and orchestrates
 
 ## Workflow Integration

@@ -82,18 +82,7 @@ cat "$ROOT/CLAUDE.md" 2>/dev/null | head -100
 
 Also check if the question references specific files - if so, note the file paths for the agent.
 
-## Step 4: Mandatory Agent Context
-
-If the selected agent appears in this table, append the instruction to the prompt:
-
-| Agent | Instruction |
-|-------|-------------|
-| `compliance` | "Only flag violations EXPLICITLY mentioned in CLAUDE.md. Quote the rule being violated." |
-| `git-historian` | "Use git blame and git log to analyze historical context." |
-| `docs` | "Check CLAUDE.md sync, docs/ sync, beads tracking, README/config docs." |
-| `pragmatist` | "Assess if the solution is proportional to the problem. Flag overengineering." |
-
-## Step 5: Launch Agent
+## Step 4: Launch Agent
 
 Use the Task tool to spawn the selected agent:
 
@@ -105,20 +94,12 @@ Task(
 RESPONSE LANGUAGE: {language from LETS Config, e.g. "English"}
 PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
 
-ASK MODE. A developer is asking you a direct question.
+MODE: ask
 
 PROJECT CONTEXT:
 {CLAUDE.md summary - stack, conventions, key rules}
 
-QUESTION: {user_question}
-
-INSTRUCTIONS:
-- Give a clear, actionable answer
-- Use code examples if relevant
-- Reference project patterns from CLAUDE.md where applicable
-- Be concise - this is a Slack reply, not an essay
-- If the question is too vague, say what you'd need to know to answer properly
-- If files are referenced, read them before answering"
+QUESTION: {user_question}"
 )
 ```
 
