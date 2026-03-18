@@ -22,16 +22,8 @@ Use `/lets:note` when you want to add extra context that doesn't fit those flows
 
 ## Step 1: Active Task Detection
 
-```bash
-BRANCH=$(git branch --show-current)
-# Extract task ID from branch name (feature/<id>-<slug> or worktree-<id>-<slug>)
-# Strategy: look for beads ID pattern anywhere in branch name
-
-# Fallback:
-bd list --status=in_progress
-```
-
-If no active task or multiple in-progress tasks found - ask user which task to add a note to.
+Use the **detect-task** skill to find the active task (read `skills/detect-task/SKILL.md` and follow its detection flow).
+If no active task or multiple tasks found - ask user which task to add a note to.
 
 ## Step 2: Review Current State
 

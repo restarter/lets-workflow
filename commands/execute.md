@@ -11,15 +11,7 @@ Load an implementation plan and execute it using Claude Code's native plan mode.
 
 ## Step 1: Active Task Detection
 
-```bash
-BRANCH=$(git branch --show-current)
-# Extract task ID from branch name (feature/<id>-<slug> or worktree-<id>-<slug>)
-# Strategy: look for beads ID pattern anywhere in branch name
-
-# Fallback:
-bd list --status=in_progress
-```
-
+Use the **detect-task** skill to find the active task (read `skills/detect-task/SKILL.md` and follow its detection flow).
 If not on a feature/worktree branch and no in-progress task found - ask user which task to execute.
 
 Verify not on main/master:

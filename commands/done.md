@@ -10,20 +10,8 @@ Complete the current task. Document work, create PR or merge locally, close in b
 
 ## Step 1: Active Task Detection
 
-```bash
-BRANCH=$(git branch --show-current)
-# Extract task ID from branch name. Handles all branch formats:
-#   feature/<task-id>-<slug>     -> standard LETS branches
-#   worktree-<task-id>-<slug>   -> worktree branches (from /lets:worktree create)
-#   worktree-<custom-name>      -> no task ID, use fallback
-#
-# Beads ID pattern: <prefix>-<alphanum>[.<number>]
-
-# Fallback (always works, also primary method for worktree branches without task ID):
-bd list --status=in_progress
-```
-
-If no active task found - ask user which task to close.
+Use the **detect-task** skill to find the active task (read `skills/detect-task/SKILL.md` and follow its detection flow).
+If no task found: ask user which task to close.
 
 ### Epic Guard
 

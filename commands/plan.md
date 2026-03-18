@@ -21,13 +21,7 @@ Wait for answer before proceeding.
 
 ## Step 2: Active Task Context
 
-```bash
-BRANCH=$(git branch --show-current)
-# Parse task ID from branch: feature/<task-id>-<slug>
-
-# Fallback:
-bd list --status=in_progress
-```
+Use the **detect-task** skill to find the active task (read `skills/detect-task/SKILL.md` and follow its detection flow).
 
 If task found:
 ```bash

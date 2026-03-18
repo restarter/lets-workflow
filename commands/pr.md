@@ -137,12 +137,8 @@ AskUserQuestion(
 
 Resolve task-id now - after checkout the branch name changes to the PR branch.
 
-```bash
-BRANCH=$(git branch --show-current)
-# Extract task ID from branch name (feature/<id>-<slug> or worktree-<id>-<slug>)
-# Fallback: bd list --status=in_progress
-# If ambiguous or not found: skip beads logging later
-```
+Use the **detect-task** skill to find the active task (read `skills/detect-task/SKILL.md` and follow its detection flow).
+If ambiguous or not found: skip beads logging later.
 
 Store detected task-id for use in `bd comments add` calls throughout the lifecycle.
 
@@ -789,12 +785,8 @@ GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
 If in worktree (`$GIT_DIR` contains `worktrees/`): warn "Already in a worktree - cannot checkout PR branch here. Proceeding on current branch." Stay on current branch, skip stash handling.
 Else: `gh pr checkout <PR>` (same stash handling as Step 2.3).
 
-**Detect active task** (before branch switch, same logic as Step 2.2):
-```bash
-BRANCH=$(git branch --show-current)
-# Extract task ID from branch name (feature/<id>-<slug> or worktree-<id>-<slug>)
-# Fallback: bd list --status=in_progress
-```
+**Detect active task** (before branch switch, same as Step 2.2):
+Use the **detect-task** skill (read `skills/detect-task/SKILL.md`).
 Store detected task_id for beads logging in 6.6.
 
 Check for existing `$PR_DIR/response.json`:

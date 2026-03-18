@@ -58,7 +58,7 @@ Team:     /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /le
 | `/lets:start` | Session | Beginning of session |
 | `/lets:end` | Session | End of session |
 | `/lets:done` | Task | Task is complete (creates PR if github mode, or merges locally) |
-| `/lets:commit` | Code | Ready to commit changes |
+| `/lets:commit` | Code | Ready to commit (also triggers automatically on "commit") |
 | `/lets:check` | Code | Quick sanity check - code (~30s) or plan (--plan) |
 | `/lets:review` | Code | Full deep review (~2-3 min) |
 | `/lets:pr` | Code | PR review lifecycle (review, respond, follow-up, approve) |
@@ -70,6 +70,17 @@ Team:     /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /le
 | `/lets:status` | Utility | Task overview anytime |
 | `/lets:note` | Utility | Add note to active task |
 | `/lets:brainstorm` | Planning | Interactive ideation - review backlog, explore ideas, quick brainstorm, cleanup |
+| `/lets:migrate` | Setup | One-time migration from .claude/sessions/ to .lets/ |
+
+### Auto-triggered Skills
+
+These fire automatically when you describe the action in conversation - no slash command needed:
+
+| Skill | Triggers on |
+|-------|-------------|
+| `create-task` | "create task", "new task", "bd create" and variations |
+| `commit` | "commit", "закоміть", "git commit" and variations |
+| `take-task` | "take task X", "візьми таск", "work on X", "claim task" and variations |
 
 ### Planning Skills (for bigger tasks)
 

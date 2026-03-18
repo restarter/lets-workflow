@@ -62,9 +62,9 @@ Cleanup:  /lets:worktree remove {name} (if task completed)
 
 ```bash
 git status --short
-git branch --show-current
-bd list --status=in_progress
 ```
+
+Use the **detect-task** skill to find the active task (read `skills/detect-task/SKILL.md` and follow its detection flow).
 
 ## Step 2: Handle Uncommitted Changes
 
