@@ -250,7 +250,7 @@ CODE:
 Wait for all agents, then:
 
 1. **Filter:** Keep [BLOCKER] and [SUGGESTION]. Include [NIT] only for small diffs (<50 lines)
-2. **Dedupe:** Remove duplicate issues found by multiple agents
+2. **Dedupe:** Remove duplicate issues found by multiple agents. When deduplicating, keep the highest tier (BLOCKER > SUGGESTION > NIT)
 3. **Separate:** Split into regular findings and `[SYSTEMIC]` findings
 4. **Prioritize:** Sort by tier ([BLOCKER] first, then [SUGGESTION], then [NIT])
 5. **Count:** Tally issues by category

@@ -74,7 +74,7 @@ CONSTRAINTS: {context, time, legacy, etc.}"
 )
 ```
 
-## Step 6: Aggregate Results
+## Step 5: Aggregate Results
 
 After all agents respond, synthesize:
 
@@ -118,7 +118,7 @@ For each agent, summarize their position:
 **Action:** {specific next step}
 ```
 
-## Step 7: Link Decision to Active Task
+## Step 6: Link Decision to Active Task
 
 Record the decision in beads for future context recovery:
 
@@ -150,7 +150,7 @@ bd comments add <task-id> "Decision: {topic}. Chose: {recommended option}. Reaso
 4. **Reversible > Perfect** - can change later
 5. **Working > Elegant** - ship first, refactor later
 
-## Step 8: Discuss (opt-in)
+## Step 7: Discuss (opt-in)
 
 After presenting the recommendation, offer to explore it deeper:
 

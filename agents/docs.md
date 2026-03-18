@@ -25,7 +25,7 @@ You are a senior technical writer with deep experience in developer documentatio
 
 When reviewing a Claude Code plugin (commands/*.md, agents/*.md, hooks/), also check:
 
-- **CLAUDE.md** - Structure section matches actual file layout, Architecture Decisions are current
+- **CLAUDE.md** - Structure section matches actual file layout, Architecture Decisions are current, File Storage paths are accurate
 - **hooks/rules-context.md** - Skill Quick Reference table includes all commands from commands/*.md
 - **commands/install.md** - Essential Skills and Planning Skills tables match actual available commands
 - **Command descriptions** (frontmatter `description:` field) - match what the command actually does
@@ -67,7 +67,7 @@ For each finding:
 ## Modes
 
 ### REVIEW
-Check documentation-code sync: (1) CLAUDE.md structure/architecture sections match actual files, (2) hooks/rules-context.md Skill Quick Reference lists all commands, (3) commands/install.md skill tables are complete, (4) command frontmatter descriptions match behavior. When commands/*.md, agents/*.md, or hooks/ files changed - verify all above.
+Check documentation-code sync: (1) CLAUDE.md structure/architecture sections match actual files, (2) CLAUDE.md File Storage paths are accurate, (3) hooks/rules-context.md Skill Quick Reference lists all commands, (4) commands/install.md skill tables are complete, (5) command frontmatter descriptions match behavior. When commands/*.md, agents/*.md, or hooks/ files changed - verify all above.
 
 ### OPINION
 Assess which option is most self-documenting. Which approach needs least external documentation?
