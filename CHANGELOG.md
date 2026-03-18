@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Added
+- Skill architecture (`skills/` directory) with two skill types: user-facing (auto-triggered) and internal (read by commands)
+- 4 skills: `commit`, `create-task`, `take-task` (user-facing), `detect-task` (internal)
+- Auto-triggered Skills table in `hooks/rules-context.md` and `commands/install.md`
+- beads-ui Docker web dashboard (`scripts/beads-ui/`) with deployment script
+- Branch return prompt after worktree creation
+
+### Changed
+- All 13 agent prompts upgraded to v2: tiered scoring ([BLOCKER]/[SUGGESTION]/[NIT]), self-contained behavioral modes, color assignments
+- `/lets:brainstorm` redesigned with 4 modes: review backlog, explore idea, quick brainstorm, cleanup
+- Commands thinned - shared logic extracted to skills (`commit.md` 208->11 lines, `start.md` -120 lines)
+- CLAUDE.md architecture decisions updated: agents define WHO+HOW, commands define WHAT+WHEN
+- Mandatory context tables removed from 5 commands (review, opinion, ask, plan, brainstorm) - now in agents
+
+### Fixed
+- beads-ui: input validation, firewall rules, deduplication (PR #35 review)
+
 ## [0.3.1] - 2026-03-08
 
 Marketplace release - plugin available via Claude Code marketplace.
