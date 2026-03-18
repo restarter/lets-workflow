@@ -60,4 +60,8 @@ Migrated .claude/sessions/ -> .lets/
   Sessions: {count} files
   Reviews: {count} files
   Old folder: removed
+
+┌─ LETS ─────────────────────────┐
+│  Start?  /lets:start           │
+└────────────────────────────────┘
 ```
