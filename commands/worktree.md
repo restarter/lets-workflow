@@ -142,7 +142,35 @@ cat "${WORKTREE_PATH}/.beads/redirect" 2>/dev/null
 cd "$WORKTREE_PATH" && git branch --show-current
 ```
 
-### Step C7: Output
+### Step C7: Ask Where to Continue
+
+After worktree is created, ask where the user wants to work:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Worktree created. Where do you want to continue?",
+    header: "LETS",
+    options: [
+      { label: "Stay on current branch", description: "Switch back to {merge-branch} and keep working here. Open worktree in a new terminal." },
+      { label: "Switch to worktree", description: "Continue in this session inside the worktree" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Stay on current branch:**
+- `git checkout {merge-branch}` (use merge-branch from LETS Config)
+- Show worktree launch command for new terminal
+
+**Switch to worktree:**
+- Stay in worktree directory
+- Suggest `/lets:start`
+
+### Step C8: Output
+
+**If staying on current branch:**
 
 ```
 Worktree created: .worktrees/{name}/
@@ -150,20 +178,28 @@ Branch: worktree-{name}
 Beads: {shared via redirect / not available}
 LETS: {symlinked / not available}
 
-## Next Steps
-
-You can continue working right here - Claude Code automatically switches to the worktree directory.
-Use `/lets:start` to pick a task and begin.
-
-Or open a **new terminal** for parallel work:
+Open a new terminal for the worktree:
 
 ```bash
 cd {absolute-worktree-path} && claude
 ```
 
 ┌─ LETS ─────────────────────────┐
+│  Continue?  /lets:start        │
+│  List?      /lets:worktree list│
+└────────────────────────────────┘
+```
+
+**If switching to worktree:**
+
+```
+Worktree created: .worktrees/{name}/
+Branch: worktree-{name}
+Beads: {shared via redirect / not available}
+LETS: {symlinked / not available}
+
+┌─ LETS ─────────────────────────┐
 │  Start?   /lets:start          │
-│  List?    /lets:worktree list  │
 │  Info?    /lets:worktree info  │
 └────────────────────────────────┘
 ```
