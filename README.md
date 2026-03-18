@@ -105,7 +105,7 @@ Then start working:
 │  /lets:review    Full multi-agent code review (~2-3 min)                  │
 │                                                                           │
 ├─ You plan, Claude builds ─────────────────────────────────────────────────┤
-│  /lets:brainstorm  Think through what to build - backlog, priorities      │
+│  /lets:brainstorm  Ideation: backlog review, explore ideas, brainstorm    │
 │  /lets:plan        Design how to build it - codebase exploration, arch    │
 │  /lets:execute     Claude implements the plan with your approval gates    │
 │                                                                           │
@@ -149,7 +149,7 @@ Then start working:
 
 | Command | Description |
 |---------|-------------|
-| `/lets:brainstorm` | Interactive backlog helper - because the backlog must grow! |
+| `/lets:brainstorm` | Interactive ideation - backlog review, idea exploration, quick brainstorm, cleanup |
 | `/lets:plan` | Structured planning - explore codebase, design architecture, write plan |
 | `/lets:execute` | Execute plan from `/lets:plan` via native plan mode |
 | `/lets:team` | Parallel implementation with Agent Teams |
@@ -248,6 +248,8 @@ Each teammate gets one task, works in isolation with plan approval from the lead
 | git-historian | Blame analysis, change patterns, refactoring impact |
 | explorer | Codebase structure mapping, pattern identification |
 | implementer | Full-stack implementation in isolated worktrees |
+
+Agents use **tiered scoring** - findings are classified as `[BLOCKER]` (must fix), `[SUGGESTION]` (should fix), or `[NIT]` (nice to have). Each agent operates in context-specific modes (review, opinion, ask, plan, brainstorm) selected by the invoking command.
 
 Agents are read-only - they analyze code but never modify it. Exception: the implementer agent has write access for parallel implementation via `/lets:team`.
 
