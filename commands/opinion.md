@@ -33,10 +33,12 @@ Based on the decision topic, select 3-5 agents:
 | General architecture | architect, security, backend, pragmatist |
 | Documentation | docs, architect, compliance, pragmatist |
 | Code quality | architect, compliance, qa, pragmatist |
+| External perspective | actor + relevant domain agents |
 
 **Rules:**
 - Minimum 3 agents, maximum 5
 - `architect` and `pragmatist` always included
+- `actor` can replace or supplement any domain agent. If actor is selected, use the **actor-fetch-personality** skill (read `skills/actor-fetch-personality/SKILL.md`) to fetch personality. Pass `PERSONALITY:` block in the actor's Task prompt only.
 - Agents use their own model from frontmatter (opus for critical agents, session model for others)
 
 ## Step 3: Gather Context

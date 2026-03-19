@@ -416,6 +416,7 @@ Based on what the feature touches, suggest relevant experts:
 
 **Always suggest:** `lets:pragmatist`
 **Never suggest:** `lets:architect` (designed the option - can't evaluate own work)
+**On request:** `lets:actor` (external personality - user must provide source. Use **actor-fetch-personality** skill)
 
 ### Checkpoint: Expert Selection
 
@@ -458,7 +459,11 @@ Evaluate an architecture design for a feature.
 FEATURE GOAL: {goal}
 
 CHOSEN ARCHITECTURE:
-{full architect output for chosen approach}"
+{full architect output for chosen approach}
+
+{If actor agent: include PERSONALITY block from actor-fetch-personality skill}
+PERSONALITY:
+{fetched personality content - only for lets:actor, omit for other agents}"
 )
 ```
 
