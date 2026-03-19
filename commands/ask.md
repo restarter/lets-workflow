@@ -110,7 +110,7 @@ QUESTION: {user_question}"
 )
 ```
 
-## Step 6: Present Results
+## Step 5: Present Results
 
 Show the agent's response:
 
@@ -120,7 +120,7 @@ Show the agent's response:
 {agent response}
 ```
 
-## Step 7: Link Answer to Active Task
+## Step 6: Link Answer to Active Task
 
 Use the **detect-task** skill to find the active task (read `skills/detect-task/SKILL.md` and follow its detection flow).
 If multiple tasks found, skip beads comment.

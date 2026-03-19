@@ -1,5 +1,5 @@
 ---
-description: Full code review with dynamic agent selection (up to 11 specialized agents). Analyzes changes first, selects relevant experts. Also reviews implementation plans.
+description: Full code review with dynamic agent selection (up to 12 specialized agents). Analyzes changes first, selects relevant experts. Also reviews implementation plans.
 argument-hint: "[PR-url-or-number|--local|--staged|--last-commit|--plan|--file <path>] [--json]"
 ---
 
@@ -186,7 +186,7 @@ Changes detected:
 - [x] Docker config (1 file)
 - [ ] Documentation
 
-Selected agents (7 of 11):
+Selected agents (7 of 12):
 1. compliance (always)
 2. backend (PHP code + bug scanning)
 3. security (PHP + DB + Docker)

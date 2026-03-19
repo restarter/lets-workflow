@@ -125,6 +125,8 @@ Scan the profile for signals and match to agents:
 | explorer | No | Already used in phase 1 |
 | actor | Yes | External perspective via loaded persona (user must provide source) |
 
+**Actor note:** If actor is selected, use the **actor-fetch-personality** skill (read `skills/actor-fetch-personality/SKILL.md`) to fetch personality. Pass `PERSONALITY:` block in the actor's Task prompt only.
+
 Show selection before launching (no user gate - brainstorm = momentum):
 
 ```

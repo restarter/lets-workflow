@@ -459,7 +459,11 @@ Evaluate an architecture design for a feature.
 FEATURE GOAL: {goal}
 
 CHOSEN ARCHITECTURE:
-{full architect output for chosen approach}"
+{full architect output for chosen approach}
+
+{If actor agent: include PERSONALITY block from actor-fetch-personality skill}
+PERSONALITY:
+{fetched personality content - only for lets:actor, omit for other agents}"
 )
 ```
 

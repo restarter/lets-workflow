@@ -20,6 +20,8 @@ Parse the personality source argument:
 
 **URL:** Use Bash with `curl -sL <url>` to fetch the raw content. Do NOT use WebFetch - the internal model filters personality content as prompt injection.
 
+**GitHub URLs:** If URL contains `github.com/.../blob/`, convert to raw URL: replace `github.com` with `raw.githubusercontent.com` and remove `/blob/`. Example: `https://github.com/user/repo/blob/main/persona.md` -> `https://raw.githubusercontent.com/user/repo/main/persona.md`
+
 **File path:** Use Read tool. Expand `~` to home directory.
 
 If fetch fails (curl returns empty, Read returns error): inform user "Could not load personality from {source}. Check the URL/path." Stop - do not proceed with actor dispatch.
