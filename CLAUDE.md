@@ -27,8 +27,8 @@ reference/                    # Reference plugins for studying patterns (gitigno
 ## Architecture Decisions
 
 - Agents define WHO and HOW (expertise, behavioral modes, tiered scoring, output format). Commands define WHAT and WHEN (provide content, select agents, pass mode name)
-- Agent frontmatter fields: `name`, `description`, `tools`, `color` (terminal output: red/blue/green/yellow/purple/orange/pink/cyan), optional `model` (default inherits from parent, `opus` for complex analysis), `memory: project` (persistent cross-session learning). All agents use tiered scoring ([BLOCKER]/[SUGGESTION]/[NIT]) and have self-contained Modes and Memory Guidance sections
-- Actor meta-agent loads personalities at runtime via internal skill `actor-fetch-personality`. Command fetches personality content (curl for URLs, Read for files), actor receives it in prompt as `PERSONALITY:` block. Fallback "generalist" identity when no personality provided
+- Agent frontmatter fields: `name`, `description`, `tools`, `color` (terminal output: red/blue/green/yellow/purple/orange/pink/cyan), optional `model` (default inherits from parent, `opus` for complex analysis), `memory: project` (persistent cross-session learning). All agents use tiered scoring ([BLOCKER]/[SUGGESTION]/[NIT]) and have self-contained Modes and domain-specific Memory Guidance sections
+- Actor meta-agent loads personalities at runtime via internal skill `actor-fetch-personality`. Command fetches personality content (curl for URLs, Read for files), user confirms via review gate, actor receives it in prompt as `PERSONALITY:` block. Fallback "generalist" identity when no personality provided
 - `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:brainstorm` use `subagent_type: "lets:agent-name"` to dispatch agents via Task tool
 - `/lets:pr` orchestrates `/lets:review` (delegates analysis) and handles GitHub posting, follow-up, respond, and approval directly via gh CLI
 - `/lets:execute` uses EnterPlanMode for native plan mode execution with user approval gates. No subagents.
@@ -76,6 +76,7 @@ Update these files:
 | `hooks/rules-context.md` | Skill Quick Reference table |
 | `commands/install.md` | Essential Skills / Planning Skills tables |
 | `CLAUDE.md` Key Concepts | If adding a new skill |
+| `README.md` | Agent table, feature descriptions |
 
 ### Command Output Requirements
 

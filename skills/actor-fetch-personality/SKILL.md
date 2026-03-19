@@ -26,13 +26,36 @@ Parse the personality source argument:
 
 If fetch fails (curl returns empty, Read returns error): inform user "Could not load personality from {source}. Check the URL/path." Stop - do not proceed with actor dispatch.
 
-### Step 3: Validate
+### Step 3: User Review Gate
+
+Before loading personality into the actor, show a preview and ask for confirmation:
+
+Extract from fetched content: name (from frontmatter or first heading), expertise signals (first 2-3 bullet points or description), line count.
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Load this personality into Actor?",
+    header: "LETS",
+    options: [
+      { label: "Load", description: "{name} - {expertise summary} ({N} lines)" },
+      { label: "Cancel", description: "Don't load, skip actor" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+- **Load** -> proceed to Step 4
+- **Cancel** -> stop, inform calling command that actor was skipped
+
+### Step 4: Validate
 
 - If content is empty: stop, inform user
 - If content exceeds 2000 lines: truncate to first 2000 lines, warn user
 - Content should contain identifiable persona signals (name, expertise, identity). If it looks like code or random text, warn but proceed (lenient validation)
 
-### Step 4: Format for Prompt
+### Step 5: Format for Prompt
 
 Return the personality content formatted as a prompt block to be injected into the Actor agent's Task prompt:
 

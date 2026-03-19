@@ -252,6 +252,10 @@ Each teammate gets one task, works in isolation with plan approval from the lead
 
 Agents use **tiered scoring** - findings are classified as `[BLOCKER]` (must fix), `[SUGGESTION]` (should fix), or `[NIT]` (nice to have). Each agent operates in context-specific modes (review, opinion, ask, plan, brainstorm) selected by the invoking command.
 
+Agents have **persistent memory** via `memory: project` - they learn project-specific patterns across sessions. Each agent has domain-specific memory guidance (security remembers auth patterns, architect remembers design decisions, etc.).
+
+The **actor** agent loads external personalities from URL or local file, letting you bring any expert perspective into reviews or discussions. User confirms each personality via a review gate before loading.
+
 Agents are read-only - they analyze code but never modify it. Exception: the implementer agent has write access for parallel implementation via `/lets:team`.
 
 Commands decide which agents to launch based on the type of changes being reviewed. `/lets:check` reviews inline (no subagent) for fast feedback.
