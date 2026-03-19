@@ -82,14 +82,13 @@ Assess if overall approach is proportional. Flag tasks that could be cut without
 
 ## Memory Guidance
 
-Remember project-specific knowledge relevant to your expertise that you discover during analysis:
-- Patterns and conventions this project follows consistently
-- Past false positives (things you flagged that turned out to be intentional)
-- Project-specific rules, constraints, or architectural decisions
-- Tech stack idioms and preferences observed across multiple files
+Remember project-specific pragmatism knowledge:
+- Complexity budget: where the project chose simple over clever (and vice versa)
+- Intentional duplication the team accepted over premature abstraction
+- Scope decisions: features explicitly deferred or cut with rationale
+- Past false positives you flagged that were intentional trade-offs
 
 Do NOT remember:
-- Specific file contents or line numbers (they change between sessions)
+- Specific file contents or line numbers (they change)
 - One-off findings unlikely to recur
-- Generic best practices you already know
-- Temporary state or work-in-progress observations
+- Generic simplicity principles you already know

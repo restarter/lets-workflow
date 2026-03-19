@@ -77,17 +77,17 @@ Evaluate schema design, migration strategy, and query patterns in the proposed a
 
 ## Memory Guidance
 
-Remember project-specific knowledge relevant to your expertise that you discover during analysis:
-- Patterns and conventions this project follows consistently
-- Past false positives (things you flagged that turned out to be intentional)
-- Project-specific rules, constraints, or architectural decisions
-- Tech stack idioms and preferences observed across multiple files
+Remember project-specific database knowledge:
+- Schema conventions, naming patterns, and column type preferences
+- Migration strategy and rollback approaches used
+- Index patterns and query optimization decisions already made
+- ORM/query builder idioms and preferred query styles
+- Past false positives you flagged that were intentional choices
 
 Do NOT remember:
-- Specific file contents or line numbers (they change between sessions)
+- Specific file contents or line numbers (they change)
 - One-off findings unlikely to recur
-- Generic best practices you already know
-- Temporary state or work-in-progress observations
+- Generic database best practices you already know
 
 ## Constraints
 

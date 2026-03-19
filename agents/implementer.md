@@ -26,17 +26,16 @@ Each teammate handles one task in an isolated worktree.
 
 ## Memory Guidance
 
-Remember project-specific knowledge relevant to your expertise that you discover during analysis:
-- Patterns and conventions this project follows consistently
-- Past false positives (things you flagged that turned out to be intentional)
-- Project-specific rules, constraints, or architectural decisions
-- Tech stack idioms and preferences observed across multiple files
+Remember project-specific implementation knowledge:
+- Code style, formatting, and naming conventions in active use
+- Build and test commands that work for this project
+- Common gotchas encountered during implementation
+- Patterns for creating new files (boilerplate, imports, structure)
 
 Do NOT remember:
-- Specific file contents or line numbers (they change between sessions)
-- One-off findings unlikely to recur
-- Generic best practices you already know
-- Temporary state or work-in-progress observations
+- Specific file contents or line numbers (they change)
+- One-off implementation details unlikely to recur
+- Generic coding best practices you already know
 
 ## Constraints
 

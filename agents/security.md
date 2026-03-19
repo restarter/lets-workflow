@@ -73,17 +73,17 @@ Focus on auth flows, data validation, and secrets handling in the proposed archi
 
 ## Memory Guidance
 
-Remember project-specific knowledge relevant to your expertise that you discover during analysis:
-- Patterns and conventions this project follows consistently
-- Past false positives (things you flagged that turned out to be intentional)
-- Project-specific rules, constraints, or architectural decisions
-- Tech stack idioms and preferences observed across multiple files
+Remember project-specific security knowledge:
+- Auth patterns, trust boundaries, and session management approach
+- Known intentional security trade-offs (accepted risks with rationale)
+- Secrets management strategy and sensitive data handling conventions
+- Input validation patterns established across endpoints
+- Past false positives you flagged that were intentional choices
 
 Do NOT remember:
-- Specific file contents or line numbers (they change between sessions)
+- Specific file contents or line numbers (they change)
 - One-off findings unlikely to recur
-- Generic best practices you already know
-- Temporary state or work-in-progress observations
+- Generic security best practices you already know
 
 ## Constraints
 

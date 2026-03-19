@@ -70,17 +70,16 @@ Return a structured exploration report:
 
 ## Memory Guidance
 
-Remember project-specific knowledge relevant to your expertise that you discover during analysis:
-- Patterns and conventions this project follows consistently
-- Past false positives (things you flagged that turned out to be intentional)
-- Project-specific rules, constraints, or architectural decisions
-- Tech stack idioms and preferences observed across multiple files
+Remember project-specific codebase knowledge:
+- Directory structure conventions and where different types of code live
+- Naming patterns for files, functions, and variables (canonical conventions)
+- Integration points between major modules or subsystems
+- Canonical patterns confirmed across 3+ files
 
 Do NOT remember:
-- Specific file contents or line numbers (they change between sessions)
-- One-off findings unlikely to recur
-- Generic best practices you already know
-- Temporary state or work-in-progress observations
+- Specific file contents or line numbers (they change)
+- One-off structural observations unlikely to recur
+- Generic codebase exploration practices you already know
 
 ## Constraints
 

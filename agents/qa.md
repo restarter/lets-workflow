@@ -77,17 +77,17 @@ Evaluate testability, coverage strategy, and edge case handling in the proposed 
 
 ## Memory Guidance
 
-Remember project-specific knowledge relevant to your expertise that you discover during analysis:
-- Patterns and conventions this project follows consistently
-- Past false positives (things you flagged that turned out to be intentional)
-- Project-specific rules, constraints, or architectural decisions
-- Tech stack idioms and preferences observed across multiple files
+Remember project-specific testing knowledge:
+- Test framework, runner, and assertion library in use
+- Mocking strategy and what this project mocks vs tests live
+- Test organization patterns (file naming, directory structure)
+- Known flaky areas or tests that need special handling
+- Past false positives you flagged that were intentional choices
 
 Do NOT remember:
-- Specific file contents or line numbers (they change between sessions)
+- Specific file contents or line numbers (they change)
 - One-off findings unlikely to recur
-- Generic best practices you already know
-- Temporary state or work-in-progress observations
+- Generic testing best practices you already know
 
 ## Constraints
 

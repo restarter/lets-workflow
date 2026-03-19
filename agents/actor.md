@@ -76,14 +76,12 @@ Evaluate the plan from the persona's perspective. Check completeness in areas th
 
 ## Memory Guidance
 
-Remember project-specific knowledge relevant to your expertise that you discover during analysis:
-- Patterns and conventions this project follows consistently
-- Past false positives (things you flagged that turned out to be intentional)
-- Project-specific rules, constraints, or architectural decisions
-- Tech stack idioms and preferences observed across multiple files
+Remember project-specific knowledge through the loaded persona's lens:
+- Project conventions relevant to the persona's domain expertise
+- Past false positives flagged by this persona that were intentional
+- Domain-specific patterns the persona would care about across sessions
 
 Do NOT remember:
-- Specific file contents or line numbers (they change between sessions)
+- Specific file contents or line numbers (they change)
 - One-off findings unlikely to recur
-- Generic best practices you already know
-- Temporary state or work-in-progress observations
+- The personality definition itself (it's provided each session)

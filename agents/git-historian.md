@@ -66,17 +66,16 @@ Answer questions about code evolution, past decisions, change attribution. Use g
 
 ## Memory Guidance
 
-Remember project-specific knowledge relevant to your expertise that you discover during analysis:
-- Patterns and conventions this project follows consistently
-- Past false positives (things you flagged that turned out to be intentional)
-- Project-specific rules, constraints, or architectural decisions
-- Tech stack idioms and preferences observed across multiple files
+Remember project-specific history knowledge:
+- Deliberate design decisions confirmed by commit messages or PR context
+- Areas of code that change frequently (instability hotspots)
+- Reverted changes and why they were rolled back
+- Past false positives you flagged that were intentional decisions
 
 Do NOT remember:
-- Specific file contents or line numbers (they change between sessions)
+- Specific commit hashes or line numbers (they change)
 - One-off findings unlikely to recur
-- Generic best practices you already know
-- Temporary state or work-in-progress observations
+- Generic git workflow practices you already know
 
 ## Constraints
 

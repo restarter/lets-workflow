@@ -66,14 +66,13 @@ Answer questions about project rules and established conventions. Reference spec
 
 ## Memory Guidance
 
-Remember project-specific knowledge relevant to your expertise that you discover during analysis:
-- Patterns and conventions this project follows consistently
-- Past false positives (things you flagged that turned out to be intentional)
-- Project-specific rules, constraints, or architectural decisions
-- Tech stack idioms and preferences observed across multiple files
+Remember project-specific compliance knowledge:
+- Explicit rules from CLAUDE.md and their scope of application
+- Established conventions confirmed across 3+ files (canonical patterns)
+- Rules that were added or changed (and why - commit context)
+- Past false positives you flagged that were intentional exceptions
 
 Do NOT remember:
-- Specific file contents or line numbers (they change between sessions)
+- Specific file contents or line numbers (they change)
 - One-off findings unlikely to recur
-- Generic best practices you already know
-- Temporary state or work-in-progress observations
+- Rules from other projects - only THIS project's rules

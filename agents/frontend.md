@@ -77,14 +77,14 @@ Assess component architecture, state management, and accessibility in the propos
 
 ## Memory Guidance
 
-Remember project-specific knowledge relevant to your expertise that you discover during analysis:
-- Patterns and conventions this project follows consistently
-- Past false positives (things you flagged that turned out to be intentional)
-- Project-specific rules, constraints, or architectural decisions
-- Tech stack idioms and preferences observed across multiple files
+Remember project-specific frontend knowledge:
+- Component patterns, state management approach, and data flow conventions
+- CSS/styling strategy (utility classes, modules, styled-components, etc.)
+- Accessibility standards and patterns established in this project
+- Bundle structure, lazy loading boundaries, and performance constraints
+- Past false positives you flagged that were intentional choices
 
 Do NOT remember:
-- Specific file contents or line numbers (they change between sessions)
+- Specific file contents or line numbers (they change)
 - One-off findings unlikely to recur
-- Generic best practices you already know
-- Temporary state or work-in-progress observations
+- Generic frontend best practices you already know

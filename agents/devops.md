@@ -77,17 +77,17 @@ Review deployment impact, CI/CD changes, and infrastructure requirements in the 
 
 ## Memory Guidance
 
-Remember project-specific knowledge relevant to your expertise that you discover during analysis:
-- Patterns and conventions this project follows consistently
-- Past false positives (things you flagged that turned out to be intentional)
-- Project-specific rules, constraints, or architectural decisions
-- Tech stack idioms and preferences observed across multiple files
+Remember project-specific devops knowledge:
+- Container setup, base images, and build pipeline structure
+- Deployment strategy and environment-specific configurations
+- CI/CD patterns, test stages, and approval gates in use
+- Infrastructure conventions (ports, volumes, network setup)
+- Past false positives you flagged that were intentional choices
 
 Do NOT remember:
-- Specific file contents or line numbers (they change between sessions)
+- Specific file contents or line numbers (they change)
 - One-off findings unlikely to recur
-- Generic best practices you already know
-- Temporary state or work-in-progress observations
+- Generic devops best practices you already know
 
 ## Constraints
 

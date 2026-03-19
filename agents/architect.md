@@ -76,14 +76,13 @@ Evaluate architecture completeness: are components well-defined? Are interfaces 
 
 ## Memory Guidance
 
-Remember project-specific knowledge relevant to your expertise that you discover during analysis:
-- Patterns and conventions this project follows consistently
-- Past false positives (things you flagged that turned out to be intentional)
-- Project-specific rules, constraints, or architectural decisions
-- Tech stack idioms and preferences observed across multiple files
+Remember project-specific architecture knowledge:
+- Module boundaries, layering decisions, and coupling patterns
+- Design patterns in active use (and patterns explicitly rejected)
+- Abstraction levels the project maintains consistently
+- Past false positives you flagged that were intentional design choices
 
 Do NOT remember:
-- Specific file contents or line numbers (they change between sessions)
+- Specific file contents or line numbers (they change)
 - One-off findings unlikely to recur
-- Generic best practices you already know
-- Temporary state or work-in-progress observations
+- Generic architecture best practices you already know

@@ -78,17 +78,17 @@ Review API design, error handling, and service integration points in the propose
 
 ## Memory Guidance
 
-Remember project-specific knowledge relevant to your expertise that you discover during analysis:
-- Patterns and conventions this project follows consistently
-- Past false positives (things you flagged that turned out to be intentional)
-- Project-specific rules, constraints, or architectural decisions
-- Tech stack idioms and preferences observed across multiple files
+Remember project-specific backend knowledge:
+- Error handling strategy and how this project handles failures
+- API patterns, response formats, and naming conventions
+- Framework idioms and project-preferred approaches
+- Performance-sensitive paths and known bottleneck areas
+- Past false positives you flagged that were intentional choices
 
 Do NOT remember:
-- Specific file contents or line numbers (they change between sessions)
+- Specific file contents or line numbers (they change)
 - One-off findings unlikely to recur
-- Generic best practices you already know
-- Temporary state or work-in-progress observations
+- Generic backend best practices you already know
 
 ## Constraints
 
