@@ -8,6 +8,7 @@
 - Auto-triggered Skills table in `hooks/rules-context.md` and `commands/install.md`
 - beads-ui Docker web dashboard (`scripts/beads-ui/`) with deployment script
 - Branch return prompt after worktree creation
+- Agent memory via `memory: project` frontmatter - agents learn project-specific patterns across sessions
 
 ### Changed
 - All 13 agent prompts upgraded to v2: tiered scoring ([BLOCKER]/[SUGGESTION]/[NIT]), self-contained behavioral modes, color assignments
