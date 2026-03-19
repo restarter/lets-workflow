@@ -5,7 +5,7 @@ argument-hint: "[PR-url-or-number|--local|--staged|--last-commit|--plan|--file <
 
 # Full Code Review
 
-Comprehensive code review with dynamic agent selection based on change types. Up to 11 specialized agents, tiered severity scoring. Works with:
+Comprehensive code review with dynamic agent selection based on change types. Up to 12 specialized agents, tiered severity scoring. Works with:
 - GitHub PRs (posts comment to PR)
 - Local changes (saves to file)
 - Implementation plans (reviews `.lets/plans/` files)
@@ -168,6 +168,9 @@ Scan the diff for file patterns:
 | `lets:frontend` | JS/TS/CSS changes | Backend only |
 | `lets:qa` | Test file changes | No test changes |
 | `lets:pragmatist` | Large changes (> 200 lines) | Small changes |
+| `lets:actor` | Explicit user request only | Always (never auto-selected) |
+
+**Actor note:** Actor is never auto-selected. When user explicitly requests it, use the **actor-fetch-personality** skill (read `skills/actor-fetch-personality/SKILL.md`) to fetch personality. Pass `PERSONALITY:` block in the actor's Task prompt only.
 
 ### 4.3 Select Agents
 

@@ -17,7 +17,7 @@ Claude Code is powerful, but without structure it drifts - forgets context betwe
 
 **LETS fix this!** Every session has a task. Every commit links to it. Expert agents review your code and help with technical decisions. Context survives across sessions and conversation compaction.
 
-You get a team of 13 expert agents and a structured workflow - but you stay in control. You define the task, approve the plan, review every commit. Agents don't go off on their own - they work within boundaries you set, and report back for your decision.
+You get a team of 14 expert agents and a structured workflow - but you stay in control. You define the task, approve the plan, review every commit. Agents don't go off on their own - they work within boundaries you set, and report back for your decision.
 
 **What you get:**
 - **Session continuity** - context restored automatically, even after compaction
@@ -231,7 +231,7 @@ Each teammate gets one task, works in isolation with plan approval from the lead
 
 ## 🤖 Expert Agents
 
-13 specialized agents for code review, exploration, implementation, and technical analysis:
+14 specialized agents for code review, exploration, implementation, and technical analysis:
 
 | Agent | Expertise |
 |-------|-----------|
@@ -248,6 +248,7 @@ Each teammate gets one task, works in isolation with plan approval from the lead
 | git-historian | Blame analysis, change patterns, refactoring impact |
 | explorer | Codebase structure mapping, pattern identification |
 | implementer | Full-stack implementation in isolated worktrees |
+| actor | Dynamic personality loading from URL or local file |
 
 Agents use **tiered scoring** - findings are classified as `[BLOCKER]` (must fix), `[SUGGESTION]` (should fix), or `[NIT]` (nice to have). Each agent operates in context-specific modes (review, opinion, ask, plan, brainstorm) selected by the invoking command.
 

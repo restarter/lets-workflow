@@ -123,6 +123,7 @@ Scan the profile for signals and match to agents:
 | git-historian | No | Historical analysis, not forward-looking |
 | implementer | No | Has write access, wrong mode |
 | explorer | No | Already used in phase 1 |
+| actor | Yes | External perspective via loaded persona (user must provide source) |
 
 Show selection before launching (no user gate - brainstorm = momentum):
 
