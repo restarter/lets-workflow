@@ -157,6 +157,24 @@ iptables -L DOCKER-USER -n | grep 9090
 # Ensure your IP is in the allowlist
 ```
 
+### Adding a remote Dolt database (project)
+
+The UI "Add Project" dialog currently only supports local filesystem paths. To add a remote Dolt database, use the API directly:
+
+```bash
+# Add a project pointing to a Dolt database
+docker exec beads-web curl -sf -X POST http://localhost:9090/api/projects \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"my-project","path":"dolt://mydb"}'
+
+# List all projects
+docker exec beads-web curl -sf http://localhost:9090/api/projects
+```
+
+The `dolt://` prefix tells beads-web to read/write beads via Dolt SQL instead of the filesystem. Multiple databases on the same Dolt server can each be added as a separate project.
+
+See [Shybko/beads-web#3](https://github.com/Shybko/beads-web/issues/3) for UI support progress.
+
 ### Binary download fails
 ```bash
 # Check release URL
