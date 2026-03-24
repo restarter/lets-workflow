@@ -275,8 +275,8 @@ create_network() {
 # ============================================
 create_config() {
   echo -e "${YELLOW}[2/4] Creating configuration...${NC}"
-  mkdir -p "$INSTALL_DIR/data/.beads"
-  # Container runs as beadsweb (uid 1000) - data dir must be writable
+  mkdir -p "$INSTALL_DIR/data/.beads" "$INSTALL_DIR/data/kanban-ui"
+  # Container runs as beadsweb (uid 1000) - data dirs must be writable
   chown -R 1000:1000 "$INSTALL_DIR/data"
 
   # Dockerfile
@@ -324,6 +324,7 @@ services:
       - "\${BEADS_WEB_PORT:-9090}:\${BEADS_WEB_PORT:-9090}"
     volumes:
       - ./data/.beads:/app/.beads
+      - ./data/kanban-ui:/home/beadsweb/.local/share/kanban-ui
     environment:
       - PORT=\${BEADS_WEB_PORT:-9090}
       - DOLT_HOST=\${DOLT_HOST:-dolt}
