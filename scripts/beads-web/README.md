@@ -90,15 +90,13 @@ This rebuilds the Docker image with `--no-cache` (re-downloads the binary) and r
 ### Update workflow
 
 1. Push changes to the fork (`Shybko/beads-web`)
-2. Build the binary (locally or in a Claude session in the fork repo)
-3. Re-upload to the same release tag:
-   ```bash
-   gh release upload v0.9.3 beads-web-linux-x64 --repo Shybko/beads-web --clobber
-   ```
-4. Update VPS:
+2. Create a new release (via GitHub UI or GitHub Actions if configured)
+3. Update VPS:
    ```bash
    ssh root@vps "bash -s" < scripts/beads-web/update-remote.sh
    ```
+
+With `--version latest` (default), the script always downloads from the latest release. No need to specify version numbers.
 
 ### Version upgrade
 
@@ -177,7 +175,7 @@ ssh root@vps "bash -s -- \
 | --dolt-host | dolt | Dolt container hostname |
 | --dolt-port | 3306 | Dolt SQL port |
 | --repo | Shybko/beads-web | GitHub repo for binary |
-| --version | 0.9.3 | beads-web release version |
+| --version | latest | beads-web release version or `latest` |
 
 Either `--allow-ip` or `--no-firewall` is required - board has no built-in auth.
 
@@ -250,9 +248,9 @@ If the DB was lost, re-add projects via API (see Quick Start step 3).
 ### Binary download fails
 
 ```bash
-# Check release URL
-curl -fsSL --head "https://github.com/Shybko/beads-web/releases/download/v0.9.3/beads-web-linux-x64"
-# If 404: check --repo and --version values
+# Check latest release URL
+curl -fsSL --head "https://github.com/Shybko/beads-web/releases/latest/download/beads-web-linux-x64"
+# If 404: check that the repo has at least one release with beads-web-linux-x64 asset
 ```
 
 ### Update doesn't pick up new binary
@@ -260,8 +258,11 @@ curl -fsSL --head "https://github.com/Shybko/beads-web/releases/download/v0.9.3/
 `update-remote.sh` uses `docker compose build --no-cache` to force re-download. If the binary still seems old:
 
 ```bash
+# Check which URL is configured
+grep RELEASE_URL /opt/beads-web/.env
+
 # Verify the release asset was actually updated
-curl -sI "https://github.com/Shybko/beads-web/releases/download/v0.9.3/beads-web-linux-x64" | grep last-modified
+curl -sI "$(grep RELEASE_URL /opt/beads-web/.env | cut -d= -f2-)" | grep last-modified
 
 # Force full rebuild
 cd /opt/beads-web && docker compose down && docker compose build --no-cache && docker compose up -d

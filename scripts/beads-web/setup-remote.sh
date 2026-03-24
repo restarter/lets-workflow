@@ -39,7 +39,7 @@ set -e
 # ============================================
 INSTALL_DIR="${INSTALL_DIR:-/opt/beads-web}"
 BEADS_WEB_PORT="${BEADS_WEB_PORT:-9090}"
-BEADS_WEB_VERSION="${BEADS_WEB_VERSION:-0.9.3}"
+BEADS_WEB_VERSION="${BEADS_WEB_VERSION:-latest}"
 BEADS_WEB_REPO="${BEADS_WEB_REPO:-Shybko/beads-web}"
 DOLT_HOST="${DOLT_HOST:-dolt}"
 DOLT_PORT="${DOLT_PORT:-3306}"
@@ -208,7 +208,7 @@ if [[ -z "$DATABASE" ]]; then
   echo "  --dolt-host HOST       Dolt hostname (default: dolt)"
   echo "  --dolt-port PORT       Dolt SQL port (default: 3306)"
   echo "  --repo OWNER/REPO      GitHub repo for binary (default: Shybko/beads-web)"
-  echo "  --version VER          beads-web version (default: 0.9.3)"
+  echo "  --version VER          beads-web version or 'latest' (default: latest)"
   echo ""
   echo "IP management (standalone):"
   echo "  --allow-ip IP          Add IP to allowlist"
@@ -235,7 +235,11 @@ if [[ -f "$INSTALL_DIR/.env" ]]; then
 fi
 
 # Build release URL
-RELEASE_URL="https://github.com/${BEADS_WEB_REPO}/releases/download/v${BEADS_WEB_VERSION}/beads-web-linux-x64"
+if [[ "$BEADS_WEB_VERSION" == "latest" ]]; then
+  RELEASE_URL="https://github.com/${BEADS_WEB_REPO}/releases/latest/download/beads-web-linux-x64"
+else
+  RELEASE_URL="https://github.com/${BEADS_WEB_REPO}/releases/download/v${BEADS_WEB_VERSION}/beads-web-linux-x64"
+fi
 
 echo ""
 echo -e "${GREEN}=== beads-web Kanban Board Setup ===${NC}"
@@ -280,18 +284,16 @@ create_config() {
   chown -R 1000:1000 "$INSTALL_DIR/data"
 
   # Dockerfile
-  cat > "$INSTALL_DIR/Dockerfile" <<'DOCKERFILE'
+  cat > "$INSTALL_DIR/Dockerfile" <<DOCKERFILE
 FROM debian:trixie-slim
 
-ARG BEADS_WEB_VERSION=0.9.3
-ARG BEADS_WEB_REPO=Shybko/beads-web
+ARG RELEASE_URL=${RELEASE_URL}
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl ca-certificates \
+RUN apt-get update && apt-get install -y --no-install-recommends \\
+    curl ca-certificates \\
     && rm -rf /var/lib/apt/lists/*
 
-RUN curl -fSL -o /usr/local/bin/beads-web \
-    "https://github.com/${BEADS_WEB_REPO}/releases/download/v${BEADS_WEB_VERSION}/beads-web-linux-x64" \
+RUN curl -fSL -o /usr/local/bin/beads-web "\${RELEASE_URL}" \\
     && chmod +x /usr/local/bin/beads-web
 
 RUN useradd --uid 1000 --system --create-home beadsweb \
@@ -316,8 +318,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        BEADS_WEB_VERSION: \${BEADS_WEB_VERSION:-0.9.3}
-        BEADS_WEB_REPO: \${BEADS_WEB_REPO:-Shybko/beads-web}
+        RELEASE_URL: \${RELEASE_URL}
     container_name: beads-web
     restart: unless-stopped
     ports:
@@ -366,6 +367,7 @@ DATABASE=${DATABASE}
 BEADS_WEB_PORT=${BEADS_WEB_PORT}
 BEADS_WEB_VERSION=${BEADS_WEB_VERSION}
 BEADS_WEB_REPO=${BEADS_WEB_REPO}
+RELEASE_URL=${RELEASE_URL}
 DOLT_HOST=${DOLT_HOST}
 DOLT_PORT=${DOLT_PORT}
 EOF
@@ -390,7 +392,7 @@ build_and_start() {
   echo "  Release URL valid"
 
   cd "$INSTALL_DIR"
-  docker compose build
+  docker compose build --no-cache
   docker compose up -d
   sleep 5
 

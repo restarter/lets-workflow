@@ -2,7 +2,8 @@
 # beads-web - Update binary on VPS
 # Downloads the latest binary from GitHub Releases and restarts the container.
 # The release asset can be updated without bumping version via:
-#   gh release upload v0.9.3 beads-web-linux-x64 --repo Shybko/beads-web --clobber
+#   gh release upload <tag> beads-web-linux-x64 --repo Shybko/beads-web --clobber
+# Or if the fork has GitHub Actions, just create a new release from GitHub UI.
 #
 # Usage:
 #   ssh root@vps "bash -s" < scripts/beads-web/update-remote.sh
@@ -47,7 +48,16 @@ fi
 # Read config from existing .env
 BEADS_WEB_VERSION=$(grep '^BEADS_WEB_VERSION=' "$INSTALL_DIR/.env" | cut -d= -f2)
 BEADS_WEB_REPO=$(grep '^BEADS_WEB_REPO=' "$INSTALL_DIR/.env" | cut -d= -f2)
-RELEASE_URL="https://github.com/${BEADS_WEB_REPO}/releases/download/v${BEADS_WEB_VERSION}/beads-web-linux-x64"
+RELEASE_URL=$(grep '^RELEASE_URL=' "$INSTALL_DIR/.env" | cut -d= -f2-)
+
+# Fallback: build URL from version/repo if RELEASE_URL not in .env
+if [[ -z "$RELEASE_URL" ]]; then
+  if [[ "$BEADS_WEB_VERSION" == "latest" ]]; then
+    RELEASE_URL="https://github.com/${BEADS_WEB_REPO}/releases/latest/download/beads-web-linux-x64"
+  else
+    RELEASE_URL="https://github.com/${BEADS_WEB_REPO}/releases/download/v${BEADS_WEB_VERSION}/beads-web-linux-x64"
+  fi
+fi
 
 echo ""
 echo -e "${GREEN}=== beads-web Update ===${NC}"
