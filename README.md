@@ -15,21 +15,22 @@
 
 Claude Code is powerful, but without structure it drifts - forgets context between sessions, silently changes approach when something fails, reviews its own code with no outside perspective, and loses track of what was decided and why.
 
-**LETS fix this!** Every session has a task. Every commit links to it. Expert agents review your code and help with technical decisions. Context survives across sessions and conversation compaction.
+**LETS fix this.** You get a team of 14 specialized AI agents, a structured development workflow, and a PR review system that posts inline comments directly to GitHub - all from the terminal. Every session has a task. Every commit links to it. Context survives across sessions and conversation compaction.
 
-You get a team of 14 expert agents and a structured workflow - but you stay in control. You define the task, approve the plan, review every commit. Agents don't go off on their own - they work within boundaries you set, and report back for your decision.
+## Why LETS
 
-**What you get:**
-- **Session continuity** - context restored automatically, even after compaction
-- **Task-driven development** - no random work, everything tracked via [beads](https://github.com/steveyegge/beads)
-- **Structured planning** - codebase exploration and architecture design before coding
-- **One-command workflow** - Claude suggests the next step, you decide
-- **Expert agents on demand** - architect, security, QA, backend, devops and others join automatically when needed
-- **Agent Teams** - spawn autonomous agents that implement multiple tasks in parallel
-- **Worktrees** - parallel interactive sessions in separate terminals, one task per worktree
-- **Uses latest Claude Code features** - ultrathink for deep analysis, interactive UI for decisions, native plan mode for execution
-- **Built for teams** - shared task database via [Dolt](https://github.com/dolthub/dolt) remotes, multiple developers see the same backlog in real time
-- **GitHub integration** - PR creation, inline code review comments, follow-up and approval - all from the terminal
+**You don't just chat with AI. You run a dev team.**
+
+- **14 expert agents** that dynamically select themselves based on your code changes - security agent for auth code, database agent for migrations, architect for structural changes. No manual configuration.
+- **Full PR review lifecycle** - agents analyze the PR, you discuss findings, they post inline comments to GitHub, then follow up to verify fixes. Approve or request changes without leaving the terminal.
+- **Agents with memory** - each agent remembers your project's patterns across sessions. Security agent learns your auth flows. Architect learns your design decisions. The more you use them, the better they get.
+- **Actor agent** - load any expert personality from a URL or file. Want a senior iOS developer's perspective on your Swift code? A UX designer reviewing your components? Import their personality and get their unique take on your work.
+- **Structured planning pipeline** - brainstorm ideas (4 modes), plan architecture with codebase exploration, execute with approval gates. Think, design, build.
+- **Agent Teams** - spawn autonomous agents that implement multiple tasks in parallel, each in an isolated worktree with plan approval from the lead.
+- **Session continuity** - context restored automatically, even after compaction. Discovery notes, decisions, and progress survive across conversations.
+- **Task-driven** - every session starts with a task, every commit links to it, tracked via [beads](https://github.com/steveyegge/beads) with shared database for teams via [Dolt](https://github.com/dolthub/dolt).
+- **GitHub-native** - PR creation, inline review comments, follow-up, approval. Or local merge if you prefer.
+- **Latest Claude Code features** - ultrathink for deep analysis, interactive UI for decisions, native plan mode for execution.
 
 <div align="center">
 
@@ -172,103 +173,124 @@ Then start working:
 | `/lets:install` | First-time global setup - plugins, environment, workflow |
 | `/lets:init` | Initialize LETS in current project |
 
-## 🔍 Review Options
+## 🔍 Code Review
 
-| Need | Command | Time |
-|------|---------|------|
-| Quick pre-commit check | `/lets:check` | ~30s |
-| Full review of local changes | `/lets:review --local` | ~2-3 min |
-| Review an implementation plan | `/lets:review --plan` | ~2-3 min |
-| Review a GitHub PR | `/lets:review <PR-url>` | ~2-3 min |
-| Full PR lifecycle | `/lets:pr <PR>` | Interactive |
-| Review a single file | `/lets:review --file <path>` | ~2-3 min |
+Three levels of review, from 30-second sanity check to full PR lifecycle:
+
+| Need | Command | Time | What happens |
+|------|---------|------|-------------|
+| Quick pre-commit check | `/lets:check` | ~30s | Inline 6-lens review: bugs, security, performance, quality, compliance, docs |
+| Full code review | `/lets:review` | ~2-3 min | Dynamic agent selection - only relevant experts for your changes |
+| Full PR lifecycle | `/lets:pr <PR>` | Interactive | Analyze, discuss, post inline comments, follow up on fixes, approve |
+
+### PR Review Lifecycle (`/lets:pr`)
+
+This is where LETS shines. Instead of reviewing PRs in a browser, you do it from the terminal with expert agents:
+
+```
+/lets:pr https://github.com/owner/repo/pull/42
+```
+
+1. **Analyze** - agents review the PR based on what actually changed (security agent for auth code, database for migrations, etc.)
+2. **Discuss** - you see each finding with code context, decide what to post: inline comment, summary, or drop
+3. **Post** - batch-posts inline comments to the exact lines on GitHub, with a review summary
+4. **Follow up** - after the author pushes fixes, `/lets:pr --follow-up` checks each finding: fixed, not fixed, or needs discussion
+5. **Approve** - `/lets:pr --approve` when ready, or request changes
+
+Authors can respond with `/lets:pr --respond` - triage comments, auto-fix mechanical issues, post replies.
+
+### Dynamic Agent Selection
+
+Agents aren't hardcoded. Each command analyzes your changes and selects only relevant experts:
+
+- Changed auth code? Security + backend + architect join the review
+- Pure docs update? Docs + compliance, skip the rest
+- Full-stack feature? Up to 12 agents, each focused on their domain
+
+For plan reviews, agents are selected by signals in the plan content (mentions of migrations, API endpoints, Docker configs, etc.).
 
 ## 🏗️ Planning
 
-For medium and large tasks, LETS provides structured planning:
-
-| Situation | Approach |
-|-----------|----------|
-| Clear goal ("Add X to Y") | `/lets:plan` - explore codebase, design architecture, write plan |
-| Unclear goal ("Improve Z") | `/lets:brainstorm` to clarify, then `/lets:plan` |
-
 > **Think** → **Design** → **Build**
->
-> `/lets:brainstorm` helps think through *what* to build.
-> `/lets:plan` designs *how* to build it.
-> `/lets:execute` implements the plan with approval gates.
+
+**Brainstorm** (`/lets:brainstorm`) - 4 modes for different situations:
+- *Review backlog* - agents analyze your task list, find patterns, suggest priorities
+- *Explore ideas* - deep dive into a specific area with codebase analysis
+- *Quick brainstorm* - fast ideation on a topic
+- *Cleanup* - find stale tasks, broken dependencies, forgotten work
+
+**Plan** (`/lets:plan`) - codebase exploration with dynamically-scaled explorer agents, then architecture design with expert evaluation. Small project? One explorer. Large monorepo? Up to 10, each mapping a different area.
+
+**Execute** (`/lets:execute`) - implements the plan step by step in native plan mode. You approve each step before Claude proceeds. No surprises.
 
 ## ⚡ Parallel Work
 
-### Worktrees (Interactive)
+Two ways to work on multiple tasks at once:
 
-Work on multiple tasks simultaneously in separate terminals:
+### Agent Teams (autonomous)
+
+Spawn multiple agents that work in parallel, each in an isolated worktree:
+
+```
+/lets:team run    # select tasks, agents start working
+```
+
+Each teammate gets one task, creates a plan, waits for your approval, then implements. Commits are cherry-picked back. Dynamic teammate count - the system scales based on how many tasks you select.
+
+### Worktrees (interactive)
+
+Work on multiple tasks yourself in separate terminals:
 
 ```bash
-# Terminal 1 (main repo)
-/lets:worktree create auth-feature
-
-# Terminal 2
-cd .worktrees/auth-feature && claude
-/lets:start   # picks task, uses worktree branch as-is
-# ... work, commit, done ...
-
-# Terminal 1 - cleanup
-/lets:worktree remove auth-feature
+/lets:worktree create auth-feature    # Terminal 1 (main repo)
+cd .worktrees/auth-feature && claude  # Terminal 2 - start new session
 ```
 
-Each worktree gets its own branch, shares the task database and config via symlinks.
-
-### Teams (Autonomous)
-
-For multiple independent tasks, `/lets:team` spawns parallel agents in isolated worktrees:
-
-```
-/lets:plan -> /lets:team run -> monitor & approve plans -> /lets:review --local -> /lets:done
-```
-
-Each teammate gets one task, works in isolation with plan approval from the lead, and commits are auto cherry-picked back.
+Each worktree gets its own branch, shares the task database and config via symlinks. Full LETS workflow in each terminal.
 
 ## 🤖 Expert Agents
 
-14 specialized agents for code review, exploration, implementation, and technical analysis:
+14 specialized agents, dynamically selected based on your code changes:
 
-| Agent | Expertise |
-|-------|-----------|
-| architect | System design, patterns, SOLID principles |
-| backend | APIs, business logic, error handling |
-| frontend | UI components, state management, accessibility |
-| security | Vulnerabilities, auth, crypto, input validation |
-| database | Schema design, migrations, query optimization |
-| devops | Docker, CI/CD, deployment, infrastructure |
-| qa | Test strategy, coverage, assertions, mocking |
-| compliance | Project standards and coding conventions |
-| docs | API docs, README, inline documentation |
-| pragmatist | ROI analysis, overengineering detection |
-| git-historian | Blame analysis, change patterns, refactoring impact |
-| explorer | Codebase structure mapping, pattern identification |
-| implementer | Full-stack implementation in isolated worktrees |
-| actor | Dynamic personality loading from URL or local file |
+| Agent | Expertise | Example trigger |
+|-------|-----------|----------------|
+| architect | System design, patterns, SOLID | Structural changes > 50 lines |
+| backend | APIs, business logic, error handling | Controllers, services, routes |
+| frontend | UI components, state, accessibility | JS/TS/CSS changes |
+| security | Vulnerabilities, auth, crypto | Auth code, tokens, encryption |
+| database | Schema, migrations, query optimization | Migrations, ORM, raw queries |
+| devops | Docker, CI/CD, deployment | Dockerfiles, CI configs, scripts |
+| qa | Test strategy, coverage, assertions | Test files, testing patterns |
+| compliance | Project standards, conventions | Always included in reviews |
+| docs | Documentation sync, README accuracy | Always included in reviews |
+| pragmatist | ROI analysis, overengineering detection | Large changes (> 200 lines) |
+| git-historian | Blame analysis, change patterns | Changes to existing code |
+| explorer | Codebase mapping, pattern discovery | Used during `/lets:plan` |
+| implementer | Full-stack implementation | Used by `/lets:team` |
+| actor | Any personality from URL or file | On explicit user request |
 
-Agents use **tiered scoring** - findings are classified as `[BLOCKER]` (must fix), `[SUGGESTION]` (should fix), or `[NIT]` (nice to have). Each agent operates in context-specific modes (review, opinion, ask, plan, brainstorm) selected by the invoking command.
+### How agents work
 
-Agents have **persistent memory** via `memory: project` - they learn project-specific patterns across sessions. Each agent has domain-specific memory guidance (security remembers auth patterns, architect remembers design decisions, etc.).
+**Dynamic selection** - you don't pick agents. Commands analyze your changes and select only relevant experts. Security agent won't review a docs-only PR. Database agent won't review CSS.
 
-The **actor** agent loads external personalities from URL or local file, letting you bring any expert perspective into reviews or discussions. User confirms each personality via a review gate before loading.
+**Tiered scoring** - findings are `[BLOCKER]` (must fix), `[SUGGESTION]` (should fix), or `[NIT]` (nice to have). No noise - agents are trained to skip obvious things and focus on what matters.
 
-Agents are read-only - they analyze code but never modify it. Exception: the implementer agent has write access for parallel implementation via `/lets:team`.
+**Persistent memory** - agents learn your project over time. Security agent remembers your auth patterns. Architect remembers your design decisions. Each agent has domain-specific memory guidance.
 
-Commands decide which agents to launch based on the type of changes being reviewed. `/lets:check` reviews inline (no subagent) for fast feedback.
+**Multiple modes** - each agent operates differently depending on the context: *review* mode for code review, *opinion* mode for technical decisions, *plan* mode for architecture evaluation, *brainstorm* mode for ideation, *ask* mode for direct questions.
+
+**Actor agent** - load any expert personality from a URL or local file. Want a senior iOS developer's perspective? A UX designer's take? Import their personality and get their domain-specific analysis. User confirms each personality before loading.
+
+**Read-only by default** - agents analyze but never modify code. The only exception: `implementer` has write access for parallel work via `/lets:team`.
 
 ## 📋 Task Integration
 
-LETS integrates with [beads](https://github.com/steveyegge/beads) for persistent task tracking:
+LETS uses [beads](https://github.com/steveyegge/beads) for persistent task tracking that survives conversation compaction:
 
-- Every session starts by selecting a task
-- Every commit is linked to the active task
-- Session summaries and discovery notes are saved to the task
-- Context survives conversation compaction and new sessions
-- Task dependencies and blocking relationships are tracked
+- Every session starts by selecting a task, every commit links to it
+- Discovery notes and decisions are saved as task comments - they survive context window limits
+- Task dependencies and blocking tracked - `/lets:status` shows what's ready to work on
+- Multi-developer: shared task database via [Dolt](https://github.com/dolthub/dolt) remotes - everyone sees the same backlog
 
 ## ⚙️ Configuration
 
