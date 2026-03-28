@@ -103,8 +103,24 @@ Scan the profile for signals and match to agents:
 **Rules:**
 1. Always include `{FORCED_AGENT}` (pragmatist for backlog, architect for explore)
 2. Select agents matching signals found in profile
-3. Cap at 5 agents total, minimum 3
-4. If fewer than 3 signals matched, pad with architect + pragmatist
+3. More signals = more agents. No hard cap - include every agent that has a clear signal
+4. If only 1-2 signals matched, add architect + pragmatist for broader perspective
+
+**Confirmation gate:** If planning to launch more than 10 agents:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Planning {N} brainstorm agents. That's a lot - confirm?",
+    header: "LETS",
+    options: [
+      { label: "Launch all", description: "{N} agents, broad coverage" },
+      { label: "Reduce", description: "Suggest fewer, more focused agents" }
+    ],
+    multiSelect: false
+  }]
+)
+```
 
 **Agent eligibility:**
 
@@ -137,6 +153,8 @@ Based on project context, selected {N} experts:
 2. {agent} - {signal}
 ...
 
+> Subagents have a separate rate limit - no cost to your conversation.
+
 Launching...
 ```
 
@@ -156,7 +174,7 @@ Task(
 The prompt template is set by the calling mode (Step R0 or Step E0). Both templates share this structure:
 
 - ultrathink prefix
-- RESPONSE LANGUAGE + PROJECT ROOT
+- PROJECT ROOT
 - `MODE: brainstorm`
 - Context profile from explorer (keep concise - pass summary, not raw data)
 - Instructions specific to the mode
@@ -252,7 +270,6 @@ DIALOG_QUESTION = "What catches your eye?"
 
 BRAINSTORM SCOUT MODE. In this mode, your mapping role extends to surfacing signals and gaps - not just structure. Gather project context for a brainstorm session.
 
-RESPONSE LANGUAGE: {language from LETS Config}
 PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
 
 GOAL: Build a Project State Profile for brainstorming. We need to understand
@@ -324,7 +341,6 @@ OUTPUT FORMAT - Project State Profile:
 ```
 "ultrathink
 
-RESPONSE LANGUAGE: {language from LETS Config}
 PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
 
 MODE: brainstorm
@@ -392,7 +408,6 @@ DIALOG_QUESTION = "What resonates?"
 
 BRAINSTORM SCOUT MODE. In this mode, your mapping role extends to surfacing signals and gaps - not just structure. Gather project context relevant to a specific topic.
 
-RESPONSE LANGUAGE: {language from LETS Config}
 PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
 
 TOPIC: {user's topic}
@@ -451,7 +466,6 @@ OUTPUT FORMAT - Topic Context Profile:
 ```
 "ultrathink
 
-RESPONSE LANGUAGE: {language from LETS Config}
 PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
 
 MODE: brainstorm

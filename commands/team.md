@@ -69,12 +69,25 @@ Two input modes:
 bd ready -n 10
 ```
 
-Present as multiSelect AskUserQuestion - user picks 2-5 tasks.
+Present as multiSelect AskUserQuestion - user picks tasks.
 
 **2. Manual (`--tasks A,B,C`):** Parse comma-separated task IDs from argument.
 
-If more than 5 selected:
-> "{N} tasks selected. Agent Teams work best with 3-5 teammates. Continue anyway?"
+**Confirmation gate:** If more than 10 selected:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "{N} tasks selected for parallel work. That's a lot - confirm?",
+    header: "LETS",
+    options: [
+      { label: "Launch all", description: "{N} teammates in isolated worktrees" },
+      { label: "Reduce", description: "Pick fewer tasks for this batch" }
+    ],
+    multiSelect: false
+  }]
+)
+```
 
 If fewer than 2 selected:
 > "Need at least 2 tasks for parallel work. For a single task, just work on it directly."

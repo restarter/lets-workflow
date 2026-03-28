@@ -1,11 +1,11 @@
 ---
-description: Quick sanity check - code (inline 5-perspective) or plan (--plan).
+description: Quick sanity check - code (inline 6-perspective) or plan (--plan).
 argument-hint: "[--staged|--last-commit|--plan]"
 ---
 
 # Quick Local Code Check
 
-Fast inline sanity check of local changes from 5 perspectives.
+Fast inline sanity check of local changes from 6 perspectives.
 
 ## Usage
 
@@ -23,7 +23,7 @@ Fast inline sanity check of local changes from 5 perspectives.
 - When unsure if code is ready
 - Spot check after refactoring
 
-**For full review:** Use `/lets:review` (local or PR, up to 11 agents).
+**For full review:** Use `/lets:review` (local or PR, multiple expert agents).
 
 ## Plan Mode (--plan)
 
@@ -80,11 +80,11 @@ git diff --stat
 cat "$ROOT/CLAUDE.md" 2>/dev/null | head -100
 ```
 
-## Step 3: Review with 5 Lenses
+## Step 3: Review with 6 Lenses
 
 ultrathink
 
-Review the diff directly using these 5 perspectives. Think like a senior dev doing a quick PR scan - catch real issues, skip noise.
+Review the diff directly using these 6 perspectives. Think like a senior dev doing a quick PR scan - catch real issues, skip noise.
 
 ### [Bug] Bugs & Logic
 - Logic errors, off-by-one, edge cases
@@ -110,11 +110,16 @@ Review the diff directly using these 5 perspectives. Think like a senior dev doi
 - Dead code, unused imports
 - Readability issues
 
-### [Compliance] Project Rules & Docs
+### [Compliance] Project Rules
 - CLAUDE.md violations (quote the rule)
 - Breaks existing patterns in codebase
 - Inconsistent with project conventions
-- Code changed but related docs/README not updated
+
+### [Docs] Documentation Sync
+- CLAUDE.md architecture decisions match actual code
+- README features/descriptions still accurate
+- Agent counts, command lists, file paths current
+- Removed or renamed features still referenced somewhere
 
 ### Review Focus
 
@@ -197,7 +202,7 @@ If clean (no issues) - skip, don't add noise to the task.
 Work -> /lets:check -> /lets:commit -> Push -> PR -> /lets:review
          ^                                            |
     Quick inline check                         Full PR review
-    5 perspectives                             up to 11 agents
+    6 perspectives                             multiple agents
 ```
 
 ## Notes

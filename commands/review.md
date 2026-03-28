@@ -162,7 +162,7 @@ Scan the diff for file patterns:
 | `lets:security` | Code, config, deps | Docs-only, test-only |
 | `lets:architect` | Code changes > 50 lines | Small fixes, docs |
 | `lets:git-historian` | Changes to existing code | New files only |
-| `lets:docs` | Any non-trivial change | Tiny fixes |
+| `lets:docs` | ALWAYS | Never skip |
 | `lets:devops` | Docker, CI, Makefile, scripts | App code only |
 | `lets:database` | Migrations, queries, ORM | No DB changes |
 | `lets:frontend` | JS/TS/CSS changes | Backend only |
@@ -171,6 +171,15 @@ Scan the diff for file patterns:
 | `lets:actor` | Explicit user request only | Always (never auto-selected) |
 
 **Actor note:** Actor is never auto-selected. When user explicitly requests it, use the **actor-fetch-personality** skill (read `skills/actor-fetch-personality/SKILL.md`) to fetch personality. Pass `PERSONALITY:` block in the actor's Task prompt only.
+
+### 4.2.1 File Mode Adjustments
+
+When reviewing a single file (`--file` mode), adjust agent selection:
+
+- **Skip git-historian** - no diff context, git blame adds noise for full-file review
+- **Skip systemic pattern check instruction** - not comparing against a diff baseline, remove SYSTEMIC PATTERN CHECK from agent prompts
+- **Adjust pragmatist threshold** - include for files >100 lines (not ">200 lines changed")
+- **Display header** - show `Reviewing: {filename} ({N} lines)` instead of `Changes detected:`
 
 ### 4.3 Select Agents
 
@@ -200,6 +209,27 @@ Skipped:
 - qa (no test files)
 - git-historian (mostly new files)
 - docs (will check inline)
+
+> Subagents have a separate rate limit - no cost to your conversation.
+```
+
+**For `--file` mode**, adjust the display:
+
+```
+## Agent Selection
+
+Reviewing: `{file path}` ({N} lines, {extension} file)
+
+Selected agents ({M}):
+1. compliance (always)
+2. backend (PHP file)
+3. security (source code)
+4. architect (>50 lines)
+
+Skipped for file mode:
+- git-historian (no diff context)
+
+> Subagents have a separate rate limit - no cost to your conversation.
 ```
 
 **RULE: Default is INCLUDE. Only skip if clearly irrelevant.**
@@ -221,7 +251,6 @@ Each agent receives this context in their task prompt. Agents define their own e
 ```
 ultrathink
 
-RESPONSE LANGUAGE: {language from LETS Config, e.g. "English"}
 PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
 
 MODE: review
@@ -450,18 +479,56 @@ cat "$ROOT/CLAUDE.md" 2>/dev/null | head -200
 
 Read the codebase files referenced in the plan's "Files" sections (Create/Modify targets) to verify paths exist and understand current state.
 
-### P3: Launch Plan Review Agents (Parallel)
+### P3: Analyze Plan & Select Agents
 
-**CRITICAL: Launch ALL agents in a SINGLE message.**
+Scan the plan content for domain signals:
 
-Always launch exactly 2 agents:
+| Signal in Plan | Detected When | Select Agent |
+|----------------|--------------|-------------|
+| Backend/API | Mentions controllers, endpoints, services, business logic, PHP/Python/Go/Java | backend |
+| Security | Mentions auth, tokens, encryption, secrets, validation, permissions | security |
+| Database | Mentions migrations, schema, queries, ORM, indexes, tables | database |
+| Frontend | Mentions components, CSS, JS/TS, UI, templates, views, React/Vue | frontend |
+| Infrastructure | Mentions Docker, CI/CD, deploy, nginx, scripts, Makefile | devops |
+| Testing | Mentions test files, coverage, assertions, TDD, test strategy | qa |
 
-#### Architect
+**Always include:** architect (plan structure) + pragmatist (feasibility)
+**Add per signal:** each detected domain signal adds its agent
+**Never include for plan review:** compliance, git-historian, docs, explorer, implementer, actor (unless user requests)
+
+Show selection before launching:
+
+```
+## Agent Selection
+
+Plan signals detected:
+- [x] Backend (API endpoints in tasks 2, 4)
+- [x] Database (migration in task 3)
+- [ ] Frontend
+- [ ] Security
+...
+
+Selected agents ({N}):
+1. architect (always for plan review)
+2. pragmatist (always for plan review)
+3. backend (API signals detected)
+4. database (migration signals detected)
+
+> Subagents have a separate rate limit - no cost to your conversation.
+```
+
+### P4: Launch Plan Review Agents (Parallel)
+
+**CRITICAL: Launch ALL selected agents in a SINGLE message.**
+
+#### Architect (always included)
 
 ```
 Task(
   subagent_type="lets:architect",
   prompt="ultrathink
+
+PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
 
 MODE: plan
 
@@ -501,12 +568,14 @@ OUTPUT FORMAT:
 )
 ```
 
-#### Pragmatist
+#### Pragmatist (always included)
 
 ```
 Task(
   subagent_type="lets:pragmatist",
   prompt="ultrathink
+
+PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
 
 MODE: plan
 
@@ -547,14 +616,60 @@ OUTPUT FORMAT:
 )
 ```
 
-### P4: Aggregate & Output
+#### Domain Experts (dynamically selected in P3)
 
-After both agents respond:
+For each additional agent selected in P3:
+
+```
+Task(
+  subagent_type="lets:{agent-name}",
+  prompt="ultrathink
+
+PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
+
+MODE: plan
+
+PLAN REVIEW MODE. Review this implementation plan from your domain expertise.
+
+PROJECT CONTEXT:
+{CLAUDE.md summary}
+
+PLAN:
+{full plan content}
+
+REVIEW CRITERIA:
+- Are the plan's assumptions correct in your domain?
+- Are there risks or gaps the plan misses from your perspective?
+- Are the proposed solutions following best practices in your area?
+- Are there simpler alternatives for tasks in your domain?
+- Grep the codebase to verify plan claims about existing code.
+
+OUTPUT FORMAT:
+## Plan Review: {Your Domain}
+
+### Verdict: {APPROVED | NEEDS REVISION}
+
+### Findings (only report actual issues)
+1. **{issue}** [Task N]
+   {what's wrong and how to fix it}
+
+### Domain-Specific Risks
+{risks from your area of expertise}
+
+### Strengths
+{1-2 things done well}"
+)
+```
+
+### P5: Aggregate & Output
+
+After all agents respond:
 
 ```
 ## Plan Review: **{plan title}** (`{task-id}`)
 
-**Verdict:** {APPROVED | NEEDS REVISION}
+**Verdict:** {APPROVED if all approve | NEEDS REVISION if any agent flags revision}
+**Agents:** {N} ({agent names})
 
 ### Architecture
 {architect findings summary}
@@ -562,17 +677,22 @@ After both agents respond:
 ### Pragmatism
 {pragmatist findings summary}
 
+{for each additional domain agent that reported findings}
+### {Agent Domain}
+{agent findings summary}
+{end for}
+
 {if NEEDS REVISION}
 ### Action Items
-1. {specific fix from architect}
-2. {specific fix from pragmatist}
+1. {specific fix}
+2. {specific fix}
 ...
 {end if}
 
 Saved to: .lets/reviews/{date}-plan-review.md
 ```
 
-### P5: Save & Link
+### P6: Save & Link
 
 Save to `.lets/reviews/{date}-plan-review.md`
 

@@ -71,111 +71,91 @@ Gather project context:
 cat "$ROOT/CLAUDE.md" 2>/dev/null | head -200
 ```
 
-### Size Heuristic
+### Exploration Strategy
 
-Check project size before choosing exploration strategy:
+Decide how many explorers to launch and what each should focus on.
+
+**Inputs for decision:**
 
 ```bash
-find "$ROOT" -type f -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/vendor/*' | wc -l
+FILE_COUNT=$(find "$ROOT" -type f \
+  -not -path '*/.git/*' \
+  -not -path '*/node_modules/*' \
+  -not -path '*/vendor/*' \
+  -not -path '*/dist/*' \
+  -not -path '*/.next/*' \
+  -not -path '*/build/*' \
+  -not -path '*/__pycache__/*' \
+  | wc -l | tr -d ' ')
 ```
 
-| Project size | Strategy |
-|-------------|----------|
-| < 100 files | **Single agent** - one explorer with combined focus |
-| >= 100 files | **Full** - 3 parallel explorer agents |
+Based on the **feature goal**, **user clarifications**, **project size**, and **task description**, identify distinct focus areas that need exploration. Each focus area becomes one explorer agent.
 
-### Single Agent Exploration (< 100 files)
+**Guidelines for choosing focus areas:**
+- Each explorer should have a clear, non-overlapping focus
+- Small isolated feature -> 1-2 explorers (e.g., "map existing auth code", "map test patterns")
+- Cross-cutting feature -> 3-5 explorers (e.g., one per module/layer it touches)
+- Large-scale refactor or unclear scope -> 5-10 explorers (one per area of concern)
+- Subagents have a separate rate limit - prefer more exploration when uncertain
+
+**Confirmation gate:** If planning to launch more than 10 explorers:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Planning {N} explorers for this feature. That's a lot - confirm?",
+    header: "LETS",
+    options: [
+      { label: "Launch all", description: "{N} explorers, thorough coverage" },
+      { label: "Reduce", description: "Suggest fewer, more focused explorers" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+### Show Exploration Plan
+
+Before launching, display the plan:
+
+```
+## Codebase Exploration
+
+Project: {FILE_COUNT} source files
+Feature: {feature goal, abbreviated}
+Explorers: {N}
+
+1. {focus area 1} - {what this explorer will map}
+2. {focus area 2} - {what this explorer will map}
+...
+
+> Subagents have a separate rate limit - no cost to your conversation.
+
+Launching...
+```
+
+### Launch Explorers
+
+**CRITICAL: Launch ALL explorer agents in a SINGLE message with multiple Task tool calls.**
+
+For each focus area, launch one explorer:
 
 ```
 Task(
   subagent_type="lets:explorer",
-  prompt="FULL EXPLORATION MODE. Map patterns, structure, and integration points for a new feature.
+  prompt="{FOCUS AREA} EXPLORATION. {One-line description of what to find.}
 
 FEATURE GOAL: {feature goal from Step 1}
 USER CLARIFICATIONS: {answers from Step 3}
-TASK CONTEXT: {task title and description from beads, if available}
-
-YOUR FOCUS:
-- Find existing features SIMILAR to what we're building (reusable patterns)
-- Map WHERE new code belongs (directory structure, naming conventions)
-- Identify HOW new code connects (APIs, entry points, dependencies, tests)
-
-Return a structured exploration report covering all three areas."
-)
-```
-
-### Full Exploration (>= 100 files, 3 Agents Parallel)
-
-**CRITICAL: Launch ALL 3 explorer agents in a SINGLE message with multiple Task tool calls.**
-
-### Explorer 1: Pattern Scout
-
-```
-Task(
-  subagent_type="lets:explorer",
-  prompt="PATTERN SCOUT MODE. Find existing features SIMILAR to what we're building.
-
-FEATURE GOAL: {feature goal from Step 1}
 
 TASK CONTEXT:
 {task title and description from beads, if available}
 
 YOUR FOCUS:
-- Find existing features or modules that solve a similar problem
-- Trace through them end-to-end: entry point -> processing -> output
-- Identify reusable patterns (if something is done 3+ places, it's the standard)
-- Find reference implementations that architects should follow
+{specific bullets tailored to this focus area}
 
 Return the structured exploration report as defined in your system prompt.
-Focus ONLY on similar existing patterns - leave structure mapping and integration to other explorers."
-)
-```
-
-### Explorer 2: Structure Mapper
-
-```
-Task(
-  subagent_type="lets:explorer",
-  prompt="STRUCTURE MAPPER MODE. Map WHERE the new feature fits in the codebase.
-
-FEATURE GOAL: {feature goal from Step 1}
-
-TASK CONTEXT:
-{task title and description from beads, if available}
-
-YOUR FOCUS:
-- Directory and module structure - where does new code belong?
-- File naming conventions (what patterns do filenames follow?)
-- Function/variable/type naming conventions
-- Configuration and build patterns
-- How are new modules typically added?
-
-Return the structured exploration report as defined in your system prompt.
-Focus ONLY on structure and conventions - leave patterns and integration to other explorers."
-)
-```
-
-### Explorer 3: Integration Analyst
-
-```
-Task(
-  subagent_type="lets:explorer",
-  prompt="INTEGRATION ANALYST MODE. Map HOW new code connects to existing code.
-
-FEATURE GOAL: {feature goal from Step 1}
-
-TASK CONTEXT:
-{task title and description from beads, if available}
-
-YOUR FOCUS:
-- Public APIs and interfaces that new code must work with
-- Entry points where new code hooks into existing system
-- Dependencies that the new feature will rely on
-- Test infrastructure: framework, patterns, file locations, representative test example
-- Potential breaking points and tight coupling risks
-
-Return the structured exploration report as defined in your system prompt.
-Focus ONLY on integration and testing - leave patterns and structure to other explorers."
+Focus ONLY on {focus area} - other explorers cover other areas."
 )
 ```
 
@@ -183,19 +163,18 @@ Focus ONLY on integration and testing - leave patterns and structure to other ex
 - Note the gap explicitly in the Codebase Map ("No data for {area} - explorer failed")
 - Ask user: "Explorer {N} couldn't map {area}. Continue with partial data, or should I explore {area} manually?"
 
-After all return, synthesize a combined codebase map:
+### Synthesize Codebase Map
+
+After all explorers return, synthesize a combined codebase map with one section per explorer:
 
 ```
 ## Codebase Map
 
-### Similar Patterns (from Pattern Scout)
-{key findings - what exists, what to follow}
+{For each explorer that returned results:}
+### {Focus Area} (from Explorer {N})
+{key findings synthesized from this explorer's report}
 
-### Where It Fits (from Structure Mapper)
-{directory, naming conventions, module location}
-
-### How It Connects (from Integration Analyst)
-{entry points, APIs, test patterns, risks}
+{End for}
 ```
 
 ### Checkpoint: Exploration Review
@@ -426,7 +405,7 @@ AskUserQuestion(
     question: "Which experts should evaluate the architecture?",
     header: "LETS",
     options: [
-      { label: "Recommended", description: "{pragmatist + N domain experts based on feature}" },
+      { label: "Recommended", description: "{pragmatist + N domain experts based on feature}. Separate rate limit." },
       { label: "Pragmatist only", description: "Quick evaluation, just overengineering check" },
       { label: "Skip evaluation", description: "Architecture is solid, go straight to plan" }
     ],
@@ -750,4 +729,4 @@ Start a new session to execute the plan with clean context.
 - **Exact file paths** in plan - verified against explorer findings
 - **Complete code snippets** - no stubs, no "implement X here"
 - **Plan is the artifact** - session ends when plan is saved
-- Respond in user's language (Ukrainian/Russian/English)
+- Respond in user's language

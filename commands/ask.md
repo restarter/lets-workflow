@@ -20,7 +20,7 @@ Quick consultation with a single expert agent. Like pinging a colleague on Slack
 | | /lets:ask | /lets:opinion |
 |---|---|---|
 | Purpose | Ask one colleague | Team meeting |
-| Experts | Always 1 | 3-5 in parallel |
+| Experts | Always 1 | Dynamic, in parallel |
 | Input | Question | Decision + options |
 | Output | Direct answer | Comparison table + recommendation |
 | Analogy | Slack ping | 30 min meeting |
@@ -94,7 +94,6 @@ Task(
   subagent_type="lets:{agent-name}",
   prompt="ultrathink
 
-RESPONSE LANGUAGE: {language from LETS Config, e.g. "English"}
 PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
 
 MODE: ask

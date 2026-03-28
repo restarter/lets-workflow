@@ -284,7 +284,7 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:check` | Code | Quick sanity check - code (~30s) or plan (--plan) |
 | `/lets:review` | Code | Full deep review (~2-3 min) |
 | `/lets:pr` | Code | PR review lifecycle (review, respond, follow-up, approve) |
-| `/lets:opinion` | Expert | Technical decision (3-5 agents) |
+| `/lets:opinion` | Expert | Technical decision (dynamic agent count) |
 | `/lets:ask` | Expert | Quick expert consultation (1 agent) |
 | `/lets:brainstorm` | Planning | Interactive ideation - review backlog, explore ideas, quick brainstorm, cleanup |
 | `/lets:plan` | Planning | Structured planning with agents - architecture + implementation plan |
