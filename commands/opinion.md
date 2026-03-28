@@ -48,6 +48,25 @@ Based on the decision topic, select 3-5 agents:
 cat "$ROOT/CLAUDE.md" 2>/dev/null | head -100
 ```
 
+## Step 3.5: Show Expert Panel
+
+Before launching, display the selection:
+
+```
+## Expert Panel
+
+Decision: {topic summary}
+Selected {N} experts:
+1. architect - {reason from topic match}
+2. pragmatist - always included
+3. {domain agent} - {reason}
+...
+
+> Subagents have a separate rate limit - no cost to your conversation.
+
+Analyzing...
+```
+
 ## Step 4: Launch Agents in Parallel
 
 **CRITICAL:** Launch ALL selected agents in a SINGLE message with multiple Task tool calls.

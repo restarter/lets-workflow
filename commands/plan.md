@@ -76,15 +76,38 @@ cat "$ROOT/CLAUDE.md" 2>/dev/null | head -200
 Check project size before choosing exploration strategy:
 
 ```bash
-find "$ROOT" -type f -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/vendor/*' | wc -l
+FILE_COUNT=$(find "$ROOT" -type f \
+  -not -path '*/.git/*' \
+  -not -path '*/node_modules/*' \
+  -not -path '*/vendor/*' \
+  -not -path '*/dist/*' \
+  -not -path '*/.next/*' \
+  -not -path '*/build/*' \
+  -not -path '*/__pycache__/*' \
+  | wc -l | tr -d ' ')
 ```
 
-| Project size | Strategy |
-|-------------|----------|
-| < 100 files | **Single agent** - one explorer with combined focus |
-| >= 100 files | **Full** - 3 parallel explorer agents |
+| Project size | Explorer count | Strategy |
+|-------------|---------------|----------|
+| < 50 files | 1 explorer | **Single agent** - one explorer with combined focus |
+| 50-500 files | 2 explorers | **Medium** - Pattern Scout + combined Structure/Integration |
+| > 500 files | 3 explorers | **Full** - 3 parallel explorer agents with differentiated roles |
 
-### Single Agent Exploration (< 100 files)
+Show exploration plan before launching:
+
+```
+## Codebase Exploration
+
+Project: {FILE_COUNT} source files (excluding vendor/node_modules/dist/build)
+Strategy: {Single agent | Medium (2 explorers) | Full (3 explorers)}
+Focus: {feature goal, abbreviated}
+
+> Subagents have a separate rate limit - no cost to your conversation.
+
+Launching...
+```
+
+### Single Agent Exploration (< 50 files)
 
 ```
 Task(
@@ -104,7 +127,61 @@ Return a structured exploration report covering all three areas."
 )
 ```
 
-### Full Exploration (>= 100 files, 3 Agents Parallel)
+### Medium Exploration (50-500 files, 2 Agents Parallel)
+
+**CRITICAL: Launch BOTH explorer agents in a SINGLE message.**
+
+#### Explorer 1: Pattern Scout
+
+```
+Task(
+  subagent_type="lets:explorer",
+  prompt="PATTERN SCOUT MODE. Find existing features SIMILAR to what we're building.
+
+FEATURE GOAL: {feature goal from Step 1}
+USER CLARIFICATIONS: {answers from Step 3}
+
+TASK CONTEXT:
+{task title and description from beads, if available}
+
+YOUR FOCUS:
+- Find existing features or modules that solve a similar problem
+- Trace through them end-to-end: entry point -> processing -> output
+- Identify reusable patterns (if something is done 3+ places, it's the standard)
+- Find reference implementations that architects should follow
+
+Return the structured exploration report as defined in your system prompt.
+Focus ONLY on similar existing patterns - leave structure and integration to the other explorer."
+)
+```
+
+#### Explorer 2: Structure & Integration
+
+```
+Task(
+  subagent_type="lets:explorer",
+  prompt="STRUCTURE & INTEGRATION MODE. Map WHERE the new feature fits and HOW it connects.
+
+FEATURE GOAL: {feature goal from Step 1}
+USER CLARIFICATIONS: {answers from Step 3}
+
+TASK CONTEXT:
+{task title and description from beads, if available}
+
+YOUR FOCUS:
+- Directory and module structure - where does new code belong?
+- File and function naming conventions
+- Public APIs and interfaces that new code must work with
+- Entry points where new code hooks into existing system
+- Test infrastructure: framework, patterns, file locations
+- Dependencies and potential breaking points
+
+Return the structured exploration report as defined in your system prompt.
+Cover both structure mapping AND integration analysis."
+)
+```
+
+### Full Exploration (> 500 files, 3 Agents Parallel)
 
 **CRITICAL: Launch ALL 3 explorer agents in a SINGLE message with multiple Task tool calls.**
 
@@ -116,6 +193,7 @@ Task(
   prompt="PATTERN SCOUT MODE. Find existing features SIMILAR to what we're building.
 
 FEATURE GOAL: {feature goal from Step 1}
+USER CLARIFICATIONS: {answers from Step 3}
 
 TASK CONTEXT:
 {task title and description from beads, if available}
@@ -139,6 +217,7 @@ Task(
   prompt="STRUCTURE MAPPER MODE. Map WHERE the new feature fits in the codebase.
 
 FEATURE GOAL: {feature goal from Step 1}
+USER CLARIFICATIONS: {answers from Step 3}
 
 TASK CONTEXT:
 {task title and description from beads, if available}
@@ -163,6 +242,7 @@ Task(
   prompt="INTEGRATION ANALYST MODE. Map HOW new code connects to existing code.
 
 FEATURE GOAL: {feature goal from Step 1}
+USER CLARIFICATIONS: {answers from Step 3}
 
 TASK CONTEXT:
 {task title and description from beads, if available}
@@ -426,7 +506,7 @@ AskUserQuestion(
     question: "Which experts should evaluate the architecture?",
     header: "LETS",
     options: [
-      { label: "Recommended", description: "{pragmatist + N domain experts based on feature}" },
+      { label: "Recommended", description: "{pragmatist + N domain experts based on feature}. Separate rate limit." },
       { label: "Pragmatist only", description: "Quick evaluation, just overengineering check" },
       { label: "Skip evaluation", description: "Architecture is solid, go straight to plan" }
     ],

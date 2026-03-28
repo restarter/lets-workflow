@@ -137,6 +137,8 @@ Based on project context, selected {N} experts:
 2. {agent} - {signal}
 ...
 
+> Subagents have a separate rate limit - no cost to your conversation.
+
 Launching...
 ```
 
