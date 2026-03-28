@@ -162,7 +162,7 @@ Scan the diff for file patterns:
 | `lets:security` | Code, config, deps | Docs-only, test-only |
 | `lets:architect` | Code changes > 50 lines | Small fixes, docs |
 | `lets:git-historian` | Changes to existing code | New files only |
-| `lets:docs` | Any non-trivial change | Tiny fixes |
+| `lets:docs` | ALWAYS | Never skip |
 | `lets:devops` | Docker, CI, Makefile, scripts | App code only |
 | `lets:database` | Migrations, queries, ORM | No DB changes |
 | `lets:frontend` | JS/TS/CSS changes | Backend only |
@@ -251,7 +251,6 @@ Each agent receives this context in their task prompt. Agents define their own e
 ```
 ultrathink
 
-RESPONSE LANGUAGE: {language from LETS Config, e.g. "English"}
 PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
 
 MODE: review
@@ -529,7 +528,6 @@ Task(
   subagent_type="lets:architect",
   prompt="ultrathink
 
-RESPONSE LANGUAGE: {language from LETS Config}
 PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
 
 MODE: plan
@@ -577,7 +575,6 @@ Task(
   subagent_type="lets:pragmatist",
   prompt="ultrathink
 
-RESPONSE LANGUAGE: {language from LETS Config}
 PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
 
 MODE: plan
@@ -619,16 +616,15 @@ OUTPUT FORMAT:
 )
 ```
 
-#### Domain Experts (dynamically selected in P2.5)
+#### Domain Experts (dynamically selected in P3)
 
-For each additional agent selected in P2.5:
+For each additional agent selected in P3:
 
 ```
 Task(
   subagent_type="lets:{agent-name}",
   prompt="ultrathink
 
-RESPONSE LANGUAGE: {language from LETS Config}
 PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
 
 MODE: plan

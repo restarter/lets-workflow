@@ -1,5 +1,5 @@
 ---
-description: Technical decision analysis from 3-5 expert agents launched in parallel, with clear recommendation
+description: Technical decision analysis from expert agents launched in parallel, with clear recommendation
 argument-hint: "[topic or question]"
 ---
 
@@ -19,27 +19,31 @@ Analyze technical decisions by launching expert agents in parallel. Each agent p
 
 ## Step 2: Select Experts
 
-Based on the decision topic, select 3-5 agents:
+Based on the decision topic, select relevant experts.
 
-| Decision about... | Agents to launch |
-|-------------------|-----------------|
-| Auth/tokens/encryption | security, architect, backend, pragmatist |
-| DB schema/migrations | database, architect, backend, pragmatist |
-| Docker/CI/deploy | devops, security, architect, pragmatist |
-| API design | architect, backend, security, pragmatist |
-| UI/UX/components | frontend, architect, qa, pragmatist |
-| Testing strategy | qa, backend, architect, pragmatist |
-| Performance | backend, database, devops, pragmatist |
-| General architecture | architect, security, backend, pragmatist |
-| Documentation | docs, architect, compliance, pragmatist |
-| Code quality | architect, compliance, qa, pragmatist |
-| External perspective | actor + relevant domain agents |
-
-**Rules:**
-- Minimum 3 agents, maximum 5
+**Guidelines:**
 - `architect` and `pragmatist` always included
+- Add domain agents based on what the decision touches (security for auth, database for schema, frontend for UI, etc.)
+- Simple binary decision -> 2-3 experts may suffice
+- Complex cross-cutting decision -> 5-7 experts covering each affected area
 - `actor` can replace or supplement any domain agent. If actor is selected, use the **actor-fetch-personality** skill (read `skills/actor-fetch-personality/SKILL.md`) to fetch personality. Pass `PERSONALITY:` block in the actor's Task prompt only.
 - Agents use their own model from frontmatter (opus for critical agents, session model for others)
+
+**Confirmation gate:** If planning to launch more than 10 experts:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Planning {N} experts for this decision. That's a lot - confirm?",
+    header: "LETS",
+    options: [
+      { label: "Launch all", description: "{N} experts, thorough analysis" },
+      { label: "Reduce", description: "Suggest fewer, more focused experts" }
+    ],
+    multiSelect: false
+  }]
+)
+```
 
 ## Step 3: Gather Context
 
@@ -78,7 +82,6 @@ Task(
   subagent_type="lets:{agent-name}",
   prompt="ultrathink
 
-RESPONSE LANGUAGE: {language from LETS Config, e.g. "English"}
 PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
 
 MODE: opinion

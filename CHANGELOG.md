@@ -19,6 +19,20 @@
 - Commands thinned - shared logic extracted to skills (`commit.md` 208->11 lines, `start.md` -120 lines)
 - CLAUDE.md architecture decisions updated: agents define WHO+HOW, commands define WHAT+WHEN
 - Mandatory context tables removed from 5 commands (review, opinion, ask, plan, brainstorm) - now in agents
+- Dynamic agent scaling across all dispatching commands - LLM decides agent count based on context, no hardcoded caps
+- `/lets:review --plan`: dynamic agent selection based on plan content signals (replaces hardcoded 2 agents)
+- `/lets:review --file`: skip git-historian, adjust pragmatist threshold, skip systemic pattern check
+- `/lets:plan` exploration: LLM-driven focus areas replace 3-tier size heuristic (Single/Medium/Full), confirmation gate at 10+ explorers
+- `/lets:opinion`: dynamic expert count replaces hardcoded 3-5 preset table
+- `/lets:brainstorm`: signal-driven agent count, no cap (was capped at 5)
+- `/lets:team`: dynamic teammate count, no cap (was capped at 5)
+- `/lets:opinion`, `/lets:brainstorm`, `/lets:review` show Agent Panel with cost note before launch
+- `/lets:check` expanded to 6 lenses (added [Docs] documentation sync)
+- `/lets:review` docs agent now ALWAYS included (was conditional)
+
+### Removed
+- RESPONSE LANGUAGE directive from all agent prompt templates - agents respond in English, orchestrator localizes
+- Hardcoded agent count caps from opinion (3-5), brainstorm (3-5), team (3-5), plan explorers (1/2/3)
 
 ### Fixed
 - beads-ui: input validation, firewall rules, deduplication (PR #35 review)

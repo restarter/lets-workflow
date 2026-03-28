@@ -94,7 +94,6 @@ Task(
   subagent_type="lets:{agent-name}",
   prompt="ultrathink
 
-RESPONSE LANGUAGE: {language from LETS Config, e.g. "English"}
 PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
 
 MODE: ask

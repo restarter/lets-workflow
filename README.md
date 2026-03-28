@@ -99,9 +99,9 @@ Then start working:
 ```
 ┌─ You write code yourself ─────────────────────────────────────────────────┐
 │  Write code with Claude. Use helpers along the way:                       │
-│  /lets:opinion   Technical decision with 3-5 expert agents                │
+│  /lets:opinion   Technical decision with expert agents                     │
 │  /lets:ask       Quick question to a single expert                        │
-│  /lets:check     Quick sanity check (5 perspectives, ~30s)                │
+│  /lets:check     Quick sanity check (6 perspectives, ~30s)                │
 │  /lets:review    Full multi-agent code review (~2-3 min)                  │
 │                                                                           │
 ├─ You plan, Claude builds ─────────────────────────────────────────────────┤
@@ -162,7 +162,7 @@ Then start working:
 | `/lets:check` | Quick inline sanity check (~30s, 5-perspective review) |
 | `/lets:review` | Full code review with dynamic agent selection (~2-3 min) |
 | `/lets:pr` | PR review lifecycle - analyze, discuss, post inline, follow-up, approve |
-| `/lets:opinion` | Technical decision analysis (3-5 expert agents in parallel) |
+| `/lets:opinion` | Technical decision analysis (dynamic expert agents in parallel) |
 | `/lets:ask` | Quick expert consultation (single agent) |
 
 ### Setup
