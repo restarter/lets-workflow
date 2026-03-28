@@ -19,13 +19,25 @@ Analyze technical decisions by launching expert agents in parallel. Each agent p
 
 ## Step 2: Select Experts
 
-Based on the decision topic, select relevant experts.
+Based on the decision topic, select relevant experts. Recommended defaults:
+
+| Decision about... | Recommended experts |
+|-------------------|-------------------|
+| Auth/tokens/encryption | security, architect, backend, pragmatist |
+| DB schema/migrations | database, architect, backend, pragmatist |
+| Docker/CI/deploy | devops, security, architect, pragmatist |
+| API design | architect, backend, security, pragmatist |
+| UI/UX/components | frontend, architect, qa, pragmatist |
+| Testing strategy | qa, backend, architect, pragmatist |
+| Performance | backend, database, devops, pragmatist |
+| General architecture | architect, security, backend, pragmatist |
+| Code quality | architect, compliance, qa, pragmatist |
+
+Adjust based on decision complexity - add more experts for cross-cutting decisions, fewer for simple binary choices.
 
 **Guidelines:**
 - `architect` and `pragmatist` always included
-- Add domain agents based on what the decision touches (security for auth, database for schema, frontend for UI, etc.)
-- Simple binary decision -> 2-3 experts may suffice
-- Complex cross-cutting decision -> 5-7 experts covering each affected area
+- Table above is a starting point, not a cap - add or remove agents based on context
 - `actor` can replace or supplement any domain agent. If actor is selected, use the **actor-fetch-personality** skill (read `skills/actor-fetch-personality/SKILL.md`) to fetch personality. Pass `PERSONALITY:` block in the actor's Task prompt only.
 - Agents use their own model from frontmatter (opus for critical agents, session model for others)
 

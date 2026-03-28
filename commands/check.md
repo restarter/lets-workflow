@@ -1,11 +1,11 @@
 ---
-description: Quick sanity check - code (inline 5-perspective) or plan (--plan).
+description: Quick sanity check - code (inline 6-perspective) or plan (--plan).
 argument-hint: "[--staged|--last-commit|--plan]"
 ---
 
 # Quick Local Code Check
 
-Fast inline sanity check of local changes from 5 perspectives.
+Fast inline sanity check of local changes from 6 perspectives.
 
 ## Usage
 
@@ -84,7 +84,7 @@ cat "$ROOT/CLAUDE.md" 2>/dev/null | head -100
 
 ultrathink
 
-Review the diff directly using these 5 perspectives. Think like a senior dev doing a quick PR scan - catch real issues, skip noise.
+Review the diff directly using these 6 perspectives. Think like a senior dev doing a quick PR scan - catch real issues, skip noise.
 
 ### [Bug] Bugs & Logic
 - Logic errors, off-by-one, edge cases

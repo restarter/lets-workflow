@@ -73,7 +73,7 @@ Present as multiSelect AskUserQuestion - user picks tasks.
 
 **2. Manual (`--tasks A,B,C`):** Parse comma-separated task IDs from argument.
 
-If more than 10 selected:
+**Confirmation gate:** If more than 10 selected:
 
 ```
 AskUserQuestion(

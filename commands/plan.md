@@ -729,4 +729,4 @@ Start a new session to execute the plan with clean context.
 - **Exact file paths** in plan - verified against explorer findings
 - **Complete code snippets** - no stubs, no "implement X here"
 - **Plan is the artifact** - session ends when plan is saved
-- Respond in user's language (Ukrainian/Russian/English)
+- Respond in user's language
