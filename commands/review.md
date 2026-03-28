@@ -480,7 +480,7 @@ cat "$ROOT/CLAUDE.md" 2>/dev/null | head -200
 
 Read the codebase files referenced in the plan's "Files" sections (Create/Modify targets) to verify paths exist and understand current state.
 
-### P2.5: Analyze Plan & Select Agents
+### P3: Analyze Plan & Select Agents
 
 Scan the plan content for domain signals:
 
@@ -518,7 +518,7 @@ Selected agents ({N}):
 > Subagents have a separate rate limit - no cost to your conversation.
 ```
 
-### P3: Launch Plan Review Agents (Parallel)
+### P4: Launch Plan Review Agents (Parallel)
 
 **CRITICAL: Launch ALL selected agents in a SINGLE message.**
 
@@ -528,6 +528,9 @@ Selected agents ({N}):
 Task(
   subagent_type="lets:architect",
   prompt="ultrathink
+
+RESPONSE LANGUAGE: {language from LETS Config}
+PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
 
 MODE: plan
 
@@ -573,6 +576,9 @@ OUTPUT FORMAT:
 Task(
   subagent_type="lets:pragmatist",
   prompt="ultrathink
+
+RESPONSE LANGUAGE: {language from LETS Config}
+PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
 
 MODE: plan
 
@@ -659,7 +665,7 @@ OUTPUT FORMAT:
 )
 ```
 
-### P4: Aggregate & Output
+### P5: Aggregate & Output
 
 After all agents respond:
 
@@ -690,7 +696,7 @@ After all agents respond:
 Saved to: .lets/reviews/{date}-plan-review.md
 ```
 
-### P5: Save & Link
+### P6: Save & Link
 
 Save to `.lets/reviews/{date}-plan-review.md`
 
