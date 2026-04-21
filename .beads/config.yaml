@@ -53,3 +53,5 @@ backup:
 # - github.repo
 
 dolt.auto-push: false
+
+no-git-ops: true

@@ -1,11 +1,34 @@
 {
-  "hooks": {},
-  "statusLine": {
-    "type": "command",
-    "command": "bash -c 'cat | bash \"$(git rev-parse --show-toplevel 2>/dev/null)/.lets/statusline.sh\" 2>/dev/null'"
-  },
   "enabledPlugins": {
     "plugin-dev@claude-plugins-official": true,
     "skill-creator@claude-plugins-official": true
+  },
+  "hooks": {
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "command": "bd prime --stealth",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "bd prime --stealth",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ]
+  },
+  "statusLine": {
+    "command": "bash -c 'cat | bash \"$(git rev-parse --show-toplevel 2\u003e/dev/null)/.lets/statusline.sh\" 2\u003e/dev/null'",
+    "type": "command"
   }
 }
