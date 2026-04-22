@@ -6,29 +6,29 @@
   "hooks": {
     "PreCompact": [
       {
+        "matcher": "",
         "hooks": [
           {
-            "command": "bd prime --stealth",
-            "type": "command"
+            "type": "command",
+            "command": "bd prime --stealth"
           }
-        ],
-        "matcher": ""
+        ]
       }
     ],
     "SessionStart": [
       {
+        "matcher": "",
         "hooks": [
           {
-            "command": "bd prime --stealth",
-            "type": "command"
+            "type": "command",
+            "command": "bd prime --stealth"
           }
-        ],
-        "matcher": ""
+        ]
       }
     ]
   },
   "statusLine": {
-    "command": "bash -c 'cat | bash \"$(git rev-parse --show-toplevel 2\u003e/dev/null)/.lets/statusline.sh\" 2\u003e/dev/null'",
+    "command": "bash -c 'cat | bash \"$(git rev-parse --show-toplevel 2>/dev/null)/.lets/statusline.sh\" 2>/dev/null'",
     "type": "command"
   }
 }
