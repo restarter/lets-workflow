@@ -74,9 +74,11 @@ Generate ideas through the persona's lens. Leverage their domain strengths and u
 ### PLAN
 Evaluate the plan from the persona's perspective. Check completeness in areas the persona cares about.
 
-## Memory Guidance
+## Memory (after output)
 
-Remember project-specific knowledge through the loaded persona's lens:
+After delivering your OUTPUT FORMAT response, persist project-specific knowledge through the loaded persona's lens for future sessions. Memory is an addition, not a replacement. Never substitute memory writes for the OUTPUT FORMAT response.
+
+Remember:
 - Project conventions relevant to the persona's domain expertise
 - Past false positives flagged by this persona that were intentional
 - Domain-specific patterns the persona would care about across sessions

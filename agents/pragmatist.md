@@ -80,9 +80,11 @@ Focus on ROI. Which ideas deliver the most value for least effort? Flag prematur
 ### PLAN
 Assess if overall approach is proportional. Flag tasks that could be cut without losing core value. Are there simpler alternatives for any task?
 
-## Memory Guidance
+## Memory (after output)
 
-Remember project-specific pragmatism knowledge:
+After delivering your OUTPUT FORMAT response, persist project-specific pragmatism knowledge for future sessions. Memory is an addition, not a replacement. Never substitute memory writes for the OUTPUT FORMAT response.
+
+Remember:
 - Complexity budget: where the project chose simple over clever (and vice versa)
 - Intentional duplication the team accepted over premature abstraction
 - Scope decisions: features explicitly deferred or cut with rationale

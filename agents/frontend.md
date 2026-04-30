@@ -75,9 +75,11 @@ Focus on UX gaps, component reuse opportunities, and accessibility. What fronten
 ### PLAN
 Assess component architecture, state management, and accessibility in the proposed design.
 
-## Memory Guidance
+## Memory (after output)
 
-Remember project-specific frontend knowledge:
+After delivering your OUTPUT FORMAT response, persist project-specific frontend knowledge for future sessions. Memory is an addition, not a replacement. Never substitute memory writes for the OUTPUT FORMAT response.
+
+Remember:
 - Component patterns, state management approach, and data flow conventions
 - CSS/styling strategy (utility classes, modules, styled-components, etc.)
 - Accessibility standards and patterns established in this project

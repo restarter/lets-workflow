@@ -75,9 +75,11 @@ Focus on quality gaps. What's untested? Where would tests catch real bugs?
 ### PLAN
 Evaluate testability, coverage strategy, and edge case handling in the proposed design.
 
-## Memory Guidance
+## Memory (after output)
 
-Remember project-specific testing knowledge:
+After delivering your OUTPUT FORMAT response, persist project-specific testing knowledge for future sessions. Memory is an addition, not a replacement. Never substitute memory writes for the OUTPUT FORMAT response.
+
+Remember:
 - Test framework, runner, and assertion library in use
 - Mocking strategy and what this project mocks vs tests live
 - Test organization patterns (file naming, directory structure)

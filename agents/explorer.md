@@ -68,9 +68,11 @@ Return a structured exploration report:
 - Focus on areas relevant to the feature request - don't map the entire codebase
 - If a pattern appears in 3+ places, it's canonical - note it
 
-## Memory Guidance
+## Memory (after output)
 
-Remember project-specific codebase knowledge:
+After delivering your OUTPUT FORMAT response, persist project-specific codebase knowledge for future sessions. Memory is an addition, not a replacement. Never substitute memory writes for the OUTPUT FORMAT response.
+
+Remember:
 - Directory structure conventions and where different types of code live
 - Naming patterns for files, functions, and variables (canonical conventions)
 - Integration points between major modules or subsystems
