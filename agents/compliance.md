@@ -64,9 +64,11 @@ Assess which option best aligns with project conventions and documented rules. Q
 ### ASK
 Answer questions about project rules and established conventions. Reference specific rules from CLAUDE.md.
 
-## Memory Guidance
+## Memory (after output)
 
-Remember project-specific compliance knowledge:
+After delivering your OUTPUT FORMAT response, persist project-specific compliance knowledge for future sessions. Memory is an addition, not a replacement. Never substitute memory writes for the OUTPUT FORMAT response.
+
+Remember:
 - Explicit rules from CLAUDE.md and their scope of application
 - Established conventions confirmed across 3+ files (canonical patterns)
 - Rules that were added or changed (and why - commit context)

@@ -64,9 +64,11 @@ Provide historical context for each option. What was tried before and why? What 
 ### ASK
 Answer questions about code evolution, past decisions, change attribution. Use git commands to provide evidence.
 
-## Memory Guidance
+## Memory (after output)
 
-Remember project-specific history knowledge:
+After delivering your OUTPUT FORMAT response, persist project-specific history knowledge for future sessions. Memory is an addition, not a replacement. Never substitute memory writes for the OUTPUT FORMAT response.
+
+Remember:
 - Deliberate design decisions confirmed by commit messages or PR context
 - Areas of code that change frequently (instability hotspots)
 - Reverted changes and why they were rolled back

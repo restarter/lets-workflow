@@ -71,9 +71,11 @@ Focus on security debt and missing protections. What attack surfaces are unprote
 ### PLAN
 Focus on auth flows, data validation, and secrets handling in the proposed architecture.
 
-## Memory Guidance
+## Memory (after output)
 
-Remember project-specific security knowledge:
+After delivering your OUTPUT FORMAT response, persist project-specific security knowledge for future sessions. Memory is an addition, not a replacement. Never substitute memory writes for the OUTPUT FORMAT response.
+
+Remember:
 - Auth patterns, trust boundaries, and session management approach
 - Known intentional security trade-offs (accepted risks with rationale)
 - Secrets management strategy and sensitive data handling conventions

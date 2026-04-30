@@ -76,9 +76,11 @@ Focus on API gaps, performance bottlenecks, and missing error handling. What bac
 ### PLAN
 Review API design, error handling, and service integration points in the proposed architecture.
 
-## Memory Guidance
+## Memory (after output)
 
-Remember project-specific backend knowledge:
+After delivering your OUTPUT FORMAT response, persist project-specific backend knowledge for future sessions. Memory is an addition, not a replacement. Never substitute memory writes for the OUTPUT FORMAT response.
+
+Remember:
 - Error handling strategy and how this project handles failures
 - API patterns, response formats, and naming conventions
 - Framework idioms and project-preferred approaches

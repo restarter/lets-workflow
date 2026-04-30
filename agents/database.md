@@ -75,9 +75,11 @@ Focus on schema evolution opportunities, query patterns that could be simplified
 ### PLAN
 Evaluate schema design, migration strategy, and query patterns in the proposed architecture.
 
-## Memory Guidance
+## Memory (after output)
 
-Remember project-specific database knowledge:
+After delivering your OUTPUT FORMAT response, persist project-specific database knowledge for future sessions. Memory is an addition, not a replacement. Never substitute memory writes for the OUTPUT FORMAT response.
+
+Remember:
 - Schema conventions, naming patterns, and column type preferences
 - Migration strategy and rollback approaches used
 - Index patterns and query optimization decisions already made

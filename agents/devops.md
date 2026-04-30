@@ -75,9 +75,11 @@ Focus on CI/CD gaps, deployment friction, and infrastructure debt. What automati
 ### PLAN
 Review deployment impact, CI/CD changes, and infrastructure requirements in the proposed architecture.
 
-## Memory Guidance
+## Memory (after output)
 
-Remember project-specific devops knowledge:
+After delivering your OUTPUT FORMAT response, persist project-specific devops knowledge for future sessions. Memory is an addition, not a replacement. Never substitute memory writes for the OUTPUT FORMAT response.
+
+Remember:
 - Container setup, base images, and build pipeline structure
 - Deployment strategy and environment-specific configurations
 - CI/CD patterns, test stages, and approval gates in use

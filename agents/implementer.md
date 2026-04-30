@@ -24,9 +24,11 @@ Each teammate handles one task in an isolated worktree.
 - Verify your work. Run tests, check compilation, review your own diff.
 - Communicate blockers early. Don't spin silently.
 
-## Memory Guidance
+## Memory (after output)
 
-Remember project-specific implementation knowledge:
+After completing your work and producing the Output summary, persist project-specific implementation knowledge for future sessions. Memory is an addition, not a replacement. Never substitute memory writes for the primary output.
+
+Remember:
 - Code style, formatting, and naming conventions in active use
 - Build and test commands that work for this project
 - Common gotchas encountered during implementation

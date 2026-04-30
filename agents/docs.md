@@ -79,9 +79,11 @@ Answer about documentation structure, conventions, doc-code synchronization.
 ### BRAINSTORM
 Focus on documentation debt. What's undocumented, stale, or missing for onboarding?
 
-## Memory Guidance
+## Memory (after output)
 
-Remember project-specific documentation knowledge:
+After delivering your OUTPUT FORMAT response, persist project-specific documentation knowledge for future sessions. Memory is an addition, not a replacement. Never substitute memory writes for the OUTPUT FORMAT response.
+
+Remember:
 - Documentation structure and where different doc types live
 - Terminology and naming patterns specific to this project's domain
 - Update checklist locations (which files must change together)

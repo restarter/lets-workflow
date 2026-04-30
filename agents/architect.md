@@ -74,9 +74,11 @@ Focus on structural opportunities. Where could the system be simplified, better 
 ### PLAN
 Evaluate architecture completeness: are components well-defined? Are interfaces clear? Is task decomposition aligned with module boundaries?
 
-## Memory Guidance
+## Memory (after output)
 
-Remember project-specific architecture knowledge:
+After delivering your OUTPUT FORMAT response, persist project-specific architecture knowledge for future sessions. Memory is an addition, not a replacement. Never substitute memory writes for the OUTPUT FORMAT response.
+
+Remember:
 - Module boundaries, layering decisions, and coupling patterns
 - Design patterns in active use (and patterns explicitly rejected)
 - Abstraction levels the project maintains consistently
