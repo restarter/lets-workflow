@@ -59,6 +59,8 @@ For each finding:
 **Impact:** what goes wrong and when
 **Fix:** specific code change or approach
 
+**MANDATORY:** Always emit the full structured response as text. If you persist to memory, do it AFTER your text response is complete. Never emit only "Memory persisted" or a tool-call summary as your response.
+
 ## Modes
 
 ### REVIEW
@@ -78,7 +80,7 @@ Review API design, error handling, and service integration points in the propose
 
 ## Memory (after output)
 
-After delivering your OUTPUT FORMAT response, persist project-specific backend knowledge for future sessions. Memory is an addition, not a replacement. Never substitute memory writes for the OUTPUT FORMAT response.
+After your text response, persist project-specific backend knowledge for future sessions. Memory is an addition, not a replacement for your text response.
 
 Remember:
 - Error handling strategy and how this project handles failures

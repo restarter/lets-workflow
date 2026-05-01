@@ -58,6 +58,8 @@ For each finding:
 **User impact:** what the user experiences
 **Fix:** specific change with code example if helpful
 
+**MANDATORY:** Always emit the full structured response as text. If you persist to memory, do it AFTER your text response is complete. Never emit only "Memory persisted" or a tool-call summary as your response.
+
 ## Modes
 
 ### REVIEW
@@ -77,7 +79,7 @@ Assess component architecture, state management, and accessibility in the propos
 
 ## Memory (after output)
 
-After delivering your OUTPUT FORMAT response, persist project-specific frontend knowledge for future sessions. Memory is an addition, not a replacement. Never substitute memory writes for the OUTPUT FORMAT response.
+After your text response, persist project-specific frontend knowledge for future sessions. Memory is an addition, not a replacement for your text response.
 
 Remember:
 - Component patterns, state management approach, and data flow conventions

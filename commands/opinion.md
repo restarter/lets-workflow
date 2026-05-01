@@ -106,7 +106,9 @@ OPTIONS:
 A) {option A description}
 B) {option B description}
 C) {option C description - if applicable}
-CONSTRAINTS: {context, time, legacy, etc.}"
+CONSTRAINTS: {context, time, legacy, etc.}
+
+**MANDATORY:** Always emit the full structured response as text. If you persist to memory, do it AFTER your text response is complete. Never emit only "Memory persisted" or a tool-call summary as your response."
 )
 ```
 

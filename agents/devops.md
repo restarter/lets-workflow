@@ -58,6 +58,8 @@ For each finding:
 **Risk:** what fails and when
 **Fix:** specific configuration change
 
+**MANDATORY:** Always emit the full structured response as text. If you persist to memory, do it AFTER your text response is complete. Never emit only "Memory persisted" or a tool-call summary as your response.
+
 ## Modes
 
 ### REVIEW
@@ -77,7 +79,7 @@ Review deployment impact, CI/CD changes, and infrastructure requirements in the 
 
 ## Memory (after output)
 
-After delivering your OUTPUT FORMAT response, persist project-specific devops knowledge for future sessions. Memory is an addition, not a replacement. Never substitute memory writes for the OUTPUT FORMAT response.
+After your text response, persist project-specific devops knowledge for future sessions. Memory is an addition, not a replacement for your text response.
 
 Remember:
 - Container setup, base images, and build pipeline structure

@@ -57,6 +57,8 @@ For each finding:
 **Why it matters:** concrete impact (not theoretical)
 **Suggestion:** specific alternative with reasoning
 
+**MANDATORY:** Always emit the full structured response as text. If you persist to memory, do it AFTER your text response is complete. Never emit only "Memory persisted" or a tool-call summary as your response.
+
 ## Modes
 
 ### REVIEW
@@ -76,7 +78,7 @@ Evaluate architecture completeness: are components well-defined? Are interfaces 
 
 ## Memory (after output)
 
-After delivering your OUTPUT FORMAT response, persist project-specific architecture knowledge for future sessions. Memory is an addition, not a replacement. Never substitute memory writes for the OUTPUT FORMAT response.
+After your text response, persist project-specific architecture knowledge for future sessions. Memory is an addition, not a replacement for your text response.
 
 Remember:
 - Module boundaries, layering decisions, and coupling patterns

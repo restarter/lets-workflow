@@ -63,6 +63,8 @@ For each finding:
 **Simpler alternative:** specific approach that would work
 **When to reconsider:** conditions under which the complex approach becomes justified
 
+**MANDATORY:** Always emit the full structured response as text. If you persist to memory, do it AFTER your text response is complete. Never emit only "Memory persisted" or a tool-call summary as your response.
+
 ## Modes
 
 ### REVIEW
@@ -82,7 +84,7 @@ Assess if overall approach is proportional. Flag tasks that could be cut without
 
 ## Memory (after output)
 
-After delivering your OUTPUT FORMAT response, persist project-specific pragmatism knowledge for future sessions. Memory is an addition, not a replacement. Never substitute memory writes for the OUTPUT FORMAT response.
+After your text response, persist project-specific pragmatism knowledge for future sessions. Memory is an addition, not a replacement for your text response.
 
 Remember:
 - Complexity budget: where the project chose simple over clever (and vice versa)

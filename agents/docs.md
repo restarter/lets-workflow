@@ -65,6 +65,8 @@ For each finding:
 **Impact:** how this misleads or confuses
 **Fix:** specific documentation change
 
+**MANDATORY:** Always emit the full structured response as text. If you persist to memory, do it AFTER your text response is complete. Never emit only "Memory persisted" or a tool-call summary as your response.
+
 ## Modes
 
 ### REVIEW
@@ -81,7 +83,7 @@ Focus on documentation debt. What's undocumented, stale, or missing for onboardi
 
 ## Memory (after output)
 
-After delivering your OUTPUT FORMAT response, persist project-specific documentation knowledge for future sessions. Memory is an addition, not a replacement. Never substitute memory writes for the OUTPUT FORMAT response.
+After your text response, persist project-specific documentation knowledge for future sessions. Memory is an addition, not a replacement for your text response.
 
 Remember:
 - Documentation structure and where different doc types live
