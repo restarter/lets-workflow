@@ -27,7 +27,7 @@ reference/                    # Reference plugins for studying patterns (gitigno
 ## Architecture Decisions
 
 - Agents define WHO and HOW (expertise, behavioral modes, tiered scoring, output format). Commands define WHAT and WHEN (provide content, select agents, pass mode name)
-- Agent frontmatter fields: `name`, `description`, `tools`, `color` (terminal output: red/blue/green/yellow/purple/orange/pink/cyan), optional `model` (default inherits from parent, `opus` for complex analysis), `memory: project` (persistent cross-session learning). All agents use tiered scoring ([BLOCKER]/[SUGGESTION]/[NIT]) and have self-contained Modes and domain-specific `Memory (after output)` sections that explicitly subordinate memory persistence to the primary OUTPUT FORMAT response
+- Agent frontmatter fields: `name`, `description`, `tools`, `color` (terminal output: red/blue/green/yellow/purple/orange/pink/cyan), optional `model` (default inherits from parent, `opus` for complex analysis), `memory: project` (persistent cross-session learning). All agents use tiered scoring ([BLOCKER]/[SUGGESTION]/[NIT]), self-contained Modes, MANDATORY rules in `Output Format` sections, and domain-specific `Memory (after output)` sections that subordinate memory persistence to the primary text response
 - Actor meta-agent loads personalities at runtime via internal skill `actor-fetch-personality`. Command fetches personality content (curl for URLs, Read for files), user confirms via review gate, actor receives it in prompt as `PERSONALITY:` block. Fallback "generalist" identity when no personality provided
 - Agent selection: each command owns its detection/selection logic (different semantics per context). Multi-agent dispatching commands (review, opinion, brainstorm, plan) show selection panel with cost note before launch. Most agents have explicit PLAN mode for plan review.
 - Agents always respond in English. Commands localize output to user's language via LETS Config and Rules.
@@ -79,6 +79,7 @@ Update these files:
 | `commands/install.md` | Essential Skills / Planning Skills tables |
 | `CLAUDE.md` Key Concepts | If adding a new skill |
 | `README.md` | Agent table, feature descriptions |
+| Agent prompts (`agents/*.md`) + Task templates in `commands/{review,plan,opinion}.md` | MANDATORY block + Memory opener: keep wording synced across all 22 occurrences (`grep -n "MANDATORY:" agents/ commands/` to find them) |
 
 ### Command Output Requirements
 

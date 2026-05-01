@@ -275,6 +275,8 @@ CHANGED FILES:
 CODE:
 {diff_content, or full file content for --file mode}
 
+**MANDATORY:** Always emit the full structured response as text. If you persist to memory, do it AFTER your text response is complete. Never emit only "Memory persisted" or a tool-call summary as your response.
+
 ```
 
 ## Step 6: Filter & Aggregate Results
@@ -564,7 +566,9 @@ OUTPUT FORMAT:
 {things the plan should cover but doesn't}
 
 ### Strengths
-{1-2 things done well - keep feedback balanced}"
+{1-2 things done well - keep feedback balanced}
+
+**MANDATORY:** Always emit the full structured response as text. If you persist to memory, do it AFTER your text response is complete. Never emit only "Memory persisted" or a tool-call summary as your response."
 )
 ```
 
@@ -612,7 +616,9 @@ OUTPUT FORMAT:
 - Missing essentials: {if any}
 
 ### Bottom Line
-{1-2 sentences: ship it or revise it, and why}"
+{1-2 sentences: ship it or revise it, and why}
+
+**MANDATORY:** Always emit the full structured response as text. If you persist to memory, do it AFTER your text response is complete. Never emit only "Memory persisted" or a tool-call summary as your response."
 )
 ```
 
@@ -657,7 +663,9 @@ OUTPUT FORMAT:
 {risks from your area of expertise}
 
 ### Strengths
-{1-2 things done well}"
+{1-2 things done well}
+
+**MANDATORY:** Always emit the full structured response as text. If you persist to memory, do it AFTER your text response is complete. Never emit only "Memory persisted" or a tool-call summary as your response."
 )
 ```
 

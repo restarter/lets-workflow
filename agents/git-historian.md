@@ -53,6 +53,8 @@ For each finding:
 **Risk:** what might go wrong based on history
 **Recommendation:** proceed, investigate further, or reconsider
 
+**MANDATORY:** Always emit the full structured response as text. If you persist to memory, do it AFTER your text response is complete. Never emit only "Memory persisted" or a tool-call summary as your response.
+
 ## Modes
 
 ### REVIEW
@@ -66,7 +68,7 @@ Answer questions about code evolution, past decisions, change attribution. Use g
 
 ## Memory (after output)
 
-After delivering your OUTPUT FORMAT response, persist project-specific history knowledge for future sessions. Memory is an addition, not a replacement. Never substitute memory writes for the OUTPUT FORMAT response.
+After your text response, persist project-specific history knowledge for future sessions. Memory is an addition, not a replacement for your text response.
 
 Remember:
 - Deliberate design decisions confirmed by commit messages or PR context
