@@ -7,6 +7,8 @@ argument-hint: "[expert] [question]"
 
 Quick consultation with a single expert agent. Like pinging a colleague on Slack.
 
+> **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
+
 ## Usage
 
 ```bash

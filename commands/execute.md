@@ -9,6 +9,8 @@ Load an implementation plan and execute it using Claude Code's native plan mode.
 
 **Plan is a roadmap, not a script.** Read real files before every change. Adapt to current context.
 
+> **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
+
 ## Step 1: Active Task Detection
 
 Use the **detect-task** skill to find the active task (read `${CLAUDE_PLUGIN_ROOT}/skills/detect-task/SKILL.md` and follow its detection flow).

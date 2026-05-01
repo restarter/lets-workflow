@@ -9,6 +9,8 @@ Interactive ideation with 4 modes. Heavy modes launch explorer + parallel agents
 
 **This command helps with WHAT to build. For HOW to build it, use `/lets:plan`.**
 
+> **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
+
 ## Step 0: Choose Mode
 
 If argument provided AND it's clearly an idea/topic (not an epic name), go directly to Explore idea mode.

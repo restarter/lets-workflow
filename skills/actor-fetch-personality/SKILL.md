@@ -7,6 +7,8 @@ description: Internal skill for commands. Fetch and validate personality from UR
 
 Internal skill used by commands that dispatch the Actor agent. Handles personality source detection, fetching, validation, and prompt formatting.
 
+> **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
+
 ## Flow
 
 ### Step 1: Detect Source Type
