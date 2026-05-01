@@ -343,12 +343,11 @@ OUTPUT FORMAT - Project State Profile:
 
 PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
 
-MODE: brainstorm
+MODE: brainstorm (review backlog)
 
-Generate ideas and surface gaps from your area of expertise.
+Review the project's BACKLOG of tasks from your area of expertise. Surface gaps in WHAT'S BEING TRACKED: missing themes, priority imbalances, areas with no tasks but clear need from your domain.
 
-You are NOT reviewing code or evaluating a decision. You are looking at a project's
-current state and generating actionable insights about what to build, fix, or improve.
+You are NOT reviewing code, counting duplications, finding stale files, or hunting bugs in source. The PROJECT STATE PROFILE below is your primary source. Use bd commands (bd show, bd comments) for task details. Code reads are allowed only as evidence for a backlog observation ("this critical area has no tasks tracking it"), never as primary investigation.
 
 PROJECT RULES (from CLAUDE.md):
 {CLAUDE.md summary, first 100 lines - architecture decisions and structure}
@@ -357,29 +356,28 @@ PROJECT STATE PROFILE:
 {explorer output from Phase 1}
 
 INSTRUCTIONS:
-- Scan the project from YOUR expertise lens
-- Read files in areas relevant to your domain if needed (you have Read/Grep/Glob)
-- Generate 3-7 ideas: things to build, improve, fix, or investigate
-- Each idea must be specific and actionable (not vague like 'improve testing')
-- Prioritize ideas by impact (high/medium)
-- Flag gaps: areas with no tasks but clear need from your perspective
-- Connect to existing tasks when relevant ('task X could be extended to also cover Y')
-- Be opinionated - rank and recommend, don't just list
+- Anchor on the BACKLOG STATE from the profile above (open/in-progress tasks, recent closures, gaps)
+- Generate 3-7 backlog-level insights from your domain lens: what tasks SHOULD exist but don't? what existing tasks need re-prioritization, scope changes, or to be split/closed?
+- Each insight must be backlog-actionable: not "improve testing" but "backlog has 0 tasks tracking auth flow regressions despite 4 recent auth changes, propose creating one"
+- Prioritize by impact (high/medium)
+- Connect to existing tasks: "task X could be extended to cover Y", "task A and B overlap, suggest merging"
+- If you reference code, frame as backlog evidence ("Pattern X exists in 5 files but no task tracks consolidation"), never as code review
+- Be opinionated: rank and recommend, don't just list
 
 OUTPUT FORMAT:
 
-## {Your Domain} Perspective
+## {Your Domain} Backlog Review
 
-### Top Ideas
-1. **{idea title}** [Impact: high/medium]
-   {2-3 sentences: what, why it matters, rough scope}
-   {connection to existing task if any}
+### Missing from Backlog
+1. **{theme or task that should exist}** [Impact: high/medium]
+   {why this gap matters from your domain}
+   {suggested bd create command or task brief}
 
-### Gaps I See
-- {gap}: {why this matters from your expertise}
+### Existing Tasks Needing Adjustment
+- **{task-id}** ({title}): {what to change: bump priority, expand scope, split, deprioritize, close as obsolete, with reason}
 
-### Quick Wins
-- {small improvement that could be done in one session}"
+### Backlog Themes ({domain} lens)
+{1-2 observations about distribution, gaps, drift from project goals: what the backlog reveals about project priorities}"
 ```
 
 Then enter Heavy Mode Flow (Phase 1).
