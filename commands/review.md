@@ -170,7 +170,7 @@ Scan the diff for file patterns:
 | `lets:pragmatist` | Large changes (> 200 lines) | Small changes |
 | `lets:actor` | Explicit user request only | Always (never auto-selected) |
 
-**Actor note:** Actor is never auto-selected. When user explicitly requests it, use the **actor-fetch-personality** skill (read `skills/actor-fetch-personality/SKILL.md`) to fetch personality. Pass `PERSONALITY:` block in the actor's Task prompt only.
+**Actor note:** Actor is never auto-selected. When user explicitly requests it, use the **actor-fetch-personality** skill (read `${CLAUDE_PLUGIN_ROOT}/skills/actor-fetch-personality/SKILL.md`) to fetch personality. Pass `PERSONALITY:` block in the actor's Task prompt only.
 
 ### 4.2.1 File Mode Adjustments
 
@@ -439,7 +439,7 @@ Display full report in console.
 
 ## Step 10: Link Review to Active Task
 
-Use the **detect-task** skill to find the active task (read `skills/detect-task/SKILL.md` and follow its detection flow).
+Use the **detect-task** skill to find the active task (read `${CLAUDE_PLUGIN_ROOT}/skills/detect-task/SKILL.md` and follow its detection flow).
 If multiple tasks found via fallback, skip beads comment.
 If active task found:
 

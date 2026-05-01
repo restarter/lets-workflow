@@ -165,7 +165,7 @@ Classify each finding:
 
 If issues were found, record in beads:
 
-Use the **detect-task** skill to find the active task (read `skills/detect-task/SKILL.md` and follow its detection flow).
+Use the **detect-task** skill to find the active task (read `${CLAUDE_PLUGIN_ROOT}/skills/detect-task/SKILL.md` and follow its detection flow).
 If multiple tasks found, skip beads comment.
 If active task found AND issues detected:
 

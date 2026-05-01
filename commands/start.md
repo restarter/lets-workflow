@@ -97,7 +97,7 @@ Recent: {last 3 commits}
 
 ## Step 6: Take Task
 
-After task is selected, delegate to the **take-task** skill to claim it and prepare the branch (read `skills/take-task/SKILL.md` and follow its flow).
+After task is selected, delegate to the **take-task** skill to claim it and prepare the branch (read `${CLAUDE_PLUGIN_ROOT}/skills/take-task/SKILL.md` and follow its flow).
 
 The take-task skill handles: setting task to `in_progress`, uncommitted changes check, worktree detection, branch creation/switching, offering worktree option, context recovery, saving session start ref.
 

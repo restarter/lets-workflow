@@ -38,7 +38,7 @@ Adjust based on decision complexity - add more experts for cross-cutting decisio
 **Guidelines:**
 - `architect` and `pragmatist` always included
 - Table above is a starting point, not a cap - add or remove agents based on context
-- `actor` can replace or supplement any domain agent. If actor is selected, use the **actor-fetch-personality** skill (read `skills/actor-fetch-personality/SKILL.md`) to fetch personality. Pass `PERSONALITY:` block in the actor's Task prompt only.
+- `actor` can replace or supplement any domain agent. If actor is selected, use the **actor-fetch-personality** skill (read `${CLAUDE_PLUGIN_ROOT}/skills/actor-fetch-personality/SKILL.md`) to fetch personality. Pass `PERSONALITY:` block in the actor's Task prompt only.
 - Agents use their own model from frontmatter (opus for critical agents, session model for others)
 
 **Confirmation gate:** If planning to launch more than 10 experts:
@@ -160,7 +160,7 @@ For each agent, summarize their position:
 
 Record the decision in beads for future context recovery:
 
-Use the **detect-task** skill to find the active task (read `skills/detect-task/SKILL.md` and follow its detection flow).
+Use the **detect-task** skill to find the active task (read `${CLAUDE_PLUGIN_ROOT}/skills/detect-task/SKILL.md` and follow its detection flow).
 If multiple tasks found, skip beads comment.
 If active task found:
 

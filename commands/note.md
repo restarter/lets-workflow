@@ -22,7 +22,7 @@ Use `/lets:note` when you want to add extra context that doesn't fit those flows
 
 ## Step 1: Active Task Detection
 
-Use the **detect-task** skill to find the active task (read `skills/detect-task/SKILL.md` and follow its detection flow).
+Use the **detect-task** skill to find the active task (read `${CLAUDE_PLUGIN_ROOT}/skills/detect-task/SKILL.md` and follow its detection flow).
 If no active task or multiple tasks found - ask user which task to add a note to.
 
 ## Step 2: Review Current State
