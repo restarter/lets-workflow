@@ -8,6 +8,8 @@ Complete the current task. Document work, create PR or merge locally, close in b
 
 **This is NOT session end.** Use `/lets:end` to end a session. `/lets:done` finishes a TASK.
 
+> **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
+
 ## Step 1: Active Task Detection
 
 Use the **detect-task** skill to find the active task (read `${CLAUDE_PLUGIN_ROOT}/skills/detect-task/SKILL.md` and follow its detection flow).

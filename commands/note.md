@@ -13,6 +13,8 @@ Add a note to the active beads task. For mid-work documentation - progress updat
 
 Use `/lets:note` when you want to add extra context that doesn't fit those flows.
 
+> **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
+
 ## When to Use
 
 - Research findings: "Investigated X, found Y"

@@ -7,6 +7,8 @@ description: This skill should be used when claiming a task to work on - "take t
 
 Claim a beads task and prepare the working environment.
 
+> **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
+
 ## Why This Exists
 
 Multiple flows need "claim task + prepare branch": /lets:start, mid-session task switch, direct "візьми таск X". Centralizing ensures consistent branch naming, worktree handling, and session ref saving.

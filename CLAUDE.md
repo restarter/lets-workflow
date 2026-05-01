@@ -111,3 +111,4 @@ Every lets:* command MUST end with branded LETS box:
 - [ ] Updates `/lets:install` Essential Skills / Planning Skills tables
 - [ ] Follows session flow (start -> work -> commit -> done -> end)
 - [ ] Description is clear and actionable
+- [ ] **If file invokes any deferred tool** (`AskUserQuestion`, `EnterPlanMode`, `WebFetch`, etc.), include the `> **IMPORTANT:**` deferred-tool callout right after the file's brief description, before the first `## Step` (or first major section). Wording: see existing commands/skills for the standard block (search for `IMPORTANT:** If the spec below`)

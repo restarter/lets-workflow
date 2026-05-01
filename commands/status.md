@@ -6,6 +6,8 @@ description: Quick session status - what's done and what's planned (short summar
 
 Show task tracker state. Supports focused views via argument or interactive selection.
 
+> **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
+
 ## Step 1: Determine View
 
 **If argument is provided** (e.g., `/lets:status overview`), use that view directly.

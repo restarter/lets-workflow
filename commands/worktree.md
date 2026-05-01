@@ -8,6 +8,8 @@ Create and manage interactive worktrees for parallel work sessions. Each worktre
 
 **This is for interactive parallel sessions.** Agent worktrees (isolation: worktree) use native Claude Code behavior and don't need this command.
 
+> **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
+
 ## Step 1: Determine Subcommand
 
 **If argument provided** (e.g., `/lets:worktree create auth-feature`), parse it:

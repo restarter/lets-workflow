@@ -7,6 +7,8 @@ description: Internal skill for commands. Detect active beads task from git bran
 
 Parse current git branch to find the active beads task ID. Used by commands that need to know which task is in progress.
 
+> **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
+
 ## Why This Exists
 
 10+ commands need to detect the active task from branch name. This skill centralizes the logic so branch format changes are updated in one place.

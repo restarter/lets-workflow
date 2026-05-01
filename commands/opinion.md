@@ -9,6 +9,8 @@ Analyze technical decisions by launching expert agents in parallel. Each agent p
 
 **DO NOT ask the user which option to choose.** Analyze and recommend.
 
+> **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
+
 ## Step 1: Frame the Problem
 
 ```

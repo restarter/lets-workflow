@@ -9,6 +9,8 @@ End a work session properly. Save context for next session.
 
 **This is NOT task completion.** Use `/lets:done` to finish a task. `/lets:end` ends a SESSION.
 
+> **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
+
 ## Fast Mode
 
 If `--fast` argument provided, skip to Fast Close below and do NOT run Steps 1-7.

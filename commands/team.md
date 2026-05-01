@@ -9,6 +9,8 @@ Spawn teammates in isolated worktrees for parallel implementation. Each teammate
 
 **This is for parallel implementation of independent tasks.** For analysis (review, opinion, plan) - use their dedicated commands.
 
+> **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
+
 ## Step 1: Determine Subcommand
 
 **If argument provided** (e.g., `/lets:team run`), parse it:

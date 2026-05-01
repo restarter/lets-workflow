@@ -7,6 +7,8 @@ description: This skill should be used when committing code changes - "commit", 
 
 Standardized commit flow that enforces conventional format, beads task linking, and user approval.
 
+> **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
+
 ## Why This Exists
 
 Direct `git commit` skips task linking, format enforcement, and approval gates. This skill ensures every commit follows conventions whether invoked via `/lets:commit` or implicit "закоміть".

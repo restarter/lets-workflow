@@ -9,6 +9,8 @@ Turn a task or idea into a detailed implementation plan. Clarifies scope, explor
 
 **HARD-GATE: This command produces a plan, NOT code. No files are modified except .lets/plans/.**
 
+> **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
+
 ## Step 1: Capture the Goal
 
 **If argument provided:** use it as the feature goal.

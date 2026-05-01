@@ -10,6 +10,8 @@ Comprehensive code review with dynamic agent selection based on change types. Up
 - Local changes (saves to file)
 - Implementation plans (reviews `.lets/plans/` files)
 
+> **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
+
 ## Usage
 
 ```bash
