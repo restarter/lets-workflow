@@ -157,9 +157,7 @@ YOUR FOCUS:
 {specific bullets tailored to this focus area}
 
 Return the structured exploration report as defined in your system prompt.
-Focus ONLY on {focus area} - other explorers cover other areas.
-
-**MANDATORY:** Always emit the full structured response as text. If you persist to memory, do it AFTER your text response is complete. Never emit only "Memory persisted" or a tool-call summary as your response."
+Focus ONLY on {focus area} - other explorers cover other areas."
 )
 ```
 
@@ -312,9 +310,7 @@ OUTPUT:
 ### Trade-offs
 - Pro: {advantages}
 - Con: {limitations}
-- Risk: {what could go wrong}
-
-**MANDATORY:** Always emit the full structured response as text. If you persist to memory, do it AFTER your text response is complete. Never emit only "Memory persisted" or a tool-call summary as your response."
+- Risk: {what could go wrong}"
 )
 ```
 
@@ -448,9 +444,7 @@ CHOSEN ARCHITECTURE:
 
 {If actor agent: include PERSONALITY block from actor-fetch-personality skill}
 PERSONALITY:
-{fetched personality content - only for lets:actor, omit for other agents}
-
-**MANDATORY:** Always emit the full structured response as text. If you persist to memory, do it AFTER your text response is complete. Never emit only "Memory persisted" or a tool-call summary as your response."
+{fetched personality content - only for lets:actor, omit for other agents}"
 )
 ```
 
