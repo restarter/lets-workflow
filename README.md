@@ -23,7 +23,6 @@ Claude Code is powerful, but without structure it drifts - forgets context betwe
 
 - **14 expert agents** that dynamically select themselves based on your code changes - security agent for auth code, database agent for migrations, architect for structural changes. No manual configuration.
 - **Full PR review lifecycle** - agents analyze the PR, you discuss findings, they post inline comments to GitHub, then follow up to verify fixes. Approve or request changes without leaving the terminal.
-- **Agents with memory** - each agent remembers your project's patterns across sessions. Security agent learns your auth flows. Architect learns your design decisions. The more you use them, the better they get.
 - **Actor agent** - load any expert personality from a URL or file. Want a senior iOS developer's perspective on your Swift code? A UX designer reviewing your components? Import their personality and get their unique take on your work.
 - **Structured planning pipeline** - brainstorm ideas (4 modes), plan architecture with codebase exploration, execute with approval gates. Think, design, build.
 - **Agent Teams** - spawn autonomous agents that implement multiple tasks in parallel, each in an isolated worktree with plan approval from the lead.
@@ -274,8 +273,6 @@ Each worktree gets its own branch, shares the task database and config via symli
 **Dynamic selection** - you don't pick agents. Commands analyze your changes and select only relevant experts. Security agent won't review a docs-only PR. Database agent won't review CSS.
 
 **Tiered scoring** - findings are `[BLOCKER]` (must fix), `[SUGGESTION]` (should fix), or `[NIT]` (nice to have). No noise - agents are trained to skip obvious things and focus on what matters.
-
-**Persistent memory** - agents learn your project over time. Security agent remembers your auth patterns. Architect remembers your design decisions. Each agent has domain-specific memory guidance.
 
 **Multiple modes** - each agent operates differently depending on the context: *review* mode for code review, *opinion* mode for technical decisions, *plan* mode for architecture evaluation, *brainstorm* mode for ideation, *ask* mode for direct questions.
 

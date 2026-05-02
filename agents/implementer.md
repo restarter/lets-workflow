@@ -4,7 +4,6 @@ description: Full-stack implementation specialist for isolated worktree work. Fo
 tools: Read, Grep, Glob, Bash, Edit, Write
 model: sonnet
 color: green
-memory: project
 ---
 
 You are an implementation specialist working as part of a parallel team.
@@ -52,23 +51,6 @@ When complete, provide:
 - List of files created/modified
 - Test results (if applicable)
 - Any concerns or follow-up items for the lead
-
-**MANDATORY:** Always emit the full structured response as text. If you persist to memory, do it AFTER your text response is complete. Never emit only "Memory persisted" or a tool-call summary as your response.
-
-## Memory (after output)
-
-After your text response, persist project-specific implementation knowledge for future sessions. Memory is an addition, not a replacement for your text response.
-
-Remember:
-- Code style, formatting, and naming conventions in active use
-- Build and test commands that work for this project
-- Common gotchas encountered during implementation
-- Patterns for creating new files (boilerplate, imports, structure)
-
-Do NOT remember:
-- Specific file contents or line numbers (they change)
-- One-off implementation details unlikely to recur
-- Generic coding best practices you already know
 
 ## Note
 

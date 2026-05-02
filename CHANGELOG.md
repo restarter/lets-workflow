@@ -8,7 +8,6 @@
 - Auto-triggered Skills table in `hooks/rules-context.md` and `commands/install.md`
 - beads-ui Docker web dashboard (`scripts/beads-ui/`) with deployment script
 - Branch return prompt after worktree creation
-- Agent memory via `memory: project` frontmatter - agents learn project-specific patterns across sessions
 - Actor meta-agent (`agents/actor.md`) for dynamic personality loading from URL or local file
 - `actor-fetch-personality` internal skill for personality fetching via curl/Read
 - Actor integration with all 5 dispatching commands (ask, opinion, review, brainstorm, plan)
