@@ -24,7 +24,7 @@ while [ $# -gt 0 ]; do
       echo "Options:"
       echo "  --language LANG        Response language (default: English)"
       echo "  --merge-branch BRANCH  Target branch for merges (default: main)"
-      echo "  --github               Enable GitHub PR workflow (default: false)"
+      echo "  --github               Enable GitHub PR workflow (sets LETS_PR_FLOW=github; default: local)"
       echo "  --skip-beads           Skip beads initialization"
       echo "  --quiet                Suppress informational output"
       echo "  --help                 Show this help"
@@ -111,30 +111,41 @@ else
   info "[ok]   .claude/settings.json (updated)"
 fi
 
-# Create config.yaml
-CONFIG="${LETS_DIR}/config.yaml"
+# Create .env
+CONFIG="${LETS_DIR}/.env"
 if [ -f "$CONFIG" ]; then
-  info "[skip] config.yaml (exists)"
+  info "[skip] .env (exists)"
 else
+  # Convert --github boolean to LETS_PR_FLOW enum value
+  case "$GITHUB" in
+    true)  PR_FLOW="github" ;;
+    *)     PR_FLOW="local" ;;
+  esac
+
   # Read template from hooks/ (relative to plugin root)
-  TEMPLATE="${SCRIPT_DIR}/../../hooks/config-template.yaml"
+  TEMPLATE="${SCRIPT_DIR}/../../hooks/config-template.env"
   if [ -f "$TEMPLATE" ]; then
-    # Substitute values in template
-    sed -e "s|^language:.*|language: ${LANGUAGE}|" \
-        -e "s|^merge-branch:.*|merge-branch: ${MERGE_BRANCH}|" \
-        -e "s|^github:.*|github: ${GITHUB}|" \
+    sed -e "s|^LETS_LANGUAGE=.*|LETS_LANGUAGE=${LANGUAGE}|" \
+        -e "s|^LETS_MERGE_BRANCH=.*|LETS_MERGE_BRANCH=${MERGE_BRANCH}|" \
+        -e "s|^LETS_PR_FLOW=.*|LETS_PR_FLOW=${PR_FLOW}|" \
         "$TEMPLATE" > "$CONFIG"
   else
     # Fallback: inline template (manual invocation without plugin context)
-    cat > "$CONFIG" <<YAML
+    cat > "$CONFIG" <<ENV
 # LETS plugin config
 
-language: ${LANGUAGE}      # Response language (English/Ukrainian/Italian/etc)
-merge-branch: ${MERGE_BRANCH}    # Target branch for merges and PR base
-github: ${GITHUB}         # GitHub PR workflow: PR on done instead of local merge (requires gh CLI)
-YAML
+LETS_LANGUAGE=${LANGUAGE}
+LETS_MERGE_BRANCH=${MERGE_BRANCH}
+LETS_PR_FLOW=${PR_FLOW}
+LETS_TRACKER=beads
+ENV
   fi
-  info "[ok]   config.yaml (language: ${LANGUAGE}, merge-branch: ${MERGE_BRANCH}, github: ${GITHUB})"
+  info "[ok]   .env (LANGUAGE=${LANGUAGE}, MERGE_BRANCH=${MERGE_BRANCH}, PR_FLOW=${PR_FLOW})"
+
+  # Notice if legacy yaml exists (left for reference, no longer read)
+  if [ -f "${LETS_DIR}/config.yaml" ]; then
+    info "[note] legacy .lets/config.yaml found - it is no longer read; edit .lets/.env instead. Safe to delete config.yaml."
+  fi
 fi
 
 # Initialize beads
