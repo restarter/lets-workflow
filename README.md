@@ -121,7 +121,7 @@ Then start working:
 
 ### Under the Hood
 
-**SessionStart Hook** - injects workflow rules into every Claude Code conversation: development practices, git conventions, session flow, discovery logging. This is what makes Claude follow the LETS workflow without you having to remind it.
+**SessionStart + PreCompact Hooks** - inject workflow rules into every Claude Code conversation: development practices, git conventions, session flow, discovery logging. SessionStart fires on new/resumed/cleared sessions; PreCompact re-injects rules before auto-compaction so workflow context survives long sessions. This is what makes Claude follow the LETS workflow without you having to remind it.
 
 **LETS Boxes** - after key actions, Claude shows contextual next-step suggestions so you always know what to do next:
 
