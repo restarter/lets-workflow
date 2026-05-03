@@ -45,20 +45,39 @@ if [ -n "$PROJECT_ROOT" ]; then
 
       # Atomic write via mktemp + cleanup trap (avoids predictable PID names
       # and dead .tmp.* accumulation on failure).
+      # Heredoc format must mirror scripts/lets/init.sh - same comment block,
+      # same per-key annotations - so /lets:init and auto-migration produce
+      # identical .env files. When updating either, update both.
       TMP_FILE=$(mktemp "${ENV_FILE}.tmp.XXXXXX" 2>/dev/null)
       if [ -n "$TMP_FILE" ]; then
         trap 'rm -f "$TMP_FILE"' EXIT INT TERM
-        if {
-          echo "# LETS plugin config (auto-migrated from config.yaml on $(date +%Y-%m-%d))"
-          echo ""
-          echo "LETS_LANGUAGE=$LANG_VAL"
-          echo "LETS_MERGE_BRANCH=$BRANCH_VAL"
-          echo "LETS_PR_FLOW=$PR_FLOW"
-          echo "LETS_TRACKER=beads"
-        } > "$TMP_FILE" && mv "$TMP_FILE" "$ENV_FILE" 2>/dev/null; then
+        if cat > "$TMP_FILE" <<ENV && mv "$TMP_FILE" "$ENV_FILE" 2>/dev/null
+# LETS plugin config
+# NOT FOR SECRETS. Contents are injected verbatim into model context every
+# session (subject to whitelist filter in hooks/session-start.sh). Put
+# tokens/passwords elsewhere (gh auth, OS keychain, .beads/.env).
+
+# Response language (English/Ukrainian/Italian/etc)
+LETS_LANGUAGE=$LANG_VAL
+
+# Target branch for merges and PR base
+LETS_MERGE_BRANCH=$BRANCH_VAL
+
+# PR flow: github | bitbucket | local
+LETS_PR_FLOW=$PR_FLOW
+
+# Task tracker (currently beads supported)
+LETS_TRACKER=beads
+ENV
+        then
+          # Mirror /lets:init: drop a reference .env.example alongside (gitignored).
+          # Useful when restoring/comparing user's customized .env.
+          TEMPLATE="${CLAUDE_PLUGIN_ROOT}/hooks/config-template.env"
+          [ -f "$TEMPLATE" ] && cp "$TEMPLATE" "${PROJECT_ROOT}/.lets/.env.example" 2>/dev/null
+
           echo ""
           echo "## LETS Notice"
-          echo "Auto-migrated .lets/config.yaml -> .lets/.env. Edit .lets/.env now (yaml is no longer read)."
+          echo "Auto-migrated .lets/config.yaml -> .lets/.env. Edit .lets/.env now (yaml is no longer read). Reference defaults in .lets/.env.example."
         else
           echo ""
           echo "## LETS Notice"
