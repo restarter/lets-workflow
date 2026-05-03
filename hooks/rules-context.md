@@ -295,7 +295,6 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:note` | Utility | Add note to active task |
 | `/lets:install` | Setup | First-time global setup |
 | `/lets:init`    | Setup | Per-project initialization |
-| `/lets:migrate` | Setup | One-time migration from .claude/sessions/ to .lets/ |
 
 ### Auto-triggered Skills
 

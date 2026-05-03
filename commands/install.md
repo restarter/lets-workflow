@@ -70,7 +70,6 @@ Team:     /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /le
 | `/lets:status` | Utility | Task overview anytime |
 | `/lets:note` | Utility | Add note to active task |
 | `/lets:brainstorm` | Planning | Interactive ideation - review backlog, explore ideas, quick brainstorm, cleanup |
-| `/lets:migrate` | Setup | One-time migration from .claude/sessions/ to .lets/ |
 
 ### Auto-triggered Skills
 
