@@ -151,6 +151,16 @@ ENV
   fi
 fi
 
+# Create .env.example as reference (shows defaults from template; safe to keep
+# under .lets/ since it's gitignored). Useful when restoring/comparing user's
+# customized .env. Always copy from template - the example IS the defaults.
+EXAMPLE="${LETS_DIR}/.env.example"
+TEMPLATE="${SCRIPT_DIR}/../../hooks/config-template.env"
+if [ -f "$TEMPLATE" ]; then
+  cp "$TEMPLATE" "$EXAMPLE"
+  info "[ok]   .env.example (reference defaults from template)"
+fi
+
 # Initialize beads
 if [ -n "$SKIP_BEADS" ]; then
   info "[skip] beads (--skip-beads)"
