@@ -85,12 +85,12 @@ All plugin configuration uses the `LETS_*` prefix (UPPER_SNAKE_CASE). The prefix
 
 The same `LETS_FOO` value appears in different surface forms depending on context. The orchestrator (model) handles substitution; subagents do NOT receive LETS Config injection and need explicit substitution before Task() launch.
 
-| Surface | Form | Resolved by |
-|---|---|---|
-| Bash block (model executes via Bash tool) | `LETS_FOO=$(...)` then `$LETS_FOO` | local shell - assign at top of every block (each Bash call is a fresh shell) |
-| Bash command snippet inside markdown (template the model runs) | `{LETS_FOO}` placeholder | orchestrator substitutes literal value before running |
-| Orchestrator prose, AskUserQuestion descriptions | `$LETS_FOO` | orchestrator reads from injected LETS Config |
-| Subagent prompt template | `{LETS_FOO from LETS Config}` | orchestrator substitutes literal before Task() call |
+| Surface | Form | Resolved by | Applies to |
+|---|---|---|---|
+| Bash block (model executes via Bash tool) | `LETS_FOO=$(...)` then `$LETS_FOO` | local shell - assign at top of every block (each Bash call is a fresh shell) | **only `LETS_PROJECT_ROOT`** (computable in-shell via `git rev-parse`) |
+| Bash command snippet inside markdown (template the model runs) | `{LETS_FOO}` placeholder | orchestrator substitutes literal value before running | all keys EXCEPT `LETS_PROJECT_ROOT` (which uses bash assignment instead) |
+| Orchestrator prose, AskUserQuestion descriptions | `$LETS_FOO` | orchestrator reads from injected LETS Config | all keys |
+| Subagent prompt template | `{LETS_FOO from LETS Config}` | orchestrator substitutes literal before Task() call | all keys |
 
 **Important note on `LETS_PROJECT_ROOT`:** the value injected in `## LETS Config` is for prompt-text reference and orchestrator substitution - it is NOT a shell variable available in Bash tool calls. Every bash block that uses the project root path must assign locally:
 
@@ -99,20 +99,25 @@ LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 mkdir -p "$LETS_PROJECT_ROOT/.lets/sessions"
 ```
 
-`LETS_PROJECT_ROOT` is the only key currently computable in-shell (via `git rev-parse`). Other `LETS_*` keys (`LETS_MERGE_BRANCH`, `LETS_PR_FLOW`, `LETS_LANGUAGE`, `LETS_TRACKER`) come only from the LETS Config inject - inside bash snippets, use the `{LETS_FOO}` template form so the orchestrator substitutes the literal value before running.
+`LETS_PROJECT_ROOT` is the **only** key computable in-shell (via `git rev-parse`). Other `LETS_*` keys (`LETS_MERGE_BRANCH`, `LETS_PR_FLOW`, `LETS_LANGUAGE`, `LETS_TRACKER`) have no shell-side derivation - inside bash snippets, use the `{LETS_FOO}` template form so the orchestrator substitutes the literal value before running. Trying to use `$LETS_FOO` in a bash block (without local assignment) yields empty string - silently wrong commands.
 
 ### User config file
 
-`.lets/.env` is `KEY=VALUE` format with comments **above** keys (NOT inline - inline comments would pollute the model's context after the hook strips full-line comments). Auto-migrated from legacy `config.yaml` on first session by `hooks/session-start.sh`. The migration code is intended to be removed in a future task once all known users have migrated.
+`.lets/.env` is `KEY=VALUE` format with comments **above** keys (NOT inline - inline comments would pollute the model's context after the hook strips full-line comments). Auto-migrated from legacy `config.yaml` on first session by `hooks/session-start.sh`. Migration code removal tracked in `lets-p732a` (remove after all known users have migrated).
 
 **NOT FOR SECRETS.** The hook injects the file's whitelisted `LETS_*` values into model context every session. Tokens, passwords, and API keys belong elsewhere: `gh auth login` for GitHub, OS keychain for general secrets, tool-specific credential files (e.g. `.beads/.env` for beads). The whitelist filter in `hooks/session-start.sh` only echoes the 4 documented `LETS_*` keys, so unknown keys are filtered - but file mode is 644 (world-readable on disk), so secrets in `.env` would still be exposed locally. Do not add secret keys.
 
 ### Adding a new config key
 
 1. Add to `hooks/config-template.env` with comment ABOVE the key
-2. Add `LETS_NEW_KEY=$NEW_KEY` substitution in `scripts/lets/init.sh`
-3. Document in `hooks/rules-context.md` Local Config section
-4. Document in this CLAUDE.md table
+2. Add the new key as a heredoc line in `scripts/lets/init.sh` (write `.env` block - keep heredoc, don't switch to sed)
+3. Add to the whitelist loop in `hooks/session-start.sh` (`for key in LETS_LANGUAGE ...; do ...`)
+4. Document in `hooks/rules-context.md` Local Config section
+5. Document in this CLAUDE.md "LETS Config keys" table
+6. Document in `README.md` ⚙️ Configuration block (user-facing example)
+7. If the key controls behavior, add the conditional logic in consuming command(s)
+
+**Migration coverage note:** the migration block in `hooks/session-start.sh` is hardcoded to 3 legacy yaml keys (language/merge-branch/github). New keys added per the recipe will appear for users who run `/lets:init` or hand-edit `.lets/.env`, but will NOT be auto-populated for users still on legacy yaml. If a new key needs a default for legacy users, extend the migration block - otherwise legacy users see only what's in their old yaml + the hardcoded `LETS_TRACKER=beads`.
 5. If the key controls behavior (not just metadata), add the conditional logic in the consuming command(s)
 
 ## Dependencies

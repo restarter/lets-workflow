@@ -72,7 +72,8 @@ If --cancel:
 **State guard:** If `--follow-up`, `--approve`, `--merge`, or `--respond` is specified but no state file exists:
 1. If a PR number is also provided (e.g., `/lets:pr --approve 2`), create a minimal state from `gh pr view`:
    ```bash
-   REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+   REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner) || { echo "ERROR: gh repo view failed - check 'gh auth status'"; exit 1; }
+[ -z "$REPO" ] && { echo "ERROR: gh repo view returned empty REPO"; exit 1; }
    gh pr view <PR> --json title,headRefOid,headRefName,baseRefName
    ```
    Write minimal state (pr_number, repo, title, branch, head_sha, findings: [], findings_posted: false) and continue.
@@ -208,7 +209,8 @@ If checkout fails:
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 PR_DIR="$LETS_PROJECT_ROOT/.lets/execution/pr-{number}"
 mkdir -p "$PR_DIR"
-REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner) || { echo "ERROR: gh repo view failed - check 'gh auth status'"; exit 1; }
+[ -z "$REPO" ] && { echo "ERROR: gh repo view returned empty REPO"; exit 1; }
 ```
 
 Write initial state to `.lets/execution/pr-{number}/review.json` with Phase 1 fields.
@@ -408,7 +410,8 @@ Step 1: Build the complete review JSON payload.
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 PR_DIR="$LETS_PROJECT_ROOT/.lets/execution/pr-{number}"
-REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner) || { echo "ERROR: gh repo view failed - check 'gh auth status'"; exit 1; }
+[ -z "$REPO" ] && { echo "ERROR: gh repo view returned empty REPO"; exit 1; }
 HEAD_SHA=$(gh pr view <PR> --json headRefOid -q .headRefOid)
 ```
 
@@ -617,7 +620,8 @@ AskUserQuestion(
 Post replies using GitHub's reply-to-comment API:
 
 ```bash
-REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner) || { echo "ERROR: gh repo view failed - check 'gh auth status'"; exit 1; }
+[ -z "$REPO" ] && { echo "ERROR: gh repo view returned empty REPO"; exit 1; }
 
 gh api repos/${REPO}/pulls/{PR}/comments \
   --method POST \
@@ -806,7 +810,8 @@ Check for existing `$PR_DIR/response.json`:
 **Step 1: Resolve REPO first.** All subsequent API calls depend on this value. Do NOT run API calls in parallel with this - resolve REPO, then use it.
 
 ```bash
-REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner) || { echo "ERROR: gh repo view failed - check 'gh auth status'"; exit 1; }
+[ -z "$REPO" ] && { echo "ERROR: gh repo view returned empty REPO"; exit 1; }
 HEAD_SHA=$(gh pr view <PR> --json headRefOid -q .headRefOid)
 ```
 

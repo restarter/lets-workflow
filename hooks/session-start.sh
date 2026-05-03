@@ -20,7 +20,7 @@ if [ -n "$PROJECT_ROOT" ]; then
   YAML_FILE="${PROJECT_ROOT}/.lets/config.yaml"
 
   # One-time auto-migration: yaml -> .env (hardcoded 3-key conversion).
-  # Removal tracked in lets-77hnu followup task.
+  # Removal tracked in lets-p732a (after all known users have migrated).
   # Parser: take 2nd whitespace-separated token via awk - handles inline
   # comments (# falls outside $2), multi-line duplicate keys (head -1).
   # _lets_clean_val strips quotes/CRLF.
