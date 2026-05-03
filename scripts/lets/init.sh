@@ -3,19 +3,21 @@
 # Usage: init.sh [--language LANG] [--merge-branch BRANCH] [--github] [--skip-beads] [--quiet] [--help]
 set -e
 
-# Defaults
-LANGUAGE="English"
-MERGE_BRANCH="main"
-GITHUB="false"
+# Defaults (LETS_ prefix mirrors .env keys for clarity - same names inside
+# the script and in the resulting config file).
+LETS_LANGUAGE="English"
+LETS_MERGE_BRANCH="main"
+LETS_PR_FLOW="local"
 SKIP_BEADS=""
 QUIET=""
 
-# Parse arguments
+# Parse arguments. CLI flag --github is preserved as a boolean shortcut
+# (separate Bitbucket integration task will replace it with --pr-flow).
 while [ $# -gt 0 ]; do
   case "$1" in
-    --language)    LANGUAGE="$2"; shift 2 ;;
-    --merge-branch) MERGE_BRANCH="$2"; shift 2 ;;
-    --github)      GITHUB="true"; shift ;;
+    --language)    LETS_LANGUAGE="$2"; shift 2 ;;
+    --merge-branch) LETS_MERGE_BRANCH="$2"; shift 2 ;;
+    --github)      LETS_PR_FLOW="github"; shift ;;
     --skip-beads)  SKIP_BEADS="true"; shift ;;
     --quiet)       QUIET="true"; shift ;;
     --help)
@@ -119,12 +121,6 @@ CONFIG="${LETS_DIR}/.env"
 if [ -f "$CONFIG" ]; then
   info "[skip] .env (exists)"
 else
-  # Convert --github boolean to LETS_PR_FLOW enum value
-  case "$GITHUB" in
-    true)  PR_FLOW="github" ;;
-    *)     PR_FLOW="local" ;;
-  esac
-
   cat > "$CONFIG" <<ENV
 # LETS plugin config
 # NOT FOR SECRETS. Contents are injected verbatim into model context every
@@ -132,18 +128,18 @@ else
 # tokens/passwords elsewhere (gh auth, OS keychain, .beads/.env).
 
 # Response language (English/Ukrainian/Italian/etc)
-LETS_LANGUAGE=${LANGUAGE}
+LETS_LANGUAGE=${LETS_LANGUAGE}
 
 # Target branch for merges and PR base
-LETS_MERGE_BRANCH=${MERGE_BRANCH}
+LETS_MERGE_BRANCH=${LETS_MERGE_BRANCH}
 
 # PR flow: github | bitbucket | local
-LETS_PR_FLOW=${PR_FLOW}
+LETS_PR_FLOW=${LETS_PR_FLOW}
 
 # Task tracker (currently beads supported)
 LETS_TRACKER=beads
 ENV
-  info "[ok]   .env (LANGUAGE=${LANGUAGE}, MERGE_BRANCH=${MERGE_BRANCH}, PR_FLOW=${PR_FLOW})"
+  info "[ok]   .env (LETS_LANGUAGE=${LETS_LANGUAGE}, LETS_MERGE_BRANCH=${LETS_MERGE_BRANCH}, LETS_PR_FLOW=${LETS_PR_FLOW})"
 
   # Notice if legacy yaml exists (left for reference, no longer read)
   if [ -f "${LETS_DIR}/config.yaml" ]; then
