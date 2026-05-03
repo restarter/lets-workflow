@@ -253,7 +253,7 @@ Each agent receives this context in their task prompt. Agents define their own e
 ```
 ultrathink
 
-PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
+PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
 
 MODE: review
 
@@ -531,7 +531,7 @@ Task(
   subagent_type="lets:architect",
   prompt="ultrathink
 
-PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
+PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
 
 MODE: plan
 
@@ -578,7 +578,7 @@ Task(
   subagent_type="lets:pragmatist",
   prompt="ultrathink
 
-PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
+PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
 
 MODE: plan
 
@@ -628,7 +628,7 @@ Task(
   subagent_type="lets:{agent-name}",
   prompt="ultrathink
 
-PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
+PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
 
 MODE: plan
 

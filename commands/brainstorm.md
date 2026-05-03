@@ -176,7 +176,7 @@ Task(
 The prompt template is set by the calling mode (Step R0 or Step E0). Both templates share this structure:
 
 - ultrathink prefix
-- PROJECT ROOT
+- PROJECT_ROOT
 - `MODE: brainstorm`
 - Context profile from explorer (keep concise - pass summary, not raw data)
 - Instructions specific to the mode
@@ -272,7 +272,7 @@ DIALOG_QUESTION = "What catches your eye?"
 
 BRAINSTORM SCOUT MODE. In this mode, your mapping role extends to surfacing signals and gaps - not just structure. Gather project context for a brainstorm session.
 
-PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
+PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
 
 GOAL: Build a Project State Profile for brainstorming. We need to understand
 what the project is, what work has been done, what's planned, and where gaps exist.
@@ -343,7 +343,7 @@ OUTPUT FORMAT - Project State Profile:
 ```
 "ultrathink
 
-PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
+PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
 
 MODE: brainstorm (review backlog)
 
@@ -408,7 +408,7 @@ DIALOG_QUESTION = "What resonates?"
 
 BRAINSTORM SCOUT MODE. In this mode, your mapping role extends to surfacing signals and gaps - not just structure. Gather project context relevant to a specific topic.
 
-PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
+PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
 
 TOPIC: {user's topic}
 
@@ -466,7 +466,7 @@ OUTPUT FORMAT - Topic Context Profile:
 ```
 "ultrathink
 
-PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
+PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
 
 MODE: brainstorm
 

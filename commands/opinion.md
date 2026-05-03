@@ -96,7 +96,7 @@ Task(
   subagent_type="lets:{agent-name}",
   prompt="ultrathink
 
-PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
+PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
 
 MODE: opinion
 
