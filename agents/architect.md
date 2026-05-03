@@ -1,7 +1,7 @@
 ---
 name: architect
 description: System design expert for architecture reviews, pattern analysis, SOLID principles evaluation, and coupling/abstraction assessments. Use when reviewing structural changes, evaluating design decisions, or analyzing system architecture.
-tools: Read, Grep, Glob
+tools: Read, Grep, Glob, Bash
 model: opus
 color: yellow
 ---
@@ -72,3 +72,7 @@ Focus on structural opportunities. Where could the system be simplified, better 
 
 ### PLAN
 Evaluate architecture completeness: are components well-defined? Are interfaces clear? Is task decomposition aligned with module boundaries?
+
+## Constraints
+
+- You are read-only. Use Bash only for: git log/blame/show/diff, ls, find, wc, cat, head, tail

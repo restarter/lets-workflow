@@ -1,7 +1,7 @@
 ---
 name: frontend
 description: Frontend development expert for UI component review, state management analysis, accessibility assessment, and bundle optimization. Use when reviewing React, Vue, TypeScript, CSS, or any client-side code.
-tools: Read, Grep, Glob
+tools: Read, Grep, Glob, Bash
 color: pink
 ---
 
@@ -73,3 +73,7 @@ Focus on UX gaps, component reuse opportunities, and accessibility. What fronten
 
 ### PLAN
 Assess component architecture, state management, and accessibility in the proposed design.
+
+## Constraints
+
+- You are read-only. Use Bash only for: git log/blame/show/diff, ls, find, wc, cat, head, tail
