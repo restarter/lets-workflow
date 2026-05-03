@@ -22,11 +22,11 @@ If `--fast` argument provided, skip to Fast Close below and do NOT run Steps 1-7
    Do NOT run /lets:commit or AskUserQuestion (saves tokens)
 3. Save minimal summary:
    ```bash
-   # ROOT = project-root from LETS Config
+   LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
    BRANCH=$(git branch --show-current)
    BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
-   mkdir -p "$ROOT/.lets/sessions"
-   SUMMARY_FILE="$ROOT/.lets/sessions/$(date +%Y-%m-%d-%H%M)-${BRANCH_SLUG}.md"
+   mkdir -p "$LETS_PROJECT_ROOT/.lets/sessions"
+   SUMMARY_FILE="$LETS_PROJECT_ROOT/.lets/sessions/$(date +%Y-%m-%d-%H%M)-${BRANCH_SLUG}.md"
    ```
    Write to `$SUMMARY_FILE`:
    ```
@@ -37,7 +37,10 @@ If `--fast` argument provided, skip to Fast Close below and do NOT run Steps 1-7
    ```
 4. Save session-start-ref:
    ```bash
-   git rev-parse HEAD > "$ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}"
+   LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+   BRANCH=$(git branch --show-current)
+   BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
+   git rev-parse HEAD > "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}"
    ```
 5. Worktree detection: check `GIT_DIR` as in Step 7. If in worktree and task in progress, add resume path. If task completed, add cleanup reminder.
 6. Output fast close block and stop - no AskUserQuestion, no bd sync
@@ -50,7 +53,7 @@ If `--fast` argument provided, skip to Fast Close below and do NOT run Steps 1-7
 Branch: {branch}
 Task: {task-id or "none"}
 Worktree: {name} (if in worktree)
-Resume:   cd $ROOT && claude -> /lets:start (if task in progress)
+Resume:   cd {LETS_PROJECT_ROOT from LETS Config} && claude -> /lets:start (if task in progress)
 Cleanup:  /lets:worktree remove {name} (if task completed)
 
 ┌─ LETS ─────────────────────────┐
@@ -96,13 +99,13 @@ For each in-progress task, record this session's work:
 
 ```bash
 # Get this session's commits (per-branch ref supports parallel worktree sessions)
-# ROOT = project-root from LETS Config
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 BRANCH=$(git branch --show-current)
 BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
-START_REF=$(cat "$ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}" 2>/dev/null)
+START_REF=$(cat "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}" 2>/dev/null)
 if [ -z "$START_REF" ]; then
   # Fallback: try old single-ref format (backwards compatibility)
-  START_REF=$(cat "$ROOT/.lets/sessions/.session-start-ref" 2>/dev/null)
+  START_REF=$(cat "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref" 2>/dev/null)
 fi
 if [ -n "$START_REF" ]; then
   git log ${START_REF}..HEAD --oneline  # this session's commits
@@ -160,11 +163,11 @@ AskUserQuestion(
 Single dated file with branch slug in the name. No `last-summary` files - `/lets:start` reads recent sessions by date.
 
 ```bash
-# ROOT = project-root from LETS Config
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 BRANCH=$(git branch --show-current)
 BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
-mkdir -p "$ROOT/.lets/sessions"
-SUMMARY_FILE="$ROOT/.lets/sessions/$(date +%Y-%m-%d-%H%M)-${BRANCH_SLUG}.md"
+mkdir -p "$LETS_PROJECT_ROOT/.lets/sessions"
+SUMMARY_FILE="$LETS_PROJECT_ROOT/.lets/sessions/$(date +%Y-%m-%d-%H%M)-${BRANCH_SLUG}.md"
 
 # Resolve actual transcript path (Claude Code stores it as <session-id>.jsonl
 # under a project-slug subdirectory at depth 2; find avoids guessing the slug algorithm)
@@ -211,7 +214,6 @@ Check if in a worktree:
 
 ```bash
 GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
-# ROOT = project-root from LETS Config
 ```
 
 If `$GIT_DIR` contains `worktrees/`:
@@ -241,7 +243,7 @@ If in worktree and task is still in progress, add:
 
 ```
 Worktree: {name}
-Resume:   cd $ROOT && claude -> /lets:start
+Resume:   cd {LETS_PROJECT_ROOT from LETS Config} && claude -> /lets:start
 ```
 
 Then use **AskUserQuestion** for next steps:

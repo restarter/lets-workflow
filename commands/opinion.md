@@ -62,8 +62,8 @@ AskUserQuestion(
 ## Step 3: Gather Context
 
 ```bash
-# ROOT = project-root from LETS Config
-cat "$ROOT/CLAUDE.md" 2>/dev/null | head -100
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+cat "$LETS_PROJECT_ROOT/CLAUDE.md" 2>/dev/null | head -100
 ```
 
 ## Step 3.5: Show Expert Panel
@@ -96,7 +96,7 @@ Task(
   subagent_type="lets:{agent-name}",
   prompt="ultrathink
 
-PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
+PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
 
 MODE: opinion
 

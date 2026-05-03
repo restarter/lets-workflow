@@ -30,9 +30,9 @@ Fast inline sanity check of local changes from 6 perspectives.
 If `--plan` flag detected, switch to plan review mode. Skip all code review steps below.
 
 ```bash
-# ROOT = project-root from LETS Config
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 # Find latest plan
-PLAN=$(ls -t "$ROOT/.lets/plans/"*.md 2>/dev/null | head -1)
+PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*.md 2>/dev/null | head -1)
 # Or specific path: /lets:check --plan path/to/plan.md
 ```
 
@@ -75,9 +75,9 @@ If no changes, inform user and exit.
 ## Step 2: Gather Context
 
 ```bash
-# ROOT = project-root from LETS Config
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 git diff --stat
-cat "$ROOT/CLAUDE.md" 2>/dev/null | head -100
+cat "$LETS_PROJECT_ROOT/CLAUDE.md" 2>/dev/null | head -100
 ```
 
 ## Step 3: Review with 6 Lenses

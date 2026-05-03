@@ -25,16 +25,16 @@ Verify not on main/master:
 ## Step 2: Load Plan
 
 ```bash
-# ROOT = project-root from LETS Config
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 BRANCH=$(git branch --show-current)
 SLUG=${BRANCH#feature/}
-cat "$ROOT/.lets/plans/${SLUG}.md" 2>/dev/null
+cat "$LETS_PROJECT_ROOT/.lets/plans/${SLUG}.md" 2>/dev/null
 
 # Fallback: try without feature/ prefix (worktrees)
-cat "$ROOT/.lets/plans/${BRANCH}.md" 2>/dev/null
+cat "$LETS_PROJECT_ROOT/.lets/plans/${BRANCH}.md" 2>/dev/null
 
 # Fallback: match by task-id
-ls "$ROOT/.lets/plans/"*${TASK_ID}* 2>/dev/null
+ls "$LETS_PROJECT_ROOT/.lets/plans/"*${TASK_ID}* 2>/dev/null
 ```
 
 If no plan found:
@@ -47,12 +47,14 @@ Exit with LETS box suggesting `/lets:plan`.
 If argument is `--status`:
 
 ```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+BRANCH=$(git branch --show-current)
 # Show plan info
 echo "Plan: .lets/plans/${SLUG}.md"
 bd show <task-id>
 # Show commits since session start
 BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
-START_REF=$(cat "$ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}" 2>/dev/null)
+START_REF=$(cat "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}" 2>/dev/null)
 if [ -n "$START_REF" ]; then
   git log --oneline ${START_REF}..HEAD
 fi

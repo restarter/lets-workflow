@@ -35,15 +35,15 @@ Restore context and prepare for work. **User MUST select a task before working.*
 ## Step 1: Previous Session Context
 
 ```bash
-# ROOT = project-root from LETS Config
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 BRANCH=$(git branch --show-current)
 BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
-mkdir -p "$ROOT/.lets/sessions"
+mkdir -p "$LETS_PROJECT_ROOT/.lets/sessions"
 
 # Read last 3 sessions for this branch (or all branches if none found)
-SESSIONS=$(ls -t "$ROOT/.lets/sessions/"*"-${BRANCH_SLUG}.md" 2>/dev/null | head -3)
+SESSIONS=$(ls -t "$LETS_PROJECT_ROOT/.lets/sessions/"*"-${BRANCH_SLUG}.md" 2>/dev/null | head -3)
 if [ -z "$SESSIONS" ]; then
-  SESSIONS=$(ls -t "$ROOT/.lets/sessions/"*.md 2>/dev/null | head -3)
+  SESSIONS=$(ls -t "$LETS_PROJECT_ROOT/.lets/sessions/"*.md 2>/dev/null | head -3)
 fi
 ```
 

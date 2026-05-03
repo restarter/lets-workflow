@@ -291,20 +291,30 @@ LETS uses [beads](https://github.com/steveyegge/beads) for persistent task track
 
 ## ⚙️ Configuration
 
-After `/lets:init`, edit `.lets/config.yaml`:
+After `/lets:init`, edit `.lets/.env`:
 
-```yaml
-language: English       # Response language (English/Ukrainian/Italian/etc)
-merge-branch: main      # Target branch for merges and PR base
-github: true            # true: PR on done, false: local merge
+```env
+# Response language (English/Ukrainian/Italian/etc)
+LETS_LANGUAGE=English
+
+# Target branch for merges and PR base
+LETS_MERGE_BRANCH=main
+
+# PR flow: github | bitbucket | local
+LETS_PR_FLOW=github
+
+# Task tracker (currently beads supported)
+LETS_TRACKER=beads
 ```
+
+> **Migration from legacy `config.yaml`:** if your project still has `.lets/config.yaml`, the SessionStart hook auto-migrates it to `.lets/.env` on next Claude Code session. The yaml file is kept for reference but no longer read.
 
 ## File Storage
 
 All generated files go to `.lets/` (gitignored):
 
 ```
-.lets/config.yaml       Project settings
+.lets/.env              Project settings (LETS_LANGUAGE, LETS_MERGE_BRANCH, LETS_PR_FLOW, LETS_TRACKER)
 .lets/sessions/         Session summaries and start references
 .lets/reviews/          Saved review reports
 .lets/plans/            Implementation plans
@@ -323,7 +333,7 @@ Interactive worktrees are stored in `.worktrees/` (gitignored).
 | [Claude Code](https://claude.com/claude-code) | Yes | AI coding agent (the thing LETS plugs into) |
 | [git](https://git-scm.com/) | Yes | Version control, branching, worktrees |
 | [beads](https://github.com/steveyegge/beads) | Yes | Task tracking and issue management (Claude Code plugin) |
-| [gh](https://cli.github.com/) | Optional | GitHub PR workflow (when `github: true`) |
+| [gh](https://cli.github.com/) | Optional | GitHub PR workflow (when `LETS_PR_FLOW=github`) |
 | [jq](https://jqlang.github.io/jq/) | Optional | Statusline JSON parsing |
 
 ## License

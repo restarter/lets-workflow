@@ -11,9 +11,9 @@ Per-project LETS setup. Creates `.lets/` structure, config, statusline, and init
 ## Step 1: Check Current State
 
 ```bash
-# ROOT = project-root from LETS Config
-ls -d "$ROOT/.lets" 2>/dev/null && echo "INITIALIZED" || echo "NOT_INITIALIZED"
-ls "$ROOT/.lets/config.yaml" 2>/dev/null && echo "CONFIG_EXISTS" || echo "NO_CONFIG"
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+ls -d "$LETS_PROJECT_ROOT/.lets" 2>/dev/null && echo "INITIALIZED" || echo "NOT_INITIALIZED"
+ls "$LETS_PROJECT_ROOT/.lets/.env" 2>/dev/null && echo "CONFIG_EXISTS" || echo "NO_CONFIG"
 ```
 
 If already initialized AND config exists:
@@ -21,9 +21,9 @@ If already initialized AND config exists:
 
 Proceed regardless (idempotent).
 
-## Step 2: Gather Preferences (only if no config.yaml)
+## Step 2: Gather Preferences (only if no .env)
 
-If config.yaml does NOT exist, gather settings:
+If `.lets/.env` does NOT exist, gather settings:
 
 ### Language
 
@@ -70,7 +70,7 @@ If gh not available: skip, default to false.
 
 ### Merge Branch
 
-Default to `main`. Mention: "Edit `.lets/config.yaml` to change merge-branch if needed."
+Default to `main`. Mention: "Edit `.lets/.env` to change `LETS_MERGE_BRANCH` if needed."
 
 ## Step 3: Run Init Script
 

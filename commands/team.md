@@ -108,8 +108,8 @@ Check:
 ### Step R4: Gather Context
 
 ```bash
-# ROOT = project-root from LETS Config
-cat "$ROOT/CLAUDE.md" 2>/dev/null | head -200
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+cat "$LETS_PROJECT_ROOT/CLAUDE.md" 2>/dev/null | head -200
 
 # For each task:
 bd show <task-id>

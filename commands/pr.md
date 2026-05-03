@@ -49,8 +49,8 @@ Interpret user intent:
 ### Check for existing state
 
 ```bash
-# ROOT = project-root from LETS Config
-PR_DIR="$ROOT/.lets/execution/pr-{number}"
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+PR_DIR="$LETS_PROJECT_ROOT/.lets/execution/pr-{number}"
 STATE_FILE="$PR_DIR/review.json"
 ```
 
@@ -72,7 +72,8 @@ If --cancel:
 **State guard:** If `--follow-up`, `--approve`, `--merge`, or `--respond` is specified but no state file exists:
 1. If a PR number is also provided (e.g., `/lets:pr --approve 2`), create a minimal state from `gh pr view`:
    ```bash
-   REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+   REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner) || { echo "ERROR: gh repo view failed - check 'gh auth status'"; exit 1; }
+[ -z "$REPO" ] && { echo "ERROR: gh repo view returned empty REPO"; exit 1; }
    gh pr view <PR> --json title,headRefOid,headRefName,baseRefName
    ```
    Write minimal state (pr_number, repo, title, branch, head_sha, findings: [], findings_posted: false) and continue.
@@ -98,7 +99,8 @@ If --cancel:
 Look for existing state files:
 
 ```bash
-ls -d "$ROOT/.lets/execution/pr-"[0-9]*/ 2>/dev/null
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+ls -d "$LETS_PROJECT_ROOT/.lets/execution/pr-"[0-9]*/ 2>/dev/null
 ```
 
 For each found folder, check which state files exist:
@@ -204,9 +206,11 @@ If checkout fails:
 ### 2.4 Create state file
 
 ```bash
-# ROOT = project-root from LETS Config
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+PR_DIR="$LETS_PROJECT_ROOT/.lets/execution/pr-{number}"
 mkdir -p "$PR_DIR"
-REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner) || { echo "ERROR: gh repo view failed - check 'gh auth status'"; exit 1; }
+[ -z "$REPO" ] && { echo "ERROR: gh repo view returned empty REPO"; exit 1; }
 ```
 
 Write initial state to `.lets/execution/pr-{number}/review.json` with Phase 1 fields.
@@ -404,8 +408,10 @@ All inline comments go in a single review submission via gh api.
 Step 1: Build the complete review JSON payload.
 
 ```bash
-# ROOT = project-root from LETS Config
-REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+PR_DIR="$LETS_PROJECT_ROOT/.lets/execution/pr-{number}"
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner) || { echo "ERROR: gh repo view failed - check 'gh auth status'"; exit 1; }
+[ -z "$REPO" ] && { echo "ERROR: gh repo view returned empty REPO"; exit 1; }
 HEAD_SHA=$(gh pr view <PR> --json headRefOid -q .headRefOid)
 ```
 
@@ -472,7 +478,8 @@ gh pr comment <PR> --body-file "$PR_DIR/fallback.md"
 If there are findings with disposition "summary" or "edited" that weren't included in inline:
 
 ```bash
-# ROOT = project-root from LETS Config
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+PR_DIR="$LETS_PROJECT_ROOT/.lets/execution/pr-{number}"
 ```
 
 Write to `$PR_DIR/summary.md`:
@@ -613,7 +620,8 @@ AskUserQuestion(
 Post replies using GitHub's reply-to-comment API:
 
 ```bash
-REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner) || { echo "ERROR: gh repo view failed - check 'gh auth status'"; exit 1; }
+[ -z "$REPO" ] && { echo "ERROR: gh repo view returned empty REPO"; exit 1; }
 
 gh api repos/${REPO}/pulls/{PR}/comments \
   --method POST \
@@ -663,7 +671,8 @@ AskUserQuestion(
 ### 5.3 Submit verdict
 
 ```bash
-# ROOT = project-root from LETS Config
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+PR_DIR="$LETS_PROJECT_ROOT/.lets/execution/pr-{number}"
 ```
 
 Write verdict body to `$PR_DIR/verdict.md`:
@@ -801,7 +810,8 @@ Check for existing `$PR_DIR/response.json`:
 **Step 1: Resolve REPO first.** All subsequent API calls depend on this value. Do NOT run API calls in parallel with this - resolve REPO, then use it.
 
 ```bash
-REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner) || { echo "ERROR: gh repo view failed - check 'gh auth status'"; exit 1; }
+[ -z "$REPO" ] && { echo "ERROR: gh repo view returned empty REPO"; exit 1; }
 HEAD_SHA=$(gh pr view <PR> --json headRefOid -q .headRefOid)
 ```
 

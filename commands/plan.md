@@ -69,8 +69,8 @@ Wait for user answers before proceeding.
 Gather project context:
 
 ```bash
-# ROOT = project-root from LETS Config
-cat "$ROOT/CLAUDE.md" 2>/dev/null | head -200
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+cat "$LETS_PROJECT_ROOT/CLAUDE.md" 2>/dev/null | head -200
 ```
 
 ### Exploration Strategy
@@ -80,7 +80,8 @@ Decide how many explorers to launch and what each should focus on.
 **Inputs for decision:**
 
 ```bash
-FILE_COUNT=$(find "$ROOT" -type f \
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+FILE_COUNT=$(find "$LETS_PROJECT_ROOT" -type f \
   -not -path '*/.git/*' \
   -not -path '*/node_modules/*' \
   -not -path '*/vendor/*' \
@@ -669,10 +670,10 @@ Before saving, verify the plan passes these gates:
 Derive plan filename from the current branch:
 
 ```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 BRANCH=$(git branch --show-current)
 SLUG="${BRANCH#feature/}"   # e.g., 0nf.10-improve-brainstorm
-# ROOT = project-root from LETS Config
-mkdir -p "$ROOT/.lets/plans"
+mkdir -p "$LETS_PROJECT_ROOT/.lets/plans"
 ```
 
 Write plan to: `.lets/plans/{branch-slug}.md`

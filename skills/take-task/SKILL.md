@@ -102,7 +102,7 @@ AskUserQuestion(
 ```
 
 Handle response:
-- **Branch** -> `git checkout -b <branch> {merge-branch}` (use `merge-branch` from LETS Config)
+- **Branch** -> `git checkout -b <branch> {LETS_MERGE_BRANCH}` (from LETS Config)
 - **Worktree** -> run `/lets:worktree create <task-id>-<slug>`, then inform:
   "Worktree created. Open a new terminal and run:"
   `cd {absolute-worktree-path} && claude`
@@ -112,11 +112,11 @@ Handle response:
 ### Step 5: Save Session Start Reference
 
 ```bash
-# ROOT = project-root from LETS Config
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 BRANCH=$(git branch --show-current)
 BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
-mkdir -p "$ROOT/.lets/sessions"
-git rev-parse HEAD > "$ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}"
+mkdir -p "$LETS_PROJECT_ROOT/.lets/sessions"
+git rev-parse HEAD > "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}"
 ```
 
 ### Step 6: Context Recovery (existing branch)

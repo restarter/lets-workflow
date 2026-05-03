@@ -8,6 +8,10 @@ Complete the current task. Document work, create PR or merge locally, close in b
 
 **This is NOT session end.** Use `/lets:end` to end a session. `/lets:done` finishes a TASK.
 
+> **Convention used in this file (per CLAUDE.md "Naming Convention: LETS_*"):**
+> - `{LETS_FOO}` placeholder inside ` ```bash ` snippets - the orchestrator substitutes the literal value before running the command. Required because Bash tool calls are fresh shells; `$LETS_FOO` would be unset.
+> - `$LETS_FOO` in prose, AskUserQuestion descriptions, and section headings - read-only reference to the LETS Config inject. Do NOT change `{LETS_FOO}` to `$LETS_FOO` in bash blocks - it will silently produce wrong commands.
+
 > **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
 
 ## Step 1: Active Task Detection
@@ -106,11 +110,13 @@ AskUserQuestion(
 
 ## Step 4: Collect Commits
 
-Use `merge-branch` from LETS Config. Fallback: `git symbolic-ref refs/remotes/origin/HEAD --short 2>/dev/null || echo main`
+Use `$LETS_MERGE_BRANCH` from LETS Config. Fallback: `git symbolic-ref refs/remotes/origin/HEAD --short 2>/dev/null || echo main`
+
+**Guard:** if `$LETS_MERGE_BRANCH` is unset or empty, STOP with error: "LETS_MERGE_BRANCH is not configured. Edit `.lets/.env` or run `/lets:init`. Refusing to proceed - empty value would cause `git checkout` no-op and merge into wrong branch." Do NOT use the fallback for merge/checkout operations - the fallback is for context only (showing the diff against a reasonable base). Merge target must be explicit.
 
 ```bash
-git log ${MERGE_BRANCH}..HEAD --oneline
-git diff --stat ${MERGE_BRANCH}..HEAD
+git log {LETS_MERGE_BRANCH}..HEAD --oneline
+git diff --stat {LETS_MERGE_BRANCH}..HEAD
 ```
 
 Show summary:
@@ -126,9 +132,11 @@ Files: X changed, Y insertions, Z deletions
 
 ## Step 5: Confirm with User
 
-Show what will happen based on `github` config value from LETS Config:
+Show what will happen based on `$LETS_PR_FLOW` from LETS Config:
 
-### If github: true:
+> **Note:** Conditionals below are binary (`== github` vs `!= github`). When Bitbucket integration lands, every `!= github` branch needs a 3rd case (currently `bitbucket` value falls into local-merge path). Search for `LETS_PR_FLOW != github` to find all sites.
+
+### If $LETS_PR_FLOW == github:
 
 ```
 AskUserQuestion(
@@ -136,7 +144,7 @@ AskUserQuestion(
     question: "Ready to finish {task title}?",
     header: "LETS",
     options: [
-      { label: "Finish", description: "Push branch and create PR to {merge-branch}" },
+      { label: "Finish", description: "Push branch and create PR to $LETS_MERGE_BRANCH" },
       { label: "Keep working", description: "Not done yet - go back to the task" }
     ],
     multiSelect: false
@@ -144,7 +152,7 @@ AskUserQuestion(
 )
 ```
 
-### If github: false (or missing):
+### If $LETS_PR_FLOW != github:
 
 ```
 AskUserQuestion(
@@ -152,7 +160,7 @@ AskUserQuestion(
     question: "Ready to finish {task title}?",
     header: "LETS",
     options: [
-      { label: "Finish", description: "Merge to {merge-branch} and delete branch" },
+      { label: "Finish", description: "Merge to $LETS_MERGE_BRANCH and delete branch" },
       { label: "Keep working", description: "Not done yet - go back to the task" }
     ],
     multiSelect: false
@@ -206,7 +214,7 @@ If in a worktree, resolve the main repo path:
 MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." 2>/dev/null && pwd)
 ```
 
-### If github: true (PR flow):
+### If $LETS_PR_FLOW == github (PR flow):
 
 **Guard: verify gh CLI first**
 
@@ -219,7 +227,7 @@ If gh is not installed or not authenticated, use **AskUserQuestion**:
 ```
 AskUserQuestion(
   questions=[{
-    question: "gh CLI is not available but github mode is enabled. What to do?",
+    question: "gh CLI is not available but $LETS_PR_FLOW=github. What to do?",
     header: "LETS",
     options: [
       { label: "Local merge", description: "Fall back to local merge for this task" },
@@ -231,7 +239,7 @@ AskUserQuestion(
 ```
 
 **Handle response:**
-- **Local merge** -> jump to "If github: false" section below
+- **Local merge** -> jump to "If $LETS_PR_FLOW != github" section below
 - **Cancel** -> stop, return to work
 
 **If gh is available, proceed with PR:**
@@ -266,12 +274,12 @@ Task stays **open** until PR is merged.
 
 **Do NOT switch branches yet** - user decides in Step 8.
 
-### If github: false (local merge) AND NOT in worktree:
+### If $LETS_PR_FLOW != github (local merge) AND NOT in worktree:
 
-Use `merge-branch` from LETS Config for target branch.
+Use `$LETS_MERGE_BRANCH` from LETS Config for target branch.
 
 ```bash
-git checkout {merge-branch}
+git checkout {LETS_MERGE_BRANCH}
 git merge <branch>
 git branch -d <branch>
 ```
@@ -281,11 +289,11 @@ After merge:
 bd close <task-id> --reason="Merged locally. Commits: {list}"
 ```
 
-### If github: false (local merge) AND in worktree:
+### If $LETS_PR_FLOW != github (local merge) AND in worktree:
 
 Cannot `git checkout` or `git branch -d` from inside a worktree. Use `git -C` to operate on the main repo:
 
-Use `merge-branch` from LETS Config for target branch.
+Use `$LETS_MERGE_BRANCH` from LETS Config for target branch.
 
 ```bash
 MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." 2>/dev/null && pwd)
@@ -293,8 +301,8 @@ BRANCH=$(git branch --show-current)
 
 # Ensure main repo is on the merge branch before merging
 MAIN_CURRENT=$(git -C "$MAIN_ROOT" branch --show-current)
-if [ "$MAIN_CURRENT" != "{merge-branch}" ]; then
-  git -C "$MAIN_ROOT" checkout {merge-branch}
+if [ "$MAIN_CURRENT" != "{LETS_MERGE_BRANCH}" ]; then
+  git -C "$MAIN_ROOT" checkout {LETS_MERGE_BRANCH}
 fi
 
 git -C "$MAIN_ROOT" merge "$BRANCH"
@@ -309,7 +317,7 @@ Do NOT delete the branch or remove the worktree here - `/lets:worktree remove` h
 
 ## Step 8: Output
 
-### After PR (github: true), NOT in worktree:
+### After PR ($LETS_PR_FLOW == github), NOT in worktree:
 
 ```
 Task: **{title}** ({task-id})
@@ -327,10 +335,10 @@ AskUserQuestion(
     question: "Task done. What's next?",
     header: "LETS",
     options: [
-      { label: "Merge & close", description: "Merge PR #{number}, close task, switch to {merge-branch}" },
+      { label: "Merge & close", description: "Merge PR #{number}, close task, switch to $LETS_MERGE_BRANCH" },
       { label: "Stay on branch", description: "Stay on feature branch - for PR fixes or follow-up work" },
-      { label: "Next task", description: "Switch to {merge-branch}, pick another task" },
-      { label: "End session", description: "Switch to {merge-branch}, run /lets:end" }
+      { label: "Next task", description: "Switch to $LETS_MERGE_BRANCH, pick another task" },
+      { label: "End session", description: "Switch to $LETS_MERGE_BRANCH, run /lets:end" }
     ],
     multiSelect: false
   }]
@@ -341,13 +349,13 @@ AskUserQuestion(
 - **Merge & close**:
   1. `gh pr merge {number} --squash --delete-branch`
   2. `bd close {task-id}`
-  3. `git checkout {merge-branch} && git pull`
+  3. `git checkout {LETS_MERGE_BRANCH} && git pull`
   4. If merge fails (conflicts, checks not passed) -> inform user, fall back to "Stay on branch"
 - **Stay on branch** -> stay on current branch, no checkout. User continues working freely.
-- **Next task** -> `git checkout {merge-branch}`, then show `bd ready`, pick new task
-- **End session** -> `git checkout {merge-branch}`, then suggest `/lets:end`
+- **Next task** -> `git checkout {LETS_MERGE_BRANCH}`, then show `bd ready`, pick new task
+- **End session** -> `git checkout {LETS_MERGE_BRANCH}`, then suggest `/lets:end`
 
-### After PR (github: true), IN worktree:
+### After PR ($LETS_PR_FLOW == github), IN worktree:
 
 ```
 Task: **{title}** ({task-id})
@@ -387,15 +395,15 @@ No "Next task" option - can't switch branches in a worktree. To start a new task
 - **End session** -> suggest `/lets:end`. After session ends, remind:
   "After PR merges, clean up: `/lets:worktree remove {name}` from the main repo terminal."
 
-### After local merge (github: false), NOT in worktree:
+### After local merge ($LETS_PR_FLOW != github), NOT in worktree:
 
 ```
 Task: **{title}** ({task-id}) - CLOSED
-Merged to {merge-branch}
+Merged to $LETS_MERGE_BRANCH
 Branch {feature-branch} deleted
 ```
 
-Already on merge-branch after merge. Use **AskUserQuestion**:
+Already on `$LETS_MERGE_BRANCH` after merge. Use **AskUserQuestion**:
 
 ```
 AskUserQuestion(
@@ -415,11 +423,11 @@ AskUserQuestion(
 - **Next task** -> show `bd ready`, pick new task
 - **End session** -> suggest `/lets:end`
 
-### After local merge (github: false), IN worktree:
+### After local merge ($LETS_PR_FLOW != github), IN worktree:
 
 ```
 Task: **{title}** ({task-id}) - CLOSED
-Merged to {merge-branch} (from worktree via git -C)
+Merged to $LETS_MERGE_BRANCH (from worktree via git -C)
 ```
 
 Then use **AskUserQuestion**:

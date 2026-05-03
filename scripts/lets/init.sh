@@ -3,19 +3,21 @@
 # Usage: init.sh [--language LANG] [--merge-branch BRANCH] [--github] [--skip-beads] [--quiet] [--help]
 set -e
 
-# Defaults
-LANGUAGE="English"
-MERGE_BRANCH="main"
-GITHUB="false"
+# Defaults (LETS_ prefix mirrors .env keys for clarity - same names inside
+# the script and in the resulting config file).
+LETS_LANGUAGE="English"
+LETS_MERGE_BRANCH="main"
+LETS_PR_FLOW="local"
 SKIP_BEADS=""
 QUIET=""
 
-# Parse arguments
+# Parse arguments. CLI flag --github is preserved as a boolean shortcut
+# (separate Bitbucket integration task will replace it with --pr-flow).
 while [ $# -gt 0 ]; do
   case "$1" in
-    --language)    LANGUAGE="$2"; shift 2 ;;
-    --merge-branch) MERGE_BRANCH="$2"; shift 2 ;;
-    --github)      GITHUB="true"; shift ;;
+    --language)    LETS_LANGUAGE="$2"; shift 2 ;;
+    --merge-branch) LETS_MERGE_BRANCH="$2"; shift 2 ;;
+    --github)      LETS_PR_FLOW="github"; shift ;;
     --skip-beads)  SKIP_BEADS="true"; shift ;;
     --quiet)       QUIET="true"; shift ;;
     --help)
@@ -24,7 +26,7 @@ while [ $# -gt 0 ]; do
       echo "Options:"
       echo "  --language LANG        Response language (default: English)"
       echo "  --merge-branch BRANCH  Target branch for merges (default: main)"
-      echo "  --github               Enable GitHub PR workflow (default: false)"
+      echo "  --github               Enable GitHub PR workflow (sets LETS_PR_FLOW=github; default: local)"
       echo "  --skip-beads           Skip beads initialization"
       echo "  --quiet                Suppress informational output"
       echo "  --help                 Show this help"
@@ -111,30 +113,48 @@ else
   info "[ok]   .claude/settings.json (updated)"
 fi
 
-# Create config.yaml
-CONFIG="${LETS_DIR}/config.yaml"
+# Create .env
+# Always use heredoc (not sed-rewrite of template) so user values containing
+# sed-special chars (|, &, \) don't break the substitution. The template file
+# at hooks/config-template.env exists as documentation/example only.
+CONFIG="${LETS_DIR}/.env"
 if [ -f "$CONFIG" ]; then
-  info "[skip] config.yaml (exists)"
+  info "[skip] .env (exists)"
 else
-  # Read template from hooks/ (relative to plugin root)
-  TEMPLATE="${SCRIPT_DIR}/../../hooks/config-template.yaml"
-  if [ -f "$TEMPLATE" ]; then
-    # Substitute values in template
-    sed -e "s|^language:.*|language: ${LANGUAGE}|" \
-        -e "s|^merge-branch:.*|merge-branch: ${MERGE_BRANCH}|" \
-        -e "s|^github:.*|github: ${GITHUB}|" \
-        "$TEMPLATE" > "$CONFIG"
-  else
-    # Fallback: inline template (manual invocation without plugin context)
-    cat > "$CONFIG" <<YAML
+  cat > "$CONFIG" <<ENV
 # LETS plugin config
+# NOT FOR SECRETS. Contents are injected verbatim into model context every
+# session (subject to whitelist filter in hooks/session-start.sh). Put
+# tokens/passwords elsewhere (gh auth, OS keychain, .beads/.env).
 
-language: ${LANGUAGE}      # Response language (English/Ukrainian/Italian/etc)
-merge-branch: ${MERGE_BRANCH}    # Target branch for merges and PR base
-github: ${GITHUB}         # GitHub PR workflow: PR on done instead of local merge (requires gh CLI)
-YAML
+# Response language (English/Ukrainian/Italian/etc)
+LETS_LANGUAGE=${LETS_LANGUAGE}
+
+# Target branch for merges and PR base
+LETS_MERGE_BRANCH=${LETS_MERGE_BRANCH}
+
+# PR flow: github | bitbucket | local
+LETS_PR_FLOW=${LETS_PR_FLOW}
+
+# Task tracker (currently beads supported)
+LETS_TRACKER=beads
+ENV
+  info "[ok]   .env (LETS_LANGUAGE=${LETS_LANGUAGE}, LETS_MERGE_BRANCH=${LETS_MERGE_BRANCH}, LETS_PR_FLOW=${LETS_PR_FLOW})"
+
+  # Notice if legacy yaml exists (left for reference, no longer read)
+  if [ -f "${LETS_DIR}/config.yaml" ]; then
+    info "[note] legacy .lets/config.yaml found - it is no longer read; edit .lets/.env instead. Safe to delete config.yaml."
   fi
-  info "[ok]   config.yaml (language: ${LANGUAGE}, merge-branch: ${MERGE_BRANCH}, github: ${GITHUB})"
+fi
+
+# Create .env.example as reference (shows defaults from template; safe to keep
+# under .lets/ since it's gitignored). Useful when restoring/comparing user's
+# customized .env. Always copy from template - the example IS the defaults.
+EXAMPLE="${LETS_DIR}/.env.example"
+TEMPLATE="${SCRIPT_DIR}/../../hooks/config-template.env"
+if [ -f "$TEMPLATE" ]; then
+  cp "$TEMPLATE" "$EXAMPLE"
+  info "[ok]   .env.example (reference defaults from template)"
 fi
 
 # Initialize beads

@@ -13,7 +13,7 @@ One-time setup for new developers. Checks environment, installs plugins, then de
 claude --version
 
 # GitHub CLI (optional)
-gh --version 2>/dev/null || echo "gh CLI not found (optional - needed for github: true)"
+gh --version 2>/dev/null || echo "gh CLI not found (optional - needed for LETS_PR_FLOW=github)"
 gh auth status 2>/dev/null || echo "gh not authenticated (optional)"
 ```
 
@@ -57,7 +57,7 @@ Team:     /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /le
 |-------|----------|-------------|
 | `/lets:start` | Session | Beginning of session |
 | `/lets:end` | Session | End of session |
-| `/lets:done` | Task | Task is complete (creates PR if github mode, or merges locally) |
+| `/lets:done` | Task | Task is complete (creates PR if LETS_PR_FLOW=github, or merges locally) |
 | `/lets:commit` | Code | Ready to commit (also triggers automatically on "commit") |
 | `/lets:check` | Code | Quick sanity check - code (~30s) or plan (--plan) |
 | `/lets:review` | Code | Full deep review (~2-3 min) |
@@ -70,7 +70,6 @@ Team:     /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /le
 | `/lets:status` | Utility | Task overview anytime |
 | `/lets:note` | Utility | Add note to active task |
 | `/lets:brainstorm` | Planning | Interactive ideation - review backlog, explore ideas, quick brainstorm, cleanup |
-| `/lets:migrate` | Setup | One-time migration from .claude/sessions/ to .lets/ |
 
 ### Auto-triggered Skills
 
@@ -123,7 +122,7 @@ These fire automatically when you describe the action in conversation - no slash
 
 ### Per-project (via /lets:init)
 - [ ] `.lets/` directory exists and gitignored
-- [ ] `.lets/config.yaml` configured
+- [ ] `.lets/.env` configured
 - [ ] `.lets/statusline.sh` installed
 - [ ] `.claude/settings.json` has statusLine config
 - [ ] `.beads/` initialized

@@ -100,8 +100,8 @@ If no changes found, inform user and exit.
 ### For File Review (--file):
 
 ```bash
-# ROOT = project-root from LETS Config
-cat "$ROOT/{path}"
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+cat "$LETS_PROJECT_ROOT/{path}"
 ```
 
 Read the entire file. Use file content as "diff" for agents. No git diff needed - this reviews existing code, not changes.
@@ -253,7 +253,7 @@ Each agent receives this context in their task prompt. Agents define their own e
 ```
 ultrathink
 
-PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
+PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
 
 MODE: review
 
@@ -318,8 +318,8 @@ Systemic findings go into a separate section in the final report (see Step 9).
 **CRITICAL: Save first, then show results.**
 
 ```bash
-# ROOT = project-root from LETS Config
-mkdir -p "$ROOT/.lets/reviews"
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+mkdir -p "$LETS_PROJECT_ROOT/.lets/reviews"
 ```
 
 Save to:
@@ -333,8 +333,8 @@ Content: Full review report with all issues, verdict, and summary.
 If `--json` flag was provided, save structured JSON and skip Steps 9-10.
 
 ```bash
-# ROOT = project-root from LETS Config
-mkdir -p "$ROOT/.lets/reviews"
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+mkdir -p "$LETS_PROJECT_ROOT/.lets/reviews"
 ```
 
 Write to `.lets/reviews/{date}-{mode}.json`:
@@ -456,16 +456,16 @@ bd comments add <task-id> "Code review ({PR #X | local}): {verdict}. {N} issues 
 ### P1: Load Plan
 
 ```bash
-# ROOT = project-root from LETS Config
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 
 # If path provided: use it
 # If no path: derive from branch name
 BRANCH=$(git branch --show-current)
 SLUG=${BRANCH#feature/}
-cat "$ROOT/.lets/plans/${SLUG}.md" 2>/dev/null
+cat "$LETS_PROJECT_ROOT/.lets/plans/${SLUG}.md" 2>/dev/null
 
 # Fallback: glob match by task-id
-ls "$ROOT/.lets/plans/"*{task-id}* 2>/dev/null
+ls "$LETS_PROJECT_ROOT/.lets/plans/"*{task-id}* 2>/dev/null
 ```
 
 If no plan files found, inform user and exit:
@@ -476,7 +476,8 @@ Read the plan file and show title + task ID to user.
 ### P2: Gather Context
 
 ```bash
-cat "$ROOT/CLAUDE.md" 2>/dev/null | head -200
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+cat "$LETS_PROJECT_ROOT/CLAUDE.md" 2>/dev/null | head -200
 ```
 
 Read the codebase files referenced in the plan's "Files" sections (Create/Modify targets) to verify paths exist and understand current state.
@@ -530,7 +531,7 @@ Task(
   subagent_type="lets:architect",
   prompt="ultrathink
 
-PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
+PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
 
 MODE: plan
 
@@ -577,7 +578,7 @@ Task(
   subagent_type="lets:pragmatist",
   prompt="ultrathink
 
-PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
+PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
 
 MODE: plan
 
@@ -627,7 +628,7 @@ Task(
   subagent_type="lets:{agent-name}",
   prompt="ultrathink
 
-PROJECT ROOT: {project-root from LETS Config}. Do NOT read or search files outside this directory.
+PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
 
 MODE: plan
 
