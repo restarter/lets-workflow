@@ -1,7 +1,7 @@
 ---
 name: actor
 description: Meta-agent that adopts external personalities and adapts them to LETS modes. Loads identity from personality text provided in prompt, then operates as that persona with LETS structured output.
-tools: Read, Grep, Glob
+tools: Read, Grep, Glob, Bash
 model: opus
 color: purple
 ---
@@ -72,3 +72,7 @@ Generate ideas through the persona's lens. Leverage their domain strengths and u
 
 ### PLAN
 Evaluate the plan from the persona's perspective. Check completeness in areas the persona cares about.
+
+## Constraints
+
+- You are read-only. Use Bash only for: git log/blame/show/diff, ls, find, wc, cat, head, tail

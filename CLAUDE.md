@@ -26,6 +26,7 @@ reference/                    # Reference plugins for studying patterns (gitigno
 
 ## Architecture Decisions
 
+- **Audience for plugin source.** Everything in `commands/`, `skills/`, `agents/`, `hooks/rules-context.md` is read by Claude (orchestrator and subagents) - never by humans. Write for the model: direct, structured, parseable. No rhetorical flourishes, no human-onboarding tone. Use markers (`MANDATORY`, `NEVER`, `IMPORTANT`) where the model needs to lock onto a constraint. Tables and bullet lists beat prose. Examples are templates the model imitates - keep them precise. Human-facing docs live in `README.md` and `CLAUDE.md` (this file).
 - Agents define WHO and HOW (expertise, behavioral modes, tiered scoring, output format). Commands define WHAT and WHEN (provide content, select agents, pass mode name)
 - Agent frontmatter fields: `name`, `description`, `tools`, `color` (terminal output: red/blue/green/yellow/purple/orange/pink/cyan), optional `model` (default inherits from parent, `opus` for complex analysis). All agents use tiered scoring ([BLOCKER]/[SUGGESTION]/[NIT]), self-contained Modes, and Output Format sections.
 - Agent memory (`memory: project` frontmatter) is **currently disabled** across all agents as a workaround for upstream Claude Code issue [#55648](https://github.com/anthropics/claude-code/issues/55648). Subagents writing memory skip the assigned task and return only a memory-write confirmation. Disabled via [PR #47](https://github.com/restarter/lets-workflow/pull/47). Tracked via bd tasks `lets-erx1c` (this disable) and `lets-rqwdg` (restore memory when Anthropic fixes the bug).
@@ -36,9 +37,9 @@ reference/                    # Reference plugins for studying patterns (gitigno
 - `/lets:pr` orchestrates `/lets:review` (delegates analysis) and handles GitHub posting, follow-up, respond, and approval directly via gh CLI
 - `/lets:execute` uses EnterPlanMode for native plan mode execution with user approval gates. No subagents.
 - `/lets:check` reviews inline (no subagent) for speed
-- All agents are read-only (Read, Grep, Glob, optionally Bash). No Edit/Write. Exception: `agents/implementer.md` has Edit/Write/Bash for `/lets:team` parallel implementation in isolated worktrees.
+- All analyst agents are read-only with uniform tools: `Read, Grep, Glob, Bash`. No `Edit/Write`. Exception: `agents/implementer.md` adds `Edit/Write` for `/lets:team` parallel implementation in isolated worktrees.
 - `/lets:team` uses Agent Teams (TeamCreate, Agent with isolation: worktree) for parallel implementation. All other commands use subagents for analysis.
-- Agents with Bash have prompt-level read-only constraints (`## Constraints` section in agent `.md` files). `hooks/validate-readonly.sh.old` exists as a PreToolUse hook prototype (not yet registered - agent frontmatter hooks silently ignored)
+- All analyst agents have prompt-level read-only Bash constraints in their `## Constraints` section (identical 1-line allowlist across all 13). `hooks/validate-readonly.sh.old` exists as a PreToolUse hook prototype (not yet registered - agent frontmatter hooks silently ignored)
 - Interactive worktrees managed via `/lets:worktree` command. Hook prototypes `hooks/worktree-setup.sh.old` and `hooks/worktree-cleanup.sh.old` (deferred - caused agent auto-cleanup issues)
 - Worktrees stored in `.worktrees/` at project root - `.lets/` symlinked for interactive sessions
 - SessionStart hook injects rules from `hooks/rules-context.md`
@@ -70,7 +71,7 @@ This includes hook debug logs, temp files, and any runtime artifacts.
 
 - beads plugin (task tracking)
 
-## When Adding/Modifying Commands or Skills
+## When Adding/Modifying Commands, Skills, or Agents
 
 Update these files:
 
@@ -80,6 +81,7 @@ Update these files:
 | `commands/install.md` | Essential Skills / Planning Skills tables |
 | `CLAUDE.md` Key Concepts | If adding a new skill |
 | `README.md` | Agent table, feature descriptions |
+| All `agents/*.md` `## Constraints` sections | If changing the read-only Bash allowlist or constraint wording, sync the identical 1-line text across all 13 analyst agents (verify with `grep -h "You are read-only" agents/*.md \| sort -u` returning exactly one line) |
 
 ### Command Output Requirements
 

@@ -2,7 +2,7 @@
 name: implementer
 description: Full-stack implementation specialist for isolated worktree work. Follows existing codebase patterns, implements a single task independently with tests. Use for /lets:team parallel implementation.
 tools: Read, Grep, Glob, Bash, Edit, Write
-model: sonnet
+model: opus
 color: green
 ---
 
