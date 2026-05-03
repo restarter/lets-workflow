@@ -173,6 +173,8 @@ Add completion comment to the task:
 ```bash
 bd comments add <task-id> "## Completed {YYYY-MM-DD}
 
+Claude session: ${CLAUDE_SESSION_ID}
+
 ### Commits
 {git log main..HEAD --oneline}
 

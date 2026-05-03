@@ -27,6 +27,7 @@ reference/                    # Reference plugins for studying patterns (gitigno
 ## Architecture Decisions
 
 - **Audience for plugin source.** Everything in `commands/`, `skills/`, `agents/`, `hooks/rules-context.md` is read by Claude (orchestrator and subagents) - never by humans. Write for the model: direct, structured, parseable. No rhetorical flourishes, no human-onboarding tone. Use markers (`MANDATORY`, `NEVER`, `IMPORTANT`) where the model needs to lock onto a constraint. Tables and bullet lists beat prose. Examples are templates the model imitates - keep them precise. Human-facing docs live in `README.md` and `CLAUDE.md` (this file).
+- **Claude Code template variables in command/skill markdown.** `${CLAUDE_PLUGIN_ROOT}` (plugin install path) and `${CLAUDE_SESSION_ID}` (session UUID, available since Claude Code v2.1.9) are substituted by Claude Code before the model reads the markdown - immune to context compaction (substitution happens at command/skill load time, not at session start). `${CLAUDE_SESSION_ID}` is documented for skill prompt text; empirically verified to work in command markdown too. Used by `/lets:end` and `/lets:done` to anchor session identity in beads comments and session summaries for transcript traceability. `${CLAUDE_PROJECT_DIR}` is NOT substituted - use `git rev-parse --show-toplevel` instead.
 - Agents define WHO and HOW (expertise, behavioral modes, tiered scoring, output format). Commands define WHAT and WHEN (provide content, select agents, pass mode name)
 - Agent frontmatter fields: `name`, `description`, `tools`, `color` (terminal output: red/blue/green/yellow/purple/orange/pink/cyan), optional `model` (default inherits from parent, `opus` for complex analysis). All agents use tiered scoring ([BLOCKER]/[SUGGESTION]/[NIT]), self-contained Modes, and Output Format sections.
 - Agent memory (`memory: project` frontmatter) is **currently disabled** across all agents as a workaround for upstream Claude Code issue [#55648](https://github.com/anthropics/claude-code/issues/55648). Subagents writing memory skip the assigned task and return only a memory-write confirmation. Disabled via [PR #47](https://github.com/restarter/lets-workflow/pull/47). Tracked via bd tasks `lets-erx1c` (this disable) and `lets-rqwdg` (restore memory when Anthropic fixes the bug).
@@ -82,6 +83,7 @@ Update these files:
 | `CLAUDE.md` Key Concepts | If adding a new skill |
 | `README.md` | Agent table, feature descriptions |
 | All `agents/*.md` `## Constraints` sections | If changing the read-only Bash allowlist or constraint wording, sync the identical 1-line text across all 13 analyst agents (verify with `grep -h "You are read-only" agents/*.md \| sort -u` returning exactly one line) |
+| `commands/end.md` + `commands/done.md` `${CLAUDE_SESSION_ID}` references | If changing the session-id capture wording, sync across all occurrences (Step 3 progress comment + Step 5 summary block in `end.md`, Step 6 completion comment in `done.md`). Verify with `grep -n "CLAUDE_SESSION_ID" commands/` |
 
 ### Command Output Requirements
 
