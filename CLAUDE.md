@@ -43,7 +43,7 @@ reference/                    # Reference plugins for studying patterns (gitigno
 - All analyst agents have prompt-level read-only Bash constraints in their `## Constraints` section (identical 1-line allowlist across all 13). `hooks/validate-readonly.sh.old` exists as a PreToolUse hook prototype (not yet registered - agent frontmatter hooks silently ignored)
 - Interactive worktrees managed via `/lets:worktree` command. Hook prototypes `hooks/worktree-setup.sh.old` and `hooks/worktree-cleanup.sh.old` (deferred - caused agent auto-cleanup issues)
 - Worktrees stored in `.worktrees/` at project root - `.lets/` symlinked for interactive sessions
-- SessionStart and PreCompact hooks both run `hooks/session-start.sh`, which injects rules from `hooks/rules-context.md` and reads `.lets/config.yaml` for project context. Dual-hook pattern (same script on both events) follows beads precedent: [issue #486](https://github.com/gastownhall/beads/issues/486) and [PR #297](https://github.com/gastownhall/beads/pull/297). SessionStart on `compact` source re-injects rules into the post-compaction context; PreCompact ensures rules are in the pre-compaction context that the auto-summary is generated from - prevents workflow drift after compaction in long sessions.
+- SessionStart and PreCompact hooks both run `hooks/session-start.sh`, which injects rules from `hooks/rules-context.md` and reads `.lets/.env` for project context (auto-migrates legacy `.lets/config.yaml` if present, see Naming Convention section). Dual-hook pattern (same script on both events) follows beads precedent: [issue #486](https://github.com/gastownhall/beads/issues/486) and [PR #297](https://github.com/gastownhall/beads/pull/297). SessionStart on `compact` source re-injects rules into the post-compaction context; PreCompact ensures rules are in the pre-compaction context that the auto-summary is generated from - prevents workflow drift after compaction in long sessions.
 - Statusline source in `scripts/lets/statusline.sh`, copied to `.lets/statusline.sh` per-project by `/lets:init`. Project `.claude/settings.json` uses `git rev-parse --show-toplevel` to locate it.
 - User-facing skills: auto-discovered by Claude Code, appear in skill list, trigger on description match. Frontmatter description must NOT use YAML quotes.
 - Internal skills: NOT auto-discovered. Commands reference with "use the X skill" and read the SKILL.md via Read tool at `` `${CLAUDE_PLUGIN_ROOT}/skills/X/SKILL.md` `` - the env var ensures the path resolves correctly whether plugin is loaded via marketplace install or `--plugin-dir` dev mode (relative `skills/...` paths break in foreign projects). No accidental triggering, no context cost until needed.
@@ -57,7 +57,7 @@ This includes hook debug logs, temp files, and any runtime artifacts.
 **WARNING:** Always use `.lets/` (with dot prefix), never `lets/`. The dot is easy to miss in manual paths.
 
 ```
-.lets/config.yaml        # Per-project settings (language, merge-branch)
+.lets/.env               # Per-project settings (LETS_LANGUAGE, LETS_MERGE_BRANCH, LETS_PR_FLOW, LETS_TRACKER)
 .lets/sessions/          # Session summaries, session-start-ref
 .lets/reviews/           # Saved review reports
 .lets/plans/             # Implementation plans
@@ -66,6 +66,52 @@ This includes hook debug logs, temp files, and any runtime artifacts.
 # Worktrees (outside .lets/ to avoid circular symlinks):
 # .worktrees/            # Interactive worktrees only (agent worktrees use native Claude Code behavior)
 ```
+
+## Naming Convention: `LETS_*`
+
+All plugin configuration uses the `LETS_*` prefix (UPPER_SNAKE_CASE). The prefix removes ambiguity in command instructions - `LETS_PR_FLOW=github` is unambiguously a parameter, while `github` could be the platform name.
+
+### LETS Config keys
+
+| Key | Source | Purpose |
+|---|---|---|
+| `LETS_PROJECT_ROOT` | Auto-injected by SessionStart hook | Absolute path to project root |
+| `LETS_LANGUAGE` | `.lets/.env` | Default response language |
+| `LETS_MERGE_BRANCH` | `.lets/.env` | Target branch for merges and PRs |
+| `LETS_PR_FLOW` | `.lets/.env` | `github` \| `bitbucket` \| `local` - which PR workflow to use |
+| `LETS_TRACKER` | `.lets/.env` | Task tracker. Currently `beads`. Future: Linear/Jira (lets-nwwkj) |
+
+### Surface forms - where to use which form
+
+The same `LETS_FOO` value appears in different surface forms depending on context. The orchestrator (model) handles substitution; subagents do NOT receive LETS Config injection and need explicit substitution before Task() launch.
+
+| Surface | Form | Resolved by |
+|---|---|---|
+| Bash block (model executes via Bash tool) | `LETS_FOO=$(...)` then `$LETS_FOO` | local shell - assign at top of every block (each Bash call is a fresh shell) |
+| Bash command snippet inside markdown (template the model runs) | `{LETS_FOO}` placeholder | orchestrator substitutes literal value before running |
+| Orchestrator prose, AskUserQuestion descriptions | `$LETS_FOO` | orchestrator reads from injected LETS Config |
+| Subagent prompt template | `{LETS_FOO from LETS Config}` | orchestrator substitutes literal before Task() call |
+
+**Important note on `LETS_PROJECT_ROOT`:** the value injected in `## LETS Config` is for prompt-text reference and orchestrator substitution - it is NOT a shell variable available in Bash tool calls. Every bash block that uses the project root path must assign locally:
+
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+mkdir -p "$LETS_PROJECT_ROOT/.lets/sessions"
+```
+
+`LETS_PROJECT_ROOT` is the only key currently computable in-shell (via `git rev-parse`). Other `LETS_*` keys (`LETS_MERGE_BRANCH`, `LETS_PR_FLOW`, `LETS_LANGUAGE`, `LETS_TRACKER`) come only from the LETS Config inject - inside bash snippets, use the `{LETS_FOO}` template form so the orchestrator substitutes the literal value before running.
+
+### User config file
+
+`.lets/.env` is `KEY=VALUE` format with comments **above** keys (NOT inline - inline comments would pollute the model's context after the hook strips full-line comments). Auto-migrated from legacy `config.yaml` on first session by `hooks/session-start.sh`. The migration code is intended to be removed in a future task once all known users have migrated.
+
+### Adding a new config key
+
+1. Add to `hooks/config-template.env` with comment ABOVE the key
+2. Add `LETS_NEW_KEY=$NEW_KEY` substitution in `scripts/lets/init.sh`
+3. Document in `hooks/rules-context.md` Local Config section
+4. Document in this CLAUDE.md table
+5. If the key controls behavior (not just metadata), add the conditional logic in the consuming command(s)
 
 ## Dependencies
 
