@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- `/lets:end` and `/lets:done` capture Claude Code session UUID into beads comments and session summaries for transcript traceability. Session summary now includes `### Claude Session` block with resolved transcript path
 - Skill architecture (`skills/` directory) with two skill types: user-facing (auto-triggered) and internal (read by commands)
 - 4 skills: `commit`, `create-task`, `take-task` (user-facing), `detect-task` (internal)
 - Auto-triggered Skills table in `hooks/rules-context.md` and `commands/install.md`

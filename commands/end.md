@@ -116,6 +116,8 @@ Add progress comment:
 ```bash
 bd comments add <task-id> "## Session progress {YYYY-MM-DD}
 
+Claude session: ${CLAUDE_SESSION_ID}
+
 ### Commits this session
 {git log from start-ref}
 
@@ -163,14 +165,23 @@ BRANCH=$(git branch --show-current)
 BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
 mkdir -p "$ROOT/.lets/sessions"
 SUMMARY_FILE="$ROOT/.lets/sessions/$(date +%Y-%m-%d-%H%M)-${BRANCH_SLUG}.md"
+
+# Resolve actual transcript path (Claude Code stores it as <session-id>.jsonl
+# under a project-slug subdirectory at depth 2; find avoids guessing the slug algorithm)
+TRANSCRIPT_PATH=$(find "$HOME/.claude/projects" -maxdepth 2 -name "${CLAUDE_SESSION_ID}.jsonl" 2>/dev/null | head -1)
+TRANSCRIPT_PATH=${TRANSCRIPT_PATH:-"(not found)"}
 ```
 
-Write summary to `$SUMMARY_FILE`.
+Write summary to `$SUMMARY_FILE` using `$TRANSCRIPT_PATH` in the template below.
 
 **Summary template:**
 
 ```markdown
 ## Session Summary {YYYY-MM-DD HH:MM}
+
+### Claude Session
+- ID: `${CLAUDE_SESSION_ID}`
+- Transcript: `$TRANSCRIPT_PATH`
 
 ### Done
 - {what was completed}
