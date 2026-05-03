@@ -102,7 +102,7 @@ AskUserQuestion(
 ```
 
 Handle response:
-- **Branch** -> `git checkout -b <branch> {merge-branch}` (use `merge-branch` from LETS Config)
+- **Branch** -> `git checkout -b <branch> {LETS_MERGE_BRANCH}` (from LETS Config)
 - **Worktree** -> run `/lets:worktree create <task-id>-<slug>`, then inform:
   "Worktree created. Open a new terminal and run:"
   `cd {absolute-worktree-path} && claude`

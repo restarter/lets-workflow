@@ -155,8 +155,8 @@ GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
 ## Session Flow
 
 ```
-github: false  /lets:start -> Work -> /lets:check -> /lets:commit -> /lets:done (merge) -> /lets:end
-github: true   /lets:start -> Work -> /lets:check -> /lets:commit -> /lets:done (push + PR) -> /lets:end
+$LETS_PR_FLOW=local   /lets:start -> Work -> /lets:check -> /lets:commit -> /lets:done (merge) -> /lets:end
+$LETS_PR_FLOW=github  /lets:start -> Work -> /lets:check -> /lets:commit -> /lets:done (push + PR) -> /lets:end
 
 Worktree:  /lets:worktree create -> `cd .worktrees/<name>/ && claude` -> /lets:start -> Work -> /lets:done -> /lets:end -> /lets:worktree remove (main repo)
 
@@ -270,8 +270,8 @@ This applies when: presenting implementation approaches, choosing between soluti
 
 **Task done:**
 1. All code committed -> `/lets:done`
-2. If `github: true`: pushes branch and creates PR on GitHub (task stays open until PR merge)
-3. If `github: false` or missing: merges to merge-branch locally, closes task
+2. If `$LETS_PR_FLOW == github`: pushes branch and creates PR on GitHub (task stays open until PR merge)
+3. If `$LETS_PR_FLOW != github` (local or bitbucket): merges to `$LETS_MERGE_BRANCH` locally, closes task
 
 **Session end:**
 1. Check uncommitted changes -> suggest `/lets:commit`

@@ -160,7 +160,7 @@ AskUserQuestion(
     question: "Worktree created. Where do you want to continue?",
     header: "LETS",
     options: [
-      { label: "Stay on current branch", description: "Switch back to {merge-branch} and keep working here. Open worktree in a new terminal." },
+      { label: "Stay on current branch", description: "Switch back to $LETS_MERGE_BRANCH and keep working here. Open worktree in a new terminal." },
       { label: "Switch to worktree", description: "Continue in this session inside the worktree" }
     ],
     multiSelect: false
@@ -169,7 +169,7 @@ AskUserQuestion(
 ```
 
 **Stay on current branch:**
-- `git checkout {merge-branch}` (use merge-branch from LETS Config)
+- `git checkout {LETS_MERGE_BRANCH}` (from LETS Config)
 - Show worktree launch command for new terminal
 
 **Switch to worktree:**
