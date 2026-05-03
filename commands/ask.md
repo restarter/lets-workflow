@@ -81,8 +81,8 @@ If passed as argument - use it. Otherwise ask the user.
 Before launching the agent, gather relevant context:
 
 ```bash
-# ROOT = project-root from LETS Config
-cat "$ROOT/CLAUDE.md" 2>/dev/null | head -100
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+cat "$LETS_PROJECT_ROOT/CLAUDE.md" 2>/dev/null | head -100
 ```
 
 Also check if the question references specific files - if so, note the file paths for the agent.

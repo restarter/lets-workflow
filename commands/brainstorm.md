@@ -518,7 +518,7 @@ No agents. Command gathers context directly and enters conversation.
 ### Step Q1: Gather Context
 
 ```bash
-# ROOT = project-root from LETS Config
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 bd stats
 bd list --status=open -n 30
 bd list --status=in_progress
@@ -527,7 +527,7 @@ git log --oneline -15
 
 Also use Grep tool (not bash grep) to scan for tech debt signals:
 ```
-Grep(pattern="TODO|FIXME|HACK|XXX", path="$ROOT", output_mode="content", head_limit=20)
+Grep(pattern="TODO|FIXME|HACK|XXX", path="$LETS_PROJECT_ROOT", output_mode="content", head_limit=20)
 ```
 
 If argument provided (topic/epic):

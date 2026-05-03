@@ -77,8 +77,8 @@ AskUserQuestion(
 ### Step C3: Verify .gitignore
 
 ```bash
-# ROOT = project-root from LETS Config
-git check-ignore -q "${ROOT}/.worktrees/test" 2>/dev/null
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+git check-ignore -q "${LETS_PROJECT_ROOT}/.worktrees/test" 2>/dev/null
 echo $?
 ```
 
@@ -89,15 +89,18 @@ If exit code is not 0 (not ignored):
 ### Step C4: Create Worktree
 
 ```bash
-# ROOT = project-root from LETS Config
-WORKTREE_PATH="${ROOT}/.worktrees/${NAME}"
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+WORKTREE_PATH="${LETS_PROJECT_ROOT}/.worktrees/${NAME}"
 BRANCH_NAME="worktree-${NAME}"
 ```
 
 **With beads (preferred):**
 
 ```bash
-cd "$ROOT"
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+WORKTREE_PATH="${LETS_PROJECT_ROOT}/.worktrees/${NAME}"
+BRANCH_NAME="worktree-${NAME}"
+cd "$LETS_PROJECT_ROOT"
 bd worktree create "$WORKTREE_PATH" --branch "$BRANCH_NAME"
 ```
 
@@ -106,7 +109,10 @@ This handles: `git worktree add` + `.beads/redirect` for shared beads database.
 **Without beads (fallback):**
 
 ```bash
-cd "$ROOT"
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+WORKTREE_PATH="${LETS_PROJECT_ROOT}/.worktrees/${NAME}"
+BRANCH_NAME="worktree-${NAME}"
+cd "$LETS_PROJECT_ROOT"
 git worktree add -b "$BRANCH_NAME" "$WORKTREE_PATH"
 # If branch already exists, checkout it into the worktree
 # git worktree add "$WORKTREE_PATH" "$BRANCH_NAME"
@@ -115,21 +121,21 @@ git worktree add -b "$BRANCH_NAME" "$WORKTREE_PATH"
 ### Step C5: Symlink .lets/
 
 ```bash
-# ROOT = project-root from LETS Config
-WORKTREE_PATH="${ROOT}/.worktrees/${NAME}"
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+WORKTREE_PATH="${LETS_PROJECT_ROOT}/.worktrees/${NAME}"
 
-if [ -d "${ROOT}/.lets" ] && [ ! -e "${WORKTREE_PATH}/.lets" ]; then
-  ln -s "${ROOT}/.lets" "${WORKTREE_PATH}/.lets"
+if [ -d "${LETS_PROJECT_ROOT}/.lets" ] && [ ! -e "${WORKTREE_PATH}/.lets" ]; then
+  ln -s "${LETS_PROJECT_ROOT}/.lets" "${WORKTREE_PATH}/.lets"
 fi
 ```
 
-This gives the worktree access to: config.yaml, session history, plans, reviews, execution state.
+This gives the worktree access to: `.env`, session history, plans, reviews, execution state.
 
 ### Step C6: Verify
 
 ```bash
-# ROOT = project-root from LETS Config
-WORKTREE_PATH="${ROOT}/.worktrees/${NAME}"
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+WORKTREE_PATH="${LETS_PROJECT_ROOT}/.worktrees/${NAME}"
 
 # Worktree exists
 ls -la "$WORKTREE_PATH" | head -5
@@ -276,8 +282,8 @@ If none exist in `.worktrees/`, check `git worktree list` and show all non-main 
 ### Step R2: Safety Check
 
 ```bash
-# ROOT = project-root from LETS Config
-WORKTREE_PATH="${ROOT}/.worktrees/${NAME}"
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+WORKTREE_PATH="${LETS_PROJECT_ROOT}/.worktrees/${NAME}"
 cd "$WORKTREE_PATH"
 git status --short
 git log @{upstream}.. --oneline 2>/dev/null
@@ -305,13 +311,13 @@ AskUserQuestion(
 ### Step R3: Remove
 
 ```bash
-# ROOT = project-root from LETS Config
-WORKTREE_PATH="${ROOT}/.worktrees/${NAME}"
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+WORKTREE_PATH="${LETS_PROJECT_ROOT}/.worktrees/${NAME}"
 
 # Remove .lets/ symlink first (points outside worktree)
 [ -L "${WORKTREE_PATH}/.lets" ] && rm "${WORKTREE_PATH}/.lets"
 
-cd "$ROOT"
+cd "$LETS_PROJECT_ROOT"
 
 # Remove via bd (handles git worktree remove + beads cleanup)
 if command -v bd &>/dev/null && [ -d ".beads" ]; then

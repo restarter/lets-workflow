@@ -49,8 +49,8 @@ Interpret user intent:
 ### Check for existing state
 
 ```bash
-# ROOT = project-root from LETS Config
-PR_DIR="$ROOT/.lets/execution/pr-{number}"
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+PR_DIR="$LETS_PROJECT_ROOT/.lets/execution/pr-{number}"
 STATE_FILE="$PR_DIR/review.json"
 ```
 
@@ -98,7 +98,8 @@ If --cancel:
 Look for existing state files:
 
 ```bash
-ls -d "$ROOT/.lets/execution/pr-"[0-9]*/ 2>/dev/null
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+ls -d "$LETS_PROJECT_ROOT/.lets/execution/pr-"[0-9]*/ 2>/dev/null
 ```
 
 For each found folder, check which state files exist:
@@ -204,7 +205,8 @@ If checkout fails:
 ### 2.4 Create state file
 
 ```bash
-# ROOT = project-root from LETS Config
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+PR_DIR="$LETS_PROJECT_ROOT/.lets/execution/pr-{number}"
 mkdir -p "$PR_DIR"
 REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 ```
@@ -404,7 +406,8 @@ All inline comments go in a single review submission via gh api.
 Step 1: Build the complete review JSON payload.
 
 ```bash
-# ROOT = project-root from LETS Config
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+PR_DIR="$LETS_PROJECT_ROOT/.lets/execution/pr-{number}"
 REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 HEAD_SHA=$(gh pr view <PR> --json headRefOid -q .headRefOid)
 ```
@@ -472,7 +475,8 @@ gh pr comment <PR> --body-file "$PR_DIR/fallback.md"
 If there are findings with disposition "summary" or "edited" that weren't included in inline:
 
 ```bash
-# ROOT = project-root from LETS Config
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+PR_DIR="$LETS_PROJECT_ROOT/.lets/execution/pr-{number}"
 ```
 
 Write to `$PR_DIR/summary.md`:
@@ -663,7 +667,8 @@ AskUserQuestion(
 ### 5.3 Submit verdict
 
 ```bash
-# ROOT = project-root from LETS Config
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+PR_DIR="$LETS_PROJECT_ROOT/.lets/execution/pr-{number}"
 ```
 
 Write verdict body to `$PR_DIR/verdict.md`:
