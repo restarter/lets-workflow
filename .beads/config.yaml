@@ -56,3 +56,5 @@
 # sync.remote: "git+https://github.com/restarter/lets-workflow"
 
 no-git-ops: true
+
+export.auto: false
