@@ -9,7 +9,7 @@ Claude Code plugin for development workflow with session management, code review
 commands/                     # Slash commands (/lets:start, /lets:done, /lets:review, etc.)
 agents/                       # 14 expert agents (architect, security, qa, actor, etc.) dispatched by review/opinion/ask/plan/brainstorm/team
 skills/                       # Reusable skills (user-facing auto-triggered + internal referenced by commands)
-hooks/                        # SessionStart hook, workflow rules, config template
+hooks/                        # SessionStart + PreCompact hooks, workflow rules, config template
 scripts/lets/                 # Statusline + init script (copied/run per-project by /lets:init)
 docs/                         # Plans, knowledge base, reference docs, comment exports
 reference/                    # Reference plugins for studying patterns (gitignored)
@@ -20,7 +20,7 @@ reference/                    # Reference plugins for studying patterns (gitigno
 - **Commands** = user-initiated workflows (sessions, commits, reviews)
 - **Agents** = experts dispatched by commands. `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:brainstorm` dispatch via subagents. `/lets:team` dispatches via Agent Teams (parallel, worktree isolation). `actor` is a meta-agent that loads external personalities (URL or file) and adapts them to LETS modes
 - **Orchestrators** = commands that delegate to other commands. `/lets:pr` orchestrates `/lets:review` for full PR lifecycle
-- **Hooks** = SessionStart injects workflow rules
+- **Hooks** = SessionStart + PreCompact inject workflow rules (PreCompact preserves rules across context compaction in long sessions)
 - **Statusline** = per-project `.lets/statusline.sh`, source in `scripts/lets/statusline.sh`, copied by `/lets:init`
 - **Skills** = reusable actions in `skills/<name>/SKILL.md`. Two types: user-facing (auto-discovered, triggered via description match or Skill tool) and internal (not auto-discovered, read by commands via Read tool when needed). Examples: `create-task`, `commit`, `take-task` (user-facing), `detect-task`, `actor-fetch-personality` (internal)
 
@@ -43,8 +43,7 @@ reference/                    # Reference plugins for studying patterns (gitigno
 - All analyst agents have prompt-level read-only Bash constraints in their `## Constraints` section (identical 1-line allowlist across all 13). `hooks/validate-readonly.sh.old` exists as a PreToolUse hook prototype (not yet registered - agent frontmatter hooks silently ignored)
 - Interactive worktrees managed via `/lets:worktree` command. Hook prototypes `hooks/worktree-setup.sh.old` and `hooks/worktree-cleanup.sh.old` (deferred - caused agent auto-cleanup issues)
 - Worktrees stored in `.worktrees/` at project root - `.lets/` symlinked for interactive sessions
-- SessionStart hook injects rules from `hooks/rules-context.md`
-- SessionStart hook reads `.lets/config.yaml` and injects settings into session context
+- SessionStart and PreCompact hooks both run `hooks/session-start.sh`, which injects rules from `hooks/rules-context.md` and reads `.lets/config.yaml` for project context. Dual-hook pattern (same script on both events) follows beads precedent: [issue #486](https://github.com/gastownhall/beads/issues/486) and [PR #297](https://github.com/gastownhall/beads/pull/297). SessionStart on `compact` source re-injects rules into the post-compaction context; PreCompact ensures rules are in the pre-compaction context that the auto-summary is generated from - prevents workflow drift after compaction in long sessions.
 - Statusline source in `scripts/lets/statusline.sh`, copied to `.lets/statusline.sh` per-project by `/lets:init`. Project `.claude/settings.json` uses `git rev-parse --show-toplevel` to locate it.
 - User-facing skills: auto-discovered by Claude Code, appear in skill list, trigger on description match. Frontmatter description must NOT use YAML quotes.
 - Internal skills: NOT auto-discovered. Commands reference with "use the X skill" and read the SKILL.md via Read tool at `` `${CLAUDE_PLUGIN_ROOT}/skills/X/SKILL.md` `` - the env var ensures the path resolves correctly whether plugin is loaded via marketplace install or `--plugin-dir` dev mode (relative `skills/...` paths break in foreign projects). No accidental triggering, no context cost until needed.
