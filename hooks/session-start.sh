@@ -1,5 +1,5 @@
 #!/bin/bash
-# LETS plugin - SessionStart hook
+# LETS plugin - SessionStart + PreCompact hook
 # Injects workflow rules + project config as context
 
 # Always inject workflow rules
