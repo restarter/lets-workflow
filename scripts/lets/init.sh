@@ -112,6 +112,9 @@ else
 fi
 
 # Create .env
+# Always use heredoc (not sed-rewrite of template) so user values containing
+# sed-special chars (|, &, \) don't break the substitution. The template file
+# at hooks/config-template.env exists as documentation/example only.
 CONFIG="${LETS_DIR}/.env"
 if [ -f "$CONFIG" ]; then
   info "[skip] .env (exists)"
@@ -122,24 +125,24 @@ else
     *)     PR_FLOW="local" ;;
   esac
 
-  # Read template from hooks/ (relative to plugin root)
-  TEMPLATE="${SCRIPT_DIR}/../../hooks/config-template.env"
-  if [ -f "$TEMPLATE" ]; then
-    sed -e "s|^LETS_LANGUAGE=.*|LETS_LANGUAGE=${LANGUAGE}|" \
-        -e "s|^LETS_MERGE_BRANCH=.*|LETS_MERGE_BRANCH=${MERGE_BRANCH}|" \
-        -e "s|^LETS_PR_FLOW=.*|LETS_PR_FLOW=${PR_FLOW}|" \
-        "$TEMPLATE" > "$CONFIG"
-  else
-    # Fallback: inline template (manual invocation without plugin context)
-    cat > "$CONFIG" <<ENV
+  cat > "$CONFIG" <<ENV
 # LETS plugin config
+# NOT FOR SECRETS. Contents are injected verbatim into model context every
+# session (subject to whitelist filter in hooks/session-start.sh). Put
+# tokens/passwords elsewhere (gh auth, OS keychain, .beads/.env).
 
+# Response language (English/Ukrainian/Italian/etc)
 LETS_LANGUAGE=${LANGUAGE}
+
+# Target branch for merges and PR base
 LETS_MERGE_BRANCH=${MERGE_BRANCH}
+
+# PR flow: github | bitbucket | local
 LETS_PR_FLOW=${PR_FLOW}
+
+# Task tracker (currently beads supported)
 LETS_TRACKER=beads
 ENV
-  fi
   info "[ok]   .env (LANGUAGE=${LANGUAGE}, MERGE_BRANCH=${MERGE_BRANCH}, PR_FLOW=${PR_FLOW})"
 
   # Notice if legacy yaml exists (left for reference, no longer read)

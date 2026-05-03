@@ -8,6 +8,10 @@ Complete the current task. Document work, create PR or merge locally, close in b
 
 **This is NOT session end.** Use `/lets:end` to end a session. `/lets:done` finishes a TASK.
 
+> **Convention used in this file (per CLAUDE.md "Naming Convention: LETS_*"):**
+> - `{LETS_FOO}` placeholder inside ` ```bash ` snippets - the orchestrator substitutes the literal value before running the command. Required because Bash tool calls are fresh shells; `$LETS_FOO` would be unset.
+> - `$LETS_FOO` in prose, AskUserQuestion descriptions, and section headings - read-only reference to the LETS Config inject. Do NOT change `{LETS_FOO}` to `$LETS_FOO` in bash blocks - it will silently produce wrong commands.
+
 > **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
 
 ## Step 1: Active Task Detection

@@ -105,6 +105,8 @@ mkdir -p "$LETS_PROJECT_ROOT/.lets/sessions"
 
 `.lets/.env` is `KEY=VALUE` format with comments **above** keys (NOT inline - inline comments would pollute the model's context after the hook strips full-line comments). Auto-migrated from legacy `config.yaml` on first session by `hooks/session-start.sh`. The migration code is intended to be removed in a future task once all known users have migrated.
 
+**NOT FOR SECRETS.** The hook injects the file's whitelisted `LETS_*` values into model context every session. Tokens, passwords, and API keys belong elsewhere: `gh auth login` for GitHub, OS keychain for general secrets, tool-specific credential files (e.g. `.beads/.env` for beads). The whitelist filter in `hooks/session-start.sh` only echoes the 4 documented `LETS_*` keys, so unknown keys are filtered - but file mode is 644 (world-readable on disk), so secrets in `.env` would still be exposed locally. Do not add secret keys.
+
 ### Adding a new config key
 
 1. Add to `hooks/config-template.env` with comment ABOVE the key
