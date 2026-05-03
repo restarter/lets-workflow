@@ -58,6 +58,7 @@ This includes hook debug logs, temp files, and any runtime artifacts.
 
 ```
 .lets/.env               # Per-project settings (LETS_LANGUAGE, LETS_MERGE_BRANCH, LETS_PR_FLOW, LETS_TRACKER)
+.lets/.env.example       # Reference defaults (auto-created from hooks/config-template.env by /lets:init and migration)
 .lets/sessions/          # Session summaries, session-start-ref
 .lets/reviews/           # Saved review reports
 .lets/plans/             # Implementation plans
