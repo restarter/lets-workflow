@@ -79,7 +79,7 @@ All plugin configuration uses the `LETS_*` prefix (UPPER_SNAKE_CASE). The prefix
 | `LETS_LANGUAGE` | `.lets/.env` | Default response language |
 | `LETS_MERGE_BRANCH` | `.lets/.env` | Target branch for merges and PRs |
 | `LETS_PR_FLOW` | `.lets/.env` | `github` \| `bitbucket` \| `local` - which PR workflow to use |
-| `LETS_TRACKER` | `.lets/.env` | Task tracker. Currently `beads`. Future: Linear/Jira (lets-nwwkj) |
+| `LETS_TRACKER` | `.lets/.env` | Task tracker. Currently `beads`. **Schema reserved** - no command branches on this yet; all task ops call `bd` regardless. Future: Linear/Jira (lets-nwwkj) |
 
 ### Surface forms - where to use which form
 

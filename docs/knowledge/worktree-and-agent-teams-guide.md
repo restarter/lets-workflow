@@ -377,8 +377,8 @@ Step by step (from `worktree_cmd.go:142-251`):
 
 `.lets/` is in `.gitignore`. When a worktree is created:
 - `.lets/` directory does NOT exist in the worktree
-- `ROOT=$(git rev-parse --show-toplevel)` returns worktree path, not main repo
-- All commands that do `$ROOT/.lets/...` look in worktree's non-existent `.lets/`
+- `LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)` returns worktree path, not main repo
+- All commands that do `$LETS_PROJECT_ROOT/.lets/...` look in worktree's non-existent `.lets/`
 
 ### 4.2 What Breaks
 
@@ -387,11 +387,11 @@ Step by step (from `worktree_cmd.go:142-251`):
 | `start.md` | Reads recent session files via `ls -t` glob | No previous session context (resolved: dated files + branch slug) |
 | `start.md` | Writes `.session-start-ref` | Written to worktree (isolated) |
 | `end.md` | Reads `.session-start-ref`, writes summaries | Isolated from main session history |
-| `plan.md` | Saves plans to `$ROOT/.lets/plans/` | Plans invisible from main repo |
+| `plan.md` | Saves plans to `$LETS_PROJECT_ROOT/.lets/plans/` | Plans invisible from main repo |
 | `execute.md` | Reads/writes execution state | State not shared |
-| `review.md` | Saves reports to `$ROOT/.lets/reviews/` | Reports isolated |
-| `pr.md` | PR state in `$ROOT/.lets/execution/pr-N/` | PR state split |
-| `statusline` | Creates `$ROOT/.lets/cache/` | Separate cache per worktree |
+| `review.md` | Saves reports to `$LETS_PROJECT_ROOT/.lets/reviews/` | Reports isolated |
+| `pr.md` | PR state in `$LETS_PROJECT_ROOT/.lets/execution/pr-N/` | PR state split |
+| `statusline` | Creates `$LETS_PROJECT_ROOT/.lets/cache/` | Separate cache per worktree |
 
 ### 4.3 Detection: Am I in a Worktree?
 

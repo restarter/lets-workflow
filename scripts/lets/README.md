@@ -36,7 +36,7 @@ The init script:
 2. Copies `statusline.sh` to `.lets/statusline.sh`
 3. Adds `.lets/`, `.beads/`, `.worktrees/` to `.gitignore`
 4. Configures `.claude/settings.json` with statusLine command
-5. Creates `.lets/config.yaml` with defaults
+5. Creates `.lets/.env` with defaults
 6. Initializes beads (if `bd` is available)
 
 Restart Claude Code after install.

@@ -108,6 +108,8 @@ AskUserQuestion(
 
 Use `$LETS_MERGE_BRANCH` from LETS Config. Fallback: `git symbolic-ref refs/remotes/origin/HEAD --short 2>/dev/null || echo main`
 
+**Guard:** if `$LETS_MERGE_BRANCH` is unset or empty, STOP with error: "LETS_MERGE_BRANCH is not configured. Edit `.lets/.env` or run `/lets:init`. Refusing to proceed - empty value would cause `git checkout` no-op and merge into wrong branch." Do NOT use the fallback for merge/checkout operations - the fallback is for context only (showing the diff against a reasonable base). Merge target must be explicit.
+
 ```bash
 git log {LETS_MERGE_BRANCH}..HEAD --oneline
 git diff --stat {LETS_MERGE_BRANCH}..HEAD
@@ -127,6 +129,8 @@ Files: X changed, Y insertions, Z deletions
 ## Step 5: Confirm with User
 
 Show what will happen based on `$LETS_PR_FLOW` from LETS Config:
+
+> **Note:** Conditionals below are binary (`== github` vs `!= github`). When Bitbucket integration lands, every `!= github` branch needs a 3rd case (currently `bitbucket` value falls into local-merge path). Search for `LETS_PR_FLOW != github` to find all sites.
 
 ### If $LETS_PR_FLOW == github:
 

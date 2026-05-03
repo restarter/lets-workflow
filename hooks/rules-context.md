@@ -18,7 +18,7 @@ The SessionStart hook injects `## LETS Config` section above. All keys are prefi
 - **`LETS_LANGUAGE`** - default response language. Use this when user's language isn't clear from their message. Value is a full language name (English, Ukrainian, Italian, etc).
 - **`LETS_MERGE_BRANCH`** - target branch for merges, PR base, and diff comparisons. Use this instead of hardcoded `main`. When running commands like `git log`, `git diff`, `git merge`, `git checkout -b` that need a base branch - use the configured value. Fallback: `git symbolic-ref refs/remotes/origin/HEAD --short 2>/dev/null || echo main`.
 - **`LETS_PR_FLOW`** - PR/merge workflow. Values: `github` (PR via gh CLI), `bitbucket` (planned, bb-api wrapper exists), `local` (no PR, local merge). Used by `/lets:done`. Requires matching CLI tools when not `local`.
-- **`LETS_TRACKER`** - task tracker integration. Currently `beads` is the only supported value. Reserved for future trackers (Linear/Jira) - tracked in lets-nwwkj.
+- **`LETS_TRACKER`** - task tracker integration. Currently `beads` is the only supported value. **Schema reserved** - no command currently branches on this value; all task ops still call `bd` regardless. Tracked in lets-nwwkj for future Linear/Jira support.
 
 `LETS_PROJECT_ROOT` is always injected by the hook. Other settings come from `.lets/.env` (auto-created on first session if `.lets/config.yaml` exists, or via `/lets:init`).
 
