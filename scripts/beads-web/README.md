@@ -117,32 +117,48 @@ If you have an existing deploy on a different port (the historical default was 9
 
 > **Migrating from beads-ui (port 9080) instead?** beads-ui is deprecated and lives at `/opt/beads-ui/` - different install path, different cleanup. See [scripts/deprecated/beads-ui/README.md](../deprecated/beads-ui/README.md) for decommission steps before deploying beads-web.
 
+> **Order matters:** redeploy on the new port FIRST, then purge old-port firewall rules. The reverse order would leave the old container running on the old port without any firewall (open to internet) for the few seconds between purge and rebuild.
+
 ```bash
-# 1. Drop ALL firewall rules for the old port (ALLOWs from any IP + REJECT, v4 + v6).
-ssh root@vps "bash -s -- --purge-port 9090" \
+# 0. Pre-flight: confirm the new port is not already in use on the host.
+ssh root@vps "ss -tlnp | grep -q ':3008' && echo BUSY || echo '3008 free'"
+# Must show "3008 free" before continuing.
+
+# 1. Redeploy on the new port. Sources existing /opt/beads-web/.env so SQL
+#    credentials don't have to be retyped. Rebuild downs the old container,
+#    so the old port stops listening as a side effect.
+ssh root@vps 'set -a; source /opt/beads-web/.env; set +a; \
+  bash -s -- \
+    --sql-user "$SQL_USER" --sql-password "$SQL_PASSWORD" \
+    --database "$DATABASE" --port 3008 \
+    --allow-ip YOUR_IP_1 --allow-ip YOUR_IP_2' \
   < scripts/beads-web/setup-remote.sh
 
-# 2. Redeploy with the new port - same install dir, same data.
-ssh root@vps "bash -s -- \
-  --sql-user bdweb --sql-password your-password \
-  --database lets --port 3008 \
-  --allow-ip YOUR_IP" < scripts/beads-web/setup-remote.sh
+# 2. Verify new deployment BEFORE purging old port. If this fails, do NOT
+#    proceed - the rollback path needs the old firewall rules intact.
+ssh root@vps "
+  docker ps --filter name=beads-web --format '{{.Status}}'
+  curl -sf -o /dev/null -w 'HTTP: %{http_code}\n' http://localhost:3008/
+"
+# Must show "Up (healthy)" and "HTTP: 200".
+
+# 3. Purge old-port firewall rules (now that new deployment is verified).
+ssh root@vps "bash -s -- --purge-port 9090" \
+  < scripts/beads-web/setup-remote.sh
 ```
 
-Step 2 regenerates `docker-compose.yml`, `Dockerfile`, `.env`, and rebuilds the container. The volume-mounted `data/` (projects SQLite + Dolt metadata) is preserved.
+Step 1 regenerates `docker-compose.yml`, `Dockerfile`, `.env`, and rebuilds the container. The volume-mounted `data/` (projects SQLite + Dolt metadata) is preserved.
 
-After migration, verify the old port has no listeners and no firewall state:
+Final verification:
 
 ```bash
-ssh root@vps "ss -tlnp | grep ':9090'"            # should be empty
-ssh root@vps "iptables -L DOCKER-USER -n | grep 9090"   # should be empty
+ssh root@vps "ss -tlnp 2>/dev/null | grep ':9090' || echo 'OK: 9090 not listening'"
+ssh root@vps "iptables -L DOCKER-USER -n | grep 9090 || echo 'OK: 9090 firewall clean'"
 ```
 
-If either returns rows, re-run `--purge-port 9090` (it's idempotent). If still non-empty, inspect output and remove with `iptables -D DOCKER-USER <rule>`.
+**Rollback:** if Step 1 or 2 fails, redeploy on the old port with the original arguments (`--port 9090 --allow-ip YOUR_IP`). Skip Step 3. The install dir and data volume are preserved across both directions; the old port's firewall rules are still in place because we deferred the purge.
 
-**Rollback:** if Step 2 fails, redeploy on the old port with the original arguments (`--port 9090 --allow-ip YOUR_IP`). The install dir and data volume are preserved across both directions.
-
-> **Expected downtime:** Step 2 runs `docker compose build --no-cache` which re-downloads the binary from GitHub Releases. Total downtime is typically 30-90 seconds (build) + ~5-10 seconds (container recreate). Plan migrations outside business hours if uptime matters.
+> **Expected downtime:** Step 1 runs `docker compose build --no-cache` which re-downloads the binary from GitHub Releases. Total downtime is typically 30-90 seconds (build) + ~5-10 seconds (container recreate). Plan migrations outside business hours if uptime matters.
 
 ## IP Allowlist
 
