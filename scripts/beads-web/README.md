@@ -9,7 +9,7 @@ Source: [Shybko/beads-web](https://github.com/Shybko/beads-web) (fork of weselow
 ```
 Developer browser
      |
-http://VPS_IP:9090
+http://VPS_IP:3008
      |
 iptables DOCKER-USER (IP allowlist)
      |
@@ -46,7 +46,7 @@ See [scripts/dolt/README.md - Add SQL user](../dolt/README.md#add-sql-user).
 ```bash
 ssh root@vps "bash -s -- \
   --sql-user bdweb --sql-password your-password \
-  --database lets --port 9090 \
+  --database lets --port 3008 \
   --allow-ip YOUR_IP_1 --allow-ip YOUR_IP_2" \
   < scripts/beads-web/setup-remote.sh
 ```
@@ -57,12 +57,12 @@ beads-web supports multiple Dolt databases as separate projects. After deploy, a
 
 ```bash
 # Add a project (from VPS)
-docker exec beads-web curl -sf -X POST http://localhost:9090/api/projects \
+docker exec beads-web curl -sf -X POST http://localhost:3008/api/projects \
   -H 'Content-Type: application/json' \
   -d '{"name":"my-project","path":"dolt://mydb"}'
 
 # Add another project
-docker exec beads-web curl -sf -X POST http://localhost:9090/api/projects \
+docker exec beads-web curl -sf -X POST http://localhost:3008/api/projects \
   -H 'Content-Type: application/json' \
   -d '{"name":"another-project","path":"dolt://anotherdb"}'
 ```
@@ -74,7 +74,7 @@ The `dolt://` prefix tells beads-web to read/write via Dolt SQL. Each database o
 ### 4. Open in browser
 
 ```
-http://VPS_IP:9090
+http://VPS_IP:3008
 ```
 
 ## Updating
@@ -105,21 +105,96 @@ To upgrade to a new version (new release tag):
 ```bash
 ssh root@vps "bash -s -- \
   --sql-user bdweb --sql-password your-password \
-  --database lets --port 9090 \
+  --database lets --port 3008 \
   --version 1.0.0" < scripts/beads-web/setup-remote.sh
 ```
 
 The setup script is idempotent - it regenerates config and rebuilds the container.
 
+> **SQLite migrations:** the binary auto-applies pending migrations to `data/kanban-ui/settings.db` on first start (logs `Applied migration vN`). Migrations are additive (`CREATE TABLE IF NOT EXISTS`), so existing projects/tags/cache survive across versions. No manual action required.
+
+### Combined version + port upgrade
+
+When you need both a new binary AND a new port, do it in two phases for safer rollback:
+
+1. **Phase 1 - upgrade binary, keep current port.** Run `update-remote.sh` (or `setup-remote.sh` with the same `--port`). Verify the new version works on the existing port before changing anything else.
+2. **Phase 2 - migrate port.** Follow [Migrating Port](#migrating-port) below. If the binary has issues, you'll hit them in phase 1 with the firewall still intact.
+
+> **Recommended:** run [scripts/dolt/backup-remote.sh](../dolt/README.md#backups) before any phase 1 or phase 2 to take a point-in-time snapshot of the Dolt server. Cheap insurance for risky operations.
+
+### Re-deploying with existing credentials
+
+When re-running `setup-remote.sh` on an existing install, source `/opt/beads-web/.env` on the remote so SQL credentials don't go through your shell history:
+
+```bash
+ssh root@vps 'set -a; source /opt/beads-web/.env; set +a; \
+  bash -s -- \
+    --sql-user "$SQL_USER" --sql-password "$SQL_PASSWORD" \
+    --database "$DATABASE" --port 3008 \
+    --allow-ip YOUR_IP' \
+  < scripts/beads-web/setup-remote.sh
+```
+
+This idiom is useful any time you re-deploy without changing credentials (port migration, version upgrade, IP allowlist edits).
+
+## Migrating Port
+
+If you have an existing deploy on a different port (the historical default was 9090; the current default is 3008) and want to switch:
+
+> **Migrating from beads-ui (port 9080) instead?** beads-ui is deprecated and lives at `/opt/beads-ui/` - different install path, different cleanup. See [scripts/deprecated/beads-ui/README.md](../deprecated/beads-ui/README.md) for decommission steps before deploying beads-web.
+
+> **Order matters:** redeploy on the new port FIRST, then purge old-port firewall rules. The reverse order would leave the old container running on the old port without any firewall (open to internet) for the few seconds between purge and rebuild.
+
+```bash
+# 0. Pre-flight: confirm the new port is not already in use on the host.
+ssh root@vps "ss -tlnp | grep -q ':3008' && echo BUSY || echo '3008 free'"
+# Must show "3008 free" before continuing.
+
+# 1. Redeploy on the new port. Sources existing /opt/beads-web/.env so SQL
+#    credentials don't have to be retyped. Rebuild downs the old container,
+#    so the old port stops listening as a side effect.
+ssh root@vps 'set -a; source /opt/beads-web/.env; set +a; \
+  bash -s -- \
+    --sql-user "$SQL_USER" --sql-password "$SQL_PASSWORD" \
+    --database "$DATABASE" --port 3008 \
+    --allow-ip YOUR_IP_1 --allow-ip YOUR_IP_2' \
+  < scripts/beads-web/setup-remote.sh
+
+# 2. Verify new deployment BEFORE purging old port. If this fails, do NOT
+#    proceed - the rollback path needs the old firewall rules intact.
+ssh root@vps "
+  docker ps --filter name=beads-web --format '{{.Status}}'
+  curl -sf -o /dev/null -w 'HTTP: %{http_code}\n' http://localhost:3008/
+"
+# Must show "Up (healthy)" and "HTTP: 200".
+
+# 3. Purge old-port firewall rules (now that new deployment is verified).
+ssh root@vps "bash -s -- --purge-port 9090" \
+  < scripts/beads-web/setup-remote.sh
+```
+
+Step 1 regenerates `docker-compose.yml`, `Dockerfile`, `.env`, and rebuilds the container. The volume-mounted `data/` (projects SQLite + Dolt metadata) is preserved.
+
+Final verification:
+
+```bash
+ssh root@vps "ss -tlnp 2>/dev/null | grep ':9090' || echo 'OK: 9090 not listening'"
+ssh root@vps "iptables -L DOCKER-USER -n | grep 9090 || echo 'OK: 9090 firewall clean'"
+```
+
+**Rollback:** if Step 1 or 2 fails, redeploy on the old port with the original arguments (`--port 9090 --allow-ip YOUR_IP`). Skip Step 3. The install dir and data volume are preserved across both directions; the old port's firewall rules are still in place because we deferred the purge.
+
+> **Expected downtime:** Step 1 runs `docker compose build --no-cache` which re-downloads the binary from GitHub Releases. Total downtime is typically 30-90 seconds (build) + ~5-10 seconds (container recreate). Plan migrations outside business hours if uptime matters.
+
 ## IP Allowlist
 
 ```bash
 # Add IP
-ssh root@vps "bash -s -- --allow-ip 1.2.3.4 --port 9090" \
+ssh root@vps "bash -s -- --allow-ip 1.2.3.4 --port 3008" \
   < scripts/beads-web/setup-remote.sh
 
 # Remove IP
-ssh root@vps "bash -s -- --remove-ip 1.2.3.4 --port 9090" \
+ssh root@vps "bash -s -- --remove-ip 1.2.3.4 --port 3008" \
   < scripts/beads-web/setup-remote.sh
 ```
 
@@ -128,7 +203,7 @@ Multiple IPs can be added in a single command:
 ```bash
 ssh root@vps "bash -s -- \
   --allow-ip 1.2.3.4 --allow-ip 5.6.7.8 --allow-ip 9.10.11.12 \
-  --port 9090" < scripts/beads-web/setup-remote.sh
+  --port 3008" < scripts/beads-web/setup-remote.sh
 ```
 
 ## Fork Support
@@ -138,7 +213,7 @@ By default, the binary is downloaded from `Shybko/beads-web`. Use `--repo` to sp
 ```bash
 ssh root@vps "bash -s -- \
   --sql-user bdweb --sql-password your-password \
-  --database lets --port 9090 \
+  --database lets --port 3008 \
   --repo weselow/beads-web --version 1.0.0 \
   --allow-ip YOUR_IP" < scripts/beads-web/setup-remote.sh
 ```
@@ -168,9 +243,9 @@ ssh root@vps "bash -s -- \
 | --sql-user | - | SQL username for Dolt connection |
 | --sql-password | - | SQL password |
 | --database | - | Dolt database name (e.g., lets, aff) |
-| --allow-ip | - | Restrict access to this IP (repeatable) |
+| --allow-ip | - | Restrict access to this IP (single IPv4, no CIDR; repeatable for multiple IPs) |
 | --no-firewall | - | Leave port open to all (NOT recommended) |
-| --port | 9090 | Web UI port |
+| --port | 3008 | Web UI port |
 | --install-dir | /opt/beads-web | Installation directory |
 | --dolt-host | dolt | Dolt container hostname |
 | --dolt-port | 3306 | Dolt SQL port |
@@ -183,9 +258,10 @@ Either `--allow-ip` or `--no-firewall` is required - board has no built-in auth.
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| --allow-ip | - | Add IP to allowlist |
+| --allow-ip | - | Add IP to allowlist (single IPv4, no CIDR) |
 | --remove-ip | - | Remove IP from allowlist |
-| --port | 9090 | Target port |
+| --purge-port | - | Drop all ALLOW + REJECT rules for a port (decommission) |
+| --port | 3008 | Target port |
 
 ### update-remote.sh
 
@@ -205,6 +281,17 @@ Reads repo and version from existing `.env` file. No other arguments needed.
 
 ## Troubleshooting
 
+### Harmless warnings on startup
+
+On every start, beads-web logs:
+
+```
+WARN bd CLI not found. Searched PATH and: ... Install bd or add it to PATH.
+WARN ⚠ bd CLI not found - beads read/write will not work for filesystem projects
+```
+
+Safe to ignore for Dolt-only deploys. The warning fires because beads-web supports both filesystem (`.beads/`) and Dolt (`dolt://`) project backends. Filesystem mode requires the `bd` CLI inside the container; Dolt mode connects via SQL only. Our deploy is Dolt-only by design (see `data/.beads/metadata.json`), so the missing `bd` CLI never matters.
+
 ### Container won't start
 
 ```bash
@@ -222,7 +309,7 @@ docker network inspect dolt-net
 ### Port not accessible
 
 ```bash
-iptables -L DOCKER-USER -n | grep 9090
+iptables -L DOCKER-USER -n | grep 3008
 # Ensure your IP is in the allowlist
 ```
 

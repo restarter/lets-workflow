@@ -55,26 +55,20 @@ validate_name() {
 
 validate_ip() {
   local ip="$1"
-  if [[ ! "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(/[0-9]+)?$ ]]; then
-    echo -e "${RED}Error: Invalid IP address format: $ip${NC}"
+  if [[ ! "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo -e "${RED}Error: Invalid IP address: $ip (single IPv4 required, no CIDR/masks)${NC}"
     exit 1
   fi
-  # Validate octets
-  local addr cidr
-  IFS='/' read -r addr cidr <<< "$ip"
-  IFS='.' read -ra octets <<< "$addr"
+  local IFS='.'
+  local -a octets
+  read -ra octets <<< "$ip"
   for o in "${octets[@]}"; do
     if (( o > 255 )); then
       echo -e "${RED}Error: Invalid IP octet: $o in $ip${NC}"
       exit 1
     fi
   done
-  # Block wide CIDR ranges
-  if [[ -n "$cidr" ]] && (( cidr < 24 )); then
-    echo -e "${RED}Error: CIDR mask /$cidr is too wide (minimum /24)${NC}"
-    exit 1
-  fi
-  if [[ "$ip" == "0.0.0.0/0" || "$ip" == "0.0.0.0" ]]; then
+  if [[ "$ip" == "0.0.0.0" ]]; then
     echo -e "${RED}Error: Refusing 0.0.0.0 - this would open the port to everyone${NC}"
     exit 1
   fi
@@ -88,6 +82,7 @@ SQL_PASSWORD=""
 DATABASE=""
 ALLOW_IPS=()
 REMOVE_IP=""
+PURGE_PORT=""
 NO_FIREWALL=false
 
 while [[ $# -gt 0 ]]; do
@@ -102,6 +97,7 @@ while [[ $# -gt 0 ]]; do
     --version) BEADS_UI_VERSION="$2"; shift 2 ;;
     --allow-ip) ALLOW_IPS+=("$2"); shift 2 ;;
     --remove-ip) REMOVE_IP="$2"; shift 2 ;;
+    --purge-port) PURGE_PORT="$2"; shift 2 ;;
     --no-firewall) NO_FIREWALL=true; shift ;;
     --) shift ;;
     *) echo -e "${RED}Unknown argument: $1${NC}"; exit 1 ;;
@@ -150,6 +146,41 @@ manage_ip_allowlist() {
   echo "Current allowlist for port $port:"
   iptables -L DOCKER-USER -n --line-numbers 2>/dev/null | grep -E "dpt:$port|Chain"
 }
+
+# Purge all DOCKER-USER rules for a port (ALLOW from any source + REJECT v4/v6).
+# Used when fully decommissioning a port (deprecation cleanup).
+purge_port_rules() {
+  local port="$1"
+  if [[ ! "$port" =~ ^[0-9]+$ ]] || (( port < 1 || port > 65535 )); then
+    echo -e "${RED}Error: Invalid port: $port${NC}"
+    exit 1
+  fi
+  if ! dpkg -s iptables-persistent &>/dev/null; then
+    DEBIAN_FRONTEND=noninteractive apt-get install -y iptables-persistent
+  fi
+  echo "Purging DOCKER-USER rules for port $port..."
+  # Pattern matches `iptables -S` output: ` --dport PORT ... -j ACCEPT` at line end.
+  while iptables -S DOCKER-USER 2>/dev/null | grep -qE " --dport ${port} .*-j ACCEPT$"; do
+    rule=$(iptables -S DOCKER-USER 2>/dev/null | grep -E " --dport ${port} .*-j ACCEPT$" | head -1 | sed 's/^-A /-D /')
+    [[ -z "$rule" ]] && break
+    eval "iptables $rule" 2>/dev/null || break
+  done
+  iptables -D DOCKER-USER -p tcp --dport "$port" -j REJECT --reject-with tcp-reset 2>/dev/null || true
+  ip6tables -D DOCKER-USER -p tcp --dport "$port" -j REJECT --reject-with tcp-reset 2>/dev/null || true
+  netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
+  echo -e "${GREEN}Purged all DOCKER-USER rules for port $port${NC}"
+  remaining=$(iptables -L DOCKER-USER -n 2>/dev/null | grep -c "dpt:$port" || true)
+  if (( remaining > 0 )); then
+    echo -e "${YELLOW}Warning: $remaining rule(s) still present for port $port:${NC}"
+    iptables -L DOCKER-USER -n 2>/dev/null | grep "dpt:$port"
+  fi
+}
+
+# --purge-port mode (standalone)
+if [[ -n "$PURGE_PORT" ]]; then
+  purge_port_rules "$PURGE_PORT"
+  exit 0
+fi
 
 # --remove-ip mode (standalone)
 if [[ -n "$REMOVE_IP" ]]; then

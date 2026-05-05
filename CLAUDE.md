@@ -11,6 +11,9 @@ agents/                       # 14 expert agents (architect, security, qa, actor
 skills/                       # Reusable skills (user-facing auto-triggered + internal referenced by commands)
 hooks/                        # SessionStart + PreCompact hooks, workflow rules, config template
 scripts/lets/                 # Statusline + init script (copied/run per-project by /lets:init)
+scripts/dolt/                 # Dolt SQL server VPS deployment + ad-hoc backup
+scripts/beads-web/            # beads-web (Rust kanban board) VPS deployment
+scripts/deprecated/           # Retired scripts kept for cleanup runbooks - not for new installs
 docs/                         # Plans, knowledge base, reference docs, comment exports
 reference/                    # Reference plugins for studying patterns (gitignored)
 ```
