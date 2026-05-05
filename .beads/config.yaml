@@ -57,8 +57,15 @@
 
 no-git-ops: true
 
+# JSONL auto-export: bd writes .beads/issues.jsonl after each Dolt write.
+#  export:
+#   git-add: false  (set below) - .beads/ is gitignored, so bd's default `git add issues.jsonl` would fail and warn.
+#   auto: false     (commented)  - if you ever want to disable export entirely (no JSONL refresh), uncomment this line.
+# We keep export.auto at its default (true) so external tools (beads-web
+# JSONL fallback, viewers) can read the file without a SQL connection.
 export:
-  auto: false
+  git-add: false
+  # auto: false
 
 # Disable Dolt-mode auto-backup (calls CALL DOLT_BACKUP('add', ...) which
 # requires admin SQL grants our per-database user doesn't have).
