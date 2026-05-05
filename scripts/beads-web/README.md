@@ -111,6 +111,32 @@ ssh root@vps "bash -s -- \
 
 The setup script is idempotent - it regenerates config and rebuilds the container.
 
+> **SQLite migrations:** the binary auto-applies pending migrations to `data/kanban-ui/settings.db` on first start (logs `Applied migration vN`). Migrations are additive (`CREATE TABLE IF NOT EXISTS`), so existing projects/tags/cache survive across versions. No manual action required.
+
+### Combined version + port upgrade
+
+When you need both a new binary AND a new port, do it in two phases for safer rollback:
+
+1. **Phase 1 - upgrade binary, keep current port.** Run `update-remote.sh` (or `setup-remote.sh` with the same `--port`). Verify the new version works on the existing port before changing anything else.
+2. **Phase 2 - migrate port.** Follow [Migrating Port](#migrating-port) below. If the binary has issues, you'll hit them in phase 1 with the firewall still intact.
+
+> **Recommended:** run [scripts/dolt/backup-remote.sh](../dolt/README.md#backups) before any phase 1 or phase 2 to take a point-in-time snapshot of the Dolt server. Cheap insurance for risky operations.
+
+### Re-deploying with existing credentials
+
+When re-running `setup-remote.sh` on an existing install, source `/opt/beads-web/.env` on the remote so SQL credentials don't go through your shell history:
+
+```bash
+ssh root@vps 'set -a; source /opt/beads-web/.env; set +a; \
+  bash -s -- \
+    --sql-user "$SQL_USER" --sql-password "$SQL_PASSWORD" \
+    --database "$DATABASE" --port 3008 \
+    --allow-ip YOUR_IP' \
+  < scripts/beads-web/setup-remote.sh
+```
+
+This idiom is useful any time you re-deploy without changing credentials (port migration, version upgrade, IP allowlist edits).
+
 ## Migrating Port
 
 If you have an existing deploy on a different port (the historical default was 9090; the current default is 3008) and want to switch:
@@ -254,6 +280,17 @@ Reads repo and version from existing `.env` file. No other arguments needed.
 - SQL user should have minimal grants (per-database only)
 
 ## Troubleshooting
+
+### Harmless warnings on startup
+
+On every start, beads-web logs:
+
+```
+WARN bd CLI not found. Searched PATH and: ... Install bd or add it to PATH.
+WARN ⚠ bd CLI not found - beads read/write will not work for filesystem projects
+```
+
+Safe to ignore for Dolt-only deploys. The warning fires because beads-web supports both filesystem (`.beads/`) and Dolt (`dolt://`) project backends. Filesystem mode requires the `bd` CLI inside the container; Dolt mode connects via SQL only. Our deploy is Dolt-only by design (see `data/.beads/metadata.json`), so the missing `bd` CLI never matters.
 
 ### Container won't start
 
