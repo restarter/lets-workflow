@@ -7,7 +7,8 @@
 - Skill architecture (`skills/` directory) with two skill types: user-facing (auto-triggered) and internal (read by commands)
 - 4 skills: `commit`, `create-task`, `take-task` (user-facing), `detect-task` (internal)
 - Auto-triggered Skills table in `hooks/rules-context.md` and `commands/install.md`
-- beads-ui Docker web dashboard (`scripts/beads-ui/`) with deployment script
+- beads-web Docker kanban board (`scripts/beads-web/`) - Rust binary (Shybko/beads-web fork v0.11.0), default port 3008
+- `scripts/dolt/backup-remote.sh` for ad-hoc Dolt server snapshots before risky operations
 - Branch return prompt after worktree creation
 - Actor meta-agent (`agents/actor.md`) for dynamic personality loading from URL or local file
 - `actor-fetch-personality` internal skill for personality fetching via curl/Read
@@ -15,6 +16,9 @@
 
 ### Changed
 - All 13 agent prompts upgraded to v2: tiered scoring ([BLOCKER]/[SUGGESTION]/[NIT]), self-contained behavioral modes, color assignments
+- Moved `scripts/beads-ui/` and legacy `scripts/beads/setup-beads-remote.sh` to `scripts/deprecated/`; superseded by `scripts/beads-web/` (Rust kanban board) and Direct SQL mode respectively
+- `scripts/beads-web/setup-remote.sh`: default port 9090 → 3008 (avoids Prometheus collision; matches upstream binary's native default), Dockerfile heredoc fixed (was unintentionally host-shell-substituted)
+- `scripts/dolt/README.md`: replaced broken cron-based backup snippet (tarred only `dolt-home/`) with ad-hoc `backup-remote.sh` script + 2-layer model (VPS-snap + application-aware)
 - `/lets:brainstorm` redesigned with 4 modes: review backlog, explore idea, quick brainstorm, cleanup
 - Commands thinned - shared logic extracted to skills (`commit.md` 208->11 lines, `start.md` -120 lines)
 - CLAUDE.md architecture decisions updated: agents define WHO+HOW, commands define WHAT+WHEN

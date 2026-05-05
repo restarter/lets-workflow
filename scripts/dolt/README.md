@@ -83,11 +83,14 @@ ssh root@vps "bash -s -- --add-repo new-project" < scripts/dolt/setup-remote.sh
 Access to SQL port 3306 is restricted by IP. Only allowed IPs can connect.
 
 ```bash
-# Allow an IP
+# Allow an IP (single IPv4 only - no CIDR/masks)
 ssh root@vps "bash -s -- --allow-ip 1.2.3.4" < scripts/dolt/setup-remote.sh
 
 # Remove an IP
 ssh root@vps "bash -s -- --remove-ip 1.2.3.4" < scripts/dolt/setup-remote.sh
+
+# Decommission the port entirely (drop all ALLOW + REJECT rules for the port)
+ssh root@vps "bash -s -- --purge-port 3306" < scripts/dolt/setup-remote.sh
 
 # Check current rules
 ssh root@vps "iptables -L DOCKER-USER -n --line-numbers | grep 3306"
@@ -191,19 +194,82 @@ If connection works, you'll see tasks. No local dolt server needed.
 5. Set env vars if not already in shell profile (see Client Setup)
 6. Run `bd list` to verify
 
-## Backup
+## Backups
 
-Daily backup cron on VPS (keeps 7 days):
+Two layers:
+
+1. **VPS-level snapshots** (host provides daily + weekly snapshots of whole VPS) - the disaster-recovery layer. Restore the entire VPS state.
+2. **Application-aware snapshot** via `scripts/dolt/backup-remote.sh` - operator-initiated, point-in-time snapshot of just `/opt/dolt-remote/` for **before-risky-op** scenarios (migrations, version bumps, ad-hoc DDL). Single tarball, fast restore without rolling back the whole VPS.
+
+This section documents layer 2.
+
+### When to use
+
+Run before any operation that would be hard to roll back via VPS-snap alone:
+- `setup-remote.sh` re-run with config changes
+- `DOLT_VERSION` bump
+- Manual SQL migrations or schema changes
+- Bulk `bd` operations that affect many issues at once
+
+### Run a backup
 
 ```bash
-ssh root@vps "mkdir -p /opt/dolt-backups && \
-  (crontab -l 2>/dev/null; echo '0 3 * * * tar czf /opt/dolt-backups/\$(date +\%F).tar.gz -C /opt/dolt-remote dolt-home/ && find /opt/dolt-backups -mtime +7 -delete >> /var/log/dolt-backup.log 2>&1') | crontab -"
+ssh root@vps "bash -s" < scripts/dolt/backup-remote.sh
+```
+
+The container stops for ~5-15 seconds. Full state lands in `/opt/dolt-remote/backups/dolt-backup-YYYYMMDD-HHMMSS.tar.gz` (chmod 600 - contains `.env` with `ROOT_PASSWORD`).
+
+Custom output dir:
+```bash
+ssh root@vps "bash -s -- --output-dir /mnt/backups" < scripts/dolt/backup-remote.sh
+```
+
+### Verify a backup
+
+```bash
+ssh root@vps "gzip -t /opt/dolt-remote/backups/dolt-backup-*.tar.gz && \
+              tar -tzf /opt/dolt-remote/backups/dolt-backup-YYYYMMDD-HHMMSS.tar.gz | head"
+```
+
+Expected: no errors from `gzip -t`; tar listing shows `dolt-home/`, `.env`, `docker-compose.yml`, `servercfg.d/`.
+
+### Restore from backup
+
+The tarball contains the entire deployment. Restore replaces the install dir's contents in-place (preserves only `backups/`):
+
+```bash
+ssh root@vps "
+  set -e
+  cd /opt/dolt-remote
+  docker compose down
+  find . -mindepth 1 -maxdepth 1 ! -name backups -exec rm -rf {} +
+  tar -xzf backups/dolt-backup-YYYYMMDD-HHMMSS.tar.gz
+  chmod 600 .env
+  docker compose up -d
+"
 ```
 
 Verify:
 ```bash
-ssh root@vps "crontab -l | grep dolt"
+ssh root@vps "docker exec dolt dolt sql -q 'SHOW DATABASES;'"
 ```
+
+> **Note:** dependent services (e.g., `beads-web`) keep running but may briefly fail until Dolt finishes booting (~5-10s). The `dolt-net` Docker network is preserved.
+
+### Manage backups
+
+There is no automatic retention. Delete tarballs you no longer want:
+
+```bash
+ssh root@vps "ls -lh /opt/dolt-remote/backups/"
+ssh root@vps "rm /opt/dolt-remote/backups/dolt-backup-YYYYMMDD-HHMMSS.tar.gz"
+```
+
+Long-term retention is covered by the VPS-level snapshot system; this script is for short-lived "before-risky-op" snapshots only.
+
+### Troubleshooting
+
+If the backup script exits with `dolt did not reach healthy state in 60s`: the tarball is still valid (chmod 600, gzip-tested). Inspect `docker logs dolt` before relying on the running container; the backup itself is safe to keep.
 
 ## Server Layout
 
@@ -323,4 +389,4 @@ ssh root@vps "cd /opt/dolt-remote && docker compose down -v && rm -rf dolt-home 
 
 ## Legacy: RemotesAPI (push/pull)
 
-The older push/pull architecture is still available via remotesapi on port 50051 (localhost only when `--expose-sql` is used). See `scripts/beads/setup-beads-remote.sh` for the client-side setup. This mode requires a local dolt server and is no longer recommended.
+The older push/pull architecture is still available via remotesapi on port 50051 (localhost only when `--expose-sql` is used). See `scripts/deprecated/beads/setup-beads-remote.sh` for the client-side setup (now archived under `scripts/deprecated/`). This mode requires a local dolt server and is no longer recommended.

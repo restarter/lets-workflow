@@ -16,6 +16,9 @@
 #   ssh root@vps "bash -s -- --allow-ip 1.2.3.4" < scripts/dolt/setup-remote.sh
 #   ssh root@vps "bash -s -- --remove-ip 1.2.3.4" < scripts/dolt/setup-remote.sh
 #
+#   # Decommission a port - drop all ALLOW + REJECT rules (e.g. when retiring this service)
+#   ssh root@vps "bash -s -- --purge-port 3306" < scripts/dolt/setup-remote.sh
+#
 # Architecture:
 #   One Dolt container serves ALL databases via data_dir volume.
 #   Direct SQL: clients connect to port 3306 via MySQL protocol.
@@ -25,6 +28,7 @@
 #   Per-user SQL accounts. Create users via MySQL protocol (see README).
 
 set -e
+umask 077  # `.env` (chmod 600 explicitly later) gets safe perms during creation window
 
 # ============================================
 # Configuration
@@ -52,11 +56,20 @@ validate_name() {
 
 validate_ip() {
   local ip="$1"
-  if [[ ! "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(/[0-9]+)?$ ]]; then
-    echo -e "${RED}Error: Invalid IP address format: $ip${NC}"
+  if [[ ! "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo -e "${RED}Error: Invalid IP address: $ip (single IPv4 required, no CIDR/masks)${NC}"
     exit 1
   fi
-  if [[ "$ip" == "0.0.0.0/0" || "$ip" == "0.0.0.0" ]]; then
+  local IFS='.'
+  local -a octets
+  read -ra octets <<< "$ip"
+  for o in "${octets[@]}"; do
+    if (( o > 255 )); then
+      echo -e "${RED}Error: Invalid IP octet: $o in $ip${NC}"
+      exit 1
+    fi
+  done
+  if [[ "$ip" == "0.0.0.0" ]]; then
     echo -e "${RED}Error: Refusing 0.0.0.0 - this would open the port to everyone${NC}"
     exit 1
   fi
@@ -70,6 +83,7 @@ ROOT_PASSWORD=""
 EXPOSE_SQL=false
 ALLOW_IP=""
 REMOVE_IP=""
+PURGE_PORT=""
 REPOS=()
 
 while [[ $# -gt 0 ]]; do
@@ -79,6 +93,7 @@ while [[ $# -gt 0 ]]; do
     --expose-sql) EXPOSE_SQL=true; shift ;;
     --allow-ip) ALLOW_IP="$2"; shift 2 ;;
     --remove-ip) REMOVE_IP="$2"; shift 2 ;;
+    --purge-port) PURGE_PORT="$2"; shift 2 ;;
     --) shift ;;
     *) REPOS+=("$1"); shift ;;
   esac
@@ -127,6 +142,42 @@ manage_ip_allowlist() {
   iptables -L DOCKER-USER -n --line-numbers 2>/dev/null | grep -E "dpt:$port|Chain"
 }
 
+# Purge all DOCKER-USER rules for a port (ALLOW from any source + REJECT v4/v6).
+# Used when fully decommissioning a port (migration, deprecation).
+purge_port_rules() {
+  local port="$1"
+  if [[ ! "$port" =~ ^[0-9]+$ ]] || (( port < 1 || port > 65535 )); then
+    echo -e "${RED}Error: Invalid port: $port${NC}"
+    exit 1
+  fi
+  if ! dpkg -s iptables-persistent &>/dev/null; then
+    DEBIAN_FRONTEND=noninteractive apt-get install -y iptables-persistent
+  fi
+  echo "Purging DOCKER-USER rules for port $port..."
+  # Drop all ALLOW rules (any source) - iterate by re-querying to handle multi-IP
+  while iptables -S DOCKER-USER 2>/dev/null | grep -q "dport $port .* -j ACCEPT"; do
+    rule=$(iptables -S DOCKER-USER 2>/dev/null | grep "dport $port .* -j ACCEPT" | head -1 | sed 's/^-A /-D /')
+    [[ -z "$rule" ]] && break
+    eval "iptables $rule" 2>/dev/null || break
+  done
+  # Drop REJECT (v4 + v6)
+  iptables -D DOCKER-USER -p tcp --dport "$port" -j REJECT --reject-with tcp-reset 2>/dev/null || true
+  ip6tables -D DOCKER-USER -p tcp --dport "$port" -j REJECT --reject-with tcp-reset 2>/dev/null || true
+  netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
+  echo -e "${GREEN}Purged all DOCKER-USER rules for port $port${NC}"
+  remaining=$(iptables -L DOCKER-USER -n 2>/dev/null | grep -c "dpt:$port" || true)
+  if (( remaining > 0 )); then
+    echo -e "${YELLOW}Warning: $remaining rule(s) still present for port $port:${NC}"
+    iptables -L DOCKER-USER -n 2>/dev/null | grep "dpt:$port"
+  fi
+}
+
+# --purge-port mode
+if [[ -n "$PURGE_PORT" ]]; then
+  purge_port_rules "$PURGE_PORT"
+  exit 0
+fi
+
 # --allow-ip mode
 if [[ -n "$ALLOW_IP" ]]; then
   validate_ip "$ALLOW_IP"
@@ -155,8 +206,9 @@ if [[ ${#REPOS[@]} -eq 0 ]]; then
   echo ""
   echo "Manage existing:"
   echo "  $0 --add-repo new-project"
-  echo "  $0 --allow-ip 1.2.3.4"
-  echo "  $0 --remove-ip 1.2.3.4"
+  echo "  $0 --allow-ip 1.2.3.4    # single IPv4, no CIDR"
+  echo "  $0 --remove-ip 1.2.3.4   # single IPv4, no CIDR"
+  echo "  $0 --purge-port 3306     # drop all rules for a port (decommission)"
   exit 1
 fi
 
