@@ -172,8 +172,9 @@ purge_port_rules() {
     DEBIAN_FRONTEND=noninteractive apt-get install -y iptables-persistent
   fi
   echo "Purging DOCKER-USER rules for port $port..."
-  while iptables -S DOCKER-USER 2>/dev/null | grep -q "dport $port .* -j ACCEPT"; do
-    rule=$(iptables -S DOCKER-USER 2>/dev/null | grep "dport $port .* -j ACCEPT" | head -1 | sed 's/^-A /-D /')
+  # Pattern matches `iptables -S` output: ` --dport PORT ... -j ACCEPT` at line end.
+  while iptables -S DOCKER-USER 2>/dev/null | grep -qE " --dport ${port} .*-j ACCEPT$"; do
+    rule=$(iptables -S DOCKER-USER 2>/dev/null | grep -E " --dport ${port} .*-j ACCEPT$" | head -1 | sed 's/^-A /-D /')
     [[ -z "$rule" ]] && break
     eval "iptables $rule" 2>/dev/null || break
   done
