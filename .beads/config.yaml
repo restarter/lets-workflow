@@ -57,4 +57,11 @@
 
 no-git-ops: true
 
-export.auto: false
+export:
+  auto: false
+
+# Disable Dolt-mode auto-backup (calls CALL DOLT_BACKUP('add', ...) which
+# requires admin SQL grants our per-database user doesn't have).
+# Backups are handled by VPS-level snapshots + scripts/dolt/backup-remote.sh.
+backup:
+  enabled: false
