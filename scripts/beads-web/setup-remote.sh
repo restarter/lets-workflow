@@ -6,26 +6,29 @@
 #   # Full install
 #   ssh root@vps "bash -s -- \
 #     --sql-user bdweb --sql-password secret \
-#     --database lets --port 9090 \
+#     --database lets --port 3008 \
 #     --allow-ip 1.2.3.4 --allow-ip 5.6.7.8" < scripts/beads-web/setup-remote.sh
 #
 #   # Different database on different port
 #   ssh root@vps "bash -s -- \
 #     --sql-user bdweb --sql-password secret \
-#     --database aff --port 9091 \
+#     --database aff --port 3009 \
 #     --install-dir /opt/beads-web-aff \
 #     --allow-ip 1.2.3.4" < scripts/beads-web/setup-remote.sh
 #
 #   # Custom fork
 #   ssh root@vps "bash -s -- \
 #     --sql-user bdweb --sql-password secret \
-#     --database lets --port 9090 \
+#     --database lets --port 3008 \
 #     --repo weselow/beads-web --version 1.0.0 \
 #     --allow-ip 1.2.3.4" < scripts/beads-web/setup-remote.sh
 #
 #   # Manage IP allowlist
-#   ssh root@vps "bash -s -- --allow-ip 1.2.3.4 --port 9090" < scripts/beads-web/setup-remote.sh
-#   ssh root@vps "bash -s -- --remove-ip 1.2.3.4 --port 9090" < scripts/beads-web/setup-remote.sh
+#   ssh root@vps "bash -s -- --allow-ip 1.2.3.4 --port 3008" < scripts/beads-web/setup-remote.sh
+#   ssh root@vps "bash -s -- --remove-ip 1.2.3.4 --port 3008" < scripts/beads-web/setup-remote.sh
+#
+#   # Decommission a port - drop all ALLOW + REJECT rules (e.g. when migrating off old port)
+#   ssh root@vps "bash -s -- --purge-port 9090" < scripts/beads-web/setup-remote.sh
 #
 # Prerequisites:
 #   - Docker installed (use scripts/dolt/setup-remote.sh first)
@@ -33,12 +36,13 @@
 #   - SQL user created in Dolt with grants on target database
 
 set -e
+umask 077  # `.env` (chmod 600 explicitly later) gets safe perms during creation window
 
 # ============================================
 # Configuration
 # ============================================
 INSTALL_DIR="${INSTALL_DIR:-/opt/beads-web}"
-BEADS_WEB_PORT="${BEADS_WEB_PORT:-9090}"
+BEADS_WEB_PORT="${BEADS_WEB_PORT:-3008}"
 BEADS_WEB_VERSION="${BEADS_WEB_VERSION:-latest}"
 BEADS_WEB_REPO="${BEADS_WEB_REPO:-Shybko/beads-web}"
 DOLT_HOST="${DOLT_HOST:-dolt}"
@@ -63,26 +67,20 @@ validate_name() {
 
 validate_ip() {
   local ip="$1"
-  if [[ ! "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(/[0-9]+)?$ ]]; then
-    echo -e "${RED}Error: Invalid IP address format: $ip${NC}"
+  if [[ ! "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo -e "${RED}Error: Invalid IP address: $ip (single IPv4 required, no CIDR/masks)${NC}"
     exit 1
   fi
-  # Validate octets
-  local addr cidr
-  IFS='/' read -r addr cidr <<< "$ip"
-  IFS='.' read -ra octets <<< "$addr"
+  local IFS='.'
+  local -a octets
+  read -ra octets <<< "$ip"
   for o in "${octets[@]}"; do
     if (( o > 255 )); then
       echo -e "${RED}Error: Invalid IP octet: $o in $ip${NC}"
       exit 1
     fi
   done
-  # Block wide CIDR ranges
-  if [[ -n "$cidr" ]] && (( cidr < 24 )); then
-    echo -e "${RED}Error: CIDR mask /$cidr is too wide (minimum /24)${NC}"
-    exit 1
-  fi
-  if [[ "$ip" == "0.0.0.0/0" || "$ip" == "0.0.0.0" ]]; then
+  if [[ "$ip" == "0.0.0.0" ]]; then
     echo -e "${RED}Error: Refusing 0.0.0.0 - this would open the port to everyone${NC}"
     exit 1
   fi
@@ -96,6 +94,7 @@ SQL_PASSWORD=""
 DATABASE=""
 ALLOW_IPS=()
 REMOVE_IP=""
+PURGE_PORT=""
 NO_FIREWALL=false
 
 while [[ $# -gt 0 ]]; do
@@ -111,6 +110,7 @@ while [[ $# -gt 0 ]]; do
     --version) BEADS_WEB_VERSION="$2"; shift 2 ;;
     --allow-ip) ALLOW_IPS+=("$2"); shift 2 ;;
     --remove-ip) REMOVE_IP="$2"; shift 2 ;;
+    --purge-port) PURGE_PORT="$2"; shift 2 ;;
     --no-firewall) NO_FIREWALL=true; shift ;;
     --) shift ;;
     *) echo -e "${RED}Unknown argument: $1${NC}"; exit 1 ;;
@@ -160,6 +160,40 @@ manage_ip_allowlist() {
   iptables -L DOCKER-USER -n --line-numbers 2>/dev/null | grep -E "dpt:$port|Chain"
 }
 
+# Purge all DOCKER-USER rules for a port (ALLOW from any source + REJECT v4/v6).
+# Used when fully decommissioning a port (migration, deprecation).
+purge_port_rules() {
+  local port="$1"
+  if [[ ! "$port" =~ ^[0-9]+$ ]] || (( port < 1 || port > 65535 )); then
+    echo -e "${RED}Error: Invalid port: $port${NC}"
+    exit 1
+  fi
+  if ! dpkg -s iptables-persistent &>/dev/null; then
+    DEBIAN_FRONTEND=noninteractive apt-get install -y iptables-persistent
+  fi
+  echo "Purging DOCKER-USER rules for port $port..."
+  while iptables -S DOCKER-USER 2>/dev/null | grep -q "dport $port .* -j ACCEPT"; do
+    rule=$(iptables -S DOCKER-USER 2>/dev/null | grep "dport $port .* -j ACCEPT" | head -1 | sed 's/^-A /-D /')
+    [[ -z "$rule" ]] && break
+    eval "iptables $rule" 2>/dev/null || break
+  done
+  iptables -D DOCKER-USER -p tcp --dport "$port" -j REJECT --reject-with tcp-reset 2>/dev/null || true
+  ip6tables -D DOCKER-USER -p tcp --dport "$port" -j REJECT --reject-with tcp-reset 2>/dev/null || true
+  netfilter-persistent save 2>/dev/null || iptables-save > /etc/iptables/rules.v4
+  echo -e "${GREEN}Purged all DOCKER-USER rules for port $port${NC}"
+  remaining=$(iptables -L DOCKER-USER -n 2>/dev/null | grep -c "dpt:$port" || true)
+  if (( remaining > 0 )); then
+    echo -e "${YELLOW}Warning: $remaining rule(s) still present for port $port:${NC}"
+    iptables -L DOCKER-USER -n 2>/dev/null | grep "dpt:$port"
+  fi
+}
+
+# --purge-port mode (standalone)
+if [[ -n "$PURGE_PORT" ]]; then
+  purge_port_rules "$PURGE_PORT"
+  exit 0
+fi
+
 # --remove-ip mode (standalone)
 if [[ -n "$REMOVE_IP" ]]; then
   validate_ip "$REMOVE_IP"
@@ -194,6 +228,7 @@ if [[ -z "$DATABASE" ]]; then
   echo "  Full install:   $0 --sql-user USER --sql-password PASS --database DB --allow-ip IP"
   echo "  Add IP:         $0 --allow-ip IP --port PORT"
   echo "  Remove IP:      $0 --remove-ip IP --port PORT"
+  echo "  Purge port:     $0 --purge-port PORT      # decommission - drops all rules"
   echo ""
   echo "Full install:"
   echo "  --sql-user USER        SQL username for Dolt connection"
@@ -203,17 +238,18 @@ if [[ -z "$DATABASE" ]]; then
   echo "  --no-firewall          Leave port open to all (NOT recommended)"
   echo ""
   echo "  Optional:"
-  echo "  --port PORT            Web UI port (default: 9090)"
+  echo "  --port PORT            Web UI port (default: 3008)"
   echo "  --install-dir DIR      Install directory (default: /opt/beads-web)"
   echo "  --dolt-host HOST       Dolt hostname (default: dolt)"
   echo "  --dolt-port PORT       Dolt SQL port (default: 3306)"
   echo "  --repo OWNER/REPO      GitHub repo for binary (default: Shybko/beads-web)"
   echo "  --version VER          beads-web version or 'latest' (default: latest)"
   echo ""
-  echo "IP management (standalone):"
-  echo "  --allow-ip IP          Add IP to allowlist"
+  echo "IP / port management (standalone):"
+  echo "  --allow-ip IP          Add IP to allowlist (single IPv4, no CIDR)"
   echo "  --remove-ip IP         Remove IP from allowlist"
-  echo "  --port PORT            Target port (default: 9090)"
+  echo "  --purge-port PORT      Drop all ALLOW + REJECT rules for a port"
+  echo "  --port PORT            Target port (default: 3008)"
   exit 1
 fi
 
@@ -230,8 +266,17 @@ if [[ -f "$INSTALL_DIR/.env" ]]; then
   echo -e "${YELLOW}Existing installation found at $INSTALL_DIR${NC}"
   existing_version=$(grep '^BEADS_WEB_VERSION=' "$INSTALL_DIR/.env" | cut -d= -f2)
   existing_repo=$(grep '^BEADS_WEB_REPO=' "$INSTALL_DIR/.env" | cut -d= -f2)
+  existing_port=$(grep '^BEADS_WEB_PORT=' "$INSTALL_DIR/.env" | cut -d= -f2)
   BEADS_WEB_VERSION="${BEADS_WEB_VERSION:-$existing_version}"
   BEADS_WEB_REPO="${BEADS_WEB_REPO:-$existing_repo}"
+  # Warn on port change - manage_ip_allowlist scopes to the new port only,
+  # so old port's ALLOW/REJECT rules linger. Operator should follow the
+  # "Migrating Port" runbook (README) before redeploying on a new port.
+  if [[ -n "$existing_port" && "$existing_port" != "$BEADS_WEB_PORT" ]]; then
+    echo -e "${YELLOW}WARNING: Port change detected: $existing_port -> $BEADS_WEB_PORT${NC}"
+    echo -e "${YELLOW}  Old port's iptables rules will not be cleaned up automatically.${NC}"
+    echo -e "${YELLOW}  See README 'Migrating Port' section before continuing if this is unexpected.${NC}"
+  fi
 fi
 
 # Build release URL
@@ -284,16 +329,18 @@ create_config() {
   chown -R 1000:1000 "$INSTALL_DIR/data"
 
   # Dockerfile
-  cat > "$INSTALL_DIR/Dockerfile" <<DOCKERFILE
+  # Quoted heredoc tag (<<'DOCKERFILE') prevents host-shell expansion of ${...} and
+  # joining of \-newline. RELEASE_URL is passed as build arg by docker-compose.
+  cat > "$INSTALL_DIR/Dockerfile" <<'DOCKERFILE'
 FROM debian:trixie-slim
 
-ARG RELEASE_URL=${RELEASE_URL}
+ARG RELEASE_URL
 
-RUN apt-get update && apt-get install -y --no-install-recommends \\
-    curl ca-certificates \\
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-RUN curl -fSL -o /usr/local/bin/beads-web "\${RELEASE_URL}" \\
+RUN curl -fSL -o /usr/local/bin/beads-web "${RELEASE_URL}" \
     && chmod +x /usr/local/bin/beads-web
 
 RUN useradd --uid 1000 --system --create-home beadsweb \
@@ -302,10 +349,10 @@ RUN useradd --uid 1000 --system --create-home beadsweb \
 WORKDIR /app
 USER beadsweb
 
-EXPOSE 9090
+EXPOSE 3008
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=10s \
-  CMD curl -sf http://localhost:${PORT:-9090}/ || exit 1
+  CMD curl -sf http://localhost:${PORT:-3008}/ || exit 1
 
 CMD ["beads-web"]
 DOCKERFILE
@@ -322,12 +369,12 @@ services:
     container_name: beads-web
     restart: unless-stopped
     ports:
-      - "\${BEADS_WEB_PORT:-9090}:\${BEADS_WEB_PORT:-9090}"
+      - "\${BEADS_WEB_PORT:-3008}:\${BEADS_WEB_PORT:-3008}"
     volumes:
       - ./data/.beads:/app/.beads
       - ./data/kanban-ui:/home/beadsweb/.local/share/kanban-ui
     environment:
-      - PORT=\${BEADS_WEB_PORT:-9090}
+      - PORT=\${BEADS_WEB_PORT:-3008}
       - DOLT_HOST=\${DOLT_HOST:-dolt}
       - DOLT_PORT=\${DOLT_PORT:-3306}
       - DOLT_USER=\${SQL_USER}
@@ -455,7 +502,7 @@ print_summary() {
   echo ""
   echo "Add another database:"
   echo "  $0 --sql-user USER --sql-password PASS \\"
-  echo "    --database aff --port 9091 \\"
+  echo "    --database aff --port 3009 \\"
   echo "    --install-dir /opt/beads-web-aff \\"
   echo "    --allow-ip <IP>"
   echo ""
