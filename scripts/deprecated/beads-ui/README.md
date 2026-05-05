@@ -1,4 +1,36 @@
-# beads-ui - Web Dashboard
+# beads-ui - Web Dashboard (DEPRECATED)
+
+> **DEPRECATED.** Superseded by [beads-web](../../beads-web/). Use `scripts/beads-web/` for new deploys.
+>
+> beads-ui is the legacy Node.js dashboard (port 9080). beads-web is the Rust/Axum-based replacement (port 3008): single binary with embedded frontend, faster, broader feature set (Dolt cache, donut chart, labels filter).
+>
+> This folder is kept for historical reference and to document the VPS cleanup runbook below. Do not use for new installs.
+
+## VPS Cleanup Runbook
+
+If beads-ui is still running on a VPS, decommission it:
+
+```bash
+# 1. Stop and remove container + image
+ssh root@vps "cd /opt/beads-ui && docker compose down --rmi all -v"
+
+# 2. Drop ALL firewall rules for the port (ALLOWs from any IP + REJECT, v4 + v6).
+ssh root@vps "bash -s -- --purge-port 9080" \
+  < scripts/deprecated/beads-ui/setup-remote.sh
+
+# 3. Remove install directory
+ssh root@vps "rm -rf /opt/beads-ui /opt/beads-ui-*"
+
+# 4. Verify nothing listens on 9080
+ssh root@vps "ss -tlnp | grep ':9080'"   # should be empty
+ssh root@vps "iptables -L DOCKER-USER -n | grep 9080"  # should be empty
+```
+
+The Dolt container and `dolt-net` Docker network are NOT removed - they are shared with beads-web and stay.
+
+---
+
+# Original Documentation (legacy)
 
 Web dashboard for beads issue tracker. Runs in Docker, connects to Dolt SQL server.
 
@@ -26,7 +58,7 @@ iptables DOCKER-USER (IP allowlist)
 
 ### 1. Create SQL user in Dolt (if not exists)
 
-See [scripts/dolt/README.md - Add SQL user](../dolt/README.md#add-sql-user).
+See [scripts/dolt/README.md - Add SQL user](../../dolt/README.md#add-sql-user).
 
 ### 2. Deploy beads-ui
 
@@ -35,7 +67,7 @@ ssh root@vps "bash -s -- \
   --sql-user bdui --sql-password your-password \
   --database lets --port 9080 \
   --allow-ip YOUR_IP_1 --allow-ip YOUR_IP_2" \
-  < scripts/beads-ui/setup-remote.sh
+  < scripts/deprecated/beads-ui/setup-remote.sh
 ```
 
 ### 3. Open in browser
@@ -51,7 +83,7 @@ ssh root@vps "bash -s -- \
   --sql-user bdui --sql-password your-password \
   --database aff --port 9081 \
   --install-dir /opt/beads-ui-aff \
-  --allow-ip YOUR_IP" < scripts/beads-ui/setup-remote.sh
+  --allow-ip YOUR_IP" < scripts/deprecated/beads-ui/setup-remote.sh
 ```
 
 ## IP Allowlist
@@ -59,11 +91,11 @@ ssh root@vps "bash -s -- \
 ```bash
 # Add IP
 ssh root@vps "bash -s -- --allow-ip 1.2.3.4 --port 9080" \
-  < scripts/beads-ui/setup-remote.sh
+  < scripts/deprecated/beads-ui/setup-remote.sh
 
 # Remove IP
 ssh root@vps "bash -s -- --remove-ip 1.2.3.4 --port 9080" \
-  < scripts/beads-ui/setup-remote.sh
+  < scripts/deprecated/beads-ui/setup-remote.sh
 ```
 
 ## Upgrading
@@ -72,7 +104,7 @@ ssh root@vps "bash -s -- --remove-ip 1.2.3.4 --port 9080" \
 ssh root@vps "bash -s -- \
   --sql-user bdui --sql-password your-password \
   --database lets --port 9080 \
-  --version 0.12.0" < scripts/beads-ui/setup-remote.sh
+  --version 0.12.0" < scripts/deprecated/beads-ui/setup-remote.sh
 ```
 
 The script is idempotent - it rebuilds the container with the new version.

@@ -77,11 +77,13 @@ The project repo (not beads repo) should have these tracked files:
 
 ## Onboarding New Developer
 
-After cloning the project:
+After cloning the project (legacy push/pull mode, now archived):
 
 ```bash
-scripts/beads/setup-beads-remote.sh
+scripts/deprecated/beads/setup-beads-remote.sh
 ```
+
+> **Note:** Direct SQL mode (recommended) skips this script entirely. See `scripts/dolt/README.md` for current setup.
 
 That's it. The script handles everything:
 1. Inits dolt database + beads schema (dolt init, dolt sql-server, bd init)

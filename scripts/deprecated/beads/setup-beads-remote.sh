@@ -5,8 +5,8 @@
 #
 # Beads Remote Setup - connects local beads to shared GitHub remote.
 #
-# Run after cloning the project:
-#   scripts/beads/setup-beads-remote.sh
+# Run after cloning the project (legacy push/pull mode):
+#   scripts/deprecated/beads/setup-beads-remote.sh
 #
 # What it does:
 #   1. Inits dolt database, starts sql-server, runs bd init
