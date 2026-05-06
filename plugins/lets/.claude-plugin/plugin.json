@@ -4,10 +4,17 @@
   "version": "0.3.1",
   "author": {
     "name": "umbo",
-    "url": "https://github.com/nickolay-umbo"
+    "url": "https://github.com/restarter"
   },
   "license": "MIT",
   "homepage": "https://github.com/restarter/lets-workflow",
   "repository": "https://github.com/restarter/lets-workflow",
-  "keywords": ["workflow", "review", "sessions", "beads", "code-review", "task-tracking"]
+  "keywords": [
+    "workflow",
+    "review",
+    "sessions",
+    "beads",
+    "code-review",
+    "task-tracking"
+  ]
 }

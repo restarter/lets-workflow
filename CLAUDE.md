@@ -4,21 +4,29 @@ Claude Code plugin for development workflow with session management, code review
 
 ## Structure
 
+Monorepo layout (beads-style): plugin source in `plugins/lets/` subdirectory, marketplace manifest at root pointing into it. Infrastructure scripts and docs stay at root, outside the plugin payload.
+
 ```
-.claude-plugin/plugin.json   # Plugin manifest
-commands/                     # Slash commands (/lets:start, /lets:done, /lets:review, etc.)
-agents/                       # 14 expert agents (architect, security, qa, actor, etc.) dispatched by review/opinion/ask/plan/brainstorm/team
-skills/                       # Reusable skills (user-facing auto-triggered + internal referenced by commands)
-hooks/                        # SessionStart + PreCompact hooks, workflow rules, config template
-scripts/lets/                 # Statusline + init script (copied/run per-project by /lets:init)
-scripts/dolt/                 # Dolt SQL server VPS deployment + ad-hoc backup
-scripts/beads-web/            # beads-web (Rust kanban board) VPS deployment
-scripts/deprecated/           # Retired scripts kept for cleanup runbooks - not for new installs
-docs/                         # Plans, knowledge base, reference docs, comment exports
-reference/                    # Reference plugins for studying patterns (gitignored)
+.claude-plugin/marketplace.json   # Marketplace manifest (source: ./plugins/lets)
+plugins/lets/                     # Plugin payload (everything ${CLAUDE_PLUGIN_ROOT} resolves to)
+├── .claude-plugin/plugin.json    #   Plugin manifest (Claude Code; .codex-plugin/ planned for multi-agent)
+├── commands/                     #   Slash commands (/lets:start, /lets:done, /lets:review, etc.)
+├── agents/                       #   14 expert agents dispatched by review/opinion/ask/plan/brainstorm/team
+├── skills/                       #   Reusable skills (user-facing auto-triggered + internal referenced by commands)
+├── hooks/                        #   SessionStart + PreCompact hooks, workflow rules, config template
+└── scripts/lets/                 #   Statusline + init script (copied/run per-project by /lets:init)
+scripts/dolt/                     # Dolt SQL server VPS deployment + ad-hoc backup (NOT plugin)
+scripts/beads-web/                # beads-web (Rust kanban board) VPS deployment (NOT plugin)
+scripts/deprecated/               # Retired scripts kept for cleanup runbooks - not for new installs
+docs/                             # Plans, knowledge base, reference docs, comment exports
+reference/                        # Reference plugins for studying patterns (gitignored)
 ```
 
+References that resolve via `${CLAUDE_PLUGIN_ROOT}` (e.g. `${CLAUDE_PLUGIN_ROOT}/skills/X/SKILL.md`, `${CLAUDE_PLUGIN_ROOT}/scripts/lets/init.sh`) continue to work unchanged - the env var now points at `plugins/lets/`.
+
 ## Key Concepts
+
+> Path convention: paths like `commands/`, `skills/`, `hooks/rules-context.md` in this doc are **relative to `plugins/lets/`** (the plugin root, also exposed as `${CLAUDE_PLUGIN_ROOT}` at runtime). Paths starting with `scripts/dolt/`, `docs/`, `reference/` are relative to the **repo root** (outside the plugin payload).
 
 - **Commands** = user-initiated workflows (sessions, commits, reviews)
 - **Agents** = experts dispatched by commands. `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:brainstorm` dispatch via subagents. `/lets:team` dispatches via Agent Teams (parallel, worktree isolation). `actor` is a meta-agent that loads external personalities (URL or file) and adapts them to LETS modes
