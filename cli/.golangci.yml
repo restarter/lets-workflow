@@ -1,0 +1,29 @@
+# golangci-lint config for lets CLI
+# https://golangci-lint.run/usage/configuration/
+
+run:
+  timeout: 3m
+
+linters:
+  enable:
+    # Default linters (explicit for clarity)
+    - errcheck       # Unchecked errors
+    - gosimple       # Code simplifications
+    - govet          # Stricter than `go vet`
+    - ineffassign    # Unused assignments
+    - staticcheck    # Static analysis
+    - unused         # Unused vars/funcs
+    # Additional
+    - gofmt          # Format check
+    - goimports      # Import sorting/grouping
+    - misspell       # Common misspellings
+
+linters-settings:
+  errcheck:
+    # cobra commands write via cmd.OutOrStdout() (io.Writer); errors from
+    # fmt.F*print* to that surface are not actionable - same rationale as
+    # the default exclusion of fmt.Print*.
+    exclude-functions:
+      - fmt.Fprintf
+      - fmt.Fprintln
+      - fmt.Fprint

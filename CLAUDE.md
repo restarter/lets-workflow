@@ -15,6 +15,14 @@ plugins/lets/                     # Plugin payload (everything ${CLAUDE_PLUGIN_R
 ├── skills/                       #   Reusable skills (user-facing auto-triggered + internal referenced by commands)
 ├── hooks/                        #   SessionStart + PreCompact hooks, workflow rules, config template
 └── scripts/lets/                 #   Statusline + init script (copied/run per-project by /lets:init)
+cli/                              # Go CLI - companion binary (Phase 2+, lets-7vtaw)
+├── cmd/lets/main.go              #   Entry point (thin)
+├── internal/cli/                 #   Cobra command factories (root.go, version.go, *_test.go)
+├── internal/version/version.go   #   Version (var, ldflags-overridable from git tag)
+├── go.mod, go.sum
+└── .golangci.yml                 #   Linter config (default + gofmt/goimports/misspell)
+Makefile                          # Repo-root build (build/test/vet/lint/fmt/install/clean)
+.editorconfig                     # Editor whitespace/charset settings
 scripts/dolt/                     # Dolt SQL server VPS deployment + ad-hoc backup (NOT plugin)
 scripts/beads-web/                # beads-web (Rust kanban board) VPS deployment (NOT plugin)
 scripts/deprecated/               # Retired scripts kept for cleanup runbooks - not for new installs
@@ -27,6 +35,8 @@ References that resolve via `${CLAUDE_PLUGIN_ROOT}` (e.g. `${CLAUDE_PLUGIN_ROOT}
 ## Key Concepts
 
 > Path convention: paths like `commands/`, `skills/`, `hooks/rules-context.md` in this doc are **relative to `plugins/lets/`** (the plugin root, also exposed as `${CLAUDE_PLUGIN_ROOT}` at runtime). Paths starting with `scripts/dolt/`, `docs/`, `reference/` are relative to the **repo root** (outside the plugin payload).
+>
+> Go CLI source paths (`cli/cmd/lets/main.go`, `cli/internal/...`) are relative to the **repo root**. The Go module root is `cli/` - all `go` commands operate from there (or via the repo-root `Makefile`).
 
 - **Commands** = user-initiated workflows (sessions, commits, reviews)
 - **Agents** = experts dispatched by commands. `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:brainstorm` dispatch via subagents. `/lets:team` dispatches via Agent Teams (parallel, worktree isolation). `actor` is a meta-agent that loads external personalities (URL or file) and adapts them to LETS modes
@@ -148,6 +158,7 @@ Update these files:
 | `README.md` | Agent table, feature descriptions |
 | All `agents/*.md` `## Constraints` sections | If changing the read-only Bash allowlist or constraint wording, sync the identical 1-line text across all 13 analyst agents (verify with `grep -h "You are read-only" agents/*.md \| sort -u` returning exactly one line) |
 | `commands/end.md` + `commands/done.md` `${CLAUDE_SESSION_ID}` references | If changing the session-id capture wording, sync across all occurrences (Step 3 progress comment + Step 5 summary block in `end.md`, Step 6 completion comment in `done.md`). Verify with `grep -n "CLAUDE_SESSION_ID" commands/` |
+| `cli/internal/cli/<name>.go` + register in `cli/internal/cli/root.go` | If adding a Go subcommand. Add `<name>_test.go` (`package cli_test`). Use `cmd.OutOrStdout()`. Update `cli/README.md` "Adding a subcommand" recipe if pattern changes. |
 
 ### Command Output Requirements
 
