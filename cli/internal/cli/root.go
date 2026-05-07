@@ -15,5 +15,6 @@ func NewRootCmd() *cobra.Command {
 		SilenceUsage: true,
 	}
 	cmd.AddCommand(NewVersionCmd())
+	cmd.AddCommand(NewHookCmd())
 	return cmd
 }

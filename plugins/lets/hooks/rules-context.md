@@ -107,9 +107,8 @@ If you don't know the task title, run `bd show <id>` to get it.
 
 ### Task Creation
 
-- **NEVER use `--parent`** - child sequential IDs (e.g. `.28`, `.29`) cause merge collisions in multi-user setup
-- All tasks are **top-level** with hash-based IDs (collision-free)
-- Use `--labels epic:<name>` to group tasks by theme
+- All tasks have hash-based IDs (collision-free in multi-user setup)
+- Use `--labels epic:<name>` to group tasks by theme; combine with `--parent <epic-id>` (or `bd update --parent`) to link existing tasks under an epic-typed task for `bd epic status` tracking
 - Every `bd create` MUST include: `--title` (imperative mood), `--labels` (epic grouping), `--priority` (0-4), `--description` (why + acceptance criteria), `--type` (task/bug/feature/epic)
 
 ### Updating Tasks

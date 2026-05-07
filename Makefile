@@ -4,7 +4,7 @@
 # If make targets fail in cmd.exe, run from Git Bash or WSL.
 # When a Windows contributor needs proper detection, see beads/Makefile pattern.
 
-.PHONY: all build test vet lint fmt fmt-check install clean help
+.PHONY: all build test vet lint fmt fmt-check install install-go clean help
 
 CLI_DIR := cli
 
@@ -32,7 +32,8 @@ help:
 	@echo "  lint            - Run golangci-lint (requires it installed)"
 	@echo "  fmt             - Run gofmt -w -s"
 	@echo "  fmt-check       - Verify gofmt is clean (CI use)"
-	@echo "  install         - Install lets to \$$GOBIN via go install"
+	@echo "  install         - Install lets to /usr/local/bin (or ~/.local/bin if not writable)"
+	@echo "  install-go      - Install lets to \$$GOBIN via 'go install' (Go-standard layout)"
 	@echo "  clean           - Remove built binary and test cache"
 
 build:
@@ -53,7 +54,29 @@ fmt:
 fmt-check:
 	@cd $(CLI_DIR) && test -z "$$(gofmt -l .)" || (echo "Code not formatted - run 'make fmt'" && gofmt -l . && exit 1)
 
-install:
+install: build
+	@if [ -w /usr/local/bin ]; then \
+		install_dir="/usr/local/bin"; \
+	else \
+		install_dir="$$HOME/.local/bin"; \
+		mkdir -p "$$install_dir"; \
+	fi; \
+	cp $(CLI_DIR)/lets "$$install_dir/lets" && \
+	echo "Installed: $$install_dir/lets" && \
+	case ":$$PATH:" in \
+		*":$$install_dir:"*) ;; \
+		*) \
+			echo ""; \
+			echo "Warning: $$install_dir is not in your PATH"; \
+			echo "Add to your shell rc (~/.zshrc, ~/.bashrc):"; \
+			echo "  export PATH=\"$$install_dir:\$$PATH\""; \
+			;; \
+	esac
+
+# install-go: traditional 'go install' to $GOBIN (or $GOPATH/bin).
+# Use when you specifically want the Go-standard layout. Requires
+# $GOBIN/$(go env GOPATH)/bin to be in PATH (Go does NOT manage this).
+install-go: build
 	cd $(CLI_DIR) && go install -trimpath $(LDFLAGS) ./cmd/lets
 
 clean:
