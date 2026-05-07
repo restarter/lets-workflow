@@ -28,7 +28,7 @@
     ]
   },
   "statusLine": {
-    "command": "bash -c 'cat | bash \"$(git rev-parse --show-toplevel 2>/dev/null)/.lets/statusline.sh\" 2>/dev/null'",
+    "command": "lets statusline",
     "type": "command"
   }
 }
