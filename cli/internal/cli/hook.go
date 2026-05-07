@@ -14,5 +14,6 @@ func NewHookCmd() *cobra.Command {
 		Short: "Hook subcommands invoked by Claude Code (SessionStart, PreCompact, ...)",
 	}
 	cmd.AddCommand(NewHookSessionStartCmd())
+	cmd.AddCommand(NewHookPreCompactCmd())
 	return cmd
 }
