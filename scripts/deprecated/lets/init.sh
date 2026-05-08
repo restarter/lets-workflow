@@ -124,7 +124,7 @@ else
   cat > "$CONFIG" <<ENV
 # LETS plugin config
 # NOT FOR SECRETS. Contents are injected verbatim into model context every
-# session (subject to whitelist filter in hooks/session-start.sh). Put
+# session (subject to whitelist filter in lets hook session-start). Put
 # tokens/passwords elsewhere (gh auth, OS keychain, .beads/.env).
 
 # Response language (English/Ukrainian/Italian/etc)

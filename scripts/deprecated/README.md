@@ -15,3 +15,4 @@ Each subdir's README opens with a `DEPRECATED` banner, points to the replacement
 |---|---|---|
 | `beads-ui/` | `scripts/beads-web/` | Node.js dashboard (port 9080) superseded by Rust/Axum binary (port 3008) - faster, broader feature set |
 | `beads/` | Direct SQL via `scripts/dolt/setup-remote.sh` | Legacy push/pull mode (remotesapi); Direct SQL is the recommended deployment now |
+| `lets/` | Go CLI subcommands | Bash `init.sh` / `statusline.sh` / `session-start.sh` ported to Go (`lets init`, `lets statusline`, `lets hook session-start`) - lets-7vtaw + lets-8ilsl. Archives are point-in-time snapshots for cleanup runbooks. |
