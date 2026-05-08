@@ -8,6 +8,7 @@
 package statusline
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -45,14 +46,26 @@ type Input struct {
 
 // Render decodes the input JSON, fetches usage cache (or spawns background
 // refresh if stale), and writes the 2-line formatted statusline to w.
+//
+// Resilient to empty/invalid stdin: Claude Code occasionally invokes the
+// statusline command with no input (e.g. during /reload-plugins or initial
+// render before the IPC pipe is wired). Empty input → render with zero-value
+// Input (defaults to cwd-based detection). A blank statusline error is more
+// disruptive than missing context.
 func Render(stdin io.Reader, w io.Writer) error {
 	data, err := io.ReadAll(stdin)
 	if err != nil {
 		return fmt.Errorf("read stdin: %w", err)
 	}
 	var in Input
-	if err := json.Unmarshal(data, &in); err != nil {
-		return fmt.Errorf("decode JSON: %w", err)
+	if len(bytes.TrimSpace(data)) > 0 {
+		if err := json.Unmarshal(data, &in); err != nil {
+			// Don't fail rendering — surface a minimal line and continue.
+			// stderr is not visible in Claude Code's bottom bar, so silent
+			// fallback beats a blank/error line.
+			fmt.Fprintf(w, "🌱 LETS Workflow [JSON parse error: %v]\n", err)
+			return nil
+		}
 	}
 
 	dir := in.Workspace.CurrentDir
