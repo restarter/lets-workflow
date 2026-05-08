@@ -2,22 +2,22 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 
 	"github.com/restarter/lets-workflow/cli/internal/initcmd"
-	"github.com/restarter/lets-workflow/cli/internal/version"
 )
 
 // NewInitCmd builds `lets init`.
 //
-// Default: TUI flow (welcome -> form-with-confirm -> apply with spinner -> completion + step list).
-// --non-interactive: skip TUI, use flags directly, plain text output.
-// --plugin-root or $CLAUDE_PLUGIN_ROOT must point to plugin install dir.
+// Internal command - intended to be invoked by the `/lets:init` slash command
+// (which captures user prefs via AskUserQuestion and passes them as flags
+// alongside --plugin-root=${CLAUDE_PLUGIN_ROOT}). Not designed for direct
+// terminal use: there is no TUI prompt and required flags must be provided.
+//
+// Direct shell invocation works for advanced use (CI / dev override) when
+// the caller knows where the plugin source lives.
 func NewInitCmd() *cobra.Command {
 	var (
 		flagLanguage    string
@@ -25,22 +25,22 @@ func NewInitCmd() *cobra.Command {
 		flagPRFlow      string
 		flagGithub      bool
 		flagSkipBeads   bool
-		flagQuiet       bool
-		flagNoTUI       bool
 		flagPluginRoot  string
 	)
 
 	cmd := &cobra.Command{
 		Use:   "init",
-		Short: "Initialize LETS in current project (interactive TUI by default)",
-		Long: `Sets up .lets/ structure, configures .claude/settings.json, copies plugin rules
-to .claude/rules/lets-rules.md, and initializes beads.
-
-Interactive: launches a TUI form (huh) for language/merge-branch/pr-flow.
-Non-interactive: pass --language --merge-branch --pr-flow + --non-interactive.
+		Short: "Apply LETS project setup (internal - invoke via /lets:init)",
+		Long: `Sets up .lets/ structure, configures .claude/settings.json (statusLine
+provenance markers), copies plugin rules to .claude/rules/lets-rules.md, and
+runs bd init.
 
 Migrates existing projects (legacy .lets/statusline.sh, bash-wrapped
-settings.json statusLine, .lets/config.yaml -> .lets/.env).`,
+settings.json statusLine, .lets/config.yaml -> .lets/.env).
+
+This is an internal subcommand. The supported entry point is the /lets:init
+slash command, which captures user preferences in Claude Code and shells
+out with --plugin-root=${CLAUDE_PLUGIN_ROOT} plus the chosen flags.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := cmd.Context()
 			if ctx == nil {
@@ -49,15 +49,15 @@ settings.json statusLine, .lets/config.yaml -> .lets/.env).`,
 
 			projectRoot := initcmd.DetectProjectRoot()
 			if projectRoot == "" {
-				return fmt.Errorf("not in a git repository")
+				return fmt.Errorf("not in a git repository - run `git init` first")
 			}
 			if initcmd.DetectInsideWorktree() {
-				return fmt.Errorf("'lets init' must run from main repo, not a worktree.\nSwitch: cd $(git rev-parse --git-common-dir | xargs dirname)")
+				return fmt.Errorf("'lets init' must run from main repo, not a worktree")
 			}
 
 			pluginRoot, err := initcmd.DetectPluginRoot(flagPluginRoot)
 			if err != nil {
-				return err
+				return fmt.Errorf("%w\n\nRun /lets:init from inside Claude Code (after `/plugin install lets@lets-workflow`).\nFor advanced use, pass --plugin-root=<path-to-plugins/lets>", err)
 			}
 
 			// Deprecation: --github maps to --pr-flow=github
@@ -75,50 +75,8 @@ settings.json statusLine, .lets/config.yaml -> .lets/.env).`,
 				PRFlow:      flagPRFlow,
 				SkipBeads:   flagSkipBeads,
 			}
-			opts := initcmd.RunOptions{
-				Quiet:          flagQuiet,
-				NonInteractive: flagNoTUI,
-			}
-
-			isTTY := term.IsTerminal(int(os.Stdin.Fd()))
-			interactive := !flagNoTUI && isTTY && !flagQuiet
-
-			if interactive {
-				fmt.Fprintln(cmd.OutOrStdout(), initcmd.RenderWelcome(projectRoot, pluginRoot, version.Version))
-				fmt.Fprintln(cmd.OutOrStdout())
-
-				// PromptPrefs uses huh: collects lang / merge-branch / pr-flow
-				// AND ends with a "Confirm: Apply / Cancel" field. If user picks
-				// Cancel, returns ErrUserAborted. (No separate ConfirmApply step,
-				// no separate plan preview - completion screen shows what was done.)
-				prefs, err = initcmd.PromptPrefs(prefs)
-				if errors.Is(err, initcmd.ErrUserAborted) {
-					fmt.Fprintln(cmd.OutOrStdout(), "Aborted.")
-					return nil
-				}
-				if err != nil {
-					return err
-				}
-
-				steps, err := initcmd.RunWithSpinner(ctx, prefs, opts, projectRoot, pluginRoot)
-				if err != nil {
-					return err
-				}
-
-				beadsOK := false
-				for _, s := range steps {
-					if s.Status == initcmd.StepOK && s.Message == "beads initialized" {
-						beadsOK = true
-					}
-				}
-				fmt.Fprintln(cmd.OutOrStdout())
-				initcmd.PrintSteps(cmd.OutOrStdout(), steps)
-				fmt.Fprintln(cmd.OutOrStdout())
-				fmt.Fprintln(cmd.OutOrStdout(), initcmd.RenderCompletion(projectRoot, prefs, beadsOK))
-				return nil
-			}
-
-			// Non-interactive (no TTY, --non-interactive, or --quiet)
+			// Defaults if caller omitted them (slash command should always pass,
+			// but be lenient for direct shell invocation).
 			if prefs.Language == "" {
 				prefs.Language = "English"
 			}
@@ -128,12 +86,10 @@ settings.json statusLine, .lets/config.yaml -> .lets/.env).`,
 			if prefs.PRFlow == "" {
 				prefs.PRFlow = "local"
 			}
-			steps, err := initcmd.Run(ctx, prefs, opts, projectRoot, pluginRoot)
-			if err != nil {
-				return err
-			}
-			initcmd.PrintSteps(cmd.OutOrStdout(), steps)
-			return nil
+
+			steps, err := initcmd.Run(ctx, prefs, initcmd.RunOptions{}, projectRoot, pluginRoot)
+			initcmd.PrintSteps(cmd.OutOrStdout(), steps) // print even on partial failure
+			return err
 		},
 	}
 	cmd.Flags().StringVar(&flagLanguage, "language", "", "Response language (English/Ukrainian/Italian/etc)")
@@ -141,8 +97,6 @@ settings.json statusLine, .lets/config.yaml -> .lets/.env).`,
 	cmd.Flags().StringVar(&flagPRFlow, "pr-flow", "", "PR flow: local | github | bitbucket")
 	cmd.Flags().BoolVar(&flagGithub, "github", false, "(deprecated) alias for --pr-flow=github")
 	cmd.Flags().BoolVar(&flagSkipBeads, "skip-beads", false, "Skip beads initialization")
-	cmd.Flags().BoolVar(&flagQuiet, "quiet", false, "Suppress informational output")
-	cmd.Flags().BoolVar(&flagNoTUI, "non-interactive", false, "Skip TUI, use flags only")
-	cmd.Flags().StringVar(&flagPluginRoot, "plugin-root", "", "Plugin install dir (else $CLAUDE_PLUGIN_ROOT)")
+	cmd.Flags().StringVar(&flagPluginRoot, "plugin-root", "", "Plugin install dir (else $CLAUDE_PLUGIN_ROOT, required)")
 	return cmd
 }

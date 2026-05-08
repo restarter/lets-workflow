@@ -2,7 +2,6 @@ package initcmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -26,37 +25,28 @@ const (
 	StepMigrate StepStatus = "migrate"
 )
 
-// Step describes one apply step result for TUI rendering.
+// Step describes one apply step result for caller rendering.
 type Step struct {
 	Status  StepStatus
 	Message string
 }
 
-// RunOptions are runtime/output options that don't belong in user Prefs
-// (Prefs is what the user picks; RunOptions is how Run behaves).
-type RunOptions struct {
-	Quiet          bool // suppress non-error stderr output
-	NonInteractive bool // never prompt; used for assertion (Run itself does not prompt)
-}
-
-// ErrUserAborted is returned by PromptPrefs when the user picks "Cancel" in
-// the confirm field. Cobra wrapper checks for it via errors.Is and prints
-// "Aborted." instead of treating it as a real error.
-var ErrUserAborted = errors.New("user aborted")
+// RunOptions reserves space for future runtime tuning (verbosity, dry-run).
+// Currently empty - all behavior is driven by Prefs and arguments.
+type RunOptions struct{}
 
 // Run executes init in linear order. Idempotent. Refuses if projectRoot is
 // $HOME or filesystem root.
 //
-// Returns slice of Steps for the caller (TUI) to render. Returns error only
-// for hard failures (refused preconditions, write errors).
+// Returns slice of Steps for the caller to render. Returns error only for
+// hard failures (refused preconditions, write errors).
 //
 // Partial-completion contract: when Run returns an error mid-flight, it ALSO
 // returns the Steps slice covering work completed so far. Callers should
 // render returned steps even on error so the user sees what was already
 // done. Soft warnings (bd not found, foreign statusline) become Steps with
 // status StepWarn / StepMigrate, not errors.
-func Run(ctx context.Context, prefs Prefs, opts RunOptions, projectRoot, pluginRoot string) ([]Step, error) {
-	_ = opts // currently no opt-driven behavior in Run; reserved for future
+func Run(ctx context.Context, prefs Prefs, _ RunOptions, projectRoot, pluginRoot string) ([]Step, error) {
 	if err := guardProjectRoot(projectRoot); err != nil {
 		return nil, err
 	}

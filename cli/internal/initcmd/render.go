@@ -6,8 +6,9 @@ import (
 	"fmt"
 )
 
-// Prefs holds the user-selected initialization preferences.
-// (Runtime/output options like Quiet, NonInteractive live on RunOptions in init.go.)
+// Prefs holds the user-selected initialization preferences. The `/lets:init`
+// slash command captures these via AskUserQuestion and passes as flags
+// to the `lets init` subcommand.
 type Prefs struct {
 	Language    string // e.g. "English", "Ukrainian"
 	MergeBranch string // e.g. "main", "develop"

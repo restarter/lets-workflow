@@ -18,7 +18,7 @@ func TestInit_Help(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := buf.String()
-	for _, want := range []string{"--language", "--merge-branch", "--pr-flow", "--non-interactive", "deprecated"} {
+	for _, want := range []string{"--language", "--merge-branch", "--pr-flow", "--plugin-root", "--skip-beads", "deprecated"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in help: %s", want, out)
 		}
