@@ -18,21 +18,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"golang.org/x/mod/semver"
-
+	"github.com/restarter/lets-workflow/cli/internal/drift"
 	"github.com/restarter/lets-workflow/cli/internal/envfile"
-	"github.com/restarter/lets-workflow/cli/internal/frontmatter"
 	"github.com/restarter/lets-workflow/cli/internal/gitutil"
+	"github.com/restarter/lets-workflow/cli/internal/letsconfig"
 )
-
-// configKeys is the whitelist of LETS_* keys read from .env, in the fixed
-// order they're emitted in the LETS Config block.
-var configKeys = []string{
-	"LETS_LANGUAGE",
-	"LETS_MERGE_BRANCH",
-	"LETS_PR_FLOW",
-	"LETS_TRACKER",
-}
 
 // Run writes the SessionStart hook output to w:
 //  1. Optional ## LETS Notice block (drift check: rules missing or outdated)
@@ -69,7 +59,7 @@ func Run(w io.Writer, rulesPath, projectRoot string) error {
 	if _, err := fmt.Fprintf(w, "LETS_PROJECT_ROOT=%s\n", projectRoot); err != nil {
 		return err
 	}
-	for _, key := range configKeys {
+	for _, key := range letsconfig.Names() {
 		if val := env[key]; val != "" {
 			if _, err := fmt.Fprintf(w, "%s=%s\n", key, val); err != nil {
 				return err
@@ -79,41 +69,18 @@ func Run(w io.Writer, rulesPath, projectRoot string) error {
 	return nil
 }
 
-// driftCheck returns a "## LETS Notice" block if installed rules are missing,
-// outdated, or AHEAD of plugin (which would indicate tampering or a stale
-// binary). Empty string otherwise.
-//
-// Cases:
-//   - plugin rules path empty / unreadable / no version → silent (nothing to compare)
-//   - installed rules file absent → "rules not installed"
-//   - installed file present but no parseable version → "rules version unknown"
-//   - installed.version < plugin.version → "rules outdated"
-//   - installed.version > plugin.version → "rules ahead of plugin" (tampering or stale binary signal)
-//   - installed.version == plugin.version → silent
+// driftCheck returns a "## LETS Notice" block when the installed rules differ
+// from the plugin's. Empty string means no notice (versions match or plugin
+// unreadable). Wraps drift.Check + drift.Message — single source of truth for
+// drift wording shared with `lets init --json` output.
 func driftCheck(pluginRulesPath, projectRoot string) string {
-	pluginVer := frontmatter.ReadVersion(pluginRulesPath)
-	if pluginVer == "" {
+	installedPath := filepath.Join(projectRoot, ".claude", "rules", "lets-rules.md")
+	r := drift.Check(pluginRulesPath, installedPath)
+	msg := drift.Message(r)
+	if msg == "" {
 		return ""
 	}
-	installedPath := filepath.Join(projectRoot, ".claude", "rules", "lets-rules.md")
-	if _, err := os.Stat(installedPath); os.IsNotExist(err) {
-		return "## LETS Notice\n\nWorkflow rules not installed in `.claude/rules/lets-rules.md`. Run `/lets:init` to install."
-	}
-	installedVer := frontmatter.ReadVersion(installedPath)
-	if installedVer == "" {
-		return "## LETS Notice\n\nWorkflow rules version unknown - rules may be outdated. Run `/lets:init` to refresh."
-	}
-	switch semver.Compare("v"+installedVer, "v"+pluginVer) {
-	case -1:
-		return fmt.Sprintf("## LETS Notice\n\nWorkflow rules outdated (installed v%s < plugin v%s). Run `/lets:init` to update.", installedVer, pluginVer)
-	case 1:
-		// Installed > plugin: either someone hand-edited the rules file
-		// (possibly to bypass the drift check while neutering rules content)
-		// or the lets binary is older than the rules. Either way, surface it
-		// instead of silently honoring the installed version.
-		return fmt.Sprintf("## LETS Notice\n\nWorkflow rules AHEAD of plugin (installed v%s > plugin v%s). Verify the rules file integrity (rules tampering signal) or upgrade the lets binary. Run `/lets:init` to reset to plugin version.", installedVer, pluginVer)
-	}
-	return ""
+	return "## LETS Notice\n\n" + msg
 }
 
 // DetectProjectRoot returns the git toplevel for the current working

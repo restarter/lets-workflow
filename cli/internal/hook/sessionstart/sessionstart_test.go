@@ -73,8 +73,9 @@ func TestRun_DriftMissing(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := buf.String()
-	if !strings.Contains(out, "rules not installed") {
-		t.Errorf("missing 'rules not installed' notice:\n%s", out)
+	wantNotice := "## LETS Notice\n\nWorkflow rules not installed in `.claude/rules/lets-rules.md`. Run `/lets:init` to install."
+	if !strings.Contains(out, wantNotice) {
+		t.Errorf("missing exact notice:\nwant %q\ngot:\n%s", wantNotice, out)
 	}
 	if !strings.Contains(out, "LETS_LANGUAGE=English") {
 		t.Errorf("missing config block")
@@ -95,8 +96,9 @@ func TestRun_DriftOutdated(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := buf.String()
-	if !strings.Contains(out, "outdated (installed v0.3.0 < plugin v0.4.0)") {
-		t.Errorf("missing 'outdated' notice:\n%s", out)
+	wantNotice := "## LETS Notice\n\nWorkflow rules outdated (installed v0.3.0 < plugin v0.4.0). Run `/lets:init` to update."
+	if !strings.Contains(out, wantNotice) {
+		t.Errorf("missing exact notice:\nwant %q\ngot:\n%s", wantNotice, out)
 	}
 }
 
@@ -136,14 +138,9 @@ func TestRun_DriftWarn_WhenInstalledAhead(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := buf.String()
-	if !strings.Contains(out, "LETS Notice") {
-		t.Errorf("expected drift notice when installed > plugin (tampering signal):\n%s", out)
-	}
-	if !strings.Contains(out, "AHEAD") {
-		t.Errorf("notice should mention AHEAD direction:\n%s", out)
-	}
-	if !strings.Contains(out, "v99.0.0") || !strings.Contains(out, "v0.4.0") {
-		t.Errorf("notice should report both versions:\n%s", out)
+	wantNotice := "## LETS Notice\n\nWorkflow rules AHEAD of plugin (installed v99.0.0 > plugin v0.4.0). Verify the rules file integrity (rules tampering signal) or upgrade the lets binary. Run `/lets:init` to reset to plugin version."
+	if !strings.Contains(out, wantNotice) {
+		t.Errorf("missing exact AHEAD notice:\nwant %q\ngot:\n%s", wantNotice, out)
 	}
 }
 
@@ -160,8 +157,9 @@ func TestRun_DriftMalformedSemver_TreatsAsUnknown(t *testing.T) {
 	if err := sessionstart.Run(&buf, pluginRules, projectRoot); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(buf.String(), "version unknown") {
-		t.Errorf("expected 'version unknown' notice for malformed semver:\n%s", buf.String())
+	wantNotice := "## LETS Notice\n\nWorkflow rules version unknown - rules may be outdated. Run `/lets:init` to refresh."
+	if !strings.Contains(buf.String(), wantNotice) {
+		t.Errorf("missing exact unknown notice:\nwant %q\ngot:\n%s", wantNotice, buf.String())
 	}
 }
 
