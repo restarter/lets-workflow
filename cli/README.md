@@ -10,12 +10,22 @@ The plugin's `hooks.json` and slash commands invoke `lets <subcommand>` for cros
 cli/
 ├── cmd/lets/main.go              # Entry point - thin wrapper
 ├── internal/
-│   ├── cli/                      # Cobra command factories
-│   │   ├── root.go               # NewRootCmd
-│   │   ├── version.go            # NewVersionCmd
+│   ├── cli/                      # Cobra command factories (one file per subcommand)
+│   │   ├── root.go, version.go
+│   │   ├── hook.go, hook_session_start.go, hook_precompact.go
+│   │   ├── statusline.go, init.go
 │   │   └── *_test.go             # Black-box tests (package cli_test)
+│   ├── envfile/                  # .lets/.env reader (whitelist + parser, mirrors bash semantics)
+│   ├── frontmatter/              # YAML frontmatter `version` reader (drift check via x/mod/semver)
+│   ├── hook/sessionstart/        # SessionStart + PreCompact output (LETS Config + Notice + drift check)
+│   ├── initcmd/                  # `lets init` orchestration (init.go + migrate.go + jsonmerge.go +
+│   │                             #   state.go + render.go + embed.go + embedded_statusline_shim.sh)
+│   ├── statusline/               # Render loop, OAuth fetch, cache (build-tag splits:
+│   │                             #   keychain_darwin.go vs keychain_other.go,
+│   │                             #   spawn_unix.go vs spawn_windows.go)
 │   └── version/version.go        # CLI version (var, ldflags-overridable)
 ├── go.mod, go.sum
+├── .golangci.yml
 └── .gitignore
 ````
 
@@ -71,20 +81,31 @@ The Makefile auto-derives the version from git tags (when HEAD is exactly on a t
 4. Use `cmd.OutOrStdout()` (not `fmt.Printf`) for testability
 5. Domain logic goes in `internal/<name>/` (see `initcmd/`, `sessionstart/`, `statusline/`, `frontmatter/` for patterns)
 
-Example: `lets init` lives in `internal/cli/init.go` (cobra factory) and `internal/initcmd/` (orchestration, TUI, migration helpers).
+Example: `lets init` lives in `internal/cli/init.go` (cobra factory) and `internal/initcmd/` (orchestration, migration helpers, embedded shim).
 
 ## `lets init`
 
-Initialize LETS in current project. Interactive TUI by default.
+Internal subcommand. Designed to be invoked by the `/lets:init` slash command, which captures user preferences via `AskUserQuestion` in Claude Code and shells out with explicit flags. Direct shell invocation works for CI / dev override but requires all flags up front — there is **no TUI**.
 
 ```bash
-lets init                              # interactive (huh form: language, merge-branch, pr-flow, confirm)
-lets init --non-interactive --language English --merge-branch main --pr-flow local --skip-beads
-lets init --plugin-root ${CLAUDE_PLUGIN_ROOT}
+lets init \
+  --plugin-root "${CLAUDE_PLUGIN_ROOT}" \
+  --language English --merge-branch main --pr-flow local \
+  [--skip-beads]
 ```
 
-Sets up `.lets/` structure, mutates `.claude/settings.json` to point statusLine at `lets statusline` (with provenance markers `_letsManaged.statusLine`), copies plugin rules to `.claude/rules/lets-rules.md`, and runs `bd init`.
+Required: `--plugin-root` (or `$CLAUDE_PLUGIN_ROOT`). Other flags default sensibly. `--github` is a deprecated alias for `--pr-flow=github`.
 
-Migrates: `.lets/statusline.sh` (delete), `.claude/settings.json` (legacy bash-wrapper → managed direct), `.lets/config.yaml` → `.lets/.env`.
+What it does (idempotent, linear):
 
-Refuses: from a worktree, in `$HOME` or `/`.
+1. Creates `.lets/` directory structure (`sessions/`, `reviews/`, `plans/`, `execution/`, `cache/`)
+2. Adds `.lets/`, `.beads/`, `.worktrees/` to `.gitignore`
+3. Migrates legacy `.lets/statusline.sh` (deletes the per-project shim if it matches the embedded snapshot — see `internal/initcmd/embedded_statusline_shim.sh`)
+4. Migrates legacy `.lets/config.yaml` → `.lets/.env` (preserves user values via allowlist regex)
+5. Writes `.lets/.env` (if absent) with chosen prefs
+6. Refreshes `.lets/.env.example` from plugin template
+7. Mutates `.claude/settings.json` to set `statusLine.command = "lets statusline"` with `_letsManaged.statusLine: true` provenance marker (atomic write + `.bak`)
+8. Copies plugin rules → `<project>/.claude/rules/lets-rules.md` (frontmatter-version-aware: install / upgrade / skip)
+9. Runs `bd init` (60s timeout) unless `--skip-beads`
+
+Refuses: from a worktree (`--git-dir != --git-common-dir`), in `$HOME`, or in filesystem root `/`.

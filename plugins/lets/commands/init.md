@@ -8,6 +8,8 @@ Per-project LETS setup. Creates `.lets/` structure, config, statusline, and init
 
 > **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
 
+> **NOTE:** Step 3 currently invokes the legacy bash `init.sh`. Migration to the Go subcommand `lets init` is tracked in lets-8ilsl. When that ships, replace the bash invocation in Step 3 with `lets init --plugin-root="${CLAUDE_PLUGIN_ROOT}" --language "$LANGUAGE" --merge-branch "$MERGE_BRANCH" --pr-flow "$PR_FLOW"`. The Go path adds drift-aware rules copy, `_letsManaged.statusLine` provenance markers, and atomic settings.json merge.
+
 ## Step 1: Check Current State
 
 ```bash

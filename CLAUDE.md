@@ -43,7 +43,7 @@ References that resolve via `${CLAUDE_PLUGIN_ROOT}` (e.g. `${CLAUDE_PLUGIN_ROOT}
 - **Agents** = experts dispatched by commands. `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:brainstorm` dispatch via subagents. `/lets:team` dispatches via Agent Teams (parallel, worktree isolation). `actor` is a meta-agent that loads external personalities (URL or file) and adapts them to LETS modes
 - **Orchestrators** = commands that delegate to other commands. `/lets:pr` orchestrates `/lets:review` for full PR lifecycle
 - **Hooks** = SessionStart + PreCompact inject workflow rules (PreCompact preserves rules across context compaction in long sessions)
-- **Statusline** = `lets statusline` Go subcommand. Project `.claude/settings.json` invokes it directly. Legacy bash `scripts/lets/statusline.sh` kept as a 10-line shim for backward compat (deletion deferred to lets-8ilsl).
+- **Statusline** = `lets statusline` Go subcommand. Project `.claude/settings.json` invokes it directly via `_letsManaged.statusLine` provenance marker. Legacy bash `plugins/lets/scripts/lets/statusline.sh` kept as a thin shim for backward compat (deletion deferred to lets-8ilsl).
 - **Skills** = reusable actions in `skills/<name>/SKILL.md`. Two types: user-facing (auto-discovered, triggered via description match or Skill tool) and internal (not auto-discovered, read by commands via Read tool when needed). Examples: `create-task`, `commit`, `take-task` (user-facing), `detect-task`, `actor-fetch-personality` (internal)
 
 ## Architecture Decisions
@@ -69,7 +69,6 @@ References that resolve via `${CLAUDE_PLUGIN_ROOT}` (e.g. `${CLAUDE_PLUGIN_ROOT}
 - **PreCompact hook** invokes `lets hook precompact --rules=${CLAUDE_PLUGIN_ROOT}/rules/lets-rules.md` (separate cobra subcommand, currently shares output behavior with `session-start` via `sessionstart.Run()`). Distinct subcommand kept for future divergence (e.g. context snapshotting before compaction).
 - The bash `session-start.sh` was deleted along with its yaml→env migration block - lets-p732a closed.
 - Dual-hook pattern (same effective output on both events) follows beads precedent: [issue #486](https://github.com/gastownhall/beads/issues/486) and [PR #297](https://github.com/gastownhall/beads/pull/297). SessionStart on `compact` source re-injects rules into the post-compaction context; PreCompact ensures rules are in the pre-compaction context that the auto-summary is generated from - prevents workflow drift after compaction in long sessions.
-- Statusline source in `scripts/lets/statusline.sh`, copied to `.lets/statusline.sh` per-project by `/lets:init`. Project `.claude/settings.json` uses `git rev-parse --show-toplevel` to locate it.
 - User-facing skills: auto-discovered by Claude Code, appear in skill list, trigger on description match. Frontmatter description must NOT use YAML quotes.
 - Internal skills: NOT auto-discovered. Commands reference with "use the X skill" and read the SKILL.md via Read tool at `` `${CLAUDE_PLUGIN_ROOT}/skills/X/SKILL.md` `` - the env var ensures the path resolves correctly whether plugin is loaded via marketplace install or `--plugin-dir` dev mode (relative `skills/...` paths break in foreign projects). No accidental triggering, no context cost until needed.
 - Commands define WHAT to do and orchestrate the flow. User-facing skills define full reusable flows (steps, user gates) that auto-trigger on natural language. Internal skills define shared procedures read by commands on demand. Commands delegate to skills for shared operations.
@@ -135,22 +134,20 @@ mkdir -p "$LETS_PROJECT_ROOT/.lets/sessions"
 
 ### User config file
 
-`.lets/.env` is `KEY=VALUE` format with comments **above** keys (NOT inline - inline comments would pollute the model's context after the hook strips full-line comments). Auto-migrated from legacy `config.yaml` on first session by `hooks/session-start.sh`. Migration code removal tracked in `lets-p732a` (remove after all known users have migrated).
+`.lets/.env` is `KEY=VALUE` format with comments **above** keys (NOT inline - inline comments would pollute the model's context after the hook strips full-line comments). Migrated from legacy `config.yaml` to `.env` by `lets init` (`cli/internal/initcmd/migrate.go::MigrateYamlToEnv`). The yaml→env auto-migration in the SessionStart hook has been removed (lets-p732a closed). Legacy yaml deprecation removal tracked in `lets-q8xtk`.
 
-**NOT FOR SECRETS.** The hook injects the file's whitelisted `LETS_*` values into model context every session. Tokens, passwords, and API keys belong elsewhere: `gh auth login` for GitHub, OS keychain for general secrets, tool-specific credential files (e.g. `.beads/.env` for beads). The whitelist filter in `hooks/session-start.sh` only echoes the 4 documented `LETS_*` keys, so unknown keys are filtered - but file mode is 644 (world-readable on disk), so secrets in `.env` would still be exposed locally. Do not add secret keys.
+**NOT FOR SECRETS.** The SessionStart hook injects the file's whitelisted `LETS_*` values into model context every session. Tokens, passwords, and API keys belong elsewhere: `gh auth login` for GitHub, OS keychain for general secrets, tool-specific credential files (e.g. `.beads/.env` for beads). The whitelist filter in `cli/internal/hook/sessionstart/sessionstart.go` (the `configKeys` slice) only echoes the 4 documented `LETS_*` keys, so unknown keys are filtered - but file mode is 644 (world-readable on disk), so secrets in `.env` would still be exposed locally. Do not add secret keys.
 
 ### Adding a new config key
 
-1. Add to `hooks/config-template.env` with comment ABOVE the key
-2. Add the new key as a heredoc line in `scripts/lets/init.sh` (write `.env` block - keep heredoc, don't switch to sed)
-3. Add to the whitelist loop in `hooks/session-start.sh` (`for key in LETS_LANGUAGE ...; do ...`)
-4. Document in `hooks/rules-context.md` Local Config section
-5. Document in this CLAUDE.md "LETS Config keys" table
-6. Document in `README.md` ⚙️ Configuration block (user-facing example)
-7. If the key controls behavior, add the conditional logic in consuming command(s)
-
-**Migration coverage note:** the migration block in `hooks/session-start.sh` is hardcoded to 3 legacy yaml keys (language/merge-branch/github). New keys added per the recipe will appear for users who run `/lets:init` or hand-edit `.lets/.env`, but will NOT be auto-populated for users still on legacy yaml. If a new key needs a default for legacy users, extend the migration block - otherwise legacy users see only what's in their old yaml + the hardcoded `LETS_TRACKER=beads`.
-5. If the key controls behavior (not just metadata), add the conditional logic in the consuming command(s)
+1. Add to `plugins/lets/hooks/config-template.env` with comment ABOVE the key
+2. Add to `cli/internal/initcmd/render.go::renderEnv` (Go path - what `lets init` writes to `.lets/.env`)
+3. Add as a heredoc line in `plugins/lets/scripts/lets/init.sh` (legacy bash path - delete this step after lets-8ilsl ships and bash init.sh is removed)
+4. Add to the whitelist `configKeys` slice in `cli/internal/hook/sessionstart/sessionstart.go`
+5. Document in `plugins/lets/rules/lets-rules.md` Local Config section, then bump frontmatter `version` so SessionStart drift check fires for installed users
+6. Document in this CLAUDE.md "LETS Config keys" table
+7. Document in `README.md` ⚙️ Configuration block (user-facing example)
+8. If the key controls behavior, add the conditional logic in the consuming command(s)
 
 ## Dependencies
 

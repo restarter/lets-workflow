@@ -235,9 +235,7 @@ func runBeadsInit(ctx context.Context, projectRoot string) []Step {
 	return steps
 }
 
-// PrintSteps writes step results to w using simple text format. Used in
-// non-interactive mode. Interactive mode also calls this after spinner exits
-// (the completion screen renders the LETS box separately).
+// PrintSteps writes step results to w using simple text format.
 func PrintSteps(w io.Writer, steps []Step) {
 	for _, s := range steps {
 		fmt.Fprintf(w, "%-10s %s\n", "["+string(s.Status)+"]", s.Message)

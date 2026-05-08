@@ -2,11 +2,34 @@
 
 ## [Unreleased]
 
+### Added (Go CLI port - lets-7vtaw, Phases 1-4b)
+- Go CLI binary `lets` with subcommands: `lets version`, `lets hook session-start`, `lets hook precompact`, `lets statusline`, `lets init`. Cross-compiles for darwin/arm64, linux/amd64, windows/amd64. Module path: `github.com/restarter/lets-workflow/cli`
+- Monorepo layout: plugin payload moved to `plugins/lets/` subdir; new `cli/` parallel directory; root `Makefile` for `make build/test/vet/lint/fmt/install`
+- `plugins/lets/rules/lets-rules.md` workflow rules file with frontmatter `version` for SessionStart drift detection (replaces `hooks/rules-context.md`)
+- `_letsManaged.statusLine` provenance markers in `.claude/settings.json` (replaces fragile substring detection)
+- Hook size guard: SessionStart/PreCompact stdout capped well under Claude Code's 10K cap (closes lets-q9bx7 17KB truncation bug)
+- Shared Go packages: `cli/internal/envfile/` (.env parser), `cli/internal/frontmatter/` (semver drift check via `golang.org/x/mod/semver`), `cli/internal/initcmd/` (init orchestration + migrations + JSON merge), `cli/internal/statusline/` (render + cache + OAuth fetch with build-tag splits darwin/other and unix/windows)
+
+### Changed (Go CLI port)
+- SessionStart + PreCompact hooks ported from bash to Go (`lets hook session-start`, `lets hook precompact`); workflow rules now live in `<project>/.claude/rules/lets-rules.md` (copied by `lets init`) instead of injected via hook stdout
+- Statusline ported from bash to Go (`lets statusline`); per-project `.lets/statusline.sh` becomes optional thin shim (legacy backward-compat only)
+- `lets init` Go subcommand: drift-aware rules copy, settings.json provenance markers, atomic JSON merge with `.bak`, yaml→env migration, idempotent re-runs
+- Plugin source files moved from repo root to `plugins/lets/` subdir; `marketplace.json` `source` updated to `./plugins/lets`
+- Plugin version bumped 0.3.1 → 0.4.0 (lockstep with CLI)
+
+### Removed (Go CLI port)
+- `hooks/session-start.sh` (replaced by `lets hook session-start`; archived in `scripts/deprecated/lets/`)
+- `hooks/rules-context.md` (content migrated to `plugins/lets/rules/lets-rules.md`; rules now copied to `<project>/.claude/rules/lets-rules.md` by `lets init` instead of injected via hook stdout)
+- yaml→env auto-migration from SessionStart hook (now only triggered by `lets init`; closes lets-p732a)
+
+### Deprecated (Go CLI port)
+- `plugins/lets/scripts/lets/init.sh` and `plugins/lets/scripts/lets/statusline.sh` source files - active until lets-8ilsl rewrites `commands/init.md` to invoke `lets init` directly
+
 ### Added
 - `/lets:end` and `/lets:done` capture Claude Code session UUID into beads comments and session summaries for transcript traceability. Session summary now includes `### Claude Session` block with resolved transcript path
 - Skill architecture (`skills/` directory) with two skill types: user-facing (auto-triggered) and internal (read by commands)
 - 4 skills: `commit`, `create-task`, `take-task` (user-facing), `detect-task` (internal)
-- Auto-triggered Skills table in `hooks/rules-context.md` and `commands/install.md`
+- Auto-triggered Skills table in `plugins/lets/rules/lets-rules.md` and `commands/install.md`
 - beads-web Docker kanban board (`scripts/beads-web/`) - Rust binary (Shybko/beads-web fork v0.11.0), default port 3008
 - `scripts/dolt/backup-remote.sh` for ad-hoc Dolt server snapshots before risky operations
 - Branch return prompt after worktree creation
