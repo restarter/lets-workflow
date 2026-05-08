@@ -69,22 +69,5 @@ The Makefile auto-derives the version from git tags (when HEAD is exactly on a t
 2. Register in `internal/cli/root.go`: `cmd.AddCommand(New<Name>Cmd())`
 3. Add `<name>_test.go` (use `package cli_test` for black-box tests; `package cli` only when testing unexported helpers)
 4. Use `cmd.OutOrStdout()` (not `fmt.Printf`) for testability
-5. Domain logic goes in `internal/<name>/` (see `initcmd/`, `sessionstart/`, `statusline/`, `frontmatter/` for patterns)
 
-Example: `lets init` lives in `internal/cli/init.go` (cobra factory) and `internal/initcmd/` (orchestration, TUI, migration helpers).
-
-## `lets init`
-
-Initialize LETS in current project. Interactive TUI by default.
-
-```bash
-lets init                              # interactive (huh form: language, merge-branch, pr-flow, confirm)
-lets init --non-interactive --language English --merge-branch main --pr-flow local --skip-beads
-lets init --plugin-root ${CLAUDE_PLUGIN_ROOT}
-```
-
-Sets up `.lets/` structure, mutates `.claude/settings.json` to point statusLine at `lets statusline` (with provenance markers `_letsManaged.statusLine`), copies plugin rules to `.claude/rules/lets-rules.md`, and runs `bd init`.
-
-Migrates: `.lets/statusline.sh` (delete), `.claude/settings.json` (legacy bash-wrapper → managed direct), `.lets/config.yaml` → `.lets/.env`.
-
-Refuses: from a worktree, in `$HOME` or `/`.
+Example: `lets hook session-start` will live in `internal/cli/hook.go` returning a parent command with `session-start` as a child subcommand.

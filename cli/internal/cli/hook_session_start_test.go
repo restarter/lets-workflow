@@ -15,15 +15,13 @@ import (
 // finds at test time - typically the lets-workflow repo root since tests
 // run from cli/internal/cli/. We deliberately don't sandbox the project
 // root here: assertions only check Contains() so the test tolerates
-// whatever .env happens to live at the detected root.
-//
-// Phase 4b: rules emission was removed. Output is now just the LETS Config
-// block (+ optional drift notice when installed rules differ from plugin).
+// whatever .env happens to live at the detected root. Fully hermetic test
+// would require chdir into a temp dir with `git init`; the brittleness
+// risk is accepted for now (test passes in any git-aware environment).
 func TestHookSessionStart_E2E(t *testing.T) {
 	dir := t.TempDir()
 	rulesPath := filepath.Join(dir, "rules.md")
-	// Plugin rules with frontmatter so driftCheck has something to compare.
-	if err := os.WriteFile(rulesPath, []byte("---\nversion: 0.4.0\n---\nRULES BODY\n"), 0o644); err != nil {
+	if err := os.WriteFile(rulesPath, []byte("RULES BODY\n"), 0o644); err != nil {
 		t.Fatalf("write rules: %v", err)
 	}
 
@@ -39,11 +37,15 @@ func TestHookSessionStart_E2E(t *testing.T) {
 	}
 
 	out := buf.String()
-	// Rules body should NOT be in output (Phase 4b: rules moved to project's
-	// .claude/rules/lets-rules.md, hook only emits Config + drift notice).
-	if strings.Contains(out, "RULES BODY") {
-		t.Errorf("rules body should not be emitted in Phase 4b, got:\n%s", out)
+	if !strings.HasPrefix(out, "RULES BODY\n") {
+		preview := out
+		if len(preview) > 50 {
+			preview = preview[:50]
+		}
+		t.Errorf("output should start with rules body, got: %q", preview)
 	}
+	// Project root will be detected (we're in a git repo during tests), so
+	// LETS Config block is expected.
 	if !strings.Contains(out, "## LETS Config") {
 		t.Errorf("expected LETS Config block (test runs inside git repo), got: %q", out)
 	}

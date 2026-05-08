@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "lets hook session-start --rules=${CLAUDE_PLUGIN_ROOT}/rules/lets-rules.md"
+            "command": "lets hook session-start --rules=${CLAUDE_PLUGIN_ROOT}/hooks/rules-context.md"
           }
         ]
       }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "lets hook precompact --rules=${CLAUDE_PLUGIN_ROOT}/rules/lets-rules.md"
+            "command": "lets hook precompact --rules=${CLAUDE_PLUGIN_ROOT}/hooks/rules-context.md"
           }
         ]
       }

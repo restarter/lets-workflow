@@ -14,13 +14,10 @@ import (
 // commands currently share output behavior. Pinning a separate test here
 // guards against regression if PreCompact ever diverges (e.g. future
 // context snapshotting).
-//
-// Phase 4b: rules emission was removed. Output is now just the LETS Config
-// block (+ optional drift notice when installed rules differ from plugin).
 func TestHookPreCompact_E2E(t *testing.T) {
 	dir := t.TempDir()
 	rulesPath := filepath.Join(dir, "rules.md")
-	if err := os.WriteFile(rulesPath, []byte("---\nversion: 0.4.0\n---\nRULES BODY\n"), 0o644); err != nil {
+	if err := os.WriteFile(rulesPath, []byte("RULES BODY\n"), 0o644); err != nil {
 		t.Fatalf("write rules: %v", err)
 	}
 
@@ -36,8 +33,12 @@ func TestHookPreCompact_E2E(t *testing.T) {
 	}
 
 	out := buf.String()
-	if strings.Contains(out, "RULES BODY") {
-		t.Errorf("rules body should not be emitted in Phase 4b, got:\n%s", out)
+	if !strings.HasPrefix(out, "RULES BODY\n") {
+		preview := out
+		if len(preview) > 50 {
+			preview = preview[:50]
+		}
+		t.Errorf("output should start with rules body, got: %q", preview)
 	}
 	if !strings.Contains(out, "## LETS Config") {
 		t.Errorf("expected LETS Config block, got: %q", out)

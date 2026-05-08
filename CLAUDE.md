@@ -13,9 +13,8 @@ plugins/lets/                     # Plugin payload (everything ${CLAUDE_PLUGIN_R
 ├── commands/                     #   Slash commands (/lets:start, /lets:done, /lets:review, etc.)
 ├── agents/                       #   14 expert agents dispatched by review/opinion/ask/plan/brainstorm/team
 ├── skills/                       #   Reusable skills (user-facing auto-triggered + internal referenced by commands)
-├── rules/lets-rules.md           #   Workflow rules (frontmatter `version`; copied to .claude/rules/ by `lets init`)
-├── hooks/                        #   SessionStart + PreCompact hooks (drift check + LETS Config only - no rules in stdout)
-└── scripts/lets/                 #   Legacy bash scripts kept for `/lets:init` slash command (init.sh, statusline.sh) - cleanup deferred to lets-8ilsl
+├── hooks/                        #   SessionStart + PreCompact hooks, workflow rules, config template
+└── scripts/lets/                 #   Statusline + init script (copied/run per-project by /lets:init)
 cli/                              # Go CLI - companion binary (Phase 2+, lets-7vtaw)
 ├── cmd/lets/main.go              #   Entry point (thin)
 ├── internal/cli/                 #   Cobra command factories (root.go, version.go, *_test.go)
@@ -35,7 +34,7 @@ References that resolve via `${CLAUDE_PLUGIN_ROOT}` (e.g. `${CLAUDE_PLUGIN_ROOT}
 
 ## Key Concepts
 
-> Path convention: paths like `commands/`, `skills/`, `rules/lets-rules.md` in this doc are **relative to `plugins/lets/`** (the plugin root, also exposed as `${CLAUDE_PLUGIN_ROOT}` at runtime). Paths starting with `scripts/dolt/`, `docs/`, `reference/` are relative to the **repo root** (outside the plugin payload).
+> Path convention: paths like `commands/`, `skills/`, `hooks/rules-context.md` in this doc are **relative to `plugins/lets/`** (the plugin root, also exposed as `${CLAUDE_PLUGIN_ROOT}` at runtime). Paths starting with `scripts/dolt/`, `docs/`, `reference/` are relative to the **repo root** (outside the plugin payload).
 >
 > Go CLI source paths (`cli/cmd/lets/main.go`, `cli/internal/...`) are relative to the **repo root**. The Go module root is `cli/` - all `go` commands operate from there (or via the repo-root `Makefile`).
 
@@ -43,12 +42,12 @@ References that resolve via `${CLAUDE_PLUGIN_ROOT}` (e.g. `${CLAUDE_PLUGIN_ROOT}
 - **Agents** = experts dispatched by commands. `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:brainstorm` dispatch via subagents. `/lets:team` dispatches via Agent Teams (parallel, worktree isolation). `actor` is a meta-agent that loads external personalities (URL or file) and adapts them to LETS modes
 - **Orchestrators** = commands that delegate to other commands. `/lets:pr` orchestrates `/lets:review` for full PR lifecycle
 - **Hooks** = SessionStart + PreCompact inject workflow rules (PreCompact preserves rules across context compaction in long sessions)
-- **Statusline** = `lets statusline` Go subcommand. Project `.claude/settings.json` invokes it directly. Legacy bash `scripts/lets/statusline.sh` kept as a 10-line shim for backward compat (deletion deferred to lets-8ilsl).
+- **Statusline** = per-project `.lets/statusline.sh`, source in `scripts/lets/statusline.sh`, copied by `/lets:init`
 - **Skills** = reusable actions in `skills/<name>/SKILL.md`. Two types: user-facing (auto-discovered, triggered via description match or Skill tool) and internal (not auto-discovered, read by commands via Read tool when needed). Examples: `create-task`, `commit`, `take-task` (user-facing), `detect-task`, `actor-fetch-personality` (internal)
 
 ## Architecture Decisions
 
-- **Audience for plugin source.** Everything in `commands/`, `skills/`, `agents/`, `rules/lets-rules.md` is read by Claude (orchestrator and subagents) - never by humans. Write for the model: direct, structured, parseable. No rhetorical flourishes, no human-onboarding tone. Use markers (`MANDATORY`, `NEVER`, `IMPORTANT`) where the model needs to lock onto a constraint. Tables and bullet lists beat prose. Examples are templates the model imitates - keep them precise. Human-facing docs live in `README.md` and `CLAUDE.md` (this file).
+- **Audience for plugin source.** Everything in `commands/`, `skills/`, `agents/`, `hooks/rules-context.md` is read by Claude (orchestrator and subagents) - never by humans. Write for the model: direct, structured, parseable. No rhetorical flourishes, no human-onboarding tone. Use markers (`MANDATORY`, `NEVER`, `IMPORTANT`) where the model needs to lock onto a constraint. Tables and bullet lists beat prose. Examples are templates the model imitates - keep them precise. Human-facing docs live in `README.md` and `CLAUDE.md` (this file).
 - **Claude Code template variables in command/skill markdown.** `${CLAUDE_PLUGIN_ROOT}` (plugin install path) and `${CLAUDE_SESSION_ID}` (session UUID, available since Claude Code v2.1.9) are substituted by Claude Code before the model reads the markdown - immune to context compaction (substitution happens at command/skill load time, not at session start). `${CLAUDE_SESSION_ID}` is documented for skill prompt text; empirically verified to work in command markdown too. Used by `/lets:end` and `/lets:done` to anchor session identity in beads comments and session summaries for transcript traceability. `${CLAUDE_PROJECT_DIR}` is NOT substituted - use `git rev-parse --show-toplevel` instead.
 - Agents define WHO and HOW (expertise, behavioral modes, tiered scoring, output format). Commands define WHAT and WHEN (provide content, select agents, pass mode name)
 - Agent frontmatter fields: `name`, `description`, `tools`, `color` (terminal output: red/blue/green/yellow/purple/orange/pink/cyan), optional `model` (default inherits from parent, `opus` for complex analysis). All agents use tiered scoring ([BLOCKER]/[SUGGESTION]/[NIT]), self-contained Modes, and Output Format sections.
@@ -65,8 +64,8 @@ References that resolve via `${CLAUDE_PLUGIN_ROOT}` (e.g. `${CLAUDE_PLUGIN_ROOT}
 - All analyst agents have prompt-level read-only Bash constraints in their `## Constraints` section (identical 1-line allowlist across all 13). `hooks/validate-readonly.sh.old` exists as a PreToolUse hook prototype (not yet registered - agent frontmatter hooks silently ignored)
 - Interactive worktrees managed via `/lets:worktree` command. Hook prototypes `hooks/worktree-setup.sh.old` and `hooks/worktree-cleanup.sh.old` (deferred - caused agent auto-cleanup issues)
 - Worktrees stored in `.worktrees/` at project root - `.lets/` symlinked for interactive sessions
-- **SessionStart hook** invokes the Go subcommand `lets hook session-start --rules=${CLAUDE_PLUGIN_ROOT}/rules/lets-rules.md`. It emits ONLY: optional `## LETS Notice` (drift check via `frontmatter.ReadVersion` on plugin vs `.claude/rules/lets-rules.md`) + `## LETS Config` block. Total output is <500 chars - well under Claude Code's 10K hook output cap (lets-q9bx7). Workflow rules themselves live in the project's `.claude/rules/lets-rules.md` (uncapped project-instructions channel), copied there by `lets init` and version-tracked via frontmatter. Project root detected via `git rev-parse --show-toplevel` with `os.Getwd()` fallback.
-- **PreCompact hook** invokes `lets hook precompact --rules=${CLAUDE_PLUGIN_ROOT}/rules/lets-rules.md` (separate cobra subcommand, currently shares output behavior with `session-start` via `sessionstart.Run()`). Distinct subcommand kept for future divergence (e.g. context snapshotting before compaction).
+- **SessionStart hook** invokes the Go subcommand `lets hook session-start --rules=${CLAUDE_PLUGIN_ROOT}/hooks/rules-context.md` (logic in `cli/internal/hook/sessionstart/`, env parser in `cli/internal/envfile/`). It writes the rules file content followed by the `## LETS Config` block to stdout. Project root detected via `git rev-parse --show-toplevel` with `os.Getwd()` fallback. Requires `lets` binary on `$PATH` (see `cli/README.md` Setup).
+- **PreCompact hook** invokes `lets hook precompact --rules=...` (separate cobra subcommand, currently shares output behavior with `session-start` via `sessionstart.Run()`). Distinct subcommand kept for future divergence (e.g. context snapshotting before compaction).
 - The bash `session-start.sh` was deleted along with its yaml→env migration block - lets-p732a closed.
 - Dual-hook pattern (same effective output on both events) follows beads precedent: [issue #486](https://github.com/gastownhall/beads/issues/486) and [PR #297](https://github.com/gastownhall/beads/pull/297). SessionStart on `compact` source re-injects rules into the post-compaction context; PreCompact ensures rules are in the pre-compaction context that the auto-summary is generated from - prevents workflow drift after compaction in long sessions.
 - Statusline source in `scripts/lets/statusline.sh`, copied to `.lets/statusline.sh` per-project by `/lets:init`. Project `.claude/settings.json` uses `git rev-parse --show-toplevel` to locate it.
@@ -91,12 +90,6 @@ This includes hook debug logs, temp files, and any runtime artifacts.
 .lets/cache/             # Cached data (usage stats)
 # Worktrees (outside .lets/ to avoid circular symlinks):
 # .worktrees/            # Interactive worktrees only (agent worktrees use native Claude Code behavior)
-```
-
-Workflow rules live OUTSIDE `.lets/` because they belong to Claude Code's project-instructions channel:
-
-```
-.claude/rules/lets-rules.md  # Workflow rules (copied from plugin by `lets init`, frontmatter-versioned, customizable - tracked in git per project's choice)
 ```
 
 ## Naming Convention: `LETS_*`
@@ -162,13 +155,13 @@ Update these files:
 
 | File | What to update |
 |------|----------------|
-| `plugins/lets/rules/lets-rules.md` | Skill Quick Reference table (frontmatter `version` bump on any change so SessionStart drift check fires for installed users) |
+| `hooks/rules-context.md` | Skill Quick Reference table |
 | `commands/install.md` | Essential Skills / Planning Skills tables |
 | `CLAUDE.md` Key Concepts | If adding a new skill |
 | `README.md` | Agent table, feature descriptions |
 | All `agents/*.md` `## Constraints` sections | If changing the read-only Bash allowlist or constraint wording, sync the identical 1-line text across all 13 analyst agents (verify with `grep -h "You are read-only" agents/*.md \| sort -u` returning exactly one line) |
 | `commands/end.md` + `commands/done.md` `${CLAUDE_SESSION_ID}` references | If changing the session-id capture wording, sync across all occurrences (Step 3 progress comment + Step 5 summary block in `end.md`, Step 6 completion comment in `done.md`). Verify with `grep -n "CLAUDE_SESSION_ID" commands/` |
-| `cli/internal/cli/<name>.go` + register in `cli/internal/cli/root.go` | If adding a Go subcommand. Add `<name>_test.go` (`package cli_test`). Use `cmd.OutOrStdout()`. Domain logic goes in `cli/internal/<name>/` (see `initcmd/`, `sessionstart/`, `statusline/`, `frontmatter/` for patterns). Update `cli/README.md` "Adding a subcommand" recipe if pattern changes. |
+| `cli/internal/cli/<name>.go` + register in `cli/internal/cli/root.go` | If adding a Go subcommand. Add `<name>_test.go` (`package cli_test`). Use `cmd.OutOrStdout()`. Update `cli/README.md` "Adding a subcommand" recipe if pattern changes. |
 
 ### Command Output Requirements
 
@@ -196,7 +189,7 @@ Every lets:* command MUST end with branded LETS box:
 ### Command Checklist
 
 - [ ] Has LETS box in output section
-- [ ] Updates Skill Quick Reference in `plugins/lets/rules/lets-rules.md` (and bump frontmatter `version`)
+- [ ] Updates Skill Quick Reference in `hooks/rules-context.md`
 - [ ] Updates `/lets:install` Essential Skills / Planning Skills tables
 - [ ] Follows session flow (start -> work -> commit -> done -> end)
 - [ ] Description is clear and actionable

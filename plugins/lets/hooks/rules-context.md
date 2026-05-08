@@ -1,11 +1,6 @@
----
-name: lets-rules
-version: 0.4.0
----
-
-<!-- DO NOT EDIT - managed by lets init / lets install. To add custom rules, create a sibling *.md file in this directory (e.g. .claude/rules/team-conventions.md). Files prefixed `lets-` are owned by the LETS plugin and overwritten on update. -->
-
 # LETS Workflow Rules
+
+These rules are injected by the LETS plugin and apply to every conversation.
 
 ## Language & Communication
 
@@ -41,6 +36,10 @@ If a `## LETS Notice` block appears in the injected context (sibling H2 of `## L
 ## Development Workflow
 
 **One rule above all: transparency. User sees everything, decides everything.**
+
+```
+User states goal -> Claude proposes approach -> User approves -> Claude executes
+```
 
 - Never commit or push without explicit user approval
 - Never silently switch approaches when something fails - stop, explain, present options, wait
