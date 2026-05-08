@@ -105,7 +105,7 @@ If `drift.detected: true` AND `drift.message != ""`, show `drift.message` direct
 **Restart hint** — scan `steps[]` for messages containing `statusLine ->`, `_letsManaged marker added`, `.claude/rules/lets-rules.md installed`, or `.claude/rules/lets-rules.md updated`. If ANY match → show hint right before the LETS box:
 
 ```
-⚠️  Restart Claude Code to apply statusline + rules changes (Cmd+R, or quit and reopen).
+⚠️  Restart Claude Code to apply statusline + rules changes — run `/exit`, then reopen Claude Code in this directory.
 ```
 
 If no match (everything skipped or only `.env` updated) → no hint, just LETS box.
