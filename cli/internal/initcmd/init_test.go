@@ -1,6 +1,7 @@
 package initcmd
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"os/exec"
@@ -17,8 +18,8 @@ func TestRun_FreshProject(t *testing.T) {
 	gitInit(t, tmp)
 	pluginRoot := setupFakePluginRoot(t)
 
-	prefs := Prefs{Language: "English", MergeBranch: "main", PRFlow: "local", SkipBeads: true}
-	steps, err := Run(context.Background(), prefs, tmp, pluginRoot)
+	prefs := Prefs{Language: "English", MergeBranch: "main", PRFlow: "local", Tracker: "beads", SkipBeads: true}
+	result, err := Run(context.Background(), prefs, tmp, pluginRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,8 +43,18 @@ func TestRun_FreshProject(t *testing.T) {
 		t.Errorf(".env content wrong:\n%s", envData)
 	}
 
-	if len(steps) < 5 {
-		t.Errorf("steps = %d, want >=5", len(steps))
+	// Tighten .env.example assertion: bytes-equal vs renderEnvExample() catches
+	// regressions where Step 6 writes wrong path or empty/stale content.
+	gotExample, err := os.ReadFile(filepath.Join(tmp, ".lets", ".env.example"))
+	if err != nil {
+		t.Fatalf("read .env.example: %v", err)
+	}
+	if !bytes.Equal(gotExample, renderEnvExample()) {
+		t.Errorf(".env.example content != renderEnvExample() output\n--- got ---\n%s\n--- want ---\n%s", gotExample, renderEnvExample())
+	}
+
+	if len(result.Steps) < 5 {
+		t.Errorf("steps = %d, want >=5", len(result.Steps))
 	}
 }
 
@@ -54,29 +65,36 @@ func TestRun_Idempotent(t *testing.T) {
 	tmp := t.TempDir()
 	gitInit(t, tmp)
 	pluginRoot := setupFakePluginRoot(t)
-	prefs := Prefs{Language: "English", MergeBranch: "main", PRFlow: "local", SkipBeads: true}
+	prefs := Prefs{Language: "English", MergeBranch: "main", PRFlow: "local", Tracker: "beads", SkipBeads: true}
 
 	if _, err := Run(context.Background(), prefs, tmp, pluginRoot); err != nil {
 		t.Fatal(err)
 	}
-	steps, err := Run(context.Background(), prefs, tmp, pluginRoot)
+	result, err := Run(context.Background(), prefs, tmp, pluginRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
 	skipCount := 0
-	for _, s := range steps {
+	envSkipped := false
+	for _, s := range result.Steps {
 		if s.Status == StepSkip {
 			skipCount++
+			if strings.Contains(s.Message, ".lets/.env") {
+				envSkipped = true
+			}
 		}
 	}
 	if skipCount < 2 {
 		t.Errorf("second run had %d skips, want >=2", skipCount)
 	}
+	if !envSkipped {
+		t.Error("second run did not skip .env step (regression: re-run rewrites .env unconditionally)")
+	}
 }
 
 func TestRun_RefusesHome(t *testing.T) {
 	home, _ := os.UserHomeDir()
-	prefs := Prefs{Language: "English", MergeBranch: "main", PRFlow: "local", SkipBeads: true}
+	prefs := Prefs{Language: "English", MergeBranch: "main", PRFlow: "local", Tracker: "beads", SkipBeads: true}
 	_, err := Run(context.Background(), prefs, home, "/tmp")
 	if err == nil || !strings.Contains(err.Error(), "$HOME") {
 		t.Errorf("expected $HOME refusal, got %v", err)
@@ -84,7 +102,7 @@ func TestRun_RefusesHome(t *testing.T) {
 }
 
 func TestRun_RefusesRoot(t *testing.T) {
-	prefs := Prefs{Language: "English", MergeBranch: "main", PRFlow: "local", SkipBeads: true}
+	prefs := Prefs{Language: "English", MergeBranch: "main", PRFlow: "local", Tracker: "beads", SkipBeads: true}
 	_, err := Run(context.Background(), prefs, "/", "/tmp")
 	if err == nil || !strings.Contains(err.Error(), "filesystem root") {
 		t.Errorf("expected root refusal, got %v", err)
@@ -100,8 +118,9 @@ func gitInit(t *testing.T, dir string) {
 	}
 }
 
-// setupFakePluginRoot creates a minimal plugin structure with a rules file
-// and config-template.env. Returns the path.
+// setupFakePluginRoot creates a minimal plugin structure with a rules file.
+// Returns the path. Note: no config-template.env is created — `.env.example` is
+// generated from letsconfig.Keys defaults at lets init time (post lets-8ilsl).
 func setupFakePluginRoot(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
@@ -115,12 +134,6 @@ version: 0.4.0
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(root, "rules", "lets-rules.md"), []byte(rules), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(filepath.Join(root, "hooks"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "hooks", "config-template.env"), []byte("# template\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return root

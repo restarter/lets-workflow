@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/restarter/lets-workflow/cli/internal/frontmatter"
+	"github.com/restarter/lets-workflow/cli/internal/drift"
 )
 
 // StepStatus is a typed enum for step result categories.
@@ -27,27 +27,27 @@ const (
 
 // Step describes one apply step result for caller rendering.
 type Step struct {
-	Status  StepStatus
-	Message string
+	Status  StepStatus `json:"status"`
+	Message string     `json:"message"`
 }
 
 // Run executes init in linear order. Idempotent. Refuses if projectRoot is
 // $HOME or filesystem root.
 //
-// Returns slice of Steps for the caller to render. Returns error only for
-// hard failures (refused preconditions, write errors).
+// Returns Result with Steps slice for the caller to render. Returns error only
+// for hard failures (refused preconditions, write errors).
 //
 // Partial-completion contract: when Run returns an error mid-flight, it ALSO
-// returns the Steps slice covering work completed so far. Callers should
-// render returned steps even on error so the user sees what was already
+// returns a Result with Steps populated for work completed so far. Callers
+// should render returned Steps even on error so the user sees what was already
 // done. Soft warnings (bd not found, foreign statusline) become Steps with
 // status StepWarn / StepMigrate, not errors.
-func Run(ctx context.Context, prefs Prefs, projectRoot, pluginRoot string) ([]Step, error) {
-	if err := guardProjectRoot(projectRoot); err != nil {
-		return nil, err
-	}
+func Run(ctx context.Context, prefs Prefs, projectRoot, pluginRoot string) (Result, error) {
+	result := NewResult(projectRoot, pluginRoot)
 
-	var steps []Step
+	if err := guardProjectRoot(projectRoot); err != nil {
+		return result, err
+	}
 
 	// 1. .lets/ structure
 	dirs := []string{
@@ -60,122 +60,152 @@ func Run(ctx context.Context, prefs Prefs, projectRoot, pluginRoot string) ([]St
 	}
 	for _, d := range dirs {
 		if err := os.MkdirAll(d, 0o755); err != nil {
-			return steps, fmt.Errorf("mkdir %s: %w", d, err)
+			return result, fmt.Errorf("mkdir %s: %w", d, err)
 		}
 	}
 	if err := os.Chmod(filepath.Join(projectRoot, ".lets", "cache"), 0o700); err != nil {
-		return steps, err
+		return result, err
 	}
-	steps = append(steps, Step{Status: StepOK, Message: ".lets/ structure (5 dirs)"})
+	result.Add(Step{Status: StepOK, Message: ".lets/ structure (5 dirs)"})
 
 	// 2. .gitignore
 	if err := EnsureGitignore(projectRoot, []string{".lets/", ".beads/", ".worktrees/"}); err != nil {
-		return steps, err
+		return result, err
 	}
-	steps = append(steps, Step{Status: StepOK, Message: ".gitignore entries"})
+	result.Add(Step{Status: StepOK, Message: ".gitignore entries"})
 
 	// 3. statusline.sh migration
 	if msg, err := MigrateStatuslineSh(projectRoot); err != nil {
-		return steps, err
+		return result, err
 	} else if msg != "" {
-		steps = append(steps, Step{Status: StepMigrate, Message: msg})
+		result.Add(Step{Status: StepMigrate, Message: msg})
 	}
 
 	// 4. yaml→env migration (if applicable)
 	if msg, did, err := MigrateYamlToEnv(projectRoot); err != nil {
-		return steps, err
+		return result, err
 	} else if did {
-		steps = append(steps, Step{Status: StepMigrate, Message: msg})
+		result.Add(Step{Status: StepMigrate, Message: msg})
 	} else if msg != "" {
 		// Soft warning - yaml present but unreadable (permissions etc).
-		steps = append(steps, Step{Status: StepWarn, Message: msg})
+		result.Add(Step{Status: StepWarn, Message: msg})
 	}
 
-	// 5. .env (if absent)
+	// 5. .env (write or surgical update)
 	envPath := filepath.Join(projectRoot, ".lets", ".env")
-	if _, err := os.Stat(envPath); os.IsNotExist(err) {
+	envExists := false
+	if _, err := os.Stat(envPath); err == nil {
+		envExists = true
+	}
+	switch {
+	case !envExists:
+		// First-time write (also covers --force-env on missing file: treats as create)
 		envBytes := renderEnv(prefs)
 		if err := atomicWriteBytes(envPath, envBytes, 0o644); err != nil {
-			return steps, err
+			return result, err
 		}
-		steps = append(steps, Step{Status: StepOK, Message: fmt.Sprintf(".lets/.env (%s, %s, %s)", prefs.Language, prefs.MergeBranch, prefs.PRFlow)})
-	} else {
-		steps = append(steps, Step{Status: StepSkip, Message: ".lets/.env (exists)"})
+		result.EnvAction = EnvAction{Kind: EnvCreated, Path: envPath, ChangedKeys: []string{}, PreservedLines: 0}
+		result.Add(Step{Status: StepOK, Message: fmt.Sprintf(".lets/.env (%s, %s, %s)", prefs.Language, prefs.MergeBranch, prefs.PRFlow)})
+	case envExists && !prefs.ForceEnv:
+		result.EnvAction = EnvAction{Kind: EnvSkip, Path: envPath, ChangedKeys: []string{}}
+		result.Add(Step{Status: StepSkip, Message: ".lets/.env (exists)"})
+	case envExists && prefs.ForceEnv:
+		action, err := UpdateEnvKeys(envPath, prefs)
+		// IMPORTANT: even on err, action may be partially populated (BackupPath set).
+		result.EnvAction = action
+		if err != nil {
+			return result, err
+		}
+		switch action.Kind {
+		case EnvSkip:
+			result.Add(Step{Status: StepSkip, Message: ".lets/.env (no changes)"})
+		case EnvUpdated:
+			result.Add(Step{Status: StepOK, Message: fmt.Sprintf(".lets/.env updated (%d keys, %d lines preserved, backup: %s)", len(action.ChangedKeys), action.PreservedLines, filepath.Base(action.BackupPath))})
+		}
 	}
 
-	// 6. .env.example always refreshes from plugin template
-	templatePath := filepath.Join(pluginRoot, "hooks", "config-template.env")
-	if data, err := os.ReadFile(templatePath); err == nil {
-		examplePath := filepath.Join(projectRoot, ".lets", ".env.example")
-		if err := atomicWriteBytes(examplePath, data, 0o644); err != nil {
-			return steps, err
-		}
-		steps = append(steps, Step{Status: StepOK, Message: ".lets/.env.example (refreshed)"})
-	} else {
-		steps = append(steps, Step{Status: StepWarn, Message: fmt.Sprintf("plugin template missing: %s", templatePath)})
+	// 6. .env.example always refreshes from canonical letsconfig defaults
+	// (no plugin template file — Go is the single source of truth).
+	examplePath := filepath.Join(projectRoot, ".lets", ".env.example")
+	if err := atomicWriteBytes(examplePath, renderEnvExample(), 0o644); err != nil {
+		return result, err
 	}
+	result.Add(Step{Status: StepOK, Message: ".lets/.env.example (refreshed)"})
 
 	// 7. settings.json (provenance-aware)
 	settingsPath := filepath.Join(projectRoot, ".claude", "settings.json")
 	settings, err := readSettingsJSON(settingsPath)
 	if err != nil {
-		steps = append(steps, Step{Status: StepWarn, Message: fmt.Sprintf("settings.json malformed - skipped: %v", err)})
+		result.Add(Step{Status: StepWarn, Message: fmt.Sprintf("settings.json malformed - skipped: %v", err)})
 	} else {
 		state := detectStatusLineField(settings)
 		switch state {
 		case StatusLineForeign:
-			steps = append(steps, Step{Status: StepSkip, Message: ".claude/settings.json statusLine is user-customized - left alone"})
+			result.Add(Step{Status: StepSkip, Message: ".claude/settings.json statusLine is user-customized - left alone"})
 		case StatusLineLetsManaged:
-			steps = append(steps, Step{Status: StepSkip, Message: ".claude/settings.json (statusLine managed)"})
+			result.Add(Step{Status: StepSkip, Message: ".claude/settings.json (statusLine managed)"})
 		case StatusLineLetsDirect:
 			if err := SetStatusLineManaged(settingsPath); err != nil {
-				return steps, err
+				return result, err
 			}
-			steps = append(steps, Step{Status: StepOK, Message: ".claude/settings.json _letsManaged marker added"})
+			result.Add(Step{Status: StepOK, Message: ".claude/settings.json _letsManaged marker added"})
 		default: // Absent or LetsBashWrapper
 			if err := SetStatusLineManaged(settingsPath); err != nil {
-				return steps, err
+				return result, err
 			}
-			steps = append(steps, Step{Status: StepOK, Message: ".claude/settings.json statusLine -> 'lets statusline'"})
+			result.Add(Step{Status: StepOK, Message: ".claude/settings.json statusLine -> 'lets statusline'"})
 		}
 	}
 
-	// 8. .claude/rules/lets-rules.md (copy from plugin, version-aware)
+	// 8. .claude/rules/lets-rules.md (drift-aware)
 	rulesSrc := filepath.Join(pluginRoot, "rules", "lets-rules.md")
 	rulesDst := filepath.Join(projectRoot, ".claude", "rules", "lets-rules.md")
-	rulesData, err := os.ReadFile(rulesSrc)
-	if err != nil {
-		steps = append(steps, Step{Status: StepWarn, Message: fmt.Sprintf("plugin rules missing: %s", rulesSrc)})
+	rulesData, readErr := os.ReadFile(rulesSrc)
+	if readErr != nil {
+		// Plugin rules unreadable. Populate Drift.State explicitly so JSON consumers
+		// can disambiguate "drift check ran, equal" from "drift check failed".
+		result.Drift = DriftReport{Detected: false, State: drift.StatePluginUnreadable}
+		result.Add(Step{Status: StepWarn, Message: fmt.Sprintf("plugin rules missing: %s", rulesSrc)})
 	} else {
-		pluginVer := frontmatter.ReadVersion(rulesSrc)
-		installedVer := frontmatter.ReadVersion(rulesDst)
-		needsUpdate := installedVer == "" || installedVer != pluginVer
-		if needsUpdate {
+		dr := drift.Check(rulesSrc, rulesDst)
+		result.Drift = DriftReport{
+			Detected:         dr.Detected(),
+			State:            dr.State,
+			InstalledVersion: dr.InstalledVersion,
+			PluginVersion:    dr.PluginVersion,
+			Message:          drift.Message(dr),
+		}
+		if dr.Detected() {
 			if err := os.MkdirAll(filepath.Dir(rulesDst), 0o755); err != nil {
-				return steps, err
+				return result, err
 			}
 			if err := atomicWriteBytes(rulesDst, rulesData, 0o644); err != nil {
-				return steps, err
+				return result, err
 			}
-			if installedVer == "" {
-				steps = append(steps, Step{Status: StepOK, Message: fmt.Sprintf(".claude/rules/lets-rules.md installed (v%s)", pluginVer)})
-			} else {
-				steps = append(steps, Step{Status: StepOK, Message: fmt.Sprintf(".claude/rules/lets-rules.md upgraded (v%s -> v%s)", installedVer, pluginVer)})
+			switch dr.State {
+			case drift.StateMissing:
+				result.Add(Step{Status: StepOK, Message: fmt.Sprintf(".claude/rules/lets-rules.md installed (v%s)", dr.PluginVersion)})
+			case drift.StateUnknown:
+				result.Add(Step{Status: StepOK, Message: fmt.Sprintf(".claude/rules/lets-rules.md refreshed (was: unparseable, now v%s)", dr.PluginVersion)})
+			case drift.StateOutdated, drift.StateAhead:
+				result.Add(Step{Status: StepOK, Message: fmt.Sprintf(".claude/rules/lets-rules.md updated (v%s -> v%s)", dr.InstalledVersion, dr.PluginVersion)})
 			}
 		} else {
-			steps = append(steps, Step{Status: StepSkip, Message: fmt.Sprintf(".claude/rules/lets-rules.md (v%s up to date)", installedVer)})
+			result.Add(Step{Status: StepSkip, Message: fmt.Sprintf(".claude/rules/lets-rules.md (v%s up to date)", dr.InstalledVersion)})
 		}
 	}
 
 	// 9. beads
 	if !prefs.SkipBeads {
 		bdSteps := runBeadsInit(ctx, projectRoot)
-		steps = append(steps, bdSteps...)
+		for _, s := range bdSteps {
+			result.Add(s)
+		}
 	} else {
-		steps = append(steps, Step{Status: StepSkip, Message: "beads (--skip-beads)"})
+		result.Add(Step{Status: StepSkip, Message: "beads (--skip-beads)"})
 	}
 
-	return steps, nil
+	return result, nil
 }
 
 // guardProjectRoot refuses dangerous root paths.

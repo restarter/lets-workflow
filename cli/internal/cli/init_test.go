@@ -42,7 +42,8 @@ func TestInit_GithubDeprecationFlagPresent(t *testing.T) {
 
 // makeFakePluginRoot creates a minimal plugin tree that DetectPluginRoot
 // will accept (.claude-plugin/plugin.json marker) and Run() can read from
-// (rules/lets-rules.md + hooks/config-template.env).
+// (rules/lets-rules.md). Note: no config-template.env — `.env.example` is
+// generated from letsconfig.Keys defaults post lets-8ilsl.
 func makeFakePluginRoot(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
@@ -58,7 +59,6 @@ func makeFakePluginRoot(t *testing.T) string {
 	}
 	mustWrite(".claude-plugin/plugin.json", `{"name":"lets","version":"0.4.0"}`)
 	mustWrite("rules/lets-rules.md", "---\nversion: 0.4.0\n---\n# test rules\n")
-	mustWrite("hooks/config-template.env", "# test template\n")
 	return root
 }
 

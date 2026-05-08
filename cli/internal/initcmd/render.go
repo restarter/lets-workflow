@@ -4,6 +4,8 @@ package initcmd
 import (
 	"bytes"
 	"fmt"
+
+	"github.com/restarter/lets-workflow/cli/internal/letsconfig"
 )
 
 // Prefs holds the user-selected initialization preferences. The `/lets:init`
@@ -33,26 +35,33 @@ func (p Prefs) AsValues() map[string]string {
 	}
 }
 
-// renderEnv produces the .lets/.env file body.
-// Output is byte-for-byte equivalent to bash heredoc in init.sh:124-141.
-// MUST match testdata/golden_env_*.txt exactly.
+// renderEnv produces the .lets/.env file body using letsconfig.Header and
+// per-key comments from letsconfig.Keys. Single source of truth — this,
+// renderEnvExample, and UpdateEnvKeys all consume letsconfig.Keys.
+//
+// MUST match testdata/golden_env_*.txt exactly. Goldens are regenerated with
+// `go test ./internal/initcmd -run TestRenderEnv_Golden -update`.
 func renderEnv(p Prefs) []byte {
+	return renderTemplate(letsconfig.Header, p.AsValues())
+}
+
+// renderEnvExample produces the .lets/.env.example body using canonical
+// defaults from letsconfig.Keys. Replaces the deleted plugins/lets/hooks/config-template.env
+// file. Single source of truth — adding a new key in letsconfig.Keys automatically
+// updates the example.
+func renderEnvExample() []byte {
+	return renderTemplate(letsconfig.ExampleHeader, letsconfig.Defaults())
+}
+
+// renderTemplate is the shared template logic for renderEnv + renderEnvExample.
+// Writes header, then for each Key: blank line, comment line, key=value.
+func renderTemplate(header string, values map[string]string) []byte {
 	var buf bytes.Buffer
-	buf.WriteString("# LETS plugin config\n")
-	buf.WriteString("# NOT FOR SECRETS. Contents are injected verbatim into model context every\n")
-	buf.WriteString("# session (subject to whitelist filter in hooks/session-start.sh). Put\n")
-	buf.WriteString("# tokens/passwords elsewhere (gh auth, OS keychain, .beads/.env).\n")
-	buf.WriteString("\n")
-	buf.WriteString("# Response language (English/Ukrainian/Italian/etc)\n")
-	fmt.Fprintf(&buf, "LETS_LANGUAGE=%s\n", p.Language)
-	buf.WriteString("\n")
-	buf.WriteString("# Target branch for merges and PR base\n")
-	fmt.Fprintf(&buf, "LETS_MERGE_BRANCH=%s\n", p.MergeBranch)
-	buf.WriteString("\n")
-	buf.WriteString("# PR flow: github | bitbucket | local\n")
-	fmt.Fprintf(&buf, "LETS_PR_FLOW=%s\n", p.PRFlow)
-	buf.WriteString("\n")
-	buf.WriteString("# Task tracker (currently beads supported)\n")
-	buf.WriteString("LETS_TRACKER=beads\n")
+	buf.WriteString(header)
+	for _, k := range letsconfig.Keys {
+		buf.WriteByte('\n')
+		fmt.Fprintf(&buf, "# %s\n", k.Comment)
+		fmt.Fprintf(&buf, "%s=%s\n", k.Name, values[k.Name])
+	}
 	return buf.Bytes()
 }
