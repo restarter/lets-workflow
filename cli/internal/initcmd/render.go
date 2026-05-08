@@ -13,7 +13,24 @@ type Prefs struct {
 	Language    string // e.g. "English", "Ukrainian"
 	MergeBranch string // e.g. "main", "develop"
 	PRFlow      string // "local" | "github" | "bitbucket"
+	Tracker     string // "beads" (canonical default; reserved for Linear/Jira)
 	SkipBeads   bool
+	ForceEnv    bool // if true, surgically update existing .env via UpdateEnvKeys
+}
+
+// AsValues returns the canonical Key.Name → Prefs field mapping.
+//
+// Single source of truth for Prefs↔Key wiring — both renderEnv (write fresh)
+// and UpdateEnvKeys (surgical update) consume this. Adding a new LETS_* key
+// requires adding ONE entry here (alongside the Keys entry in letsconfig and
+// the Prefs field above) — no other map needs editing.
+func (p Prefs) AsValues() map[string]string {
+	return map[string]string{
+		"LETS_LANGUAGE":     p.Language,
+		"LETS_MERGE_BRANCH": p.MergeBranch,
+		"LETS_PR_FLOW":      p.PRFlow,
+		"LETS_TRACKER":      p.Tracker,
+	}
 }
 
 // renderEnv produces the .lets/.env file body.
