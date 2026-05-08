@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -93,12 +94,29 @@ func validateISO(s string) string {
 }
 
 // writeUsageCache writes the 4-line cache format atomically (tmp + rename).
+//
+// Uses os.CreateTemp for the staging file (unique name per call) so that
+// concurrent statusline renders racing to refresh the cache cannot interleave
+// writes into a shared `.tmp` file - each gets its own staging file, last
+// rename wins. Cache file is mode 0o600 (operational metadata, no other
+// user on a shared host needs to read it).
 func writeUsageCache(path string, u usage) error {
-	tmp := path + ".tmp"
-	f, err := os.Create(tmp)
+	dir := filepath.Dir(path)
+	f, err := os.CreateTemp(dir, "usage-*")
 	if err != nil {
 		return err
 	}
+	tmp := f.Name()
+	cleanup := func() {
+		f.Close()
+		os.Remove(tmp)
+	}
+	// CreateTemp on POSIX defaults to 0o600; explicit Chmod for portability.
+	if err := os.Chmod(tmp, 0o600); err != nil {
+		cleanup()
+		return err
+	}
+
 	w := bufio.NewWriter(f)
 	if u.fiveHourOK {
 		_, _ = w.WriteString(strconv.Itoa(u.fiveHour) + "\n")
@@ -113,8 +131,7 @@ func writeUsageCache(path string, u usage) error {
 	_, _ = w.WriteString(u.fiveHourReset + "\n")
 	_, _ = w.WriteString(u.sevenDayReset + "\n")
 	if err := w.Flush(); err != nil {
-		f.Close()
-		os.Remove(tmp)
+		cleanup()
 		return err
 	}
 	if err := f.Close(); err != nil {

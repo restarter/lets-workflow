@@ -64,19 +64,29 @@ func DetectInsideWorktree() bool {
 
 // DetectPluginRoot resolves plugin install dir.
 // Order: --plugin-root flag (passed in via param) > $CLAUDE_PLUGIN_ROOT env > error.
-// No walk-up - too risky (plugin.json hijack vector). Caller must provide.
+// No walk-up - too risky (plugin.json hijack vector).
+//
+// Sanity check: the resolved path MUST contain `.claude-plugin/plugin.json`.
+// This blocks malicious "lets init --plugin-root=./vendor/evil" invocations
+// that could otherwise overwrite the project's .claude/rules/ with arbitrary
+// content (rules feed the orchestrator's project-instructions channel).
 func DetectPluginRoot(flagValue string) (string, error) {
-	if flagValue != "" {
-		abs, err := filepath.Abs(flagValue)
-		if err != nil {
-			return "", fmt.Errorf("invalid --plugin-root: %w", err)
-		}
-		return abs, nil
+	cand := flagValue
+	if cand == "" {
+		cand = os.Getenv("CLAUDE_PLUGIN_ROOT")
 	}
-	if env := os.Getenv("CLAUDE_PLUGIN_ROOT"); env != "" {
-		return env, nil
+	if cand == "" {
+		return "", errors.New("plugin root not found: pass --plugin-root or set CLAUDE_PLUGIN_ROOT")
 	}
-	return "", errors.New("plugin root not found: pass --plugin-root or set CLAUDE_PLUGIN_ROOT")
+	abs, err := filepath.Abs(cand)
+	if err != nil {
+		return "", fmt.Errorf("invalid --plugin-root: %w", err)
+	}
+	marker := filepath.Join(abs, ".claude-plugin", "plugin.json")
+	if _, err := os.Stat(marker); err != nil {
+		return "", fmt.Errorf("not a LETS plugin install (missing .claude-plugin/plugin.json under %s)", abs)
+	}
+	return abs, nil
 }
 
 // detectStatuslineSh classifies .lets/statusline.sh.
@@ -98,11 +108,23 @@ func detectStatuslineSh(path string) StatuslineState {
 }
 
 // detectStatusLineField classifies the statusLine command in settings.json.
+//
+// When the _letsManaged.statusLine provenance marker is set to true, we
+// additionally cross-check that statusLine.command is exactly the string we
+// would write ("lets statusline"). If something else mutated the command
+// while leaving the marker intact, we treat it as Foreign so /lets:init
+// refuses to silently overwrite (defense-in-depth: marker is just a JSON
+// boolean, anyone with write access could set it).
 func detectStatusLineField(settings map[string]any) StatusLineFieldState {
 	managed, _ := settings["_letsManaged"].(map[string]any)
 	if managed != nil {
 		if b, _ := managed["statusLine"].(bool); b {
-			return StatusLineLetsManaged
+			sl, _ := settings["statusLine"].(map[string]any)
+			cmd, _ := sl["command"].(string)
+			if cmd == "lets statusline" {
+				return StatusLineLetsManaged
+			}
+			return StatusLineForeign
 		}
 	}
 	sl, _ := settings["statusLine"].(map[string]any)

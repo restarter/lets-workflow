@@ -86,6 +86,9 @@ func Run(ctx context.Context, prefs Prefs, projectRoot, pluginRoot string) ([]St
 		return steps, err
 	} else if did {
 		steps = append(steps, Step{Status: StepMigrate, Message: msg})
+	} else if msg != "" {
+		// Soft warning - yaml present but unreadable (permissions etc).
+		steps = append(steps, Step{Status: StepWarn, Message: msg})
 	}
 
 	// 5. .env (if absent)

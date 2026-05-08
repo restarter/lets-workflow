@@ -118,8 +118,11 @@ func TestRun_DriftSilent_WhenSameVersion(t *testing.T) {
 	}
 }
 
-// Installed > plugin: shouldn't happen in normal flow, but should NOT spam a notice.
-func TestRun_DriftSilent_WhenInstalledAhead(t *testing.T) {
+// Installed > plugin: surface a tampering/stale-binary signal (B9 from
+// 2026-05-08 review). Earlier behavior was silent - that hid both rules
+// hand-edits (potentially neutering the read-only Bash allowlist) and stale
+// `lets` binaries running against newer rules.
+func TestRun_DriftWarn_WhenInstalledAhead(t *testing.T) {
 	tmp := t.TempDir()
 	pluginRules := filepath.Join(tmp, "plugin-rules.md")
 	writeFile(t, pluginRules, "---\nversion: 0.4.0\n---\n")
@@ -132,8 +135,15 @@ func TestRun_DriftSilent_WhenInstalledAhead(t *testing.T) {
 	if err := sessionstart.Run(&buf, pluginRules, projectRoot); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(buf.String(), "LETS Notice") {
-		t.Errorf("unexpected drift notice when installed > plugin:\n%s", buf.String())
+	out := buf.String()
+	if !strings.Contains(out, "LETS Notice") {
+		t.Errorf("expected drift notice when installed > plugin (tampering signal):\n%s", out)
+	}
+	if !strings.Contains(out, "AHEAD") {
+		t.Errorf("notice should mention AHEAD direction:\n%s", out)
+	}
+	if !strings.Contains(out, "v99.0.0") || !strings.Contains(out, "v0.4.0") {
+		t.Errorf("notice should report both versions:\n%s", out)
 	}
 }
 

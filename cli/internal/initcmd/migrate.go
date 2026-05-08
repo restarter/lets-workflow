@@ -3,7 +3,9 @@ package initcmd
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -33,6 +35,13 @@ func MigrateStatuslineSh(projectRoot string) (string, error) {
 // MigrateYamlToEnv reads legacy .lets/config.yaml, writes .lets/.env, renames
 // yaml to .lets/config.yaml.deprecated. No-op if .env already exists or yaml
 // absent.
+//
+// Return contract:
+//   - msg!="", did=true, err=nil → migration ran (StepMigrate by caller)
+//   - msg!="", did=false, err=nil → soft warning surfaced to caller (e.g. yaml
+//     present but unreadable due to permissions); rendered as StepWarn
+//   - msg=="", did=false, err=nil → no-op (yaml absent or .env already exists)
+//   - err!=nil → hard failure (parse/write/rename error); caller aborts
 func MigrateYamlToEnv(projectRoot string) (string, bool, error) {
 	yamlPath := filepath.Join(projectRoot, ".lets", "config.yaml")
 	envPath := filepath.Join(projectRoot, ".lets", ".env")
@@ -41,7 +50,12 @@ func MigrateYamlToEnv(projectRoot string) (string, bool, error) {
 	}
 	yamlData, err := os.ReadFile(yamlPath)
 	if err != nil {
-		return "", false, nil
+		if errors.Is(err, fs.ErrNotExist) {
+			return "", false, nil
+		}
+		// File exists but unreadable (permissions, IO). Surface as warn so
+		// the user knows their legacy config wasn't migrated silently.
+		return fmt.Sprintf(".lets/config.yaml present but unreadable (%v) - migration skipped", err), false, nil
 	}
 	prefs, err := parseLegacyYaml(yamlData)
 	if err != nil {

@@ -55,6 +55,8 @@ func TestDetectStatusLineField(t *testing.T) {
 		{"absent", `{}`, StatusLineAbsent},
 		{"empty command", `{"statusLine":{"type":"command","command":""}}`, StatusLineAbsent},
 		{"managed", `{"_letsManaged":{"statusLine":true},"statusLine":{"command":"lets statusline"}}`, StatusLineLetsManaged},
+		{"managed marker but command tampered", `{"_letsManaged":{"statusLine":true},"statusLine":{"command":"/etc/passwd"}}`, StatusLineForeign},
+		{"managed marker but command missing", `{"_letsManaged":{"statusLine":true}}`, StatusLineForeign},
 		{"direct unmanaged", `{"statusLine":{"command":"lets statusline"}}`, StatusLineLetsDirect},
 		{"bash wrapper", `{"statusLine":{"command":"bash -c 'cat | bash $(git rev-parse --show-toplevel)/.lets/statusline.sh 2>/dev/null'"}}`, StatusLineLetsBashWrapper},
 		{"foreign", `{"statusLine":{"command":"/usr/local/bin/my-status.sh"}}`, StatusLineForeign},

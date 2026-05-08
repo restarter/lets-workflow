@@ -79,15 +79,17 @@ func Run(w io.Writer, rulesPath, projectRoot string) error {
 	return nil
 }
 
-// driftCheck returns a "## LETS Notice" block if installed rules are missing
-// or outdated vs plugin. Empty string otherwise.
+// driftCheck returns a "## LETS Notice" block if installed rules are missing,
+// outdated, or AHEAD of plugin (which would indicate tampering or a stale
+// binary). Empty string otherwise.
 //
 // Cases:
 //   - plugin rules path empty / unreadable / no version → silent (nothing to compare)
 //   - installed rules file absent → "rules not installed"
 //   - installed file present but no parseable version → "rules version unknown"
 //   - installed.version < plugin.version → "rules outdated"
-//   - installed.version >= plugin.version (incl. future drift) → silent
+//   - installed.version > plugin.version → "rules ahead of plugin" (tampering or stale binary signal)
+//   - installed.version == plugin.version → silent
 func driftCheck(pluginRulesPath, projectRoot string) string {
 	pluginVer := frontmatter.ReadVersion(pluginRulesPath)
 	if pluginVer == "" {
@@ -101,8 +103,15 @@ func driftCheck(pluginRulesPath, projectRoot string) string {
 	if installedVer == "" {
 		return "## LETS Notice\n\nWorkflow rules version unknown - rules may be outdated. Run `/lets:init` to refresh."
 	}
-	if semver.Compare("v"+installedVer, "v"+pluginVer) < 0 {
+	switch semver.Compare("v"+installedVer, "v"+pluginVer) {
+	case -1:
 		return fmt.Sprintf("## LETS Notice\n\nWorkflow rules outdated (installed v%s < plugin v%s). Run `/lets:init` to update.", installedVer, pluginVer)
+	case 1:
+		// Installed > plugin: either someone hand-edited the rules file
+		// (possibly to bypass the drift check while neutering rules content)
+		// or the lets binary is older than the rules. Either way, surface it
+		// instead of silently honoring the installed version.
+		return fmt.Sprintf("## LETS Notice\n\nWorkflow rules AHEAD of plugin (installed v%s > plugin v%s). Verify the rules file integrity (rules tampering signal) or upgrade the lets binary. Run `/lets:init` to reset to plugin version.", installedVer, pluginVer)
 	}
 	return ""
 }
