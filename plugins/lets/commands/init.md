@@ -61,13 +61,14 @@ AskUserQuestion(
     options: [
       { label: "English", description: "Default" },
       { label: "Ukrainian", description: "Українська" },
-      { label: "Italian", description: "Italiano" }
+      { label: "Spanish", description: "Español" },
+      { label: "Chinese", description: "中文" }
     ],
     multiSelect: false
   }]
 )
 
-Bind selected label to `$LANG`. "Other" free-text → use as-is.
+Bind selected label to `$LANG`. "Other" free-text (auto-added by tool) → use as-is for any other language (Polski, Deutsch, Français, Русский, 日本語, Português, etc.).
 
 ### 2b. Detect PR flow
 
@@ -219,13 +220,14 @@ AskUserQuestion(
     options: [
       { label: "Keep current", description: "Currently: $CURRENT_LANG" },
       { label: "English", description: "Default" },
-      { label: "Ukrainian", description: "Українська" }
+      { label: "Ukrainian", description: "Українська" },
+      { label: "Spanish", description: "Español" }
     ],
     multiSelect: false
   }]
 )
 
-If "Keep current" picked, substitute `$LANG = $CURRENT_LANG`. Else use selected label.
+If "Keep current" picked, substitute `$LANG = $CURRENT_LANG`. Else use selected label. "Other" free-text (auto-added by tool) for Chinese / Polski / Deutsch / etc. — use as-is.
 
 Repeat for MergeBranch (`$BRANCH`) and PRFlow (`$FLOW`).
 
