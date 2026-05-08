@@ -75,6 +75,32 @@ func TestMigrateStatuslineSh_DeletesShim(t *testing.T) {
 	}
 }
 
+func TestMigrateStatuslineSh_DeletesLegacyBash(t *testing.T) {
+	// Closes B12 from the 2026-05-08 review: legacy bash branch of
+	// MigrateStatuslineSh was untested. Without this guard, a future tightening
+	// of detectStatuslineSh's size/marker heuristics could silently flip
+	// legacy-bash files to StatuslineForeign, causing migration to no-op
+	// while users stay on broken bash.
+	tmp := t.TempDir()
+	letsDir := filepath.Join(tmp, ".lets")
+	os.MkdirAll(letsDir, 0o755)
+	shimPath := filepath.Join(letsDir, "statusline.sh")
+	// Reuses makeLegacyBash from state_test.go (same package).
+	if err := os.WriteFile(shimPath, makeLegacyBash(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	msg, err := MigrateStatuslineSh(tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(msg, "removed") {
+		t.Errorf("msg = %q, want 'removed' for legacy bash", msg)
+	}
+	if _, err := os.Stat(shimPath); !os.IsNotExist(err) {
+		t.Errorf("legacy bash shim still present (migration should have deleted)")
+	}
+}
+
 func TestMigrateStatuslineSh_PreservesForeign(t *testing.T) {
 	tmp := t.TempDir()
 	letsDir := filepath.Join(tmp, ".lets")
@@ -176,6 +202,31 @@ func TestEnsureGitignore_AppendMissing(t *testing.T) {
 	data2, _ := os.ReadFile(gitignore)
 	if strings.Count(string(data2), ".lets/") != 1 {
 		t.Errorf("idempotency broken, count = %d", strings.Count(string(data2), ".lets/"))
+	}
+}
+
+func TestEnsureGitignore_CreatesFromScratch(t *testing.T) {
+	// Closes S16 from the 2026-05-08 review: the absent-file path of
+	// EnsureGitignore (most common case for `lets init` on a fresh repo!)
+	// was uncovered. Coverage was 91.7%, missing exactly this branch.
+	tmp := t.TempDir()
+	gitignore := filepath.Join(tmp, ".gitignore")
+	if _, err := os.Stat(gitignore); !os.IsNotExist(err) {
+		t.Fatalf("test setup invariant violated: .gitignore should not exist yet")
+	}
+
+	if err := EnsureGitignore(tmp, []string{".lets/", ".beads/", ".worktrees/"}); err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := os.ReadFile(gitignore)
+	if err != nil {
+		t.Fatalf(".gitignore not created: %v", err)
+	}
+	for _, want := range []string{".lets/", ".beads/", ".worktrees/"} {
+		if !strings.Contains(string(data), want) {
+			t.Errorf("missing %q in fresh .gitignore: %s", want, data)
+		}
 	}
 }
 

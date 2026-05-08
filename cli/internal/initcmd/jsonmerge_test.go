@@ -86,23 +86,53 @@ func TestSetStatusLineManaged_BackupCreated(t *testing.T) {
 	if string(bak) != initial {
 		t.Errorf(".bak content mismatch: got %q, want %q", bak, initial)
 	}
+	// S17 (review 2026-05-08): settings.json may contain unrelated user
+	// fields (auth tokens, custom commands). Backup must not widen permissions.
+	fi, err := os.Stat(path + ".bak")
+	if err != nil {
+		t.Fatalf("stat .bak: %v", err)
+	}
+	if mode := fi.Mode().Perm(); mode != 0o600 {
+		t.Errorf(".bak mode = %o, want 0600 (no group/world access)", mode)
+	}
 }
 
 func TestSetStatusLineManaged_BackupOverwritten(t *testing.T) {
+	// N13 (review 2026-05-08): originally only checked .bak existed, which
+	// is satisfied even if the second run leaves stale pre-first-run content.
+	// Verify the .bak content actually rotates - i.e. after run-2, .bak
+	// reflects the post-run-1 state, NOT the pre-run-1 state.
 	path := filepath.Join(t.TempDir(), "settings.json")
-	if err := os.WriteFile(path, []byte(`{"statusLine":{"command":"lets statusline"}}`), 0o644); err != nil {
+	preRun1 := `{"statusLine":{"command":"lets statusline"}}`
+	if err := os.WriteFile(path, []byte(preRun1), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := SetStatusLineManaged(path); err != nil {
+		t.Fatalf("run 1: %v", err)
+	}
+
+	// Snapshot the post-run-1 state - this is what should land in .bak
+	// after the second run.
+	postRun1, err := os.ReadFile(path)
+	if err != nil {
 		t.Fatal(err)
 	}
-	// Run again - second run should overwrite .bak with the result of first run
+
+	// Mutate path between runs so we can prove .bak rotated (not just exists).
+	if err := os.WriteFile(path, []byte(`{"between":"runs"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
 	if err := SetStatusLineManaged(path); err != nil {
-		t.Fatal(err)
+		t.Fatalf("run 2: %v", err)
 	}
-	// Just verify .bak exists and is not stale
-	if _, err := os.Stat(path + ".bak"); err != nil {
-		t.Errorf(".bak missing after second run: %v", err)
+
+	bak, err := os.ReadFile(path + ".bak")
+	if err != nil {
+		t.Fatalf(".bak missing after second run: %v", err)
+	}
+	if string(bak) != `{"between":"runs"}` {
+		t.Errorf(".bak content didn't rotate.\n got:  %s\n want: %s\n(post-run-1 was: %s)", bak, `{"between":"runs"}`, postRun1)
 	}
 }
 

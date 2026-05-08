@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/restarter/lets-workflow/cli/internal/version"
 )
 
 func TestRenderLines_HasBranchAndModel(t *testing.T) {
@@ -72,11 +74,15 @@ func TestRenderLines_NoContextNoUsage(t *testing.T) {
 }
 
 func TestRenderLines_VersionInHeader(t *testing.T) {
+	// N12 (review 2026-05-08): old assertion `Contains(out, "v")` was a
+	// tautology - any output containing letter v passed. Bind to the actual
+	// version string so a regression that drops the version entirely fails.
 	var buf bytes.Buffer
 	_ = renderLines(&buf, Input{}, "br", "", usage{})
 	out := buf.String()
-	if !strings.Contains(out, "v") {
-		t.Errorf("expected version prefix 'v' in output: %q", out)
+	want := "v" + version.Version
+	if !strings.Contains(out, want) {
+		t.Errorf("expected %q in output: %q", want, out)
 	}
 }
 

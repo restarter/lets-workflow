@@ -52,6 +52,40 @@ func TestHookSessionStart_E2E(t *testing.T) {
 	}
 }
 
+// TestHookSessionStart_PreCompact_OutputParity locks the contract that the
+// two hook subcommands produce byte-identical output today (they share
+// runHookSessionPipeline). Future PreCompact-specific divergence should
+// be intentional - this test forces the change to be visible by failing,
+// rather than letting one subcommand silently drift while the other
+// stays correct. Closes S15 from the 2026-05-08 review.
+func TestHookSessionStart_PreCompact_OutputParity(t *testing.T) {
+	dir := t.TempDir()
+	rulesPath := filepath.Join(dir, "rules.md")
+	if err := os.WriteFile(rulesPath, []byte("---\nversion: 0.4.0\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	run := func(t *testing.T, sub string) string {
+		t.Helper()
+		root := cli.NewRootCmd()
+		root.SetArgs([]string{"hook", sub, "--rules=" + rulesPath})
+		var buf bytes.Buffer
+		root.SetOut(&buf)
+		root.SetErr(&buf)
+		if err := root.Execute(); err != nil {
+			t.Fatalf("execute %s: %v", sub, err)
+		}
+		return buf.String()
+	}
+
+	got1 := run(t, "session-start")
+	got2 := run(t, "precompact")
+
+	if got1 != got2 {
+		t.Errorf("session-start vs precompact output diverged.\nsession-start:\n%s\nprecompact:\n%s", got1, got2)
+	}
+}
+
 func TestHookSessionStart_RulesFlagRequired(t *testing.T) {
 	root := cli.NewRootCmd()
 	root.SetArgs([]string{"hook", "session-start"})

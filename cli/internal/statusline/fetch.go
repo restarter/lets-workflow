@@ -12,10 +12,14 @@ import (
 )
 
 const (
-	usageAPIURL = "https://api.anthropic.com/oauth/usage"
-	apiTimeout  = 3 * time.Second // matches bash `curl -m 3`
-	cacheTTL    = 5 * time.Minute
+	apiTimeout = 3 * time.Second // matches bash `curl -m 3`
+	cacheTTL   = 5 * time.Minute
 )
+
+// usageAPIURL is a var (not const) so tests can point fetchUsage at an
+// httptest.Server. Production callers never mutate it. Tests that swap it
+// must restore via t.Cleanup to avoid bleeding between parallel runs.
+var usageAPIURL = "https://api.anthropic.com/oauth/usage"
 
 // httpClient is a package-private HTTP client for usage API fetches.
 //

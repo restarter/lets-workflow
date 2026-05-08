@@ -48,18 +48,39 @@ func DetectProjectRoot() string {
 // repo's `.git`. They differ iff we're inside a worktree. Substring matching
 // on the literal "/worktrees/" path component is fragile (path could legally
 // contain that segment elsewhere), so prefer the path-equality check.
+//
+// Normalize both paths via filepath.Abs before comparing - git returns
+// absolute when run from repo root and relative (e.g. "../../.git") when
+// run from a subdirectory, so the same .git can yield two different raw
+// strings. Without normalization a subfolder of the main repo would be
+// false-positively classified as a worktree (real bug surfaced during
+// Phase 4b smoke testing; fix had been discarded in the revert and is
+// re-applied here).
 func DetectInsideWorktree() bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	gitDir, err := exec.CommandContext(ctx, "git", "rev-parse", "--git-dir").Output()
-	if err != nil {
+
+	resolve := func(arg string) (string, bool) {
+		out, err := exec.CommandContext(ctx, "git", "rev-parse", arg).Output()
+		if err != nil {
+			return "", false
+		}
+		abs, err := filepath.Abs(strings.TrimSpace(string(out)))
+		if err != nil {
+			return "", false
+		}
+		return abs, true
+	}
+
+	gitDir, ok := resolve("--git-dir")
+	if !ok {
 		return false
 	}
-	commonDir, err := exec.CommandContext(ctx, "git", "rev-parse", "--git-common-dir").Output()
-	if err != nil {
+	commonDir, ok := resolve("--git-common-dir")
+	if !ok {
 		return false
 	}
-	return strings.TrimSpace(string(gitDir)) != strings.TrimSpace(string(commonDir))
+	return gitDir != commonDir
 }
 
 // DetectPluginRoot resolves plugin install dir.
