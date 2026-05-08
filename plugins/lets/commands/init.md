@@ -4,34 +4,30 @@ description: Initialize LETS in current project - creates .lets/ structure, conf
 
 # Project Initialization
 
-Per-project LETS setup. Creates `.lets/` structure, config, statusline, and initializes beads.
+Per-project LETS setup. Bridges to `lets init --json` (Go binary) for all filesystem mutation. Slash command captures user prefs via AskUserQuestion, exec's the binary, parses JSON stdout, renders to user.
 
 > **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
 
-> **NOTE:** Step 3 currently invokes the legacy bash `init.sh`. Migration to the Go subcommand `lets init` is tracked in lets-8ilsl. When that ships, replace the bash invocation in Step 3 with `lets init --plugin-root="${CLAUDE_PLUGIN_ROOT}" --language "$LANGUAGE" --merge-branch "$MERGE_BRANCH" --pr-flow "$PR_FLOW"`. The Go path adds drift-aware rules copy, `_letsManaged.statusLine` provenance markers, and atomic settings.json merge.
-
-## Step 1: Check Current State
+## Step 1: Pre-checks
 
 ```bash
-LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-ls -d "$LETS_PROJECT_ROOT/.lets" 2>/dev/null && echo "INITIALIZED" || echo "NOT_INITIALIZED"
-ls "$LETS_PROJECT_ROOT/.lets/.env" 2>/dev/null && echo "CONFIG_EXISTS" || echo "NO_CONFIG"
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "NOT_GIT_REPO"; exit 0; }
+command -v lets >/dev/null 2>&1 || { echo "NO_LETS_BINARY"; exit 0; }
+test -f "$LETS_PROJECT_ROOT/.lets/.env" && echo "ENV_EXISTS" || echo "ENV_ABSENT"
 ```
 
-If already initialized AND config exists:
-> "Project already initialized. Re-running will update statusline and skip existing config."
+Branch on output:
+- `NOT_GIT_REPO` → tell user "Run `git init` first" and stop. NO LETS box.
+- `NO_LETS_BINARY` → tell user "lets binary not found. Run `make install` from the lets-workflow repo or check `$PATH`." NO LETS box.
+- `ENV_ABSENT` → first-time path (Step 2)
+- `ENV_EXISTS` → re-run path (Step 3)
 
-Proceed regardless (idempotent).
+## Step 2: First-time path
 
-## Step 2: Gather Preferences (only if no .env)
+### 2a. Detect language
 
-If `.lets/.env` does NOT exist, gather settings:
+Detect from user's most recent message language. If unclear, ask:
 
-### Language
-
-Detect from user's message language. If unclear, ask:
-
-```
 AskUserQuestion(
   questions=[{
     question: "Response language for this project?",
@@ -44,66 +40,164 @@ AskUserQuestion(
     multiSelect: false
   }]
 )
-```
 
-### GitHub PR Workflow
+Bind selected label to `$LANG`. "Other" free-text → use as-is.
+
+### 2b. Detect PR flow
 
 ```bash
-gh auth status 2>/dev/null
+gh auth status >/dev/null 2>&1 && echo "GH_AUTH" || echo "GH_NONE"
 ```
 
-If gh is authenticated, ask:
-
-```
 AskUserQuestion(
   questions=[{
-    question: "Enable GitHub PR workflow?",
+    question: "PR workflow for this project?",
     header: "LETS",
     options: [
-      { label: "Yes", description: "/lets:done creates PR instead of local merge" },
-      { label: "No", description: "Local merge workflow (default)" }
+      { label: "GitHub", description: "Recommended if gh authenticated; /lets:done creates PR" },
+      { label: "Bitbucket", description: "Bitbucket PR workflow" },
+      { label: "Local", description: "Local merge workflow (default)" }
     ],
     multiSelect: false
   }]
 )
-```
 
-If gh not available: skip, default to false.
+Bind label (lowercased) to `$FLOW`: "GitHub"→"github", "Bitbucket"→"bitbucket", "Local"→"local".
 
-### Merge Branch
+### 2c. Merge branch
 
-Default to `main`. Mention: "Edit `.lets/.env` to change `LETS_MERGE_BRANCH` if needed."
+AskUserQuestion(
+  questions=[{
+    question: "Target branch for merges and PRs?",
+    header: "LETS",
+    options: [
+      { label: "main", description: "Default modern Git convention" },
+      { label: "dev", description: "Develop branch as default merge target" },
+      { label: "master", description: "Legacy default" }
+    ],
+    multiSelect: false
+  }]
+)
 
-## Step 3: Run Init Script
+Bind to `$BRANCH`. "Other" free-text → use as-is.
 
-Build and execute the command:
+### 2d. Exec
 
 ```bash
-bash "${CLAUDE_PLUGIN_ROOT}/scripts/lets/init.sh" \
-  --language "$LANGUAGE" \
-  --merge-branch "$MERGE_BRANCH" \
-  [--github]
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+lets init --json \
+  --plugin-root="${CLAUDE_PLUGIN_ROOT}" \
+  --language="$LANG" \
+  --merge-branch="$BRANCH" \
+  --pr-flow="$FLOW"
 ```
 
-Show script output to user.
+Capture stdout (JSON object).
 
-## Step 4: Handle Result
+### 2e. Render
 
-**Exit 0:** "Project initialized successfully. Restart Claude Code to see the statusline."
+Parse JSON. For each `steps[]` entry, render `[<status>] <message>`.
 
-**Exit 2 (partial):** "Project initialized but beads is not available. Install the beads plugin, then run `/lets:init` again."
+Show summary line: `<ok_count> ok · <skip_count> skip · <migrate_count> migrate · <warn_count> warn · <err_count> err`.
 
-**Exit 1 (fatal):** Show error, suggest fixing the issue.
+If `drift.detected: true` AND `drift.message != ""`, show `drift.message` directly (canonical wording from binary, no slash command formatting needed).
+
+If `ok: false`, show `error` field; do NOT show LETS box.
+
+If `ok: true`, render LETS box (Step 4).
+
+## Step 3: Re-run path
+
+### 3a. Read current config
+
+Read `.lets/.env` via Read tool. Extract:
+- `$CURRENT_LANG` from `LETS_LANGUAGE=...` line
+- `$CURRENT_BRANCH` from `LETS_MERGE_BRANCH=...` line
+- `$CURRENT_FLOW` from `LETS_PR_FLOW=...` line
+
+Show user a one-line summary: "Current: $CURRENT_LANG / $CURRENT_BRANCH / $CURRENT_FLOW".
+
+### 3b. Confirm intent
+
+AskUserQuestion(
+  questions=[{
+    question: "Re-run /lets:init - what to do?",
+    header: "LETS",
+    options: [
+      { label: "Refresh", description: "Self-heal (rules drift, statusline, etc.). Keep current config." },
+      { label: "Change config", description: "Update language / merge branch / PR flow. Backs up current .env." },
+      { label: "Cancel", description: "Stop, no changes." }
+    ],
+    multiSelect: false
+  }]
+)
+
+Branch:
+- **Refresh** → Step 3c
+- **Change config** → Step 3d
+- **Cancel** → stop. NO LETS box.
+
+### 3c. Refresh exec
+
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+lets init --json \
+  --plugin-root="${CLAUDE_PLUGIN_ROOT}" \
+  --language="$CURRENT_LANG" \
+  --merge-branch="$CURRENT_BRANCH" \
+  --pr-flow="$CURRENT_FLOW"
+```
+
+(Binary skips .env step → `env_action.kind=skip`. Other steps self-heal.)
+
+Render per Step 2e.
+
+### 3d. Change config exec
+
+For each of Language / MergeBranch / PRFlow ask AskUserQuestion. First option is "Keep current" with description showing the actual current value:
+
+AskUserQuestion(
+  questions=[{
+    question: "Response language for this project?",
+    header: "LETS",
+    options: [
+      { label: "Keep current", description: "Currently: $CURRENT_LANG" },
+      { label: "English", description: "Default" },
+      { label: "Ukrainian", description: "Українська" }
+    ],
+    multiSelect: false
+  }]
+)
+
+If "Keep current" picked, substitute `$LANG = $CURRENT_LANG`. Else use selected label.
+
+Repeat for MergeBranch (`$BRANCH`) and PRFlow (`$FLOW`).
+
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+lets init --json --force-env \
+  --plugin-root="${CLAUDE_PLUGIN_ROOT}" \
+  --language="$LANG" \
+  --merge-branch="$BRANCH" \
+  --pr-flow="$FLOW"
+```
+
+Render per Step 2e. JSON's `env_action.changed_keys` shows what changed; `env_action.backup_path` shows `.env.bak` location — surface both to user.
+
+## Step 4: Output
+
+If `ok: true`:
+
+```
+┌─ LETS ─────────────────┐
+│  Start?  /lets:start   │
+└────────────────────────┘
+```
+
+If `ok: false` or user picked Cancel: NO LETS box. Plain-text status only.
 
 ## Rules
 
-- Respond in user's language
-- Idempotent: safe to re-run anytime
-
-## Output
-
-```
-┌─ LETS ─────────────────────────┐
-│  Start?  /lets:start           │
-└────────────────────────────────┘
-```
+- Respond in user's language ($LETS_LANGUAGE)
+- Idempotent: re-running on the same project is safe
+- Binary backs up .env automatically when --force-env runs (single .env.bak, overwriting any previous)
