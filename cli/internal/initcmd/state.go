@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/restarter/lets-workflow/cli/internal/gitutil"
 )
 
 // StatuslineState classifies what's at .lets/statusline.sh.
@@ -34,15 +36,10 @@ const (
 	StatusLineForeign                                     // user-customized, no LETS markers
 )
 
-// DetectProjectRoot returns git toplevel or empty string.
+// DetectProjectRoot returns git toplevel or empty string. 2s timeout because
+// `lets init` runs interactively and a hung git would block visibly.
 func DetectProjectRoot() string {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, "git", "rev-parse", "--show-toplevel").Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
+	return gitutil.ProjectRoot("", 2*time.Second)
 }
 
 // DetectInsideWorktree returns true if the current dir is inside a git worktree

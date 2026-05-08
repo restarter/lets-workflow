@@ -17,6 +17,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/restarter/lets-workflow/cli/internal/gitutil"
 )
 
 // Input mirrors the JSON Claude Code pipes to the statusline command.
@@ -83,18 +85,14 @@ func RunFetchOnly(cacheDir string) error {
 
 // detectProjectRoot wraps `git -C <dir> rev-parse --show-toplevel`.
 // Returns empty string on failure (caller falls back to dir).
+//
+// 1-second timeout because statusline renders frequently and any git lag
+// would visibly stall the bottom bar.
 func detectProjectRoot(dir string) string {
 	if dir == "" {
 		return ""
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", "-C", dir, "rev-parse", "--show-toplevel")
-	out, err := cmd.Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
+	return gitutil.ProjectRoot(dir, 1*time.Second)
 }
 
 // detectBranch returns the symbolic branch name or short SHA if detached.

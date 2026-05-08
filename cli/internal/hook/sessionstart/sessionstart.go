@@ -15,14 +15,14 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
+	"time"
 
 	"golang.org/x/mod/semver"
 
 	"github.com/restarter/lets-workflow/cli/internal/envfile"
 	"github.com/restarter/lets-workflow/cli/internal/frontmatter"
+	"github.com/restarter/lets-workflow/cli/internal/gitutil"
 )
 
 // configKeys is the whitelist of LETS_* keys read from .env, in the fixed
@@ -108,17 +108,18 @@ func driftCheck(pluginRulesPath, projectRoot string) string {
 }
 
 // DetectProjectRoot returns the git toplevel for the current working
-// directory. Falls back to os.Getwd() if git is unavailable or the cwd is
-// not in a git repo. Returns empty string if both fail.
+// directory, or empty string if git is unavailable or cwd is not in a repo.
+//
+// Bash parity (matches old session-start.sh `git rev-parse --show-toplevel
+// 2>/dev/null` semantics): no os.Getwd() fallback. Empty result triggers
+// Run() to emit nothing, which is the correct behavior for "user opened
+// Claude Code outside any project" - downstream commands assume the value
+// is a real project root and would otherwise mutate the user's $HOME or cwd.
+//
+// 2-second timeout because the hook fires on every SessionStart and a
+// hanging git would noticeably delay Claude Code startup.
 func DetectProjectRoot() string {
-	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
-	if out, err := cmd.Output(); err == nil {
-		return strings.TrimSpace(string(out))
-	}
-	if cwd, err := os.Getwd(); err == nil {
-		return cwd
-	}
-	return ""
+	return gitutil.ProjectRoot("", 2*time.Second)
 }
 
 // readEnvFile parses the .env file at path. A missing file is not an error -

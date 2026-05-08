@@ -31,10 +31,6 @@ type Step struct {
 	Message string
 }
 
-// RunOptions reserves space for future runtime tuning (verbosity, dry-run).
-// Currently empty - all behavior is driven by Prefs and arguments.
-type RunOptions struct{}
-
 // Run executes init in linear order. Idempotent. Refuses if projectRoot is
 // $HOME or filesystem root.
 //
@@ -46,7 +42,7 @@ type RunOptions struct{}
 // render returned steps even on error so the user sees what was already
 // done. Soft warnings (bd not found, foreign statusline) become Steps with
 // status StepWarn / StepMigrate, not errors.
-func Run(ctx context.Context, prefs Prefs, _ RunOptions, projectRoot, pluginRoot string) ([]Step, error) {
+func Run(ctx context.Context, prefs Prefs, projectRoot, pluginRoot string) ([]Step, error) {
 	if err := guardProjectRoot(projectRoot); err != nil {
 		return nil, err
 	}

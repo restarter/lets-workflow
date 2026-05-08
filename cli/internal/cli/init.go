@@ -87,7 +87,7 @@ out with --plugin-root=${CLAUDE_PLUGIN_ROOT} plus the chosen flags.`,
 				prefs.PRFlow = "local"
 			}
 
-			steps, err := initcmd.Run(ctx, prefs, initcmd.RunOptions{}, projectRoot, pluginRoot)
+			steps, err := initcmd.Run(ctx, prefs, projectRoot, pluginRoot)
 			initcmd.PrintSteps(cmd.OutOrStdout(), steps) // print even on partial failure
 			return err
 		},

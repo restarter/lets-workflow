@@ -18,7 +18,7 @@ func TestRun_FreshProject(t *testing.T) {
 	pluginRoot := setupFakePluginRoot(t)
 
 	prefs := Prefs{Language: "English", MergeBranch: "main", PRFlow: "local", SkipBeads: true}
-	steps, err := Run(context.Background(), prefs, RunOptions{}, tmp, pluginRoot)
+	steps, err := Run(context.Background(), prefs, tmp, pluginRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,10 +56,10 @@ func TestRun_Idempotent(t *testing.T) {
 	pluginRoot := setupFakePluginRoot(t)
 	prefs := Prefs{Language: "English", MergeBranch: "main", PRFlow: "local", SkipBeads: true}
 
-	if _, err := Run(context.Background(), prefs, RunOptions{}, tmp, pluginRoot); err != nil {
+	if _, err := Run(context.Background(), prefs, tmp, pluginRoot); err != nil {
 		t.Fatal(err)
 	}
-	steps, err := Run(context.Background(), prefs, RunOptions{}, tmp, pluginRoot)
+	steps, err := Run(context.Background(), prefs, tmp, pluginRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestRun_Idempotent(t *testing.T) {
 func TestRun_RefusesHome(t *testing.T) {
 	home, _ := os.UserHomeDir()
 	prefs := Prefs{Language: "English", MergeBranch: "main", PRFlow: "local", SkipBeads: true}
-	_, err := Run(context.Background(), prefs, RunOptions{}, home, "/tmp")
+	_, err := Run(context.Background(), prefs, home, "/tmp")
 	if err == nil || !strings.Contains(err.Error(), "$HOME") {
 		t.Errorf("expected $HOME refusal, got %v", err)
 	}
@@ -85,7 +85,7 @@ func TestRun_RefusesHome(t *testing.T) {
 
 func TestRun_RefusesRoot(t *testing.T) {
 	prefs := Prefs{Language: "English", MergeBranch: "main", PRFlow: "local", SkipBeads: true}
-	_, err := Run(context.Background(), prefs, RunOptions{}, "/", "/tmp")
+	_, err := Run(context.Background(), prefs, "/", "/tmp")
 	if err == nil || !strings.Contains(err.Error(), "filesystem root") {
 		t.Errorf("expected root refusal, got %v", err)
 	}
