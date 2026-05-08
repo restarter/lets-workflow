@@ -47,6 +47,9 @@ func NewHookSessionStartCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().String("rules", "", "Path to plugin's rules/lets-rules.md (for drift check)")
+	// MarkFlagRequired returns an error only if the flag name is wrong (typo);
+	// the flag IS defined immediately above, so any error is a programmer bug
+	// and would surface during dev. Intentional swallow.
 	_ = cmd.MarkFlagRequired("rules")
 	return cmd
 }

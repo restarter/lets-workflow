@@ -11,3 +11,7 @@
 
 # Coverage
 coverage.out
+coverage.html
+
+# Profile output (pprof)
+*.prof

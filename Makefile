@@ -4,7 +4,12 @@
 # If make targets fail in cmd.exe, run from Git Bash or WSL.
 # When a Windows contributor needs proper detection, see beads/Makefile pattern.
 
-.PHONY: all build test vet lint fmt fmt-check install install-go clean help
+# Pin shell to /bin/sh - GNU Make defaults vary across platforms (cmd.exe on
+# Windows, /bin/sh elsewhere). Pinning gives a clear "shell not found" error on
+# pure cmd.exe instead of a cascade of confusing recipe failures.
+SHELL := /bin/sh
+
+.PHONY: all build test test-fast vet lint fmt fmt-check install install-go clean help
 
 CLI_DIR := cli
 
@@ -27,7 +32,8 @@ all: build
 help:
 	@echo "Targets:"
 	@echo "  build           - Build cli/lets binary (-trimpath, ldflags from git tag if present)"
-	@echo "  test            - Run cli unit tests with -race"
+	@echo "  test            - Run cli unit tests with -race (needs CGO + C compiler)"
+	@echo "  test-fast       - Run cli unit tests without -race (no CGO required)"
 	@echo "  vet             - Run go vet"
 	@echo "  lint            - Run golangci-lint (requires it installed)"
 	@echo "  fmt             - Run gofmt -w -s"
@@ -40,7 +46,14 @@ build:
 	cd $(CLI_DIR) && go build -trimpath $(LDFLAGS) -o lets ./cmd/lets
 
 test:
+	@command -v cc >/dev/null 2>&1 || command -v clang >/dev/null 2>&1 || command -v gcc >/dev/null 2>&1 || \
+		(echo "Error: -race requires a C compiler. Install Xcode CLT (macOS: xcode-select --install) or build-essential (Linux), or use 'make test-fast'." && exit 1)
 	cd $(CLI_DIR) && go test -race ./...
+
+# test-fast: skip race detector (no CGO required). For CI environments without
+# C toolchain, or quick local iteration. Production CI should still run `make test`.
+test-fast:
+	cd $(CLI_DIR) && go test ./...
 
 vet:
 	cd $(CLI_DIR) && go vet ./...
@@ -55,13 +68,14 @@ fmt-check:
 	@cd $(CLI_DIR) && test -z "$$(gofmt -l .)" || (echo "Code not formatted - run 'make fmt'" && gofmt -l . && exit 1)
 
 install: build
-	@if [ -w /usr/local/bin ]; then \
+	@if [ -d /usr/local/bin ] && [ -w /usr/local/bin ]; then \
 		install_dir="/usr/local/bin"; \
 	else \
 		install_dir="$$HOME/.local/bin"; \
 		mkdir -p "$$install_dir"; \
+		echo "Note: /usr/local/bin not writable - installing to user-local prefix"; \
 	fi; \
-	cp $(CLI_DIR)/lets "$$install_dir/lets" && \
+	install -m 0755 $(CLI_DIR)/lets "$$install_dir/lets" && \
 	echo "Installed: $$install_dir/lets" && \
 	case ":$$PATH:" in \
 		*":$$install_dir:"*) ;; \
