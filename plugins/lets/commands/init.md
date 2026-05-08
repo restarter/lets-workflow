@@ -11,16 +11,42 @@ Per-project LETS setup. Bridges to `lets init --json` (Go binary) for all filesy
 ## Step 1: Pre-checks
 
 ```bash
-LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "NOT_GIT_REPO"; exit 0; }
 command -v lets >/dev/null 2>&1 || { echo "NO_LETS_BINARY"; exit 0; }
-test -f "$LETS_PROJECT_ROOT/.lets/.env" && echo "ENV_EXISTS" || echo "ENV_ABSENT"
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || echo "NOT_GIT_REPO"
+if [ -n "$LETS_PROJECT_ROOT" ]; then
+  test -f "$LETS_PROJECT_ROOT/.lets/.env" && echo "ENV_EXISTS" || echo "ENV_ABSENT"
+  test -d "$LETS_PROJECT_ROOT/.beads" && echo "BEADS_EXISTS" || echo "BEADS_ABSENT"
+fi
 ```
 
 Branch on output:
-- `NOT_GIT_REPO` → tell user "Run `git init` first" and stop. NO LETS box.
-- `NO_LETS_BINARY` → tell user "lets binary not found. Run `make install` from the lets-workflow repo or check `$PATH`." NO LETS box.
-- `ENV_ABSENT` → first-time path (Step 2)
-- `ENV_EXISTS` → re-run path (Step 3)
+- `NO_LETS_BINARY` → tell user "lets binary not found. Run `make install` from the lets-workflow repo or check `$PATH`." NO LETS box. STOP.
+- `NOT_GIT_REPO` → ask user via AskUserQuestion (Step 1a below). If user picks "Init git" → run `git init`, recompute LETS_PROJECT_ROOT, ENV_ABSENT/BEADS_ABSENT (both will be absent for fresh repo). If "Cancel" → stop, NO LETS box.
+- `ENV_ABSENT` → first-time path (Step 2). Use `BEADS_ABSENT`/`BEADS_EXISTS` to decide whether to ask about beads init in Step 2c-bis.
+- `ENV_EXISTS` → re-run path (Step 3). Don't re-ask about beads — `lets init` self-heals (StepSkip if already inited; StepWarn if bd not on PATH).
+
+### 1a. Git init prompt (only if NOT_GIT_REPO)
+
+AskUserQuestion(
+  questions=[{
+    question: "This directory is not a git repository. Initialize git here?",
+    header: "LETS",
+    options: [
+      { label: "Init git", description: "Run `git init` here and continue with /lets:init (LETS workflow assumes git)" },
+      { label: "Cancel", description: "Stop. Run `git init` manually first or cd to a git repo." }
+    ],
+    multiSelect: false
+  }]
+)
+
+If "Init git":
+```bash
+git init -q
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+```
+Then proceed with first-time path (ENV_ABSENT, BEADS_ABSENT both true for fresh repo).
+
+If "Cancel" → STOP. NO LETS box.
 
 ## Step 2: First-time path
 
@@ -81,6 +107,27 @@ AskUserQuestion(
 
 Bind to `$BRANCH`. "Other" free-text → use as-is.
 
+### 2c-bis. Beads init prompt (only if BEADS_ABSENT from Step 1)
+
+If `BEADS_ABSENT`:
+
+AskUserQuestion(
+  questions=[{
+    question: "Initialize beads (cross-session task tracking)?",
+    header: "LETS",
+    options: [
+      { label: "Init beads", description: "Recommended: LETS workflow uses beads for task IDs, dependencies, and persistent memory" },
+      { label: "Skip beads", description: "Don't init now. You can run `bd init` later — `lets init` self-heals on next run" }
+    ],
+    multiSelect: false
+  }]
+)
+
+If "Init beads" → set `$SKIP_BEADS_FLAG=""`.
+If "Skip beads" → set `$SKIP_BEADS_FLAG="--skip-beads"`.
+
+If `BEADS_EXISTS` (re-init scenario where someone removed .lets/ but kept .beads/) → set `$SKIP_BEADS_FLAG=""` (binary will report StepSkip "already initialized" — no harm).
+
 ### 2d. Exec
 
 ```bash
@@ -89,7 +136,8 @@ lets init --json \
   --plugin-root="${CLAUDE_PLUGIN_ROOT}" \
   --language="$LANG" \
   --merge-branch="$BRANCH" \
-  --pr-flow="$FLOW"
+  --pr-flow="$FLOW" \
+  $SKIP_BEADS_FLAG
 ```
 
 Capture stdout (JSON object).
