@@ -35,8 +35,13 @@ const (
 func renderLines(w io.Writer, in Input, branch, folder string, u usage) error {
 	sep := ansiSepGold + separatorAngle + ansiReset
 
-	// Line 1
-	fmt.Fprintf(w, "%s %sLETS Workflow v%s%s", leafEmoji, ansiBoldGold, version.Version, ansiReset)
+	// Line 1 — `v` prefix elided for untagged dev builds (renders as
+	// "LETS Workflow dev" instead of awkward "LETS Workflow vdev").
+	versionDisplay := version.Version
+	if !version.IsDev() {
+		versionDisplay = "v" + versionDisplay
+	}
+	fmt.Fprintf(w, "%s %sLETS Workflow %s%s", leafEmoji, ansiBoldGold, versionDisplay, ansiReset)
 	fmt.Fprint(w, sep)
 	branchOrFolder := branch
 	if branchOrFolder == "" {

@@ -77,10 +77,15 @@ func TestRenderLines_VersionInHeader(t *testing.T) {
 	// N12 (review 2026-05-08): old assertion `Contains(out, "v")` was a
 	// tautology - any output containing letter v passed. Bind to the actual
 	// version string so a regression that drops the version entirely fails.
+	//
+	// Dev builds render as "dev" (no v prefix); tagged builds as "vX.Y.Z".
 	var buf bytes.Buffer
 	_ = renderLines(&buf, Input{}, "br", "", usage{})
 	out := buf.String()
-	want := "v" + version.Version
+	want := version.Version
+	if !version.IsDev() {
+		want = "v" + want
+	}
 	if !strings.Contains(out, want) {
 		t.Errorf("expected %q in output: %q", want, out)
 	}
