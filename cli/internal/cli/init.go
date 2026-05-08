@@ -45,6 +45,12 @@ settings.json statusLine, .lets/config.yaml -> .lets/.env).
 This is an internal subcommand. The supported entry point is the /lets:init
 slash command, which captures user preferences in Claude Code and shells
 out with --plugin-root=${CLAUDE_PLUGIN_ROOT} plus the chosen flags.`,
+		// SilenceUsage prevents cobra from appending the Usage block to stdout
+		// after RunE error — would corrupt the JSON envelope. SilenceErrors
+		// prevents cobra from prefixing "Error: ..." to stderr (we set
+		// result.Error in the envelope; main.go can still print to stderr).
+		SilenceUsage:  true,
+		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := cmd.Context()
 			if ctx == nil {
