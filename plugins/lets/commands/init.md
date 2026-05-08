@@ -102,6 +102,14 @@ Show summary line: `<ok_count> ok · <skip_count> skip · <migrate_count> migrat
 
 If `drift.detected: true` AND `drift.message != ""`, show `drift.message` directly (canonical wording from binary, no slash command formatting needed).
 
+**Restart hint** — scan `steps[]` for messages containing `statusLine ->`, `_letsManaged marker added`, `.claude/rules/lets-rules.md installed`, or `.claude/rules/lets-rules.md updated`. If ANY match → show hint right before the LETS box:
+
+```
+⚠️  Restart Claude Code to apply statusline + rules changes (Cmd+R, or quit and reopen).
+```
+
+If no match (everything skipped or only `.env` updated) → no hint, just LETS box.
+
 If `ok: false`, show `error` field; do NOT show LETS box.
 
 If `ok: true`, render LETS box (Step 4).
