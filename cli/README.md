@@ -107,10 +107,16 @@ Internal subcommand. Designed to be invoked by the `/lets:init` slash command, w
 lets init \
   --plugin-root "${CLAUDE_PLUGIN_ROOT}" \
   --language English --merge-branch main --pr-flow local \
-  [--skip-beads]
+  [--skip-beads] [--json] [--force-env]
 ```
 
-Required: `--plugin-root` (or `$CLAUDE_PLUGIN_ROOT`). Other flags default sensibly. `--github` is a deprecated alias for `--pr-flow=github`.
+Required: `--plugin-root` (or `$CLAUDE_PLUGIN_ROOT`). Other flags default sensibly via `letsconfig.Defaults()`. `--github` is a deprecated alias for `--pr-flow=github`.
+
+Flags:
+- `--language`, `--merge-branch`, `--pr-flow` — preference flags. Defaults flow from `letsconfig.Defaults()`.
+- `--skip-beads` — skip the final `bd init` step.
+- `--json` — emit machine-readable JSON to stdout (single object, schema_version=1). Slash command `/lets:init` consumes this.
+- `--force-env` — surgically update existing `.lets/.env` (LETS_* keys only, preserves comments/foreign keys). Writes single `.env.bak` overwriting any previous backup.
 
 What it does (idempotent, linear):
 
@@ -118,10 +124,26 @@ What it does (idempotent, linear):
 2. Adds `.lets/`, `.beads/`, `.worktrees/` to `.gitignore`
 3. Migrates legacy `.lets/statusline.sh` (deletes the per-project shim if it matches the embedded snapshot — see `internal/initcmd/embedded_statusline_shim.sh`)
 4. Migrates legacy `.lets/config.yaml` → `.lets/.env` (preserves user values via allowlist regex)
-5. Writes `.lets/.env` (if absent) with chosen prefs
-6. Refreshes `.lets/.env.example` from plugin template
+5. Writes `.lets/.env` (if absent) with chosen prefs. With `--force-env`, surgically updates LETS_* keys preserving comments and foreign keys (writes `.env.bak`)
+6. Refreshes `.lets/.env.example` from canonical `letsconfig.Keys` defaults via `renderEnvExample()` (no plugin template file — single source of truth)
 7. Mutates `.claude/settings.json` to set `statusLine.command = "lets statusline"` with `_letsManaged.statusLine: true` provenance marker (atomic write + `.bak`)
-8. Copies plugin rules → `<project>/.claude/rules/lets-rules.md` (frontmatter-version-aware: install / upgrade / skip)
+8. Copies plugin rules → `<project>/.claude/rules/lets-rules.md` using `drift.Check` (semver-aware: install / upgrade / skip)
 9. Runs `bd init` (60s timeout) unless `--skip-beads`
 
 Refuses: from a worktree (`--git-dir != --git-common-dir`), in `$HOME`, or in filesystem root `/`.
+
+### `lets init --json` contract
+
+- **stdout:** Always a single JSON object terminated by newline. Valid JSON even on Run() failure (`ok: false`, `error: "..."`). `steps` array contains work completed before the error (partial-completion contract).
+- **stderr:** Cobra suppresses both Usage and Error blocks (`SilenceUsage` + `SilenceErrors`). Human-readable error duplicates `result.Error`; non-JSON consumers can read `cmd.ErrOrStderr()`.
+- **exit code:** 0 on success, non-zero on Run() error. Slash command consumes stdout; ignore stderr.
+- **schema_version:** Currently 1. Bump on field removal or semantic change. Additions are minor (consumers ignore unknown fields). `TestResult_SchemaContract` enforces awareness of any addition.
+
+### Regenerating goldens
+
+```bash
+go test ./internal/initcmd -run TestRenderEnv_Golden -update
+git diff cli/internal/initcmd/testdata/golden_env_*.txt
+```
+
+Goldens lock the exact byte output of `renderEnv`. After legitimate changes (new key in `letsconfig.Keys`, comment update), regenerate and commit the diff. `TestRenderEnv_NonEmptyValues` and `TestRenderEnvExample_Output` provide commit-time guards independent of golden contents.

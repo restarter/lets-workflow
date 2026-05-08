@@ -14,8 +14,7 @@ plugins/lets/                     # Plugin payload (everything ${CLAUDE_PLUGIN_R
 ├── agents/                       #   14 expert agents dispatched by review/opinion/ask/plan/brainstorm/team
 ├── skills/                       #   Reusable skills (user-facing auto-triggered + internal referenced by commands)
 ├── rules/lets-rules.md           #   Workflow rules (frontmatter `version`; copied to .claude/rules/ by `lets init`)
-├── hooks/                        #   SessionStart + PreCompact hooks (drift check + LETS Config only - no rules in stdout)
-└── scripts/lets/                 #   Legacy bash scripts kept for `/lets:init` slash command (init.sh, statusline.sh) - cleanup deferred to lets-8ilsl
+└── hooks/                        #   SessionStart + PreCompact hooks (drift check + LETS Config only - no rules in stdout)
 cli/                              # Go CLI - companion binary (Phase 2+, lets-7vtaw)
 ├── cmd/lets/main.go              #   Entry point (thin)
 ├── internal/cli/                 #   Cobra command factories (root.go, version.go, *_test.go)
@@ -31,7 +30,7 @@ docs/                             # Plans, knowledge base, reference docs, comme
 reference/                        # Reference plugins for studying patterns (gitignored)
 ```
 
-References that resolve via `${CLAUDE_PLUGIN_ROOT}` (e.g. `${CLAUDE_PLUGIN_ROOT}/skills/X/SKILL.md`, `${CLAUDE_PLUGIN_ROOT}/scripts/lets/init.sh`) continue to work unchanged - the env var now points at `plugins/lets/`.
+References that resolve via `${CLAUDE_PLUGIN_ROOT}` (e.g. `${CLAUDE_PLUGIN_ROOT}/skills/X/SKILL.md`) work as before - the env var points at `plugins/lets/`.
 
 ## Key Concepts
 
@@ -43,7 +42,7 @@ References that resolve via `${CLAUDE_PLUGIN_ROOT}` (e.g. `${CLAUDE_PLUGIN_ROOT}
 - **Agents** = experts dispatched by commands. `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:brainstorm` dispatch via subagents. `/lets:team` dispatches via Agent Teams (parallel, worktree isolation). `actor` is a meta-agent that loads external personalities (URL or file) and adapts them to LETS modes
 - **Orchestrators** = commands that delegate to other commands. `/lets:pr` orchestrates `/lets:review` for full PR lifecycle
 - **Hooks** = SessionStart + PreCompact inject workflow rules (PreCompact preserves rules across context compaction in long sessions)
-- **Statusline** = `lets statusline` Go subcommand. Project `.claude/settings.json` invokes it directly via `_letsManaged.statusLine` provenance marker. Legacy bash `plugins/lets/scripts/lets/statusline.sh` kept as a thin shim for backward compat (deletion deferred to lets-8ilsl).
+- **Statusline** = `lets statusline` Go subcommand. Project `.claude/settings.json` invokes it directly via `_letsManaged.statusLine` provenance marker. Legacy bash shim `plugins/lets/scripts/lets/statusline.sh` removed in lets-8ilsl. Byte-equal detection of pre-deletion installs (.lets/statusline.sh) handled via the frozen `cli/internal/initcmd/embedded_statusline_shim.sh` snapshot — `MigrateStatuslineSh` deletes matching legacy shims and triggers `SetStatusLineManaged` to point settings.json at `lets statusline`.
 - **Skills** = reusable actions in `skills/<name>/SKILL.md`. Two types: user-facing (auto-discovered, triggered via description match or Skill tool) and internal (not auto-discovered, read by commands via Read tool when needed). Examples: `create-task`, `commit`, `take-task` (user-facing), `detect-task`, `actor-fetch-personality` (internal)
 
 ## Architecture Decisions
@@ -82,7 +81,8 @@ This includes hook debug logs, temp files, and any runtime artifacts.
 
 ```
 .lets/.env               # Per-project settings (LETS_LANGUAGE, LETS_MERGE_BRANCH, LETS_PR_FLOW, LETS_TRACKER)
-.lets/.env.example       # Reference defaults (auto-created from hooks/config-template.env by /lets:init and migration)
+.lets/.env.example       # Reference defaults — generated each `lets init` from canonical letsconfig.Keys defaults via renderEnvExample(). Not used by the hook; it's a user-facing template
+.lets/.env.bak           # Single backup written by `lets init --force-env` before surgical update. Plugin-owned: user-created files at this path are silently overwritten — copy elsewhere for permanent backup
 .lets/sessions/          # Session summaries, session-start-ref
 .lets/reviews/           # Saved review reports
 .lets/plans/             # Implementation plans
@@ -136,18 +136,32 @@ mkdir -p "$LETS_PROJECT_ROOT/.lets/sessions"
 
 `.lets/.env` is `KEY=VALUE` format with comments **above** keys (NOT inline - inline comments would pollute the model's context after the hook strips full-line comments). Migrated from legacy `config.yaml` to `.env` by `lets init` (`cli/internal/initcmd/migrate.go::MigrateYamlToEnv`). The yaml→env auto-migration in the SessionStart hook has been removed (lets-p732a closed). Legacy yaml deprecation removal tracked in `lets-q8xtk`.
 
-**NOT FOR SECRETS.** The SessionStart hook injects the file's whitelisted `LETS_*` values into model context every session. Tokens, passwords, and API keys belong elsewhere: `gh auth login` for GitHub, OS keychain for general secrets, tool-specific credential files (e.g. `.beads/.env` for beads). The whitelist filter in `cli/internal/hook/sessionstart/sessionstart.go` (the `configKeys` slice) only echoes the 4 documented `LETS_*` keys, so unknown keys are filtered - but file mode is 644 (world-readable on disk), so secrets in `.env` would still be exposed locally. Do not add secret keys.
+**NOT FOR SECRETS.** The SessionStart hook injects the file's whitelisted `LETS_*` values into model context every session. Tokens, passwords, and API keys belong elsewhere: `gh auth login` for GitHub, OS keychain for general secrets, tool-specific credential files (e.g. `.beads/.env` for beads). The whitelist filter in `cli/internal/hook/sessionstart/sessionstart.go` calls `letsconfig.Names()` to get the 4 canonical keys, so unknown keys are filtered - but file mode is 644 (world-readable on disk), so secrets in `.env` would still be exposed locally. Do not add secret keys.
 
 ### Adding a new config key
 
-1. Add to `plugins/lets/hooks/config-template.env` with comment ABOVE the key
-2. Add to `cli/internal/initcmd/render.go::renderEnv` (Go path - what `lets init` writes to `.lets/.env`)
-3. Add as a heredoc line in `plugins/lets/scripts/lets/init.sh` (legacy bash path - delete this step after lets-8ilsl ships and bash init.sh is removed)
-4. Add to the whitelist `configKeys` slice in `cli/internal/hook/sessionstart/sessionstart.go`
-5. Document in `plugins/lets/rules/lets-rules.md` Local Config section, then bump frontmatter `version` so SessionStart drift check fires for installed users
-6. Document in this CLAUDE.md "LETS Config keys" table
-7. Document in `README.md` ⚙️ Configuration block (user-facing example)
-8. If the key controls behavior, add the conditional logic in the consuming command(s)
+Single source of truth for canonical metadata: `cli/internal/letsconfig/keys.go::Keys`.
+Single source of truth for Prefs↔Key wiring: `cli/internal/initcmd/render.go::Prefs.AsValues()`.
+
+Required edits:
+
+1. Append `Key{Name, Comment, Default}` entry to `letsconfig.Keys`. Name MUST start with `LETS_`.
+2. Add field to `Prefs` struct in `cli/internal/initcmd/render.go` AND add ONE entry to `Prefs.AsValues()` map (one-line addition right below the field).
+3. Bump frontmatter `version` in `plugins/lets/rules/lets-rules.md` so SessionStart drift check fires for installed users on next session.
+
+If the key is exposed via the `/lets:init` slash command (most are):
+
+4. Add a `--<key>` cobra flag in `cli/internal/cli/init.go` and wire it through `flagOrDefault(flag<X>, defaults["LETS_X"])` in prefs construction.
+5. Add an AskUserQuestion in `plugins/lets/commands/init.md` (Step 2 first-time path + Step 3d "Keep current" option in change-config path).
+
+Auto-derived (no edit needed):
+- `.lets/.env` content (renderEnv → renderTemplate(Header, p.AsValues()))
+- `.lets/.env.example` content (renderEnvExample → renderTemplate(ExampleHeader, Defaults()))
+- SessionStart hook env-injection whitelist (sessionstart imports `letsconfig.Names()`)
+- Surgical update wiring (UpdateEnvKeys uses `p.AsValues()`, iterates `letsconfig.Keys`)
+- Future `/lets:doctor` validation + display
+
+Then document in this CLAUDE.md "LETS Config keys" table + `README.md` Configuration block, and add consuming logic in the relevant commands.
 
 ## Dependencies
 

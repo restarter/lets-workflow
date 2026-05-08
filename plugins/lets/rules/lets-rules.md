@@ -1,6 +1,6 @@
 ---
 name: lets-rules
-version: 0.4.0
+version: 0.5.0
 ---
 
 <!-- DO NOT EDIT - managed by lets init / lets install. To add custom rules, create a sibling *.md file in this directory (e.g. .claude/rules/team-conventions.md). Files prefixed `lets-` are owned by the LETS plugin and overwritten on update. -->
@@ -301,7 +301,7 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:team` | Utility | Parallel implementation with Agent Teams (run, status, stop) |
 | `/lets:note` | Utility | Add note to active task |
 | `/lets:install` | Setup | First-time global setup |
-| `/lets:init`    | Setup | Per-project initialization |
+| `/lets:init`    | Setup | Per-project initialization. Re-run for self-heal (drift fix) or to change config |
 
 ### Auto-triggered Skills
 

@@ -80,7 +80,7 @@ Team:     /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /le
 | `/lets:pr` | Code | PR review lifecycle (review, respond, follow-up, approve) |
 | `/lets:opinion` | Expert | Technical decision needed |
 | `/lets:ask` | Expert | Quick question to one expert |
-| `/lets:init` | Setup | Initialize LETS in a new project |
+| `/lets:init` | Setup | Initialize LETS in a new project; re-run for self-heal or config change |
 | `/lets:worktree` | Utility | Create/manage worktrees for parallel sessions |
 | `/lets:team` | Utility | Parallel implementation with Agent Teams |
 | `/lets:status` | Utility | Task overview anytime |
