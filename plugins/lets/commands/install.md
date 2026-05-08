@@ -12,10 +12,26 @@ One-time setup for new developers. Checks environment, installs plugins, then de
 # Claude Code version
 claude --version
 
+# lets CLI binary (REQUIRED - hooks and statusline invoke it directly)
+lets version 2>/dev/null || echo "lets CLI not found - install before continuing"
+
 # GitHub CLI (optional)
 gh --version 2>/dev/null || echo "gh CLI not found (optional - needed for LETS_PR_FLOW=github)"
 gh auth status 2>/dev/null || echo "gh not authenticated (optional)"
 ```
+
+If `lets version` is missing, the plugin's hooks and statusline will silently fail. Install before continuing:
+
+```bash
+# From a clone (current canonical install method)
+git clone https://github.com/restarter/lets-workflow
+cd lets-workflow
+make install
+which lets       # verify $PATH
+lets version
+```
+
+Future installers (tracked under epic `lets-hdrdr`): Homebrew (`lets-odg13`), curl install.sh (`lets-2vb2b`), winget+scoop (`lets-hdrdr.1`). After those ship, this step becomes a one-liner per platform.
 
 ## Step 2: Install Required Plugins
 
@@ -114,7 +130,8 @@ These fire automatically when you describe the action in conversation - no slash
 
 ### Global
 - [ ] Claude Code installed and running
-- [ ] `beads` plugin installed
+- [ ] `lets` CLI binary on `$PATH` (`lets version` works)
+- [ ] `beads` plugin installed (`bd ready` works)
 - [ ] Claude Code restarted after plugin install
 - [ ] Auto compact disabled
 - [ ] (Optional) `gh` CLI installed
@@ -123,8 +140,8 @@ These fire automatically when you describe the action in conversation - no slash
 ### Per-project (via /lets:init)
 - [ ] `.lets/` directory exists and gitignored
 - [ ] `.lets/.env` configured
-- [ ] `.lets/statusline.sh` installed
-- [ ] `.claude/settings.json` has statusLine config
+- [ ] `.claude/settings.json` has `statusLine.command = "lets statusline"` with `_letsManaged.statusLine: true` provenance marker
+- [ ] `.claude/rules/lets-rules.md` installed (with frontmatter `version`)
 - [ ] `.beads/` initialized
 - [ ] `bd ready` works
 

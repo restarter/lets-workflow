@@ -33,41 +33,57 @@ cli/
 
 ```bash
 make build       # produces cli/lets (with -trimpath, ldflags from git tag if present)
-make test        # runs `go test -race ./...` inside cli/
+make test        # runs `go test -race ./...` inside cli/ (needs CGO + C compiler)
+make test-fast   # like `make test` but no -race (use in CGO-less envs / quick iteration)
 make vet         # runs `go vet ./...`
 make lint        # runs golangci-lint (requires it installed)
 make fmt         # runs gofmt -w -s
 make fmt-check   # verifies gofmt is clean (CI use)
-make install     # installs lets to $GOBIN
+make install     # installs lets to /usr/local/bin (smart fallback to ~/.local/bin)
+make install-go  # alternative: `go install` to $GOBIN (Go-standard layout)
 make clean       # removes built artifact + test cache
 ```
 
 `make lint` requires golangci-lint installed: `brew install golangci-lint` or `go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest`.
 
-`make test` uses `-race`, which requires CGO and a C compiler (clang on macOS via Xcode CLT, gcc on Linux). Fails with linker errors if `CGO_ENABLED=0` or no C toolchain.
+`make test` uses `-race`, which requires CGO and a C compiler (clang on macOS via Xcode CLT, gcc on Linux). Fails with linker errors if `CGO_ENABLED=0` or no C toolchain - use `make test-fast` instead.
 
 ## Setup
 
-After `make install`, the `lets` binary lives at `$(go env GOPATH)/bin/lets` (or `$GOBIN/lets` if set). The plugin's hooks (Phase 3+) will invoke `lets` from `$PATH` - this is required.
+The plugin's `hooks.json` and the project's `.claude/settings.json` invoke `lets` directly. The binary MUST be on `$PATH` for SessionStart, PreCompact, and statusline to work.
 
-Verify:
+`make install` places the binary at `/usr/local/bin/lets` if writable, otherwise falls back to `$HOME/.local/bin/lets` (creating the dir if missing) and prints a PATH-setup hint if needed.
 
 ```bash
 make install
-which lets    # should print path
-lets version
+which lets    # should print the install path
+lets version  # should print "lets version 0.0.0-dev" (or the git tag if HEAD is tagged)
 ```
 
-If `which lets` fails, add `$(go env GOPATH)/bin` to your `$PATH`.
+If `which lets` doesn't find the binary:
+
+- `/usr/local/bin` should already be on `$PATH` on most macOS / Linux systems.
+- For `~/.local/bin`, add to your shell rc:
+  ```bash
+  export PATH="$HOME/.local/bin:$PATH"
+  ```
+
+Future packagers (tracked under epic `lets-hdrdr`):
+
+- Homebrew formula (`lets-odg13`)
+- curl install.sh (`lets-2vb2b`)
+- winget + scoop for Windows (`lets-hdrdr.1`)
+
+After release pipelines ship, end-users install via package manager and never need `make`.
 
 ## Versioning
 
-`internal/version/Version` defaults to `0.4.0-dev` for untagged dev builds.
+`internal/version/Version` defaults to the sentinel `0.0.0-dev` for untagged dev builds. Sentinel decoupled from the next release minor so dev builds never need a manual bump - the actual content is in `git log`.
 
 The Makefile auto-derives the version from git tags (when HEAD is exactly on a tag), strips leading `v`, and injects via `-ldflags`:
 
 - Tagged HEAD (e.g. `v0.5.0`) → `make build` produces binary stamped with `0.5.0`
-- Dev HEAD → no `-ldflags`, binary uses Go default `0.4.0-dev`
+- Dev HEAD → no `-ldflags`, binary uses Go default `0.0.0-dev`
 
 **Lockstep with the plugin.** Plugin and CLI share one version - bumping `plugins/lets/.claude-plugin/plugin.json` `"version"` and tagging `vX.Y.Z` happens together at release time. Release scripting handled by `lets-pplgq`.
 
