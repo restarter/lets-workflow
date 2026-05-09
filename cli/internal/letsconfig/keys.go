@@ -3,7 +3,7 @@
 // Consumers:
 //   - cli/internal/initcmd/render.go::renderEnv (initial .env write — uses Prefs values)
 //   - cli/internal/initcmd/render.go::renderEnvExample (.env.example write — uses Default values)
-//   - cli/internal/initcmd/envupdate.go::UpdateEnvKeys (surgical update + append-missing)
+//   - cli/internal/initcmd/env.go::RegenerateEnv (canonical writer; preserves user values + foreign keys)
 //   - cli/internal/hook/sessionstart/sessionstart.go (whitelist for hook env injection)
 //   - Future: /lets:doctor (validation + display)
 //
@@ -15,17 +15,26 @@
 //  3. Bump frontmatter version in plugins/lets/rules/lets-rules.md
 //
 // If the key is exposed via the /lets:init slash command (most are):
-//  4. Add a --<key> cobra flag in cli/internal/cli/init.go and wire it
-//     through flagOrDefault(flag<X>, defaults["LETS_X"]) in prefs construction
+//  4. Add a --<key> cobra flag in cli/internal/cli/init.go (raw flag value
+//     passed directly into Prefs; empty indicates "user did not pass --<key>")
 //  5. Add an AskUserQuestion in plugins/lets/commands/init.md
 //
 // Auto-derived (no edit needed):
 //   - .lets/.env content       (renderEnv → renderTemplate(Header, p.AsValues()))
 //   - .lets/.env.example       (renderEnvExample → renderTemplate(ExampleHeader, Defaults()))
 //   - SessionStart whitelist   (sessionstart imports Names())
-//   - Surgical update wiring   (UpdateEnvKeys uses p.AsValues(), iterates Keys)
+//   - Regenerate wiring        (RegenerateEnv uses p.AsValues(), iterates Keys)
 //   - Future /lets:doctor      (validation + display)
 package letsconfig
+
+// VersionKeyName is the metadata key recorded as the first line of generated
+// .env files. Used by RegenerateEnv to detect when the file's schema or header
+// is out of date relative to the running binary.
+//
+// NOT included in Keys — version is metadata, not user-facing config. The
+// SessionStart hook whitelist (Names()) excludes it, so it's never injected
+// into the model context.
+const VersionKeyName = "LETS_ENV_VERSION"
 
 // Header is the file-level comment block written at the top of fresh .env files.
 // Per CLAUDE.md: kept above keys (NOT inline) because the SessionStart hook strips

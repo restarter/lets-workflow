@@ -3,6 +3,9 @@
 # session (subject to whitelist filter in lets hook session-start). Put
 # tokens/passwords elsewhere (gh auth, OS keychain, .beads/.env).
 
+# Managed by lets - do not edit
+LETS_ENV_VERSION=dev
+
 # Response language (English/Ukrainian/Italian/etc)
 LETS_LANGUAGE=Ukrainian
 

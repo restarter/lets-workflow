@@ -91,37 +91,36 @@ func Run(ctx context.Context, prefs Prefs, projectRoot, pluginRoot string) (Resu
 		result.Add(Step{Status: StepWarn, Message: msg})
 	}
 
-	// 5. .env (write or surgical update)
+	// 5. .env (version-aware regenerate; RegenerateEnv decides skip vs write)
 	envPath := filepath.Join(projectRoot, ".lets", ".env")
 	envExists := false
 	if _, err := os.Stat(envPath); err == nil {
 		envExists = true
 	}
-	switch {
-	case !envExists:
-		// First-time write (also covers --force-env on missing file: treats as create)
-		envBytes := renderEnv(prefs)
-		if err := atomicWriteBytes(envPath, envBytes, 0o644); err != nil {
-			return result, err
+	// Fresh creation requires all prefs flags - the only path that can't infer
+	// values from existing .env or yaml migration.
+	if !envExists {
+		if prefs.Language == "" || prefs.MergeBranch == "" || prefs.PRFlow == "" {
+			return result, fmt.Errorf("creating new .env requires --language, --merge-branch, --pr-flow")
 		}
-		result.EnvAction = EnvAction{Kind: EnvCreated, Path: envPath, ChangedKeys: []string{}, PreservedLines: 0}
-		result.Add(Step{Status: StepOK, Message: fmt.Sprintf(".lets/.env (%s, %s, %s)", prefs.Language, prefs.MergeBranch, prefs.PRFlow)})
-	case envExists && !prefs.ForceEnv:
-		result.EnvAction = EnvAction{Kind: EnvSkip, Path: envPath, ChangedKeys: []string{}}
-		result.Add(Step{Status: StepSkip, Message: ".lets/.env (exists)"})
-	case envExists && prefs.ForceEnv:
-		action, err := UpdateEnvKeys(envPath, prefs)
-		// IMPORTANT: even on err, action may be partially populated (BackupPath set).
-		result.EnvAction = action
-		if err != nil {
-			return result, err
+	}
+	action, err := RegenerateEnv(envPath, prefs)
+	if err != nil {
+		return result, err
+	}
+	result.EnvAction = action
+	switch action.Kind {
+	case EnvCreated:
+		result.Add(Step{Status: StepOK, Message: fmt.Sprintf(".lets/.env created (v%s, %s, %s, %s)", action.NewVersion, prefs.Language, prefs.MergeBranch, prefs.PRFlow)})
+	case EnvSkip:
+		result.Add(Step{Status: StepSkip, Message: fmt.Sprintf(".lets/.env (v%s, in sync)", action.PrevVersion)})
+	case EnvRegenerated:
+		msg := fmt.Sprintf(".lets/.env regenerated (v%s -> v%s", action.PrevVersion, action.NewVersion)
+		if len(action.ChangedKeys) > 0 {
+			msg += fmt.Sprintf(", %d keys changed", len(action.ChangedKeys))
 		}
-		switch action.Kind {
-		case EnvSkip:
-			result.Add(Step{Status: StepSkip, Message: ".lets/.env (no changes)"})
-		case EnvUpdated:
-			result.Add(Step{Status: StepOK, Message: fmt.Sprintf(".lets/.env updated (%d keys, %d lines preserved, backup: %s)", len(action.ChangedKeys), action.PreservedLines, filepath.Base(action.BackupPath))})
-		}
+		msg += ")"
+		result.Add(Step{Status: StepOK, Message: msg})
 	}
 
 	// 6. .env.example always refreshes from canonical letsconfig defaults

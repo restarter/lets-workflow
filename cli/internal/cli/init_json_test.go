@@ -90,28 +90,8 @@ func TestInit_JSON_FirstTime(t *testing.T) {
 	}
 }
 
-func TestInit_JSON_FirstTime_WithForceEnvIsNoop(t *testing.T) {
-	// --force-env on missing .env should fall through to fresh-write path
-	// (kind=created, BackupPath="").
-	dir := initGitRepo(t)
-	pluginRoot := makeFakePluginRoot(t)
-
-	result := runInitJSON(t, dir, "--json", "--plugin-root="+pluginRoot,
-		"--language=English", "--merge-branch=main", "--pr-flow=local", "--skip-beads", "--force-env")
-
-	if !result.OK {
-		t.Errorf("OK: got false, error: %s", result.Error)
-	}
-	if result.EnvAction.Kind != initcmd.EnvCreated {
-		t.Errorf("Kind on fresh .env even with --force-env: got %q want %q",
-			result.EnvAction.Kind, initcmd.EnvCreated)
-	}
-	if result.EnvAction.BackupPath != "" {
-		t.Errorf("BackupPath on fresh .env: got %q want empty", result.EnvAction.BackupPath)
-	}
-}
-
-func TestInit_JSON_ReRun_NoForce_KindSkip(t *testing.T) {
+func TestInit_JSON_ReRun_NoFlagChanges_KindSkip(t *testing.T) {
+	// Re-run with same prefs flags as first run → no value changes → EnvSkip.
 	dir := initGitRepo(t)
 	pluginRoot := makeFakePluginRoot(t)
 	args := []string{"--json", "--plugin-root=" + pluginRoot, "--language=English",
@@ -129,9 +109,9 @@ func TestInit_JSON_ReRun_NoForce_KindSkip(t *testing.T) {
 	}
 }
 
-func TestInit_JSON_ForceEnv_SurgicalUpdate_CombinedFlags(t *testing.T) {
-	// Combined flags realistic for slash-command "Change config" path:
-	// --json --force-env --pr-flow=github changing both LANGUAGE and PR_FLOW.
+func TestInit_JSON_ChangedPrefs_TriggersRegenerate(t *testing.T) {
+	// Slash-command "Change config" path: passing different prefs values
+	// triggers EnvRegenerated. Foreign keys + custom comments preserved.
 	dir := initGitRepo(t)
 	pluginRoot := makeFakePluginRoot(t)
 	baseArgs := []string{"--json", "--plugin-root=" + pluginRoot, "--language=English",
@@ -141,17 +121,19 @@ func TestInit_JSON_ForceEnv_SurgicalUpdate_CombinedFlags(t *testing.T) {
 
 	envPath := filepath.Join(dir, ".lets", ".env")
 	original, _ := os.ReadFile(envPath)
-	custom := "# my custom comment\n" + string(original) + "\nLETS_FUTURE=test\n"
+	// Inject a foreign key; canonical comments are owned by RegenerateEnv and
+	// will be re-rendered, but foreign KEY=VALUE survives the regen.
+	custom := string(original) + "\nLETS_FUTURE=test\n"
 	_ = os.WriteFile(envPath, []byte(custom), 0o644)
 
 	result := runInitJSON(t, dir, "--json", "--plugin-root="+pluginRoot,
-		"--language=Italian", "--merge-branch=main", "--pr-flow=github", "--skip-beads", "--force-env")
+		"--language=Italian", "--merge-branch=main", "--pr-flow=github", "--skip-beads")
 
 	if !result.OK {
 		t.Errorf("OK: got false, error: %s", result.Error)
 	}
-	if result.EnvAction.Kind != initcmd.EnvUpdated {
-		t.Errorf("EnvAction.Kind: got %q want %q", result.EnvAction.Kind, initcmd.EnvUpdated)
+	if result.EnvAction.Kind != initcmd.EnvRegenerated {
+		t.Errorf("EnvAction.Kind: got %q want %q", result.EnvAction.Kind, initcmd.EnvRegenerated)
 	}
 
 	hasLang := false
@@ -172,11 +154,11 @@ func TestInit_JSON_ForceEnv_SurgicalUpdate_CombinedFlags(t *testing.T) {
 		t.Error("BackupPath empty")
 	}
 	updated, _ := os.ReadFile(envPath)
-	if !bytes.Contains(updated, []byte("# my custom comment")) {
-		t.Error("custom comment not preserved")
-	}
 	if !bytes.Contains(updated, []byte("LETS_FUTURE=test")) {
 		t.Error("foreign key not preserved")
+	}
+	if !bytes.Contains(updated, []byte("# User-added keys")) {
+		t.Error("foreign-keys section header missing")
 	}
 }
 

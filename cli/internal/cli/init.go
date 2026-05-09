@@ -29,7 +29,6 @@ func NewInitCmd() *cobra.Command {
 		flagSkipBeads   bool
 		flagPluginRoot  string
 		flagJSON        bool
-		flagForceEnv    bool
 	)
 
 	cmd := &cobra.Command{
@@ -103,16 +102,20 @@ out with --plugin-root=${CLAUDE_PLUGIN_ROOT} plus the chosen flags.`,
 				fmt.Fprintln(cmd.ErrOrStderr(), "warning: --github is deprecated, use --pr-flow=github")
 			}
 
-			// Defaults flow from letsconfig.Defaults() — single source of truth.
-			// Direct shell invocation may omit flags; slash command always passes them.
-			defaults := letsconfig.Defaults()
+			// Pass raw cobra flag values through to Prefs. Empty string means
+			// "user did not pass --<key>" — initcmd.Run gates fresh-creation on
+			// this (errors if .env doesn't exist and any prefs flag is empty).
+			// Existing-.env paths use empty as a signal to preserve current values.
+			//
+			// Tracker has no CLI flag yet; always filled from canonical defaults.
+			// RegenerateEnv's mergePrefs preserves user-customized LETS_TRACKER
+			// in existing .env over this default.
 			prefs := initcmd.Prefs{
-				Language:    flagOrDefault(flagLanguage, defaults["LETS_LANGUAGE"]),
-				MergeBranch: flagOrDefault(flagMergeBranch, defaults["LETS_MERGE_BRANCH"]),
-				PRFlow:      flagOrDefault(flagPRFlow, defaults["LETS_PR_FLOW"]),
-				Tracker:     defaults["LETS_TRACKER"], // no --tracker flag yet; always default
+				Language:    flagLanguage,
+				MergeBranch: flagMergeBranch,
+				PRFlow:      flagPRFlow,
+				Tracker:     letsconfig.Defaults()["LETS_TRACKER"],
 				SkipBeads:   flagSkipBeads,
-				ForceEnv:    flagForceEnv,
 			}
 
 			result, runErr := initcmd.Run(ctx, prefs, projectRoot, pluginRoot)
@@ -126,7 +129,6 @@ out with --plugin-root=${CLAUDE_PLUGIN_ROOT} plus the chosen flags.`,
 	cmd.Flags().BoolVar(&flagSkipBeads, "skip-beads", false, "Skip beads initialization")
 	cmd.Flags().StringVar(&flagPluginRoot, "plugin-root", "", "Plugin install dir (else $CLAUDE_PLUGIN_ROOT, required)")
 	cmd.Flags().BoolVar(&flagJSON, "json", false, "Output machine-readable JSON to stdout (single object, schema_version=1)")
-	cmd.Flags().BoolVar(&flagForceEnv, "force-env", false, "Surgically update existing .env (LETS_* keys only, preserves comments/foreign keys, writes single .env.bak)")
 	return cmd
 }
 

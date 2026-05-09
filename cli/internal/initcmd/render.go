@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/restarter/lets-workflow/cli/internal/letsconfig"
+	"github.com/restarter/lets-workflow/cli/internal/version"
 )
 
 // Prefs holds the user-selected initialization preferences. The `/lets:init`
@@ -17,13 +18,12 @@ type Prefs struct {
 	PRFlow      string // "local" | "github" | "bitbucket"
 	Tracker     string // "beads" (canonical default; reserved for Linear/Jira)
 	SkipBeads   bool
-	ForceEnv    bool // if true, surgically update existing .env via UpdateEnvKeys
 }
 
 // AsValues returns the canonical Key.Name → Prefs field mapping.
 //
 // Single source of truth for Prefs↔Key wiring — both renderEnv (write fresh)
-// and UpdateEnvKeys (surgical update) consume this. Adding a new LETS_* key
+// and RegenerateEnv (canonical writer) consume this. Adding a new LETS_* key
 // requires adding ONE entry here (alongside the Keys entry in letsconfig and
 // the Prefs field above) — no other map needs editing.
 func (p Prefs) AsValues() map[string]string {
@@ -37,7 +37,7 @@ func (p Prefs) AsValues() map[string]string {
 
 // renderEnv produces the .lets/.env file body using letsconfig.Header and
 // per-key comments from letsconfig.Keys. Single source of truth — this,
-// renderEnvExample, and UpdateEnvKeys all consume letsconfig.Keys.
+// renderEnvExample, and RegenerateEnv all consume letsconfig.Keys.
 //
 // MUST match testdata/golden_env_*.txt exactly. Goldens are regenerated with
 // `go test ./internal/initcmd -run TestRenderEnv_Golden -update`.
@@ -54,10 +54,20 @@ func renderEnvExample() []byte {
 }
 
 // renderTemplate is the shared template logic for renderEnv + renderEnvExample.
-// Writes header, then for each Key: blank line, comment line, key=value.
+// Writes header, then LETS_ENV_VERSION metadata block, then for each Key:
+// blank line, comment line, key=value.
+//
+// LETS_ENV_VERSION is always derived from version.Version so both renderEnv
+// (Prefs) and renderEnvExample (Defaults) get the same canonical marker for
+// free without each caller having to inject it.
 func renderTemplate(header string, values map[string]string) []byte {
 	var buf bytes.Buffer
 	buf.WriteString(header)
+	// Version marker - first key, with its own comment block.
+	// Single \n after the value matches the existing key-block style; the loop
+	// below emits its own blank-line separator before each key.
+	buf.WriteString("\n# Managed by lets - do not edit\n")
+	fmt.Fprintf(&buf, "%s=%s\n", letsconfig.VersionKeyName, version.Version)
 	for _, k := range letsconfig.Keys {
 		buf.WriteByte('\n')
 		fmt.Fprintf(&buf, "# %s\n", k.Comment)
