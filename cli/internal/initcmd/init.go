@@ -182,6 +182,18 @@ func Run(ctx context.Context, prefs Prefs, projectRoot, pluginRoot string) (Resu
 			if err := atomicWriteBytes(rulesDst, rulesData, 0o644); err != nil {
 				return result, err
 			}
+			// Recompute drift against newly-written file. Symmetric to the
+			// pre-write check; surfaces any post-write inconsistency (atomic-rename
+			// oddity, frontmatter corruption) as a non-equal state instead of
+			// silently lying that all is well.
+			drPost := drift.Check(rulesSrc, rulesDst)
+			result.Drift = DriftReport{
+				Detected:         drPost.Detected(),
+				State:            drPost.State,
+				InstalledVersion: drPost.InstalledVersion,
+				PluginVersion:    drPost.PluginVersion,
+				Message:          drift.Message(drPost),
+			}
 			switch dr.State {
 			case drift.StateMissing:
 				result.Add(Step{Status: StepOK, Message: fmt.Sprintf(".claude/rules/lets-rules.md installed (v%s)", dr.PluginVersion)})

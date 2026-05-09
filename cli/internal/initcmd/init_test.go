@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/restarter/lets-workflow/cli/internal/drift"
 )
 
 func TestRun_FreshProject(t *testing.T) {
@@ -89,6 +91,38 @@ func TestRun_Idempotent(t *testing.T) {
 	}
 	if !envSkipped {
 		t.Error("second run did not skip .env step (regression: re-run rewrites .env unconditionally)")
+	}
+}
+
+func TestRun_DriftRecomputedAfterInstall(t *testing.T) {
+	// Regression: result.Drift used to carry the pre-install snapshot (e.g.
+	// State=missing) even when the install step succeeded, producing JSON
+	// output that contradicted the steps[] entries. Now it's recomputed
+	// against the freshly-written file.
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	tmp := t.TempDir()
+	gitInit(t, tmp)
+	pluginRoot := setupFakePluginRoot(t)
+
+	prefs := Prefs{Language: "English", MergeBranch: "main", PRFlow: "local", Tracker: "beads", SkipBeads: true}
+	res, err := Run(context.Background(), prefs, tmp, pluginRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if res.Drift.Detected {
+		t.Errorf("Drift.Detected = true after successful install; want false. State=%s", res.Drift.State)
+	}
+	if res.Drift.State != drift.StateEqual {
+		t.Errorf("Drift.State = %s after install; want %s", res.Drift.State, drift.StateEqual)
+	}
+	if res.Drift.Message != "" {
+		t.Errorf("Drift.Message = %q after install; want empty", res.Drift.Message)
+	}
+	if res.Drift.InstalledVersion == "" {
+		t.Error("Drift.InstalledVersion empty after install")
 	}
 }
 
