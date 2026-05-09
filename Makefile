@@ -9,7 +9,8 @@
 # pure cmd.exe instead of a cascade of confusing recipe failures.
 SHELL := /bin/sh
 
-.PHONY: all build test test-fast vet lint fmt fmt-check install install-go clean help
+.PHONY: all build test test-fast vet lint fmt fmt-check install install-go clean help \
+        verify-versions bump release-tag
 
 CLI_DIR := cli
 
@@ -18,8 +19,9 @@ CLI_DIR := cli
 # When VERSION is empty, no -ldflags is passed, and the Go default in version.go wins.
 # This makes version.go the single source of truth for the dev placeholder.
 #
-# TODO(lets-pplgq): release script must enforce that plugins/lets/.claude-plugin/plugin.json
-# "version" matches the git tag (lockstep). No automated check today - manual audit before tagging.
+# Source-tree version coherence (plugin.json + marketplace.json + lets-rules.md
+# frontmatter) is enforced by `make verify-versions` (scripts/release/verify-versions.sh)
+# and the verify-versions.yml CI workflow. Drift fails the gate.
 VERSION := $(shell git describe --tags --exact-match 2>/dev/null | sed 's/^v//')
 
 LDFLAGS :=
@@ -41,6 +43,9 @@ help:
 	@echo "  install         - Install lets to /usr/local/bin (or ~/.local/bin if not writable)"
 	@echo "  install-go      - Install lets to \$$GOBIN via 'go install' (Go-standard layout)"
 	@echo "  clean           - Remove built binary and test cache"
+	@echo "  verify-versions - Run scripts/release/verify-versions.sh (VERIFY_FLAGS=--against-tag for tag check)"
+	@echo "  bump            - Phase 1 of release: bump VERSION=X.Y.Z [DRY_RUN=1]"
+	@echo "  release-tag     - Phase 3 of release: tag main + push (triggers goreleaser)"
 
 build:
 	cd $(CLI_DIR) && go build -trimpath $(LDFLAGS) -o lets ./cmd/lets
@@ -96,3 +101,40 @@ install-go: build
 clean:
 	rm -f $(CLI_DIR)/lets $(CLI_DIR)/lets.exe
 	cd $(CLI_DIR) && go clean -testcache
+
+# verify-versions: run scripts/release/verify-versions.sh.
+# Optional: VERIFY_FLAGS="--against-tag" to also assert tag matches source-tree.
+verify-versions:
+	@bash scripts/release/verify-versions.sh $(VERIFY_FLAGS)
+
+# bump VERSION=X.Y.Z [DRY_RUN=1]: Phase 1 of release.
+# Edits source-tree versions + (stable only) CHANGELOG, runs gates, commits to current branch.
+# Does NOT push, does NOT tag.
+bump:
+	@if [ -z "$(VERSION)" ]; then echo "Usage: make bump VERSION=X.Y.Z [DRY_RUN=1]"; exit 1; fi
+	@if [ "$(DRY_RUN)" = "1" ]; then \
+		bash scripts/release/bump-version.sh $(VERSION) --dry-run; \
+	else \
+		bash scripts/release/bump-version.sh $(VERSION); \
+	fi
+
+# release-tag VERSION=X.Y.Z: Phase 3 of release.
+# Tags current commit and pushes the tag (must be on main, post-bump-merge).
+# Pushing the tag triggers .github/workflows/release.yml → goreleaser.
+release-tag:
+	@if [ -z "$(VERSION)" ]; then echo "Usage: make release-tag VERSION=X.Y.Z"; exit 1; fi
+	@if [ "$$(git branch --show-current)" != "main" ]; then \
+		echo "Error: must be on main branch (got: $$(git branch --show-current))"; exit 1; \
+	fi
+	@if [ -n "$$(git status --porcelain)" ]; then \
+		echo "Error: working tree is not clean"; exit 1; \
+	fi
+	@if git rev-parse "v$(VERSION)" >/dev/null 2>&1; then \
+		echo "Error: tag v$(VERSION) already exists"; exit 1; \
+	fi
+	@bash scripts/release/verify-versions.sh
+	git tag "v$(VERSION)"
+	git push origin "v$(VERSION)"
+	@echo ""
+	@echo "✓ Pushed tag v$(VERSION)"
+	@echo "  Watch: gh run watch  (release.yml triggered by tag push)"

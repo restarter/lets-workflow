@@ -26,7 +26,7 @@ One dolt container serves all project databases. Each project has its own databa
 ### Initial deploy
 
 ```bash
-ssh root@vps "bash -s -- --expose-sql lets aff test" < scripts/dolt/setup-remote.sh
+ssh root@vps "bash -s -- --expose-sql lets aff test" < scripts/remote/dolt/setup-remote.sh
 ```
 
 This will:
@@ -75,7 +75,7 @@ mysql -h <vps-ip> -u root -p<root-password> -e "
 ### Add database
 
 ```bash
-ssh root@vps "bash -s -- --add-repo new-project" < scripts/dolt/setup-remote.sh
+ssh root@vps "bash -s -- --add-repo new-project" < scripts/remote/dolt/setup-remote.sh
 ```
 
 ## IP Allowlist
@@ -84,13 +84,13 @@ Access to SQL port 3306 is restricted by IP. Only allowed IPs can connect.
 
 ```bash
 # Allow an IP (single IPv4 only - no CIDR/masks)
-ssh root@vps "bash -s -- --allow-ip 1.2.3.4" < scripts/dolt/setup-remote.sh
+ssh root@vps "bash -s -- --allow-ip 1.2.3.4" < scripts/remote/dolt/setup-remote.sh
 
 # Remove an IP
-ssh root@vps "bash -s -- --remove-ip 1.2.3.4" < scripts/dolt/setup-remote.sh
+ssh root@vps "bash -s -- --remove-ip 1.2.3.4" < scripts/remote/dolt/setup-remote.sh
 
 # Decommission the port entirely (drop all ALLOW + REJECT rules for the port)
-ssh root@vps "bash -s -- --purge-port 3306" < scripts/dolt/setup-remote.sh
+ssh root@vps "bash -s -- --purge-port 3306" < scripts/remote/dolt/setup-remote.sh
 
 # Check current rules
 ssh root@vps "iptables -L DOCKER-USER -n --line-numbers | grep 3306"
@@ -180,7 +180,7 @@ If connection works, you'll see tasks. No local dolt server needed.
 
 1. Add database on VPS:
    ```bash
-   ssh root@vps "bash -s -- --add-repo my-project" < scripts/dolt/setup-remote.sh
+   ssh root@vps "bash -s -- --add-repo my-project" < scripts/remote/dolt/setup-remote.sh
    ```
 2. Grant access to existing users:
    ```bash
@@ -199,7 +199,7 @@ If connection works, you'll see tasks. No local dolt server needed.
 Two layers:
 
 1. **VPS-level snapshots** (host provides daily + weekly snapshots of whole VPS) - the disaster-recovery layer. Restore the entire VPS state.
-2. **Application-aware snapshot** via `scripts/dolt/backup-remote.sh` - operator-initiated, point-in-time snapshot of just `/opt/dolt-remote/` for **before-risky-op** scenarios (migrations, version bumps, ad-hoc DDL). Single tarball, fast restore without rolling back the whole VPS.
+2. **Application-aware snapshot** via `scripts/remote/dolt/backup-remote.sh` - operator-initiated, point-in-time snapshot of just `/opt/dolt-remote/` for **before-risky-op** scenarios (migrations, version bumps, ad-hoc DDL). Single tarball, fast restore without rolling back the whole VPS.
 
 This section documents layer 2.
 
@@ -214,14 +214,14 @@ Run before any operation that would be hard to roll back via VPS-snap alone:
 ### Run a backup
 
 ```bash
-ssh root@vps "bash -s" < scripts/dolt/backup-remote.sh
+ssh root@vps "bash -s" < scripts/remote/dolt/backup-remote.sh
 ```
 
 The container stops for ~5-15 seconds. Full state lands in `/opt/dolt-remote/backups/dolt-backup-YYYYMMDD-HHMMSS.tar.gz` (chmod 600 - contains `.env` with `ROOT_PASSWORD`).
 
 Custom output dir:
 ```bash
-ssh root@vps "bash -s -- --output-dir /mnt/backups" < scripts/dolt/backup-remote.sh
+ssh root@vps "bash -s -- --output-dir /mnt/backups" < scripts/remote/dolt/backup-remote.sh
 ```
 
 ### Verify a backup

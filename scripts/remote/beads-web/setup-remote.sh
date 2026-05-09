@@ -1,38 +1,50 @@
 #!/bin/bash
-# beads-ui - Web Dashboard Docker Installation
-# Deploys beads-ui container that connects to existing Dolt server via Docker network.
+# beads-web - Kanban Board Docker Installation
+# Deploys beads-web container (Rust binary) that connects to existing Dolt server via Docker network.
 #
 # Usage:
 #   # Full install
 #   ssh root@vps "bash -s -- \
-#     --sql-user bdui --sql-password secret \
-#     --database lets --port 9080 \
-#     --allow-ip 1.2.3.4 --allow-ip 5.6.7.8" < scripts/beads-ui/setup-remote.sh
+#     --sql-user bdweb --sql-password secret \
+#     --database lets --port 3008 \
+#     --allow-ip 1.2.3.4 --allow-ip 5.6.7.8" < scripts/remote/beads-web/setup-remote.sh
 #
 #   # Different database on different port
 #   ssh root@vps "bash -s -- \
-#     --sql-user bdui --sql-password secret \
-#     --database aff --port 9081 \
-#     --install-dir /opt/beads-ui-aff \
-#     --allow-ip 1.2.3.4" < scripts/beads-ui/setup-remote.sh
+#     --sql-user bdweb --sql-password secret \
+#     --database aff --port 3009 \
+#     --install-dir /opt/beads-web-aff \
+#     --allow-ip 1.2.3.4" < scripts/remote/beads-web/setup-remote.sh
+#
+#   # Custom fork
+#   ssh root@vps "bash -s -- \
+#     --sql-user bdweb --sql-password secret \
+#     --database lets --port 3008 \
+#     --repo weselow/beads-web --version 1.0.0 \
+#     --allow-ip 1.2.3.4" < scripts/remote/beads-web/setup-remote.sh
 #
 #   # Manage IP allowlist
-#   ssh root@vps "bash -s -- --allow-ip 1.2.3.4 --port 9080" < scripts/beads-ui/setup-remote.sh
-#   ssh root@vps "bash -s -- --remove-ip 1.2.3.4 --port 9080" < scripts/beads-ui/setup-remote.sh
+#   ssh root@vps "bash -s -- --allow-ip 1.2.3.4 --port 3008" < scripts/remote/beads-web/setup-remote.sh
+#   ssh root@vps "bash -s -- --remove-ip 1.2.3.4 --port 3008" < scripts/remote/beads-web/setup-remote.sh
+#
+#   # Decommission a port - drop all ALLOW + REJECT rules (e.g. when migrating off old port)
+#   ssh root@vps "bash -s -- --purge-port 9090" < scripts/remote/beads-web/setup-remote.sh
 #
 # Prerequisites:
-#   - Docker installed (use scripts/dolt/setup-remote.sh first)
+#   - Docker installed (use scripts/remote/dolt/setup-remote.sh first)
 #   - Dolt container running with dolt-net network
 #   - SQL user created in Dolt with grants on target database
 
 set -e
+umask 077  # `.env` (chmod 600 explicitly later) gets safe perms during creation window
 
 # ============================================
 # Configuration
 # ============================================
-INSTALL_DIR="${INSTALL_DIR:-/opt/beads-ui}"
-BEADS_UI_PORT="${BEADS_UI_PORT:-9080}"
-BEADS_UI_VERSION="${BEADS_UI_VERSION:-0.11.1}"
+INSTALL_DIR="${INSTALL_DIR:-/opt/beads-web}"
+BEADS_WEB_PORT="${BEADS_WEB_PORT:-3008}"
+BEADS_WEB_VERSION="${BEADS_WEB_VERSION:-latest}"
+BEADS_WEB_REPO="${BEADS_WEB_REPO:-Shybko/beads-web}"
 DOLT_HOST="${DOLT_HOST:-dolt}"
 DOLT_PORT="${DOLT_PORT:-3306}"
 
@@ -90,11 +102,12 @@ while [[ $# -gt 0 ]]; do
     --sql-user) SQL_USER="$2"; shift 2 ;;
     --sql-password) SQL_PASSWORD="$2"; shift 2 ;;
     --database) DATABASE="$2"; shift 2 ;;
-    --port) BEADS_UI_PORT="$2"; shift 2 ;;
+    --port) BEADS_WEB_PORT="$2"; shift 2 ;;
     --install-dir) INSTALL_DIR="$2"; shift 2 ;;
     --dolt-host) DOLT_HOST="$2"; shift 2 ;;
     --dolt-port) DOLT_PORT="$2"; shift 2 ;;
-    --version) BEADS_UI_VERSION="$2"; shift 2 ;;
+    --repo) BEADS_WEB_REPO="$2"; shift 2 ;;
+    --version) BEADS_WEB_VERSION="$2"; shift 2 ;;
     --allow-ip) ALLOW_IPS+=("$2"); shift 2 ;;
     --remove-ip) REMOVE_IP="$2"; shift 2 ;;
     --purge-port) PURGE_PORT="$2"; shift 2 ;;
@@ -108,7 +121,7 @@ done
 # IP allowlist management
 # ============================================
 manage_ip_allowlist() {
-  local action="$1" ip="$2" port="$BEADS_UI_PORT"
+  local action="$1" ip="$2" port="$BEADS_WEB_PORT"
 
   if ! dpkg -s iptables-persistent &>/dev/null; then
     echo "Installing iptables-persistent..."
@@ -148,7 +161,7 @@ manage_ip_allowlist() {
 }
 
 # Purge all DOCKER-USER rules for a port (ALLOW from any source + REJECT v4/v6).
-# Used when fully decommissioning a port (deprecation cleanup).
+# Used when fully decommissioning a port (migration, deprecation).
 purge_port_rules() {
   local port="$1"
   if [[ ! "$port" =~ ^[0-9]+$ ]] || (( port < 1 || port > 65535 )); then
@@ -207,7 +220,7 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 if ! command -v docker &>/dev/null || ! docker info &>/dev/null; then
-  echo -e "${RED}Error: Docker not installed or not running. Run scripts/dolt/setup-remote.sh first.${NC}"
+  echo -e "${RED}Error: Docker not installed or not running. Run scripts/remote/dolt/setup-remote.sh first.${NC}"
   exit 1
 fi
 
@@ -216,6 +229,7 @@ if [[ -z "$DATABASE" ]]; then
   echo "  Full install:   $0 --sql-user USER --sql-password PASS --database DB --allow-ip IP"
   echo "  Add IP:         $0 --allow-ip IP --port PORT"
   echo "  Remove IP:      $0 --remove-ip IP --port PORT"
+  echo "  Purge port:     $0 --purge-port PORT      # decommission - drops all rules"
   echo ""
   echo "Full install:"
   echo "  --sql-user USER        SQL username for Dolt connection"
@@ -225,16 +239,18 @@ if [[ -z "$DATABASE" ]]; then
   echo "  --no-firewall          Leave port open to all (NOT recommended)"
   echo ""
   echo "  Optional:"
-  echo "  --port PORT            Web UI port (default: 9080)"
-  echo "  --install-dir DIR      Install directory (default: /opt/beads-ui)"
+  echo "  --port PORT            Web UI port (default: 3008)"
+  echo "  --install-dir DIR      Install directory (default: /opt/beads-web)"
   echo "  --dolt-host HOST       Dolt hostname (default: dolt)"
   echo "  --dolt-port PORT       Dolt SQL port (default: 3306)"
-  echo "  --version VER          beads-ui version (default: 0.11.1)"
+  echo "  --repo OWNER/REPO      GitHub repo for binary (default: Shybko/beads-web)"
+  echo "  --version VER          beads-web version or 'latest' (default: latest)"
   echo ""
-  echo "IP management (standalone):"
-  echo "  --allow-ip IP          Add IP to allowlist"
+  echo "IP / port management (standalone):"
+  echo "  --allow-ip IP          Add IP to allowlist (single IPv4, no CIDR)"
   echo "  --remove-ip IP         Remove IP from allowlist"
-  echo "  --port PORT            Target port (default: 9080)"
+  echo "  --purge-port PORT      Drop all ALLOW + REJECT rules for a port"
+  echo "  --port PORT            Target port (default: 3008)"
   exit 1
 fi
 
@@ -249,18 +265,38 @@ validate_name "$SQL_USER" "SQL user"
 # Resolve versions from existing .env
 if [[ -f "$INSTALL_DIR/.env" ]]; then
   echo -e "${YELLOW}Existing installation found at $INSTALL_DIR${NC}"
-  existing_version=$(grep '^BEADS_UI_VERSION=' "$INSTALL_DIR/.env" | cut -d= -f2)
-  BEADS_UI_VERSION="${BEADS_UI_VERSION:-$existing_version}"
+  existing_version=$(grep '^BEADS_WEB_VERSION=' "$INSTALL_DIR/.env" | cut -d= -f2)
+  existing_repo=$(grep '^BEADS_WEB_REPO=' "$INSTALL_DIR/.env" | cut -d= -f2)
+  existing_port=$(grep '^BEADS_WEB_PORT=' "$INSTALL_DIR/.env" | cut -d= -f2)
+  BEADS_WEB_VERSION="${BEADS_WEB_VERSION:-$existing_version}"
+  BEADS_WEB_REPO="${BEADS_WEB_REPO:-$existing_repo}"
+  # Warn on port change - manage_ip_allowlist scopes to the new port only,
+  # so old port's ALLOW/REJECT rules linger. Operator should follow the
+  # "Migrating Port" runbook (README) before redeploying on a new port.
+  if [[ -n "$existing_port" && "$existing_port" != "$BEADS_WEB_PORT" ]]; then
+    echo -e "${YELLOW}WARNING: Port change detected: $existing_port -> $BEADS_WEB_PORT${NC}"
+    echo -e "${YELLOW}  Old port's iptables rules will not be cleaned up automatically.${NC}"
+    echo -e "${YELLOW}  See README 'Migrating Port' section before continuing if this is unexpected.${NC}"
+  fi
+fi
+
+# Build release URL
+if [[ "$BEADS_WEB_VERSION" == "latest" ]]; then
+  RELEASE_URL="https://github.com/${BEADS_WEB_REPO}/releases/latest/download/beads-web-linux-x64"
+else
+  RELEASE_URL="https://github.com/${BEADS_WEB_REPO}/releases/download/v${BEADS_WEB_VERSION}/beads-web-linux-x64"
 fi
 
 echo ""
-echo -e "${GREEN}=== beads-ui Web Dashboard Setup ===${NC}"
+echo -e "${GREEN}=== beads-web Kanban Board Setup ===${NC}"
 echo -e "${GREEN}    Docker + Dolt Network${NC}"
 echo ""
 echo "  Database:    $DATABASE"
-echo "  Port:        $BEADS_UI_PORT"
+echo "  Port:        $BEADS_WEB_PORT"
 echo "  Install dir: $INSTALL_DIR"
-echo "  Version:     $BEADS_UI_VERSION"
+echo "  Repo:        $BEADS_WEB_REPO"
+echo "  Version:     $BEADS_WEB_VERSION"
+echo "  Binary URL:  $RELEASE_URL"
 echo ""
 
 # ============================================
@@ -289,65 +325,71 @@ create_network() {
 # ============================================
 create_config() {
   echo -e "${YELLOW}[2/4] Creating configuration...${NC}"
-  mkdir -p "$INSTALL_DIR/data/.beads"
-  # Container runs as node (uid 1000) - data dir must be writable
+  mkdir -p "$INSTALL_DIR/data/.beads" "$INSTALL_DIR/data/kanban-ui"
+  # Container runs as beadsweb (uid 1000) - data dirs must be writable
   chown -R 1000:1000 "$INSTALL_DIR/data"
 
   # Dockerfile
+  # Quoted heredoc tag (<<'DOCKERFILE') prevents host-shell expansion of ${...} and
+  # joining of \-newline. RELEASE_URL is passed as build arg by docker-compose.
   cat > "$INSTALL_DIR/Dockerfile" <<'DOCKERFILE'
-FROM node:22-slim
+FROM debian:trixie-slim
 
-ARG BEADS_UI_VERSION=0.11.1
+ARG RELEASE_URL
 
-RUN npm install -g @beads/bd beads-ui@${BEADS_UI_VERSION}
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN mkdir -p /app/.beads && chown -R node:node /app
+RUN curl -fSL -o /usr/local/bin/beads-web "${RELEASE_URL}" \
+    && chmod +x /usr/local/bin/beads-web
+
+RUN useradd --uid 1000 --system --create-home beadsweb \
+    && mkdir -p /app/.beads && chown -R beadsweb:beadsweb /app
 
 WORKDIR /app
-USER node
+USER beadsweb
 
-ENV BD_BIN=/usr/local/bin/bd
+EXPOSE 3008
 
-EXPOSE 9080
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=10s \
+  CMD curl -sf http://localhost:${PORT:-3008}/ || exit 1
 
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=15s \
-  CMD node -e "fetch('http://localhost:'+(process.env.PORT||9080)+'/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
-
-CMD ["sh", "-c", "exec node /usr/local/lib/node_modules/beads-ui/server/index.js"]
+CMD ["beads-web"]
 DOCKERFILE
 
   # docker-compose.yml
   cat > "$INSTALL_DIR/docker-compose.yml" <<EOF
 services:
-  beads-ui:
+  beads-web:
     build:
       context: .
       dockerfile: Dockerfile
       args:
-        BEADS_UI_VERSION: \${BEADS_UI_VERSION:-0.11.1}
-    container_name: beads-ui-${DATABASE}
+        RELEASE_URL: \${RELEASE_URL}
+    container_name: beads-web
     restart: unless-stopped
     ports:
-      - "\${BEADS_UI_PORT:-9080}:\${BEADS_UI_PORT:-9080}"
+      - "\${BEADS_WEB_PORT:-3008}:\${BEADS_WEB_PORT:-3008}"
     volumes:
       - ./data/.beads:/app/.beads
+      - ./data/kanban-ui:/home/beadsweb/.local/share/kanban-ui
     environment:
-      - PORT=\${BEADS_UI_PORT:-9080}
-      - HOST=0.0.0.0
-      - BD_BIN=/usr/local/bin/bd
-      - BEADS_DOLT_SERVER_HOST=\${DOLT_HOST:-dolt}
-      - BEADS_DOLT_SERVER_PORT=\${DOLT_PORT:-3306}
-      - BEADS_DOLT_SERVER_USER=\${SQL_USER}
-      - BEADS_DOLT_PASSWORD=\${SQL_PASSWORD}
+      - PORT=\${BEADS_WEB_PORT:-3008}
+      - DOLT_HOST=\${DOLT_HOST:-dolt}
+      - DOLT_PORT=\${DOLT_PORT:-3306}
+      - DOLT_USER=\${SQL_USER}
+      - DOLT_PASSWORD=\${SQL_PASSWORD}
+      - NO_BROWSER=1
     networks:
       - dolt-net
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: 256M
           cpus: "1.0"
         reservations:
-          memory: 128M
+          memory: 64M
 
 networks:
   dolt-net:
@@ -370,8 +412,10 @@ EOF
 SQL_USER='${SQL_USER}'
 SQL_PASSWORD='${SQL_PASSWORD}'
 DATABASE=${DATABASE}
-BEADS_UI_PORT=${BEADS_UI_PORT}
-BEADS_UI_VERSION=${BEADS_UI_VERSION}
+BEADS_WEB_PORT=${BEADS_WEB_PORT}
+BEADS_WEB_VERSION=${BEADS_WEB_VERSION}
+BEADS_WEB_REPO=${BEADS_WEB_REPO}
+RELEASE_URL=${RELEASE_URL}
 DOLT_HOST=${DOLT_HOST}
 DOLT_PORT=${DOLT_PORT}
 EOF
@@ -384,16 +428,26 @@ EOF
 # 3. Build and start
 # ============================================
 build_and_start() {
-  echo -e "${YELLOW}[3/4] Building and starting beads-ui...${NC}"
+  echo -e "${YELLOW}[3/4] Building and starting beads-web...${NC}"
+
+  # Validate release URL before building
+  echo "  Checking release URL..."
+  if ! curl -fsSL --head "$RELEASE_URL" >/dev/null 2>&1; then
+    echo -e "${RED}ERROR: Release not found at: $RELEASE_URL${NC}"
+    echo -e "${RED}Check --repo and --version values.${NC}"
+    exit 1
+  fi
+  echo "  Release URL valid"
+
   cd "$INSTALL_DIR"
-  docker compose build
+  docker compose build --no-cache
   docker compose up -d
   sleep 5
 
   if docker compose ps --format '{{.Status}}' | grep -q "Up"; then
-    echo "  beads-ui-${DATABASE} running on port $BEADS_UI_PORT"
+    echo "  beads-web running on port $BEADS_WEB_PORT"
   else
-    echo -e "${RED}ERROR: beads-ui failed to start. Check: docker compose -f $INSTALL_DIR/docker-compose.yml logs${NC}"
+    echo -e "${RED}ERROR: beads-web failed to start. Check: docker compose -f $INSTALL_DIR/docker-compose.yml logs${NC}"
     exit 1
   fi
 }
@@ -405,12 +459,12 @@ setup_firewall() {
   echo -e "${YELLOW}[4/4] Setting up firewall...${NC}"
 
   if [[ "$NO_FIREWALL" == true ]]; then
-    echo -e "${YELLOW}  --no-firewall: skipping IP allowlist. Port $BEADS_UI_PORT is open to all.${NC}"
+    echo -e "${YELLOW}  --no-firewall: skipping IP allowlist. Port $BEADS_WEB_PORT is open to all.${NC}"
     return 0
   fi
 
   if [[ ${#ALLOW_IPS[@]} -eq 0 ]]; then
-    echo -e "${RED}Error: --allow-ip is required (dashboard has no auth). Use --no-firewall to explicitly skip.${NC}"
+    echo -e "${RED}Error: --allow-ip is required (board has no auth). Use --no-firewall to explicitly skip.${NC}"
     exit 1
   fi
 
@@ -428,28 +482,29 @@ print_summary() {
 
   echo ""
   echo -e "${GREEN}========================================${NC}"
-  echo -e "${GREEN}    beads-ui Dashboard Ready${NC}"
+  echo -e "${GREEN}    beads-web Kanban Board Ready${NC}"
   echo -e "${GREEN}========================================${NC}"
   echo ""
-  echo "  URL:          http://$PUBLIC_IP:$BEADS_UI_PORT"
+  echo "  URL:          http://$PUBLIC_IP:$BEADS_WEB_PORT"
   echo "  Database:     $DATABASE"
-  echo "  Container:    beads-ui-$DATABASE"
+  echo "  Container:    beads-web"
   echo "  Install dir:  $INSTALL_DIR"
-  echo "  Version:      $BEADS_UI_VERSION"
+  echo "  Repo:         $BEADS_WEB_REPO"
+  echo "  Version:      $BEADS_WEB_VERSION"
   echo ""
   echo "Manage:"
-  echo "  Logs:         docker logs beads-ui-$DATABASE"
+  echo "  Logs:         docker logs beads-web"
   echo "  Restart:      cd $INSTALL_DIR && docker compose restart"
   echo "  Stop:         cd $INSTALL_DIR && docker compose down"
   echo ""
   echo "IP allowlist:"
-  echo "  --allow-ip <IP> --port $BEADS_UI_PORT"
-  echo "  --remove-ip <IP> --port $BEADS_UI_PORT"
+  echo "  --allow-ip <IP> --port $BEADS_WEB_PORT"
+  echo "  --remove-ip <IP> --port $BEADS_WEB_PORT"
   echo ""
   echo "Add another database:"
   echo "  $0 --sql-user USER --sql-password PASS \\"
-  echo "    --database aff --port 9081 \\"
-  echo "    --install-dir /opt/beads-ui-aff \\"
+  echo "    --database aff --port 3009 \\"
+  echo "    --install-dir /opt/beads-web-aff \\"
   echo "    --allow-ip <IP>"
   echo ""
   echo -e "${GREEN}========================================${NC}"

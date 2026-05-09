@@ -23,9 +23,10 @@ cli/                              # Go CLI - companion binary (Phase 2+, lets-7v
 └── .golangci.yml                 #   Linter config (default + gofmt/goimports/misspell)
 Makefile                          # Repo-root build (build/test/vet/lint/fmt/install/clean)
 .editorconfig                     # Editor whitespace/charset settings
-scripts/dolt/                     # Dolt SQL server VPS deployment + ad-hoc backup (NOT plugin)
-scripts/beads-web/                # beads-web (Rust kanban board) VPS deployment (NOT plugin)
-scripts/deprecated/               # Retired scripts kept for cleanup runbooks - not for new installs
+scripts/release/                  # Release tooling: bump-version.sh + verify-versions.sh (used by Makefile bump/release-tag)
+scripts/remote/dolt/              # Dolt SQL server VPS deployment + ad-hoc backup (NOT plugin)
+scripts/remote/beads-web/         # beads-web (Rust kanban board) VPS deployment (NOT plugin)
+scripts/deprecated/               # Retired scripts kept for cleanup runbooks - gitignored, not tracked
 docs/                             # Plans, knowledge base, reference docs, comment exports
 reference/                        # Reference plugins for studying patterns (gitignored)
 ```
@@ -34,7 +35,7 @@ References that resolve via `${CLAUDE_PLUGIN_ROOT}` (e.g. `${CLAUDE_PLUGIN_ROOT}
 
 ## Key Concepts
 
-> Path convention: paths like `commands/`, `skills/`, `rules/lets-rules.md` in this doc are **relative to `plugins/lets/`** (the plugin root, also exposed as `${CLAUDE_PLUGIN_ROOT}` at runtime). Paths starting with `scripts/dolt/`, `docs/`, `reference/` are relative to the **repo root** (outside the plugin payload).
+> Path convention: paths like `commands/`, `skills/`, `rules/lets-rules.md` in this doc are **relative to `plugins/lets/`** (the plugin root, also exposed as `${CLAUDE_PLUGIN_ROOT}` at runtime). Paths starting with `scripts/release/`, `scripts/remote/`, `docs/`, `reference/` are relative to the **repo root** (outside the plugin payload).
 >
 > Go CLI source paths (`cli/cmd/lets/main.go`, `cli/internal/...`) are relative to the **repo root**. The Go module root is `cli/` - all `go` commands operate from there (or via the repo-root `Makefile`).
 
@@ -73,6 +74,37 @@ References that resolve via `${CLAUDE_PLUGIN_ROOT}` (e.g. `${CLAUDE_PLUGIN_ROOT}
 - Internal skills: NOT auto-discovered. Commands reference with "use the X skill" and read the SKILL.md via Read tool at `` `${CLAUDE_PLUGIN_ROOT}/skills/X/SKILL.md` `` - the env var ensures the path resolves correctly whether plugin is loaded via marketplace install or `--plugin-dir` dev mode (relative `skills/...` paths break in foreign projects). No accidental triggering, no context cost until needed.
 - Commands define WHAT to do and orchestrate the flow. User-facing skills define full reusable flows (steps, user gates) that auto-trigger on natural language. Internal skills define shared procedures read by commands on demand. Commands delegate to skills for shared operations.
 - Gate for new skills: extract only if (a) user-facing with standalone trigger value, or (b) internal logic duplicated in 3+ commands.
+
+## Release Flow
+
+Two-phase tag-driven pipeline. See `RELEASING.md` for the maintainer ceremony.
+
+```
+Phase 1: Bump (manual, on release/X.Y.Z branch)
+  scripts/release/bump-version.sh: edits source-tree version + (stable only) CHANGELOG,
+                                   runs gates, commits. Does NOT push, does NOT tag.
+                                   Stable: 4 files (3 source-tree + CHANGELOG promote)
+                                   Prerelease (X.Y.Z-rc.N): 3 files only, CHANGELOG intact
+Phase 2: Review (PR to main)
+  .github/workflows/verify-versions.yml: PR-time source-tree coherence check
+Phase 3: Tag (manual, on main)
+  make release-tag VERSION=X.Y.Z: tags merge commit + pushes tag
+Phase 4: Distribute (automated, on tag push)
+  .github/workflows/release.yml:
+    - guard job:   verify-versions.sh --against-tag
+    - release job: goreleaser builds 5 archives + checksums, uploads to GH Releases
+                   release notes from CHANGELOG [X.Y.Z] (stable) or [Unreleased] (prerelease)
+```
+
+**Why two phases** — bump is reviewable (can revert), tag is reproducible (same tag → same binaries). Mixing them means tag commits to changes that haven't been reviewed.
+
+**Why bash for orchestration** — bump-version.sh + verify-versions.sh are file-edits + gates, natural for bash + jq + awk. No Go binary involvement; CI doesn't need `setup-go` for verify.
+
+**Why goreleaser** — single declarative config builds 5 platforms in parallel, handles archives + checksums + GH Release creation + prerelease detection (semver suffix `-rc.1` etc.). Battle-tested in beads and similar Go CLIs.
+
+**Source-tree version invariants** — single semver string across `plugin.json`, `marketplace.json`, `lets-rules.md` frontmatter (binary version derives from git tag via ldflags). Drift between any of these fails `verify-versions.yml`.
+
+**Prereleases skip CHANGELOG mutation** — rc/beta/alpha tags exist as validation snapshots; the full release entry is reserved for the stable tag. release.yml synthesizes prerelease notes from `[Unreleased]`. PREV_TAG (used to compute compare-link bottom of CHANGELOG) filters prereleases so stable releases compare against the previous **stable** tag.
 
 ## File Storage
 

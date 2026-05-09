@@ -6,8 +6,8 @@
 # Or if the fork has GitHub Actions, just create a new release from GitHub UI.
 #
 # Usage:
-#   ssh root@vps "bash -s" < scripts/beads-web/update-remote.sh
-#   ssh root@vps "bash -s -- --install-dir /opt/beads-web-custom" < scripts/beads-web/update-remote.sh
+#   ssh root@vps "bash -s" < scripts/remote/beads-web/update-remote.sh
+#   ssh root@vps "bash -s -- --install-dir /opt/beads-web-custom" < scripts/remote/beads-web/update-remote.sh
 #
 # Prerequisites:
 #   - beads-web already installed via setup-remote.sh

@@ -31,7 +31,7 @@ iptables DOCKER-USER (IP allowlist)
 
 ## Prerequisites
 
-- Dolt server running in Docker (see `scripts/dolt/`)
+- Dolt server running in Docker (see `scripts/remote/dolt/`)
 - `dolt-net` Docker network (created automatically by setup script)
 - SQL user with grants on target database
 
@@ -39,7 +39,7 @@ iptables DOCKER-USER (IP allowlist)
 
 ### 1. Create SQL user in Dolt (if not exists)
 
-See [scripts/dolt/README.md - Add SQL user](../dolt/README.md#add-sql-user).
+See [scripts/remote/dolt/README.md - Add SQL user](../dolt/README.md#add-sql-user).
 
 ### 2. Deploy beads-web
 
@@ -48,7 +48,7 @@ ssh root@vps "bash -s -- \
   --sql-user bdweb --sql-password your-password \
   --database lets --port 3008 \
   --allow-ip YOUR_IP_1 --allow-ip YOUR_IP_2" \
-  < scripts/beads-web/setup-remote.sh
+  < scripts/remote/beads-web/setup-remote.sh
 ```
 
 ### 3. Add projects
@@ -82,7 +82,7 @@ http://VPS_IP:3008
 When the fork has new changes (binary re-uploaded to the same release tag):
 
 ```bash
-ssh root@vps "bash -s" < scripts/beads-web/update-remote.sh
+ssh root@vps "bash -s" < scripts/remote/beads-web/update-remote.sh
 ```
 
 This rebuilds the Docker image with `--no-cache` (re-downloads the binary) and restarts the container. Project configuration (SQLite DB) is preserved via volume mount.
@@ -93,7 +93,7 @@ This rebuilds the Docker image with `--no-cache` (re-downloads the binary) and r
 2. Create a new release (via GitHub UI or GitHub Actions if configured)
 3. Update VPS:
    ```bash
-   ssh root@vps "bash -s" < scripts/beads-web/update-remote.sh
+   ssh root@vps "bash -s" < scripts/remote/beads-web/update-remote.sh
    ```
 
 With `--version latest` (default), the script always downloads from the latest release. No need to specify version numbers.
@@ -106,7 +106,7 @@ To upgrade to a new version (new release tag):
 ssh root@vps "bash -s -- \
   --sql-user bdweb --sql-password your-password \
   --database lets --port 3008 \
-  --version 1.0.0" < scripts/beads-web/setup-remote.sh
+  --version 1.0.0" < scripts/remote/beads-web/setup-remote.sh
 ```
 
 The setup script is idempotent - it regenerates config and rebuilds the container.
@@ -120,7 +120,7 @@ When you need both a new binary AND a new port, do it in two phases for safer ro
 1. **Phase 1 - upgrade binary, keep current port.** Run `update-remote.sh` (or `setup-remote.sh` with the same `--port`). Verify the new version works on the existing port before changing anything else.
 2. **Phase 2 - migrate port.** Follow [Migrating Port](#migrating-port) below. If the binary has issues, you'll hit them in phase 1 with the firewall still intact.
 
-> **Recommended:** run [scripts/dolt/backup-remote.sh](../dolt/README.md#backups) before any phase 1 or phase 2 to take a point-in-time snapshot of the Dolt server. Cheap insurance for risky operations.
+> **Recommended:** run [scripts/remote/dolt/backup-remote.sh](../dolt/README.md#backups) before any phase 1 or phase 2 to take a point-in-time snapshot of the Dolt server. Cheap insurance for risky operations.
 
 ### Re-deploying with existing credentials
 
@@ -132,7 +132,7 @@ ssh root@vps 'set -a; source /opt/beads-web/.env; set +a; \
     --sql-user "$SQL_USER" --sql-password "$SQL_PASSWORD" \
     --database "$DATABASE" --port 3008 \
     --allow-ip YOUR_IP' \
-  < scripts/beads-web/setup-remote.sh
+  < scripts/remote/beads-web/setup-remote.sh
 ```
 
 This idiom is useful any time you re-deploy without changing credentials (port migration, version upgrade, IP allowlist edits).
@@ -158,7 +158,7 @@ ssh root@vps 'set -a; source /opt/beads-web/.env; set +a; \
     --sql-user "$SQL_USER" --sql-password "$SQL_PASSWORD" \
     --database "$DATABASE" --port 3008 \
     --allow-ip YOUR_IP_1 --allow-ip YOUR_IP_2' \
-  < scripts/beads-web/setup-remote.sh
+  < scripts/remote/beads-web/setup-remote.sh
 
 # 2. Verify new deployment BEFORE purging old port. If this fails, do NOT
 #    proceed - the rollback path needs the old firewall rules intact.
@@ -170,7 +170,7 @@ ssh root@vps "
 
 # 3. Purge old-port firewall rules (now that new deployment is verified).
 ssh root@vps "bash -s -- --purge-port 9090" \
-  < scripts/beads-web/setup-remote.sh
+  < scripts/remote/beads-web/setup-remote.sh
 ```
 
 Step 1 regenerates `docker-compose.yml`, `Dockerfile`, `.env`, and rebuilds the container. The volume-mounted `data/` (projects SQLite + Dolt metadata) is preserved.
@@ -191,11 +191,11 @@ ssh root@vps "iptables -L DOCKER-USER -n | grep 9090 || echo 'OK: 9090 firewall 
 ```bash
 # Add IP
 ssh root@vps "bash -s -- --allow-ip 1.2.3.4 --port 3008" \
-  < scripts/beads-web/setup-remote.sh
+  < scripts/remote/beads-web/setup-remote.sh
 
 # Remove IP
 ssh root@vps "bash -s -- --remove-ip 1.2.3.4 --port 3008" \
-  < scripts/beads-web/setup-remote.sh
+  < scripts/remote/beads-web/setup-remote.sh
 ```
 
 Multiple IPs can be added in a single command:
@@ -203,7 +203,7 @@ Multiple IPs can be added in a single command:
 ```bash
 ssh root@vps "bash -s -- \
   --allow-ip 1.2.3.4 --allow-ip 5.6.7.8 --allow-ip 9.10.11.12 \
-  --port 3008" < scripts/beads-web/setup-remote.sh
+  --port 3008" < scripts/remote/beads-web/setup-remote.sh
 ```
 
 ## Fork Support
@@ -215,7 +215,7 @@ ssh root@vps "bash -s -- \
   --sql-user bdweb --sql-password your-password \
   --database lets --port 3008 \
   --repo weselow/beads-web --version 1.0.0 \
-  --allow-ip YOUR_IP" < scripts/beads-web/setup-remote.sh
+  --allow-ip YOUR_IP" < scripts/remote/beads-web/setup-remote.sh
 ```
 
 ## Server Layout
