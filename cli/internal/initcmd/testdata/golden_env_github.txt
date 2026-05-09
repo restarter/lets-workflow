@@ -1,0 +1,19 @@
+# LETS plugin config
+# NOT FOR SECRETS. Contents are injected verbatim into model context every
+# session (subject to whitelist filter in lets hook session-start). Put
+# tokens/passwords elsewhere (gh auth, OS keychain, .beads/.env).
+
+# Managed by lets - do not edit
+LETS_ENV_VERSION=dev
+
+# Response language (English/Ukrainian/Italian/etc)
+LETS_LANGUAGE=English
+
+# Target branch for merges and PR base
+LETS_MERGE_BRANCH=main
+
+# PR flow: github | bitbucket | local
+LETS_PR_FLOW=github
+
+# Task tracker (currently 'beads'; schema reserved for Linear/Jira)
+LETS_TRACKER=beads

@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "lets hook session-start --rules=${CLAUDE_PLUGIN_ROOT}/rules/lets-rules.md"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "lets hook precompact --rules=${CLAUDE_PLUGIN_ROOT}/rules/lets-rules.md"
+          }
+        ]
+      }
+    ]
+  }
+}

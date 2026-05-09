@@ -41,6 +41,19 @@ Claude Code is powerful, but without structure it drifts - forgets context betwe
 
 ## 🚀 Quick Start
 
+### Prerequisites
+
+The plugin requires the `lets` CLI binary on `$PATH` for SessionStart/PreCompact hooks and `lets statusline`. Until release pipelines ship (Homebrew via [lets-odg13](https://github.com/restarter/lets-workflow/issues), curl install via lets-2vb2b, winget/scoop via lets-hdrdr.1), install from a local clone:
+
+```bash
+git clone https://github.com/restarter/lets-workflow
+cd lets-workflow
+make install      # installs to /usr/local/bin or ~/.local/bin (smart fallback)
+lets version      # verify
+```
+
+`lets` and `bd` (beads) both need to be on `$PATH` before `/lets:install` and `/lets:init` will work.
+
 ### Install
 
 **Option A: From marketplace (recommended)**
@@ -121,7 +134,7 @@ Then start working:
 
 ### Under the Hood
 
-**SessionStart + PreCompact Hooks** - inject workflow rules into every Claude Code conversation: development practices, git conventions, session flow, discovery logging. SessionStart fires on new/resumed/cleared sessions; PreCompact re-injects rules before auto-compaction so workflow context survives long sessions. This is what makes Claude follow the LETS workflow without you having to remind it.
+**SessionStart + PreCompact Hooks** - run `lets hook session-start` / `lets hook precompact` on every Claude Code conversation. The hooks emit a small `## LETS Config` block (and a drift notice if rules are out of date) - the workflow rules themselves live in `<project>/.claude/rules/lets-rules.md` (copied there by `/lets:init`) and Claude Code loads them as project instructions. SessionStart fires on new/resumed/cleared/compacted sessions; PreCompact ensures rules survive long-session compaction. This is what makes Claude follow the LETS workflow without you having to remind it.
 
 **LETS Boxes** - after key actions, Claude shows contextual next-step suggestions so you always know what to do next:
 
@@ -307,7 +320,7 @@ LETS_PR_FLOW=github
 LETS_TRACKER=beads
 ```
 
-> **Migration from legacy `config.yaml`:** if your project still has `.lets/config.yaml`, the SessionStart hook auto-migrates it to `.lets/.env` on next Claude Code session. The yaml file is kept for reference but no longer read.
+> **Migration from legacy `config.yaml`:** if your project still has `.lets/config.yaml`, run `/lets:init` — `lets init` migrates it to `.lets/.env` (preserving values via allowlist regex). The yaml file is kept for reference but no longer read.
 
 ## File Storage
 

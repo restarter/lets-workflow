@@ -1,6 +1,5 @@
 .DS_Store
 /reference/
-.lets
 .lets/
 /lets/
 .idea/
@@ -14,7 +13,11 @@ dolt-monitor.*
 .worktrees/
 .claude/worktrees/
 .beads/
+/docs-local/
 
 # Beads / Dolt files (added by bd init)
 .beads-credential-key
 issues.jsonl
+
+# bv (beads viewer) local config and caches
+.bv/

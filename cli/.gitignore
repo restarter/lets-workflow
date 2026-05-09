@@ -1,0 +1,17 @@
+# Compiled binary
+/lets
+/lets.exe
+
+# Vendored deps (we don't vendor, but defensive)
+/vendor/
+
+# Test artifacts
+*.test
+*.out
+
+# Coverage
+coverage.out
+coverage.html
+
+# Profile output (pprof)
+*.prof
