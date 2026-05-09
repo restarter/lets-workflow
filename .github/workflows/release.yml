@@ -1,0 +1,79 @@
+name: Release
+
+# Tag-driven release pipeline. Triggered by tag push (v*).
+# 1. guard:   verify source-tree + tag coherence (re-uses verify-versions.sh)
+# 2. release: extract CHANGELOG section + run goreleaser (build + upload + GH Release page)
+#
+# Security: the only github context value used in shell is GITHUB_REF_NAME
+# (the tag name), which is constrained by the `on.push.tags: ['v*']` trigger
+# to start with 'v' followed by safe characters. No untrusted input
+# (PR bodies, commit messages, issue titles) flows into run: commands.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write   # required: gh release create + asset upload
+
+jobs:
+  guard:
+    name: Verify tag coherence
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify source-tree + tag
+        run: bash scripts/release/verify-versions.sh --against-tag
+
+  release:
+    name: Build and publish
+    needs: guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'cli/go.mod'
+          cache-dependency-path: 'cli/go.sum'
+
+      - name: Extract release notes from CHANGELOG
+        id: notes
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v ver="$VERSION" '
+            $0 ~ "^## \\[" ver "\\]" { p=1; next }
+            p && /^## \[/ { exit }
+            p { print }
+          ' CHANGELOG.md > /tmp/release-notes.md
+
+          if [[ "$VERSION" == *-* ]] && [ ! -s /tmp/release-notes.md ]; then
+            echo "Prerelease without [$VERSION] section — falling back to [Unreleased]"
+            awk '
+              /^## \[Unreleased\]/ { p=1; next }
+              p && /^## \[/ { exit }
+              p { print }
+            ' CHANGELOG.md > /tmp/release-notes.md
+          fi
+
+          if [ ! -s /tmp/release-notes.md ]; then
+            echo "ERROR: no release notes available for $VERSION" >&2
+            exit 1
+          fi
+          echo "Extracted notes for v$VERSION:"
+          cat /tmp/release-notes.md
+
+      - name: Run goreleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --release-notes /tmp/release-notes.md --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
