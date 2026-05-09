@@ -44,6 +44,12 @@ func TestRun_FreshProject(t *testing.T) {
 	if !strings.Contains(string(envData), "LETS_LANGUAGE=English") {
 		t.Errorf(".env content wrong:\n%s", envData)
 	}
+	// Version marker must be present — guards against renderTemplate regressions
+	// that would silently drop the LETS_ENV_VERSION block (which RegenerateEnv
+	// uses for skip-vs-regen detection on subsequent runs).
+	if !strings.Contains(string(envData), "LETS_ENV_VERSION=") {
+		t.Errorf(".env missing LETS_ENV_VERSION marker:\n%s", envData)
+	}
 
 	// Tighten .env.example assertion: bytes-equal vs renderEnvExample() catches
 	// regressions where Step 6 writes wrong path or empty/stale content.

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/restarter/lets-workflow/cli/internal/envfile"
@@ -102,7 +103,7 @@ func RegenerateEnv(path string, prefs Prefs) (EnvAction, error) {
 		body = append(body, []byte(foreignBlock)...)
 	}
 
-	if err := os.MkdirAll(strings.TrimSuffix(path, "/.env"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		// best-effort; atomicWriteBytes will retry/fail with concrete error
 		_ = err
 	}
