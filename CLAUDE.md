@@ -23,9 +23,10 @@ cli/                              # Go CLI - companion binary (Phase 2+, lets-7v
 └── .golangci.yml                 #   Linter config (default + gofmt/goimports/misspell)
 Makefile                          # Repo-root build (build/test/vet/lint/fmt/install/clean)
 .editorconfig                     # Editor whitespace/charset settings
-scripts/dolt/                     # Dolt SQL server VPS deployment + ad-hoc backup (NOT plugin)
-scripts/beads-web/                # beads-web (Rust kanban board) VPS deployment (NOT plugin)
-scripts/deprecated/               # Retired scripts kept for cleanup runbooks - not for new installs
+scripts/release/                  # Release tooling: bump-version.sh + verify-versions.sh (used by Makefile bump/release-tag)
+scripts/remote/dolt/              # Dolt SQL server VPS deployment + ad-hoc backup (NOT plugin)
+scripts/remote/beads-web/         # beads-web (Rust kanban board) VPS deployment (NOT plugin)
+scripts/deprecated/               # Retired scripts kept for cleanup runbooks - gitignored, not tracked
 docs/                             # Plans, knowledge base, reference docs, comment exports
 reference/                        # Reference plugins for studying patterns (gitignored)
 ```
@@ -34,7 +35,7 @@ References that resolve via `${CLAUDE_PLUGIN_ROOT}` (e.g. `${CLAUDE_PLUGIN_ROOT}
 
 ## Key Concepts
 
-> Path convention: paths like `commands/`, `skills/`, `rules/lets-rules.md` in this doc are **relative to `plugins/lets/`** (the plugin root, also exposed as `${CLAUDE_PLUGIN_ROOT}` at runtime). Paths starting with `scripts/dolt/`, `docs/`, `reference/` are relative to the **repo root** (outside the plugin payload).
+> Path convention: paths like `commands/`, `skills/`, `rules/lets-rules.md` in this doc are **relative to `plugins/lets/`** (the plugin root, also exposed as `${CLAUDE_PLUGIN_ROOT}` at runtime). Paths starting with `scripts/release/`, `scripts/remote/`, `docs/`, `reference/` are relative to the **repo root** (outside the plugin payload).
 >
 > Go CLI source paths (`cli/cmd/lets/main.go`, `cli/internal/...`) are relative to the **repo root**. The Go module root is `cli/` - all `go` commands operate from there (or via the repo-root `Makefile`).
 

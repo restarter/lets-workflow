@@ -8,12 +8,12 @@
 #
 # Usage:
 #   # Default: stop container, snapshot to /opt/dolt-remote/backups/
-#   ssh root@vps "bash -s" < scripts/dolt/backup-remote.sh
+#   ssh root@vps "bash -s" < scripts/remote/dolt/backup-remote.sh
 #
 #   # Custom output dir
-#   ssh root@vps "bash -s -- --output-dir /mnt/backups" < scripts/dolt/backup-remote.sh
+#   ssh root@vps "bash -s -- --output-dir /mnt/backups" < scripts/remote/dolt/backup-remote.sh
 #
-# Restore: see scripts/dolt/README.md "Restore from backup" section.
+# Restore: see scripts/remote/dolt/README.md "Restore from backup" section.
 
 set -e
 umask 077  # tarball + sidecar files default to 600/700
@@ -170,6 +170,6 @@ echo "  File:        $TARBALL"
 echo "  Size:        $SIZE"
 echo "  Downtime:    ${DOWNTIME}s"
 echo ""
-echo "Restore: see scripts/dolt/README.md 'Restore from backup' section."
+echo "Restore: see scripts/remote/dolt/README.md 'Restore from backup' section."
 echo "Manage:  delete unwanted backups with 'rm $OUTPUT_DIR/dolt-backup-*.tar.gz'"
 echo -e "${GREEN}========================================${NC}"

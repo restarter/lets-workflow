@@ -4,20 +4,20 @@
 #
 # Usage:
 #   # Full install with Direct SQL exposed
-#   ssh root@vps "bash -s -- --expose-sql lets aff test" < scripts/dolt/setup-remote.sh
+#   ssh root@vps "bash -s -- --expose-sql lets aff test" < scripts/remote/dolt/setup-remote.sh
 #
 #   # Full install with custom root password
-#   ssh root@vps "bash -s -- --root-password s3cret --expose-sql lets" < scripts/dolt/setup-remote.sh
+#   ssh root@vps "bash -s -- --root-password s3cret --expose-sql lets" < scripts/remote/dolt/setup-remote.sh
 #
 #   # Add database to existing install
-#   ssh root@vps "bash -s -- --add-repo new-project" < scripts/dolt/setup-remote.sh
+#   ssh root@vps "bash -s -- --add-repo new-project" < scripts/remote/dolt/setup-remote.sh
 #
 #   # Manage IP allowlist (for Direct SQL access control)
-#   ssh root@vps "bash -s -- --allow-ip 1.2.3.4" < scripts/dolt/setup-remote.sh
-#   ssh root@vps "bash -s -- --remove-ip 1.2.3.4" < scripts/dolt/setup-remote.sh
+#   ssh root@vps "bash -s -- --allow-ip 1.2.3.4" < scripts/remote/dolt/setup-remote.sh
+#   ssh root@vps "bash -s -- --remove-ip 1.2.3.4" < scripts/remote/dolt/setup-remote.sh
 #
 #   # Decommission a port - drop all ALLOW + REJECT rules (e.g. when retiring this service)
-#   ssh root@vps "bash -s -- --purge-port 3306" < scripts/dolt/setup-remote.sh
+#   ssh root@vps "bash -s -- --purge-port 3306" < scripts/remote/dolt/setup-remote.sh
 #
 # Architecture:
 #   One Dolt container serves ALL databases via data_dir volume.
