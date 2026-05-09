@@ -1,0 +1,66 @@
+# .goreleaser.yml — cross-platform binary distribution for `lets` CLI.
+# Triggered by .github/workflows/release.yml on tag push (v*).
+# Reference: https://goreleaser.com/customization/
+
+version: 2
+
+project_name: lets
+
+before:
+  hooks:
+    - sh -c "cd cli && go mod tidy"
+
+builds:
+  - id: lets
+    main: ./cmd/lets
+    dir: ./cli
+    binary: lets
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/restarter/lets-workflow/cli/internal/version.Version={{.Version}}
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - id: lets
+    name_template: "lets_{{.Version}}_{{.Os}}_{{.Arch}}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+      - CHANGELOG.md
+
+checksum:
+  name_template: "lets_{{.Version}}_checksums.txt"
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ .Version }}-snapshot-{{.ShortCommit}}"
+
+# Release notes are written from CHANGELOG.md — extracted by release.yml workflow
+# step before invoking goreleaser, passed via --release-notes flag.
+changelog:
+  disable: true
+
+release:
+  github:
+    owner: restarter
+    name: lets-workflow
+  prerelease: auto    # auto-detect prerelease from semver suffix (-rc, -beta, -alpha)
+  draft: false
+  mode: replace       # replace any draft release with same tag
