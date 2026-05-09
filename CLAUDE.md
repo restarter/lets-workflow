@@ -42,7 +42,8 @@ References that resolve via `${CLAUDE_PLUGIN_ROOT}` (e.g. `${CLAUDE_PLUGIN_ROOT}
 - **Agents** = experts dispatched by commands. `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:brainstorm` dispatch via subagents. `/lets:team` dispatches via Agent Teams (parallel, worktree isolation). `actor` is a meta-agent that loads external personalities (URL or file) and adapts them to LETS modes
 - **Orchestrators** = commands that delegate to other commands. `/lets:pr` orchestrates `/lets:review` for full PR lifecycle
 - **Hooks** = SessionStart + PreCompact inject workflow rules (PreCompact preserves rules across context compaction in long sessions)
-- **Statusline** = `lets statusline` Go subcommand. Project `.claude/settings.json` invokes it directly via `_letsManaged.statusLine` provenance marker. Legacy bash shim `plugins/lets/scripts/lets/statusline.sh` removed in lets-8ilsl. Byte-equal detection of pre-deletion installs (.lets/statusline.sh) handled via the frozen `cli/internal/initcmd/embedded_statusline_shim.sh` snapshot — `MigrateStatuslineSh` deletes matching legacy shims and triggers `SetStatusLineManaged` to point settings.json at `lets statusline`.
+- **Statusline** = `lets statusline` Go subcommand. Project `.claude/settings.json` invokes it directly. `lets init` detects the canonical command via value-match against `"lets statusline"`; foreign user-customized commands are left alone. Legacy bash shim `plugins/lets/scripts/lets/statusline.sh` removed in lets-8ilsl. Byte-equal detection of pre-deletion installs (.lets/statusline.sh) handled via the frozen `cli/internal/initcmd/embedded_statusline_shim.sh` snapshot — `MigrateStatuslineSh` deletes matching legacy shims and triggers `SetStatusLine` to point settings.json at `lets statusline`.
+- **`.env` versioning** — first key `LETS_ENV_VERSION` records which `lets` binary version last regenerated the file. `lets init` regenerates when version mismatches the running binary OR when CLI prefs flags are passed with new values. `RegenerateEnv` (`cli/internal/initcmd/env.go`) is the canonical writer; preserves user values + foreign keys (under `# User-added keys` separator), refreshes header. NOT in `letsconfig.Keys` whitelist (metadata, not user-config) — hook session injection skips it. Reusable for future `/lets:update` (lets-hdrdr.3).
 - **Skills** = reusable actions in `skills/<name>/SKILL.md`. Two types: user-facing (auto-discovered, triggered via description match or Skill tool) and internal (not auto-discovered, read by commands via Read tool when needed). Examples: `create-task`, `commit`, `take-task` (user-facing), `detect-task`, `actor-fetch-personality` (internal)
 
 ## Architecture Decisions
@@ -82,7 +83,7 @@ This includes hook debug logs, temp files, and any runtime artifacts.
 ```
 .lets/.env               # Per-project settings (LETS_LANGUAGE, LETS_MERGE_BRANCH, LETS_PR_FLOW, LETS_TRACKER)
 .lets/.env.example       # Reference defaults — generated each `lets init` from canonical letsconfig.Keys defaults via renderEnvExample(). Not used by the hook; it's a user-facing template
-.lets/.env.bak           # Single backup written by `lets init --force-env` before surgical update. Plugin-owned: user-created files at this path are silently overwritten — copy elsewhere for permanent backup
+.lets/.env.bak           # Single backup written by `RegenerateEnv` before mutation. Plugin-owned: user-created files at this path are silently overwritten — copy elsewhere for permanent backup
 .lets/sessions/          # Session summaries, session-start-ref
 .lets/reviews/           # Saved review reports
 .lets/plans/             # Implementation plans
@@ -158,7 +159,7 @@ Auto-derived (no edit needed):
 - `.lets/.env` content (renderEnv → renderTemplate(Header, p.AsValues()))
 - `.lets/.env.example` content (renderEnvExample → renderTemplate(ExampleHeader, Defaults()))
 - SessionStart hook env-injection whitelist (sessionstart imports `letsconfig.Names()`)
-- Surgical update wiring (UpdateEnvKeys uses `p.AsValues()`, iterates `letsconfig.Keys`)
+- Regenerate wiring (`RegenerateEnv` uses `p.AsValues()`, iterates `letsconfig.Keys`)
 - Future `/lets:doctor` validation + display
 
 Then document in this CLAUDE.md "LETS Config keys" table + `README.md` Configuration block, and add consuming logic in the relevant commands.

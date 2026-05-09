@@ -6,21 +6,40 @@
 - Go CLI binary `lets` with subcommands: `lets version`, `lets hook session-start`, `lets hook precompact`, `lets statusline`, `lets init`. Cross-compiles for darwin/arm64, linux/amd64, windows/amd64. Module path: `github.com/restarter/lets-workflow/cli`
 - Monorepo layout: plugin payload moved to `plugins/lets/` subdir; new `cli/` parallel directory; root `Makefile` for `make build/test/vet/lint/fmt/install`
 - `plugins/lets/rules/lets-rules.md` workflow rules file with frontmatter `version` for SessionStart drift detection (replaces `hooks/rules-context.md`)
-- `_letsManaged.statusLine` provenance markers in `.claude/settings.json` (replaces fragile substring detection)
 - Hook size guard: SessionStart/PreCompact stdout capped well under Claude Code's 10K cap (closes lets-q9bx7 17KB truncation bug)
 - Shared Go packages: `cli/internal/envfile/` (.env parser), `cli/internal/frontmatter/` (semver drift check via `golang.org/x/mod/semver`), `cli/internal/initcmd/` (init orchestration + migrations + JSON merge), `cli/internal/statusline/` (render + cache + OAuth fetch with build-tag splits darwin/other and unix/windows)
+
+### Added (lets-hdrdr.2 - pre-PR fixes)
+- `LETS_ENV_VERSION` first key in `.lets/.env` records the binary version that wrote the file. `lets init` regenerates `.env` when version mismatches the running binary or when CLI prefs flags are passed with new values; refreshes header and adds any new canonical keys.
+- `RegenerateEnv` reusable function in `cli/internal/initcmd/env.go` — handles fresh creation, version-mismatch refresh, and prefs-change overrides. Preserves user values + foreign keys (latter under `# User-added keys` separator). Imported by future `/lets:update` (lets-hdrdr.3).
+- "Slash Command Discipline" section in `plugins/lets/rules/lets-rules.md` — global rule against bypassing Step bash blocks in slash commands.
+- MANDATORY callout in `/lets:init` Step 1 reinforces literal execution of the dotfile pre-check.
 
 ### Changed (Go CLI port)
 - SessionStart + PreCompact hooks ported from bash to Go (`lets hook session-start`, `lets hook precompact`); workflow rules now live in `<project>/.claude/rules/lets-rules.md` (copied by `lets init`) instead of injected via hook stdout
 - Statusline ported from bash to Go (`lets statusline`); per-project `.lets/statusline.sh` becomes optional thin shim (legacy backward-compat only)
-- `lets init` Go subcommand: drift-aware rules copy, settings.json provenance markers, atomic JSON merge with `.bak`, yaml→env migration, idempotent re-runs
+- `lets init` Go subcommand: drift-aware rules copy, value-match statusLine detection, atomic JSON merge with `.bak`, yaml→env migration, idempotent re-runs
 - Plugin source files moved from repo root to `plugins/lets/` subdir; `marketplace.json` `source` updated to `./plugins/lets`
 - Plugin version bumped 0.3.1 → 0.4.0 (lockstep with CLI)
+
+### Changed (lets-hdrdr.2 - pre-PR fixes)
+- statusLine detection in `.claude/settings.json` uses pure value-match against canonical command (no provenance marker). Existing installs' `_letsManaged.statusLine` keys are harmless residue.
+- `lets init` drops `--force-env` flag — semantics now driven by raw cobra flag values (empty = preserve existing, non-empty = regen with new value).
+- `--language/--merge-branch/--pr-flow` no longer cobra-required. Required-ness moved to runtime; only fails when `.env` needs fresh creation and no flags supplied.
+- `bd init` workspace-detection switched from filesystem-layout sniffing (`.beads/dolt/`) to authoritative `bd status` exit code. Resilient to upstream bd internal layout changes.
+- `MigrateYamlToEnv` deletes `config.yaml` outright (was: rename to `.deprecated`). Also handles orphan case (`.env` and `config.yaml` coexist) by removing the yaml.
+- `lets init` recomputes drift state after rules install; JSON output reflects post-action state (no more "installed" + "missing" contradictions).
 
 ### Removed (Go CLI port)
 - `hooks/session-start.sh` (replaced by `lets hook session-start`; archived in `scripts/deprecated/lets/`)
 - `hooks/rules-context.md` (content migrated to `plugins/lets/rules/lets-rules.md`; rules now copied to `<project>/.claude/rules/lets-rules.md` by `lets init` instead of injected via hook stdout)
 - yaml→env auto-migration from SessionStart hook (now only triggered by `lets init`; closes lets-p732a)
+
+### Removed (lets-hdrdr.2 - pre-PR fixes)
+- `_letsManaged.statusLine` provenance marker write logic — single-string field doesn't need provenance, value-match is sufficient.
+- `UpdateEnvKeys` (replaced by `RegenerateEnv`).
+- `os.RemoveAll(.beads)` auto-cleanup branch from `runBeadsInit` — destructive recovery shouldn't be automatic.
+- `--force-env` cobra flag.
 
 ### Deprecated (Go CLI port)
 - `plugins/lets/scripts/lets/init.sh` and `plugins/lets/scripts/lets/statusline.sh` source files - active until lets-8ilsl rewrites `commands/init.md` to invoke `lets init` directly

@@ -139,8 +139,8 @@ These fire automatically when you describe the action in conversation - no slash
 
 ### Per-project (via /lets:init)
 - [ ] `.lets/` directory exists and gitignored
-- [ ] `.lets/.env` configured
-- [ ] `.claude/settings.json` has `statusLine.command = "lets statusline"` with `_letsManaged.statusLine: true` provenance marker
+- [ ] `.lets/.env` configured (with `LETS_ENV_VERSION` as first key)
+- [ ] `.claude/settings.json` has `statusLine.command = "lets statusline"` (value-match; no provenance marker)
 - [ ] `.claude/rules/lets-rules.md` installed (with frontmatter `version`)
 - [ ] `.beads/` initialized
 - [ ] `bd ready` works

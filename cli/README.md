@@ -106,29 +106,28 @@ Internal subcommand. Designed to be invoked by the `/lets:init` slash command, w
 ```bash
 lets init \
   --plugin-root "${CLAUDE_PLUGIN_ROOT}" \
-  --language English --merge-branch main --pr-flow local \
-  [--skip-beads] [--json] [--force-env]
+  [--language English --merge-branch main --pr-flow local] \
+  [--skip-beads] [--json]
 ```
 
-Required: `--plugin-root` (or `$CLAUDE_PLUGIN_ROOT`). Other flags default sensibly via `letsconfig.Defaults()`. `--github` is a deprecated alias for `--pr-flow=github`.
+Required: `--plugin-root` (or `$CLAUDE_PLUGIN_ROOT`). Prefs flags are required only when creating `.env` from scratch (no existing `.env`, no legacy `config.yaml` to migrate from); on existing `.env` they're optional — empty value means "preserve current". `--github` is a deprecated alias for `--pr-flow=github`.
 
 Flags:
-- `--language`, `--merge-branch`, `--pr-flow` — preference flags. Defaults flow from `letsconfig.Defaults()`.
+- `--language`, `--merge-branch`, `--pr-flow` — preference flags. Empty value (no flag passed) signals "use existing or fail if creating fresh". Non-empty triggers regen with new value.
 - `--skip-beads` — skip the final `bd init` step.
 - `--json` — emit machine-readable JSON to stdout (single object, schema_version=1). Slash command `/lets:init` consumes this.
-- `--force-env` — surgically update existing `.lets/.env` (LETS_* keys only, preserves comments/foreign keys). Writes single `.env.bak` overwriting any previous backup.
 
 What it does (idempotent, linear):
 
 1. Creates `.lets/` directory structure (`sessions/`, `reviews/`, `plans/`, `execution/`, `cache/`)
 2. Adds `.lets/`, `.beads/`, `.worktrees/` to `.gitignore`
 3. Migrates legacy `.lets/statusline.sh` (deletes the per-project shim if it matches the embedded snapshot — see `internal/initcmd/embedded_statusline_shim.sh`)
-4. Migrates legacy `.lets/config.yaml` → `.lets/.env` (preserves user values via allowlist regex)
-5. Writes `.lets/.env` (if absent) with chosen prefs. With `--force-env`, surgically updates LETS_* keys preserving comments and foreign keys (writes `.env.bak`)
+4. Migrates legacy `.lets/config.yaml` → `.lets/.env` (preserves user values via allowlist regex). Yaml is deleted (not renamed); orphan yaml alongside an existing `.env` is also cleaned up.
+5. Writes/regenerates `.lets/.env` via `RegenerateEnv`. Always emits `LETS_ENV_VERSION` first key from `version.Version`. Skip path when version matches AND no value changes; regen path otherwise — preserves user values + foreign keys (latter under `# User-added keys` separator). Single `.env.bak` rotation per regen.
 6. Refreshes `.lets/.env.example` from canonical `letsconfig.Keys` defaults via `renderEnvExample()` (no plugin template file — single source of truth)
-7. Mutates `.claude/settings.json` to set `statusLine.command = "lets statusline"` with `_letsManaged.statusLine: true` provenance marker (atomic write + `.bak`)
-8. Copies plugin rules → `<project>/.claude/rules/lets-rules.md` using `drift.Check` (semver-aware: install / upgrade / skip)
-9. Runs `bd init` (60s timeout) unless `--skip-beads`
+7. Mutates `.claude/settings.json` to set `statusLine.command = "lets statusline"` (atomic write + `.bak`). Foreign user-customized commands left alone (value-match detection).
+8. Copies plugin rules → `<project>/.claude/rules/lets-rules.md` using `drift.Check` (semver-aware: install / upgrade / skip). Drift state is recomputed after install for accurate JSON output.
+9. Runs `bd init` (60s timeout) unless `--skip-beads`. Detection of "already initialized" goes through `bd status` exit code (authoritative, layout-independent).
 
 Refuses: from a worktree (`--git-dir != --git-common-dir`), in `$HOME`, or in filesystem root `/`.
 
