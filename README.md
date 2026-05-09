@@ -43,7 +43,30 @@ Claude Code is powerful, but without structure it drifts - forgets context betwe
 
 ### Prerequisites
 
-The plugin requires the `lets` CLI binary on `$PATH` for SessionStart/PreCompact hooks and `lets statusline`. Until release pipelines ship (Homebrew via [lets-odg13](https://github.com/restarter/lets-workflow/issues), curl install via lets-2vb2b, winget/scoop via lets-hdrdr.1), install from a local clone:
+The plugin requires the `lets` CLI binary on `$PATH` for SessionStart/PreCompact hooks and `lets statusline`.
+
+**Download a binary** from [GitHub Releases](https://github.com/restarter/lets-workflow/releases/latest) — pre-built for macOS (arm64/amd64), Linux (arm64/amd64), and Windows (amd64).
+
+```bash
+# macOS / Linux — replace VERSION + OS + ARCH from the latest release
+VERSION=0.5.0
+OS=darwin                         # or linux
+ARCH=arm64                        # or amd64
+curl -L "https://github.com/restarter/lets-workflow/releases/download/v${VERSION}/lets_${VERSION}_${OS}_${ARCH}.tar.gz" \
+  | tar xz -C /tmp
+sudo install /tmp/lets /usr/local/bin/lets
+lets version                      # verify
+```
+
+On macOS, if Gatekeeper blocks the binary on first run (binaries are not yet code-signed):
+
+```bash
+xattr -cr /usr/local/bin/lets
+```
+
+**Windows**: download `lets_<VERSION>_windows_amd64.zip`, unzip, place `lets.exe` somewhere in `%PATH%`.
+
+**From source** (any platform with Go 1.22+):
 
 ```bash
 git clone https://github.com/restarter/lets-workflow
@@ -53,6 +76,8 @@ lets version      # verify
 ```
 
 `lets` and `bd` (beads) both need to be on `$PATH` before `/lets:install` and `/lets:init` will work.
+
+> Future: `brew install restarter/tap/lets` ([lets-odg13](https://github.com/restarter/lets-workflow/issues)), `curl ... | bash` (lets-2vb2b), `winget install lets` / `scoop install lets` (lets-hdrdr.1).
 
 ### Install
 
