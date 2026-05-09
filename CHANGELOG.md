@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-05-10
+
 ### Added (Go CLI port - lets-7vtaw, Phases 1-4b)
 - Go CLI binary `lets` with subcommands: `lets version`, `lets hook session-start`, `lets hook precompact`, `lets statusline`, `lets init`. Cross-compiles for darwin/arm64, linux/amd64, windows/amd64. Module path: `github.com/restarter/lets-workflow/cli`
 - Monorepo layout: plugin payload moved to `plugins/lets/` subdir; new `cli/` parallel directory; root `Makefile` for `make build/test/vet/lint/fmt/install`
@@ -263,7 +265,8 @@ Initial release with expert agents team.
 - SessionStart hook injecting workflow rules
 - Plugin structure: commands, agents, hooks
 
-[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/restarter/lets-workflow/compare/v0.3.0...v0.5.0
 [0.3.1]: https://github.com/restarter/lets-workflow/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/restarter/lets-workflow/compare/v0.2.4...v0.3.0
 [0.2.4]: https://github.com/restarter/lets-workflow/compare/v0.2.3...v0.2.4
