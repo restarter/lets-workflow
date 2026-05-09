@@ -8,6 +8,8 @@ Per-project LETS setup. Bridges to `lets init --json` (Go binary) for all filesy
 
 > **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
 
+> **MANDATORY:** Execute every Step's bash block **literally as written**. Do not substitute output from earlier `ls`/`cat`/`bd show` in this conversation — `.env` and other dotfiles are invisible to plain `ls`. The `test -f` / `test -d` checks below ARE the contract for branching first-time-vs-re-run paths; shortcutting them produces wrong branches.
+
 ## Step 1: Pre-checks
 
 ```bash
@@ -151,7 +153,9 @@ Show summary line: `<ok_count> ok · <skip_count> skip · <migrate_count> migrat
 
 If `drift.detected: true` AND `drift.message != ""`, show `drift.message` directly (canonical wording from binary, no slash command formatting needed).
 
-**Restart hint** — scan `steps[]` for messages containing `statusLine ->`, `_letsManaged marker added`, `.claude/rules/lets-rules.md installed`, or `.claude/rules/lets-rules.md updated`. If ANY match → show hint right before the LETS box:
+**Restart hint** — scan `steps[]` for messages containing `statusLine ->`, `.claude/rules/lets-rules.md installed`, or `.claude/rules/lets-rules.md updated`. If ANY match → show hint right before the LETS box:
+
+(Note: `.lets/.env regenerated` is intentionally NOT in the scan — env regen only changes the file's header/comment and version marker, but the SessionStart hook injects only canonical user-facing keys to model context. The values themselves don't change unless `changed_keys` is non-empty AND a session restart isn't required for that.)
 
 ```
 ⚠️  Restart Claude Code to apply statusline + rules changes — run `/exit`, then reopen Claude Code in this directory.
@@ -199,13 +203,14 @@ Branch:
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 lets init --json \
-  --plugin-root="${CLAUDE_PLUGIN_ROOT}" \
-  --language="$CURRENT_LANG" \
-  --merge-branch="$CURRENT_BRANCH" \
-  --pr-flow="$CURRENT_FLOW"
+  --plugin-root="${CLAUDE_PLUGIN_ROOT}"
 ```
 
-(Binary skips .env step → `env_action.kind=skip`. Other steps self-heal.)
+No prefs flags passed. The binary reads existing values from `.env` and:
+- If file's `LETS_ENV_VERSION` matches running binary AND no values changed → `env_action.kind=skip`
+- If version mismatches → `env_action.kind=regenerated` (header refreshed, values preserved)
+
+Other steps (settings.json, rules drift, beads) self-heal as needed.
 
 Render per Step 2e.
 
@@ -233,12 +238,14 @@ Repeat for MergeBranch (`$BRANCH`) and PRFlow (`$FLOW`).
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-lets init --json --force-env \
+lets init --json \
   --plugin-root="${CLAUDE_PLUGIN_ROOT}" \
   --language="$LANG" \
   --merge-branch="$BRANCH" \
   --pr-flow="$FLOW"
 ```
+
+Passing the prefs flags triggers `env_action.kind=regenerated` (binary detects values differ from existing .env, regenerates while preserving foreign keys + user-customized `LETS_TRACKER`).
 
 Render per Step 2e. JSON's `env_action.changed_keys` shows what changed; `env_action.backup_path` shows `.env.bak` location — surface both to user.
 
@@ -258,4 +265,4 @@ If `ok: false` or user picked Cancel: NO LETS box. Plain-text status only.
 
 - Respond in user's language ($LETS_LANGUAGE)
 - Idempotent: re-running on the same project is safe
-- Binary backs up .env automatically when --force-env runs (single .env.bak, overwriting any previous)
+- Binary backs up .env automatically when regenerating (single .env.bak, overwriting any previous)

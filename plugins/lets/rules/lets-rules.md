@@ -1,6 +1,6 @@
 ---
 name: lets-rules
-version: 0.5.0
+version: 0.5.1
 ---
 
 <!-- DO NOT EDIT - managed by lets init / lets install. To add custom rules, create a sibling *.md file in this directory (e.g. .claude/rules/team-conventions.md). Files prefixed `lets-` are owned by the LETS plugin and overwritten on update. -->
@@ -37,6 +37,17 @@ If a `## LETS Notice` block appears in the injected context (sibling H2 of `## L
 
 - **Stay inside `$LETS_PROJECT_ROOT`.** Never read, search, or edit files outside the project directory. Never explore parent directories or other projects without explicit user request.
 - **Never edit files on the merge-branch.** Every task gets its own `feature/<task-id>-<slug>` branch (or `worktree-<name>` in worktrees). Before any code edit - verify you're on a feature/worktree branch. If on `$LETS_MERGE_BRANCH`: create/switch to feature branch FIRST, then edit.
+
+## Slash Command Discipline
+
+When invoking a `/lets:*` slash command, execute every Step's bash block **literally**. The bash blocks ARE the contract — substitute their fresh output, not the command itself.
+
+**Do NOT:**
+- Substitute output from earlier `ls` / `cat` / `bd show` runs in this conversation
+- Skip a pre-check because "I already know the answer"
+- Rewrite a check using a different shell incantation that you "think is equivalent"
+
+**Why this matters:** state changes between commands (files appear/disappear, dotfiles are invisible to plain `ls`, sessions span editor + filesystem). The pre-checks in slash commands exist precisely because shortcutting them produces wrong branches and wrong outputs.
 
 ## Development Workflow
 
