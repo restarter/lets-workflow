@@ -17,3 +17,20 @@ var Version = "dev"
 func IsDev() bool {
 	return Version == "dev"
 }
+
+// Format renders a version string for human display, eliding the "v" prefix
+// for the dev sentinel and rendering the empty string as "legacy" (used by
+// `lets init` when reporting regen of a .env file written before the
+// LETS_ENV_VERSION marker was introduced).
+//
+// Examples: Format("0.5.1") → "v0.5.1"; Format("dev") → "dev";
+// Format("") → "legacy".
+func Format(v string) string {
+	switch v {
+	case "":
+		return "legacy"
+	case "dev":
+		return "dev"
+	}
+	return "v" + v
+}

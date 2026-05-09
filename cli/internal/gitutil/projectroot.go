@@ -47,3 +47,33 @@ func ProjectRoot(dir string, timeout time.Duration) string {
 	}
 	return strings.TrimSpace(string(out))
 }
+
+// Branch returns the current git branch name in dir (or cwd if dir == "").
+// Returns "" on failure (detached HEAD, not a repo, etc.). Same silent-failure
+// semantics as ProjectRoot — callers decide how to render absence.
+func Branch(dir string, timeout time.Duration) string {
+	args := []string{"rev-parse", "--abbrev-ref", "HEAD"}
+	if dir != "" {
+		args = append([]string{"-C", dir}, args...)
+	}
+
+	var cmd *exec.Cmd
+	if timeout > 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		cmd = exec.CommandContext(ctx, "git", args...)
+	} else {
+		cmd = exec.Command("git", args...)
+	}
+
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	branch := strings.TrimSpace(string(out))
+	if branch == "HEAD" {
+		// Detached HEAD - not a useful branch name; surface as empty.
+		return ""
+	}
+	return branch
+}

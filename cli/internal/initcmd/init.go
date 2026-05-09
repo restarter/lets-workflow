@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/restarter/lets-workflow/cli/internal/drift"
+	"github.com/restarter/lets-workflow/cli/internal/gitutil"
+	"github.com/restarter/lets-workflow/cli/internal/version"
 )
 
 // StepStatus is a typed enum for step result categories.
@@ -47,6 +49,15 @@ func Run(ctx context.Context, prefs Prefs, projectRoot, pluginRoot string) (Resu
 
 	if err := guardProjectRoot(projectRoot); err != nil {
 		return result, err
+	}
+
+	// 0. git context (informational - cobra wrapper validated repo presence
+	// before calling Run; we just surface the branch for symmetry with the
+	// beads step at the end).
+	if branch := gitutil.Branch(projectRoot, 2*time.Second); branch != "" {
+		result.Add(Step{Status: StepOK, Message: fmt.Sprintf("git (branch: %s)", branch)})
+	} else {
+		result.Add(Step{Status: StepOK, Message: "git (detached HEAD)"})
 	}
 
 	// 1. .lets/ structure
@@ -111,11 +122,11 @@ func Run(ctx context.Context, prefs Prefs, projectRoot, pluginRoot string) (Resu
 	result.EnvAction = action
 	switch action.Kind {
 	case EnvCreated:
-		result.Add(Step{Status: StepOK, Message: fmt.Sprintf(".lets/.env created (v%s, %s, %s, %s)", action.NewVersion, prefs.Language, prefs.MergeBranch, prefs.PRFlow)})
+		result.Add(Step{Status: StepOK, Message: fmt.Sprintf(".lets/.env created (%s, %s, %s, %s)", version.Format(action.NewVersion), prefs.Language, prefs.MergeBranch, prefs.PRFlow)})
 	case EnvSkip:
-		result.Add(Step{Status: StepSkip, Message: fmt.Sprintf(".lets/.env (v%s, in sync)", action.PrevVersion)})
+		result.Add(Step{Status: StepSkip, Message: fmt.Sprintf(".lets/.env (%s, in sync)", version.Format(action.PrevVersion))})
 	case EnvRegenerated:
-		msg := fmt.Sprintf(".lets/.env regenerated (v%s -> v%s", action.PrevVersion, action.NewVersion)
+		msg := fmt.Sprintf(".lets/.env regenerated (%s -> %s", version.Format(action.PrevVersion), version.Format(action.NewVersion))
 		if len(action.ChangedKeys) > 0 {
 			msg += fmt.Sprintf(", %d keys changed", len(action.ChangedKeys))
 		}
