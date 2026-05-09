@@ -16,6 +16,9 @@ dolt-monitor.*
 /docs-local/
 /scripts/deprecated/
 
+# goreleaser output (created by `goreleaser release --snapshot` / tag-driven CI release)
+/dist/
+
 # Beads / Dolt files (added by bd init)
 .beads-credential-key
 issues.jsonl
