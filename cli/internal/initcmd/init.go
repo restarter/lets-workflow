@@ -132,7 +132,7 @@ func Run(ctx context.Context, prefs Prefs, projectRoot, pluginRoot string) (Resu
 	}
 	result.Add(Step{Status: StepOK, Message: ".lets/.env.example (refreshed)"})
 
-	// 7. settings.json (provenance-aware)
+	// 7. settings.json (value-match: detect canonical command; no provenance marker)
 	settingsPath := filepath.Join(projectRoot, ".claude", "settings.json")
 	settings, err := readSettingsJSON(settingsPath)
 	if err != nil {
@@ -142,15 +142,10 @@ func Run(ctx context.Context, prefs Prefs, projectRoot, pluginRoot string) (Resu
 		switch state {
 		case StatusLineForeign:
 			result.Add(Step{Status: StepSkip, Message: ".claude/settings.json statusLine is user-customized - left alone"})
-		case StatusLineLetsManaged:
-			result.Add(Step{Status: StepSkip, Message: ".claude/settings.json (statusLine managed)"})
 		case StatusLineLetsDirect:
-			if err := SetStatusLineManaged(settingsPath); err != nil {
-				return result, err
-			}
-			result.Add(Step{Status: StepOK, Message: ".claude/settings.json _letsManaged marker added"})
+			result.Add(Step{Status: StepSkip, Message: ".claude/settings.json (statusLine canonical)"})
 		default: // Absent or LetsBashWrapper
-			if err := SetStatusLineManaged(settingsPath); err != nil {
+			if err := SetStatusLine(settingsPath); err != nil {
 				return result, err
 			}
 			result.Add(Step{Status: StepOK, Message: ".claude/settings.json statusLine -> 'lets statusline'"})

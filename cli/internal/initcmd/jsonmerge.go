@@ -7,9 +7,8 @@ import (
 	"path/filepath"
 )
 
-// SetStatusLineManaged mutates settings.json to set:
+// SetStatusLine mutates settings.json to set:
 //   - .statusLine = {type:"command", command:"lets statusline"}
-//   - ._letsManaged.statusLine = true
 //
 // Preserves all other fields. Atomic write (tmp + rename). Refuses if existing
 // statusLine is StatusLineForeign (caller should check before invoking).
@@ -18,7 +17,7 @@ import (
 // runs overwrite that single .bak. (No timestamped 3-rotation scheme - the
 // scrap-then-restore use case for one-shot init is just "the file before
 // I touched it", and git already covers history beyond that.)
-func SetStatusLineManaged(path string) error {
+func SetStatusLine(path string) error {
 	settings, err := readSettingsJSON(path)
 	if err != nil {
 		return err
@@ -40,12 +39,6 @@ func SetStatusLineManaged(path string) error {
 		"type":    "command",
 		"command": "lets statusline",
 	}
-	managed, _ := settings["_letsManaged"].(map[string]any)
-	if managed == nil {
-		managed = map[string]any{}
-	}
-	managed["statusLine"] = true
-	settings["_letsManaged"] = managed
 
 	return atomicWriteJSON(path, settings)
 }

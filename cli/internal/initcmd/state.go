@@ -30,10 +30,9 @@ type StatusLineFieldState int
 
 const (
 	StatusLineAbsent          StatusLineFieldState = iota // statusLine field missing/empty
-	StatusLineLetsManaged                                 // _letsManaged.statusLine == true (provenance marker)
 	StatusLineLetsBashWrapper                             // legacy: bash -c wrapper around $(git rev-parse).../.lets/statusline.sh
-	StatusLineLetsDirect                                  // value == "lets statusline" (current canonical, but no provenance marker yet)
-	StatusLineForeign                                     // user-customized, no LETS markers
+	StatusLineLetsDirect                                  // value == "lets statusline" (current canonical)
+	StatusLineForeign                                     // user-customized
 )
 
 // DetectProjectRoot returns git toplevel or empty string. 2s timeout because
@@ -128,26 +127,13 @@ func detectStatuslineSh(path string) StatuslineState {
 	return StatuslineForeign
 }
 
-// detectStatusLineField classifies the statusLine command in settings.json.
-//
-// When the _letsManaged.statusLine provenance marker is set to true, we
-// additionally cross-check that statusLine.command is exactly the string we
-// would write ("lets statusline"). If something else mutated the command
-// while leaving the marker intact, we treat it as Foreign so /lets:init
-// refuses to silently overwrite (defense-in-depth: marker is just a JSON
-// boolean, anyone with write access could set it).
+// detectStatusLineField classifies the statusLine command in settings.json by
+// the value alone. For a single-string field, value-match against canonical
+// commands answers every classification question (own / legacy / foreign).
+// Earlier versions also wrote a `_letsManaged.statusLine` provenance marker;
+// it added no decision power and is no longer written. Existing installs may
+// still carry the orphan key — Claude Code ignores unknown keys, harmless.
 func detectStatusLineField(settings map[string]any) StatusLineFieldState {
-	managed, _ := settings["_letsManaged"].(map[string]any)
-	if managed != nil {
-		if b, _ := managed["statusLine"].(bool); b {
-			sl, _ := settings["statusLine"].(map[string]any)
-			cmd, _ := sl["command"].(string)
-			if cmd == "lets statusline" {
-				return StatusLineLetsManaged
-			}
-			return StatusLineForeign
-		}
-	}
 	sl, _ := settings["statusLine"].(map[string]any)
 	if sl == nil {
 		return StatusLineAbsent

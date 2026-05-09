@@ -8,9 +8,9 @@ import (
 	"testing"
 )
 
-func TestSetStatusLineManaged_FreshFile(t *testing.T) {
+func TestSetStatusLine_FreshFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
-	if err := SetStatusLineManaged(path); err != nil {
+	if err := SetStatusLine(path); err != nil {
 		t.Fatal(err)
 	}
 	data, _ := os.ReadFile(path)
@@ -22,13 +22,12 @@ func TestSetStatusLineManaged_FreshFile(t *testing.T) {
 	if cmd, _ := sl["command"].(string); cmd != "lets statusline" {
 		t.Errorf("statusLine.command = %v, want 'lets statusline'", cmd)
 	}
-	managed, _ := m["_letsManaged"].(map[string]any)
-	if b, _ := managed["statusLine"].(bool); !b {
-		t.Errorf("_letsManaged.statusLine = %v, want true", b)
+	if _, exists := m["_letsManaged"]; exists {
+		t.Errorf("_letsManaged unexpectedly written: %v", m["_letsManaged"])
 	}
 }
 
-func TestSetStatusLineManaged_PreservesUnknownFields(t *testing.T) {
+func TestSetStatusLine_PreservesUnknownFields(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
 	initial := `{
   "myCustom": {"deep": {"value": 42}},
@@ -38,7 +37,7 @@ func TestSetStatusLineManaged_PreservesUnknownFields(t *testing.T) {
 	if err := os.WriteFile(path, []byte(initial), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := SetStatusLineManaged(path); err != nil {
+	if err := SetStatusLine(path); err != nil {
 		t.Fatal(err)
 	}
 	data, _ := os.ReadFile(path)
@@ -52,31 +51,27 @@ func TestSetStatusLineManaged_PreservesUnknownFields(t *testing.T) {
 	if _, ok := m["permissions"]; !ok {
 		t.Errorf("permissions field lost")
 	}
-	managed, _ := m["_letsManaged"].(map[string]any)
-	if b, _ := managed["statusLine"].(bool); !b {
-		t.Errorf("_letsManaged.statusLine = %v, want true", b)
-	}
 }
 
-func TestSetStatusLineManaged_RefusesForeign(t *testing.T) {
+func TestSetStatusLine_RefusesForeign(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
 	initial := `{"statusLine": {"command": "/usr/local/bin/my-custom-statusline.sh"}}`
 	if err := os.WriteFile(path, []byte(initial), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	err := SetStatusLineManaged(path)
+	err := SetStatusLine(path)
 	if err == nil || !strings.Contains(err.Error(), "foreign statusLine") {
 		t.Errorf("expected foreign-statusLine error, got %v", err)
 	}
 }
 
-func TestSetStatusLineManaged_BackupCreated(t *testing.T) {
+func TestSetStatusLine_BackupCreated(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
 	initial := `{"statusLine": {"command": "lets statusline"}}`
 	if err := os.WriteFile(path, []byte(initial), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := SetStatusLineManaged(path); err != nil {
+	if err := SetStatusLine(path); err != nil {
 		t.Fatal(err)
 	}
 	bak, err := os.ReadFile(path + ".bak")
@@ -97,7 +92,7 @@ func TestSetStatusLineManaged_BackupCreated(t *testing.T) {
 	}
 }
 
-func TestSetStatusLineManaged_BackupOverwritten(t *testing.T) {
+func TestSetStatusLine_BackupOverwritten(t *testing.T) {
 	// N13 (review 2026-05-08): originally only checked .bak existed, which
 	// is satisfied even if the second run leaves stale pre-first-run content.
 	// Verify the .bak content actually rotates - i.e. after run-2, .bak
@@ -107,7 +102,7 @@ func TestSetStatusLineManaged_BackupOverwritten(t *testing.T) {
 	if err := os.WriteFile(path, []byte(preRun1), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := SetStatusLineManaged(path); err != nil {
+	if err := SetStatusLine(path); err != nil {
 		t.Fatalf("run 1: %v", err)
 	}
 
@@ -123,7 +118,7 @@ func TestSetStatusLineManaged_BackupOverwritten(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := SetStatusLineManaged(path); err != nil {
+	if err := SetStatusLine(path); err != nil {
 		t.Fatalf("run 2: %v", err)
 	}
 

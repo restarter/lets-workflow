@@ -47,6 +47,8 @@ func makeLegacyBash() []byte {
 }
 
 func TestDetectStatusLineField(t *testing.T) {
+	// Value-match only: orphan _letsManaged keys from older versions are
+	// irrelevant to classification.
 	tests := []struct {
 		name string
 		json string
@@ -54,14 +56,12 @@ func TestDetectStatusLineField(t *testing.T) {
 	}{
 		{"absent", `{}`, StatusLineAbsent},
 		{"empty command", `{"statusLine":{"type":"command","command":""}}`, StatusLineAbsent},
-		{"managed", `{"_letsManaged":{"statusLine":true},"statusLine":{"command":"lets statusline"}}`, StatusLineLetsManaged},
-		{"managed marker but command tampered", `{"_letsManaged":{"statusLine":true},"statusLine":{"command":"/etc/passwd"}}`, StatusLineForeign},
-		{"managed marker but command missing", `{"_letsManaged":{"statusLine":true}}`, StatusLineForeign},
-		{"direct unmanaged", `{"statusLine":{"command":"lets statusline"}}`, StatusLineLetsDirect},
+		{"canonical command", `{"statusLine":{"command":"lets statusline"}}`, StatusLineLetsDirect},
+		{"canonical command + orphan legacy marker", `{"_letsManaged":{"statusLine":true},"statusLine":{"command":"lets statusline"}}`, StatusLineLetsDirect},
 		{"bash wrapper", `{"statusLine":{"command":"bash -c 'cat | bash $(git rev-parse --show-toplevel)/.lets/statusline.sh 2>/dev/null'"}}`, StatusLineLetsBashWrapper},
-		{"foreign", `{"statusLine":{"command":"/usr/local/bin/my-status.sh"}}`, StatusLineForeign},
-		{"managed marker false treated as foreign-or-absent", `{"_letsManaged":{"statusLine":false},"statusLine":{"command":"lets statusline"}}`, StatusLineLetsDirect},
-		{"managed marker non-bool", `{"_letsManaged":{"statusLine":"yes"},"statusLine":{"command":"lets statusline"}}`, StatusLineLetsDirect},
+		{"foreign command", `{"statusLine":{"command":"/usr/local/bin/my-status.sh"}}`, StatusLineForeign},
+		{"foreign + stale marker (marker no longer protects)", `{"_letsManaged":{"statusLine":true},"statusLine":{"command":"/usr/local/bin/my-status.sh"}}`, StatusLineForeign},
+		{"orphan marker, no statusLine field", `{"_letsManaged":{"statusLine":true}}`, StatusLineAbsent},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
