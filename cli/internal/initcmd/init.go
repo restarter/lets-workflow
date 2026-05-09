@@ -230,26 +230,30 @@ func guardProjectRoot(root string) error {
 }
 
 // runBeadsInit invokes `bd init` (if bd on PATH) with 60s timeout.
+//
+// Detection of "already initialized" goes through `bd status` rather than
+// filesystem-layout sniffing — bd's internal layout has changed before
+// (.beads/dolt -> .beads/embeddeddolt/<dbname>/) and value-by-asking-bd is
+// the same pattern we use for git via `git rev-parse`.
 func runBeadsInit(ctx context.Context, projectRoot string) []Step {
 	bdPath, err := exec.LookPath("bd")
 	if err != nil {
 		return []Step{{Status: StepWarn, Message: "bd (beads) not on PATH - install beads plugin"}}
 	}
 
-	beadsDir := filepath.Join(projectRoot, ".beads")
-	doltDir := filepath.Join(beadsDir, "dolt")
-	if entries, err := os.ReadDir(doltDir); err == nil {
-		if len(entries) > 0 {
-			return []Step{{Status: StepSkip, Message: "beads (already initialized)"}}
-		}
-		// empty .beads/dolt/ blocks bd init - clean up
-		if err := os.RemoveAll(beadsDir); err != nil {
-			return []Step{{Status: StepErr, Message: fmt.Sprintf("rm .beads/: %v", err)}}
-		}
+	// Authoritative source-of-truth: ask bd if workspace exists.
+	// bd status exits 0 in initialized workspace, non-zero otherwise.
+	statusCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	statusCmd := exec.CommandContext(statusCtx, bdPath, "status")
+	statusCmd.Dir = projectRoot
+	if err := statusCmd.Run(); err == nil {
+		return []Step{{Status: StepSkip, Message: "beads (already initialized)"}}
 	}
 
-	timeoutCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	defer cancel()
+	// Not initialized -> run bd init
+	timeoutCtx, cancel2 := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel2()
 	cmd := exec.CommandContext(timeoutCtx, bdPath, "init")
 	cmd.Dir = projectRoot
 	out, err := cmd.CombinedOutput()
@@ -264,6 +268,7 @@ func runBeadsInit(ctx context.Context, projectRoot string) []Step {
 
 	steps := []Step{{Status: StepOK, Message: "beads initialized"}}
 
+	beadsDir := filepath.Join(projectRoot, ".beads")
 	if _, err := os.Stat(filepath.Join(beadsDir, "hooks")); err == nil {
 		_ = EnsureGitignore(projectRoot, []string{".beads/hooks/"})
 	}
