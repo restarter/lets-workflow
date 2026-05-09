@@ -57,7 +57,7 @@ The plugin's `hooks.json` and the project's `.claude/settings.json` invoke `lets
 ```bash
 make install
 which lets    # should print the install path
-lets version  # should print "lets version 0.0.0-dev" (or the git tag if HEAD is tagged)
+lets version  # should print "lets version dev" (or the git tag like "v0.5.0" if HEAD is tagged)
 ```
 
 If `which lets` doesn't find the binary:
@@ -78,14 +78,14 @@ After release pipelines ship, end-users install via package manager and never ne
 
 ## Versioning
 
-`internal/version/Version` defaults to the sentinel `0.0.0-dev` for untagged dev builds. Sentinel decoupled from the next release minor so dev builds never need a manual bump - the actual content is in `git log`.
+`internal/version/Version` defaults to the sentinel `dev` for untagged dev builds. Sentinel decoupled from the next release minor so dev builds never need a manual bump - the actual content is in `git log`. Renderers (statusline, cobra `--version`) check `version.IsDev()` and elide the `v` prefix to avoid awkward `vdev`.
 
 The Makefile auto-derives the version from git tags (when HEAD is exactly on a tag), strips leading `v`, and injects via `-ldflags`:
 
 - Tagged HEAD (e.g. `v0.5.0`) → `make build` produces binary stamped with `0.5.0`
-- Dev HEAD → no `-ldflags`, binary uses Go default `0.0.0-dev`
+- Dev HEAD → no `-ldflags`, binary uses Go default `dev`
 
-**Lockstep with the plugin.** Plugin and CLI share one version - bumping `plugins/lets/.claude-plugin/plugin.json` `"version"` and tagging `vX.Y.Z` happens together at release time. Release scripting handled by `lets-pplgq`.
+**Lockstep with the plugin.** Plugin and CLI share one version - bumping `plugins/lets/.claude-plugin/plugin.json` `"version"` and tagging `vX.Y.Z` happens together at release time. Release scripting lives in `scripts/release/{bump-version,verify-versions}.sh` + `Makefile` targets `bump`/`release-tag`; tag-driven distribution via `.goreleaser.yml` + `.github/workflows/release.yml`. Full ceremony documented in `RELEASING.md`.
 
 **Module path is load-bearing.** `go install github.com/restarter/lets-workflow/cli/cmd/lets@latest` depends on this exact path. Renaming the `cli/` directory or moving the repo requires a deprecation cycle (old import paths fail).
 
