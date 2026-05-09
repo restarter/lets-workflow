@@ -54,8 +54,24 @@ snapshot:
 
 # Release notes are written from CHANGELOG.md — extracted by release.yml workflow
 # step before invoking goreleaser, passed via --release-notes flag.
+#
+# IMPORTANT: do NOT set `changelog.disable: true` here. That flag disables the
+# entire changelog pipe in goreleaser, which silently swallows --release-notes
+# content too — the GH Release body comes out empty. Verified failure on
+# v0.5.0-rc.1 and v0.5.0 (lets-bv8lc).
+#
+# Instead, suppress goreleaser's commit-from-git-log default by using an empty
+# `use:` source (no auto-generated changelog appended below our notes) while
+# leaving the pipe enabled so --release-notes is honored.
 changelog:
-  disable: true
+  use: github
+  filters:
+    exclude:
+      - "^chore:"
+      - "^docs:"
+      - "^test:"
+      - "Merge pull request"
+      - "Merge branch"
 
 release:
   github:
