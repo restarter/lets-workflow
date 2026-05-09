@@ -13,18 +13,18 @@ func TestParseLegacyYaml(t *testing.T) {
 		body string
 		want Prefs
 	}{
-		{"empty", ``, Prefs{Language: "English", MergeBranch: "main", PRFlow: "local"}},
-		{"all keys", "language: Ukrainian\nmerge-branch: develop\ngithub: true\n", Prefs{Language: "Ukrainian", MergeBranch: "develop", PRFlow: "github"}},
-		{"github false", "github: false\n", Prefs{Language: "English", MergeBranch: "main", PRFlow: "local"}},
-		{"github bitbucket", "github: bitbucket\n", Prefs{Language: "English", MergeBranch: "main", PRFlow: "bitbucket"}},
-		{"with inline comments", "language: English # default\nmerge-branch: main\n", Prefs{Language: "English", MergeBranch: "main", PRFlow: "local"}},
-		{"unsafe value rejected", "language: foo;rm -rf /\n", Prefs{Language: "English", MergeBranch: "main", PRFlow: "local"}},
-		{"CRLF line endings", "language: Ukrainian\r\nmerge-branch: develop\r\n", Prefs{Language: "Ukrainian", MergeBranch: "develop", PRFlow: "local"}},
-		{"UTF-8 BOM prefix", "\xEF\xBB\xBFlanguage: English\nmerge-branch: main\n", Prefs{Language: "English", MergeBranch: "main", PRFlow: "local"}},
-		{"BOM + CRLF", "\xEF\xBB\xBFlanguage: Ukrainian\r\n", Prefs{Language: "Ukrainian", MergeBranch: "main", PRFlow: "local"}},
-		{"trailing whitespace + comment", "github: true   # use github\n", Prefs{Language: "English", MergeBranch: "main", PRFlow: "github"}},
-		{"single-quoted value", "language: 'English'\n", Prefs{Language: "English", MergeBranch: "main", PRFlow: "local"}},
-		{"double-quoted value", `language: "English"` + "\n", Prefs{Language: "English", MergeBranch: "main", PRFlow: "local"}},
+		{"empty", ``, Prefs{Language: "English", MergeBranch: "main", PRFlow: "local", Tracker: "beads"}},
+		{"all keys", "language: Ukrainian\nmerge-branch: develop\ngithub: true\n", Prefs{Language: "Ukrainian", MergeBranch: "develop", PRFlow: "github", Tracker: "beads"}},
+		{"github false", "github: false\n", Prefs{Language: "English", MergeBranch: "main", PRFlow: "local", Tracker: "beads"}},
+		{"github bitbucket", "github: bitbucket\n", Prefs{Language: "English", MergeBranch: "main", PRFlow: "bitbucket", Tracker: "beads"}},
+		{"with inline comments", "language: English # default\nmerge-branch: main\n", Prefs{Language: "English", MergeBranch: "main", PRFlow: "local", Tracker: "beads"}},
+		{"unsafe value rejected", "language: foo;rm -rf /\n", Prefs{Language: "English", MergeBranch: "main", PRFlow: "local", Tracker: "beads"}},
+		{"CRLF line endings", "language: Ukrainian\r\nmerge-branch: develop\r\n", Prefs{Language: "Ukrainian", MergeBranch: "develop", PRFlow: "local", Tracker: "beads"}},
+		{"UTF-8 BOM prefix", "\xEF\xBB\xBFlanguage: English\nmerge-branch: main\n", Prefs{Language: "English", MergeBranch: "main", PRFlow: "local", Tracker: "beads"}},
+		{"BOM + CRLF", "\xEF\xBB\xBFlanguage: Ukrainian\r\n", Prefs{Language: "Ukrainian", MergeBranch: "main", PRFlow: "local", Tracker: "beads"}},
+		{"trailing whitespace + comment", "github: true   # use github\n", Prefs{Language: "English", MergeBranch: "main", PRFlow: "github", Tracker: "beads"}},
+		{"single-quoted value", "language: 'English'\n", Prefs{Language: "English", MergeBranch: "main", PRFlow: "local", Tracker: "beads"}},
+		{"double-quoted value", `language: "English"` + "\n", Prefs{Language: "English", MergeBranch: "main", PRFlow: "local", Tracker: "beads"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -137,8 +137,8 @@ func TestMigrateYamlToEnv(t *testing.T) {
 	if !did {
 		t.Errorf("expected migration, did=false")
 	}
-	if !strings.Contains(msg, ".env") {
-		t.Errorf("msg = %q", msg)
+	if !strings.Contains(msg, "deleted") {
+		t.Errorf("msg = %q, want to mention 'deleted'", msg)
 	}
 	envData, err := os.ReadFile(filepath.Join(letsDir, ".env"))
 	if err != nil {
@@ -148,35 +148,46 @@ func TestMigrateYamlToEnv(t *testing.T) {
 		t.Errorf(".env missing LETS_LANGUAGE=Ukrainian")
 	}
 	if _, err := os.Stat(yamlPath); !os.IsNotExist(err) {
-		t.Errorf("yaml not renamed")
+		t.Errorf("yaml not deleted after migration")
 	}
-	if _, err := os.Stat(yamlPath + ".deprecated"); err != nil {
-		t.Errorf(".deprecated rename missing: %v", err)
+	if _, err := os.Stat(yamlPath + ".deprecated"); !os.IsNotExist(err) {
+		t.Errorf(".deprecated file should not be created (we delete outright)")
 	}
 }
 
-func TestMigrateYamlToEnv_SkipsWhenEnvExists(t *testing.T) {
+func TestMigrateYamlToEnv_OrphanCleanupWhenEnvExists(t *testing.T) {
+	// When .env and config.yaml coexist (mixed-state install), the orphan
+	// yaml is deleted, .env left untouched. did=true so caller renders this
+	// as a migration-related action (StepMigrate).
 	tmp := t.TempDir()
 	letsDir := filepath.Join(tmp, ".lets")
 	os.MkdirAll(letsDir, 0o755)
 	envPath := filepath.Join(letsDir, ".env")
-	if err := os.WriteFile(envPath, []byte("# already here\n"), 0o644); err != nil {
+	envContent := "LETS_LANGUAGE=English\n# already here\n"
+	if err := os.WriteFile(envPath, []byte(envContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	yamlPath := filepath.Join(letsDir, "config.yaml")
 	if err := os.WriteFile(yamlPath, []byte("language: Ukrainian\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, did, err := MigrateYamlToEnv(tmp)
+	msg, did, err := MigrateYamlToEnv(tmp)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if did {
-		t.Errorf("did=true, want false (env existed)")
+	if !did {
+		t.Errorf("did=false; orphan cleanup should signal did=true so it renders as StepMigrate")
 	}
-	// yaml should still be present (not renamed)
-	if _, err := os.Stat(yamlPath); err != nil {
-		t.Errorf("yaml renamed unexpectedly: %v", err)
+	if !strings.Contains(msg, "superseded") {
+		t.Errorf("msg = %q, want mention of 'superseded'", msg)
+	}
+	if _, err := os.Stat(yamlPath); !os.IsNotExist(err) {
+		t.Errorf("orphan yaml not removed")
+	}
+	// .env untouched
+	got, _ := os.ReadFile(envPath)
+	if string(got) != envContent {
+		t.Errorf(".env modified during orphan cleanup:\n got:  %q\n want: %q", got, envContent)
 	}
 }
 

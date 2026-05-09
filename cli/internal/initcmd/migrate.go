@@ -32,27 +32,40 @@ func MigrateStatuslineSh(projectRoot string) (string, error) {
 	return "", nil
 }
 
-// MigrateYamlToEnv reads legacy .lets/config.yaml, writes .lets/.env, renames
-// yaml to .lets/config.yaml.deprecated. No-op if .env already exists or yaml
-// absent.
+// MigrateYamlToEnv reads legacy .lets/config.yaml, writes .lets/.env, deletes
+// the yaml. Also handles the orphan case where both .env and yaml coexist
+// (mixed-state cleanup): yaml deleted, .env left as-is.
 //
 // Return contract:
 //   - msg!="", did=true, err=nil → migration ran (StepMigrate by caller)
 //   - msg!="", did=false, err=nil → soft warning surfaced to caller (e.g. yaml
 //     present but unreadable due to permissions); rendered as StepWarn
-//   - msg=="", did=false, err=nil → no-op (yaml absent or .env already exists)
-//   - err!=nil → hard failure (parse/write/rename error); caller aborts
+//   - msg=="", did=false, err=nil → no-op (yaml absent)
+//   - err!=nil → hard failure (parse/write/remove error); caller aborts
 func MigrateYamlToEnv(projectRoot string) (string, bool, error) {
 	yamlPath := filepath.Join(projectRoot, ".lets", "config.yaml")
 	envPath := filepath.Join(projectRoot, ".lets", ".env")
-	if _, err := os.Stat(envPath); err == nil {
-		return "", false, nil
-	}
-	yamlData, err := os.ReadFile(yamlPath)
-	if err != nil {
+
+	if _, err := os.Stat(yamlPath); err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return "", false, nil
 		}
+		return "", false, err
+	}
+
+	if _, err := os.Stat(envPath); err == nil {
+		// Orphan yaml lying alongside fresh .env - remove it. .env is
+		// authoritative; yaml is a leftover from a partial earlier state.
+		if err := os.Remove(yamlPath); err != nil {
+			return "", false, err
+		}
+		// did=true so the caller renders this as StepMigrate (a migration-
+		// related action, even if not a strict yaml→env conversion).
+		return "removed legacy .lets/config.yaml (superseded by existing .env)", true, nil
+	}
+
+	yamlData, err := os.ReadFile(yamlPath)
+	if err != nil {
 		// File exists but unreadable (permissions, IO). Surface as warn so
 		// the user knows their legacy config wasn't migrated silently.
 		return fmt.Sprintf(".lets/config.yaml present but unreadable (%v) - migration skipped", err), false, nil
@@ -68,11 +81,10 @@ func MigrateYamlToEnv(projectRoot string) (string, bool, error) {
 	if err := atomicWriteBytes(envPath, envBytes, 0o644); err != nil {
 		return "", false, err
 	}
-	deprecatedPath := yamlPath + ".deprecated"
-	if err := os.Rename(yamlPath, deprecatedPath); err != nil {
+	if err := os.Remove(yamlPath); err != nil {
 		return "", false, err
 	}
-	return ".lets/config.yaml -> .lets/.env (yaml renamed to .deprecated)", true, nil
+	return ".lets/config.yaml -> .lets/.env (yaml deleted)", true, nil
 }
 
 var (
@@ -103,7 +115,7 @@ func parseLegacyYaml(data []byte) (Prefs, error) {
 		}
 	}
 
-	p := Prefs{Language: "English", MergeBranch: "main", PRFlow: "local"}
+	p := Prefs{Language: "English", MergeBranch: "main", PRFlow: "local", Tracker: "beads"}
 
 	// Sanitize: each captured value must be safe.
 	allowedRe := regexp.MustCompile(`^[A-Za-z0-9._/-]+$`)
