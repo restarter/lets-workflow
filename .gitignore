@@ -13,6 +13,7 @@ dolt-monitor.*
 .worktrees/
 .claude/worktrees/
 .beads/
+/docs-local/
 
 # Beads / Dolt files (added by bd init)
 .beads-credential-key
