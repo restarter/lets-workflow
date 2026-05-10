@@ -52,12 +52,10 @@ curl -fsSL https://raw.githubusercontent.com/restarter/lets-workflow/main/script
 ```
 
 <!-- TEMP: remove this block once repo is public -->
-> ⚠️ **Repo is private during testing** — the curl one-liner above returns 404 until we go public. For now, use the authenticated path with [`gh`](https://cli.github.com/) (run `gh auth login` first if needed):
+> ⚠️ **Repo is private during testing** — the curl one-liner above returns 404 until we go public. For now, use [`gh`](https://cli.github.com/) (run `gh auth login` first if needed):
 >
 > ```bash
-> gh repo clone restarter/lets-workflow /tmp/lets-workflow
-> GITHUB_TOKEN=$(gh auth token) bash /tmp/lets-workflow/scripts/install.sh
-> rm -rf /tmp/lets-workflow
+> GITHUB_TOKEN=$(gh auth token) bash <(gh api -H 'Accept: application/vnd.github.raw' repos/restarter/lets-workflow/contents/scripts/install.sh)
 > ```
 >
 > This block will be removed when the repo goes public.
