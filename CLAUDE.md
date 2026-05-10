@@ -66,7 +66,7 @@ References that resolve via `${CLAUDE_PLUGIN_ROOT}` (e.g. `${CLAUDE_PLUGIN_ROOT}
 - All analyst agents have prompt-level read-only Bash constraints in their `## Constraints` section (identical 1-line allowlist across all 13). `hooks/validate-readonly.sh.old` exists as a PreToolUse hook prototype (not yet registered - agent frontmatter hooks silently ignored)
 - Interactive worktrees managed via `/lets:worktree` command. Hook prototypes `hooks/worktree-setup.sh.old` and `hooks/worktree-cleanup.sh.old` (deferred - caused agent auto-cleanup issues)
 - Worktrees stored in `.worktrees/` at project root - `.lets/` symlinked for interactive sessions
-- **SessionStart hook** invokes the Go subcommand `lets hook session-start --rules=${CLAUDE_PLUGIN_ROOT}/rules/lets-rules.md`. It emits ONLY: optional `## LETS Notice` (drift check via `frontmatter.ReadVersion` on plugin vs `.claude/rules/lets-rules.md`) + `## LETS Config` block. Total output is <500 chars - well under Claude Code's 10K hook output cap (lets-q9bx7). Workflow rules themselves live in the project's `.claude/rules/lets-rules.md` (uncapped project-instructions channel), copied there by `lets init` and version-tracked via frontmatter. Project root detected via `git rev-parse --show-toplevel` with `os.Getwd()` fallback.
+- **SessionStart hook** invokes the Go subcommand `lets hook session-start --rules=${CLAUDE_PLUGIN_ROOT}/rules/lets-rules.md`. It emits: optional `## LETS Notice` (drift check via `frontmatter.ReadVersion` on plugin vs `.claude/rules/lets-rules.md`) + `## LETS Config` block (values + `### About these values` explainer embedded from `cli/internal/hook/sessionstart/local_config_explainer.md`). Total output ~2KB - well under Claude Code's 10K hook output cap (lets-q9bx7). Workflow rules themselves live in the project's `.claude/rules/lets-rules.md` (uncapped project-instructions channel), copied there by `lets init` and version-tracked via frontmatter. Project root detected via `git rev-parse --show-toplevel` with `os.Getwd()` fallback.
 - **PreCompact hook** invokes `lets hook precompact --rules=${CLAUDE_PLUGIN_ROOT}/rules/lets-rules.md` (separate cobra subcommand, currently shares output behavior with `session-start` via `sessionstart.Run()`). Distinct subcommand kept for future divergence (e.g. context snapshotting before compaction).
 - The bash `session-start.sh` was deleted along with its yaml→env migration block - lets-p732a closed.
 - Dual-hook pattern (same effective output on both events) follows beads precedent: [issue #486](https://github.com/gastownhall/beads/issues/486) and [PR #297](https://github.com/gastownhall/beads/pull/297). SessionStart on `compact` source re-injects rules into the post-compaction context; PreCompact ensures rules are in the pre-compaction context that the auto-summary is generated from - prevents workflow drift after compaction in long sessions.
@@ -130,6 +130,8 @@ Workflow rules live OUTSIDE `.lets/` because they belong to Claude Code's projec
 ```
 .claude/rules/lets-rules.md  # Workflow rules (copied from plugin by `lets init`, frontmatter-versioned, customizable - tracked in git per project's choice)
 ```
+
+**NEVER edit `.claude/rules/lets-rules.md` directly.** It is the **installed copy**, plugin-managed. Only the canonical source `plugins/lets/rules/lets-rules.md` is edited. The installed copy is rewritten by `/lets:init` (and only via that path) when the plugin's frontmatter `version` is bumped — this dogfoods drift detection live. Workflow: edit source -> bump source `version` -> commit -> release -> end user (or maintainer) runs `/lets:init` -> installed copy refreshed. Editing the installed copy directly bypasses drift testing and silently desyncs from source.
 
 ## Naming Convention: `LETS_*`
 
@@ -202,11 +204,13 @@ Then document in this CLAUDE.md "LETS Config keys" table + `README.md` Configura
 
 ## When Adding/Modifying Commands, Skills, or Agents
 
+**Rules-file rule:** edits go ONLY to `plugins/lets/rules/lets-rules.md` (the canonical source). NEVER touch `.claude/rules/lets-rules.md` (installed copy) — that file is refreshed exclusively via `/lets:init` after a source bump. This is intentional: we eat our own dogfood for drift detection.
+
 Update these files:
 
 | File | What to update |
 |------|----------------|
-| `plugins/lets/rules/lets-rules.md` | Skill Quick Reference table (frontmatter `version` bump on any change so SessionStart drift check fires for installed users) |
+| `plugins/lets/rules/lets-rules.md` | Skill Quick Reference table (frontmatter `version` bump on any change so SessionStart drift check fires for installed users). Edit ONLY here, never the installed `.claude/rules/lets-rules.md`. |
 | `commands/install.md` | Essential Skills / Planning Skills tables |
 | `CLAUDE.md` Key Concepts | If adding a new skill |
 | `README.md` | Agent table, feature descriptions |

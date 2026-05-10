@@ -1,9 +1,14 @@
 // Package sessionstart implements the SessionStart + PreCompact hook output:
-// it writes ONLY the LETS Config block (and an optional drift notice) to the
+// it writes the LETS Config block (and an optional drift notice) to the
 // provided writer. Workflow rules themselves live in the project's
 // .claude/rules/lets-rules.md (uncapped Claude Code project-instructions
 // channel) - they are NOT emitted by the hook (Phase 4b: lets-q9bx7 fix for
 // the 10K hook output cap that silently truncated the 17KB rules-context.md).
+//
+// Per-key usage docs (the "Local Config" explainer) are embedded from
+// local_config_explainer.md and emitted right after the values block, so
+// the values arrive self-documenting and the explainer survives compaction
+// the same way the values do (lets-q9bx7 scope extension 2026-05-10).
 //
 // This package owns no I/O policy: callers supply the (plugin) rules file
 // path - used for drift comparison vs the installed rules - the project root,
@@ -12,6 +17,7 @@
 package sessionstart
 
 import (
+	_ "embed"
 	"fmt"
 	"io"
 	"os"
@@ -24,10 +30,15 @@ import (
 	"github.com/restarter/lets-workflow/cli/internal/letsconfig"
 )
 
+//go:embed local_config_explainer.md
+var localConfigExplainer string
+
 // Run writes the SessionStart hook output to w:
 //  1. Optional ## LETS Notice block (drift check: rules missing or outdated)
 //  2. Blank line
 //  3. ## LETS Config block (LETS_PROJECT_ROOT + .env whitelisted keys)
+//  4. Blank line
+//  5. ### About these values explainer (embedded from local_config_explainer.md)
 //
 // rulesPath is the plugin's rules/lets-rules.md (for version compare against
 // the installed copy at <projectRoot>/.claude/rules/lets-rules.md).
@@ -65,6 +76,12 @@ func Run(w io.Writer, rulesPath, projectRoot string) error {
 				return err
 			}
 		}
+	}
+	if _, err := fmt.Fprintln(w); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprint(w, localConfigExplainer); err != nil {
+		return err
 	}
 	return nil
 }
