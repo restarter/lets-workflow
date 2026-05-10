@@ -1,8 +1,8 @@
 # lets CLI
 
-Go binary that ships alongside the LETS Claude Code plugin (`../plugins/lets/`).
+Go binary that ships alongside the LETS Claude Code plugin (`../plugins/lets-workflow/`).
 
-The plugin's `hooks.json` and slash commands invoke `lets <subcommand>` for cross-platform behavior. Eventually replaces all bash scripts under `plugins/lets/hooks/` and `plugins/lets/scripts/lets/`.
+The plugin's `hooks.json` and slash commands invoke `lets <subcommand>` for cross-platform behavior. Eventually replaces all bash scripts under `plugins/lets-workflow/hooks/` and `plugins/lets-workflow/scripts/lets/`.
 
 ## Layout
 
@@ -85,7 +85,7 @@ The Makefile auto-derives the version from git tags (when HEAD is exactly on a t
 - Tagged HEAD (e.g. `v0.5.0`) → `make build` produces binary stamped with `0.5.0`
 - Dev HEAD → no `-ldflags`, binary uses Go default `dev`
 
-**Lockstep with the plugin.** Plugin and CLI share one version - bumping `plugins/lets/.claude-plugin/plugin.json` `"version"` and tagging `vX.Y.Z` happens together at release time. Release scripting lives in `scripts/release/{bump-version,verify-versions}.sh` + `Makefile` targets `bump`/`release-tag`; tag-driven distribution via `.goreleaser.yml` + `.github/workflows/release.yml`. Full ceremony documented in `RELEASING.md`.
+**Lockstep with the plugin.** Plugin and CLI share one version - bumping `plugins/lets-workflow/.claude-plugin/plugin.json` `"version"` and tagging `vX.Y.Z` happens together at release time. Release scripting lives in `scripts/release/{bump-version,verify-versions}.sh` + `Makefile` targets `bump`/`release-tag`; tag-driven distribution via `.goreleaser.yml` + `.github/workflows/release.yml`. Full ceremony documented in `RELEASING.md`.
 
 **Module path is load-bearing.** `go install github.com/restarter/lets-workflow/cli/cmd/lets@latest` depends on this exact path. Renaming the `cli/` directory or moving the repo requires a deprecation cycle (old import paths fail).
 

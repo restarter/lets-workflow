@@ -12,12 +12,12 @@
 //  1. Append a Key{Name, Comment, Default} entry to Keys below
 //  2. Add field to Prefs struct in cli/internal/initcmd/render.go AND add
 //     ONE entry to Prefs.AsValues() map (one-line addition right below)
-//  3. Bump frontmatter version in plugins/lets/rules/lets-rules.md
+//  3. Bump frontmatter version in plugins/lets-workflow/rules/lets-rules.md
 //
 // If the key is exposed via the /lets:init slash command (most are):
 //  4. Add a --<key> cobra flag in cli/internal/cli/init.go (raw flag value
 //     passed directly into Prefs; empty indicates "user did not pass --<key>")
-//  5. Add an AskUserQuestion in plugins/lets/commands/init.md
+//  5. Add an AskUserQuestion in plugins/lets-workflow/commands/init.md
 //
 // Auto-derived (no edit needed):
 //   - .lets/.env content       (renderEnv → renderTemplate(Header, p.AsValues()))

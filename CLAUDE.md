@@ -4,11 +4,11 @@ Claude Code plugin for development workflow with session management, code review
 
 ## Structure
 
-Monorepo layout (beads-style): plugin source in `plugins/lets/` subdirectory, marketplace manifest at root pointing into it. Infrastructure scripts and docs stay at root, outside the plugin payload.
+Monorepo layout (beads-style): plugin source in `plugins/lets-workflow/` subdirectory, marketplace manifest at root pointing into it. Infrastructure scripts and docs stay at root, outside the plugin payload.
 
 ```
-.claude-plugin/marketplace.json   # Marketplace manifest (source: ./plugins/lets)
-plugins/lets/                     # Plugin payload (everything ${CLAUDE_PLUGIN_ROOT} resolves to)
+.claude-plugin/marketplace.json   # Marketplace manifest (source: ./plugins/lets-workflow)
+plugins/lets-workflow/                     # Plugin payload (everything ${CLAUDE_PLUGIN_ROOT} resolves to)
 ├── .claude-plugin/plugin.json    #   Plugin manifest (Claude Code; .codex-plugin/ planned for multi-agent)
 ├── commands/                     #   Slash commands (/lets:start, /lets:done, /lets:review, etc.)
 ├── agents/                       #   14 expert agents dispatched by review/opinion/ask/plan/brainstorm/team
@@ -31,11 +31,11 @@ docs/                             # Plans, knowledge base, reference docs, comme
 reference/                        # Reference plugins for studying patterns (gitignored)
 ```
 
-References that resolve via `${CLAUDE_PLUGIN_ROOT}` (e.g. `${CLAUDE_PLUGIN_ROOT}/skills/X/SKILL.md`) work as before - the env var points at `plugins/lets/`.
+References that resolve via `${CLAUDE_PLUGIN_ROOT}` (e.g. `${CLAUDE_PLUGIN_ROOT}/skills/X/SKILL.md`) work as before - the env var points at `plugins/lets-workflow/`.
 
 ## Key Concepts
 
-> Path convention: paths like `commands/`, `skills/`, `rules/lets-rules.md` in this doc are **relative to `plugins/lets/`** (the plugin root, also exposed as `${CLAUDE_PLUGIN_ROOT}` at runtime). Paths starting with `scripts/release/`, `scripts/remote/`, `docs/`, `reference/` are relative to the **repo root** (outside the plugin payload).
+> Path convention: paths like `commands/`, `skills/`, `rules/lets-rules.md` in this doc are **relative to `plugins/lets-workflow/`** (the plugin root, also exposed as `${CLAUDE_PLUGIN_ROOT}` at runtime). Paths starting with `scripts/release/`, `scripts/remote/`, `docs/`, `reference/` are relative to the **repo root** (outside the plugin payload).
 >
 > Go CLI source paths (`cli/cmd/lets/main.go`, `cli/internal/...`) are relative to the **repo root**. The Go module root is `cli/` - all `go` commands operate from there (or via the repo-root `Makefile`).
 
@@ -43,7 +43,7 @@ References that resolve via `${CLAUDE_PLUGIN_ROOT}` (e.g. `${CLAUDE_PLUGIN_ROOT}
 - **Agents** = experts dispatched by commands. `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:brainstorm` dispatch via subagents. `/lets:team` dispatches via Agent Teams (parallel, worktree isolation). `actor` is a meta-agent that loads external personalities (URL or file) and adapts them to LETS modes
 - **Orchestrators** = commands that delegate to other commands. `/lets:pr` orchestrates `/lets:review` for full PR lifecycle
 - **Hooks** = SessionStart + PreCompact inject workflow rules (PreCompact preserves rules across context compaction in long sessions)
-- **Statusline** = `lets statusline` Go subcommand. Project `.claude/settings.json` invokes it directly. `lets init` detects the canonical command via value-match against `"lets statusline"`; foreign user-customized commands are left alone. Legacy bash shim `plugins/lets/scripts/lets/statusline.sh` removed in lets-8ilsl. Byte-equal detection of pre-deletion installs (.lets/statusline.sh) handled via the frozen `cli/internal/initcmd/embedded_statusline_shim.sh` snapshot — `MigrateStatuslineSh` deletes matching legacy shims and triggers `SetStatusLine` to point settings.json at `lets statusline`.
+- **Statusline** = `lets statusline` Go subcommand. Project `.claude/settings.json` invokes it directly. `lets init` detects the canonical command via value-match against `"lets statusline"`; foreign user-customized commands are left alone. Legacy bash shim `plugins/lets-workflow/scripts/lets/statusline.sh` removed in lets-8ilsl. Byte-equal detection of pre-deletion installs (.lets/statusline.sh) handled via the frozen `cli/internal/initcmd/embedded_statusline_shim.sh` snapshot — `MigrateStatuslineSh` deletes matching legacy shims and triggers `SetStatusLine` to point settings.json at `lets statusline`.
 - **`.env` versioning** — first key `LETS_ENV_VERSION` records which `lets` binary version last regenerated the file. `lets init` regenerates when version mismatches the running binary OR when CLI prefs flags are passed with new values. `RegenerateEnv` (`cli/internal/initcmd/env.go`) is the canonical writer; preserves user values + foreign keys (under `# User-added keys` separator), refreshes header. NOT in `letsconfig.Keys` whitelist (metadata, not user-config) — hook session injection skips it. Reusable for future `/lets:update` (lets-hdrdr.3).
 - **Skills** = reusable actions in `skills/<name>/SKILL.md`. Two types: user-facing (auto-discovered, triggered via description match or Skill tool) and internal (not auto-discovered, read by commands via Read tool when needed). Examples: `create-task`, `commit`, `take-task` (user-facing), `detect-task`, `actor-fetch-personality` (internal)
 
@@ -180,12 +180,12 @@ Required edits:
 
 1. Append `Key{Name, Comment, Default}` entry to `letsconfig.Keys`. Name MUST start with `LETS_`.
 2. Add field to `Prefs` struct in `cli/internal/initcmd/render.go` AND add ONE entry to `Prefs.AsValues()` map (one-line addition right below the field).
-3. Bump frontmatter `version` in `plugins/lets/rules/lets-rules.md` so SessionStart drift check fires for installed users on next session.
+3. Bump frontmatter `version` in `plugins/lets-workflow/rules/lets-rules.md` so SessionStart drift check fires for installed users on next session.
 
 If the key is exposed via the `/lets:init` slash command (most are):
 
 4. Add a `--<key>` cobra flag in `cli/internal/cli/init.go` and wire it through `flagOrDefault(flag<X>, defaults["LETS_X"])` in prefs construction.
-5. Add an AskUserQuestion in `plugins/lets/commands/init.md` (Step 2 first-time path + Step 3d "Keep current" option in change-config path).
+5. Add an AskUserQuestion in `plugins/lets-workflow/commands/init.md` (Step 2 first-time path + Step 3d "Keep current" option in change-config path).
 
 Auto-derived (no edit needed):
 - `.lets/.env` content (renderEnv → renderTemplate(Header, p.AsValues()))
@@ -206,7 +206,7 @@ Update these files:
 
 | File | What to update |
 |------|----------------|
-| `plugins/lets/rules/lets-rules.md` | Skill Quick Reference table (frontmatter `version` bump on any change so SessionStart drift check fires for installed users) |
+| `plugins/lets-workflow/rules/lets-rules.md` | Skill Quick Reference table (frontmatter `version` bump on any change so SessionStart drift check fires for installed users) |
 | `commands/install.md` | Essential Skills / Planning Skills tables |
 | `CLAUDE.md` Key Concepts | If adding a new skill |
 | `README.md` | Agent table, feature descriptions |
@@ -240,7 +240,7 @@ Every lets:* command MUST end with branded LETS box:
 ### Command Checklist
 
 - [ ] Has LETS box in output section
-- [ ] Updates Skill Quick Reference in `plugins/lets/rules/lets-rules.md` (and bump frontmatter `version`)
+- [ ] Updates Skill Quick Reference in `plugins/lets-workflow/rules/lets-rules.md` (and bump frontmatter `version`)
 - [ ] Updates `/lets:install` Essential Skills / Planning Skills tables
 - [ ] Follows session flow (start -> work -> commit -> done -> end)
 - [ ] Description is clear and actionable
