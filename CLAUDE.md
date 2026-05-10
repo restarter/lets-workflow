@@ -131,6 +131,8 @@ Workflow rules live OUTSIDE `.lets/` because they belong to Claude Code's projec
 .claude/rules/lets-rules.md  # Workflow rules (copied from plugin by `lets init`, frontmatter-versioned, customizable - tracked in git per project's choice)
 ```
 
+**NEVER edit `.claude/rules/lets-rules.md` directly.** It is the **installed copy**, plugin-managed. Only the canonical source `plugins/lets/rules/lets-rules.md` is edited. The installed copy is rewritten by `/lets:init` (and only via that path) when the plugin's frontmatter `version` is bumped — this dogfoods drift detection live. Workflow: edit source -> bump source `version` -> commit -> release -> end user (or maintainer) runs `/lets:init` -> installed copy refreshed. Editing the installed copy directly bypasses drift testing and silently desyncs from source.
+
 ## Naming Convention: `LETS_*`
 
 All plugin configuration uses the `LETS_*` prefix (UPPER_SNAKE_CASE). The prefix removes ambiguity in command instructions - `LETS_PR_FLOW=github` is unambiguously a parameter, while `github` could be the platform name.
@@ -202,11 +204,13 @@ Then document in this CLAUDE.md "LETS Config keys" table + `README.md` Configura
 
 ## When Adding/Modifying Commands, Skills, or Agents
 
+**Rules-file rule:** edits go ONLY to `plugins/lets/rules/lets-rules.md` (the canonical source). NEVER touch `.claude/rules/lets-rules.md` (installed copy) — that file is refreshed exclusively via `/lets:init` after a source bump. This is intentional: we eat our own dogfood for drift detection.
+
 Update these files:
 
 | File | What to update |
 |------|----------------|
-| `plugins/lets/rules/lets-rules.md` | Skill Quick Reference table (frontmatter `version` bump on any change so SessionStart drift check fires for installed users) |
+| `plugins/lets/rules/lets-rules.md` | Skill Quick Reference table (frontmatter `version` bump on any change so SessionStart drift check fires for installed users). Edit ONLY here, never the installed `.claude/rules/lets-rules.md`. |
 | `commands/install.md` | Essential Skills / Planning Skills tables |
 | `CLAUDE.md` Key Concepts | If adding a new skill |
 | `README.md` | Agent table, feature descriptions |

@@ -1,6 +1,6 @@
 ---
 name: lets-rules
-version: 0.5.0
+version: 0.5.1
 ---
 
 <!-- DO NOT EDIT - managed by lets init / lets install. To add custom rules, create a sibling *.md file in this directory (e.g. .claude/rules/team-conventions.md). Files prefixed `lets-` are owned by the LETS plugin and overwritten on update. -->
@@ -340,12 +340,12 @@ These skills fire automatically when you describe the action in conversation:
 | Ending with uncommitted changes | Warn, suggest `/lets:commit` |
 | Task seems complete but no `/lets:done` | Suggest `/lets:done` |
 | Task in progress, no recent commits | Remind about `/lets:commit` |
-| Context window > 70% | Warn, suggest `/lets:end` and new window |
+| Long session + new large scope being proposed | Suggest finishing current work + `/lets:end` before starting new scope |
 
 ## Context Window Management
 
-| Usage | Action |
-|-------|--------|
-| < 50% | Safe to continue |
-| 50-70% | Proceed with caution |
-| > 70% | Split session: save plan to docs/, `/lets:end`, new window, `/lets:start` |
+You don't have programmatic access to your own token count, and context window size varies per account (200k - 1M). Don't guess percentages.
+
+- If user asks how much context is used, tell them to run `/context` - don't speculate.
+- Late in a long session (many tool calls, file edits, hours of work), avoid starting a fundamentally new large scope. Suggest finishing current task and `/lets:end` for a fresh window first.
+- Trust user's judgement: if they want to continue despite a long session, continue.
