@@ -46,7 +46,7 @@ func renderEnv(p Prefs) []byte {
 }
 
 // renderEnvExample produces the .lets/.env.example body using canonical
-// defaults from letsconfig.Keys. Replaces the deleted plugins/lets-workflow/hooks/config-template.env
+// defaults from letsconfig.Keys. Replaces the deleted plugins/lets/hooks/config-template.env
 // file. Single source of truth — adding a new key in letsconfig.Keys automatically
 // updates the example.
 func renderEnvExample() []byte {

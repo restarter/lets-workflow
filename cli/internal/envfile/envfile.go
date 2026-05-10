@@ -1,7 +1,7 @@
 // Package envfile parses .env files in the restricted format used by LETS:
 // KEY=VALUE per line, # comments above keys (no inline), no multi-line values,
 // no quote stripping, no variable expansion. Mirrors the whitelist parser in
-// plugins/lets-workflow/hooks/session-start.sh.
+// plugins/lets/hooks/session-start.sh.
 package envfile
 
 import (
