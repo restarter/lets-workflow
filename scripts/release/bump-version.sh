@@ -83,7 +83,7 @@ if ! $IS_PRERELEASE; then
   fi
 fi
 
-CURRENT=$(jq -r .version plugins/lets/.claude-plugin/plugin.json)
+CURRENT=$(jq -r .version plugins/lets-workflow/.claude-plugin/plugin.json)
 echo -e "${YELLOW}Bumping: $CURRENT → $NEW_VERSION${NC}"
 [ "$DRY_RUN" = true ] && echo "  (dry-run mode: no commits will be made)"
 
@@ -93,10 +93,10 @@ TMP=$(mktemp)
 trap 'rm -f "$TMP"' EXIT
 
 # 1. plugin.json
-echo "  • plugins/lets/.claude-plugin/plugin.json"
+echo "  • plugins/lets-workflow/.claude-plugin/plugin.json"
 jq --indent 2 --arg v "$NEW_VERSION" '.version = $v' \
-   plugins/lets/.claude-plugin/plugin.json > "$TMP"
-mv "$TMP" plugins/lets/.claude-plugin/plugin.json
+   plugins/lets-workflow/.claude-plugin/plugin.json > "$TMP"
+mv "$TMP" plugins/lets-workflow/.claude-plugin/plugin.json
 TMP=$(mktemp)
 
 # 2. marketplace.json
@@ -108,14 +108,14 @@ mv "$TMP" .claude-plugin/marketplace.json
 TMP=$(mktemp)
 
 # 3. lets-rules.md frontmatter
-echo "  • plugins/lets/rules/lets-rules.md (frontmatter)"
+echo "  • plugins/lets-workflow/rules/lets-rules.md (frontmatter)"
 awk -v new="$NEW_VERSION" '
   BEGIN { c=0 }
   /^---$/ { c++; print; next }
   c==1 && /^version:/ { print "version: " new; next }
   { print }
-' plugins/lets/rules/lets-rules.md > "$TMP"
-mv "$TMP" plugins/lets/rules/lets-rules.md
+' plugins/lets-workflow/rules/lets-rules.md > "$TMP"
+mv "$TMP" plugins/lets-workflow/rules/lets-rules.md
 TMP=$(mktemp)
 
 # 4. CHANGELOG: STABLE only — rename [Unreleased] → [X.Y.Z] - DATE + bottom links.
@@ -128,7 +128,7 @@ else
   # Last STABLE tag (filter prereleases — '-' suffix). Fallback v0.1.0 (initial release).
   PREV_TAG=$(git tag --list --sort=-v:refname | grep -v -- '-' | head -1 || true)
   [ -z "$PREV_TAG" ] && PREV_TAG="v0.1.0"
-  REPO_URL=$(jq -r .repository plugins/lets/.claude-plugin/plugin.json)
+  REPO_URL=$(jq -r .repository plugins/lets-workflow/.claude-plugin/plugin.json)
 
   # Heading: insert empty [Unreleased] above existing one (which becomes [X.Y.Z] - DATE)
   awk -v new="$NEW_VERSION" -v date="$DATE" '
@@ -179,21 +179,21 @@ if [ "$DRY_RUN" = true ]; then
   echo ""
   echo -e "${YELLOW}--dry-run: changes are in working tree, NOT committed.${NC}"
   echo "  Review:    git diff"
-  echo "  Discard:   git restore plugins/lets/.claude-plugin/plugin.json \\"
+  echo "  Discard:   git restore plugins/lets-workflow/.claude-plugin/plugin.json \\"
   echo "                          .claude-plugin/marketplace.json \\"
-  echo "                          plugins/lets/rules/lets-rules.md \\"
+  echo "                          plugins/lets-workflow/rules/lets-rules.md \\"
   echo "                          CHANGELOG.md"
   exit 0
 fi
 
 if $IS_PRERELEASE; then
-  git add plugins/lets/.claude-plugin/plugin.json \
+  git add plugins/lets-workflow/.claude-plugin/plugin.json \
           .claude-plugin/marketplace.json \
-          plugins/lets/rules/lets-rules.md
+          plugins/lets-workflow/rules/lets-rules.md
 else
-  git add plugins/lets/.claude-plugin/plugin.json \
+  git add plugins/lets-workflow/.claude-plugin/plugin.json \
           .claude-plugin/marketplace.json \
-          plugins/lets/rules/lets-rules.md \
+          plugins/lets-workflow/rules/lets-rules.md \
           CHANGELOG.md
 fi
 git commit -m "chore: release v$NEW_VERSION"

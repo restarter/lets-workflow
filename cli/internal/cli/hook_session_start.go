@@ -8,7 +8,7 @@ import (
 // Output is the LETS Config block + optional drift notice (rules emission was
 // removed in Phase 4b - rules now live in <project>/.claude/rules/lets-rules.md).
 //
-// Invoked by Claude Code via plugins/lets/hooks/hooks.json on SessionStart.
+// Invoked by Claude Code via plugins/lets-workflow/hooks/hooks.json on SessionStart.
 // Body shared with `lets hook precompact` via runHookSessionPipeline.
 func NewHookSessionStartCmd() *cobra.Command {
 	cmd := &cobra.Command{

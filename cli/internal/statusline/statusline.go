@@ -3,7 +3,7 @@
 // Reads JSON context from Claude Code via stdin, writes a 2-line formatted
 // statusline to stdout with branch, model, context window, and usage stats.
 //
-// Mirrors plugins/lets/scripts/lets/statusline.sh behavior 1:1 plus current
+// Mirrors plugins/lets-workflow/scripts/lets/statusline.sh behavior 1:1 plus current
 // CLI version in the LETS Workflow header line.
 package statusline
 

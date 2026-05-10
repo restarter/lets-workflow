@@ -23,19 +23,19 @@ ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || {
 cd "$ROOT"
 
 # Required files exist
-for f in plugins/lets/.claude-plugin/plugin.json \
+for f in plugins/lets-workflow/.claude-plugin/plugin.json \
          .claude-plugin/marketplace.json \
-         plugins/lets/rules/lets-rules.md; do
+         plugins/lets-workflow/rules/lets-rules.md; do
   [ -f "$f" ] || { echo "ERROR: file missing: $f" >&2; exit 2; }
 done
 
 # Read 3 source-tree versions
-PLUGIN_JSON=$(jq -r .version plugins/lets/.claude-plugin/plugin.json)
+PLUGIN_JSON=$(jq -r .version plugins/lets-workflow/.claude-plugin/plugin.json)
 MARKET_JSON=$(jq -r '.plugins[] | select(.name=="lets") | .version' .claude-plugin/marketplace.json)
 RULES_MD=$(awk '
   /^---$/ { c++; next }
   c==1 && /^version:/ { sub(/^version:[ \t]*/, ""); sub(/[ \t]*$/, ""); print; exit }
-' plugins/lets/rules/lets-rules.md)
+' plugins/lets-workflow/rules/lets-rules.md)
 
 # Sanity: all 3 must be non-empty
 for v in "$PLUGIN_JSON" "$MARKET_JSON" "$RULES_MD"; do
