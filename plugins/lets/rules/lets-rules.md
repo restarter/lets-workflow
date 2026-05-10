@@ -126,8 +126,6 @@ A bare ID like `0nf` or `proj-ffj` without the bold title is a formatting error.
 This applies everywhere:
 - Flowing text: "starting **LETS Planning & Execution Workflow** (`0nf`)?"
 - Report rows: `[P2] **Test Coverage** (`proj-1om`)`
-- Dependency graphs: `**Refactor Core** (`proj-ffj`) -> **Tests** (`proj-1om`)`
-- Insights: "Bottleneck: **Refactor Core** (`proj-ffj`) blocks 2 tasks"
 - Bad: "starting epic 0nf?", "closing 24o.2", "Bottleneck: proj-ffj blocks 2 tasks"
 
 If you don't know the task title, run `bd show <id>` to get it.
@@ -136,9 +134,7 @@ If you don't know the task title, run `bd show <id>` to get it.
 
 ### Task Creation
 
-- All tasks have hash-based IDs (collision-free in multi-user setup)
-- Use `--labels epic:<name>` to group tasks by theme; combine with `--parent <epic-id>` (or `bd update --parent`) to link existing tasks under an epic-typed task for `bd epic status` tracking
-- Every `bd create` MUST include: `--title` (imperative mood), `--labels` (epic grouping), `--priority` (0-4), `--description` (why + acceptance criteria), `--type` (task/bug/feature/epic)
+Use the `create-task` skill (auto-triggers on "create task", "new task", "bd create" variations). It enforces required fields (--title, --type, --priority, --description, --labels) and discovers project-specific labels dynamically. Tasks use hash-based IDs (collision-free in multi-user setup).
 
 ### Updating Tasks
 
@@ -234,7 +230,7 @@ After `/lets:plan` produces a plan, use `/lets:execute` to implement it step by 
 
 ### Mid-Session Task Switch
 
-When user wants to switch tasks mid-session: handle current work first (ask about uncommitted changes, delete empty branches, return unworked tasks to `open`), then create a new feature branch for the new task.
+When user wants to switch tasks mid-session: handle current work first (ask about uncommitted changes, delete empty branches, return unworked tasks to `open`), then delegate to the `take-task` skill to claim the new task (it handles status update + branch creation).
 
 ### During Work
 
@@ -243,7 +239,7 @@ When user wants to switch tasks mid-session: handle current work first (ask abou
 - Multiple files changed -> Periodic reminder about committing
 - Before commit -> Suggest `/lets:check` for quick sanity check
 - Significant changes -> Suggest `/lets:review` for full deep review
-- Long conversation -> Suggest checking `/context`
+- If user asks about context usage -> Tell them `/context`, don't speculate on percentages (see Context Window Management section)
 
 ### Phase Detection & LETS Boxes
 
@@ -258,6 +254,8 @@ Every milestone should show a LETS box with relevant next steps.
 | **Decision point** | AI presents 2+ options | `opinion` |
 
 **Rule:** If AI made changes -> always suggest `/lets:check` first.
+
+**Exception — internal invocation:** When a `/lets:*` command is invoked programmatically by another command (e.g., `/lets:review --json` called by `/lets:pr`), the inner command's LETS box is waived. Only the outer command shows its box to avoid duplicate / conflicting next-step suggestions in one response.
 
 **Active work:**
 ```
@@ -328,7 +326,6 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:worktree` | Utility | Create/manage interactive worktrees for parallel work |
 | `/lets:team` | Utility | Parallel implementation with Agent Teams (run, status, stop) |
 | `/lets:note` | Utility | Add note to active task |
-| `/lets:install` | Setup | First-time global setup |
 | `/lets:init`    | Setup | Per-project initialization. Re-run for self-heal (drift fix) or to change config |
 
 ### Auto-triggered Skills
@@ -340,15 +337,6 @@ These skills fire automatically when you describe the action in conversation:
 | `create-task` | "create task", "new task", "bd create" and variations |
 | `commit` | "commit", "закоміть", "git commit" and variations |
 | `take-task` | "take task X", "візьми таск", "work on X", "claim task" and variations |
-
-## Key Principles
-
-1. **Every session has a task** - no random work without tracking
-2. **Big tasks need planning** - use `/lets:plan` + `/lets:execute`
-3. **Document everything** - beads is the source of truth
-4. **Git + Beads linked** - commits reference tasks, tasks track commits
-5. **Skills guide the flow** - each skill prompts next step
-6. **Always suggest next step** - never end response without direction
 
 ## Warning Situations
 
