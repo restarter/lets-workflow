@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+- README "Recommended scope" note in Install section: project scope is preferred for team-shared repos so teammates inherit `lets` without re-install (lets-i5ayk)
+- `/lets:init` Step 1b: detect plugin install scope from `~/.claude/plugins/installed_plugins.json`; one-time informational notice when scope is `user`, suggesting re-install at project scope. No notice for `project` (best case), `local` (deliberate choice), or `unknown` (dev mode / missing file) (lets-i5ayk)
+
 ## [0.5.0] - 2026-05-10
 
 ### Added (Go CLI port - lets-7vtaw, Phases 1-4b)

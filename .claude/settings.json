@@ -1,8 +1,4 @@
 {
-  "enabledPlugins": {
-    "plugin-dev@claude-plugins-official": true,
-    "skill-creator@claude-plugins-official": true
-  },
   "hooks": {
     "PreCompact": [
       {
@@ -28,7 +24,12 @@
     ]
   },
   "statusLine": {
-    "command": "lets statusline",
-    "type": "command"
+    "type": "command",
+    "command": "lets statusline"
+  },
+  "enabledPlugins": {
+    "plugin-dev@claude-plugins-official": true,
+    "skill-creator@claude-plugins-official": true,
+    "lets@lets-workflow": true
   }
 }
