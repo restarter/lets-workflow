@@ -50,6 +50,34 @@ Then proceed with first-time path (ENV_ABSENT, BEADS_ABSENT both true for fresh 
 
 If "Cancel" → STOP. NO LETS box.
 
+### 1b. Plugin install scope check
+
+```bash
+PLUGINS_FILE="$HOME/.claude/plugins/installed_plugins.json"
+SCOPE=""
+if [ -f "$PLUGINS_FILE" ] && command -v python3 >/dev/null 2>&1; then
+  SCOPE=$(python3 -c "
+import json, sys
+try:
+    d = json.load(open('$PLUGINS_FILE'))
+    entries = d.get('plugins', {}).get('lets@lets-workflow', [])
+    print(entries[0].get('scope', '') if entries else '')
+except Exception:
+    pass
+" 2>/dev/null)
+fi
+echo "SCOPE=${SCOPE:-unknown}"
+```
+
+Branch on `$SCOPE`:
+- `project` → no notice. Best case.
+- `user` → surface a one-time notice (one short line), then continue:
+  > ℹ️ Plugin installed at **user scope** (only you). For team adoption, re-install at project scope: `/plugin uninstall lets` → `/plugin install lets` → pick "Install for all collaborators on this repository".
+- `local` → no notice. User picked deliberately ("this repo only for me").
+- `unknown` (empty / file missing / dev `--plugin-dir` mode) → no notice.
+
+The notice is informational, not a blocker. Continue with Step 2/3 regardless.
+
 ## Step 2: First-time path
 
 ### 2a. Detect language

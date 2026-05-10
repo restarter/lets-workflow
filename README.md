@@ -91,6 +91,8 @@ Then in Claude Code:
 /plugin install lets
 ```
 
+**Recommended scope:** when Claude Code asks "Install for...", pick **"Install for all collaborators on this repository" (project scope)**. This commits the choice to `.claude/settings.json` so teammates inherit `lets` without re-installing. Use user scope only for personal/throwaway projects; local scope is rarely useful.
+
 ### Setup
 
 ```bash
