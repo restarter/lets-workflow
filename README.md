@@ -45,39 +45,31 @@ Claude Code is powerful, but without structure it drifts - forgets context betwe
 
 The plugin requires the `lets` CLI binary on `$PATH` for SessionStart/PreCompact hooks and `lets statusline`.
 
-**Download a binary** from [GitHub Releases](https://github.com/restarter/lets-workflow/releases/latest) — pre-built for macOS (arm64/amd64), Linux (arm64/amd64), and Windows (amd64).
+**One-liner (macOS / Linux):**
 
 ```bash
-# macOS / Linux — replace VERSION + OS + ARCH from the latest release
-VERSION=0.5.0
-OS=darwin                         # or linux
-ARCH=arm64                        # or amd64
-curl -L "https://github.com/restarter/lets-workflow/releases/download/v${VERSION}/lets_${VERSION}_${OS}_${ARCH}.tar.gz" \
-  | tar xz -C /tmp
-sudo install /tmp/lets /usr/local/bin/lets
-lets version                      # verify
+curl -fsSL https://raw.githubusercontent.com/restarter/lets-workflow/main/scripts/install.sh | bash
 ```
 
-On macOS, if Gatekeeper blocks the binary on first run (binaries are not yet code-signed):
+<!-- TEMP: remove this block once repo is public -->
+> ⚠️ **Repo is private during testing** — the curl one-liner above returns 404 until we go public. For now, use the authenticated path with [`gh`](https://cli.github.com/) (run `gh auth login` first if needed):
+>
+> ```bash
+> gh repo clone restarter/lets-workflow /tmp/lets-workflow
+> GITHUB_TOKEN=$(gh auth token) bash /tmp/lets-workflow/scripts/install.sh
+> rm -rf /tmp/lets-workflow
+> ```
+>
+> This block will be removed when the repo goes public.
+<!-- /TEMP -->
 
-```bash
-xattr -cr /usr/local/bin/lets
-```
+The installer detects your OS/arch, fetches the latest release, **verifies the SHA256 checksum**, and installs to `/usr/local/bin/lets` (or `~/.local/bin/lets` as fallback). It also warns you if the install dir isn't on `$PATH` or if multiple `lets` binaries are reachable.
 
-**Windows**: download `lets_<VERSION>_windows_amd64.zip`, unzip, place `lets.exe` somewhere in `%PATH%`.
+For manual download, source builds, Windows, and troubleshooting see **[docs/installation.md](docs/installation.md)**.
 
-**From source** (any platform with Go 1.22+):
+`lets` and `bd` (beads) both need to be on `$PATH` before `/lets:init` will work.
 
-```bash
-git clone https://github.com/restarter/lets-workflow
-cd lets-workflow
-make install      # installs to /usr/local/bin or ~/.local/bin (smart fallback)
-lets version      # verify
-```
-
-`lets` and `bd` (beads) both need to be on `$PATH` before `/lets:install` and `/lets:init` will work.
-
-> Future: `brew install restarter/tap/lets` ([lets-odg13](https://github.com/restarter/lets-workflow/issues)), `curl ... | bash` (lets-2vb2b), `winget install lets` / `scoop install lets` (lets-hdrdr.1).
+> Future: `brew install restarter/tap/lets` ([lets-odg13](https://github.com/restarter/lets-workflow/issues)), `winget install lets` / `scoop install lets` (lets-hdrdr.1).
 
 ### Install
 
@@ -104,9 +96,6 @@ Then in Claude Code:
 ### Setup
 
 ```bash
-# First-time global setup (installs beads plugin, verifies environment)
-/lets:install
-
 # Initialize current project (creates .lets/ structure, config, statusline)
 /lets:init
 ```
@@ -207,7 +196,6 @@ Then start working:
 
 | Command | Description |
 |---------|-------------|
-| `/lets:install` | First-time global setup - plugins, environment, workflow |
 | `/lets:init` | Initialize LETS in current project |
 
 ## 🔍 Code Review
@@ -362,7 +350,7 @@ All generated files go to `.lets/` (gitignored):
 
 Interactive worktrees are stored in `.worktrees/` (gitignored).
 
-> **Note:** LETS requires the [beads](https://github.com/steveyegge/beads) plugin for task tracking. `/lets:install` will guide you through installing it.
+> **Note:** LETS requires the [beads](https://github.com/steveyegge/beads) plugin for task tracking. See its [install docs](https://github.com/steveyegge/beads#installation) — typically `curl -fsSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/install.sh | bash`.
 
 ## 📦 Dependencies
 
