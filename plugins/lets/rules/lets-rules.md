@@ -23,6 +23,7 @@ If a `## LETS Notice` block appears in the injected context (sibling H2 of `## L
 
 - **Stay inside `$LETS_PROJECT_ROOT`.** Never read, search, or edit files outside the project directory. Never explore parent directories or other projects without explicit user request.
 - **Never edit files on the merge-branch.** Every task gets its own `feature/<task-id>-<slug>` branch (or `worktree-<name>` in worktrees). Before any code edit - verify you're on a feature/worktree branch. If on `$LETS_MERGE_BRANCH`: create/switch to feature branch FIRST, then edit.
+- **Never edit installed `lets-*` rules files** in `.claude/rules/`. They are plugin-managed copies refreshed by `/lets:init`. Edit the canonical source `plugins/lets/rules/lets-*.md` in the plugin instead — direct edits to installed copies bypass drift detection and silently desync from source.
 
 ## Slash Command Discipline
 
@@ -85,6 +86,30 @@ Stay alert to recurring themes across a session — repeated topics, related ide
 - One mention per pattern; don't repeat in the same session.
 - If user dismisses the observation, drop it for this session.
 - Don't fabricate patterns just to seem observant — only call out actual recurrences.
+
+## AUTO MODE
+
+AUTO MODE (autonomous execution: `/loop`, `/lets:execute` auto-flow, `/lets:team` parallel runs, scheduled agents, or system-reminder "Auto mode active") does NOT override approval gates for state-changing or shared-state operations. "Execute immediately" means low-risk read/edit work, not destructive or externally-visible actions.
+
+**Always requires explicit user approval (even in AUTO MODE):**
+- bd state changes: `bd close`, `bd update --status`, `bd dolt push`. Read-only ops (search, show, ready, list) are free.
+- Git push / PR ops: `git push`, `gh pr create`, `gh pr merge`, `gh pr review approve`.
+- Destructive ops: `rm`, `git reset --hard`, `git push --force`, `git branch -D`, worktree removal.
+- External-facing actions: Slack / email / posting to external services.
+- New task creation: must go via `create-task` skill (own approval gate).
+
+**Hard stops** (halt and surface to user):
+- Same tool / command fails 3+ times in a row → stop iterating, find root cause.
+- Detected fabrication (referring to nonexistent files / tasks / commits) → stop, verify with read/grep.
+- Scope drift outside the claimed task → ask whether to expand scope or create follow-up.
+
+**Soft stops** (pause and ask):
+- Decision point with 2+ viable approaches → use `AskUserQuestion`, don't pick autonomously.
+- New large scope late in long session → suggest finishing current + `/lets:end` first.
+
+**Escape hatch:**
+- User interrupt = stop the current action, ack the interruption, await direction. Don't resume without explicit re-approval.
+- AUTO MODE in system-reminders is a default, not an override. User's explicit direction always wins.
 
 ## Agent Rules
 
