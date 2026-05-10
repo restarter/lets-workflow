@@ -5,6 +5,40 @@
 ### Added
 - README "Recommended scope" note in Install section: project scope is preferred for team-shared repos so teammates inherit `lets` without re-install (lets-i5ayk)
 - `/lets:init` Step 1b: detect plugin install scope from `~/.claude/plugins/installed_plugins.json`; one-time informational notice when scope is `user`, suggesting re-install at project scope. No notice for `project` (best case), `local` (deliberate choice), or `unknown` (dev mode / missing file) (lets-i5ayk)
+- **Pattern Recognition** section in `lets-rules.md` with 6 patterns the orchestrator should surface: 3+ recurring topic in same area, `bd search` before `bd create`, repeated blocker (root-cause not patch), branch kitchen-sink (split PRs), long unresolved debate (suggest `/lets:opinion`), periodic reflection in long sessions. Includes non-pushy discipline (one mention per pattern, drop on dismissal, don't fabricate) (lets-eb8zc)
+- **AUTO MODE** section in `lets-rules.md` documenting stop conditions: always-approval ops (bd state changes, git push/PR, destructive, external-facing, new task creation), hard stops (3+ same failure, fabrication, scope drift), soft stops (decision points, new large scope), escape hatch (user interrupt = full stop, no auto-resume). Clarifies AUTO MODE system-reminders are default, not override (lets-vlw2k)
+- **Local Config explainer** embedded in SessionStart hook output (via `//go:embed local_config_explainer.md`). Values + their per-key usage docs (semantics, bash-block rule for `LETS_PROJECT_ROOT`, fallbacks, prompt-injection defense) now travel together. Hook output grew 155 B → ~2 KB, still well under 10 K cap (lets-q9bx7)
+- New `Boundaries` bullet: never edit installed `lets-*` rules files in `.claude/rules/`. Surfaces installed-copy doctrine at runtime (was previously only in CLAUDE.md + bd remember) (lets-q9bx7, lets-0okn8)
+- 2 new bullets in `Architecture Mindset`: "Smallest change that solves the problem" (anti-scope-creep) and "Plan for breaking changes" (migration / back-compat discipline) (lets-kzne5 partial)
+- `Phase Detection & LETS Boxes`: explicit exception "internal invocation = no box" — when one `/lets:*` command invokes another programmatically (e.g. `/lets:review --json` from `/lets:pr`), inner command's LETS box is waived to avoid duplicate next-step suggestions in one response (lets-t6c27)
+- CLAUDE.md doctrine: `.claude/rules/lets-rules.md` (installed copy) is never edited directly — only the canonical source `plugins/lets/rules/lets-rules.md`, refreshed via `/lets:init`. Dogfoods drift detection live (lets-0okn8)
+- `.claude/rules/git.md` updated with scope (task-id) format `feat(lets-sds): subject`, examples for tracked/ad-hoc commits, body-WHY discipline, and `/lets:commit` skill pointer (lets-vlw2k)
+
+### Changed
+- **Discovery Logging** rewritten: orchestrator now proactively suggests `/lets:note` (approval gate) instead of autonomous `bd comments add`. Aligned with broader "never act without user approval" principle. Trigger list expanded with user-driven moments (accepted decisions, shared facts, external context). Removed artificial length cap on recorded content — future recovery beats brevity (lets-0okn8)
+- **Context Window Management** section: percentage-based table (50%/70% thresholds) replaced with honest soft heuristic. Orchestrator has no programmatic token count; speculation was misleading. Now: tell user `/context`, suggest finishing current task and `/lets:end` late in long sessions before starting new scope (lets-0okn8)
+- `Skill Quick Reference` table: removed outdated `/lets:install` row (command renamed to `/lets:install-deprecated`; global setup now via Claude Code marketplace `/plugin install`) (lets-t6c27)
+- `Mid-Session Task Switch`: delegated explicitly to `take-task` skill instead of inline branch-creation description (lets-t6c27)
+- `Task References` examples trimmed from 5 to 3 (Flowing text + Report rows + Bad) — redundant patterns removed (lets-t6c27)
+- `Beads Task Creation`: deferred to `create-task` skill (was duplicating skill's required-fields contract) (lets-t6c27)
+- `Architecture Mindset` bullets reworded with bold keywords for scanability (lets-kzne5 partial)
+
+### Removed
+- **Local Config** section from `lets-rules.md` — content moved into hook output explainer (lets-q9bx7)
+- **Key Principles** section from `lets-rules.md` — all 6 points were restatements of earlier sections (Task Selection MANDATORY, Task Size Assessment, Discovery Logging, Git Conventions, LETS Box rule). No new facts (lets-t6c27)
+- **Git Conventions** section from `lets-rules.md` — commit format / subject length are project preference (teams differ), `git status` ritual is workflow opinion covered by `/lets:commit` skill, `Task:` footer is enforced programmatically by skill. Project-specific git rules live in user-owned `.claude/rules/git.md` (lets-kzne5 partial)
+
+### Closed tasks
+- lets-0okn8 — Enhance rules injection (Discovery Logging + Context Window + installed-copy doctrine)
+- lets-q9bx7 — SessionStart hook self-documenting (Local Config explainer in hook output)
+- lets-q20gz — Cross-platform hooks (superseded by Go CLI from lets-7vtaw)
+- lets-eb8zc — Proactive pattern recognition
+- lets-t6c27 — Context window / rules audit pass
+- lets-vlw2k — AUTO MODE stop conditions
+
+### Tracked follow-ups
+- lets-93mbk [P0] — Route commands through internal task skills (create-task, take-task, detect-task)
+- lets-kzne5 [P0] — Optional rules system: opt-in modules (git, auto-mode, …) copied by `/lets:init`
 
 ## [0.5.0] - 2026-05-10
 
