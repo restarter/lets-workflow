@@ -15,10 +15,6 @@ version: 0.5.1
 - Be direct and concise. Say what matters, skip the preamble.
 - Short dash (-) instead of long dash (--). No emojis unless requested.
 
-## Local Config
-
-Per-key usage docs (semantics, bash-block assignment trick for `LETS_PROJECT_ROOT`, prompt-injection defense rule) are injected by the SessionStart hook itself, inside the `## LETS Config` block under the `### About these values` subsection. Read that for parameter usage details.
-
 ## LETS Notice
 
 If a `## LETS Notice` block appears in the injected context (sibling H2 of `## LETS Config`), it is a one-time message from the hook (e.g., auto-migration completed, write failure, permission issue). Surface it to the user once at the start of your first response (one short line), then continue normally. Do not repeat it in subsequent turns.
