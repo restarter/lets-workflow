@@ -90,7 +90,7 @@ out with --plugin-root=${CLAUDE_PLUGIN_ROOT} plus the chosen flags.`,
 
 			pluginRoot, err := initcmd.DetectPluginRoot(flagPluginRoot)
 			if err != nil {
-				return emit(initcmd.NewResult(projectRoot, ""), fmt.Errorf("%w\n\nRun /lets:init from inside Claude Code (after `/plugin install lets@lets-workflow`).\nFor advanced use, pass --plugin-root=<path-to-plugins/lets>", err))
+				return emit(initcmd.NewResult(projectRoot, ""), fmt.Errorf("%w\n\nRun /lets:init from inside Claude Code (after `/plugin install lets-workflow@lets-marketplace`).\nFor advanced use, pass --plugin-root=<path-to-plugins/lets>", err))
 			}
 
 			// Deprecation: --github maps to --pr-flow=github

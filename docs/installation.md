@@ -15,7 +15,7 @@ curl -fsSL https://raw.githubusercontent.com/restarter/lets-workflow/main/script
 
 # 2. Install the Claude Code plugin (one-time, inside Claude Code)
 /plugin marketplace add restarter/lets-workflow
-/plugin install lets
+/plugin install lets-workflow
 
 # 3. Initialize a project
 cd your-project && claude
@@ -71,7 +71,7 @@ Once `lets` is on `$PATH`, install the plugin from Claude Code's marketplace. **
 
 ```
 /plugin marketplace add restarter/lets-workflow
-/plugin install lets
+/plugin install lets-workflow
 ```
 
 This is a one-time setup per machine. The plugin's hooks (SessionStart, PreCompact) and statusline will start invoking the `lets` binary you just installed.

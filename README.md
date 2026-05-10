@@ -76,7 +76,7 @@ For manual download, source builds, Windows, and troubleshooting see **[docs/ins
 In Claude Code:
 ```
 /plugin marketplace add restarter/lets-workflow
-/plugin install lets
+/plugin install lets-workflow
 ```
 
 **Option B: From local clone**
@@ -88,7 +88,7 @@ git clone https://github.com/restarter/lets-workflow
 Then in Claude Code:
 ```
 /plugin marketplace add ./lets-workflow
-/plugin install lets
+/plugin install lets-workflow
 ```
 
 ### Setup

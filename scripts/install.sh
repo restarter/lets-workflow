@@ -440,7 +440,7 @@ main() {
 
    ${CYAN}${BOLD}▸ Install the plugin${NC} ${DIM}(in Claude Code, one-time):${NC}
      ${BOLD}/plugin marketplace add restarter/lets-workflow${NC}
-     ${BOLD}/plugin install lets${NC}
+     ${BOLD}/plugin install lets-workflow${NC}
 
    ${CYAN}${BOLD}▸ Initialize a project:${NC}
      ${BOLD}cd${NC} your-project ${DIM}&&${NC} ${BOLD}claude${NC}
