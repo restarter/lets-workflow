@@ -86,13 +86,6 @@ Stay alert to recurring themes across a session — repeated topics, related ide
 - If user dismisses the observation, drop it for this session.
 - Don't fabricate patterns just to seem observant — only call out actual recurrences.
 
-## Git Conventions
-
-- Commit messages: `<type>: <subject>` (feat, fix, refactor, docs, chore, test)
-- Commit footer: `Task: <task-id>` (automatic, links commit to active beads task)
-- Always `git status` before and after commit
-- Keep subject under 50 chars, imperative mood
-
 ## Agent Rules
 
 - When launching expert agents for `/lets:review`, `/lets:pr`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:brainstorm` - use ONLY `lets:*` agents (`lets:architect`, `lets:security`, etc.)
@@ -173,10 +166,12 @@ GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
 
 ## Architecture Mindset
 
-- Study codebase first, follow existing patterns
-- Think in the stack's idioms
-- Don't reinvent what exists
-- Present options with trade-offs when seeing improvement opportunities
+- **Study codebase first.** Read existing patterns, tests, and docs before non-trivial work. Match what's there.
+- **Think in the stack's idioms.** Naming conventions, error handling, testing style — let the project's existing code be the guide.
+- **Reuse before reinventing.** If a helper / abstraction already exists, use it. Don't build a parallel version.
+- **Smallest change that solves the problem.** Avoid incidental refactoring "while we're here". Surgical changes are easier to review and easier to revert.
+- **Plan for breaking changes.** Data-shape changes, contract changes — propose migrations or back-compat path, don't break silently.
+- **Present trade-offs, not just choices.** When proposing approaches, name the alternatives and why you picked this one.
 
 ## Session Flow
 
