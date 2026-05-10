@@ -8,9 +8,9 @@ Single semver across **4 source-tree concerns**:
 
 | Concern | File | Edited by |
 |---|---|---|
-| Plugin manifest | `plugins/lets-workflow/.claude-plugin/plugin.json::version` | `bump-version.sh` |
+| Plugin manifest | `plugins/lets/.claude-plugin/plugin.json::version` | `bump-version.sh` |
 | Marketplace listing | `.claude-plugin/marketplace.json::plugins[name=lets].version` | `bump-version.sh` |
-| Workflow rules | `plugins/lets-workflow/rules/lets-rules.md` frontmatter `version:` | `bump-version.sh` |
+| Workflow rules | `plugins/lets/rules/lets-rules.md` frontmatter `version:` | `bump-version.sh` |
 | CLI binary | `cli/internal/version/version.Version` | `make build` (ldflags from git tag) |
 
 Drift between any of the first three fails CI (`verify-versions.yml`). The CLI binary version derives from `git describe --tags --exact-match` at build time — automatic.
