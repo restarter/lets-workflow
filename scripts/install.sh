@@ -433,18 +433,20 @@ main() {
         log_success "${BOLD}${v}${NC}"
 
         # Final celebration banner — binary done, but plugin + project init still needed.
+        # Section labels (▸ ...) use cyan+bold like the [N/6] step counters above —
+        # consistent visual anchors so user's eye doesn't slide past them.
         printf '%b\n' "
-   ${GREEN}🌱 lets binary ready!${NC}
+   ${GREEN}${BOLD}🌱 lets binary ready!${NC}
 
-   ${BOLD}▸${NC} ${DIM}Install the plugin (in Claude Code, one-time):${NC}
+   ${CYAN}${BOLD}▸ Install the plugin${NC} ${DIM}(in Claude Code, one-time):${NC}
      ${BOLD}/plugin marketplace add restarter/lets-workflow${NC}
      ${BOLD}/plugin install lets${NC}
 
-   ${BOLD}▸${NC} ${DIM}Initialize a project:${NC}
+   ${CYAN}${BOLD}▸ Initialize a project:${NC}
      ${BOLD}cd${NC} your-project ${DIM}&&${NC} ${BOLD}claude${NC}
      ${BOLD}/lets:init${NC}
 
-   📘 ${DIM}Full guide:${NC} https://github.com/restarter/lets-workflow/blob/main/docs/installation.md
+   📘 ${DIM}Full guide:${NC} ${BOLD}https://github.com/restarter/lets-workflow/blob/main/docs/installation.md${NC}
 " >&2
     else
         log_warning "Binary installed but '$BIN_NAME version' returned non-zero."
