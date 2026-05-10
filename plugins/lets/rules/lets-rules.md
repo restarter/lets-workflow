@@ -1,6 +1,6 @@
 ---
 name: lets-rules
-version: 0.5.1
+version: 0.5.2
 ---
 
 <!-- DO NOT EDIT - managed by lets init / lets install. To add custom rules, create a sibling *.md file in this directory (e.g. .claude/rules/team-conventions.md). Files prefixed `lets-` are owned by the LETS plugin and overwritten on update. -->
@@ -59,15 +59,29 @@ When invoking a `/lets:*` slash command, execute every Step's bash block **liter
 
 ## Discovery Logging
 
-When you discover something important during work - capture it immediately via `bd comments add <task-id>`:
+Watch for moments worth recording. When something is decided, established as fact, or otherwise worth preserving — proactively suggest `/lets:note` so the user approves recording. Don't write to beads autonomously; the user controls the command.
 
-- Architecture decisions and trade-offs made
-- Gotchas and unexpected behavior ("X doesn't work because Y")
-- Infrastructure facts (URLs, configs, versions)
-- Tool/command quirks discovered
-- Patterns confirmed across multiple files
+**Suggest `/lets:note` when:**
+- User accepts a decision or approves an approach
+- User shares an important fact about the task, context, or domain
+- User provides a reference, link, or external context
+- You confirm an architecture decision or trade-off
+- You discover a gotcha or unexpected behavior ("X doesn't work because Y")
+- You find an infrastructure fact (URL, config, version)
+- You identify a tool/command quirk
+- You confirm a pattern across multiple files
 
-Don't wait for `/lets:note` - write insights as they happen. If no active task, mention it to the user.
+**Don't suggest for:**
+- Routine reads ("looked at file X")
+- Normal implementation decisions (obvious from the code)
+- Speculation — verify with quick read/grep before claiming as fact
+
+**How to suggest:** brief one-liner naming what would be recorded.
+> "Це варто зафіксувати в задачі — `/lets:note`?"
+
+**Content when `/lets:note` runs:** record full context so future-you (or another agent) can fully reconstruct the moment — decision + reasoning, related `file:line` if applicable, links, nuances, any context that made it non-obvious. No artificial length limits — write whatever is needed for recovery.
+
+If no active task — mention insight to user, ask where it belongs.
 
 ## Git Conventions
 
