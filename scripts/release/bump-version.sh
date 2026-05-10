@@ -102,7 +102,7 @@ TMP=$(mktemp)
 # 2. marketplace.json
 echo "  • .claude-plugin/marketplace.json"
 jq --indent 2 --arg v "$NEW_VERSION" \
-   '(.plugins[] | select(.name=="lets") | .version) |= $v' \
+   '(.plugins[] | select(.name=="lets-workflow") | .version) |= $v' \
    .claude-plugin/marketplace.json > "$TMP"
 mv "$TMP" .claude-plugin/marketplace.json
 TMP=$(mktemp)

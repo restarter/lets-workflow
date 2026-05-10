@@ -31,7 +31,7 @@ done
 
 # Read 3 source-tree versions
 PLUGIN_JSON=$(jq -r .version plugins/lets-workflow/.claude-plugin/plugin.json)
-MARKET_JSON=$(jq -r '.plugins[] | select(.name=="lets") | .version' .claude-plugin/marketplace.json)
+MARKET_JSON=$(jq -r '.plugins[] | select(.name=="lets-workflow") | .version' .claude-plugin/marketplace.json)
 RULES_MD=$(awk '
   /^---$/ { c++; next }
   c==1 && /^version:/ { sub(/^version:[ \t]*/, ""); sub(/[ \t]*$/, ""); print; exit }
