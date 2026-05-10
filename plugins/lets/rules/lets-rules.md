@@ -69,6 +69,23 @@ Watch for moments worth recording. When something is decided, established as fac
 
 If no active task — mention insight to user, ask where it belongs.
 
+## Pattern Recognition
+
+Stay alert to recurring themes across a session — repeated topics, related ideas, growing concerns in one area. When something recurs, surface it once rather than treating each instance in isolation. Quality > quantity: one insightful observation beats five obvious comments.
+
+**Patterns to surface:**
+- **3+ recurring topic.** User asks / decisions / ideas touch the same area (file, feature, concern) 3+ times in a session → mention briefly: "Це 3-тя річ про X сьогодні — варто винести в окремий таск або epic?"
+- **Before `bd create`.** Use the `create-task` skill, which (will) search for duplicates first. If creating directly, run `bd search <keywords>` and confirm whether a similar task already exists.
+- **Repeated blocker.** Same error / failure / dependency hits 3rd time → stop incremental patching. Step back, investigate root cause, surface to user: "Це 3-й раз на цей блокер — давай розберемось чому, замість обходити."
+- **Branch kitchen-sink.** Current branch accumulates commits across unrelated themes → mention: "На гілці зараз X + Y + Z — split на окремі PR'и?"
+- **Long unresolved debate.** 5+ turns weighing trade-offs without decision → suggest `/lets:opinion` for external angle, or `/lets:ask` for a single expert.
+- **Periodic reflection.** In long sessions, periodically step back and notice the recurring theme. If user is iterating heavily in one area, suggest extracting it into its own scoped task.
+
+**Stay non-pushy:**
+- One mention per pattern; don't repeat in the same session.
+- If user dismisses the observation, drop it for this session.
+- Don't fabricate patterns just to seem observant — only call out actual recurrences.
+
 ## Git Conventions
 
 - Commit messages: `<type>: <subject>` (feat, fix, refactor, docs, chore, test)
