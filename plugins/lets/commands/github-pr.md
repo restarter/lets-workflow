@@ -1129,10 +1129,10 @@ Posted {N} inline + {M} summary to PR #{number}
 ### After Phase 3 (follow-up done):
 
 ```
-┌─ LETS ───────────────────────────────┐
-│  Approve?  /lets:github-pr --approve │
-│  Merge?    /lets:github-pr --merge   │
-└──────────────────────────────────────┘
+┌─ LETS ───────────────────────────────────┐
+│  Approve?  /lets:github-pr --approve     │
+│  Merge?    /lets:github-pr --merge       │
+└──────────────────────────────────────────┘
 ```
 
 ### After Phase 4 (verdict submitted):
@@ -1140,10 +1140,10 @@ Posted {N} inline + {M} summary to PR #{number}
 ```
 PR #{number} {approved/merged/changes requested}
 
-┌─ LETS ─────────────────────────┐
-│  Done?  /lets:done             │
-│  End?   /lets:end              │
-└────────────────────────────────┘
+┌─ LETS ───────────────────────────────────┐
+│  Done?  /lets:done                       │
+│  End?   /lets:end                        │
+└──────────────────────────────────────────┘
 ```
 
 ### After Phase R (replies posted):
@@ -1151,10 +1151,10 @@ PR #{number} {approved/merged/changes requested}
 ```
 Replied to {N} comments on PR #{number} ({X} fixed, {Y} agreed, {Z} disagreed)
 
-┌─ LETS ─────────────────────────────┐
-│  Done?    /lets:done               │
-│  Status?  /lets:github-pr --status │
-└────────────────────────────────────┘
+┌─ LETS ───────────────────────────────────┐
+│  Done?    /lets:done                     │
+│  Status?  /lets:github-pr --status       │
+└──────────────────────────────────────────┘
 ```
 
 ### After Phase R (saved for later):
@@ -1181,9 +1181,9 @@ Response saved to .lets/execution/pr-{number}/response.json
 ```
 Review state cleaned up.
 
-┌─ LETS ─────────────────────────────┐
-│  New review?  /lets:github-pr <PR> │
-└────────────────────────────────────┘
+┌─ LETS ───────────────────────────────────┐
+│  New review?  /lets:github-pr <PR>       │
+└──────────────────────────────────────────┘
 ```
 
 ## Rules

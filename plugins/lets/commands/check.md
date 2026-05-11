@@ -74,10 +74,10 @@ Read the plan and review with 5 lenses (same confidence filter):
 Output same format as code check, then:
 
 ```
-┌─ LETS ─────────────────────────────┐
-│  Full review?  /lets:review --plan │
-│  Execute?      /lets:execute       │
-└────────────────────────────────────┘
+┌─ LETS ────────────────────────────────────┐
+│  Full review?  /lets:review --plan        │
+│  Execute?      /lets:execute              │
+└───────────────────────────────────────────┘
 ```
 
 ---
@@ -258,19 +258,19 @@ Skip the box entirely when `--json` was set. Otherwise the box offers the `/lets
 
 **Local modes (`--local` / default / `--staged` / `--last-commit`), GOOD or REVIEW:**
 ```
-┌─ LETS ──────────────────────────────┐
-│  Commit?       /lets:commit         │
-│  Deep review?  /lets:review --local │
-└─────────────────────────────────────┘
+┌─ LETS ────────────────────────────────────┐
+│  Commit?       /lets:commit               │
+│  Deep review?  /lets:review --local       │
+└───────────────────────────────────────────┘
 ```
 (swap `--local` for `--staged` / `--last-commit` to match the mode used)
 
 **PR mode, GOOD or REVIEW:**
 ```
-┌─ LETS ─────────────────────────────────┐
-│  Deep review?     /lets:review <PR>    │
-│  Full lifecycle?  /lets:github-pr <PR> │
-└────────────────────────────────────────┘
+┌─ LETS ────────────────────────────────────┐
+│  Deep review?     /lets:review <PR>       │
+│  Full lifecycle?  /lets:github-pr <PR>    │
+└───────────────────────────────────────────┘
 ```
 
 **File mode, GOOD or REVIEW:**

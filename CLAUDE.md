@@ -233,6 +233,7 @@ Every lets:* command MUST end with branded LETS box:
 - Lines: `│  ` + content + padding + ` │`
 - Footer: `└─` + padding with `─` + `┘`
 - Min width: 25 chars
+- **All boxes in one file MUST have the same width** - use the widest box's content as the reference and pad the rest. (Quick check: extract every box, the header/content/footer line lengths must all match per-box and across boxes in the file.)
 
 **Content guidelines:**
 - Short action word + `?` (e.g., "Commit?", "Next?", "Fix?")
@@ -241,9 +242,17 @@ Every lets:* command MUST end with branded LETS box:
 - **No command = no box** - if next step isn't a /lets:* command, just ask in plain text
 - **Internal invocation = no box** - when a command is invoked programmatically by another command (e.g., `/lets:review --json` called by `/lets:github-pr`), the LETS box is waived
 
+**Which shortcuts to offer (pick from these three, in order):**
+1. **Most-likely next step** in the workflow loop - always include. (After `/lets:check` -> `/lets:commit`; after `/lets:commit` -> `/lets:done`; after `/lets:plan` -> `/lets:execute`; etc.)
+2. **A lighter/faster alternative**, if one exists - include when applicable. Pairs: `/lets:check` is the lighter `/lets:review`; `/lets:check --plan` is the lighter `/lets:review --plan`; `/lets:ask` is the lighter `/lets:opinion`. If a box offers the heavy command, offer the light one alongside it (and pass the matching flag - `/lets:review --local` -> also `/lets:check --local`).
+3. **An escape hatch** - `/lets:start` (new task), `/lets:end` (wrap session), or `/lets:status` (where am I). Pure-navigation boxes (e.g. `Start? /lets:start` after `/lets:init`) are *only* an escape hatch and that's fine - don't pad them with irrelevant options.
+
+Don't exceed ~4 lines in a box. If a command genuinely has only one sensible next step, one line is correct.
+
 ### Command Checklist
 
 - [ ] Has LETS box in output section
+- [ ] LETS box shortcuts follow the guidance above (most-likely next step + lighter alternative where one exists + escape hatch); all boxes in the file are the same width
 - [ ] Updates Skill Quick Reference in `plugins/lets/rules/lets-rules.md` (and bump frontmatter `version`)
 - [ ] Updates `/lets:install` Essential Skills / Planning Skills tables
 - [ ] Follows session flow (start -> work -> commit -> done -> end)

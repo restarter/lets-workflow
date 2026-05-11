@@ -684,20 +684,20 @@ bd comments add <task-id> "Cleanup: closed {N}, reprioritized {M}, labeled {L}, 
 ### After Review Backlog / Explore Idea modes:
 
 ```
-┌─ LETS ──────────────────────────────────┐
-│  Plan a task?  /lets:plan               │
-│  Start work?   /lets:start              │
-└─────────────────────────────────────────┘
+┌─ LETS ─────────────────────────┐
+│  Plan a task?  /lets:plan      │
+│  Start work?   /lets:start     │
+└────────────────────────────────┘
 ```
 
 ### After Quick Brainstorm:
 
 ```
-┌─ LETS ──────────────────────────────────┐
-│  Go deeper?  /lets:brainstorm           │
-│  Plan?       /lets:plan                 │
-│  Start?      /lets:start                │
-└─────────────────────────────────────────┘
+┌─ LETS ─────────────────────────┐
+│  Go deeper?  /lets:brainstorm  │
+│  Plan?       /lets:plan        │
+│  Start?      /lets:start       │
+└────────────────────────────────┘
 ```
 
 ### After Cleanup:

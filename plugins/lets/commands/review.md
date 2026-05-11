@@ -708,10 +708,10 @@ bd comments add <task-id> "Plan review: {verdict}. {N} issues found."
 
 **If approved:**
 ```
-┌─ LETS ──────────────────────────────────┐
-│  Execute?     /lets:execute             │
-│  New session? /lets:start               │
-└─────────────────────────────────────────┘
+┌─ LETS ───────────────────────┐
+│  Execute?      /lets:execute │
+│  New session?  /lets:start   │
+└──────────────────────────────┘
 ```
 
 **If needs revision:** No box. List action items to fix in the plan first.
@@ -756,9 +756,10 @@ Work -> /lets:commit -> Push -> PR -> /lets:review <PR>
 
 **If no issues or approved:**
 ```
-┌─ LETS ─────────────────┐
-│  Commit? /lets:commit  │
-└────────────────────────┘
+┌─ LETS ───────────────────────┐
+│  Commit?  /lets:commit       │
+│  Check?   /lets:check        │
+└──────────────────────────────┘
 ```
 
 **If changes requested:** No box. List issues to fix first.

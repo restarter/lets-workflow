@@ -192,10 +192,10 @@ Open a new terminal for the worktree:
 cd {absolute-worktree-path} && claude
 ```
 
-┌─ LETS ─────────────────────────┐
-│  Continue?  /lets:start        │
-│  List?      /lets:worktree list│
-└────────────────────────────────┘
+┌─ LETS ──────────────────────────┐
+│  Continue?  /lets:start         │
+│  List?      /lets:worktree list │
+└─────────────────────────────────┘
 ```
 
 **If switching to worktree:**
@@ -206,10 +206,10 @@ Branch: worktree-{name}
 Beads: {shared via redirect / not available}
 LETS: {symlinked / not available}
 
-┌─ LETS ─────────────────────────┐
-│  Start?   /lets:start          │
-│  Info?    /lets:worktree info  │
-└────────────────────────────────┘
+┌─ LETS ──────────────────────────┐
+│  Start?  /lets:start            │
+│  Info?   /lets:worktree info    │
+└─────────────────────────────────┘
 ```
 
 ---
@@ -252,10 +252,10 @@ cd "${WORKTREE_PATH}" && git status --short 2>/dev/null | head -5
 
 {N} active worktrees
 
-┌─ LETS ─────────────────────────┐
-│  Create?  /lets:worktree create│
-│  Remove?  /lets:worktree remove│
-└────────────────────────────────┘
+┌─ LETS ──────────────────────────┐
+│  Create?  /lets:worktree create │
+│  Remove?  /lets:worktree remove │
+└─────────────────────────────────┘
 ```
 
 Note: `.claude/worktrees/` are agent worktrees (native Claude Code). `.worktrees/` are interactive (this command).
@@ -364,9 +364,9 @@ AskUserQuestion(
 Worktree removed: .worktrees/{name}/
 Branch: {deleted / kept}
 
-┌─ LETS ─────────────────────────┐
-│  List?  /lets:worktree list    │
-└────────────────────────────────┘
+┌─ LETS ──────────────────────────┐
+│  List?  /lets:worktree list     │
+└─────────────────────────────────┘
 ```
 
 ---
@@ -421,10 +421,10 @@ Beads: {shared via redirect / local (stale) / not available}
 LETS: {symlinked / not available}
 Changes: {clean / N uncommitted files}
 
-┌─ LETS ─────────────────────────┐
-│  List?    /lets:worktree list  │
-│  Remove?  /lets:worktree remove│
-└────────────────────────────────┘
+┌─ LETS ──────────────────────────┐
+│  List?    /lets:worktree list   │
+│  Remove?  /lets:worktree remove │
+└─────────────────────────────────┘
 ```
 
 **If in main repo:**
@@ -435,10 +435,10 @@ Changes: {clean / N uncommitted files}
 You are in the main repository (not a worktree).
 Path: {toplevel}
 
-┌─ LETS ─────────────────────────┐
-│  Create?  /lets:worktree create│
-│  List?    /lets:worktree list  │
-└────────────────────────────────┘
+┌─ LETS ──────────────────────────┐
+│  Create?  /lets:worktree create │
+│  List?    /lets:worktree list   │
+└─────────────────────────────────┘
 ```
 
 ---
