@@ -10,9 +10,15 @@
 - **Local Config explainer** embedded in SessionStart hook output (via `//go:embed local_config_explainer.md`). Values + their per-key usage docs (semantics, bash-block rule for `LETS_PROJECT_ROOT`, fallbacks, prompt-injection defense) now travel together. Hook output grew 155 B → ~2 KB, still well under 10 K cap (lets-q9bx7)
 - New `Boundaries` bullet: never edit installed `lets-*` rules files in `.claude/rules/`. Surfaces installed-copy doctrine at runtime (was previously only in CLAUDE.md + bd remember) (lets-q9bx7, lets-0okn8)
 - 2 new bullets in `Architecture Mindset`: "Smallest change that solves the problem" (anti-scope-creep) and "Plan for breaking changes" (migration / back-compat discipline) (lets-kzne5 partial)
-- `Phase Detection & LETS Boxes`: explicit exception "internal invocation = no box" — when one `/lets:*` command invokes another programmatically (e.g. `/lets:review --json` from `/lets:pr`), inner command's LETS box is waived to avoid duplicate next-step suggestions in one response (lets-t6c27)
+- `Phase Detection & LETS Boxes`: explicit exception "internal invocation = no box" — when one `/lets:*` command invokes another programmatically (e.g. `/lets:review --json` from `/lets:github-pr`), inner command's LETS box is waived to avoid duplicate next-step suggestions in one response (lets-t6c27)
 - CLAUDE.md doctrine: `.claude/rules/lets-rules.md` (installed copy) is never edited directly — only the canonical source `plugins/lets/rules/lets-rules.md`, refreshed via `/lets:init`. Dogfoods drift detection live (lets-0okn8)
 - `.claude/rules/git.md` updated with scope (task-id) format `feat(lets-sds): subject`, examples for tracked/ad-hoc commits, body-WHY discipline, and `/lets:commit` skill pointer (lets-vlw2k)
+- `/lets:plan --fast` flag — orchestrator-only planning that skips the three subagent-dispatch phases (Step 4 explorers, Step 6 architects, Step 7 experts) and replaces them with in-session work (read files yourself, draft approaches inline, self-evaluate risks). Clarifying questions, checkpoints, discussion, plan format, and beads recording are unchanged; the Plan Ready output records which mode was used. Combinable with a task-id (lets-lq1ud)
+- `/lets:check` parameter parity with `/lets:review` — accepts `<PR-url-or-number>`, `--local` (explicit), `--file <path>`, and `--json` in addition to `--staged`/`--last-commit`/`--plan`; `argument-hint` is byte-identical to `/lets:review`. PR mode warns when the PR is large (suggests full `/lets:review`); `--file` mode reviews full file content; `--json` output mirrors `/lets:review --json` (same `verdict`/`tier`/`findings[]` shape, `agent: "check"` + per-finding `lens`, `summary` object). No subagent dispatch in any mode — that's the only thing that stays inline vs `/lets:review`. End-of-run LETS box offers the matching `/lets:review --<flag>` upgrade path (lets-qadj0)
+- `/lets:done` Step 5 — CHANGELOG update step: when `CHANGELOG.md` exists at the project root and the task touched user-visible files, offers (AskUserQuestion: Add / Edit / Skip) to add a `[Unreleased]` entry drafted from the task title + commits and commit it via `/lets:commit` so it lands in the same PR; skips silently and says so when there's no `CHANGELOG.md` (lets-v1rm1.1)
+- `/lets:start` Step 7 — suggests `/rename {slug}` after a task is claimed so the statusline reflects the active task. Presented as a paste-ready hint (`/rename` is user-invoked; the assistant can't run it), not a gate (lets-gzsho)
+- **Plan-visibility gate** in `lets-rules.md` AUTO MODE section — present the plan (per task/file, what changes, in what order) before any edits, even in AUTO MODE; one approval covers a multi-task batch. "Execute immediately" now means "run the next step of an approved plan", not "skip showing the plan"; "let's think about how to do X" / "проаналізуй" is a request for a plan, not a green light to edit. Plus a matching Soft stop line (lets-sjtiy.1)
+- CLAUDE.md "Command Output Requirements": "Which shortcuts to offer" guidance for LETS boxes (most-likely next step + lighter/faster alternative where one exists + escape hatch; same-width-within-a-file rule made explicit) and a Command Checklist line for it (lets-ne36e)
 
 ### Changed
 - **Discovery Logging** rewritten: orchestrator now proactively suggests `/lets:note` (approval gate) instead of autonomous `bd comments add`. Aligned with broader "never act without user approval" principle. Trigger list expanded with user-driven moments (accepted decisions, shared facts, external context). Removed artificial length cap on recorded content — future recovery beats brevity (lets-0okn8)
@@ -22,11 +28,17 @@
 - `Task References` examples trimmed from 5 to 3 (Flowing text + Report rows + Bad) — redundant patterns removed (lets-t6c27)
 - `Beads Task Creation`: deferred to `create-task` skill (was duplicating skill's required-fields contract) (lets-t6c27)
 - `Architecture Mindset` bullets reworded with bold keywords for scanability (lets-kzne5 partial)
+- **`/lets:pr` renamed to `/lets:github-pr`** — the PR review lifecycle command supports GitHub only (via `gh` CLI); Bitbucket and local-merge PR flows are not implemented (those finish tasks via `/lets:done`). Command file `pr.md` → `github-pr.md`; all `/lets:pr` references updated across commands, skills, `lets-rules.md`, CLAUDE.md, README; H1 and intro now state "GitHub only" (lets-v1rm1.2)
+- LETS-box audit across all 17 command files — box widths now consistent within each file (brainstorm/check/execute/github-pr/review/team/worktree had mixed widths; worktree boxes had `/lets:worktree` commands touching the right border with no padding); added the lighter `/lets:check` alternative wherever `/lets:review` was offered alone (execute, team, review); `/lets:plan` Plan Ready box gains `Check plan? /lets:check --plan` (lets-ne36e)
 
 ### Removed
 - **Local Config** section from `lets-rules.md` — content moved into hook output explainer (lets-q9bx7)
 - **Key Principles** section from `lets-rules.md` — all 6 points were restatements of earlier sections (Task Selection MANDATORY, Task Size Assessment, Discovery Logging, Git Conventions, LETS Box rule). No new facts (lets-t6c27)
 - **Git Conventions** section from `lets-rules.md` — commit format / subject length are project preference (teams differ), `git status` ritual is workflow opinion covered by `/lets:commit` skill, `Task:` footer is enforced programmatically by skill. Project-specific git rules live in user-owned `.claude/rules/git.md` (lets-kzne5 partial)
+- spurious `> **IMPORTANT:**` deferred-tool callout from `commands/check.md` — the command invokes no `AskUserQuestion`; the brief now notes "no AskUserQuestion gates" instead (lets-qadj0)
+
+### Fixed
+- `bd comments list <id> [--limit N]` corrected to `bd comments <id>` in `/lets:start`, `/lets:note`, `/lets:team`, and the `take-task` skill — `bd comments` has no `list` subcommand or `--limit` flag (default already lists all), and the bad syntax made `/lets:start <task-id>` fail against bd v1.0.2. Those flows now also instruct reading the FULL task description and ALL comments, not a truncated slice (lets-8ptef)
 
 ### Closed tasks
 - lets-0okn8 — Enhance rules injection (Discovery Logging + Context Window + installed-copy doctrine)
@@ -35,6 +47,16 @@
 - lets-eb8zc — Proactive pattern recognition
 - lets-t6c27 — Context window / rules audit pass
 - lets-vlw2k — AUTO MODE stop conditions
+- lets-8ptef — `bd comments` syntax bug in 4 plugin files
+- lets-gzsho — Auto-rename session on `/lets:start` (as a paste-ready suggestion)
+- lets-v1rm1.1 — CHANGELOG update step in `/lets:done`
+- lets-v1rm1.2 — Rename `/lets:pr` → `/lets:github-pr` (GitHub-only flow)
+- lets-qadj0 — Align `/lets:check` parameter surface with `/lets:review`
+- lets-lq1ud — `/lets:plan --fast` flag
+- lets-ne36e — LETS-box audit + shortcut-selection guidance
+- lets-sjtiy.1 — Plan-visibility gate in AUTO MODE rules
+- lets-afwa4 — Refine ultrathink (already shipped in PR #24; closed as superseded)
+- lets-ae0wt — Standardize branch parsing comments (resolved by `detect-task` skill extraction)
 
 ### Tracked follow-ups
 - lets-93mbk [P0] — Route commands through internal task skills (create-task, take-task, detect-task)
