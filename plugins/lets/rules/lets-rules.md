@@ -354,6 +354,7 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:team` | Utility | Parallel implementation with Agent Teams (run, status, stop) |
 | `/lets:note` | Utility | Add note to active task |
 | `/lets:init`    | Setup | Per-project initialization. Re-run for self-heal (drift fix) or to change config |
+| `/lets:update`  | Setup | Sync project with the current release - `.lets/.env` + rules self-heal, plus version status for the `lets` binary and the plugin |
 
 ### Auto-triggered Skills
 

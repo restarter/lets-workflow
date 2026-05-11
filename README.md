@@ -197,6 +197,7 @@ Then start working:
 | Command | Description |
 |---------|-------------|
 | `/lets:init` | Initialize LETS in current project |
+| `/lets:update` | Sync project with the current release - `.lets/.env` + rules self-heal, plus version status for the `lets` binary and the plugin |
 
 ## 🔍 Code Review
 

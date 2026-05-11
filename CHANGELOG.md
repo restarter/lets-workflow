@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+- `/lets:update` command + `lets update` Go subcommand — syncs a project with the current LETS release: self-heals `.lets/.env` (header refresh when `LETS_ENV_VERSION` is stale, user values preserved) and `.claude/rules/lets-rules.md` (re-copy when outdated/missing), and reports version status for the `lets` binary and the Claude Code plugin vs the latest GitHub release (it can't self-replace those, so it prints the upgrade command). GitHub `releases/latest` lookup is cached for 1h at `.lets/cache/update-check.json` with a stale-cache fallback; `--offline` skips the network, `--refresh-cache` bypasses the cache, `--json` emits a machine-readable envelope (`schema_version=1`). Also reports `consistent` (binary == plugin == installed-rules version) to flag partial upgrades. New `cli/internal/updatecmd/` package (lets-hdrdr.3)
+
+### Changed
+- Rules-drift Notice messages (SessionStart hook + `lets init --json` output) now point at `/lets:update` for the `unknown`/`outdated`/`ahead` states; `/lets:init` is kept only for `missing` (first-time install — no rules file yet). `lets update` re-copies the plugin rules on any detected drift, including `ahead`, so no `--force` flag is needed (lets-hdrdr.3)
+
 ## [0.5.1] - 2026-05-11
 
 ### Added
