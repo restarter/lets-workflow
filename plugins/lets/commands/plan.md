@@ -1,6 +1,6 @@
 ---
 description: Structured planning - explore codebase, design architecture, evaluate options, produce detailed implementation plan
-argument-hint: "[feature description]"
+argument-hint: "[feature description] [--fast]"
 ---
 
 # Plan
@@ -11,11 +11,19 @@ Turn a task or idea into a detailed implementation plan. Clarifies scope, explor
 
 > **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
 
+## --fast mode
+
+`/lets:plan --fast` (combinable with a task-id or feature description, e.g. `/lets:plan lets-abc --fast`) skips the three subagent-dispatch phases - **Step 4** (explorer agents), **Step 6** (architect agents), **Step 7** (expert agents) - and replaces them with orchestrator-only equivalents (read files yourself, draft approaches inline, self-evaluate risks). Use it when the user explicitly wants a collaborative talk-through without subagent budget: "let's just plan it together, I'll review". Everything else - clarifying questions, interactive discussion, plan format, beads recording, the saved file - is identical to the full flow. The plan's shape doesn't change; only *how* it's built.
+
+When `--fast` is **not** set, run the full flow exactly as written.
+
 ## Step 1: Capture the Goal
 
-**If argument provided:** use it as the feature goal.
+**Parse the argument:** strip a `--fast` token if present (sets fast mode); the rest is the feature goal.
 
-**If no argument:** ask:
+**If a feature goal was provided:** use it.
+
+**If no goal provided:** ask:
 
 > "What are you trying to build or change?"
 
@@ -73,7 +81,20 @@ LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 cat "$LETS_PROJECT_ROOT/CLAUDE.md" 2>/dev/null | head -200
 ```
 
+### --fast: orchestrator-only exploration
+
+**If `--fast` is set:** skip the explorer-dispatch phase below (Exploration Strategy, Show Exploration Plan, Launch Explorers). Instead, build the Codebase Map yourself:
+
+- Read/Grep/Glob the files relevant to the feature goal + user clarifications, on demand - prioritize the entry points, the modules the feature touches, and the existing patterns it should follow.
+- Iterate: read a file, learn something, decide what to read next. Stop when you can describe the relevant surface confidently.
+- Synthesize the same `## Codebase Map` structure (sections by area), then go to the **Checkpoint: Exploration Review** below (same checkpoint, same options).
+- Note any area you couldn't cover ("didn't read X - low confidence there") so the user can ask for more.
+
+Then jump to **Checkpoint: Exploration Review**.
+
 ### Exploration Strategy
+
+*(full mode only - skipped under `--fast`)*
 
 Decide how many explorers to launch and what each should focus on.
 
@@ -261,9 +282,17 @@ AskUserQuestion(
 
 ## Step 6: Architecture Design
 
-Launch one architect agent per selected approach. Each gets a focused brief with user's decisions baked in.
+### --fast: orchestrator-only design
+
+**If `--fast` is set:** skip the architect dispatch (Architect Brief, parallel launch). Instead, draft the architecture yourself for each approach the user selected in Step 5 - using the codebase map, the user's clarifications, and your own analysis. Produce the same `## {Approach Name}` shape (Summary / Components / Files / Data Flow / Trade-offs) for each. Present the design(s) to the user, then go to **Checkpoint: Architecture Review** below (same checkpoint, same options).
+
+Then jump to **Checkpoint: Architecture Review** (use the multi-approach or single-approach variant as applicable).
 
 ### Architect Brief
+
+*(full mode only - skipped under `--fast`)*
+
+Launch one architect agent per selected approach. Each gets a focused brief with user's decisions baked in.
 
 For each selected approach:
 
@@ -381,9 +410,19 @@ AskUserQuestion(
 
 ## Step 7: Expert Evaluation
 
-Evaluate the chosen architecture with domain experts.
+### --fast: orchestrator-only evaluation
+
+**If `--fast` is set:** skip the expert dispatch (Suggest Experts, Expert Selection checkpoint, Dispatch Experts). Instead, self-evaluate the chosen architecture from project context: name the real risks, the proportionality concerns (overengineering / underspec), and the trade-offs. Present them in the same `## Expert Evaluation` shape (a short list of findings + a Risks & Suggestions list), then add:
+
+> *Fast mode skipped the expert agents. For a second opinion before executing, run `/lets:opinion` or `/lets:review --plan` after the plan is saved.*
+
+Then go to the **Checkpoint: Evaluation Results** below (same checkpoint, same options).
 
 ### Suggest Experts
+
+*(full mode only - skipped under `--fast`)*
+
+Evaluate the chosen architecture with domain experts.
 
 Based on what the feature touches, suggest relevant experts:
 
@@ -698,6 +737,7 @@ Plan: .lets/plans/${SLUG}.md"
 ## Plan Ready: **{task title}** (`{task-id}`)
 
 Saved: `.lets/plans/{branch-slug}.md`
+Built: {full flow (explorer + architect + expert agents) | fast mode (orchestrator-only - no subagents)}
 
 ### Approach
 {chosen option - 2 sentences}
@@ -715,21 +755,25 @@ Start a new session to execute the plan with clean context.
 ```
 
 ```
-┌─ LETS ──────────────────────────────────┐
-│  Review plan? /lets:review --plan       │
-│  Execute?     /lets:execute             │
-│  New session? /lets:start               │
-└─────────────────────────────────────────┘
+┌─ LETS ─────────────────────────────┐
+│  Check plan?   /lets:check --plan  │
+│  Review plan?  /lets:review --plan │
+│  Execute?      /lets:execute       │
+│  New session?  /lets:start         │
+└────────────────────────────────────┘
 ```
+
+(In fast mode, nudge `/lets:check --plan` or `/lets:review --plan` first - the plan didn't get agent review.)
 
 ## Rules
 
 - **NEVER write code** outside the plan document in `.lets/plans/`
-- **NEVER skip clarifying questions** (Step 3) - vague input produces vague plans
+- **NEVER skip clarifying questions** (Step 3) - vague input produces vague plans, in fast mode too
 - **EVERY phase transition requires user approval** via AskUserQuestion
 - **NEVER hardcode approach names** like "Minimal/Maximal/Pragmatic" - derive from exploration context
 - **ALL parallel agents in a SINGLE message** - never sequential when parallel is possible
-- **Exact file paths** in plan - verified against explorer findings
+- **`--fast` skips Steps 4/6/7 subagent dispatch only** - it does NOT skip the clarifying questions, the checkpoints, the discussion, or any user approval gate. Output plan format is identical; record which mode was used in the Plan Ready output.
+- **Exact file paths** in plan - verified against explorer findings (or orchestrator's own reads in fast mode)
 - **Complete code snippets** - no stubs, no "implement X here"
 - **Plan is the artifact** - session ends when plan is saved
 - Respond in user's language

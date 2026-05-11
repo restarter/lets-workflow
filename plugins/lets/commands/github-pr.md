@@ -3,9 +3,11 @@ description: GitHub PR review lifecycle - analyze, discuss, post inline comments
 argument-hint: "[PR-url-or-number|--respond|--follow-up|--approve|--merge|--status|--cancel]"
 ---
 
-# PR Review Lifecycle
+# GitHub PR Review Lifecycle
 
 Full GitHub PR review lifecycle: analyze code, discuss findings with user, post inline comments, follow-up on fixes, approve or request changes.
+
+**GitHub only.** This command drives PRs exclusively via the `gh` CLI. Bitbucket and local-merge PR flows are not implemented (`LETS_PR_FLOW=bitbucket|local` users finish tasks via `/lets:done`, not this command).
 
 **Requires:** `gh` CLI installed and authenticated.
 
@@ -14,14 +16,14 @@ Full GitHub PR review lifecycle: analyze code, discuss findings with user, post 
 ## Usage
 
 ```bash
-/lets:pr <PR-url-or-number>     # Start new review
-/lets:pr                        # Resume from saved state
-/lets:pr --follow-up            # Check if fixes addressed comments
-/lets:pr --respond [PR]         # Author: triage review comments, fix, reply
-/lets:pr --approve              # Approve PR
-/lets:pr --merge                # Merge PR
-/lets:pr --status               # Show current review state
-/lets:pr --cancel               # Clean up state, abandon review
+/lets:github-pr <PR-url-or-number>     # Start new review
+/lets:github-pr                        # Resume from saved state
+/lets:github-pr --follow-up            # Check if fixes addressed comments
+/lets:github-pr --respond [PR]         # Author: triage review comments, fix, reply
+/lets:github-pr --approve              # Approve PR
+/lets:github-pr --merge                # Merge PR
+/lets:github-pr --status               # Show current review state
+/lets:github-pr --cancel               # Clean up state, abandon review
 ```
 
 ## Step 1: Detect Mode
@@ -57,7 +59,7 @@ STATE_FILE="$PR_DIR/review.json"
 ### --status flag (exit early)
 
 If --status: read state file, show progress summary (phase, findings count, posted status), exit.
-If no state file: "No active PR review. Run `/lets:pr <PR>` to start one."
+If no state file: "No active PR review. Run `/lets:github-pr <PR>` to start one."
 
 ### --cancel flag (cleanup and exit)
 
@@ -70,7 +72,7 @@ If --cancel:
 ### Route to phase
 
 **State guard:** If `--follow-up`, `--approve`, `--merge`, or `--respond` is specified but no state file exists:
-1. If a PR number is also provided (e.g., `/lets:pr --approve 2`), create a minimal state from `gh pr view`:
+1. If a PR number is also provided (e.g., `/lets:github-pr --approve 2`), create a minimal state from `gh pr view`:
    ```bash
    REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner) || { echo "ERROR: gh repo view failed - check 'gh auth status'"; exit 1; }
 [ -z "$REPO" ] && { echo "ERROR: gh repo view returned empty REPO"; exit 1; }
@@ -81,7 +83,7 @@ If --cancel:
    For `--respond` specifically, create a minimal response state (not review state):
    - If PR number provided: fetch PR info, create `$PR_DIR/response.json`, continue to Phase R
    - If no PR number: check for existing `pr-[0-9]*/response.json` files, or stop
-2. If no PR number - stop: "No active PR review found. Run `/lets:pr <PR>` to start one."
+2. If no PR number - stop: "No active PR review found. Run `/lets:github-pr <PR>` to start one."
 
 | State | Action |
 |-------|--------|
@@ -368,7 +370,7 @@ AskUserQuestion(
 Handle response:
 - Post all -> proceed to 3.3
 - Review again -> loop back to 3.1
-- Save for later -> save state, show LETS box with `/lets:pr` to resume
+- Save for later -> save state, show LETS box with `/lets:github-pr` to resume
 
 ### 3.3 Verify line numbers against diff
 
@@ -529,7 +531,7 @@ CURRENT_SHA=$(gh pr view <PR> --json headRefOid -q .headRefOid)
 
 If REVIEW_SHA == CURRENT_SHA:
   "No new commits since review. Waiting for fixes."
-  Show LETS box: /lets:pr --approve (if ready) or /lets:pr --status
+  Show LETS box: /lets:github-pr --approve (if ready) or /lets:github-pr --status
   Exit.
 
 ### 4.2 Checkout updated PR and get fix delta
@@ -1118,19 +1120,19 @@ No LETS box needed - flow continues.
 ```
 Posted {N} inline + {M} summary to PR #{number}
 
-┌─ LETS ────────────────────────────────┐
-│  Follow-up?  /lets:pr --follow-up     │
-│  Approve?    /lets:pr --approve       │
-└───────────────────────────────────────┘
+┌─ LETS ───────────────────────────────────┐
+│  Follow-up?  /lets:github-pr --follow-up │
+│  Approve?    /lets:github-pr --approve   │
+└──────────────────────────────────────────┘
 ```
 
 ### After Phase 3 (follow-up done):
 
 ```
-┌─ LETS ─────────────────────────┐
-│  Approve?  /lets:pr --approve  │
-│  Merge?    /lets:pr --merge    │
-└────────────────────────────────┘
+┌─ LETS ───────────────────────────────────┐
+│  Approve?  /lets:github-pr --approve     │
+│  Merge?    /lets:github-pr --merge       │
+└──────────────────────────────────────────┘
 ```
 
 ### After Phase 4 (verdict submitted):
@@ -1138,10 +1140,10 @@ Posted {N} inline + {M} summary to PR #{number}
 ```
 PR #{number} {approved/merged/changes requested}
 
-┌─ LETS ─────────────────────────┐
-│  Done?  /lets:done             │
-│  End?   /lets:end              │
-└────────────────────────────────┘
+┌─ LETS ───────────────────────────────────┐
+│  Done?  /lets:done                       │
+│  End?   /lets:end                        │
+└──────────────────────────────────────────┘
 ```
 
 ### After Phase R (replies posted):
@@ -1149,10 +1151,10 @@ PR #{number} {approved/merged/changes requested}
 ```
 Replied to {N} comments on PR #{number} ({X} fixed, {Y} agreed, {Z} disagreed)
 
-┌─ LETS ─────────────────────────┐
-│  Done?    /lets:done           │
-│  Status?  /lets:pr --status    │
-└────────────────────────────────┘
+┌─ LETS ───────────────────────────────────┐
+│  Done?    /lets:done                     │
+│  Status?  /lets:github-pr --status       │
+└──────────────────────────────────────────┘
 ```
 
 ### After Phase R (saved for later):
@@ -1160,18 +1162,18 @@ Replied to {N} comments on PR #{number} ({X} fixed, {Y} agreed, {Z} disagreed)
 ```
 Response saved to .lets/execution/pr-{number}/response.json
 
-┌─ LETS ──────────────────────────────┐
-│  Resume?  /lets:pr --respond {PR}   │
-└─────────────────────────────────────┘
+┌─ LETS ───────────────────────────────────┐
+│  Resume?  /lets:github-pr --respond {PR} │
+└──────────────────────────────────────────┘
 ```
 
 ### After --status:
 
 ```
-┌─ LETS ────────────────────────────────┐
-│  Resume?     /lets:pr                 │
-│  Follow-up?  /lets:pr --follow-up     │
-└───────────────────────────────────────┘
+┌─ LETS ───────────────────────────────────┐
+│  Resume?     /lets:github-pr             │
+│  Follow-up?  /lets:github-pr --follow-up │
+└──────────────────────────────────────────┘
 ```
 
 ### After --cancel:
@@ -1179,9 +1181,9 @@ Response saved to .lets/execution/pr-{number}/response.json
 ```
 Review state cleaned up.
 
-┌─ LETS ─────────────────────────┐
-│  New review?  /lets:pr <PR>    │
-└────────────────────────────────┘
+┌─ LETS ───────────────────────────────────┐
+│  New review?  /lets:github-pr <PR>       │
+└──────────────────────────────────────────┘
 ```
 
 ## Rules

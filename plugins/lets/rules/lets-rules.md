@@ -106,6 +106,13 @@ AUTO MODE (autonomous execution: `/loop`, `/lets:execute` auto-flow, `/lets:team
 **Soft stops** (pause and ask):
 - Decision point with 2+ viable approaches → use `AskUserQuestion`, don't pick autonomously.
 - New large scope late in long session → suggest finishing current + `/lets:end` first.
+- Implementation about to start without an approved plan → present the plan, wait. Don't begin editing.
+
+**Plan-visibility gate** (applies even in AUTO MODE):
+- Before editing code/files the user has not already seen and approved as a concrete plan — present the plan first: per task/file, what changes, in what order. Wait for "go". AUTO MODE speeds up execution of an *approved* plan; it never authorizes starting unseen work.
+- "Execute immediately" = run the next step of an already-approved plan without re-confirming each step. It does NOT mean "skip showing the plan".
+- "Let's think about how to do X" / "подумаємо як" / "проаналізуй" / "how to do X?" = request for a plan or analysis, NOT a green light to edit. Produce the plan/analysis, stop, wait.
+- Multi-task batches: show the full batch breakdown (per-task approach + files touched) before the first edit. One approval covers the whole batch — no need to re-ask per task — but the user must see it before any code changes.
 
 **Escape hatch:**
 - User interrupt = stop the current action, ack the interruption, await direction. Don't resume without explicit re-approval.
@@ -113,7 +120,7 @@ AUTO MODE (autonomous execution: `/loop`, `/lets:execute` auto-flow, `/lets:team
 
 ## Agent Rules
 
-- When launching expert agents for `/lets:review`, `/lets:pr`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:brainstorm` - use ONLY `lets:*` agents (`lets:architect`, `lets:security`, etc.)
+- When launching expert agents for `/lets:review`, `/lets:github-pr`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:brainstorm` - use ONLY `lets:*` agents (`lets:architect`, `lets:security`, etc.)
 - `lets:actor` is a special meta-agent: requires explicit user request + personality source (URL or file path). Never auto-select. Use `actor-fetch-personality` skill to fetch personality before dispatch.
 - Never use `general-purpose` or other non-lets subagent types for expert work
 
@@ -208,8 +215,8 @@ Worktree:  /lets:worktree create -> `cd .worktrees/<name>/ && claude` -> /lets:s
 
 Team:      /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /lets:done
 
-PR review:  /lets:pr <PR> -> discuss -> post -> /lets:pr --follow-up -> /lets:pr --approve
-PR respond: /lets:pr --respond <PR> -> triage -> fix -> reply
+PR review:  /lets:github-pr <PR> -> discuss -> post -> /lets:github-pr --follow-up -> /lets:github-pr --approve
+PR respond: /lets:github-pr --respond <PR> -> triage -> fix -> reply
 ```
 
 If a plan exists from `/lets:plan`, use `/lets:execute` to implement it. Execute enters native plan mode; use `/lets:commit` at natural commit points.
@@ -219,14 +226,14 @@ Two separate lifecycles:
 - **Task:** picked at start ... `/lets:done` (may span multiple sessions)
 
 **Review options:**
-- `/lets:check` - quick sanity check (~30 sec), before any commit
+- `/lets:check` - quick inline sanity check (~30 sec); same target flags as `/lets:review` but no subagents - before any commit, or a fast first pass on a PR
 - `/lets:review` - full deep review (~2-3 min), works locally OR on GitHub PR
 
 **When to use which:**
 - Small change -> `/lets:check` -> commit
 - Significant change -> `/lets:check` -> `/lets:review --local` -> fix -> commit -> PR
 - PR already exists -> `/lets:review <PR>` -> comment on PR
-- Full PR lifecycle -> `/lets:pr <PR>` -> discuss -> post inline -> follow-up -> approve
+- Full PR lifecycle -> `/lets:github-pr <PR>` -> discuss -> post inline -> follow-up -> approve
 - Existing file quality -> `/lets:review --file <path>`
 - Quick plan check -> `/lets:check --plan`
 
@@ -275,7 +282,7 @@ Every milestone should show a LETS box with relevant next steps.
 
 **Rule:** If AI made changes -> always suggest `/lets:check` first.
 
-**Exception — internal invocation:** When a `/lets:*` command is invoked programmatically by another command (e.g., `/lets:review --json` called by `/lets:pr`), the inner command's LETS box is waived. Only the outer command shows its box to avoid duplicate / conflicting next-step suggestions in one response.
+**Exception — internal invocation:** When a `/lets:*` command is invoked programmatically by another command (e.g., `/lets:review --json` called by `/lets:github-pr`), the inner command's LETS box is waived. Only the outer command shows its box to avoid duplicate / conflicting next-step suggestions in one response.
 
 **Active work:**
 ```
@@ -334,13 +341,13 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:end` | Session | End of session |
 | `/lets:done` | Task | Task is complete |
 | `/lets:commit` | Code | Ready to commit (also auto-triggers on "commit", "закоміть") |
-| `/lets:check` | Code | Quick sanity check - code (~30s) or plan (--plan) |
+| `/lets:check` | Code | Quick sanity check (~30s) - inline 6-lens; same targets as `/lets:review` (local/staged/last-commit/PR/`--file`/`--plan`/`--json`), no subagents |
 | `/lets:review` | Code | Full deep review (~2-3 min) |
-| `/lets:pr` | Code | PR review lifecycle (review, respond, follow-up, approve) |
+| `/lets:github-pr` | Code | GitHub PR review lifecycle (review, respond, follow-up, approve) |
 | `/lets:opinion` | Expert | Technical decision (dynamic agent count) |
 | `/lets:ask` | Expert | Quick expert consultation (1 agent) |
 | `/lets:brainstorm` | Planning | Interactive ideation - review backlog, explore ideas, quick brainstorm, cleanup |
-| `/lets:plan` | Planning | Structured planning with agents - architecture + implementation plan |
+| `/lets:plan` | Planning | Structured planning with agents - architecture + implementation plan (`--fast` = orchestrator-only, skips explorer/architect/expert subagents) |
 | `/lets:execute` | Planning | Execute plan from /lets:plan via native plan mode |
 | `/lets:status` | Utility | Task overview and project status |
 | `/lets:worktree` | Utility | Create/manage interactive worktrees for parallel work |

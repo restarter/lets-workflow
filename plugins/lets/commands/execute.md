@@ -70,10 +70,10 @@ Commits this session: {N}
 ```
 
 ```
-┌─ LETS ──────────────────────────────────┐
-│  Continue?  /lets:execute               │
-│  End?       /lets:end                   │
-└─────────────────────────────────────────┘
+┌─ LETS ─────────────────────────┐
+│  Continue?  /lets:execute      │
+│  End?       /lets:end          │
+└────────────────────────────────┘
 ```
 
 Exit after showing status.
@@ -168,15 +168,16 @@ $(git log --oneline ${START_REF}..HEAD)"
 
 **After completion:**
 ```
-┌─ LETS ──────────────────────────────────┐
-│  Review?  /lets:review --local          │
-│  Done?    /lets:done                    │
-└─────────────────────────────────────────┘
+┌─ LETS ─────────────────────────┐
+│  Check?   /lets:check          │
+│  Review?  /lets:review --local │
+│  Done?    /lets:done           │
+└────────────────────────────────┘
 ```
 
 **If no plan found:**
 ```
-┌─ LETS ──────────────────────────────────┐
-│  Plan?  /lets:plan                      │
-└─────────────────────────────────────────┘
+┌─ LETS ─────────────────────────┐
+│  Plan?  /lets:plan             │
+└────────────────────────────────┘
 ```

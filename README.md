@@ -177,7 +177,7 @@ Then start working:
 | Command | Description |
 |---------|-------------|
 | `/lets:brainstorm` | Interactive ideation - backlog review, idea exploration, quick brainstorm, cleanup |
-| `/lets:plan` | Structured planning - explore codebase, design architecture, write plan |
+| `/lets:plan` | Structured planning - explore codebase, design architecture, write plan (`--fast` = orchestrator-only, no subagents) |
 | `/lets:execute` | Execute plan from `/lets:plan` via native plan mode |
 | `/lets:team` | Parallel implementation with Agent Teams |
 | `/lets:worktree` | Create/manage worktrees for parallel sessions |
@@ -188,7 +188,7 @@ Then start working:
 |---------|-------------|
 | `/lets:check` | Quick inline sanity check (~30s, 6-perspective review) |
 | `/lets:review` | Full code review with dynamic agent selection (~2-3 min) |
-| `/lets:pr` | PR review lifecycle - analyze, discuss, post inline, follow-up, approve |
+| `/lets:github-pr` | GitHub PR review lifecycle - analyze, discuss, post inline, follow-up, approve |
 | `/lets:opinion` | Technical decision analysis (dynamic expert agents in parallel) |
 | `/lets:ask` | Quick expert consultation (single agent) |
 
@@ -206,23 +206,23 @@ Three levels of review, from 30-second sanity check to full PR lifecycle:
 |------|---------|------|-------------|
 | Quick pre-commit check | `/lets:check` | ~30s | Inline 6-lens review: bugs, security, performance, quality, compliance, docs |
 | Full code review | `/lets:review` | ~2-3 min | Dynamic agent selection - only relevant experts for your changes |
-| Full PR lifecycle | `/lets:pr <PR>` | Interactive | Analyze, discuss, post inline comments, follow up on fixes, approve |
+| Full PR lifecycle (GitHub) | `/lets:github-pr <PR>` | Interactive | Analyze, discuss, post inline comments, follow up on fixes, approve |
 
-### PR Review Lifecycle (`/lets:pr`)
+### GitHub PR Review Lifecycle (`/lets:github-pr`)
 
-This is where LETS shines. Instead of reviewing PRs in a browser, you do it from the terminal with expert agents:
+This is where LETS shines. Instead of reviewing PRs in a browser, you do it from the terminal with expert agents. GitHub only — Bitbucket/local flows aren't implemented (those finish tasks via `/lets:done`):
 
 ```
-/lets:pr https://github.com/owner/repo/pull/42
+/lets:github-pr https://github.com/owner/repo/pull/42
 ```
 
 1. **Analyze** - agents review the PR based on what actually changed (security agent for auth code, database for migrations, etc.)
 2. **Discuss** - you see each finding with code context, decide what to post: inline comment, summary, or drop
 3. **Post** - batch-posts inline comments to the exact lines on GitHub, with a review summary
-4. **Follow up** - after the author pushes fixes, `/lets:pr --follow-up` checks each finding: fixed, not fixed, or needs discussion
-5. **Approve** - `/lets:pr --approve` when ready, or request changes
+4. **Follow up** - after the author pushes fixes, `/lets:github-pr --follow-up` checks each finding: fixed, not fixed, or needs discussion
+5. **Approve** - `/lets:github-pr --approve` when ready, or request changes
 
-Authors can respond with `/lets:pr --respond` - triage comments, auto-fix mechanical issues, post replies.
+Authors can respond with `/lets:github-pr --respond` - triage comments, auto-fix mechanical issues, post replies.
 
 ### Dynamic Agent Selection
 
@@ -244,7 +244,7 @@ For plan reviews, agents are selected by signals in the plan content (mentions o
 - *Quick brainstorm* - fast ideation on a topic
 - *Cleanup* - find stale tasks, broken dependencies, forgotten work
 
-**Plan** (`/lets:plan`) - codebase exploration with dynamically-scaled explorer agents, then architecture design with expert evaluation. Small project? One explorer. Large monorepo? Up to 10, each mapping a different area.
+**Plan** (`/lets:plan`) - codebase exploration with dynamically-scaled explorer agents, then architecture design with expert evaluation. Small project? One explorer. Large monorepo? Up to 10, each mapping a different area. Want a quick talk-through instead? `/lets:plan --fast` skips the subagent phases and plans collaboratively in-session.
 
 **Execute** (`/lets:execute`) - implements the plan step by step in native plan mode. You approve each step before Claude proceeds. No surprises.
 

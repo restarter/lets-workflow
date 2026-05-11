@@ -111,9 +111,9 @@ Check:
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 cat "$LETS_PROJECT_ROOT/CLAUDE.md" 2>/dev/null | head -200
 
-# For each task:
+# For each task (read full description + all comments):
 bd show <task-id>
-bd comments list <task-id>
+bd comments <task-id>
 
 # Stack detection
 ls package.json pyproject.toml Cargo.toml go.mod composer.json Gemfile 2>/dev/null
@@ -452,10 +452,11 @@ All commits landed on current branch ({branch-name}).
 ```
 
 ```
-┌─ LETS ──────────────────────────────────┐
-│  Review?  /lets:review --local          │
-│  Done?    /lets:done                    │
-└─────────────────────────────────────────┘
+┌─ LETS ─────────────────────────┐
+│  Check?   /lets:check --local  │
+│  Review?  /lets:review --local │
+│  Done?    /lets:done           │
+└────────────────────────────────┘
 ```
 
 ---
@@ -510,9 +511,9 @@ Started: {time}
 ```
 
 ```
-┌─ LETS ──────────────────────────────────┐
-│  Stop?  /lets:team stop                 │
-└─────────────────────────────────────────┘
+┌─ LETS ─────────────────────────┐
+│  Stop?  /lets:team stop        │
+└────────────────────────────────┘
 ```
 
 ---
@@ -576,9 +577,10 @@ In-progress work from stopped teammates may be lost if they didn't commit before
 
 Check teammate commits: git log --oneline ${BASE_SHA}..HEAD
 
-┌─ LETS ──────────────────────────────────┐
-│  Review?  /lets:review --local          │
-└─────────────────────────────────────────┘
+┌─ LETS ─────────────────────────┐
+│  Check?   /lets:check --local  │
+│  Review?  /lets:review --local │
+└────────────────────────────────┘
 ```
 
 ---

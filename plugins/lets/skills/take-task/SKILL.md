@@ -125,10 +125,10 @@ If the branch already existed (continuing a multi-session task):
 
 ```bash
 bd show <task-id>
-bd comments list <task-id>
+bd comments <task-id>
 ```
 
-Present: "Resuming **{task title}** (`{task-id}`). Last session: {summary from latest beads comment}"
+Read the full description and ALL comments — they hold the multi-session context. Present: "Resuming **{task title}** (`{task-id}`). Last session: {summary from latest beads comment}"
 
 ## Output
 

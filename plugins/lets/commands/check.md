@@ -1,19 +1,24 @@
 ---
 description: Quick sanity check - code (inline 6-perspective) or plan (--plan).
-argument-hint: "[--staged|--last-commit|--plan]"
+argument-hint: "[PR-url-or-number|--local|--staged|--last-commit|--plan|--file <path>] [--json]"
 ---
 
 # Quick Local Code Check
 
-Fast inline sanity check of local changes from 6 perspectives.
+Fast inline sanity check from 6 perspectives. Same target selection as `/lets:review` - the difference is depth: `/lets:check` reviews inline (no subagent dispatch, no AskUserQuestion gates), `/lets:review` dispatches expert agents.
 
 ## Usage
 
 ```bash
-/lets:check              # uncommitted changes (default)
-/lets:check --staged     # only staged changes
-/lets:check --last-commit # last commit
-/lets:check --plan       # quick plan sanity check
+/lets:check                      # uncommitted changes (default, same as --local)
+/lets:check --local              # uncommitted changes (explicit)
+/lets:check --staged             # only staged changes
+/lets:check --last-commit        # last commit
+/lets:check <PR-url-or-number>   # quick PR sanity (gh pr diff, inline - no agents)
+/lets:check --file <path>        # quick sanity of an existing file (full content, not a diff)
+/lets:check --plan               # quick plan sanity check
+/lets:check --plan <path>        # quick sanity of a specific plan file
+/lets:check ... --json           # structured JSON output instead of console report
 ```
 
 ## When to Use
@@ -22,8 +27,26 @@ Fast inline sanity check of local changes from 6 perspectives.
 - Before commit for significant changes
 - When unsure if code is ready
 - Spot check after refactoring
+- Fast first pass on a PR before a full `/lets:review`
 
-**For full review:** Use `/lets:review` (local or PR, multiple expert agents).
+**For full review:** Use `/lets:review` (same modes, multiple expert agents, deeper analysis). Every mode below has a `/lets:review --<same-flag>` upgrade path.
+
+## Step 0: Determine Mode
+
+Parse the argument(s):
+
+| Argument | Mode | Target |
+|----------|------|--------|
+| `--plan` / `--plan <path>` | Plan review | go to **Plan Mode** section below, skip code steps |
+| `--file <path>` | File review | entire file content (not a diff) |
+| bare PR URL or number (not a flag) | PR | `gh pr diff <PR>` |
+| `--local` / *no argument* | Local (default) | `git diff` (uncommitted) |
+| `--staged` | Local | `git diff --staged` |
+| `--last-commit` | Local | `git diff HEAD~1` |
+
+`--json` is a modifier that can accompany any code mode (not plan mode): emit structured JSON instead of the console report (see Step 4.5). Skip the LETS box and the beads comment when `--json` is set - the caller handles output.
+
+**This command never dispatches subagents in any mode** - all review is inline (Step 3's 6 lenses). PR and file modes just change what gets fed to those lenses.
 
 ## Plan Mode (--plan)
 
@@ -49,42 +72,63 @@ Read the plan and review with 5 lenses (same confidence filter):
 Output same format as code check, then:
 
 ```
-┌─ LETS ─────────────────────────┐
-│  Full review?  /lets:review --plan  │
-│  Execute?      /lets:execute        │
-└─────────────────────────────────────┘
+┌─ LETS ────────────────────────────────────┐
+│  Full review?  /lets:review --plan        │
+│  Execute?      /lets:execute              │
+└───────────────────────────────────────────┘
 ```
 
 ---
 
-## Step 1: Get Changes
+## Step 1: Get Target
+
+### Local mode (`--local` / default / `--staged` / `--last-commit`):
 
 ```bash
-# Default: uncommitted changes
-git diff
-
-# Or staged only
-git diff --staged
-
-# Or last commit
-git diff HEAD~1
+git diff              # default / --local: uncommitted
+git diff --staged     # --staged
+git diff HEAD~1       # --last-commit
 ```
 
 If no changes, inform user and exit.
+
+### PR mode (bare PR URL or number):
+
+```bash
+gh pr view <PR> --json state,isDraft,title,body,additions,deletions,changedFiles
+gh pr diff <PR>
+```
+
+- **Skip if** the PR is closed or draft (inform user, exit).
+- **If the PR is large** (rough heuristic: >400 changed lines or >15 files), warn: "This PR is large - `/lets:review <PR>` (full agent review) is a better fit. Running a quick inline pass anyway on the diff." Then proceed.
+- The `gh pr diff` output is the "diff" fed to Step 3.
+
+### File mode (`--file <path>`):
+
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+cat "$LETS_PROJECT_ROOT/{path}"
+```
+
+Read the entire file (respect Read-tool pagination for large files - don't blast context; if the file is huge, review the first ~600 lines and say so). The file content is the "diff" fed to Step 3 - this reviews existing code, not changes. If the file doesn't exist, inform user and exit.
 
 ## Step 2: Gather Context
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-git diff --stat
 cat "$LETS_PROJECT_ROOT/CLAUDE.md" 2>/dev/null | head -100
 ```
+
+Mode-specific extras:
+- **Local:** `git diff --stat` (or `--staged` / `HEAD~1`)
+- **PR:** `gh pr view <PR> --json title,body` for context; `gh pr diff <PR> --name-only` for the file list
+- **File:** `cat "$LETS_PROJECT_ROOT/$(dirname {path})/CLAUDE.md" 2>/dev/null` for any directory-local rules
 
 ## Step 3: Review with 6 Lenses
 
 ultrathink
 
-Review the diff directly using these 6 perspectives. Think like a senior dev doing a quick PR scan - catch real issues, skip noise.
+Review the target (diff for local/PR modes, full file content for `--file` mode) directly using these 6 perspectives. Think like a senior dev doing a quick PR scan - catch real issues, skip noise. In `--file` mode there's no diff baseline, so judge the code on its own merits rather than "what changed".
 
 ### [Bug] Bugs & Logic
 - Logic errors, off-by-one, edge cases
@@ -140,10 +184,14 @@ Classify each finding:
 
 ## Step 4: Present Results
 
+**If `--json` was set, skip this step - go to Step 4.5 instead.**
+
 ### Output Format
 
+`{target}` is the thing reviewed: `"{N} files changed"` (local modes), `"PR #{number}: {title}"` (PR mode), or `"{filename} ({N} lines)"` (file mode).
+
 ```
-## Quick Check: {N files changed}
+## Quick Check: {target}
 
 ### Verdict: {[OK] GOOD | [!] REVIEW | [X] FIX}
 
@@ -161,30 +209,80 @@ Classify each finding:
 - Minor issues only -> [!] REVIEW
 - Security or critical bugs -> [X] FIX
 
+## Step 4.5: JSON Output (--json only)
+
+If `--json` was provided, emit a structured object instead of the console report. The shape mirrors `/lets:review --json` so a consumer can parse either: same `verdict` values, same severity `tier` values, same `findings[]` fields (`id`, `title`, `tier`, `file`, `line`, `description`, `suggestion`, `agent`), same `summary` object keyed by reviewer. For check, the "reviewer" is always `"check"` and each finding also carries the originating `lens` as an extra field; there is no `systemic[]` array (inline check doesn't do cross-pattern detection - omit it).
+
+```json
+{
+  "date": "2026-02-26",
+  "mode": "check-local",
+  "verdict": "REVIEW",
+  "findings_count": 2,
+  "findings": [
+    {
+      "id": 1,
+      "title": "Off-by-one in pagination offset",
+      "tier": "SUGGESTION",
+      "agent": "check",
+      "lens": "Bug",
+      "file": "src/list.py",
+      "line": 88,
+      "description": "Offset starts at 1 instead of 0",
+      "suggestion": "Use 0-based offset"
+    }
+  ],
+  "summary": {
+    "check": "2 findings (0 blocker, 2 suggestion); inline 6-lens, no agents"
+  }
+}
+```
+
+`mode` values: `check-local` | `check-staged` | `check-last-commit` | `check-PR-{number}` | `check-file`. After emitting, STOP - skip Step 5 and the Output box; the caller handles output and task linking.
+
 ## Step 5: Link to Active Task
 
-If issues were found, record in beads:
+Skip entirely if `--json` was set, or if mode is PR / `--file` (those aren't tied to the active branch's task). For local modes, if issues were found, record in beads:
 
 Use the **detect-task** skill to find the active task (read `${CLAUDE_PLUGIN_ROOT}/skills/detect-task/SKILL.md` and follow its detection flow).
 If multiple tasks found, skip beads comment.
 If active task found AND issues detected:
 
 ```bash
-bd comments add <task-id> "Quick check: {verdict}. {N} issues found."
+bd comments add <task-id> "Quick check ({mode}): {verdict}. {N} issues found."
 ```
 
 If clean (no issues) - skip, don't add noise to the task.
 
 ## Output
 
-**If GOOD or REVIEW:**
+Skip the box entirely when `--json` was set. Otherwise the box offers the `/lets:review` upgrade path for the same target:
+
+**Local modes (`--local` / default / `--staged` / `--last-commit`), GOOD or REVIEW:**
 ```
-┌─ LETS ─────────────────┐
-│  Commit? /lets:commit  │
-└────────────────────────┘
+┌─ LETS ────────────────────────────────────┐
+│  Commit?       /lets:commit               │
+│  Deep review?  /lets:review --local       │
+└───────────────────────────────────────────┘
+```
+(swap `--local` for `--staged` / `--last-commit` to match the mode used)
+
+**PR mode, GOOD or REVIEW:**
+```
+┌─ LETS ────────────────────────────────────┐
+│  Deep review?     /lets:review <PR>       │
+│  Full lifecycle?  /lets:github-pr <PR>    │
+└───────────────────────────────────────────┘
 ```
 
-**If FIX:** No box. Say "Fix the issues above, then run `/lets:check` again."
+**File mode, GOOD or REVIEW:**
+```
+┌─ LETS ────────────────────────────────────┐
+│  Deep review?  /lets:review --file <path> │
+└───────────────────────────────────────────┘
+```
+
+**If FIX (any mode):** No box. Say "Fix the issues above, then run `/lets:check` again." (or `/lets:review --<same-flag>` for a deeper look).
 
 ## Rules
 
@@ -192,18 +290,20 @@ If clean (no issues) - skip, don't add noise to the task.
 
 ## What This Is NOT
 
-- NOT a full code review (use `/lets:review`)
-- NOT multi-agent (no subagents, inline review only)
-- NOT saved to file (console only)
+- NOT multi-agent - inline review only, no subagent dispatch in ANY mode (that's the one thing that never changes vs `/lets:review`)
+- NOT saved to file - console only (`--json` emits to console too, for tooling)
+- NOT a substitute for `/lets:review` on large changes - same target surface, shallower analysis
 
 ## Workflow Integration
 
 ```
-Work -> /lets:check -> /lets:commit -> Push -> PR -> /lets:review
-         ^                                            |
-    Quick inline check                         Full PR review
-    6 perspectives                             multiple agents
+Work -> /lets:check -> /lets:commit -> Push -> PR -> /lets:review <PR> (or /lets:github-pr <PR>)
+         ^                                            ^
+    Quick inline check (any target:                Full agent review
+    local / staged / PR / file / plan)             multiple specialists
 ```
+
+Same flags as `/lets:review` (`--local`, `--staged`, `--last-commit`, `<PR>`, `--file`, `--plan`, `--json`) - reach for `/lets:check` when you want a fast pass, `/lets:review` when you want depth.
 
 ## Notes
 
@@ -211,4 +311,4 @@ Work -> /lets:check -> /lets:commit -> Push -> PR -> /lets:review
 - Focus on actionable issues only - this is a helper, not a blocker
 - No false positives - when in doubt, skip it
 - Be direct, no hedging
-- Reference specific lines from the diff
+- Reference specific lines from the diff (or file, in `--file` mode)

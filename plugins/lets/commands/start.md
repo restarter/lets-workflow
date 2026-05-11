@@ -20,7 +20,7 @@ Restore context and prepare for work. **User MUST select a task before working.*
 **If `<task-id>` provided** (e.g., `/lets:start lets-rmcwo`):
 - Skip Steps 1, 3, 5 (session history, status overview, task selection)
 - Run Step 2 (git state) briefly
-- `bd show <task-id>` + `bd comments list <task-id> --limit 3` for context
+- `bd show <task-id>` + `bd comments <task-id>` for context — read the FULL description and ALL comments, never truncate
 - Jump to Step 6 (branch) with this task
 
 **If `--continue`:**
@@ -30,7 +30,7 @@ Restore context and prepare for work. **User MUST select a task before working.*
 - If multiple -> show selection with context from recent sessions
 - If none -> fall through to full flow
 
-**If no arguments** -> full flow (Steps 1-8 as below)
+**If no arguments** -> full flow (Steps 1-9 as below)
 
 ## Step 1: Previous Session Context
 
@@ -101,7 +101,16 @@ After task is selected, delegate to the **take-task** skill to claim it and prep
 
 The take-task skill handles: setting task to `in_progress`, uncommitted changes check, worktree detection, branch creation/switching, offering worktree option, context recovery, saving session start ref.
 
-## Step 7: Task Size Assessment
+## Step 7: Suggest Session Rename
+
+After the task is claimed, suggest renaming the Claude Code session so the statusline reflects the active task. `/rename` is a built-in slash command the **user** invokes — the assistant cannot run it — so present it as a ready-to-paste suggestion, not an action:
+
+> Tip: name this session for quick context — `/rename {slug}`
+
+- Slug: short, lowercase, dash-separated, derived from the task title (e.g. **Add CHANGELOG step to /lets:done** -> `changelog-step-done`). Keep under ~30 chars; compress long titles to the 2-4 most distinctive words.
+- This is a one-line suggestion, not a gate — continue regardless of whether the user runs it.
+
+## Step 8: Task Size Assessment
 
 Once task is selected, assess complexity:
 
@@ -112,7 +121,7 @@ Once task is selected, assess complexity:
 | Medium (2-8 hrs) | Suggest `/lets:plan` then `/lets:execute` |
 | Large (> 8 hrs) | Require `/lets:plan` + break into subtasks |
 
-## Step 8: Ready to Work
+## Step 9: Ready to Work
 
 After task is selected and branch is ready, show reminders and welcome box.
 
@@ -120,6 +129,7 @@ After task is selected and branch is ready, show reminders and welcome box.
 
 ```
 ## Reminders
+- Name this session: `/rename {slug}`
 - Check context window: `/context`
 - For technical decisions: `/lets:opinion`
 - When task done: `/lets:commit` - `/lets:done` - `/lets:end`
