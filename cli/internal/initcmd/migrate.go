@@ -78,7 +78,7 @@ func MigrateYamlToEnv(projectRoot string) (string, bool, error) {
 	if err := os.MkdirAll(filepath.Dir(envPath), 0o755); err != nil {
 		return "", false, err
 	}
-	if err := atomicWriteBytes(envPath, envBytes, 0o644); err != nil {
+	if err := AtomicWriteBytes(envPath, envBytes, 0o644); err != nil {
 		return "", false, err
 	}
 	if err := os.Remove(yamlPath); err != nil {
@@ -184,5 +184,5 @@ func EnsureGitignore(projectRoot string, entries []string) error {
 	for _, e := range toAppend {
 		buf = append(buf, []byte(e+"\n")...)
 	}
-	return atomicWriteBytes(path, buf, 0o644)
+	return AtomicWriteBytes(path, buf, 0o644)
 }

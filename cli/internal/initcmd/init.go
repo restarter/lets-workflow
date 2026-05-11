@@ -137,7 +137,7 @@ func Run(ctx context.Context, prefs Prefs, projectRoot, pluginRoot string) (Resu
 	// 6. .env.example always refreshes from canonical letsconfig defaults
 	// (no plugin template file — Go is the single source of truth).
 	examplePath := filepath.Join(projectRoot, ".lets", ".env.example")
-	if err := atomicWriteBytes(examplePath, renderEnvExample(), 0o644); err != nil {
+	if err := AtomicWriteBytes(examplePath, renderEnvExample(), 0o644); err != nil {
 		return result, err
 	}
 	result.Add(Step{Status: StepOK, Message: ".lets/.env.example (refreshed)"})
@@ -184,7 +184,7 @@ func Run(ctx context.Context, prefs Prefs, projectRoot, pluginRoot string) (Resu
 			if err := os.MkdirAll(filepath.Dir(rulesDst), 0o755); err != nil {
 				return result, err
 			}
-			if err := atomicWriteBytes(rulesDst, rulesData, 0o644); err != nil {
+			if err := AtomicWriteBytes(rulesDst, rulesData, 0o644); err != nil {
 				return result, err
 			}
 			// Recompute drift against newly-written file. Symmetric to the

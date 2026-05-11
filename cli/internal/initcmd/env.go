@@ -104,10 +104,10 @@ func RegenerateEnv(path string, prefs Prefs) (EnvAction, error) {
 	}
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		// best-effort; atomicWriteBytes will retry/fail with concrete error
+		// best-effort; AtomicWriteBytes will retry/fail with concrete error
 		_ = err
 	}
-	if err := atomicWriteBytes(path, body, 0o644); err != nil {
+	if err := AtomicWriteBytes(path, body, 0o644); err != nil {
 		return action, fmt.Errorf("write .env: %w", err)
 	}
 
@@ -133,26 +133,37 @@ func readEnvVersion(path string) string {
 	return values[letsconfig.VersionKeyName]
 }
 
-// mergePrefs returns prefs filled from existingValues for any field where prefs
-// is zero-value. CLI flag values (non-empty in prefs) win over existingValues.
+// mergePrefs resolves each user-facing key with precedence
+// CLI flag (non-empty in prefs) > value in the existing .env > canonical
+// default. The default fallback matters when a key was hand-deleted from .env:
+// without it, renderTemplate would emit `LETS_FOO=` (empty) and the
+// SessionStart hook would inject an empty value into model context.
 //
-// Tracker is asymmetric: it has no CLI flag (no --tracker), so prefs.Tracker
-// is always non-empty (cobra wrapper fills from defaults). For Tracker we
-// invert the precedence — existing value wins over default — so user
-// customization in .env is preserved across regen.
+// Tracker is asymmetric: it has no CLI flag (no --tracker), so prefs.Tracker is
+// always non-empty (cobra wrapper fills from defaults). For Tracker we invert
+// the precedence — existing value wins over that default — so user
+// customization in .env is preserved across regen; the default is the floor.
 func mergePrefs(prefs Prefs, existing map[string]string) Prefs {
+	defaults := letsconfig.Defaults()
+	pick := func(flagVal, key string) string {
+		switch {
+		case flagVal != "":
+			return flagVal
+		case existing[key] != "":
+			return existing[key]
+		default:
+			return defaults[key]
+		}
+	}
 	result := prefs
-	if result.Language == "" {
-		result.Language = existing["LETS_LANGUAGE"]
-	}
-	if result.MergeBranch == "" {
-		result.MergeBranch = existing["LETS_MERGE_BRANCH"]
-	}
-	if result.PRFlow == "" {
-		result.PRFlow = existing["LETS_PR_FLOW"]
-	}
+	result.Language = pick(prefs.Language, "LETS_LANGUAGE")
+	result.MergeBranch = pick(prefs.MergeBranch, "LETS_MERGE_BRANCH")
+	result.PRFlow = pick(prefs.PRFlow, "LETS_PR_FLOW")
 	if existingTracker := existing["LETS_TRACKER"]; existingTracker != "" {
 		result.Tracker = existingTracker
+	}
+	if result.Tracker == "" {
+		result.Tracker = defaults["LETS_TRACKER"]
 	}
 	return result
 }

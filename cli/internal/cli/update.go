@@ -81,6 +81,9 @@ slash command, which shells out with --plugin-root=${CLAUDE_PLUGIN_ROOT}.`,
 				return emit(updatecmd.NewResult(projectRoot, ""), fmt.Errorf("%w\n\nRun /lets:update from inside Claude Code, or pass --plugin-root=<path-to-plugins/lets>", err))
 			}
 
+			if flagRefreshCache && flagOffline {
+				fmt.Fprintln(cmd.ErrOrStderr(), "warning: --refresh-cache has no effect with --offline")
+			}
 			opts := updatecmd.Options{}
 			if !flagOffline {
 				cacheDir := filepath.Join(projectRoot, ".lets", "cache")

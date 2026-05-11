@@ -50,9 +50,16 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 
 	// --- Artifact 1: .lets/.env ---
 	envPath := filepath.Join(projectRoot, ".lets", ".env")
-	if _, err := os.Stat(envPath); os.IsNotExist(err) {
+	_, envStatErr := os.Stat(envPath)
+	switch {
+	case os.IsNotExist(envStatErr):
 		result.Add(Artifact{Name: ".env", Status: StatusNotInitialized, Action: "Run /lets:init"})
-	} else {
+	case version.IsDev():
+		// A dev binary has no real version to stamp; RegenerateEnv would rewrite
+		// LETS_ENV_VERSION to "dev" (a confusing downgrade). Skip it - same
+		// short-circuit the binary artifact below uses.
+		result.Add(Artifact{Name: ".env", Status: StatusDev, Detail: "untagged dev build - .env regen skipped"})
+	default:
 		action, err := initcmd.RegenerateEnv(envPath, initcmd.Prefs{Tracker: letsconfig.Defaults()["LETS_TRACKER"]})
 		if err != nil {
 			return result, fmt.Errorf("regenerate .env: %w", err)
@@ -60,17 +67,18 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 		switch action.Kind {
 		case initcmd.EnvSkip:
 			result.Add(Artifact{Name: ".env", Status: StatusUpToDate, CurrentVersion: action.PrevVersion})
-		case initcmd.EnvRegenerated, initcmd.EnvCreated:
+		case initcmd.EnvRegenerated:
 			a := Artifact{Name: ".env", Status: StatusUpdated, CurrentVersion: action.NewVersion}
-			switch {
-			case action.Kind == initcmd.EnvCreated:
-				a.Detail = "created"
-			case len(action.ChangedKeys) > 0:
+			if len(action.ChangedKeys) > 0 {
 				a.Detail = fmt.Sprintf("was %s; %d key(s) changed; backup %s", version.Format(action.PrevVersion), len(action.ChangedKeys), action.BackupPath)
-			default:
+			} else {
 				a.Detail = fmt.Sprintf("was %s; header refreshed; backup %s", version.Format(action.PrevVersion), action.BackupPath)
 			}
 			result.Add(a)
+		case initcmd.EnvCreated:
+			// Unreachable: the os.Stat above already routed a missing file to
+			// StatusNotInitialized. Kept for switch completeness.
+			result.Add(Artifact{Name: ".env", Status: StatusUpdated, CurrentVersion: action.NewVersion, Detail: "created"})
 		}
 	}
 
@@ -81,20 +89,22 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 		result.Add(Artifact{Name: "rules", Status: StatusUnknown, Detail: fmt.Sprintf("plugin rules unreadable: %s", rulesSrc)})
 	} else {
 		dr := drift.Check(rulesSrc, rulesDst)
-		if dr.Detected() {
+		switch {
+		case dr.State == drift.StatePluginUnreadable:
+			// rulesSrc exists and is readable (the os.ReadFile above succeeded)
+			// but has no parseable `version:` frontmatter - "couldn't check",
+			// not "up to date".
+			result.Add(Artifact{Name: "rules", Status: StatusUnknown, Detail: "plugin rules version unparseable (no `version:` frontmatter)"})
+		case dr.Detected():
 			if err := os.MkdirAll(filepath.Dir(rulesDst), 0o755); err != nil {
 				return result, err
 			}
-			// Plain WriteFile (not an atomic tmp+rename): a single, non-concurrent
-			// write of a markdown file - a torn write self-heals on the next
-			// SessionStart drift check, so the extra machinery isn't worth
-			// exporting initcmd's helper for.
-			if err := os.WriteFile(rulesDst, rulesData, 0o644); err != nil {
+			if err := initcmd.AtomicWriteBytes(rulesDst, rulesData, 0o644); err != nil {
 				return result, fmt.Errorf("write rules: %w", err)
 			}
 			drPost := drift.Check(rulesSrc, rulesDst)
 			result.Add(Artifact{Name: "rules", Status: StatusUpdated, CurrentVersion: drPost.InstalledVersion, Detail: drift.Message(dr)})
-		} else {
+		default:
 			result.Add(Artifact{Name: "rules", Status: StatusUpToDate, CurrentVersion: dr.InstalledVersion})
 		}
 	}
@@ -174,9 +184,12 @@ func consistentVersions(vs ...string) bool {
 	return true
 }
 
-// durationApprox renders a coarse human duration ("3m", "2h", "5d").
+// durationApprox renders a coarse human duration ("3m", "2h", "5d"). Sub-minute
+// and negative inputs (clock skew) collapse to "<1m".
 func durationApprox(d time.Duration) string {
 	switch {
+	case d < time.Minute:
+		return "<1m"
 	case d < time.Hour:
 		return fmt.Sprintf("%dm", int(d.Minutes()))
 	case d < 24*time.Hour:
@@ -209,7 +222,11 @@ func PrintReport(w io.Writer, r Result) {
 		fmt.Fprintln(w, "warning: local install is inconsistent (binary / plugin / rules versions differ) - likely a partial upgrade")
 	}
 	if r.Summary.ActionNeeded == 0 {
-		fmt.Fprintf(w, "All %d artifacts in sync.\n", len(r.Artifacts))
+		if r.Summary.Unknown > 0 {
+			fmt.Fprintf(w, "%d artifact(s) in sync, %d couldn't be checked; nothing needs your action.\n", r.Summary.UpToDate+r.Summary.Updated, r.Summary.Unknown)
+		} else {
+			fmt.Fprintf(w, "All %d artifacts in sync.\n", len(r.Artifacts))
+		}
 		return
 	}
 	fmt.Fprintf(w, "%d of %d artifacts need your action:\n", r.Summary.ActionNeeded, len(r.Artifacts))

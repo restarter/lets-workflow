@@ -4,12 +4,20 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"golang.org/x/mod/semver"
 )
+
+// maxResponseBytes caps the GitHub API response we'll read - a compromised /
+// MITM'd endpoint can't OOM the CLI by streaming an unbounded body. A release
+// JSON is a few KB; 1 MiB is generous.
+const maxResponseBytes = 1 << 20
 
 // releasesURL is the GitHub API endpoint for the latest *stable* release
 // (the API excludes prereleases from /releases/latest by definition).
@@ -97,14 +105,20 @@ func fetchFromGitHub(ctx context.Context) (string, error) {
 	var body struct {
 		TagName string `json:"tag_name"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxResponseBytes)).Decode(&body); err != nil {
 		return "", err
 	}
-	tag := strings.TrimSpace(body.TagName)
-	if tag == "" {
+	v := strings.TrimPrefix(strings.TrimSpace(body.TagName), "v")
+	if v == "" {
 		return "", fmt.Errorf("github releases API: empty tag_name")
 	}
-	return strings.TrimPrefix(tag, "v"), nil
+	// Reject anything that isn't a clean semver - keeps a hostile/MITM'd
+	// endpoint from feeding control characters into the cache file, the JSON
+	// envelope, and the terminal via PrintReport.
+	if !semver.IsValid("v" + v) {
+		return "", fmt.Errorf("github releases API: tag %q is not a valid version", body.TagName)
+	}
+	return v, nil
 }
 
 func readCache(path string) (cacheEntry, bool) {
