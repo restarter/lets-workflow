@@ -117,7 +117,7 @@ Server connection details are set via environment variables (not committed to gi
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `BEADS_DOLT_SERVER_HOST` | VPS IP address | `144.124.255.40` |
+| `BEADS_DOLT_SERVER_HOST` | VPS IP address | `203.0.113.42` |
 | `BEADS_DOLT_SERVER_PORT` | SQL port (default 3306) | `3306` |
 | `BEADS_DOLT_SERVER_USER` | Your SQL username | `myuser` |
 | `BEADS_DOLT_PASSWORD` | Your SQL password | `mypassword` |
@@ -175,6 +175,22 @@ If connection works, you'll see tasks. No local dolt server needed.
 3. **Configure:** Verify `.beads/metadata.json` has `dolt_database` set (should be committed in repo)
 4. **Set env vars:** Add `BEADS_DOLT_SERVER_HOST`, `BEADS_DOLT_SERVER_PORT`, `BEADS_DOLT_SERVER_USER`, `BEADS_DOLT_PASSWORD` to shell profile (see Client Setup)
 5. **Verify:** Run `bd list` - should show project tasks
+
+## Project Identity Mismatch (cross-checkout safety)
+
+`bd` refuses to connect to a Dolt database whose `project_id` differs from the local checkout's. You'll see:
+
+```
+PROJECT IDENTITY MISMATCH — refusing to connect
+  Local project ID (metadata.json):  608faa47-...
+  Database project ID:               8322ceda-...
+```
+
+This is intentional safety: it prevents accidental task pollution between unrelated projects that share the same VPS. Each project has a unique `project_id` stored in `.beads/metadata.json` (committed to the repo). The Dolt server stores its own `project_id` next to the database; `bd` compares them on connect.
+
+**To use the same database from a sibling checkout** (e.g. a worktree, a fresh clone, or a second machine): copy `.beads/metadata.json` (or just the `project_id` field) from the source checkout into the new checkout's `.beads/metadata.json` before running `bd`. Server data is shared; identity is per-checkout.
+
+If you intentionally want a fresh project against the same VPS, generate a new `project_id` (e.g. `uuidgen`) and use a separate `dolt_database` name in `.beads/metadata.json`.
 
 ## Adding New Project
 

@@ -61,6 +61,44 @@ func TestProjectRoot_NoTimeout_StillWorks(t *testing.T) {
 	}
 }
 
+func TestHasCommits_NotARepo(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	tmp := t.TempDir() // NOT a git repo
+	if gitutil.HasCommits(tmp, time.Second) {
+		t.Error("HasCommits(non-git) = true, want false")
+	}
+}
+
+func TestHasCommits_UnbornHEAD(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	tmp := t.TempDir()
+	gitInit(t, tmp)
+	// Fresh `git init` — HEAD points at refs/heads/main but no commits exist.
+	if gitutil.HasCommits(tmp, time.Second) {
+		t.Error("HasCommits(unborn HEAD) = true, want false")
+	}
+}
+
+func TestHasCommits_AfterCommit(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	tmp := t.TempDir()
+	gitInit(t, tmp)
+	cmd := exec.Command("git", "commit", "--allow-empty", "-m", "init")
+	cmd.Dir = tmp
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git commit --allow-empty: %v\n%s", err, out)
+	}
+	if !gitutil.HasCommits(tmp, time.Second) {
+		t.Error("HasCommits(after commit) = false, want true")
+	}
+}
+
 // gitInit runs `git init` in dir. Helper kept private to this test file.
 func gitInit(t *testing.T, dir string) {
 	t.Helper()

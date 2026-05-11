@@ -67,7 +67,7 @@ type Key struct {
 var Keys = []Key{
 	{
 		Name:    "LETS_LANGUAGE",
-		Comment: "Response language (English/Ukrainian/Italian/etc)",
+		Comment: "Default response language — write the English name, like every value here (English, Ukrainian, Russian, Japanese, ...)",
 		Default: "English",
 	},
 	{
