@@ -31,10 +31,10 @@ If no active task or multiple tasks found - ask user which task to add a note to
 
 ```bash
 bd show <task-id>
-bd comments list <task-id>
+bd comments <task-id>
 ```
 
-Check existing comments to avoid duplicating info.
+Read the full description and all comments. Check existing comments to avoid duplicating info.
 
 ## Step 3: Ask What to Note
 

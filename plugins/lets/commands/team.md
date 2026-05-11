@@ -111,9 +111,9 @@ Check:
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 cat "$LETS_PROJECT_ROOT/CLAUDE.md" 2>/dev/null | head -200
 
-# For each task:
+# For each task (read full description + all comments):
 bd show <task-id>
-bd comments list <task-id>
+bd comments <task-id>
 
 # Stack detection
 ls package.json pyproject.toml Cargo.toml go.mod composer.json Gemfile 2>/dev/null
