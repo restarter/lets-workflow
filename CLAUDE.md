@@ -44,8 +44,8 @@ References that resolve via `${CLAUDE_PLUGIN_ROOT}` (e.g. `${CLAUDE_PLUGIN_ROOT}
 - **Orchestrators** = commands that delegate to other commands. `/lets:github-pr` orchestrates `/lets:review` for full PR lifecycle
 - **Hooks** = SessionStart + PreCompact inject workflow rules (PreCompact preserves rules across context compaction in long sessions)
 - **Statusline** = `lets statusline` Go subcommand. Project `.claude/settings.json` invokes it directly. `lets init` detects the canonical command via value-match against `"lets statusline"`; foreign user-customized commands are left alone. Legacy bash shim `plugins/lets/scripts/lets/statusline.sh` removed in lets-8ilsl. Byte-equal detection of pre-deletion installs (.lets/statusline.sh) handled via the frozen `cli/internal/initcmd/embedded_statusline_shim.sh` snapshot — `MigrateStatuslineSh` deletes matching legacy shims and triggers `SetStatusLine` to point settings.json at `lets statusline`.
-- **`.env` versioning** — first key `LETS_ENV_VERSION` records which `lets` binary version last regenerated the file. `lets init` regenerates when version mismatches the running binary OR when CLI prefs flags are passed with new values. `RegenerateEnv` (`cli/internal/initcmd/env.go`) is the canonical writer; preserves user values + foreign keys (under `# User-added keys` separator), refreshes header. NOT in `letsconfig.Keys` whitelist (metadata, not user-config) — hook session injection skips it. Reused by `/lets:update` (calls `RegenerateEnv` with empty `Prefs` — refresh the header without touching values) (lets-hdrdr.3).
-- **`/lets:update`** — sync a project with the current release. Slash command `commands/update.md` shells `lets update --json` (mirrors `/lets:init → lets init`); the `lets update` Go subcommand (`cli/internal/updatecmd/`) checks 4 drift-able artifacts: `.lets/.env` (via `RegenerateEnv`) and `.claude/rules/lets-rules.md` (via `drift.Check` + re-copy) are auto-synced; the `lets` binary and the Claude Code plugin are version-checked against the latest GitHub release (`releases/latest`, cached 1h at `.lets/cache/update-check.json` with stale-cache fallback, `--offline` to skip the network, `--refresh-cache` to bypass the cache) and reported with an upgrade command (can't self-replace). Reports `consistent` (binary == plugin == installed-rules version) to flag partial upgrades. Worktree-guarded like `lets init`. Does NOT prompt for config or touch `settings.json`/beads — that's `lets init`'s job (init = setup; update = sync). Rules-drift Notice messages point users here for `unknown`/`outdated`/`ahead`; `/lets:init` only for `missing` (lets-hdrdr.3).
+- **`.env` versioning** — first key `LETS_ENV_VERSION` records which `lets` binary version last regenerated the file. `lets init` regenerates when version mismatches the running binary OR when CLI prefs flags are passed with new values. `RegenerateEnv` (`cli/internal/initcmd/env.go`) is the canonical writer; preserves user values + foreign keys (under `# User-added keys` separator), refreshes header. A hand-deleted `LETS_*` key is restored to its `letsconfig.Defaults()` value (not left empty) via `mergePrefs`. NOT in `letsconfig.Keys` whitelist (metadata, not user-config) — hook session injection skips it. Reused by `/lets:update` (calls `RegenerateEnv` with a near-empty `Prefs` — only the default tracker; the existing `.env`'s user values are read regardless — so it just refreshes the header) (lets-hdrdr.3).
+- **`/lets:update`** — sync a project with the current release. Slash command `commands/update.md` shells `lets update --json` (mirrors `/lets:init → lets init`); the `lets update` Go subcommand (`cli/internal/updatecmd/`) checks 4 drift-able artifacts: `.lets/.env` (via `RegenerateEnv`; skipped on a `dev` binary so `LETS_ENV_VERSION` isn't downgraded to `dev`) and `.claude/rules/lets-rules.md` (via `drift.Check` + re-copy with `initcmd.AtomicWriteBytes`) are auto-synced; the `lets` binary and the Claude Code plugin are version-checked against the latest GitHub release (`releases/latest`, cached 1h at `.lets/cache/update-check.json` with stale-cache fallback, `--offline` to skip the network, `--refresh-cache` to bypass the cache) and reported with an upgrade command (can't self-replace). Reports `consistent` (binary == plugin == installed-rules version) to flag partial upgrades. Worktree-guarded like `lets init`. Does NOT prompt for config or touch `settings.json`/beads — that's `lets init`'s job (init = setup; update = sync). Rules-drift Notice messages point users here for `unknown`/`outdated`/`ahead`; `/lets:init` only for `missing` (lets-hdrdr.3).
 - **Skills** = reusable actions in `skills/<name>/SKILL.md`. Two types: user-facing (auto-discovered, triggered via description match or Skill tool) and internal (not auto-discovered, read by commands via Read tool when needed). Examples: `create-task`, `commit`, `take-task` (user-facing), `detect-task`, `actor-fetch-personality` (internal)
 
 ## Architecture Decisions
@@ -121,7 +121,7 @@ This includes hook debug logs, temp files, and any runtime artifacts.
 .lets/reviews/           # Saved review reports
 .lets/plans/             # Implementation plans
 .lets/execution/         # Execution state (PR review: pr-{number}/, team records: team-*.json)
-.lets/cache/             # Cached data (usage stats)
+.lets/cache/             # Cached data (usage stats; update-check.json — /lets:update latest-release lookup, 1h TTL)
 # Worktrees (outside .lets/ to avoid circular symlinks):
 # .worktrees/            # Interactive worktrees only (agent worktrees use native Claude Code behavior)
 ```
@@ -132,7 +132,7 @@ Workflow rules live OUTSIDE `.lets/` because they belong to Claude Code's projec
 .claude/rules/lets-rules.md  # Workflow rules (copied from plugin by `lets init`, frontmatter-versioned, customizable - tracked in git per project's choice)
 ```
 
-**NEVER edit `.claude/rules/lets-rules.md` directly.** It is the **installed copy**, plugin-managed. Only the canonical source `plugins/lets/rules/lets-rules.md` is edited. The installed copy is rewritten by `/lets:init` (and only via that path) when the plugin's frontmatter `version` is bumped — this dogfoods drift detection live. Workflow: edit source -> bump source `version` -> commit -> release -> end user (or maintainer) runs `/lets:init` -> installed copy refreshed. Editing the installed copy directly bypasses drift testing and silently desyncs from source.
+**NEVER edit `.claude/rules/lets-rules.md` directly.** It is the **installed copy**, plugin-managed. Only the canonical source `plugins/lets/rules/lets-rules.md` is edited. The installed copy is rewritten by `/lets:init` or `/lets:update` (and only via those plugin-managed paths) when the plugin's frontmatter `version` is bumped — this dogfoods drift detection live. Workflow: edit source -> bump source `version` (at release ceremony) -> commit -> release -> end user (or maintainer) runs `/lets:update` (or `/lets:init`) -> installed copy refreshed. Editing the installed copy directly bypasses drift testing and silently desyncs from source.
 
 ## Naming Convention: `LETS_*`
 
@@ -205,19 +205,19 @@ Then document in this CLAUDE.md "LETS Config keys" table + `README.md` Configura
 
 ## When Adding/Modifying Commands, Skills, or Agents
 
-**Rules-file rule:** edits go ONLY to `plugins/lets/rules/lets-rules.md` (the canonical source). NEVER touch `.claude/rules/lets-rules.md` (installed copy) — that file is refreshed exclusively via `/lets:init` after a source bump. This is intentional: we eat our own dogfood for drift detection.
+**Rules-file rule:** edits go ONLY to `plugins/lets/rules/lets-rules.md` (the canonical source). NEVER touch `.claude/rules/lets-rules.md` (installed copy) — that file is refreshed exclusively via `/lets:init` or `/lets:update` after a source bump. This is intentional: we eat our own dogfood for drift detection.
 
 Update these files:
 
 | File | What to update |
 |------|----------------|
-| `plugins/lets/rules/lets-rules.md` | Skill Quick Reference table (frontmatter `version` bump on any change so SessionStart drift check fires for installed users). Edit ONLY here, never the installed `.claude/rules/lets-rules.md`. |
-| `commands/install.md` | Essential Skills / Planning Skills tables |
+| `plugins/lets/rules/lets-rules.md` | Skill Quick Reference table. Edit ONLY here, never the installed `.claude/rules/lets-rules.md`. **Do NOT bump frontmatter `version` per change** — it's bumped once per release at ceremony time (`scripts/release/bump-version.sh`; see RELEASING.md / the Release Flow section). A rules edit on a feature branch accumulates under the current target version. |
+| `commands/install-deprecated.md` | Essential Skills / Planning Skills tables |
 | `CLAUDE.md` Key Concepts | If adding a new skill |
 | `README.md` | Agent table, feature descriptions |
 | All `agents/*.md` `## Constraints` sections | If changing the read-only Bash allowlist or constraint wording, sync the identical 1-line text across all 13 analyst agents (verify with `grep -h "You are read-only" agents/*.md \| sort -u` returning exactly one line) |
 | `commands/end.md` + `commands/done.md` `${CLAUDE_SESSION_ID}` references | If changing the session-id capture wording, sync across all occurrences (Step 3 progress comment + Step 5 summary block in `end.md`, Step 7 completion comment in `done.md`). Verify with `grep -n "CLAUDE_SESSION_ID" commands/` |
-| `cli/internal/cli/<name>.go` + register in `cli/internal/cli/root.go` | If adding a Go subcommand. Add `<name>_test.go` (`package cli_test`). Use `cmd.OutOrStdout()`. Domain logic goes in `cli/internal/<name>/` (see `initcmd/`, `sessionstart/`, `statusline/`, `frontmatter/` for patterns). Update `cli/README.md` "Adding a subcommand" recipe if pattern changes. |
+| `cli/internal/cli/<name>.go` + register in `cli/internal/cli/root.go` | If adding a Go subcommand. Add `<name>_test.go` (`package cli_test`). Use `cmd.OutOrStdout()`. Domain logic goes in `cli/internal/<name>/` (see `initcmd/`, `updatecmd/`, `sessionstart/`, `statusline/`, `frontmatter/` for patterns). Update `cli/README.md` "Adding a subcommand" recipe if pattern changes. |
 
 ### Command Output Requirements
 

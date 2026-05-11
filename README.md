@@ -148,7 +148,7 @@ Then start working:
 
 ### Under the Hood
 
-**SessionStart + PreCompact Hooks** - run `lets hook session-start` / `lets hook precompact` on every Claude Code conversation. The hooks emit a small `## LETS Config` block (and a drift notice if rules are out of date) - the workflow rules themselves live in `<project>/.claude/rules/lets-rules.md` (copied there by `/lets:init`) and Claude Code loads them as project instructions. SessionStart fires on new/resumed/cleared/compacted sessions; PreCompact ensures rules survive long-session compaction. This is what makes Claude follow the LETS workflow without you having to remind it.
+**SessionStart + PreCompact Hooks** - run `lets hook session-start` / `lets hook precompact` on every Claude Code conversation. The hooks emit a small `## LETS Config` block (and a drift notice if rules are out of date) - the workflow rules themselves live in `<project>/.claude/rules/lets-rules.md` (copied there by `/lets:init`, re-synced by `/lets:update` when a new release ships) and Claude Code loads them as project instructions. SessionStart fires on new/resumed/cleared/compacted sessions; PreCompact ensures rules survive long-session compaction. This is what makes Claude follow the LETS workflow without you having to remind it.
 
 **LETS Boxes** - after key actions, Claude shows contextual next-step suggestions so you always know what to do next:
 

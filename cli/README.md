@@ -165,8 +165,8 @@ What it checks (in order; never crashes for a network failure):
 
 | Artifact | Check | Action |
 |---|---|---|
-| `.lets/.env` | `LETS_ENV_VERSION` vs `version.Version` | `RegenerateEnv` with empty `Prefs` (user values preserved, header refreshed). Skip when in sync. `not-initialized` if `.env` is absent → "Run /lets:init". |
-| `.claude/rules/lets-rules.md` | `drift.Check` against plugin source | Re-copy from the plugin on any detected drift (incl. `ahead`). `up-to-date` otherwise. |
+| `.lets/.env` | `LETS_ENV_VERSION` vs `version.Version` | `RegenerateEnv` with a near-empty `Prefs` (only the default tracker; user values are read from the existing `.env` regardless), so it just refreshes the header. Skip when in sync. Skipped entirely on a `dev` binary (avoids stamping `LETS_ENV_VERSION=dev`). `not-initialized` if `.env` is absent → "Run /lets:init". |
+| `.claude/rules/lets-rules.md` | `drift.Check` against plugin source | Re-copy from the plugin (atomic write) on any detected drift (incl. `ahead`); `unknown` if the plugin's own frontmatter is unparseable; `up-to-date` otherwise. |
 | `lets` binary | `version.Version` vs latest GitHub release | Report only (can't self-replace) — `outdated` → prints `brew upgrade lets` / `curl … install.sh`. `dev` build → no comparison. |
 | Claude Code plugin | `<pluginRoot>/.claude-plugin/plugin.json::version` vs latest release | Report only — `outdated` → prints `/plugin` update instruction. |
 
