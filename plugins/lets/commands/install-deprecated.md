@@ -77,7 +77,7 @@ Team:     /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /le
 | `/lets:commit` | Code | Ready to commit (also triggers automatically on "commit") |
 | `/lets:check` | Code | Quick sanity check - code (~30s) or plan (--plan) |
 | `/lets:review` | Code | Full deep review (~2-3 min) |
-| `/lets:pr` | Code | PR review lifecycle (review, respond, follow-up, approve) |
+| `/lets:github-pr` | Code | GitHub PR review lifecycle (review, respond, follow-up, approve) |
 | `/lets:opinion` | Expert | Technical decision needed |
 | `/lets:ask` | Expert | Quick question to one expert |
 | `/lets:init` | Setup | Initialize LETS in a new project; re-run for self-heal or config change |

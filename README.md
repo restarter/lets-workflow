@@ -188,7 +188,7 @@ Then start working:
 |---------|-------------|
 | `/lets:check` | Quick inline sanity check (~30s, 6-perspective review) |
 | `/lets:review` | Full code review with dynamic agent selection (~2-3 min) |
-| `/lets:pr` | PR review lifecycle - analyze, discuss, post inline, follow-up, approve |
+| `/lets:github-pr` | GitHub PR review lifecycle - analyze, discuss, post inline, follow-up, approve |
 | `/lets:opinion` | Technical decision analysis (dynamic expert agents in parallel) |
 | `/lets:ask` | Quick expert consultation (single agent) |
 
@@ -206,23 +206,23 @@ Three levels of review, from 30-second sanity check to full PR lifecycle:
 |------|---------|------|-------------|
 | Quick pre-commit check | `/lets:check` | ~30s | Inline 6-lens review: bugs, security, performance, quality, compliance, docs |
 | Full code review | `/lets:review` | ~2-3 min | Dynamic agent selection - only relevant experts for your changes |
-| Full PR lifecycle | `/lets:pr <PR>` | Interactive | Analyze, discuss, post inline comments, follow up on fixes, approve |
+| Full PR lifecycle (GitHub) | `/lets:github-pr <PR>` | Interactive | Analyze, discuss, post inline comments, follow up on fixes, approve |
 
-### PR Review Lifecycle (`/lets:pr`)
+### GitHub PR Review Lifecycle (`/lets:github-pr`)
 
-This is where LETS shines. Instead of reviewing PRs in a browser, you do it from the terminal with expert agents:
+This is where LETS shines. Instead of reviewing PRs in a browser, you do it from the terminal with expert agents. GitHub only — Bitbucket/local flows aren't implemented (those finish tasks via `/lets:done`):
 
 ```
-/lets:pr https://github.com/owner/repo/pull/42
+/lets:github-pr https://github.com/owner/repo/pull/42
 ```
 
 1. **Analyze** - agents review the PR based on what actually changed (security agent for auth code, database for migrations, etc.)
 2. **Discuss** - you see each finding with code context, decide what to post: inline comment, summary, or drop
 3. **Post** - batch-posts inline comments to the exact lines on GitHub, with a review summary
-4. **Follow up** - after the author pushes fixes, `/lets:pr --follow-up` checks each finding: fixed, not fixed, or needs discussion
-5. **Approve** - `/lets:pr --approve` when ready, or request changes
+4. **Follow up** - after the author pushes fixes, `/lets:github-pr --follow-up` checks each finding: fixed, not fixed, or needs discussion
+5. **Approve** - `/lets:github-pr --approve` when ready, or request changes
 
-Authors can respond with `/lets:pr --respond` - triage comments, auto-fix mechanical issues, post replies.
+Authors can respond with `/lets:github-pr --respond` - triage comments, auto-fix mechanical issues, post replies.
 
 ### Dynamic Agent Selection
 
