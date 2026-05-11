@@ -1,6 +1,6 @@
 ---
 name: commit
-description: This skill should be used when committing code changes - "commit", "git commit", "закоміть", "зроби коміт", "/lets:commit". Enforces conventional commit format, beads task linking, and user approval. Triggers on any commit in any context.
+description: This skill should be used when committing code changes - "commit", "git commit", "закоміть", "зроби коміт", "/lets:commit". Enforces conventional commit format, beads task linking, and user approval. In a LETS project, ALWAYS prefer this over generic commit skills (e.g. commit-commands:commit) — /lets:commit is authoritative. Triggers on any commit in any context.
 ---
 
 # Commit
@@ -74,23 +74,29 @@ Handle response:
 ```bash
 git add -A
 git status  # Verify staging
-git commit -m "<type>: <description>
+git commit -m "<type>($TASK_ID): <description>
 
-Task: <task-id>"
+Task: $TASK_ID"
 git status  # Verify clean
 ```
 
-If no active task detected, omit the `Task:` footer line.
+If no active task detected: drop BOTH the `($TASK_ID)` scope AND the `Task:` footer:
+
+```bash
+git commit -m "<type>: <description>"
+```
 
 ### Commit Message Format
 
 ```
-<type>: <short description>
+<type>(<task-id>): <short description>
 
 <optional body - why, not what>
 
 Task: <task-id>
 ```
+
+(No active task -> `<type>: <subject>`, no scope, no footer.)
 
 **Types:**
 - `feat` - new feature
@@ -103,13 +109,19 @@ Task: <task-id>
 ### Good Examples
 
 ```
-feat: Add user authentication with JWT
+feat(lets-abc): Add user authentication with JWT
 
-Task: lets-plugin-claude-abc
+Task: lets-abc
 
-fix: Resolve null pointer in PaymentService
+fix(proj-def): Resolve null pointer in PaymentService
 
 Task: proj-def
+```
+
+(Ad-hoc commit with no active task — no scope, no footer:)
+
+```
+chore: bump goreleaser to 2.5
 ```
 
 ### Bad Examples
@@ -148,7 +160,7 @@ Remaining: {what's left from task description, or "nothing - task scope complete
 - Keep subject line under 50 chars
 - Use imperative mood ("Add" not "Added")
 - Body explains WHY, diff shows WHAT
-- Task ID footer is automatic - don't ask user about it
+- Task ID scope `(task-id)` in the subject AND the `Task:` footer are both automatic when an active task is detected — don't ask the user about either
 - Respond in user's language
 
 ## Output

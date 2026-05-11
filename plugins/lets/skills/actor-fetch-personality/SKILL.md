@@ -1,6 +1,7 @@
 ---
 name: actor-fetch-personality
 description: Internal skill for commands. Fetch and validate personality from URL or file path for Actor agent. Do not trigger on user conversation - only when commands need personality loading.
+user-invocable: false
 ---
 
 # Actor Fetch Personality

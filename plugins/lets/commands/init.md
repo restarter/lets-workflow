@@ -98,20 +98,30 @@ AskUserQuestion(
   }]
 )
 
-Bind selected label to `$LANG`. "Other" free-text (auto-added by tool) → use as-is for any other language (Polski, Deutsch, Français, Русский, 日本語, Português, etc.).
+Bind selected label to `$LANG`. "Other" free-text (auto-added by tool) → use the **ENGLISH name** of the language (Polish, German, French, Russian, Japanese, Portuguese, ...). If the user types a native-script name (`Русский`, `Українська`, `日本語`, `中文`, `Deutsch`, ...), **normalise it to the English name** before binding to `$LANG` — every value in `.lets/.env` is in English so the model honours it via the rules' language priority.
 
 ### 2b. Detect PR flow
 
 ```bash
 gh auth status >/dev/null 2>&1 && echo "GH_AUTH" || echo "GH_NONE"
+git remote -v 2>/dev/null | head -1 | grep -q . && echo "HAS_REMOTE" || echo "NO_REMOTE"
 ```
+
+Pick the GitHub option's `description` from the four cases below — branch on (`GH_AUTH` / `GH_NONE`) × (`HAS_REMOTE` / `NO_REMOTE`):
+
+- `GH_AUTH` + `HAS_REMOTE` → `"Recommended; /lets:done pushes the branch and opens a PR"`
+- `GH_AUTH` + `NO_REMOTE` → `"⚠ gh authenticated but this repo has no git remote — add one (git remote add origin ...) before /lets:done, or it fails at push"`
+- `GH_NONE` + `HAS_REMOTE` → `"Needs gh auth (gh auth login) first"`
+- `GH_NONE` + `NO_REMOTE` → `"Needs gh auth (gh auth login) AND a git remote"`
+
+Then:
 
 AskUserQuestion(
   questions=[{
     question: "PR workflow for this project?",
     header: "LETS",
     options: [
-      { label: "GitHub", description: "Recommended if gh authenticated; /lets:done creates PR" },
+      { label: "GitHub", description: "<conditional, picked above>" },
       { label: "Bitbucket", description: "Bitbucket PR workflow" },
       { label: "Local", description: "Local merge workflow (default)" }
     ],
@@ -120,6 +130,8 @@ AskUserQuestion(
 )
 
 Bind label (lowercased) to `$FLOW`: "GitHub"→"github", "Bitbucket"→"bitbucket", "Local"→"local".
+
+**If the user picks `GitHub` while `NO_REMOTE`:** accept it (write `LETS_PR_FLOW=github` to `.env`) but explicitly warn after the question — `/lets:done` will fail at the push step until they run `git remote add origin <url>`. Don't try to add the remote here; that's the user's call.
 
 ### 2c. Merge branch
 
@@ -260,7 +272,7 @@ AskUserQuestion(
   }]
 )
 
-If "Keep current" picked, substitute `$LANG = $CURRENT_LANG`. Else use selected label. "Other" free-text (auto-added by tool) for Chinese / Polski / Deutsch / etc. — use as-is.
+If "Keep current" picked, substitute `$LANG = $CURRENT_LANG`. Else use selected label. "Other" free-text (auto-added by tool) → use the **ENGLISH name** of the language (Chinese, Polish, German, Russian, Japanese, ...). If the user types a native-script name (`Русский`, `Українська`, `日本語`, `中文`, `Deutsch`, ...), **normalise it to the English name** before binding — same rule as Step 2a; every value in `.lets/.env` is in English.
 
 Repeat for MergeBranch (`$BRANCH`) and PRFlow (`$FLOW`).
 

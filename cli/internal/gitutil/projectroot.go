@@ -77,3 +77,31 @@ func Branch(dir string, timeout time.Duration) string {
 	}
 	return branch
 }
+
+// HasCommits reports whether HEAD resolves to a commit in dir (or cwd if
+// dir == ""). Returns false for a freshly `git init`'d repo with no commits
+// yet ("unborn HEAD") and for any other case where `git rev-parse --verify
+// HEAD` fails (not a repo, git not installed, timeout). Same silent-failure
+// semantics as Branch.
+//
+// Use this to distinguish an unborn HEAD (no commits yet) from a detached
+// HEAD (HEAD points at a commit SHA, not a ref) — both make Branch return "",
+// but the user-facing wording should differ.
+func HasCommits(dir string, timeout time.Duration) bool {
+	args := []string{"rev-parse", "--verify", "--quiet", "HEAD"}
+	if dir != "" {
+		args = append([]string{"-C", dir}, args...)
+	}
+
+	var cmd *exec.Cmd
+	if timeout > 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		cmd = exec.CommandContext(ctx, "git", args...)
+	} else {
+		cmd = exec.Command("git", args...)
+	}
+
+	out, err := cmd.Output()
+	return err == nil && len(strings.TrimSpace(string(out))) > 0
+}

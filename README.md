@@ -321,7 +321,7 @@ LETS uses [beads](https://github.com/steveyegge/beads) for persistent task track
 After `/lets:init`, edit `.lets/.env`:
 
 ```env
-# Response language (English/Ukrainian/Italian/etc)
+# Default response language — write the English name, like every value here (English, Ukrainian, Russian, Japanese, ...)
 LETS_LANGUAGE=English
 
 # Target branch for merges and PR base
@@ -352,6 +352,15 @@ All generated files go to `.lets/` (gitignored):
 Interactive worktrees are stored in `.worktrees/` (gitignored).
 
 > **Note:** LETS requires the [beads](https://github.com/steveyegge/beads) plugin for task tracking. See its [install docs](https://github.com/steveyegge/beads#installation) — typically `curl -fsSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/install.sh | bash`.
+
+## Setup order: `lets init` and `bd init`
+
+Run `/lets:init` first, then enable beads (`/lets:init` will run `bd init` for you if both binaries are installed; you can also run `bd init` manually afterwards). Order matters and the two tools touch different files:
+
+- **`lets init` (the plugin's CLI)** writes only LETS-owned `.gitignore` entries — `.lets/` and `.worktrees/`. It also creates `.lets/.env`, `.lets/.env.example`, the `.lets/{sessions,reviews,plans,execution,cache}/` layout, copies `.claude/rules/lets-rules.md`, and sets the statusline in `.claude/settings.json`.
+- **`bd init` (beads)** adds its own entries to `.gitignore` (`.beads/...`, `issues.jsonl`, `.beads-credential-key`), installs a project-scoped SessionStart + PreCompact hook block into `.claude/settings.json`, and creates `CLAUDE.md` / `AGENTS.md` if they don't exist yet.
+- **PreCompact hook duplication:** bd's project-scoped PreCompact hook runs in addition to the plugin's plugin-scoped one — both fire on the same event. Not destructive, but rules get injected twice. Tracked under `lets-71urx`; until that lands, this is a known integration quirk, not a configuration error.
+- **`bd init --server --database=NAME`** may auto-create the database on first connect if the SQL user has CREATE privilege (depends on Dolt server policy). The remote dolt deployment docs in `scripts/remote/dolt/README.md` cover the multi-checkout safety mechanism (`PROJECT IDENTITY MISMATCH`) you'll meet on a second machine.
 
 ## 📦 Dependencies
 

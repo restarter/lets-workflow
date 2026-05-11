@@ -1,6 +1,7 @@
 ---
 name: detect-task
 description: Internal skill for commands. Detect active beads task from git branch name. Do not trigger on user conversation - only when commands need task detection.
+user-invocable: false
 ---
 
 # Detect Active Task

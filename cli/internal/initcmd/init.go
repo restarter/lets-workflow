@@ -56,6 +56,8 @@ func Run(ctx context.Context, prefs Prefs, projectRoot, pluginRoot string) (Resu
 	// beads step at the end).
 	if branch := gitutil.Branch(projectRoot, 2*time.Second); branch != "" {
 		result.Add(Step{Status: StepOK, Message: fmt.Sprintf("git (branch: %s)", branch)})
+	} else if !gitutil.HasCommits(projectRoot, 2*time.Second) {
+		result.Add(Step{Status: StepOK, Message: "git (no commits yet)"})
 	} else {
 		result.Add(Step{Status: StepOK, Message: "git (detached HEAD)"})
 	}
@@ -79,8 +81,10 @@ func Run(ctx context.Context, prefs Prefs, projectRoot, pluginRoot string) (Resu
 	}
 	result.Add(Step{Status: StepOK, Message: ".lets/ structure (5 dirs)"})
 
-	// 2. .gitignore
-	if err := EnsureGitignore(projectRoot, []string{".lets/", ".beads/", ".worktrees/"}); err != nil {
+	// 2. .gitignore — only LETS-owned paths. `bd init` writes its own .beads/
+	// entries (and its own auto-generated CLAUDE.md / AGENTS.md hook block);
+	// we don't speak for it.
+	if err := EnsureGitignore(projectRoot, []string{".lets/", ".worktrees/"}); err != nil {
 		return result, err
 	}
 	result.Add(Step{Status: StepOK, Message: ".gitignore entries"})
@@ -278,11 +282,6 @@ func runBeadsInit(ctx context.Context, projectRoot string) []Step {
 	_ = configCmd.Run()
 
 	steps := []Step{{Status: StepOK, Message: "beads initialized"}}
-
-	beadsDir := filepath.Join(projectRoot, ".beads")
-	if _, err := os.Stat(filepath.Join(beadsDir, "hooks")); err == nil {
-		_ = EnsureGitignore(projectRoot, []string{".beads/hooks/"})
-	}
 	return steps
 }
 
