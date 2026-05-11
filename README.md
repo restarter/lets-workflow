@@ -177,7 +177,7 @@ Then start working:
 | Command | Description |
 |---------|-------------|
 | `/lets:brainstorm` | Interactive ideation - backlog review, idea exploration, quick brainstorm, cleanup |
-| `/lets:plan` | Structured planning - explore codebase, design architecture, write plan |
+| `/lets:plan` | Structured planning - explore codebase, design architecture, write plan (`--fast` = orchestrator-only, no subagents) |
 | `/lets:execute` | Execute plan from `/lets:plan` via native plan mode |
 | `/lets:team` | Parallel implementation with Agent Teams |
 | `/lets:worktree` | Create/manage worktrees for parallel sessions |
@@ -244,7 +244,7 @@ For plan reviews, agents are selected by signals in the plan content (mentions o
 - *Quick brainstorm* - fast ideation on a topic
 - *Cleanup* - find stale tasks, broken dependencies, forgotten work
 
-**Plan** (`/lets:plan`) - codebase exploration with dynamically-scaled explorer agents, then architecture design with expert evaluation. Small project? One explorer. Large monorepo? Up to 10, each mapping a different area.
+**Plan** (`/lets:plan`) - codebase exploration with dynamically-scaled explorer agents, then architecture design with expert evaluation. Small project? One explorer. Large monorepo? Up to 10, each mapping a different area. Want a quick talk-through instead? `/lets:plan --fast` skips the subagent phases and plans collaboratively in-session.
 
 **Execute** (`/lets:execute`) - implements the plan step by step in native plan mode. You approve each step before Claude proceeds. No surprises.
 
