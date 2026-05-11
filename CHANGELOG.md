@@ -7,6 +7,7 @@
 
 ### Changed
 - Rules-drift Notice messages (SessionStart hook + `lets init --json` output) now point at `/lets:update` for the `unknown`/`outdated`/`ahead` states; `/lets:init` is kept only for `missing` (first-time install — no rules file yet). `lets update` re-copies the plugin rules on any detected drift, including `ahead`, so no `--force` flag is needed (lets-hdrdr.3)
+- `lets init` re-run (and `/lets:update`) now restores a `LETS_*` key that was hand-deleted from `.lets/.env` to its canonical default, instead of rewriting it as an empty value the SessionStart hook would then inject into model context (lets-hdrdr.3)
 
 ## [0.5.1] - 2026-05-11
 
