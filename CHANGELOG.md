@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-05-11
+
 ### Added
 - README "Recommended scope" note in Install section: project scope is preferred for team-shared repos so teammates inherit `lets` without re-install (lets-i5ayk)
 - `/lets:init` Step 1b: detect plugin install scope from `~/.claude/plugins/installed_plugins.json`; one-time informational notice when scope is `user`, suggesting re-install at project scope. No notice for `project` (best case), `local` (deliberate choice), or `unknown` (dev mode / missing file) (lets-i5ayk)
@@ -325,7 +327,8 @@ Initial release with expert agents team.
 - SessionStart hook injecting workflow rules
 - Plugin structure: commands, agents, hooks
 
-[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/restarter/lets-workflow/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/restarter/lets-workflow/compare/v0.3.0...v0.5.0
 [0.3.1]: https://github.com/restarter/lets-workflow/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/restarter/lets-workflow/compare/v0.2.4...v0.3.0
