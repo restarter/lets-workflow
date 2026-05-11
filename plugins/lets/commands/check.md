@@ -5,9 +5,7 @@ argument-hint: "[PR-url-or-number|--local|--staged|--last-commit|--plan|--file <
 
 # Quick Local Code Check
 
-Fast inline sanity check from 6 perspectives. Same target selection as `/lets:review` - the difference is depth: `/lets:check` reviews inline (no subagent dispatch), `/lets:review` dispatches expert agents.
-
-> **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
+Fast inline sanity check from 6 perspectives. Same target selection as `/lets:review` - the difference is depth: `/lets:check` reviews inline (no subagent dispatch, no AskUserQuestion gates), `/lets:review` dispatches expert agents.
 
 ## Usage
 
@@ -190,9 +188,10 @@ Classify each finding:
 
 ### Output Format
 
+`{target}` is the thing reviewed: `"{N} files changed"` (local modes), `"PR #{number}: {title}"` (PR mode), or `"{filename} ({N} lines)"` (file mode).
+
 ```
 ## Quick Check: {target}
-{target = "{N} files changed" (local) | "PR #{number}: {title}" | "{filename} ({N} lines)"}
 
 ### Verdict: {[OK] GOOD | [!] REVIEW | [X] FIX}
 
@@ -212,7 +211,7 @@ Classify each finding:
 
 ## Step 4.5: JSON Output (--json only)
 
-If `--json` was provided, emit a structured object instead of the console report - schema-compatible with `/lets:review --json` (same severity tiers and finding shape) so consumers can switch between the two:
+If `--json` was provided, emit a structured object instead of the console report. The shape mirrors `/lets:review --json` so a consumer can parse either: same `verdict` values, same severity `tier` values, same `findings[]` fields (`id`, `title`, `tier`, `file`, `line`, `description`, `suggestion`, `agent`), same `summary` object keyed by reviewer. For check, the "reviewer" is always `"check"` and each finding also carries the originating `lens` as an extra field; there is no `systemic[]` array (inline check doesn't do cross-pattern detection - omit it).
 
 ```json
 {
@@ -225,6 +224,7 @@ If `--json` was provided, emit a structured object instead of the console report
       "id": 1,
       "title": "Off-by-one in pagination offset",
       "tier": "SUGGESTION",
+      "agent": "check",
       "lens": "Bug",
       "file": "src/list.py",
       "line": 88,
@@ -232,7 +232,9 @@ If `--json` was provided, emit a structured object instead of the console report
       "suggestion": "Use 0-based offset"
     }
   ],
-  "summary": "2 findings (0 blocker, 2 suggestion). Inline 6-lens check, no agents."
+  "summary": {
+    "check": "2 findings (0 blocker, 2 suggestion); inline 6-lens, no agents"
+  }
 }
 ```
 
