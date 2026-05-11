@@ -36,13 +36,13 @@ func TestCheck_AllStates(t *testing.T) {
 	}{
 		{"equal", "0.5.0", true, "0.5.0", drift.StateEqual, "0.5.0", "0.5.0", false, ""},
 		{"outdated", "0.5.0", true, "0.4.0", drift.StateOutdated, "0.4.0", "0.5.0", true,
-			"Workflow rules outdated (installed v0.4.0 < plugin v0.5.0). Run `/lets:init` to update."},
+			"Workflow rules outdated (installed v0.4.0 < plugin v0.5.0). Run `/lets:update` to update."},
 		{"ahead", "0.5.0", true, "0.6.0", drift.StateAhead, "0.6.0", "0.5.0", true,
-			"Workflow rules AHEAD of plugin (installed v0.6.0 > plugin v0.5.0). Verify the rules file integrity (rules tampering signal) or upgrade the lets binary. Run `/lets:init` to reset to plugin version."},
+			"Workflow rules AHEAD of plugin (installed v0.6.0 > plugin v0.5.0). Verify the rules file integrity (rules tampering signal) or upgrade the lets binary. Run `/lets:update` to reset to plugin version."},
 		{"missing", "0.5.0", false, "", drift.StateMissing, "", "0.5.0", true,
 			"Workflow rules not installed in `.claude/rules/lets-rules.md`. Run `/lets:init` to install."},
 		{"unknown_unparseable", "0.5.0", true, "", drift.StateUnknown, "", "0.5.0", true,
-			"Workflow rules version unknown - rules may be outdated. Run `/lets:init` to refresh."},
+			"Workflow rules version unknown - rules may be outdated. Run `/lets:update` to refresh."},
 		{"plugin_unreadable", "", true, "0.5.0", drift.StatePluginUnreadable, "", "", false, ""},
 	}
 	for _, tt := range tests {

@@ -70,16 +70,21 @@ func (r Result) Detected() bool {
 // This is the single source of truth — both the SessionStart hook notice and
 // the `lets init --json` output use this. Wording changes here propagate
 // automatically to all consumers.
+//
+// StateMissing points at /lets:init (first-time install — no rules file yet).
+// The other three point at /lets:update (sync an already-installed project with
+// a fresh release): `lets update` re-copies the plugin rules on any Detected()
+// state, including StateAhead, so no --force flag is needed.
 func Message(r Result) string {
 	switch r.State {
 	case StateMissing:
 		return "Workflow rules not installed in `.claude/rules/lets-rules.md`. Run `/lets:init` to install."
 	case StateUnknown:
-		return "Workflow rules version unknown - rules may be outdated. Run `/lets:init` to refresh."
+		return "Workflow rules version unknown - rules may be outdated. Run `/lets:update` to refresh."
 	case StateOutdated:
-		return fmt.Sprintf("Workflow rules outdated (installed v%s < plugin v%s). Run `/lets:init` to update.", r.InstalledVersion, r.PluginVersion)
+		return fmt.Sprintf("Workflow rules outdated (installed v%s < plugin v%s). Run `/lets:update` to update.", r.InstalledVersion, r.PluginVersion)
 	case StateAhead:
-		return fmt.Sprintf("Workflow rules AHEAD of plugin (installed v%s > plugin v%s). Verify the rules file integrity (rules tampering signal) or upgrade the lets binary. Run `/lets:init` to reset to plugin version.", r.InstalledVersion, r.PluginVersion)
+		return fmt.Sprintf("Workflow rules AHEAD of plugin (installed v%s > plugin v%s). Verify the rules file integrity (rules tampering signal) or upgrade the lets binary. Run `/lets:update` to reset to plugin version.", r.InstalledVersion, r.PluginVersion)
 	}
 	return ""
 }
