@@ -226,7 +226,7 @@ Two separate lifecycles:
 - **Task:** picked at start ... `/lets:done` (may span multiple sessions)
 
 **Review options:**
-- `/lets:check` - quick sanity check (~30 sec), before any commit
+- `/lets:check` - quick inline sanity check (~30 sec); same target flags as `/lets:review` but no subagents - before any commit, or a fast first pass on a PR
 - `/lets:review` - full deep review (~2-3 min), works locally OR on GitHub PR
 
 **When to use which:**
@@ -341,13 +341,13 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:end` | Session | End of session |
 | `/lets:done` | Task | Task is complete |
 | `/lets:commit` | Code | Ready to commit (also auto-triggers on "commit", "закоміть") |
-| `/lets:check` | Code | Quick sanity check - code (~30s) or plan (--plan) |
+| `/lets:check` | Code | Quick sanity check (~30s) - inline 6-lens; same targets as `/lets:review` (local/staged/last-commit/PR/`--file`/`--plan`/`--json`), no subagents |
 | `/lets:review` | Code | Full deep review (~2-3 min) |
 | `/lets:github-pr` | Code | PR review lifecycle (review, respond, follow-up, approve) |
 | `/lets:opinion` | Expert | Technical decision (dynamic agent count) |
 | `/lets:ask` | Expert | Quick expert consultation (1 agent) |
 | `/lets:brainstorm` | Planning | Interactive ideation - review backlog, explore ideas, quick brainstorm, cleanup |
-| `/lets:plan` | Planning | Structured planning with agents - architecture + implementation plan |
+| `/lets:plan` | Planning | Structured planning with agents - architecture + implementation plan (`--fast` = orchestrator-only, skips explorer/architect/expert subagents) |
 | `/lets:execute` | Planning | Execute plan from /lets:plan via native plan mode |
 | `/lets:status` | Utility | Task overview and project status |
 | `/lets:worktree` | Utility | Create/manage interactive worktrees for parallel work |
