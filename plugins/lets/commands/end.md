@@ -169,18 +169,15 @@ BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
 mkdir -p "$LETS_PROJECT_ROOT/.lets/sessions"
 SUMMARY_FILE="$LETS_PROJECT_ROOT/.lets/sessions/$(date +%Y-%m-%d-%H%M)-${BRANCH_SLUG}.md"
 
-# Capture the session id from Claude Code's Bash subprocess env var. Single
-# source of truth — used by the find below AND by the markdown summary
-# template (the model substitutes $SESSION_ID's value when calling Write).
-SESSION_ID="$CLAUDE_CODE_SESSION_ID"
-
 # Resolve actual transcript path (Claude Code stores it as <session-id>.jsonl
-# under a project-slug subdirectory at depth 2; find avoids guessing the slug algorithm)
-TRANSCRIPT_PATH=$(find "$HOME/.claude/projects" -maxdepth 2 -name "${SESSION_ID}.jsonl" 2>/dev/null | head -1)
+# under a project-slug subdirectory at depth 2; find avoids guessing the slug
+# algorithm). $CLAUDE_CODE_SESSION_ID is the Bash subprocess env var Claude
+# Code injects — bash expands it here at runtime.
+TRANSCRIPT_PATH=$(find "$HOME/.claude/projects" -maxdepth 2 -name "${CLAUDE_CODE_SESSION_ID}.jsonl" 2>/dev/null | head -1)
 TRANSCRIPT_PATH=${TRANSCRIPT_PATH:-"(not found)"}
 ```
 
-Write summary to `$SUMMARY_FILE` using `$TRANSCRIPT_PATH` in the template below.
+Write summary to `$SUMMARY_FILE` using `$TRANSCRIPT_PATH` in the template below. In the template, `${CLAUDE_SESSION_ID}` is Claude Code's command-load-time template substitution — it's already the literal session UUID by the time you read this spec, so write it through verbatim.
 
 **Summary template:**
 
@@ -188,7 +185,7 @@ Write summary to `$SUMMARY_FILE` using `$TRANSCRIPT_PATH` in the template below.
 ## Session Summary {YYYY-MM-DD HH:MM}
 
 ### Claude Session
-- ID: `$SESSION_ID`
+- ID: `${CLAUDE_SESSION_ID}`
 - Transcript: `$TRANSCRIPT_PATH`
 
 ### Done
