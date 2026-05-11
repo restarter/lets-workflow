@@ -54,10 +54,14 @@ fi
 ```bash
 git branch --show-current
 git status --short
-git log --oneline -3
+if git rev-parse --verify --quiet HEAD >/dev/null; then
+  git log --oneline -3
+else
+  echo "(no commits yet — fresh repo)"
+fi
 ```
 
-Report: branch, uncommitted changes, recent commits.
+Report: branch, uncommitted changes, recent commits. **If the repo has no commits yet** (the `else` branch above fires), that's fine — say so in plain text; offer `git commit --allow-empty -m "chore: initial setup"` if the user wants an anchor for `git log` to work later. **Don't** raise `/lets:init` here (it's a separate concern) and **don't** treat the missing HEAD as a fatal error.
 
 ## Step 3: Task Status
 

@@ -211,12 +211,12 @@ Next steps presented via AskUserQuestion (replaces LETS box).
 
 ## Step 7: Document in Beads
 
-Add completion comment to the task:
+Add completion comment to the task. **MANDATORY:** the `Claude session: $CLAUDE_CODE_SESSION_ID` line MUST appear in the comment between `## Completed` and `### Commits` — don't drop it. `$CLAUDE_CODE_SESSION_ID` is the Bash subprocess env var Claude Code injects (see CLAUDE.md → "Claude Code session identity"); bash expands it inside the double-quoted argument at runtime, so `bd` receives the literal session UUID. No pre-assignment / template substitution needed.
 
 ```bash
 bd comments add <task-id> "## Completed {YYYY-MM-DD}
 
-Claude session: ${CLAUDE_SESSION_ID}
+Claude session: $CLAUDE_CODE_SESSION_ID
 
 ### Commits
 {git log main..HEAD --oneline}
