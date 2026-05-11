@@ -10,6 +10,7 @@ version: 0.5.1
 ## Language & Communication
 
 - **Response language priority:** (1) If user writes in a specific language - respond in that language. (2) Otherwise use `$LETS_LANGUAGE` from LETS Config section. (3) Fallback: English.
+- **`$LETS_LANGUAGE` is a language *name in English*** (e.g. `Russian`, `Japanese`, `Ukrainian`) — like every value in LETS Config. Respond in that language regardless of the script the name itself is written in.
 - **Code, commits, docs - always English.** Comments, variable names, commit messages, documentation files.
 - Talk like a colleague, not an assistant. No corporate speak, no filler phrases.
 - Be direct and concise. Say what matters, skip the preamble.
@@ -321,7 +322,7 @@ This applies when: presenting implementation approaches, choosing between soluti
 
 ### Commit, Task Done & Session End
 
-**Commit:** ALWAYS use `/lets:commit` skill. Never commit directly.
+**Commit:** ALWAYS use `/lets:commit` skill. Never commit directly, and never let a generic commit skill (e.g. `commit-commands:commit` from the official marketplace) handle a commit in a LETS project — `/lets:commit` is authoritative. If a slash autocomplete surfaces both, pick `/lets:commit`.
 
 **Task done:**
 1. All code committed -> `/lets:done`
