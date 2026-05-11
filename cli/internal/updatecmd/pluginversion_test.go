@@ -23,8 +23,11 @@ func TestReadPluginVersion(t *testing.T) {
 		writeFile        bool
 	}{
 		{"ok", `{"name":"lets","version":"0.6.0"}`, "0.6.0", true},
+		{"ok with prerelease", `{"version":"0.6.0-rc.1"}`, "0.6.0-rc.1", true},
 		{"no version key", `{"name":"lets"}`, "", true},
 		{"malformed json", `{not json`, "", true},
+		{"non-semver sentinel", `{"version":"unknown"}`, "", true},
+		{"version with control chars", "{\"version\":\"1.0.0]0;x\"}", "", true},
 		{"missing file", "", "", false},
 	}
 	for _, tc := range cases {

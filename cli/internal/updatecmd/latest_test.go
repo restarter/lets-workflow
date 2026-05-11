@@ -105,7 +105,7 @@ func TestFetchLatest_HTTPErrorNoCacheReturnsErr(t *testing.T) {
 
 func TestFetchLatest_StripsLeadingV(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]string{"tag_name": "v1.2.3-rc.1"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"tag_name": "v1.2.3"})
 	}))
 	defer srv.Close()
 	withReleasesURL(t, srv.URL)
@@ -113,8 +113,24 @@ func TestFetchLatest_StripsLeadingV(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Version != "1.2.3-rc.1" {
-		t.Fatalf("Version = %q, want 1.2.3-rc.1 (v stripped)", got.Version)
+	if got.Version != "1.2.3" {
+		t.Fatalf("Version = %q, want 1.2.3 (v stripped)", got.Version)
+	}
+}
+
+func TestFetchLatest_RejectsGarbageTag(t *testing.T) {
+	dir := t.TempDir()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]string{"tag_name": "v1.0.0\x1b[2Jnot-a-version"})
+	}))
+	defer srv.Close()
+	withReleasesURL(t, srv.URL)
+	if _, err := FetchLatest(context.Background(), dir, false); err == nil {
+		t.Fatal("expected error for a non-semver tag_name")
+	}
+	// And nothing got cached.
+	if _, ok := readCache(filepath.Join(dir, cacheFileName)); ok {
+		t.Fatal("a garbage tag should not be written to the cache")
 	}
 }
 

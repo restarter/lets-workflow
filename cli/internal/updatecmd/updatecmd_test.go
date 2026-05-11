@@ -66,6 +66,12 @@ func stubLatest(v string) func(context.Context) (LatestInfo, error) {
 	}
 }
 
+func stubCached(v string, age time.Duration) func(context.Context) (LatestInfo, error) {
+	return func(context.Context) (LatestInfo, error) {
+		return LatestInfo{Version: v, Source: "cache", CheckedAt: time.Now().Add(-age)}, nil
+	}
+}
+
 func find(t *testing.T, r Result, name string) Artifact {
 	t.Helper()
 	for _, a := range r.Artifacts {
@@ -191,18 +197,95 @@ func TestRun_NetworkError(t *testing.T) {
 }
 
 func TestRun_DevBinary(t *testing.T) {
-	// envVer "dev" so RegenerateEnv sees no version mismatch -> EnvSkip.
-	pr, plug := scaffold(t, "dev", "0.6.0", "0.6.0", "dev")
+	pr, plug := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "dev")
 	r, err := Run(context.Background(), Options{LatestFn: stubLatest("0.6.0")}, pr, plug)
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A dev binary makes Run skip the .env regen entirely and report it as dev,
+	// and short-circuit the binary version check.
+	if find(t, r, ".env").Status != StatusDev {
+		t.Errorf(".env status = %s, want dev (regen skipped on dev build)", find(t, r, ".env").Status)
+	}
 	if find(t, r, "binary").Status != StatusDev {
-		t.Fatalf("binary status = %s, want dev", find(t, r, "binary").Status)
+		t.Errorf("binary status = %s, want dev", find(t, r, "binary").Status)
 	}
 	// "dev" is ignored by the consistency check -> plugin & rules both 0.6.0 -> consistent.
 	if !r.Consistent {
 		t.Errorf("Consistent = false, want true (dev binary ignored)")
+	}
+	// No backup file should be left behind (regen was skipped).
+	if _, err := os.Stat(filepath.Join(pr, ".lets", ".env.bak")); err == nil {
+		t.Errorf(".env.bak exists - regen should have been skipped on a dev build")
+	}
+}
+
+func TestRun_EnvHeaderRefreshed(t *testing.T) {
+	pr, plug := scaffold(t, "0.5.0", "0.6.0", "0.6.0", "0.6.0") // .env behind the (real) binary
+	r, err := Run(context.Background(), Options{LatestFn: stubLatest("0.6.0")}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := find(t, r, ".env")
+	if a.Status != StatusUpdated || a.CurrentVersion != "0.6.0" {
+		t.Fatalf(".env = %+v, want updated/0.6.0", a)
+	}
+	if !strings.Contains(a.Detail, "v0.5.0") || !strings.Contains(a.Detail, "backup") {
+		t.Fatalf(".env Detail = %q, want it to mention the old version and the backup", a.Detail)
+	}
+	if _, err := os.Stat(filepath.Join(pr, ".lets", ".env.bak")); err != nil {
+		t.Fatalf(".env.bak not written: %v", err)
+	}
+}
+
+func TestRun_BinaryUpToDate_FromCache(t *testing.T) {
+	pr, plug := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0")
+	r, err := Run(context.Background(), Options{LatestFn: stubCached("0.6.0", 90*time.Minute)}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := find(t, r, "binary")
+	if a.Status != StatusUpToDate {
+		t.Fatalf("binary status = %s, want up-to-date", a.Status)
+	}
+	if !strings.Contains(a.Detail, "checked") || !strings.Contains(a.Detail, "ago") || !strings.Contains(a.Detail, "1h") {
+		t.Fatalf("binary Detail = %q, want a 'checked 1h ago'-style provenance note", a.Detail)
+	}
+}
+
+func TestRun_BinaryAhead_FromCache(t *testing.T) {
+	pr, plug := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "0.7.0") // binary ahead of latest
+	r, err := Run(context.Background(), Options{LatestFn: stubCached("0.6.0", 30*time.Minute)}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := find(t, r, "binary")
+	if a.Status != StatusAhead {
+		t.Fatalf("binary status = %s, want ahead", a.Status)
+	}
+	// Detail joins the cache-provenance note with the "newer than latest" note.
+	if !strings.Contains(a.Detail, "checked") || !strings.Contains(a.Detail, "; ") || !strings.Contains(a.Detail, "newer than") {
+		t.Fatalf("binary Detail = %q, want '<provenance>; newer than ...'", a.Detail)
+	}
+}
+
+func TestDurationApprox(t *testing.T) {
+	cases := []struct {
+		d    time.Duration
+		want string
+	}{
+		{-5 * time.Minute, "<1m"},
+		{30 * time.Second, "<1m"},
+		{5 * time.Minute, "5m"},
+		{59 * time.Minute, "59m"},
+		{90 * time.Minute, "1h"},
+		{23 * time.Hour, "23h"},
+		{49 * time.Hour, "2d"},
+	}
+	for _, c := range cases {
+		if got := durationApprox(c.d); got != c.want {
+			t.Errorf("durationApprox(%v) = %q, want %q", c.d, got, c.want)
+		}
 	}
 }
 

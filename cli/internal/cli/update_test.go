@@ -3,11 +3,14 @@ package cli_test
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/restarter/lets-workflow/cli/internal/cli"
+	"github.com/restarter/lets-workflow/cli/internal/version"
 )
 
 // gitInitRepo creates a fresh temp git repo (with user identity configured so
@@ -73,6 +76,9 @@ func TestUpdate_MissingPluginRoot(t *testing.T) {
 }
 
 func TestUpdate_JSONEnvelope_Offline(t *testing.T) {
+	if version.Version != "dev" {
+		t.Skip("test build carries a tagged version - the binary artifact assertion below assumes the 'dev' sentinel")
+	}
 	chdirTo(t, gitInitRepo(t))
 	out, err := runRootUpdate(t, "--json", "--offline", "--plugin-root="+makeFakePluginRoot(t))
 	if err != nil {
@@ -118,5 +124,34 @@ func TestUpdate_TextOutput_Offline(t *testing.T) {
 	}
 	if !strings.Contains(out, "LETS Update Status") {
 		t.Fatalf("missing table header:\n%s", out)
+	}
+}
+
+func TestUpdate_RefusesInsideWorktree(t *testing.T) {
+	main := gitInitRepo(t)
+	git := func(args ...string) {
+		t.Helper()
+		c := exec.Command("git", args...)
+		c.Dir = main
+		if out, err := c.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	// A worktree needs a commit to check out.
+	if err := os.WriteFile(filepath.Join(main, "f"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git("add", ".")
+	git("commit", "-q", "-m", "init")
+	wt := filepath.Join(t.TempDir(), "wt")
+	git("worktree", "add", "-q", wt)
+
+	chdirTo(t, wt)
+	out, err := runRootUpdate(t, "--json", "--offline", "--plugin-root="+makeFakePluginRoot(t))
+	if err == nil {
+		t.Fatalf("expected an error when run inside a worktree:\n%s", out)
+	}
+	if !strings.Contains(out, "worktree") {
+		t.Fatalf("worktree refusal not surfaced:\n%s", out)
 	}
 }
