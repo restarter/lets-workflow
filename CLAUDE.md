@@ -41,7 +41,7 @@ References that resolve via `${CLAUDE_PLUGIN_ROOT}` (e.g. `${CLAUDE_PLUGIN_ROOT}
 
 - **Commands** = user-initiated workflows (sessions, commits, reviews)
 - **Agents** = experts dispatched by commands. `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:brainstorm` dispatch via subagents. `/lets:team` dispatches via Agent Teams (parallel, worktree isolation). `actor` is a meta-agent that loads external personalities (URL or file) and adapts them to LETS modes
-- **Orchestrators** = commands that delegate to other commands. `/lets:pr` orchestrates `/lets:review` for full PR lifecycle
+- **Orchestrators** = commands that delegate to other commands. `/lets:github-pr` orchestrates `/lets:review` for full PR lifecycle
 - **Hooks** = SessionStart + PreCompact inject workflow rules (PreCompact preserves rules across context compaction in long sessions)
 - **Statusline** = `lets statusline` Go subcommand. Project `.claude/settings.json` invokes it directly. `lets init` detects the canonical command via value-match against `"lets statusline"`; foreign user-customized commands are left alone. Legacy bash shim `plugins/lets/scripts/lets/statusline.sh` removed in lets-8ilsl. Byte-equal detection of pre-deletion installs (.lets/statusline.sh) handled via the frozen `cli/internal/initcmd/embedded_statusline_shim.sh` snapshot — `MigrateStatuslineSh` deletes matching legacy shims and triggers `SetStatusLine` to point settings.json at `lets statusline`.
 - **`.env` versioning** — first key `LETS_ENV_VERSION` records which `lets` binary version last regenerated the file. `lets init` regenerates when version mismatches the running binary OR when CLI prefs flags are passed with new values. `RegenerateEnv` (`cli/internal/initcmd/env.go`) is the canonical writer; preserves user values + foreign keys (under `# User-added keys` separator), refreshes header. NOT in `letsconfig.Keys` whitelist (metadata, not user-config) — hook session injection skips it. Reusable for future `/lets:update` (lets-hdrdr.3).
@@ -58,7 +58,7 @@ References that resolve via `${CLAUDE_PLUGIN_ROOT}` (e.g. `${CLAUDE_PLUGIN_ROOT}
 - Agent selection: each command owns its detection/selection logic (different semantics per context). Multi-agent dispatching commands (review, opinion, brainstorm, plan) show selection panel with cost note before launch. Most agents have explicit PLAN mode for plan review.
 - Agents always respond in English. Commands localize output to user's language via LETS Config and Rules.
 - `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:brainstorm` use `subagent_type: "lets:agent-name"` to dispatch agents via Task tool
-- `/lets:pr` orchestrates `/lets:review` (delegates analysis) and handles GitHub posting, follow-up, respond, and approval directly via gh CLI
+- `/lets:github-pr` orchestrates `/lets:review` (delegates analysis) and handles GitHub posting, follow-up, respond, and approval directly via gh CLI
 - `/lets:execute` uses EnterPlanMode for native plan mode execution with user approval gates. No subagents.
 - `/lets:check` reviews inline (no subagent) for speed
 - All analyst agents are read-only with uniform tools: `Read, Grep, Glob, Bash`. No `Edit/Write`. Exception: `agents/implementer.md` adds `Edit/Write` for `/lets:team` parallel implementation in isolated worktrees.
@@ -215,7 +215,7 @@ Update these files:
 | `CLAUDE.md` Key Concepts | If adding a new skill |
 | `README.md` | Agent table, feature descriptions |
 | All `agents/*.md` `## Constraints` sections | If changing the read-only Bash allowlist or constraint wording, sync the identical 1-line text across all 13 analyst agents (verify with `grep -h "You are read-only" agents/*.md \| sort -u` returning exactly one line) |
-| `commands/end.md` + `commands/done.md` `${CLAUDE_SESSION_ID}` references | If changing the session-id capture wording, sync across all occurrences (Step 3 progress comment + Step 5 summary block in `end.md`, Step 6 completion comment in `done.md`). Verify with `grep -n "CLAUDE_SESSION_ID" commands/` |
+| `commands/end.md` + `commands/done.md` `${CLAUDE_SESSION_ID}` references | If changing the session-id capture wording, sync across all occurrences (Step 3 progress comment + Step 5 summary block in `end.md`, Step 7 completion comment in `done.md`). Verify with `grep -n "CLAUDE_SESSION_ID" commands/` |
 | `cli/internal/cli/<name>.go` + register in `cli/internal/cli/root.go` | If adding a Go subcommand. Add `<name>_test.go` (`package cli_test`). Use `cmd.OutOrStdout()`. Domain logic goes in `cli/internal/<name>/` (see `initcmd/`, `sessionstart/`, `statusline/`, `frontmatter/` for patterns). Update `cli/README.md` "Adding a subcommand" recipe if pattern changes. |
 
 ### Command Output Requirements
@@ -239,7 +239,7 @@ Every lets:* command MUST end with branded LETS box:
 - **ONLY `/lets:*` commands** - never raw commands like `bd sync`, `bd update`
 - **Exception:** `git push` allowed after `/lets:done` or `/lets:end`
 - **No command = no box** - if next step isn't a /lets:* command, just ask in plain text
-- **Internal invocation = no box** - when a command is invoked programmatically by another command (e.g., `/lets:review --json` called by `/lets:pr`), the LETS box is waived
+- **Internal invocation = no box** - when a command is invoked programmatically by another command (e.g., `/lets:review --json` called by `/lets:github-pr`), the LETS box is waived
 
 ### Command Checklist
 

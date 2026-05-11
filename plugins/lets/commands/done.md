@@ -104,7 +104,7 @@ AskUserQuestion(
 **Handle response:**
 - **Fix first** -> stop, do NOT proceed to closing
 - **Update scope** -> update task description with `bd update`, then proceed
-- **PR only, keep open** -> proceed to Step 4. In Step 7, create PR but do NOT close the task. In Step 8, skip "Merge & close" option - user explicitly chose to keep the task open for remaining work.
+- **PR only, keep open** -> proceed to Step 4. In Step 8, create PR but do NOT close the task. In Step 9, skip "Merge & close" option - user explicitly chose to keep the task open for remaining work.
 
 **Only continue to Step 4 when all requirements are verified OR user chose "PR only, keep open".**
 
@@ -130,7 +130,42 @@ Commits (N):
 Files: X changed, Y insertions, Z deletions
 ```
 
-## Step 5: Confirm with User
+## Step 5: Update CHANGELOG
+
+Keep `CHANGELOG.md` in sync with merged work so release notes don't have to be back-filled later. This step runs before the branch is pushed/merged, so the CHANGELOG commit lands in the same PR as the task work.
+
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+test -f "$LETS_PROJECT_ROOT/CHANGELOG.md" && echo "has-changelog" || echo "no-changelog"
+```
+
+**If `no-changelog`** (no `CHANGELOG.md` at the project root): tell the user "No `CHANGELOG.md` at the project root - skipping changelog update." and proceed to Step 6. Do nothing else.
+
+**If `has-changelog` but the task is pure infra / tests / internal refactor** (no user-visible change to commands, skills, agents, rules, CLI, or README): say so briefly and proceed to Step 6.
+
+**Otherwise** — draft a one-line entry from the task title + commit subjects, pick the right Keep-a-Changelog section (`Added` / `Changed` / `Fixed` / `Removed`), and prepare to insert it under `[Unreleased]` following the file's existing conventions (section headers, task-id link style). Then use **AskUserQuestion**:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Add this entry to CHANGELOG.md [Unreleased]?",
+    header: "CHANGELOG",
+    options: [
+      { label: "Add entry", description: "{drafted entry} - under {section}" },
+      { label: "Edit first", description: "Show me the draft, I'll adjust wording before it's written" },
+      { label: "Skip", description: "Don't touch CHANGELOG for this task" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Handle response:**
+- **Add entry** -> edit `CHANGELOG.md`, then commit it via `/lets:commit` (`docs(<task-id>): update CHANGELOG`). This commit joins the same branch/PR. Then proceed to Step 6.
+- **Edit first** -> show the draft, apply the user's wording, then edit + commit as above. Proceed to Step 6.
+- **Skip** -> proceed to Step 6, CHANGELOG untouched.
+
+## Step 6: Confirm with User
 
 Show what will happen based on `$LETS_PR_FLOW` from LETS Config:
 
@@ -171,10 +206,10 @@ AskUserQuestion(
 Next steps presented via AskUserQuestion (replaces LETS box).
 
 **Handle response:**
-- **Finish** -> proceed to Step 6
+- **Finish** -> proceed to Step 7
 - **Keep working** -> stop, return to work
 
-## Step 6: Document in Beads
+## Step 7: Document in Beads
 
 Add completion comment to the task:
 
@@ -196,7 +231,7 @@ Claude session: ${CLAUDE_SESSION_ID}
 {git diff --stat main..HEAD}"
 ```
 
-## Step 7: Finish Task
+## Step 8: Finish Task
 
 ### Worktree Detection
 
@@ -272,7 +307,7 @@ bd comments add <task-id> "PR #XX created: <PR URL>"
 
 Task stays **open** until PR is merged.
 
-**Do NOT switch branches yet** - user decides in Step 8.
+**Do NOT switch branches yet** - user decides in Step 9.
 
 ### If $LETS_PR_FLOW != github (local merge) AND NOT in worktree:
 
@@ -315,7 +350,7 @@ bd close <task-id> --reason="Merged locally from worktree. Commits: {list}"
 
 Do NOT delete the branch or remove the worktree here - `/lets:worktree remove` handles cleanup.
 
-## Step 8: Output
+## Step 9: Output
 
 ### After PR ($LETS_PR_FLOW == github), NOT in worktree:
 
@@ -454,7 +489,7 @@ AskUserQuestion(
 
 - **NEVER push or create PR without user approval**
 - **NEVER merge without user approval**
-- Document BEFORE finishing (Step 6 before Step 7)
+- Document BEFORE finishing (Step 7 before Step 8)
 - If PR flow: task stays open, user closes after merge
 - If local merge: task closes immediately
 - Respond in user's language
