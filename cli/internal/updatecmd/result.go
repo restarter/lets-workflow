@@ -1,0 +1,84 @@
+// Package updatecmd implements the `lets update` subcommand: it checks the
+// four drift-able LETS artifacts (.lets/.env, .claude/rules/lets-rules.md,
+// the lets binary, the Claude Code plugin), auto-syncs the two it safely can,
+// and reports actionable status for the two it cannot. Mirrors initcmd's
+// cobra-factory / Run() / Result-envelope structure.
+package updatecmd
+
+// SchemaVersion identifies the JSON output contract for `lets update --json`.
+// Bump on field removal or semantic change of an existing field; additions are
+// minor (consumers ignore unknown fields). Mirrors initcmd.SchemaVersion.
+const SchemaVersion = 1
+
+// ArtifactStatus categorizes the state of one drift-able artifact.
+type ArtifactStatus string
+
+const (
+	StatusUpToDate       ArtifactStatus = "up-to-date"      // matches the expected version
+	StatusUpdated        ArtifactStatus = "updated"         // we just synced it (.env header / rules file)
+	StatusOutdated       ArtifactStatus = "outdated"        // behind latest - user action needed
+	StatusAhead          ArtifactStatus = "ahead"           // newer than latest stable (prerelease / dev checkout)
+	StatusUnknown        ArtifactStatus = "unknown"         // couldn't determine (offline, unreadable)
+	StatusNotInitialized ArtifactStatus = "not-initialized" // .env absent - project never `lets init`-ed
+	StatusDev            ArtifactStatus = "dev"             // running an untagged dev binary - no comparison
+)
+
+// Artifact is the outcome of checking one drift-able artifact.
+type Artifact struct {
+	Name           string         `json:"name"` // ".env" | "rules" | "binary" | "plugin"
+	Status         ArtifactStatus `json:"status"`
+	CurrentVersion string         `json:"current_version,omitempty"`
+	LatestVersion  string         `json:"latest_version,omitempty"`
+	Action         string         `json:"action,omitempty"` // human instruction when Status needs user action
+	Detail         string         `json:"detail,omitempty"` // extra context (changed keys, cache age, error reason)
+}
+
+// Summary aggregates artifact counts for at-a-glance consumption.
+type Summary struct {
+	UpToDate     int `json:"up_to_date"`
+	Updated      int `json:"updated"`
+	ActionNeeded int `json:"action_needed"` // outdated + not-initialized
+	Unknown      int `json:"unknown"`       // unknown + ahead + dev
+}
+
+// Result is the structured outcome of `lets update`. Always populated, even on
+// error (Artifacts carries whatever was checked before the failure).
+type Result struct {
+	SchemaVersion int        `json:"schema_version"`
+	OK            bool       `json:"ok"`
+	Error         string     `json:"error,omitempty"`
+	ProjectRoot   string     `json:"project_root"`
+	PluginRoot    string     `json:"plugin_root"`
+	Artifacts     []Artifact `json:"artifacts"`
+	Consistent    bool       `json:"consistent"` // binary == plugin == installed-rules frontmatter version (ignoring "dev"/"")
+	Summary       Summary    `json:"summary"`
+}
+
+// NewResult initializes a Result with paths and a non-nil Artifacts slice
+// (JSON consumers see "artifacts":[] not null). Consistent defaults true
+// (nothing contradicts until proven otherwise).
+func NewResult(projectRoot, pluginRoot string) Result {
+	return Result{
+		SchemaVersion: SchemaVersion,
+		ProjectRoot:   projectRoot,
+		PluginRoot:    pluginRoot,
+		Artifacts:     []Artifact{},
+		Consistent:    true,
+	}
+}
+
+// Add appends an artifact and increments the matching Summary counter. Single
+// invariant: every append goes through here (a direct append desyncs Summary).
+func (r *Result) Add(a Artifact) {
+	r.Artifacts = append(r.Artifacts, a)
+	switch a.Status {
+	case StatusUpToDate:
+		r.Summary.UpToDate++
+	case StatusUpdated:
+		r.Summary.Updated++
+	case StatusOutdated, StatusNotInitialized:
+		r.Summary.ActionNeeded++
+	case StatusUnknown, StatusAhead, StatusDev:
+		r.Summary.Unknown++
+	}
+}

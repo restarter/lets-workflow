@@ -146,3 +146,32 @@ git diff cli/internal/initcmd/testdata/golden_env_*.txt
 ```
 
 Goldens lock the exact byte output of `renderEnv`. After legitimate changes (new key in `letsconfig.Keys`, comment update), regenerate and commit the diff. `TestRenderEnv_NonEmptyValues` and `TestRenderEnvExample_Output` provide commit-time guards independent of golden contents.
+
+## `lets update`
+
+Internal subcommand. Invoked by the `/lets:update` slash command (`commands/update.md`) with `--plugin-root=${CLAUDE_PLUGIN_ROOT}`. Syncs the four drift-able LETS artifacts; never prompts, never touches `settings.json` or beads — that's `lets init`'s job (init = setup; update = sync). Lives in `internal/cli/update.go` (cobra factory) + `internal/updatecmd/` (orchestration, GitHub latest-release lookup, plugin-version reader).
+
+```bash
+lets update --plugin-root "${CLAUDE_PLUGIN_ROOT}" [--json] [--offline] [--refresh-cache]
+```
+
+Flags:
+- `--plugin-root` — plugin install dir (or `$CLAUDE_PLUGIN_ROOT`). Required, validated via the `.claude-plugin/plugin.json` marker.
+- `--json` — emit a machine-readable JSON object (`schema_version=1`); `/lets:update` consumes this.
+- `--offline` — skip the GitHub latest-release check; `binary`/`plugin` come back `unknown`.
+- `--refresh-cache` — bypass the cached latest-release lookup and hit GitHub now.
+
+What it checks (in order; never crashes for a network failure):
+
+| Artifact | Check | Action |
+|---|---|---|
+| `.lets/.env` | `LETS_ENV_VERSION` vs `version.Version` | `RegenerateEnv` with a near-empty `Prefs` (only the default tracker; user values are read from the existing `.env` regardless), so it just refreshes the header. Skip when in sync. Skipped entirely on a `dev` binary (avoids stamping `LETS_ENV_VERSION=dev`). `not-initialized` if `.env` is absent → "Run /lets:init". |
+| `.claude/rules/lets-rules.md` | `drift.Check` against plugin source | Re-copy from the plugin (atomic write) on any detected drift (incl. `ahead`); `unknown` if the plugin's own frontmatter is unparseable; `up-to-date` otherwise. |
+| `lets` binary | `version.Version` vs latest GitHub release | Report only (can't self-replace) — `outdated` → prints `brew upgrade lets` / `curl … install.sh`. `dev` build → no comparison. |
+| Claude Code plugin | `<pluginRoot>/.claude-plugin/plugin.json::version` vs latest release | Report only — `outdated` → prints `/plugin` update instruction. |
+
+Latest-release lookup hits `https://api.github.com/repos/restarter/lets-workflow/releases/latest` (5s timeout), cached 1h at `<project>/.lets/cache/update-check.json`; on a network failure it falls back to a stale cache entry if one exists, else reports `unknown`. The result also carries `consistent` (binary == plugin == installed-rules frontmatter version, ignoring `dev`) to flag a partial upgrade.
+
+Refuses: from a worktree (`--git-dir != --git-common-dir`) — `.claude/` isn't shared into worktrees.
+
+Same `--json` contract semantics as `lets init` (single JSON object, valid even on error, `SilenceUsage`/`SilenceErrors`, `TestResult_SchemaContract` guards `schema_version` bumps).

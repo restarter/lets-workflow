@@ -131,12 +131,3 @@ out with --plugin-root=${CLAUDE_PLUGIN_ROOT} plus the chosen flags.`,
 	cmd.Flags().BoolVar(&flagJSON, "json", false, "Output machine-readable JSON to stdout (single object, schema_version=1)")
 	return cmd
 }
-
-// flagOrDefault returns flagVal if non-empty, else def. Used to layer
-// letsconfig.Defaults() under cobra string flags.
-func flagOrDefault(flagVal, def string) string {
-	if flagVal == "" {
-		return def
-	}
-	return flagVal
-}

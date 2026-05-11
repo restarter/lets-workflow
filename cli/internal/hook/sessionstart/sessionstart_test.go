@@ -130,7 +130,7 @@ func TestRun_DriftOutdated(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := buf.String()
-	wantNotice := "## LETS Notice\n\nWorkflow rules outdated (installed v0.3.0 < plugin v0.4.0). Run `/lets:init` to update."
+	wantNotice := "## LETS Notice\n\nWorkflow rules outdated (installed v0.3.0 < plugin v0.4.0). Run `/lets:update` to update."
 	if !strings.Contains(out, wantNotice) {
 		t.Errorf("missing exact notice:\nwant %q\ngot:\n%s", wantNotice, out)
 	}
@@ -172,7 +172,7 @@ func TestRun_DriftWarn_WhenInstalledAhead(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := buf.String()
-	wantNotice := "## LETS Notice\n\nWorkflow rules AHEAD of plugin (installed v99.0.0 > plugin v0.4.0). Verify the rules file integrity (rules tampering signal) or upgrade the lets binary. Run `/lets:init` to reset to plugin version."
+	wantNotice := "## LETS Notice\n\nWorkflow rules AHEAD of plugin (installed v99.0.0 > plugin v0.4.0). Verify the rules file integrity (rules tampering signal) or upgrade the lets binary. Run `/lets:update` to reset to plugin version."
 	if !strings.Contains(out, wantNotice) {
 		t.Errorf("missing exact AHEAD notice:\nwant %q\ngot:\n%s", wantNotice, out)
 	}
@@ -191,7 +191,7 @@ func TestRun_DriftMalformedSemver_TreatsAsUnknown(t *testing.T) {
 	if err := sessionstart.Run(&buf, pluginRules, projectRoot); err != nil {
 		t.Fatal(err)
 	}
-	wantNotice := "## LETS Notice\n\nWorkflow rules version unknown - rules may be outdated. Run `/lets:init` to refresh."
+	wantNotice := "## LETS Notice\n\nWorkflow rules version unknown - rules may be outdated. Run `/lets:update` to refresh."
 	if !strings.Contains(buf.String(), wantNotice) {
 		t.Errorf("missing exact unknown notice:\nwant %q\ngot:\n%s", wantNotice, buf.String())
 	}

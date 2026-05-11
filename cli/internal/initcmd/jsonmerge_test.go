@@ -136,7 +136,7 @@ func TestAtomicWriteBytes_PreservesMode(t *testing.T) {
 	if err := os.WriteFile(path, []byte("orig"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := atomicWriteBytes(path, []byte("new"), 0o644); err != nil {
+	if err := AtomicWriteBytes(path, []byte("new"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	fi, _ := os.Stat(path)
@@ -147,7 +147,7 @@ func TestAtomicWriteBytes_PreservesMode(t *testing.T) {
 
 func TestAtomicWriteBytes_FreshFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "f.txt")
-	if err := atomicWriteBytes(path, []byte("test"), 0o644); err != nil {
+	if err := AtomicWriteBytes(path, []byte("test"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	data, _ := os.ReadFile(path)

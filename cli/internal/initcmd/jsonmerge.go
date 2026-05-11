@@ -54,12 +54,16 @@ func atomicWriteJSON(path string, m map[string]any) error {
 		return err
 	}
 	data = append(data, '\n')
-	return atomicWriteBytes(path, data, 0o644)
+	return AtomicWriteBytes(path, data, 0o644)
 }
 
-// atomicWriteBytes writes via tmp + rename. Preserves existing file mode if
-// the target exists. Sync before rename for crash-safety.
-func atomicWriteBytes(path string, data []byte, defaultMode os.FileMode) error {
+// AtomicWriteBytes writes via tmp + rename. Preserves existing file mode if
+// the target exists, else uses defaultMode. Sync before rename for crash-safety.
+//
+// Exported for reuse by sibling packages (updatecmd writes the rules copy and
+// the latest-release cache with it) - keeps "write a primary artifact" atomic
+// everywhere, not just inside initcmd.
+func AtomicWriteBytes(path string, data []byte, defaultMode os.FileMode) error {
 	mode := defaultMode
 	if fi, err := os.Stat(path); err == nil {
 		mode = fi.Mode().Perm()

@@ -212,7 +212,7 @@ func TestInit_JSON_EarlyError_InsideWorktree(t *testing.T) {
 
 func TestInit_JSON_PartialFailure(t *testing.T) {
 	// Force a mid-flight failure: pre-create .lets/.env.example as a DIRECTORY
-	// so Step 6 atomicWriteBytes fails after Steps 1-5 complete.
+	// so Step 6 AtomicWriteBytes fails after Steps 1-5 complete.
 	dir := initGitRepo(t)
 	pluginRoot := makeFakePluginRoot(t)
 
