@@ -132,7 +132,7 @@ func versionArtifact(name, current string, latest LatestInfo, latestErr error, o
 	}
 	if latestErr != nil || latest.Version == "" {
 		a.Status = StatusUnknown
-		a.Detail = "could not reach github.com to check the latest release"
+		a.Detail = "could not check the latest release on github.com (offline, rate-limited, or no published release)"
 		return a
 	}
 	a.LatestVersion = latest.Version
