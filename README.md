@@ -67,7 +67,7 @@ In Claude Code:
 /plugin install lets
 ```
 
-> **For teams:** when Claude Code asks who to install for, pick **"Install for all collaborators on this repository" (project scope)** — the choice goes into `.claude/settings.json`, so teammates inherit `lets` without re-installing.
+> **Install scope:** when Claude Code asks who to install for, pick **"Install for all collaborators on this repository" (project scope)** — the choice goes into `.claude/settings.json`, so teammates inherit `lets` without re-installing. **Local** scope (just this checkout) is fine for a solo or throwaway project. Avoid **user** scope: at user scope the SessionStart/PreCompact hooks fire in *every* project you open, including ones that never ran `/lets:init` — smoother user-scope handling is planned for a future update.
 
 (From a local clone instead: `git clone …` then `/plugin marketplace add ./lets-workflow` and `/plugin install lets`.)
 
