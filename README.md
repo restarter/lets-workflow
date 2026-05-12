@@ -79,7 +79,7 @@ Then in Claude Code:
 /plugin install lets
 ```
 
-**Recommended scope:** when Claude Code asks "Install for...", pick **"Install for all collaborators on this repository" (project scope)**. This commits the choice to `.claude/settings.json` so teammates inherit `lets` without re-installing. Use user scope only for personal/throwaway projects; local scope is rarely useful.
+**Recommended scope:** when Claude Code asks "Install for...", pick **"Install for all collaborators on this repository" (project scope)**. This commits the choice to `.claude/settings.json` so teammates inherit `lets` without re-installing. Use user scope only for personal/throwaway projects — at user scope the SessionStart/PreCompact hooks run in *every* project you open, including ones that never ran `/lets:init`; smoother user-scope handling is planned for a future update.
 
 ### Setup
 
@@ -130,7 +130,7 @@ Then start working:
 └───────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Commit** - `/lets:commit` reviews changes and creates a conventional commit (`feat:`, `fix:`, `refactor:`) linked to the active task.
+**Commit** - `/lets:commit` reviews changes and creates a conventional commit (`feat:`, `fix:`, `docs:`, …) linked to the active task.
 
 **Finish** - `/lets:done` creates a PR on GitHub (or merges locally). `/lets:end` saves a session summary so the next conversation picks up where you left off.
 
