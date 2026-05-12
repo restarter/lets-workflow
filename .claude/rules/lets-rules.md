@@ -1,6 +1,6 @@
 ---
 name: lets-rules
-version: 0.5.2
+version: 0.5.3
 ---
 
 <!-- DO NOT EDIT - managed by lets init / lets install. To add custom rules, create a sibling *.md file in this directory (e.g. .claude/rules/team-conventions.md). Files prefixed `lets-` are owned by the LETS plugin and overwritten on update. -->
