@@ -1,6 +1,6 @@
 ---
 name: lets-rules
-version: 0.5.1
+version: 0.5.2
 ---
 
 <!-- DO NOT EDIT - managed by lets init / lets install. To add custom rules, create a sibling *.md file in this directory (e.g. .claude/rules/team-conventions.md). Files prefixed `lets-` are owned by the LETS plugin and overwritten on update. -->
@@ -10,6 +10,7 @@ version: 0.5.1
 ## Language & Communication
 
 - **Response language priority:** (1) If user writes in a specific language - respond in that language. (2) Otherwise use `$LETS_LANGUAGE` from LETS Config section. (3) Fallback: English.
+- **`$LETS_LANGUAGE` is a language *name in English*** (e.g. `Russian`, `Japanese`, `Ukrainian`) — like every value in LETS Config. Respond in that language regardless of the script the name itself is written in.
 - **Code, commits, docs - always English.** Comments, variable names, commit messages, documentation files.
 - Talk like a colleague, not an assistant. No corporate speak, no filler phrases.
 - Be direct and concise. Say what matters, skip the preamble.
@@ -321,7 +322,7 @@ This applies when: presenting implementation approaches, choosing between soluti
 
 ### Commit, Task Done & Session End
 
-**Commit:** ALWAYS use `/lets:commit` skill. Never commit directly.
+**Commit:** ALWAYS use `/lets:commit` skill. Never commit directly, and never let a generic commit skill (e.g. `commit-commands:commit` from the official marketplace) handle a commit in a LETS project — `/lets:commit` is authoritative. If a slash autocomplete surfaces both, pick `/lets:commit`.
 
 **Task done:**
 1. All code committed -> `/lets:done`
@@ -354,6 +355,7 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:team` | Utility | Parallel implementation with Agent Teams (run, status, stop) |
 | `/lets:note` | Utility | Add note to active task |
 | `/lets:init`    | Setup | Per-project initialization. Re-run for self-heal (drift fix) or to change config |
+| `/lets:update`  | Setup | Sync project with the current release - `.lets/.env` + rules self-heal, plus version status for the `lets` binary and the plugin |
 
 ### Auto-triggered Skills
 
