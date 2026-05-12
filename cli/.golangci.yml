@@ -1,29 +1,34 @@
-# golangci-lint config for lets CLI
-# https://golangci-lint.run/usage/configuration/
+# golangci-lint v2 config for the lets CLI.
+# https://golangci-lint.run/
+#
+# CI runs golangci-lint v2.x via golangci/golangci-lint-action
+# (see .github/workflows/ci.yml). Install a v2.x golangci-lint locally
+# (`make lint`) for results that match CI — a v1.x binary will reject this file.
 
-run:
-  timeout: 3m
+version: "2"
 
 linters:
+  # errcheck, govet, ineffassign, staticcheck, unused are the v2 default set —
+  # listed explicitly for clarity. gosimple/stylecheck were folded into
+  # staticcheck in v2, so they're no longer separate entries.
   enable:
-    # Default linters (explicit for clarity)
     - errcheck       # Unchecked errors
-    - gosimple       # Code simplifications
     - govet          # Stricter than `go vet`
     - ineffassign    # Unused assignments
-    - staticcheck    # Static analysis
+    - staticcheck    # Static analysis (includes former gosimple/stylecheck)
     - unused         # Unused vars/funcs
-    # Additional
+    - misspell       # Common misspellings
+  settings:
+    errcheck:
+      # cobra commands write via cmd.OutOrStdout() (io.Writer); errors from
+      # fmt.F*print* to that surface are not actionable - same rationale as
+      # the default exclusion of fmt.Print*.
+      exclude-functions:
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - fmt.Fprint
+
+formatters:
+  enable:
     - gofmt          # Format check
     - goimports      # Import sorting/grouping
-    - misspell       # Common misspellings
-
-linters-settings:
-  errcheck:
-    # cobra commands write via cmd.OutOrStdout() (io.Writer); errors from
-    # fmt.F*print* to that surface are not actionable - same rationale as
-    # the default exclusion of fmt.Print*.
-    exclude-functions:
-      - fmt.Fprintf
-      - fmt.Fprintln
-      - fmt.Fprint

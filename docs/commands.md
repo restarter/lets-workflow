@@ -1,0 +1,59 @@
+# Command reference
+
+Every `/lets:*` command, grouped. For the day-to-day flow see **[workflow.md](workflow.md)**.
+
+## Session & task
+
+| Command | What it does |
+|---------|--------------|
+| `/lets:start` | Start a session — restore context, show tasks, create a feature branch. `/lets:start <task-id>` jumps to a task; `/lets:start --continue` resumes the in-progress one. |
+| `/lets:end` | End the session — save progress, sync the task tracker, write a summary for next time. |
+| `/lets:commit` | Commit changes — review, conventional commit message, task ID in the scope and a `Task:` footer. Use this instead of `git commit`. Also auto-triggers on "commit" in conversation. |
+| `/lets:done` | Finish the task — push the branch and open a PR (GitHub mode), or merge locally and close the task (local/bitbucket). |
+| `/lets:status` | Task overview and project status — ready, in progress, blocked, recent activity. |
+| `/lets:note` | Add a note to the active task — a decision, gotcha, fact, or reference. |
+
+See **[tasks.md](tasks.md)** for the task lifecycle.
+
+## Planning & execution
+
+| Command | What it does |
+|---------|--------------|
+| `/lets:brainstorm` | Interactive ideation — review the backlog, explore an idea, quick brainstorm, or cleanup. |
+| `/lets:plan` | Structured planning — codebase exploration with scaled explorer agents, then architecture design with expert evaluation, then a written plan in `.lets/plans/`. `--fast` skips the subagent phases and plans in-conversation. |
+| `/lets:execute` | Execute the plan from `/lets:plan` in native plan mode, with your approval at each step. |
+| `/lets:team` | Parallel implementation with Agent Teams — `run` (pick tasks, spawn teammates), `status`, `stop`. |
+| `/lets:worktree` | Create and manage worktrees for parallel sessions — `create <name>`, `list`, `remove <name>`. |
+
+See **[plan-execute.md](plan-execute.md)** and **[parallel-work.md](parallel-work.md)**.
+
+## Review & analysis
+
+| Command | What it does |
+|---------|--------------|
+| `/lets:check` | Quick inline sanity check (~30s) — 6 perspectives, no subagents. Targets: working tree, staged, last commit, a PR, `--file <path>`, `--plan`. |
+| `/lets:review` | Full code review (~2-3 min) — dynamic agent selection. Same targets as `/lets:check`; `--local` for local changes, `<PR>` for a PR, `--plan` for a plan. |
+| `/lets:github-pr` | GitHub PR review lifecycle — `<PR>` to analyze and discuss, then post inline; `--follow-up` to check fixes; `--approve` to approve; `--respond <PR>` for the PR author. |
+| `/lets:opinion` | Technical decision analyzed by expert agents in parallel, with a recommendation. Dynamic agent count. |
+| `/lets:ask` | Quick consultation with a single expert agent — like pinging a colleague. |
+
+See **[code-review.md](code-review.md)** and **[agents.md](agents.md)**.
+
+## Setup
+
+| Command | What it does |
+|---------|--------------|
+| `/lets:init` | Initialize LETS in the current project — creates `.lets/`, writes `.lets/.env` with defaults, copies the workflow rules to `.claude/rules/lets-rules.md`, wires up the statusline, and runs `bd init` if beads is installed. Re-run anytime to self-heal drift or change config. |
+| `/lets:update` | Sync the project with the current release — self-heal `.lets/.env` and the rules file, and report version status for the `lets` binary and the plugin. |
+
+See **[installation.md](installation.md)** and **[configuration.md](configuration.md)**.
+
+## Lighter alternatives
+
+Some commands have a faster, lower-cost counterpart — reach for the light one first:
+
+| Heavy | Lighter |
+|-------|---------|
+| `/lets:review` | `/lets:check` |
+| `/lets:review --plan` | `/lets:check --plan` |
+| `/lets:opinion` | `/lets:ask` |

@@ -20,9 +20,10 @@ cli/                              # Go CLI - companion binary (Phase 2+, lets-7v
 ├── internal/cli/                 #   Cobra command factories (root.go, version.go, *_test.go)
 ├── internal/version/version.go   #   Version (var, ldflags-overridable from git tag)
 ├── go.mod, go.sum
-└── .golangci.yml                 #   Linter config (default + gofmt/goimports/misspell)
+└── .golangci.yml                 #   golangci-lint v2 config (default linters + misspell; gofmt/goimports as formatters)
 Makefile                          # Repo-root build (build/test/vet/lint/fmt/install/clean)
 .editorconfig                     # Editor whitespace/charset settings
+.github/workflows/                # CI: ci.yml (Go build/vet/test/lint on PRs+pushes), verify-versions.yml (source-tree version coherence), release.yml (tag-driven goreleaser)
 scripts/release/                  # Release tooling: bump-version.sh + verify-versions.sh (used by Makefile bump/release-tag)
 scripts/remote/dolt/              # Dolt SQL server VPS deployment + ad-hoc backup (NOT plugin)
 scripts/remote/beads-web/         # beads-web (Rust kanban board) VPS deployment (NOT plugin)
@@ -93,6 +94,10 @@ Phase 1: Bump (manual, on release/X.Y.Z branch)
                                    Prerelease (X.Y.Z-rc.N): 3 files only, CHANGELOG intact
 Phase 2: Review (PR to main)
   .github/workflows/verify-versions.yml: PR-time source-tree coherence check
+  .github/workflows/ci.yml:              PR-time Go build + vet + test + lint
+  (both are required status checks on the `main protection` ruleset; the release
+   PR is gated by them like any other PR — no tag-push CI, the tagged commit is
+   already validated here, and Phase 4's goreleaser cross-builds all 5 platforms)
 Phase 3: Tag (manual, on main)
   make release-tag VERSION=X.Y.Z: tags merge commit + pushes tag
 Phase 4: Distribute (automated, on tag push)

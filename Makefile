@@ -37,7 +37,7 @@ help:
 	@echo "  test            - Run cli unit tests with -race (needs CGO + C compiler)"
 	@echo "  test-fast       - Run cli unit tests without -race (no CGO required)"
 	@echo "  vet             - Run go vet"
-	@echo "  lint            - Run golangci-lint (requires it installed)"
+	@echo "  lint            - Run golangci-lint v2 (requires it installed - see cli/README.md)"
 	@echo "  fmt             - Run gofmt -w -s"
 	@echo "  fmt-check       - Verify gofmt is clean (CI use)"
 	@echo "  install         - Install lets to /usr/local/bin (or ~/.local/bin if not writable)"

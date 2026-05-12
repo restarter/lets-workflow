@@ -3,7 +3,7 @@
 .lets/
 /lets/
 .idea/
-AGENTS.md
+/AGENTS.md
 .dolt/
 .beads/hooks/
 *.db

@@ -27,7 +27,7 @@ func TestReadPluginVersion(t *testing.T) {
 		{"no version key", `{"name":"lets"}`, "", true},
 		{"malformed json", `{not json`, "", true},
 		{"non-semver sentinel", `{"version":"unknown"}`, "", true},
-		{"version with control chars", "{\"version\":\"1.0.0]0;x\"}", "", true},
+		{"version with control chars", "{\"version\":\"1.0.0\x1b]0;x\a\"}", "", true},
 		{"missing file", "", "", false},
 	}
 	for _, tc := range cases {

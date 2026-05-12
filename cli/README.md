@@ -44,7 +44,7 @@ make install-go  # alternative: `go install` to $GOBIN (Go-standard layout)
 make clean       # removes built artifact + test cache
 ```
 
-`make lint` requires golangci-lint installed: `brew install golangci-lint` or `go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest`.
+`make lint` requires golangci-lint **v2** installed (the config in `cli/.golangci.yml` is v2-format - a v1 binary rejects it): `brew install golangci-lint` or `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest`. CI runs the same lint via `golangci/golangci-lint-action` (see `.github/workflows/ci.yml`).
 
 `make test` uses `-race`, which requires CGO and a C compiler (clang on macOS via Xcode CLT, gcc on Linux). Fails with linker errors if `CGO_ENABLED=0` or no C toolchain - use `make test-fast` instead.
 
