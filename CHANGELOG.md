@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-05-12
+
 ### Added
 - `/lets:update` command + `lets update` Go subcommand — syncs a project with the current LETS release: self-heals `.lets/.env` (header refresh when `LETS_ENV_VERSION` is stale, user values preserved) and `.claude/rules/lets-rules.md` (re-copy when outdated/missing), and reports version status for the `lets` binary and the Claude Code plugin vs the latest GitHub release (it can't self-replace those, so it prints the upgrade command). GitHub `releases/latest` lookup is cached for 1h at `.lets/cache/update-check.json` with a stale-cache fallback; `--offline` skips the network, `--refresh-cache` bypasses the cache, `--json` emits a machine-readable envelope (`schema_version=1`). Also reports `consistent` (binary == plugin == installed-rules version) to flag partial upgrades. New `cli/internal/updatecmd/` package (lets-hdrdr.3)
 
@@ -346,7 +348,8 @@ Initial release with expert agents team.
 - SessionStart hook injecting workflow rules
 - Plugin structure: commands, agents, hooks
 
-[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/restarter/lets-workflow/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/restarter/lets-workflow/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/restarter/lets-workflow/compare/v0.3.0...v0.5.0
 [0.3.1]: https://github.com/restarter/lets-workflow/compare/v0.3.0...v0.3.1
