@@ -69,14 +69,17 @@ fi
 echo "SCOPE=${SCOPE:-unknown}"
 ```
 
-Branch on `$SCOPE`:
-- `project` → no notice. Best case.
-- `user` → surface a one-time notice (one short line), then continue:
-  > ℹ️ Plugin installed at **user scope** (only you). For team adoption, re-install at project scope: `/plugin uninstall lets` → `/plugin install lets` → pick "Install for all collaborators on this repository".
-- `local` → no notice. User picked deliberately ("this repo only for me").
-- `unknown` (empty / file missing / dev `--plugin-dir` mode) → no notice.
+Branch on `$SCOPE`. When the plugin is found (`project` / `user` / `local`) surface the **auto-update tip** (one short line):
+  > ℹ️ Tip — keep the plugin current: `/plugin` → **Marketplaces** → `lets-workflow` → **Enable auto-update** (then it updates itself on startup).
 
-The notice is informational, not a blocker. Continue with Step 2/3 regardless.
+Additionally:
+- `project` → just the auto-update tip. Best case.
+- `user` → the auto-update tip **plus** one more line:
+  > ℹ️ Plugin installed at **user scope** (only you). For team adoption, re-install at project scope: `/plugin uninstall lets` → `/plugin install lets` → pick "Install for all collaborators on this repository".
+- `local` → just the auto-update tip. User picked the scope deliberately, so no scope-change notice.
+- `unknown` (empty / file missing / dev `--plugin-dir` mode) → no notice at all.
+
+These are informational, not blockers. Continue with Step 2/3 regardless.
 
 ## Step 2: First-time path
 

@@ -74,7 +74,9 @@ In Claude Code:
 >
 > Don't pick the remaining option (install for yourself **everywhere** / user scope): there the SessionStart/PreCompact hooks fire in *every* project you open, including ones that never ran `/lets:init`. Smoother user-scope handling is planned for a future update.
 
-(Or install from a local clone — `git clone https://github.com/restarter/lets-workflow`, then `/plugin marketplace add ./lets-workflow` and `/plugin install lets` — handy when you're modifying the plugin, since edits to the clone are picked up directly.)
+**Stay current:** in `/plugin` → **Marketplaces** → `lets-workflow`, **Enable auto-update** — the plugin then updates itself on startup. (Or update manually anytime: `/plugin marketplace update lets-workflow`, then `claude plugin update lets@lets-workflow --scope <your-scope>`.)
+
+(Or install from a local clone — `git clone https://github.com/restarter/lets-workflow`, then `/plugin marketplace add ./lets-workflow` and `/plugin install lets` — handy for hacking on the plugin: edit the clone, then `/reload-plugins` to pick up your changes.)
 
 ### 3. Initialize your project
 
