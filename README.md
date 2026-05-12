@@ -17,13 +17,13 @@ Claude Code is powerful, but without structure it drifts - forgets context betwe
 
 **LETS fix this.** You get a team of 14 specialized AI agents, a structured development workflow, and a PR review system that posts inline comments directly to GitHub - all from the terminal. Every session has a task. Every commit links to it. Context survives across sessions and conversation compaction.
 
-## Why LETS
+## Why LETS?
 
 **You don't just chat with AI. You run a process** — `/lets:*` commands and 14 expert agents cover the whole development cycle, every change is reviewed by the right specialists, and every decision is made deliberately, with you in the loop.
 
 - **A complete workflow, not a chat box.** One loop from start to ship — restore context and pick a task, plan the work, build it, review it, open a PR, close the task. The plugin keeps Claude on the rails the whole way; nothing falls through the cracks.
 - **Plan before you build.** Brainstorm ideas (4 modes), design the architecture with real codebase exploration and expert review, then execute step by step behind approval gates. Choices are made on purpose, not improvised.
-- **Every change reviewed by the right experts.** 14 specialized agents select themselves based on what changed - security for auth code, database for migrations, architect for structure. Findings come tiered (`[BLOCKER]` / `[SUGGESTION]` / `[NIT]`), so you act on what matters. Plus an *actor* agent that loads any expert personality from a URL or file.
+- **Every change reviewed by the right experts.** 14 specialized agents select themselves based on what changed - security for auth code, database for migrations, architect for structure. Findings come tiered by severity, so you act on what matters. Plus an *actor* agent — point it at a senior iOS dev's profile, a UX designer's, anyone — and get their take.
 - **You decide, always.** Commit, push, PR, merge - every state-changing step waits for your "go". The AI proposes and explains its reasoning; it never silently switches approach. Transparency by design.
 - **Context that survives.** Tasks, decisions, and discovery notes live in [beads](https://github.com/steveyegge/beads) and outlast conversation compaction and new sessions - pick up exactly where you left off.
 - **Built for teams.** Shared task database via [Dolt](https://github.com/dolthub/dolt), Agent Teams that implement multiple tasks in parallel (each in its own worktree, plan approved by the lead), and worktrees for hands-on parallel sessions.
@@ -40,65 +40,55 @@ Claude Code is powerful, but without structure it drifts - forgets context betwe
 
 ## 🚀 Quick Start
 
-### Prerequisites
+LETS is two pieces: a small `lets` CLI on your `$PATH`, and the plugin inside Claude Code. Install both, then initialize your project.
 
-The plugin requires the `lets` CLI binary on `$PATH`. It runs the SessionStart/PreCompact hooks, renders the `lets statusline`, and handles rules distribution — `/lets:init` copies the workflow rules into `<project>/.claude/rules/lets-rules.md`, and `/lets:update` re-syncs them as new releases ship.
+### 1. Install the CLI
 
-**One-liner (macOS / Linux):**
+macOS / Linux:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/restarter/lets-workflow/main/scripts/install.sh | bash
 ```
 
-The installer detects your OS/arch, fetches the latest release, **verifies the SHA256 checksum**, and installs to `/usr/local/bin/lets` (or `~/.local/bin/lets` as fallback). It also warns you if the install dir isn't on `$PATH` or if multiple `lets` binaries are reachable.
+You also need [beads](https://github.com/steveyegge/beads) (`bd`) on `$PATH` — LETS uses it for task tracking. You don't have to learn beads: the plugin drives `bd` entirely for you, so just get it installed. Its [install guide](https://github.com/steveyegge/beads#installation) has all the options; the quick one-liner:
 
-For manual download, source builds, Windows, and troubleshooting see **[docs/installation.md](docs/installation.md)**.
+```bash
+curl -fsSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/install.sh | bash
+```
 
-`lets` and `bd` (beads) both need to be on `$PATH` before `/lets:init` will work.
+Manual download, Windows, source builds, troubleshooting → **[docs/installation.md](docs/installation.md)**.
 
-### Install
-
-**Option A: From marketplace (recommended)**
+### 2. Install the plugin
 
 In Claude Code:
+
 ```
 /plugin marketplace add restarter/lets-workflow
 /plugin install lets
 ```
 
-**Option B: From local clone**
+> **For teams:** when Claude Code asks who to install for, pick **"Install for all collaborators on this repository" (project scope)** — the choice goes into `.claude/settings.json`, so teammates inherit `lets` without re-installing.
+
+(From a local clone instead: `git clone …` then `/plugin marketplace add ./lets-workflow` and `/plugin install lets`.)
+
+### 3. Initialize your project
 
 ```bash
-git clone https://github.com/restarter/lets-workflow
+cd your-project
+claude
 ```
 
-Then in Claude Code:
+Then, inside the Claude Code session:
+
 ```
-/plugin marketplace add ./lets-workflow
-/plugin install lets
-```
-
-**Recommended scope:** when Claude Code asks "Install for...", pick **"Install for all collaborators on this repository" (project scope)**. This commits the choice to `.claude/settings.json` so teammates inherit `lets` without re-installing. Use user scope only for personal/throwaway projects — at user scope the SessionStart/PreCompact hooks run in *every* project you open, including ones that never ran `/lets:init`; smoother user-scope handling is planned for a future update.
-
-### Setup
-
-```bash
-# Initialize current project (creates .lets/ structure, config, statusline)
 /lets:init
 ```
 
-Then start working:
-
-```bash
-/lets:start          # Restore context, pick a task, create feature branch
-# ... write code ...
-/lets:check          # Quick sanity check before commit
-/lets:commit         # Review + conventional commit linked to task
-/lets:done           # Create PR (or merge locally) and close task
-/lets:end            # Save session summary for next time
-```
+`/lets:init` creates `.lets/` (config + statusline) and runs `bd init` if beads is installed. From there, start each work session with `/lets:start` — the full loop is in [Using LETS](#-using-lets) below.
 
 ## 📖 Commands
+
+→ Full docs: [docs/commands.md](docs/commands.md)
 
 ### Session & Task
 
@@ -138,44 +128,44 @@ Then start working:
 | `/lets:init` | Initialize LETS in current project |
 | `/lets:update` | Sync project with the current release - `.lets/.env` + rules self-heal, plus version status for the `lets` binary and the plugin |
 
-→ Flags and when to use which: **[docs/commands.md](docs/commands.md)**.
-
 ## 🤖 Expert Agents
 
-14 specialized agents, dynamically selected based on your code changes:
+→ Full docs: [docs/agents.md](docs/agents.md)
 
-| Agent | Expertise | Example trigger |
-|-------|-----------|----------------|
-| architect | System design, patterns, SOLID | Structural changes > 50 lines |
-| backend | APIs, business logic, error handling | Controllers, services, routes |
-| frontend | UI components, state, accessibility | JS/TS/CSS changes |
-| security | Vulnerabilities, auth, crypto | Auth code, tokens, encryption |
-| database | Schema, migrations, query optimization | Migrations, ORM, raw queries |
-| devops | Docker, CI/CD, deployment | Dockerfiles, CI configs, scripts |
-| qa | Test strategy, coverage, assertions | Test files, testing patterns |
-| compliance | Project standards, conventions | Always included in reviews |
-| docs | Documentation sync, README accuracy | Always included in reviews |
-| pragmatist | ROI analysis, overengineering detection | Large changes (> 200 lines) |
-| git-historian | Blame analysis, change patterns | Changes to existing code |
-| explorer | Codebase mapping, pattern discovery | Used during `/lets:plan` |
-| implementer | Full-stack implementation | Used by `/lets:team` |
-| actor | Any personality from URL or file | On explicit user request |
+LETS ships **14 specialized agents**. You never pick them by hand — the commands that use agents (`/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:brainstorm`, `/lets:team`) look at what you're doing and bring in only the ones that fit.
 
-Findings are tiered: `[BLOCKER]` (must fix), `[SUGGESTION]` (should fix), `[NIT]` (nice to have) — agents skip the obvious and focus on what matters. They're read-only; the only exception is `implementer`, which has write access for parallel work via `/lets:team`. The `actor` agent loads any expert personality from a URL or file — you confirm each one before it's used.
+| Agent | Expertise |
+|-------|-----------|
+| architect | System design, patterns, SOLID, coupling |
+| backend | APIs, business logic, error handling, performance |
+| frontend | UI components, state management, accessibility |
+| security | Vulnerabilities, auth, crypto, secrets, input validation |
+| database | Schema design, migrations, query optimization, transactions |
+| devops | Docker, CI/CD, deployment config, shell scripts |
+| qa | Test strategy, coverage, assertion quality, mocking |
+| compliance | Project standards and conventions (`CLAUDE.md`, style) |
+| docs | Documentation sync, README accuracy, changelog |
+| pragmatist | ROI analysis, overengineering detection, scope creep |
+| git-historian | Blame analysis, past-decision context, change patterns |
+| explorer | Codebase mapping, pattern discovery (used in `/lets:plan`) |
+| implementer | Full-stack implementation (used by `/lets:team`) |
+| actor | Any expert personality loaded from a URL or local file |
 
-### Dynamic Agent Selection
+**Dynamic selection.** Each command analyzes the change (or the plan, or the question) and selects only the experts that matter — touch auth code and security, backend, and architect join; a pure docs update gets docs + compliance and nothing else; a full-stack feature can pull in up to 12, each focused on its domain. (`compliance` and `docs` always join a review. For plan reviews, the picks come from signals in the plan text — migrations, API endpoints, Docker configs, ….)
 
-You don't pick agents — each command analyzes your changes and selects only the relevant experts:
+**Tiered findings.** Every finding is `[BLOCKER]` (must fix), `[SUGGESTION]` (should fix), or `[NIT]` (nice to have). Agents are tuned to skip the obvious and surface what actually matters — signal, not a wall of nitpicks.
 
-- Changed auth code? Security + backend + architect join the review
-- Pure docs update? Docs + compliance, skip the rest
-- Full-stack feature? Up to 12 agents, each focused on their domain
+**Modes.** The same agent behaves differently depending on context — *review* for code review, *opinion* for a technical decision, *plan* for evaluating an architecture, *brainstorm* for ideation, *ask* for a direct question. Same expertise, different lens.
 
-For plan reviews, agents are selected by signals in the plan content (mentions of migrations, API endpoints, Docker configs, etc.).
+**Read-only by default.** Agents analyze; they never touch your code. The one exception is `implementer`, which gets write access for parallel implementation via `/lets:team` (in an isolated worktree, behind your plan approval).
 
-→ Agent modes, tiered scoring, and the actor agent in detail: **[docs/agents.md](docs/agents.md)**.
+**The actor agent.** Give `actor` a personality — a URL or a local file — and it adopts that persona, then works with LETS's structured output. A senior iOS dev on your Swift code, a UX designer on your components, anyone — point it at their writeup and get their take. It's never auto-selected; you confirm each personality before it's loaded.
+
+---
 
 ## 🔧 Using LETS
+
+→ Full docs: [docs/workflow.md](docs/workflow.md)
 
 A LETS session runs a loop: start, work, commit, finish.
 
@@ -210,9 +200,9 @@ A LETS session runs a loop: start, work, commit, finish.
 
 **Finish** - `/lets:done` creates a PR on GitHub (or merges locally). `/lets:end` saves a session summary so the next conversation picks up where you left off.
 
-→ Full walkthrough: **[docs/workflow.md](docs/workflow.md)**.
-
 ### Plan, then build
+
+→ Full docs: [docs/plan-execute.md](docs/plan-execute.md)
 
 > **Think** → **Design** → **Build**
 
@@ -226,9 +216,9 @@ A LETS session runs a loop: start, work, commit, finish.
 
 **Execute** (`/lets:execute`) - implements the plan step by step in native plan mode. You approve each step before Claude proceeds. No surprises.
 
-→ More: **[docs/plan-execute.md](docs/plan-execute.md)**.
-
 ### Code review
+
+→ Full docs: [docs/code-review.md](docs/code-review.md)
 
 Three levels of review, from 30-second sanity check to full PR lifecycle:
 
@@ -254,9 +244,9 @@ This is where LETS shines. Instead of reviewing PRs in a browser, you do it from
 
 Authors can respond with `/lets:github-pr --respond` - triage comments, auto-fix mechanical issues, post replies.
 
-→ More: **[docs/code-review.md](docs/code-review.md)**.
-
 ### Working in parallel
+
+→ Full docs: [docs/parallel-work.md](docs/parallel-work.md)
 
 Two ways to work on multiple tasks at once:
 
@@ -277,8 +267,6 @@ cd .worktrees/auth-feature && claude  # Terminal 2 - start new session
 
 Each worktree gets its own branch, shares the task database and config via symlinks. Full LETS workflow in each terminal.
 
-→ More: **[docs/parallel-work.md](docs/parallel-work.md)**.
-
 ### LETS Help Boxes
 
 After key actions, Claude shows a contextual help box with the most likely next steps, so you always know what to do next:
@@ -290,7 +278,11 @@ After key actions, Claude shows a contextual help box with the most likely next 
 └────────────────────────────────┘
 ```
 
+---
+
 ## 📋 Task Integration
+
+→ Full docs: [docs/tasks.md](docs/tasks.md)
 
 LETS uses [beads](https://github.com/steveyegge/beads) for persistent task tracking that survives conversation compaction:
 
@@ -299,9 +291,9 @@ LETS uses [beads](https://github.com/steveyegge/beads) for persistent task track
 - Task dependencies and blocking tracked - `/lets:status` shows what's ready to work on
 - Multi-developer: shared task database via [Dolt](https://github.com/dolthub/dolt) remotes - everyone sees the same backlog
 
-→ The task lifecycle, creating/taking tasks, beads memory: **[docs/tasks.md](docs/tasks.md)**.
-
 ## ⚙️ Configuration
+
+→ Full docs: [docs/configuration.md](docs/configuration.md)
 
 After `/lets:init`, edit `.lets/.env`:
 
@@ -320,8 +312,6 @@ LETS_TRACKER=beads
 ```
 
 All plugin-generated files live under `.lets/` (gitignored); interactive worktrees under `.worktrees/`.
-
-→ Every setting, the full `.lets/` layout, and the `lets init` / `bd init` setup order: **[docs/configuration.md](docs/configuration.md)**.
 
 ## 📦 Dependencies
 
