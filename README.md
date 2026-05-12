@@ -51,16 +51,6 @@ The plugin requires the `lets` CLI binary on `$PATH` for SessionStart/PreCompact
 curl -fsSL https://raw.githubusercontent.com/restarter/lets-workflow/main/scripts/install.sh | bash
 ```
 
-<!-- TEMP: remove this block once repo is public -->
-> ⚠️ **Repo is private during testing** — the curl one-liner above returns 404 until we go public. For now, use [`gh`](https://cli.github.com/) (run `gh auth login` first if needed):
->
-> ```bash
-> GITHUB_TOKEN=$(gh auth token) bash <(gh api -H 'Accept: application/vnd.github.raw' repos/restarter/lets-workflow/contents/scripts/install.sh)
-> ```
->
-> This block will be removed when the repo goes public.
-<!-- /TEMP -->
-
 The installer detects your OS/arch, fetches the latest release, **verifies the SHA256 checksum**, and installs to `/usr/local/bin/lets` (or `~/.local/bin/lets` as fallback). It also warns you if the install dir isn't on `$PATH` or if multiple `lets` binaries are reachable.
 
 For manual download, source builds, Windows, and troubleshooting see **[docs/installation.md](docs/installation.md)**.
