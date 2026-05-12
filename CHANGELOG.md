@@ -3,11 +3,16 @@
 ## [Unreleased]
 
 ### Added
-- Community health files: `SECURITY.md` (private vulnerability reporting via the Security tab), `CONTRIBUTING.md`, GitHub issue/PR templates, and `.github/dependabot.yml` (gomod + github-actions).
+- Community health files: `SECURITY.md` (private vulnerability reporting via the Security tab), `CONTRIBUTING.md`, GitHub issue/PR templates, `.github/dependabot.yml` (gomod + github-actions), and `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1; conduct reports via a private GitHub security advisory).
+- CI: `.github/workflows/ci.yml` runs `make build` / `make vet` / `make test` / `golangci-lint` on every PR to `main` and every push to `main`, added as required status checks alongside `Verify version coherence`. (`verify-versions.yml` only checks source-tree version coherence — it doesn't compile, test, or lint the code.)
+- `docs/` manual — `workflow.md`, `plan-execute.md`, `code-review.md`, `agents.md`, `parallel-work.md`, `tasks.md`, `commands.md`, `configuration.md`, plus an index. The exhaustive reference now lives here; the README links to each page.
 
 ### Changed
+- README restructured as a landing-page tour (Why LETS? → Quick Start → Commands → Expert Agents → Using LETS → reference tail). The full reference moved to `docs/`; each section points to its deep-dive page; refreshed screenshot; pruned unused images.
 - Repository made public — removed the "repo is private during testing" notices from `README.md` and `docs/installation.md`; the `docs/installation.md` manual-download example no longer hardcodes a version number.
-- Doc/reality drift fixes: `CLAUDE.md` `docs/` description now matches the actual tree (`installation.md` + images); `RELEASING.md` recovery steps account for release immutability + the `Protect release tags` ruleset, and dropped the stale "install.sh script (future)" line that already shipped.
+- `cli/.golangci.yml` migrated to golangci-lint v2; 16 pre-existing `errcheck`/`staticcheck` findings fixed (mechanical, no behavior change). Bumped `golang.org/x/mod` to 0.36.0 (Dependabot).
+- `.gitignore`: anchored the `AGENTS.md` pattern to `/AGENTS.md` so it no longer also ignores `docs/agents.md` on case-insensitive filesystems.
+- Doc/reality drift fixes: `CLAUDE.md` `docs/` description now matches the actual tree (`installation.md` + images, plus `.github/workflows/`); `RELEASING.md` recovery steps account for release immutability + the `Protect release tags` ruleset, and dropped the stale "install.sh script (future)" line that already shipped.
 
 ## [0.5.2] - 2026-05-12
 
