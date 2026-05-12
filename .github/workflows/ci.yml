@@ -1,0 +1,75 @@
+name: CI
+
+# Build + test + lint the Go CLI.
+#
+# Complements verify-versions.yml, which only checks source-tree version
+# coherence (it does NOT compile, run tests, or lint). Together these two
+# workflows are the required status checks on the `main protection` ruleset.
+#
+# Runs on every PR to main and every push to main (the push trigger is
+# defensive — catches breakage if branch protection is ever bypassed).
+#
+# Security: no untrusted user input (PR titles/bodies, commit messages, issue
+# titles) flows into any run: command — only Makefile targets and pinned
+# actions. The only github context value used is github.ref (in the
+# concurrency group), which GitHub validates against allowed ref patterns.
+# Token is read-only (permissions: contents: read), mirroring verify-versions.yml.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # Cancel superseded runs on a PR (only the latest push matters), but let every
+  # push to main run to completion so each commit on main keeps its own status.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build-test:
+    name: Build, vet & test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'cli/go.mod'          # pins to the `go` directive (1.22)
+          cache-dependency-path: 'cli/go.sum'
+
+      - name: Build
+        run: make build
+
+      - name: Vet
+        run: make vet
+
+      - name: Test
+        run: make test                          # go test -race; ubuntu-latest ships gcc
+
+  lint:
+    # Separate job so it runs in parallel with build-test (golangci-lint-action
+    # docs recommend isolating the linter from `go test` etc.).
+    name: Lint (golangci-lint)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'cli/go.mod'
+          cache-dependency-path: 'cli/go.sum'
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12
+          working-directory: cli
