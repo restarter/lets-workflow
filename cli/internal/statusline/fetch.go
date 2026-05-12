@@ -131,7 +131,7 @@ func fetchUsage(token string) (usage, error) {
 	if err != nil {
 		return usage{}, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return usage{}, fmt.Errorf("api status %d", resp.StatusCode)
 	}

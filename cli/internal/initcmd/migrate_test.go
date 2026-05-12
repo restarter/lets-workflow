@@ -58,7 +58,9 @@ func TestParseLegacyYaml_RefusesBlockScalar(t *testing.T) {
 func TestMigrateStatuslineSh_DeletesShim(t *testing.T) {
 	tmp := t.TempDir()
 	letsDir := filepath.Join(tmp, ".lets")
-	os.MkdirAll(letsDir, 0o755)
+	if err := os.MkdirAll(letsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	shimPath := filepath.Join(letsDir, "statusline.sh")
 	if err := os.WriteFile(shimPath, embeddedStatuslineShim, 0o755); err != nil {
 		t.Fatal(err)
@@ -83,7 +85,9 @@ func TestMigrateStatuslineSh_DeletesLegacyBash(t *testing.T) {
 	// while users stay on broken bash.
 	tmp := t.TempDir()
 	letsDir := filepath.Join(tmp, ".lets")
-	os.MkdirAll(letsDir, 0o755)
+	if err := os.MkdirAll(letsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	shimPath := filepath.Join(letsDir, "statusline.sh")
 	// Reuses makeLegacyBash from state_test.go (same package).
 	if err := os.WriteFile(shimPath, makeLegacyBash(), 0o755); err != nil {
@@ -104,7 +108,9 @@ func TestMigrateStatuslineSh_DeletesLegacyBash(t *testing.T) {
 func TestMigrateStatuslineSh_PreservesForeign(t *testing.T) {
 	tmp := t.TempDir()
 	letsDir := filepath.Join(tmp, ".lets")
-	os.MkdirAll(letsDir, 0o755)
+	if err := os.MkdirAll(letsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	shimPath := filepath.Join(letsDir, "statusline.sh")
 	custom := []byte("#!/bin/bash\necho 'my custom thing'\n")
 	if err := os.WriteFile(shimPath, custom, 0o755); err != nil {
@@ -125,7 +131,9 @@ func TestMigrateStatuslineSh_PreservesForeign(t *testing.T) {
 func TestMigrateYamlToEnv(t *testing.T) {
 	tmp := t.TempDir()
 	letsDir := filepath.Join(tmp, ".lets")
-	os.MkdirAll(letsDir, 0o755)
+	if err := os.MkdirAll(letsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	yamlPath := filepath.Join(letsDir, "config.yaml")
 	if err := os.WriteFile(yamlPath, []byte("language: Ukrainian\nmerge-branch: main\ngithub: false\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -161,7 +169,9 @@ func TestMigrateYamlToEnv_OrphanCleanupWhenEnvExists(t *testing.T) {
 	// as a migration-related action (StepMigrate).
 	tmp := t.TempDir()
 	letsDir := filepath.Join(tmp, ".lets")
-	os.MkdirAll(letsDir, 0o755)
+	if err := os.MkdirAll(letsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	envPath := filepath.Join(letsDir, ".env")
 	envContent := "LETS_LANGUAGE=English\n# already here\n"
 	if err := os.WriteFile(envPath, []byte(envContent), 0o644); err != nil {

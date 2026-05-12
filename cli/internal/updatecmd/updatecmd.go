@@ -125,12 +125,12 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 // versionArtifact builds an Artifact for a version-only artifact (binary, plugin).
 func versionArtifact(name, current string, latest LatestInfo, latestErr error, offline bool, action string) Artifact {
 	a := Artifact{Name: name, CurrentVersion: current}
-	switch {
-	case current == "":
+	switch current {
+	case "":
 		a.Status = StatusUnknown
 		a.Detail = "could not determine installed version"
 		return a
-	case current == "dev":
+	case "dev":
 		a.Status = StatusDev
 		a.Detail = "untagged dev build - no release comparison"
 		return a

@@ -43,7 +43,7 @@ func readUsageCache(path string) usage {
 	if err != nil {
 		return u
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	if info, err := f.Stat(); err == nil {
 		u.mtime = info.ModTime()
@@ -108,8 +108,8 @@ func writeUsageCache(path string, u usage) error {
 	}
 	tmp := f.Name()
 	cleanup := func() {
-		f.Close()
-		os.Remove(tmp)
+		_ = f.Close()
+		_ = os.Remove(tmp)
 	}
 	// CreateTemp on POSIX defaults to 0o600; explicit Chmod for portability.
 	if err := os.Chmod(tmp, 0o600); err != nil {
@@ -135,7 +135,7 @@ func writeUsageCache(path string, u usage) error {
 		return err
 	}
 	if err := f.Close(); err != nil {
-		os.Remove(tmp)
+		_ = os.Remove(tmp)
 		return err
 	}
 	return os.Rename(tmp, path)
