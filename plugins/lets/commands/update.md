@@ -39,16 +39,17 @@ Capture stdout (single JSON object). On network trouble the binary degrades grac
 
 Parse JSON.
 
-1. Print the artifact table - one line per `artifacts[]` entry:
+1. **Artifact table** - one line per `artifacts[]` entry:
    `<name>  v<current_version>  <status>  (latest v<latest_version>)  - <detail>`
-   Omit the `(latest …)` and `- detail` parts when those fields are empty; print `?` for an empty `current_version`. (Versions already-tagged like `dev` print as-is, not `vdev`.)
-2. If `consistent` is `false` → show: "⚠️ Local install is inconsistent (binary / plugin / rules versions differ) - likely a partial upgrade. Update everything to the same release."
-3. If any `artifacts[]` entry has `status == "updated"` and `name == "rules"` → show the **restart hint** right before the LETS box:
-   > ⚠️ Restart Claude Code to apply the updated workflow rules - run `/exit`, then reopen Claude Code in this directory.
-4. List every non-empty `action` from `artifacts[]` (the things only the user can do - upgrade the binary, update the plugin):
-   `- <name>: <action>`
-5. Summary line: `<summary.up_to_date> up-to-date · <summary.updated> updated · <summary.action_needed> need action · <summary.unknown> unknown`.
-6. If `ok == false` → show `error`; NO LETS box.
+   Omit `(latest …)` / `- <detail>` when those fields are empty; print `?` for an empty `current_version` (`dev` prints as-is, not `vdev`).
+2. **Summary line:** `<summary.up_to_date> up-to-date · <summary.updated> updated · <summary.action_needed> need action · <summary.unknown> unknown`.
+3. **What you need to do** - build ONE numbered list of everything left for the user. Skip the whole section if there's nothing (no `action` strings, no rules update). Order: binary → plugin → rules-restart.
+   - For each `artifacts[]` entry with a non-empty `action` (i.e. `binary` / `plugin`), add a step.
+     - **`binary`:** present the `curl …` command from the action with a leading `! ` so the user can run it directly in the Claude Code prompt — `! curl -fsSL https://raw.githubusercontent.com/restarter/lets-workflow/main/scripts/install.sh | bash` — and note it runs in this session (no terminal needed).
+     - **`plugin`:** relay the command(s) from the `action` string verbatim (the `/plugin marketplace update …` slash command runs in Claude Code; the `claude plugin update …` part can be run in a terminal, or in the prompt with a leading `! `).
+   - If any `artifacts[]` entry has `status == "updated"` and `name == "rules"`, add a final step: "Restart Claude Code so the updated workflow rules take effect — `/exit`, then reopen it in this folder." (The rules file is already re-copied; the restart is only so the *current* session reloads it.)
+4. If `consistent` is `false` → after the list (or, if there's no list, on its own), one line: "⚠️ Versions don't match (binary / plugin / rules) - a partial upgrade. Do the steps above to get everything onto the same release."
+5. If `ok == false` → show `error` only; NO LETS box, no table, no other sections.
 
 ## Step 4: Output
 
