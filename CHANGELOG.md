@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-05-13
+
 ### Added
 - Community health files: `SECURITY.md` (private vulnerability reporting via the Security tab), `CONTRIBUTING.md`, GitHub issue/PR templates, `.github/dependabot.yml` (gomod + github-actions), and `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1; conduct reports via a private GitHub security advisory).
 - CI: `.github/workflows/ci.yml` runs `make build` / `make vet` / `make test` / `golangci-lint` on every PR to `main` and every push to `main`, added as required status checks alongside `Verify version coherence`. (`verify-versions.yml` only checks source-tree version coherence — it doesn't compile, test, or lint the code.)
@@ -360,7 +362,8 @@ Initial release with expert agents team.
 - SessionStart hook injecting workflow rules
 - Plugin structure: commands, agents, hooks
 
-[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.5.3...HEAD
+[0.5.3]: https://github.com/restarter/lets-workflow/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/restarter/lets-workflow/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/restarter/lets-workflow/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/restarter/lets-workflow/compare/v0.3.0...v0.5.0
