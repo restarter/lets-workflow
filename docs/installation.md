@@ -32,18 +32,6 @@ cd your-project && claude
 curl -fsSL https://raw.githubusercontent.com/restarter/lets-workflow/main/scripts/install.sh | bash
 ```
 
-<!-- TEMP: remove this block once repo is public -->
-> ⚠️ **Repo is private during testing** — the curl one-liner above returns 404 until we go public. For now, use [`gh`](https://cli.github.com/) (run `gh auth login` first if needed):
->
-> ```bash
-> GITHUB_TOKEN=$(gh auth token) bash <(gh api -H 'Accept: application/vnd.github.raw' repos/restarter/lets-workflow/contents/scripts/install.sh)
-> ```
->
-> How it works: `gh api` fetches the raw `install.sh` from the private repo (auth handled by `gh`), bash runs it via process substitution, and `GITHUB_TOKEN` lets the script itself authenticate when fetching release assets.
->
-> This block will be removed when the repo goes public.
-<!-- /TEMP -->
-
 ### What the installer does
 
 1. **Detects your platform** (`darwin`/`linux` × `amd64`/`arm64`).
@@ -106,7 +94,7 @@ You're done — start working with `/lets:start`.
 If you prefer not to pipe `curl` to `bash`, or you want to pin a specific version:
 
 ```bash
-VERSION=0.5.0                       # the version you want
+VERSION=X.Y.Z                       # the version you want — see https://github.com/restarter/lets-workflow/releases
 OS=darwin                           # or linux
 ARCH=arm64                          # or amd64
 

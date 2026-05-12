@@ -51,23 +51,11 @@ The plugin requires the `lets` CLI binary on `$PATH` for SessionStart/PreCompact
 curl -fsSL https://raw.githubusercontent.com/restarter/lets-workflow/main/scripts/install.sh | bash
 ```
 
-<!-- TEMP: remove this block once repo is public -->
-> ⚠️ **Repo is private during testing** — the curl one-liner above returns 404 until we go public. For now, use [`gh`](https://cli.github.com/) (run `gh auth login` first if needed):
->
-> ```bash
-> GITHUB_TOKEN=$(gh auth token) bash <(gh api -H 'Accept: application/vnd.github.raw' repos/restarter/lets-workflow/contents/scripts/install.sh)
-> ```
->
-> This block will be removed when the repo goes public.
-<!-- /TEMP -->
-
 The installer detects your OS/arch, fetches the latest release, **verifies the SHA256 checksum**, and installs to `/usr/local/bin/lets` (or `~/.local/bin/lets` as fallback). It also warns you if the install dir isn't on `$PATH` or if multiple `lets` binaries are reachable.
 
 For manual download, source builds, Windows, and troubleshooting see **[docs/installation.md](docs/installation.md)**.
 
 `lets` and `bd` (beads) both need to be on `$PATH` before `/lets:init` will work.
-
-> Future: `brew install restarter/tap/lets` ([lets-odg13](https://github.com/restarter/lets-workflow/issues)), `winget install lets` / `scoop install lets` (lets-hdrdr.1).
 
 ### Install
 
@@ -91,7 +79,7 @@ Then in Claude Code:
 /plugin install lets
 ```
 
-**Recommended scope:** when Claude Code asks "Install for...", pick **"Install for all collaborators on this repository" (project scope)**. This commits the choice to `.claude/settings.json` so teammates inherit `lets` without re-installing. Use user scope only for personal/throwaway projects; local scope is rarely useful.
+**Recommended scope:** when Claude Code asks "Install for...", pick **"Install for all collaborators on this repository" (project scope)**. This commits the choice to `.claude/settings.json` so teammates inherit `lets` without re-installing. Use user scope only for personal/throwaway projects — at user scope the SessionStart/PreCompact hooks run in *every* project you open, including ones that never ran `/lets:init`; smoother user-scope handling is planned for a future update.
 
 ### Setup
 
@@ -142,7 +130,7 @@ Then start working:
 └───────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Commit** - `/lets:commit` reviews changes and creates a conventional commit (`feat:`, `fix:`, `refactor:`) linked to the active task.
+**Commit** - `/lets:commit` reviews changes and creates a conventional commit (`feat:`, `fix:`, `docs:`, …) linked to the active task.
 
 **Finish** - `/lets:done` creates a PR on GitHub (or merges locally). `/lets:end` saves a session summary so the next conversation picks up where you left off.
 

@@ -1,0 +1,18 @@
+version: 2
+updates:
+  # Go modules — the CLI lives in cli/ (the Go module root, not the repo root).
+  - package-ecosystem: gomod
+    directory: /cli
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+    open-pull-requests-limit: 5
+  # GitHub Actions used by workflows in .github/workflows/.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+    open-pull-requests-limit: 5

@@ -137,16 +137,17 @@ If `goreleaser check` reports schema errors, fix `.goreleaser.yml` before taggin
 
 ## Recovery
 
+> **Release immutability + tag protection are ON.** Once a release is published its assets and tag can't be modified, and `v*` tags are protected by the `Protect release tags` ruleset (deleting/moving one needs the Repository-admin bypass). When in doubt, **roll forward** — bump to the next patch (or `-rc.N+1` when validating) rather than re-use a burnt tag; a partial release may already have been consumed.
+
 **Bump committed but not yet merged**: discard branch, redo. No harm done.
 
-**Tag pushed but `release.yml` fails before goreleaser succeeds**:
+**Tag pushed but `release.yml` fails before goreleaser publishes** (nothing on the Releases page yet):
 - Inspect failure, fix the underlying issue (likely goreleaser config or CHANGELOG extraction).
-- Delete the failed tag: `git push --delete origin v0.6.0 && git tag -d v0.6.0`.
-- Re-run `make release-tag VERSION=0.6.0`.
+- As a Repository admin, delete the failed tag — `git push --delete origin v0.6.0 && git tag -d v0.6.0` — then re-run `make release-tag VERSION=0.6.0`. (The tag ruleset's admin bypass allows the delete.)
+- Don't want to touch the tag? Bump to `v0.6.1` (or `v0.6.0-rc.2`) and tag that instead.
 
-**`release.yml` succeeded but assets are wrong**:
-- Delete the GH Release: `gh release delete v0.6.0 --yes`.
-- Delete the tag (as above), fix, re-tag.
+**`release.yml` published but the assets are wrong** (tag is now immutable):
+- You can't overwrite it — immutability blocks modifying a published release. Bump to the next patch (`v0.6.1`), fix, ship that. Optionally `gh release delete v0.6.0 --yes` to hide the bad one; the immutable tag stays put.
 
 **`verify-versions` finds drift on main** (shouldn't happen if PR-time check passed): treat as a bug — investigate which file is out of sync, fix on a hotfix branch.
 
@@ -156,4 +157,3 @@ If `goreleaser check` reports schema errors, fix `.goreleaser.yml` before taggin
 - Windows Authenticode signing
 - Homebrew tap auto-update (`lets-odg13`)
 - Scoop / winget manifests (`lets-hdrdr.1`)
-- `curl install.sh | bash` script (`lets-2vb2b`)

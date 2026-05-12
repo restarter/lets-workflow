@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added
+- Community health files: `SECURITY.md` (private vulnerability reporting via the Security tab), `CONTRIBUTING.md`, GitHub issue/PR templates, and `.github/dependabot.yml` (gomod + github-actions).
+
+### Changed
+- Repository made public — removed the "repo is private during testing" notices from `README.md` and `docs/installation.md`; the `docs/installation.md` manual-download example no longer hardcodes a version number.
+- Doc/reality drift fixes: `CLAUDE.md` `docs/` description now matches the actual tree (`installation.md` + images); `RELEASING.md` recovery steps account for release immutability + the `Protect release tags` ruleset, and dropped the stale "install.sh script (future)" line that already shipped.
+
 ## [0.5.2] - 2026-05-12
 
 ### Added
