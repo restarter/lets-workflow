@@ -4,7 +4,7 @@ Claude Code plugin for development workflow with session management, code review
 
 ## Structure
 
-Monorepo layout (beads-style): plugin source in `plugins/lets/` subdirectory, marketplace manifest at root pointing into it. Infrastructure scripts and docs stay at root, outside the plugin payload.
+Monorepo layout: plugin source in `plugins/lets/` subdirectory, marketplace manifest at root pointing into it. Infrastructure scripts and docs stay at root, outside the plugin payload.
 
 ```
 .claude-plugin/marketplace.json   # Marketplace manifest (source: ./plugins/lets)

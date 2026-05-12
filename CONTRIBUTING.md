@@ -4,7 +4,7 @@ Thanks for taking the time. This repo is a Claude Code plugin (`plugins/lets/`) 
 
 ## Repo layout
 
-Monorepo (beads-style):
+Monorepo layout:
 
 - `plugins/lets/` — the plugin payload. `commands/` (slash commands), `agents/` (expert subagents), `skills/` (reusable + internal), `rules/lets-rules.md` (workflow rules, frontmatter-versioned), `hooks/` (SessionStart + PreCompact).
 - `cli/` — the Go CLI (`lets`). Go module root is `cli/`, not the repo root — all `go` commands run from there (or via the repo-root `Makefile`).
