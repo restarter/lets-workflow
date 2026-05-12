@@ -57,8 +57,6 @@ For manual download, source builds, Windows, and troubleshooting see **[docs/ins
 
 `lets` and `bd` (beads) both need to be on `$PATH` before `/lets:init` will work.
 
-> Future: `brew install restarter/tap/lets` ([lets-odg13](https://github.com/restarter/lets-workflow/issues)), `winget install lets` / `scoop install lets` (lets-hdrdr.1).
-
 ### Install
 
 **Option A: From marketplace (recommended)**
