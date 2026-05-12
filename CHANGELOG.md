@@ -3,7 +3,7 @@
 ## [Unreleased]
 
 ### Added
-- Community health files: `SECURITY.md` (private vulnerability reporting via the Security tab), `CONTRIBUTING.md`, `CODEOWNERS`, GitHub issue/PR templates, and `.github/dependabot.yml` (gomod + github-actions).
+- Community health files: `SECURITY.md` (private vulnerability reporting via the Security tab), `CONTRIBUTING.md`, GitHub issue/PR templates, and `.github/dependabot.yml` (gomod + github-actions).
 
 ### Changed
 - Repository made public — removed the "repo is private during testing" notices from `README.md` and `docs/installation.md`; the `docs/installation.md` manual-download example no longer hardcodes a version number.
