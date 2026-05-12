@@ -27,7 +27,7 @@ scripts/release/                  # Release tooling: bump-version.sh + verify-ve
 scripts/remote/dolt/              # Dolt SQL server VPS deployment + ad-hoc backup (NOT plugin)
 scripts/remote/beads-web/         # beads-web (Rust kanban board) VPS deployment (NOT plugin)
 scripts/deprecated/               # Retired scripts kept for cleanup runbooks - gitignored, not tracked
-docs/                             # Plans, knowledge base, reference docs, comment exports
+docs/                             # Public-facing docs (installation.md + images/); planning notes / comment exports / KB live in gitignored docs-local/
 reference/                        # Reference plugins for studying patterns (gitignored)
 ```
 
