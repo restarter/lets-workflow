@@ -43,11 +43,11 @@ Parse JSON.
    `<name>  v<current_version>  <status>  (latest v<latest_version>)  - <detail>`
    Omit `(latest …)` / `- <detail>` when those fields are empty; print `?` for an empty `current_version` (`dev` prints as-is, not `vdev`).
 2. **Summary line:** `<summary.up_to_date> up-to-date · <summary.updated> updated · <summary.action_needed> need action · <summary.unknown> unknown`.
-3. **What you need to do** - build ONE numbered list of everything left for the user. Skip the whole section if there's nothing (no `action` strings, no rules update). Order: binary → plugin → rules-restart.
+3. **What you need to do** - build ONE numbered list of everything left for the user. Skip the whole section if there's nothing (no `action` strings, no rules update). Order: binary → plugin → restart. Everything here runs from inside Claude Code.
    - For each `artifacts[]` entry with a non-empty `action` (i.e. `binary` / `plugin`), add a step.
-     - **`binary`:** present the `curl …` command from the action with a leading `! ` so the user can run it directly in the Claude Code prompt — `! curl -fsSL https://raw.githubusercontent.com/restarter/lets-workflow/main/scripts/install.sh | bash` — and note it runs in this session (no terminal needed).
-     - **`plugin`:** relay the command(s) from the `action` string verbatim (the `/plugin marketplace update …` slash command runs in Claude Code; the `claude plugin update …` part can be run in a terminal, or in the prompt with a leading `! `).
-   - If any `artifacts[]` entry has `status == "updated"` and `name == "rules"`, add a final step: "Restart Claude Code so the updated workflow rules take effect — `/exit`, then reopen it in this folder." (The rules file is already re-copied; the restart is only so the *current* session reloads it.)
+     - **`binary`:** present the `curl …` command from the action **prefixed with `! `** so the user can run it right in the Claude Code prompt — `! curl -fsSL https://raw.githubusercontent.com/restarter/lets-workflow/main/scripts/install.sh | bash` — the leading `!` makes Claude Code run it as a shell command in this session, no terminal needed. Add: "(or run the same command **without** the `!` in a terminal.)"
+     - **`plugin`:** relay the `action` string verbatim — it's all slash commands in Claude Code (`/plugin marketplace update lets-workflow`, then `/reload-plugins`); no terminal, no `--scope` to figure out.
+   - If any `artifacts[]` entry has `status == "updated"` and `name == "rules"`, add a final step: "Restart Claude Code so the updated workflow rules take effect — `/exit`, then reopen it in this folder." (The rules file is already re-copied; the restart is only so the *current* session reloads it. If the plugin step above also needs a restart, one `/exit` + reopen covers both.)
 4. If `consistent` is `false` → after the list (or, if there's no list, on its own), one line: "⚠️ Versions don't match (binary / plugin / rules) - a partial upgrade. Do the steps above to get everything onto the same release."
 5. If `ok == false` → show `error` only; NO LETS box, no table, no other sections.
 
