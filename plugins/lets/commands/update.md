@@ -19,7 +19,7 @@ test -f "$LETS_PROJECT_ROOT/.lets/.env" && echo "ENV_EXISTS" || echo "ENV_ABSENT
 ```
 
 Branch on output:
-- `NO_LETS_BINARY` → tell user: "lets binary not found. Run `make install` from the lets-workflow repo or check `$PATH`." NO LETS box. STOP.
+- `NO_LETS_BINARY` → tell user: "`lets` binary not found on `$PATH`. Install it — `! curl -fsSL https://raw.githubusercontent.com/restarter/lets-workflow/main/scripts/install.sh | bash` (the leading `!` runs it in this session; or the same command without `!` in a terminal). See the README → Quick Start." NO LETS box. STOP.
 - `NOT_GIT_REPO` → tell user: "Not a git repository. `/lets:update` runs inside a LETS project." NO LETS box. STOP.
 - `ENV_ABSENT` → not initialized. Tell user: "This project hasn't been set up - run `/lets:init` first." Then still run Step 2 (it reports `.env: not-initialized` plus the binary/plugin status, which is useful). In Step 4 show the LETS box pointing at `/lets:init` instead of `/lets:start`.
 - `ENV_EXISTS` → normal path. Continue to Step 2.
@@ -39,16 +39,17 @@ Capture stdout (single JSON object). On network trouble the binary degrades grac
 
 Parse JSON.
 
-1. Print the artifact table - one line per `artifacts[]` entry:
+1. **Artifact table** - one line per `artifacts[]` entry:
    `<name>  v<current_version>  <status>  (latest v<latest_version>)  - <detail>`
-   Omit the `(latest …)` and `- detail` parts when those fields are empty; print `?` for an empty `current_version`. (Versions already-tagged like `dev` print as-is, not `vdev`.)
-2. If `consistent` is `false` → show: "⚠️ Local install is inconsistent (binary / plugin / rules versions differ) - likely a partial upgrade. Update everything to the same release."
-3. If any `artifacts[]` entry has `status == "updated"` and `name == "rules"` → show the **restart hint** right before the LETS box:
-   > ⚠️ Restart Claude Code to apply the updated workflow rules - run `/exit`, then reopen Claude Code in this directory.
-4. List every non-empty `action` from `artifacts[]` (the things only the user can do - upgrade the binary, update the plugin):
-   `- <name>: <action>`
-5. Summary line: `<summary.up_to_date> up-to-date · <summary.updated> updated · <summary.action_needed> need action · <summary.unknown> unknown`.
-6. If `ok == false` → show `error`; NO LETS box.
+   Omit `(latest …)` / `- <detail>` when those fields are empty; print `?` for an empty `current_version` (`dev` prints as-is, not `vdev`).
+2. **Summary line:** `<summary.up_to_date> up-to-date · <summary.updated> updated · <summary.action_needed> need action · <summary.unknown> unknown`.
+3. **What you need to do** - build ONE numbered list of everything left for the user. Skip the whole section if there's nothing (no `action` strings, no rules update). Order: binary → plugin → restart. Everything here runs from inside Claude Code.
+   - For each `artifacts[]` entry with a non-empty `action` (i.e. `binary` / `plugin`), add a step.
+     - **`binary`:** present the `curl …` command from the action **prefixed with `! `** so the user can run it right in the Claude Code prompt — `! curl -fsSL https://raw.githubusercontent.com/restarter/lets-workflow/main/scripts/install.sh | bash` — the leading `!` makes Claude Code run it as a shell command in this session, no terminal needed. Add: "(or run the same command **without** the `!` in a terminal.)"
+     - **`plugin`:** relay the `action` string verbatim — it's all slash commands in Claude Code (`/plugin marketplace update lets-workflow`, then `/reload-plugins`); no terminal, no `--scope` to figure out.
+   - If any `artifacts[]` entry has `status == "updated"` and `name == "rules"`, add a final step: "Restart Claude Code so the updated workflow rules take effect — `/exit`, then reopen it in this folder." (The rules file is already re-copied; the restart is only so the *current* session reloads it. If the plugin step above also needs a restart, one `/exit` + reopen covers both.)
+4. If `consistent` is `false` → after the list (or, if there's no list, on its own), one line: "⚠️ Versions don't match (binary / plugin / rules) - a partial upgrade. Do the steps above to get everything onto the same release."
+5. If `ok == false` → show `error` only; NO LETS box, no table, no other sections.
 
 ## Step 4: Output
 

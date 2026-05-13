@@ -67,9 +67,16 @@ In Claude Code:
 /plugin install lets
 ```
 
-> **Install scope:** when Claude Code asks who to install for, pick **"Install for all collaborators on this repository" (project scope)** — the choice goes into `.claude/settings.json`, so teammates inherit `lets` without re-installing. **Local** scope (just this checkout) is fine for a solo or throwaway project. Avoid **user** scope: at user scope the SessionStart/PreCompact hooks fire in *every* project you open, including ones that never ran `/lets:init` — smoother user-scope handling is planned for a future update.
+> **Install scope:** Claude Code will ask where to install — pick **one of these two**:
+>
+> - **"Install for all collaborators on this repository"** *(project scope)* — recommended for shared repos; the choice lands in `.claude/settings.json`, so teammates inherit `lets` without re-installing.
+> - **"Install for you, in this repo only"** *(local scope)* — fine for a solo or throwaway project; not committed.
+>
+> Don't pick the remaining option (install for yourself **everywhere** / user scope): there the SessionStart/PreCompact hooks fire in *every* project you open, including ones that never ran `/lets:init`. Smoother user-scope handling is planned for a future update.
 
-(From a local clone instead: `git clone …` then `/plugin marketplace add ./lets-workflow` and `/plugin install lets`.)
+**Stay current:** in `/plugin` → **Marketplaces** → `lets-workflow`, **Enable auto-update** — then the plugin updates itself on startup and you never think about it again. (To update by hand instead: `/plugin marketplace update lets-workflow`, then `/reload-plugins` — or just restart Claude Code.)
+
+(Or install from a local clone — `git clone https://github.com/restarter/lets-workflow`, then `/plugin marketplace add ./lets-workflow` and `/plugin install lets` — handy for hacking on the plugin: edit the clone, then `/reload-plugins` to pick up your changes.)
 
 ### 3. Initialize your project
 

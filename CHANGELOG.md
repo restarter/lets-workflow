@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Fixed
+- `/lets:update`'s binary-upgrade hint no longer points at a 404 — dropped `brew upgrade lets` (no Homebrew tap yet) and corrected the install URL to `https://raw.githubusercontent.com/restarter/lets-workflow/main/scripts/install.sh` (it was missing `scripts/`). Note: the broken hint is baked into the v0.5.2 / v0.5.3 `lets` binaries; this fix takes effect once you're on a newer binary. (lets-4fmgu)
+- A rules-drift `## LETS Notice` from the SessionStart hook now reliably reaches the user even mid-slash-command: the hook appends a "surface this to the user" instruction to the block, and `/lets:start` was taught to put the notice first in its output (`start.md` previously said nothing about it, so the orchestrator relied only on the small `## LETS Notice` rule in `lets-rules.md` and tended to forget). (lets-4fmgu)
+- The "lets binary not found" hint in `/lets:init` / `/lets:update` points at the curl install one-liner (run it in the prompt with `!`, or in a terminal) instead of `make install` — the contributor path. (lets-4fmgu)
+
+### Changed
+- `/lets:update` plugin-update guidance is the in-Claude-Code path now: `/plugin marketplace update lets-workflow`, then `/reload-plugins` (dropped the fragile `claude plugin update --scope` advice — `/plugin marketplace update` for a marketplace-tracked install plus a reload picks up the new version). The binary hint is shown both as `! curl …` (run it in the prompt) and the plain terminal command. `/lets:init` Step 1b and the README / `docs/installation.md` gained an "enable plugin auto-update" tip (`/plugin` → Marketplaces → lets-workflow → Enable auto-update). (lets-4fmgu)
+- Doc freshen: the README install step spells out the exact `/plugin install` prompt labels and the local-clone note says `/reload-plugins` after editing; `docs/installation.md` covers install scope, auto-update, and that `/lets:init` also runs `bd init`; `cli/README.md` and `commands/install-deprecated.md` stop listing the already-shipped curl installer as "future"; `docs/installation.md`'s sudo note shows the real `curl … | sudo bash` invocation. (lets-4fmgu)
+
 ## [0.5.3] - 2026-05-13
 
 ### Added

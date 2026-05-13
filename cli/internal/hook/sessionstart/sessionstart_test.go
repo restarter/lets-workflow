@@ -134,6 +134,11 @@ func TestRun_DriftOutdated(t *testing.T) {
 	if !strings.Contains(out, wantNotice) {
 		t.Errorf("missing exact notice:\nwant %q\ngot:\n%s", wantNotice, out)
 	}
+	// The hook appends a surface-this imperative so the orchestrator relays the
+	// notice even mid-slash-command (e.g. /lets:start).
+	if !strings.Contains(out, "Surface this to the user") {
+		t.Errorf("notice missing the surface-this imperative:\n%s", out)
+	}
 }
 
 func TestRun_DriftSilent_WhenSameVersion(t *testing.T) {

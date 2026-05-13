@@ -18,8 +18,8 @@ import (
 )
 
 const (
-	binaryUpdateAction = "Update lets - `brew upgrade lets`  or  `curl -fsSL https://raw.githubusercontent.com/restarter/lets-workflow/main/install.sh | bash`"
-	pluginUpdateAction = "Update the plugin - in Claude Code run `/plugin` and update `lets@lets-workflow`"
+	binaryUpdateAction = "Update the lets binary: `curl -fsSL https://raw.githubusercontent.com/restarter/lets-workflow/main/scripts/install.sh | bash`"
+	pluginUpdateAction = "Update the plugin: `/plugin marketplace update lets-workflow`, then `/reload-plugins` (or restart Claude Code: `/exit`, reopen) - all in Claude Code, no terminal. Do it once and skip this in future: enable auto-update in `/plugin` -> Marketplaces -> lets-workflow."
 )
 
 // Options carries injectable dependencies. LatestFn resolves the latest stable

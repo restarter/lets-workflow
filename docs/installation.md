@@ -2,7 +2,7 @@
 
 `lets` is the companion CLI for the `lets-workflow` Claude Code plugin. It powers
 SessionStart/PreCompact hooks, the `lets statusline` renderer, and the
-`lets init` per-project setup that the plugin's slash commands invoke under the hood.
+`lets init` / `lets update` per-project setup that the plugin's slash commands invoke under the hood.
 
 This guide covers installing the **binary** (`lets` on `$PATH`), the **plugin**
 (in Claude Code), and **per-project initialization**.
@@ -38,7 +38,7 @@ curl -fsSL https://raw.githubusercontent.com/restarter/lets-workflow/main/script
 2. **Fetches the latest release** from GitHub Releases.
 3. **Downloads** the platform-specific archive **and** the SHA256 checksums file.
 4. **Verifies the archive against `checksums.txt`** — refuses to install on mismatch.
-5. **Extracts** and installs to `/usr/local/bin/lets` (if writable) or `~/.local/bin/lets` (fallback). Does **not** auto-elevate via `sudo` — to install globally on a system where `/usr/local/bin` needs root, run `sudo bash install.sh` explicitly.
+5. **Extracts** and installs to `/usr/local/bin/lets` (if writable) or `~/.local/bin/lets` (fallback). Does **not** auto-elevate via `sudo` — to install globally on a system where `/usr/local/bin` needs root, pipe it through sudo: `curl -fsSL https://raw.githubusercontent.com/restarter/lets-workflow/main/scripts/install.sh | sudo bash`.
 6. **Warns** if the install dir isn't on `$PATH`, and prints the line to add.
 7. **Warns** if multiple `lets` binaries are reachable on `$PATH`, with a per-binary version comparison and concrete reorder/remove instructions.
 8. **Verifies** by running `lets version`.
@@ -62,9 +62,9 @@ Once `lets` is on `$PATH`, install the plugin from Claude Code's marketplace. **
 /plugin install lets
 ```
 
-This is a one-time setup per machine. The plugin's hooks (SessionStart, PreCompact) and statusline will start invoking the `lets` binary you just installed.
+This is a one-time setup per machine. When Claude Code asks who to install for, pick **"Install for all collaborators on this repository"** (project scope — committed to `.claude/settings.json`, so teammates inherit it) or **"Install for you, in this repo only"** (local scope); avoid the **everywhere** / user-scope option, where the SessionStart/PreCompact hooks fire in *every* project you open. Tip: in `/plugin` → **Marketplaces** → `lets-workflow`, **Enable auto-update** so the plugin stays current on its own.
 
-> Verify: open a Claude Code session in any git repo. The bottom statusline should show `🌱 LETS Workflow vX.Y.Z » <branch>`.
+> Verify the plugin loaded: `/lets:` commands should now autocomplete in Claude Code. (The `🌱 LETS Workflow vX.Y.Z » <branch>` statusline appears once you've run `/lets:init` in a project — see step 3.)
 
 ---
 
@@ -83,9 +83,9 @@ Then inside the Claude Code session:
 /lets:init
 ```
 
-This creates `.lets/` (gitignored), populates `.lets/.env` with sensible defaults, copies the workflow rules to `.claude/rules/lets-rules.md`, and wires up the statusline. Re-run anytime to self-heal drift or change config.
+This creates `.lets/` (gitignored), populates `.lets/.env` with sensible defaults, copies the workflow rules to `.claude/rules/lets-rules.md`, wires up the statusline, and runs `bd init` if beads is installed. Re-run anytime to self-heal drift or change config.
 
-You're done — start working with `/lets:start`.
+You're done — start working with `/lets:start`. Later, when a new release ships, run `/lets:update` to re-sync `.lets/.env` and the rules file (and see version status for the binary and the plugin).
 
 ---
 
