@@ -187,7 +187,7 @@ A LETS session runs a loop: start, work, commit, finish.
 ```
 ┌─ You write code yourself ─────────────────────────────────────────────────┐
 │  Write code with Claude. Use helpers along the way:                       │
-│  /lets:opinion   Technical decision with expert agents                     │
+│  /lets:opinion   Technical decision with expert agents                    │
 │  /lets:ask       Quick question to a single expert                        │
 │  /lets:check     Quick sanity check (6 perspectives, ~30s)                │
 │  /lets:review    Full multi-agent code review (~2-3 min)                  │
