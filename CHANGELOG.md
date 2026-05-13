@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-05-13
+
 ### Fixed
 - `/lets:update`'s binary-upgrade hint no longer points at a 404 — dropped `brew upgrade lets` (no Homebrew tap yet) and corrected the install URL to `https://raw.githubusercontent.com/restarter/lets-workflow/main/scripts/install.sh` (it was missing `scripts/`). Note: the broken hint is baked into the v0.5.2 / v0.5.3 `lets` binaries; this fix takes effect once you're on a newer binary. (lets-4fmgu)
 - A rules-drift `## LETS Notice` from the SessionStart hook now reliably reaches the user even mid-slash-command: the hook appends a "surface this to the user" instruction to the block, and `/lets:start` was taught to put the notice first in its output (`start.md` previously said nothing about it, so the orchestrator relied only on the small `## LETS Notice` rule in `lets-rules.md` and tended to forget). (lets-4fmgu)
@@ -371,7 +373,8 @@ Initial release with expert agents team.
 - SessionStart hook injecting workflow rules
 - Plugin structure: commands, agents, hooks
 
-[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.5.3...HEAD
+[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.5.4...HEAD
+[0.5.4]: https://github.com/restarter/lets-workflow/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/restarter/lets-workflow/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/restarter/lets-workflow/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/restarter/lets-workflow/compare/v0.5.0...v0.5.1
