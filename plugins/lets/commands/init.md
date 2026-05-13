@@ -70,7 +70,7 @@ echo "SCOPE=${SCOPE:-unknown}"
 ```
 
 Branch on `$SCOPE`. When the plugin is found (`project` / `user` / `local`) surface the **auto-update tip** (one short line):
-  > ℹ️ Tip — keep the plugin current: `/plugin` → **Marketplaces** → `lets-workflow` → **Enable auto-update** (then it updates itself on startup).
+  > ℹ️ Tip — do this once: `/plugin` → **Marketplaces** → `lets-workflow` → **Enable auto-update**. The plugin then stays on the latest LETS release automatically — no manual updates.
 
 Additionally:
 - `project` → just the auto-update tip. Best case.

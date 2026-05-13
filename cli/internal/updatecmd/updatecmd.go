@@ -19,7 +19,7 @@ import (
 
 const (
 	binaryUpdateAction = "Update the lets binary: `curl -fsSL https://raw.githubusercontent.com/restarter/lets-workflow/main/scripts/install.sh | bash`"
-	pluginUpdateAction = "Update the plugin: `/plugin marketplace update lets-workflow`, then `claude plugin update lets@lets-workflow --scope <your-scope>` (`claude plugin list` shows the scope) - or enable auto-update in `/plugin` -> Marketplaces -> lets-workflow"
+	pluginUpdateAction = "Update the plugin - easiest, do this once: in `/plugin` -> Marketplaces -> lets-workflow -> Enable auto-update (it then updates itself on startup). To update by hand instead: `/plugin marketplace update lets-workflow`, then `claude plugin update lets@lets-workflow --scope project` (use the scope you installed at - `project` is what we recommend, but it may be `user` or `local`; `claude plugin list` shows it)"
 )
 
 // Options carries injectable dependencies. LatestFn resolves the latest stable
