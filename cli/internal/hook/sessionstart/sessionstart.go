@@ -89,7 +89,10 @@ func Run(w io.Writer, rulesPath, projectRoot string) error {
 // driftCheck returns a "## LETS Notice" block when the installed rules differ
 // from the plugin's. Empty string means no notice (versions match or plugin
 // unreadable). Wraps drift.Check + drift.Message — single source of truth for
-// drift wording shared with `lets init --json` output.
+// drift wording shared with `lets init --json` output. The trailing
+// surface-this line is hook-only (it tells the orchestrator to relay the
+// notice even when a big slash command like /lets:start is running); it is NOT
+// part of drift.Message, so `lets init --json` output stays clean.
 func driftCheck(pluginRulesPath, projectRoot string) string {
 	installedPath := filepath.Join(projectRoot, ".claude", "rules", "lets-rules.md")
 	r := drift.Check(pluginRulesPath, installedPath)
@@ -97,7 +100,7 @@ func driftCheck(pluginRulesPath, projectRoot string) string {
 	if msg == "" {
 		return ""
 	}
-	return "## LETS Notice\n\n" + msg
+	return "## LETS Notice\n\n" + msg + "\n\n→ Surface this to the user at the start of your next response (one line), then continue - do not skip it."
 }
 
 // DetectProjectRoot returns the git toplevel for the current working

@@ -7,6 +7,8 @@ argument-hint: "[task-id|--continue]"
 
 Restore context and prepare for work. **User MUST select a task before working.**
 
+> **LETS Notice — surface it.** If a `## LETS Notice` block is present in the injected context (a one-time message the SessionStart hook emits — e.g. workflow rules outdated/missing, a migration result), it MUST be the **first line of your output** for `/lets:start` (`⚠️ <notice text>`), before the session summary. Don't omit it — it tells the user a `/lets:update` or `/lets:init` is needed. Mention it once, then continue with the steps below; don't repeat it in later turns.
+
 ## Usage
 
 ```bash
