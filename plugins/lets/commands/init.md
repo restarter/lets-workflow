@@ -22,7 +22,7 @@ fi
 ```
 
 Branch on output:
-- `NO_LETS_BINARY` → tell user "lets binary not found. Run `make install` from the lets-workflow repo or check `$PATH`." NO LETS box. STOP.
+- `NO_LETS_BINARY` → tell user "`lets` binary not found on `$PATH`. Install it — `! curl -fsSL https://raw.githubusercontent.com/restarter/lets-workflow/main/scripts/install.sh | bash` (the leading `!` runs it in this session; or the same command without `!` in a terminal). See the README → Quick Start." NO LETS box. STOP.
 - `NOT_GIT_REPO` → ask user via AskUserQuestion (Step 1a below). If user picks "Init git" → run `git init`, recompute LETS_PROJECT_ROOT, ENV_ABSENT/BEADS_ABSENT (both will be absent for fresh repo). If "Cancel" → stop, NO LETS box.
 - `ENV_ABSENT` → first-time path (Step 2). Use `BEADS_ABSENT`/`BEADS_EXISTS` to decide whether to ask about beads init in Step 2c-bis.
 - `ENV_EXISTS` → re-run path (Step 3). Don't re-ask about beads — `lets init` self-heals (StepSkip if already inited; StepWarn if bd not on PATH).
