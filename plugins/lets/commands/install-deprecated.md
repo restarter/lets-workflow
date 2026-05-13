@@ -23,15 +23,16 @@ gh auth status 2>/dev/null || echo "gh not authenticated (optional)"
 If `lets version` is missing, the plugin's hooks and statusline will silently fail. Install before continuing:
 
 ```bash
-# From a clone (current canonical install method)
-git clone https://github.com/restarter/lets-workflow
-cd lets-workflow
-make install
+# Curl one-liner — the usual end-user install (pulls a release archive, verifies the checksum)
+curl -fsSL https://raw.githubusercontent.com/restarter/lets-workflow/main/scripts/install.sh | bash
 which lets       # verify $PATH
 lets version
+
+# Or from a clone — for contributors / source builds:
+git clone https://github.com/restarter/lets-workflow && cd lets-workflow && make install
 ```
 
-Future installers (tracked under epic `lets-hdrdr`): Homebrew (`lets-odg13`), curl install.sh (`lets-2vb2b`), winget+scoop (`lets-hdrdr.1`). After those ship, this step becomes a one-liner per platform.
+Still to come (tracked under epic `lets-hdrdr`): Homebrew (`lets-odg13`), winget+scoop (`lets-hdrdr.1`).
 
 ## Step 2: Install Required Plugins
 

@@ -68,13 +68,10 @@ If `which lets` doesn't find the binary:
   export PATH="$HOME/.local/bin:$PATH"
   ```
 
-Future packagers (tracked under epic `lets-hdrdr`):
+End-users install via the curl one-liner (`scripts/install.sh`, which pulls a release archive from GitHub and verifies the checksum) — see the repo README. `make install` here is for contributors and source builds. Still to come (tracked under epic `lets-hdrdr`):
 
 - Homebrew formula (`lets-odg13`)
-- curl install.sh (`lets-2vb2b`)
 - winget + scoop for Windows (`lets-hdrdr.1`)
-
-After release pipelines ship, end-users install via package manager and never need `make`.
 
 ## Versioning
 
@@ -167,8 +164,8 @@ What it checks (in order; never crashes for a network failure):
 |---|---|---|
 | `.lets/.env` | `LETS_ENV_VERSION` vs `version.Version` | `RegenerateEnv` with a near-empty `Prefs` (only the default tracker; user values are read from the existing `.env` regardless), so it just refreshes the header. Skip when in sync. Skipped entirely on a `dev` binary (avoids stamping `LETS_ENV_VERSION=dev`). `not-initialized` if `.env` is absent → "Run /lets:init". |
 | `.claude/rules/lets-rules.md` | `drift.Check` against plugin source | Re-copy from the plugin (atomic write) on any detected drift (incl. `ahead`); `unknown` if the plugin's own frontmatter is unparseable; `up-to-date` otherwise. |
-| `lets` binary | `version.Version` vs latest GitHub release | Report only (can't self-replace) — `outdated` → prints `brew upgrade lets` / `curl … install.sh`. `dev` build → no comparison. |
-| Claude Code plugin | `<pluginRoot>/.claude-plugin/plugin.json::version` vs latest release | Report only — `outdated` → prints `/plugin` update instruction. |
+| `lets` binary | `version.Version` vs latest GitHub release | Report only (can't self-replace) — `outdated` → prints the install one-liner (`curl -fsSL …/main/scripts/install.sh \| bash`). `dev` build → no comparison. |
+| Claude Code plugin | `<pluginRoot>/.claude-plugin/plugin.json::version` vs latest release | Report only — `outdated` → prints the plugin-update hint (`/plugin marketplace update lets-workflow` + `/reload-plugins`, or enable auto-update). |
 
 Latest-release lookup hits `https://api.github.com/repos/restarter/lets-workflow/releases/latest` (5s timeout), cached 1h at `<project>/.lets/cache/update-check.json`; on a network failure it falls back to a stale cache entry if one exists, else reports `unknown`. The result also carries `consistent` (binary == plugin == installed-rules frontmatter version, ignoring `dev`) to flag a partial upgrade.
 

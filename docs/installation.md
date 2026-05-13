@@ -38,7 +38,7 @@ curl -fsSL https://raw.githubusercontent.com/restarter/lets-workflow/main/script
 2. **Fetches the latest release** from GitHub Releases.
 3. **Downloads** the platform-specific archive **and** the SHA256 checksums file.
 4. **Verifies the archive against `checksums.txt`** — refuses to install on mismatch.
-5. **Extracts** and installs to `/usr/local/bin/lets` (if writable) or `~/.local/bin/lets` (fallback). Does **not** auto-elevate via `sudo` — to install globally on a system where `/usr/local/bin` needs root, run `sudo bash install.sh` explicitly.
+5. **Extracts** and installs to `/usr/local/bin/lets` (if writable) or `~/.local/bin/lets` (fallback). Does **not** auto-elevate via `sudo` — to install globally on a system where `/usr/local/bin` needs root, pipe it through sudo: `curl -fsSL https://raw.githubusercontent.com/restarter/lets-workflow/main/scripts/install.sh | sudo bash`.
 6. **Warns** if the install dir isn't on `$PATH`, and prints the line to add.
 7. **Warns** if multiple `lets` binaries are reachable on `$PATH`, with a per-binary version comparison and concrete reorder/remove instructions.
 8. **Verifies** by running `lets version`.
