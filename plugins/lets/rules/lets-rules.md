@@ -9,7 +9,12 @@ version: 0.5.4
 
 ## Language & Communication
 
-- **Response language priority:** (1) If user writes in a specific language - respond in that language. (2) Otherwise use `$LETS_LANGUAGE` from LETS Config section. (3) Fallback: English.
+- **Response language is MANDATORY.** Choose in this order:
+  1. User wrote a natural-language message in this conversation → match that language.
+  2. Otherwise → respond in `$LETS_LANGUAGE` from LETS Config.
+  3. `$LETS_LANGUAGE` missing → English.
+
+  **Slash commands (`/lets:start`, `/lets:done`, etc.) are command syntax, NOT user language.** They never override `$LETS_LANGUAGE`. A fresh session whose first user message is `/lets:start` → respond in `$LETS_LANGUAGE`, not English.
 - **`$LETS_LANGUAGE` is a language *name in English*** (e.g. `Russian`, `Japanese`, `Ukrainian`) — like every value in LETS Config. Respond in that language regardless of the script the name itself is written in.
 - **Code, commits, docs - always English.** Comments, variable names, commit messages, documentation files.
 - Talk like a colleague, not an assistant. No corporate speak, no filler phrases.
