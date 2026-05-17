@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Added
+- New `## AskUserQuestion Conventions` section in `lets-rules.md` codifies 8 rules for `AskUserQuestion` calls: header chip style (4-12 chars descriptive, `"LETS"` forbidden), question wording, label/description format, `multiSelect` use, `preview` constraints, follow-through (read command body + execute), and skip-when-one-action. Includes a worked example. CLAUDE.md "When Adding/Modifying" table and "Command Checklist" point at it. (lets-uffs7)
+- Auto-execute follow-through: when the user picks an `AskUserQuestion` option naming a `/lets:*` command (e.g. "End session" from `/lets:done` → `/lets:end`), the model now reads that command's body via the Read tool and runs its flow inline instead of narrating "now run /lets:end". The invoked command's own approval gates still apply (push, close, external-facing ops). (lets-sc15i)
+
+### Changed
+- Response language rule is now MANDATORY with explicit slash-command disambiguation. Slash commands (`/lets:start`, `/lets:done`, etc.) are command syntax — they do NOT override `$LETS_LANGUAGE`. A fresh session whose first user message is a slash command now responds in `$LETS_LANGUAGE`, not English. The SessionStart hook's `LETS_LANGUAGE` description trimmed to factual metadata with a pointer to the rule (single source of truth). (lets-00sdu)
+- `header: "LETS"` brand chip replaced with descriptive 4-12 char topic chips across 48 sites in 16 files (`"Uncommitted"`, `"Next step"`, `"PR flow"`, `"Language"`, `"Finish"`, `"Confirm"`, `"Architecture"`, `"Experts"`, etc.) per the new conventions and the AskUserQuestion tool spec. The orchestrator translates `question` / option `description` strings to `$LETS_LANGUAGE` at call time as usual. (lets-uffs7)
+
+### Fixed
+- `(Recommended)` marker placement — was inconsistently put in `description` in two sites (`init.md` beads option, `plan.md` expert-selection preset); now uniformly in `label` first, per tool spec. (lets-uffs7)
+- `Handle response` blocks for AskUserQuestion options naming a `/lets:*` follow-up — model previously narrated "suggest /lets:X" / "run /lets:X" instead of executing. Now the spec explicitly tells the model to read the command body via the Read tool and run its flow inline. Affects `done.md` (5 spots), `end.md` (2), `skills/take-task/SKILL.md` (1). Cross-terminal hints ("Switch to main repo terminal and run …") kept as prose. (lets-sc15i)
+
 ## [0.5.4] - 2026-05-13
 
 ### Fixed
