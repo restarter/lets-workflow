@@ -38,7 +38,7 @@ If uncommitted changes exist, use **AskUserQuestion**:
 AskUserQuestion(
   questions=[{
     question: "You have uncommitted changes. What to do?",
-    header: "LETS",
+    header: "Uncommitted",
     options: [
       { label: "Commit first", description: "Run /lets:commit before finishing task" },
       { label: "Skip", description: "Continue without committing (changes stay unstaged)" },
@@ -90,7 +90,7 @@ Missing: {list}. Fix first or update task scope?
 AskUserQuestion(
   questions=[{
     question: "Some requirements are missing. How to proceed?",
-    header: "LETS",
+    header: "Scope",
     options: [
       { label: "Fix first", description: "Stop closing - go back and implement missing items" },
       { label: "Update scope", description: "Adjust task description to match what was actually done" },
@@ -177,7 +177,7 @@ Show what will happen based on `$LETS_PR_FLOW` from LETS Config:
 AskUserQuestion(
   questions=[{
     question: "Ready to finish {task title}?",
-    header: "LETS",
+    header: "Finish",
     options: [
       { label: "Finish", description: "Push branch and create PR to $LETS_MERGE_BRANCH" },
       { label: "Keep working", description: "Not done yet - go back to the task" }
@@ -193,7 +193,7 @@ AskUserQuestion(
 AskUserQuestion(
   questions=[{
     question: "Ready to finish {task title}?",
-    header: "LETS",
+    header: "Finish",
     options: [
       { label: "Finish", description: "Merge to $LETS_MERGE_BRANCH and delete branch" },
       { label: "Keep working", description: "Not done yet - go back to the task" }
@@ -263,7 +263,7 @@ If gh is not installed or not authenticated, use **AskUserQuestion**:
 AskUserQuestion(
   questions=[{
     question: "gh CLI is not available but $LETS_PR_FLOW=github. What to do?",
-    header: "LETS",
+    header: "gh CLI",
     options: [
       { label: "Local merge", description: "Fall back to local merge for this task" },
       { label: "Cancel", description: "Stop - fix gh auth first (gh auth login)" }
@@ -368,7 +368,7 @@ Status: open (close after PR merge)
 AskUserQuestion(
   questions=[{
     question: "Task done. What's next?",
-    header: "LETS",
+    header: "Next step",
     options: [
       { label: "Merge & close", description: "Merge PR #{number}, close task, switch to $LETS_MERGE_BRANCH" },
       { label: "Stay on branch", description: "Stay on feature branch - for PR fixes or follow-up work" },
@@ -407,7 +407,7 @@ Worktree: {worktree path}
 AskUserQuestion(
   questions=[{
     question: "PR created. What's next?",
-    header: "LETS",
+    header: "Next step",
     options: [
       { label: "Merge & close", description: "Merge PR #{number}, close task" },
       { label: "Stay here", description: "Stay in this worktree for PR fixes or follow-up" },
@@ -444,7 +444,7 @@ Already on `$LETS_MERGE_BRANCH` after merge. Use **AskUserQuestion**:
 AskUserQuestion(
   questions=[{
     question: "Task done. What's next?",
-    header: "LETS",
+    header: "Next step",
     options: [
       { label: "Next task", description: "Pick another task to work on" },
       { label: "End session", description: "Run /lets:end - save context and wrap up" }
@@ -471,7 +471,7 @@ Then use **AskUserQuestion**:
 AskUserQuestion(
   questions=[{
     question: "Merged. Clean up worktree?",
-    header: "LETS",
+    header: "Cleanup",
     options: [
       { label: "Remove worktree", description: "Switch to main repo and run /lets:worktree remove {name}" },
       { label: "Keep", description: "Keep worktree for now - clean up later with /lets:worktree remove" }

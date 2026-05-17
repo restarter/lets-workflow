@@ -81,7 +81,7 @@ Present as multiSelect AskUserQuestion - user picks tasks.
 AskUserQuestion(
   questions=[{
     question: "{N} tasks selected for parallel work. That's a lot - confirm?",
-    header: "LETS",
+    header: "Confirm",
     options: [
       { label: "Launch all", description: "{N} teammates in isolated worktrees" },
       { label: "Reduce", description: "Pick fewer tasks for this batch" }

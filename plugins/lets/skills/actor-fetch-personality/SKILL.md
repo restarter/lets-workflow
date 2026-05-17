@@ -39,7 +39,7 @@ Extract from fetched content: name (from frontmatter or first heading), expertis
 AskUserQuestion(
   questions=[{
     question: "Load this personality into Actor?",
-    header: "LETS",
+    header: "Actor",
     options: [
       { label: "Load", description: "{name} - {expertise summary} ({N} lines)" },
       { label: "Cancel", description: "Don't load, skip actor" }

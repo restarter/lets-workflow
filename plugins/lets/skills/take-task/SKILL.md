@@ -41,7 +41,7 @@ If changes exist and branch switch is needed, ask user:
 AskUserQuestion(
   questions=[{
     question: "Uncommitted changes on current branch. What to do?",
-    header: "LETS",
+    header: "Uncommitted",
     options: [
       { label: "Stash", description: "git stash, switch branch, remind to pop later" },
       { label: "Commit first", description: "Commit changes, then switch branch" },
@@ -91,7 +91,7 @@ Check current state:
 AskUserQuestion(
   questions=[{
     question: "How do you want to work on this task?",
-    header: "LETS",
+    header: "Workspace",
     options: [
       { label: "Branch (Recommended)", description: "Regular feature branch in current repo" },
       { label: "Worktree", description: "Separate directory for parallel work in another terminal" }

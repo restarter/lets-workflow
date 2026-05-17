@@ -44,7 +44,7 @@ If not obvious from conversation context, use **AskUserQuestion**:
 AskUserQuestion(
   questions=[{
     question: "What kind of note?",
-    header: "LETS",
+    header: "Note type",
     options: [
       { label: "Progress", description: "What's done and what remains" },
       { label: "Decision", description: "Record a choice and reasoning" },

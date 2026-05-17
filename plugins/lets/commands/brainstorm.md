@@ -114,7 +114,7 @@ Scan the profile for signals and match to agents:
 AskUserQuestion(
   questions=[{
     question: "Planning {N} brainstorm agents. That's a lot - confirm?",
-    header: "LETS",
+    header: "Confirm",
     options: [
       { label: "Launch all", description: "{N} agents, broad coverage" },
       { label: "Reduce", description: "Suggest fewer, more focused agents" }

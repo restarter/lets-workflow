@@ -158,7 +158,7 @@ After worktree is created, ask where the user wants to work:
 AskUserQuestion(
   questions=[{
     question: "Worktree created. Where do you want to continue?",
-    header: "LETS",
+    header: "Continue",
     options: [
       { label: "Stay on current branch", description: "Switch back to $LETS_MERGE_BRANCH and keep working here. Open worktree in a new terminal." },
       { label: "Switch to worktree", description: "Continue in this session inside the worktree" }

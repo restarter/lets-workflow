@@ -128,7 +128,7 @@ PR size check - if additions + deletions > 5000 or changedFiles > 50:
 AskUserQuestion(
   questions=[{
     question: "Large PR ({additions}+ {deletions}- across {files} files). How to proceed?",
-    header: "LETS",
+    header: "Large PR",
     options: [
       { label: "Full review", description: "Review everything" },
       { label: "Focus", description: "Pick specific files or areas" },
@@ -182,7 +182,7 @@ If uncommitted changes exist:
 AskUserQuestion(
   questions=[{
     question: "Uncommitted changes on current branch. What to do?",
-    header: "LETS",
+    header: "Uncommitted",
     options: [
       { label: "Stash", description: "git stash, switch to PR, remind to pop later" },
       { label: "Commit first", description: "Run /lets:commit, then switch" },
@@ -356,7 +356,7 @@ After all findings discussed, save updated state.
 AskUserQuestion(
   questions=[{
     question: "Ready to post to PR #{number}?",
-    header: "LETS",
+    header: "Post",
     options: [
       { label: "Post all", description: "Post {N} inline + summary to GitHub" },
       { label: "Review again", description: "Go back through findings" },
@@ -659,7 +659,7 @@ Summary: {X}/{Y} critical fixed, {A}/{B} important fixed
 AskUserQuestion(
   questions=[{
     question: "PR #{number} - your verdict?",
-    header: "LETS",
+    header: "Verdict",
     options: [
       { label: "Approve", description: "All critical issues resolved" },
       { label: "Request changes", description: "Still needs work" },
@@ -716,7 +716,7 @@ After approval (or if --merge flag):
 AskUserQuestion(
   questions=[{
     question: "PR approved. Merge now?",
-    header: "LETS",
+    header: "Merge",
     options: [
       { label: "Squash merge", description: "Squash and merge, delete branch" },
       { label: "Merge commit", description: "Create merge commit, delete branch" },
@@ -780,7 +780,7 @@ If not on PR branch:
 AskUserQuestion(
   questions=[{
     question: "You're on '{CURRENT_BRANCH}', PR branch is '{PR_BRANCH}'. Switch?",
-    header: "LETS",
+    header: "Branch",
     options: [
       { label: "Checkout", description: "Switch to {PR_BRANCH}" },
       { label: "Stay", description: "Continue on current branch" },
@@ -1013,7 +1013,7 @@ After all fixes:
 AskUserQuestion(
   questions=[{
     question: "Fixes ready. How to proceed?",
-    header: "LETS",
+    header: "Fixes",
     options: [
       { label: "Commit & push", description: "git add, commit, push to PR branch" },
       { label: "Commit only", description: "Commit locally, push later" },
@@ -1057,7 +1057,7 @@ Show reply plan (skip entries with `decision: "skip"`):
 AskUserQuestion(
   questions=[{
     question: "Post {N} replies to PR #{number}?",
-    header: "LETS",
+    header: "Replies",
     options: [
       { label: "Post all", description: "Post {N} replies to GitHub" },
       { label: "Review individually", description: "Edit each reply before posting" },

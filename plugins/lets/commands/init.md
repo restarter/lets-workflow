@@ -32,7 +32,7 @@ Branch on output:
 AskUserQuestion(
   questions=[{
     question: "This directory is not a git repository. Initialize git here?",
-    header: "LETS",
+    header: "Git init",
     options: [
       { label: "Init git", description: "Run `git init` here and continue with /lets:init (LETS workflow assumes git)" },
       { label: "Cancel", description: "Stop. Run `git init` manually first or cd to a git repo." }
@@ -90,7 +90,7 @@ Detect from user's most recent message language. If unclear, ask:
 AskUserQuestion(
   questions=[{
     question: "Response language for this project?",
-    header: "LETS",
+    header: "Language",
     options: [
       { label: "English", description: "Default" },
       { label: "Ukrainian", description: "Українська" },
@@ -122,7 +122,7 @@ Then:
 AskUserQuestion(
   questions=[{
     question: "PR workflow for this project?",
-    header: "LETS",
+    header: "PR flow",
     options: [
       { label: "GitHub", description: "<conditional, picked above>" },
       { label: "Bitbucket", description: "Bitbucket PR workflow" },
@@ -141,7 +141,7 @@ Bind label (lowercased) to `$FLOW`: "GitHub"→"github", "Bitbucket"→"bitbucke
 AskUserQuestion(
   questions=[{
     question: "Target branch for merges and PRs?",
-    header: "LETS",
+    header: "Merge branch",
     options: [
       { label: "main", description: "Default modern Git convention" },
       { label: "dev", description: "Develop branch as default merge target" },
@@ -160,9 +160,9 @@ If `BEADS_ABSENT`:
 AskUserQuestion(
   questions=[{
     question: "Initialize beads (cross-session task tracking)?",
-    header: "LETS",
+    header: "Beads",
     options: [
-      { label: "Init beads", description: "Recommended: LETS workflow uses beads for task IDs, dependencies, and persistent memory" },
+      { label: "Init beads (Recommended)", description: "Cross-session task IDs, dependencies, and persistent memory" },
       { label: "Skip beads", description: "Don't init now. You can run `bd init` later — `lets init` self-heals on next run" }
     ],
     multiSelect: false
@@ -226,7 +226,7 @@ Show user a one-line summary: "Current: $CURRENT_LANG / $CURRENT_BRANCH / $CURRE
 AskUserQuestion(
   questions=[{
     question: "Re-run /lets:init - what to do?",
-    header: "LETS",
+    header: "Re-init",
     options: [
       { label: "Refresh", description: "Self-heal (rules drift, statusline, etc.). Keep current config." },
       { label: "Change config", description: "Update language / merge branch / PR flow. Backs up current .env." },
@@ -264,7 +264,7 @@ For each of Language / MergeBranch / PRFlow ask AskUserQuestion. First option is
 AskUserQuestion(
   questions=[{
     question: "Response language for this project?",
-    header: "LETS",
+    header: "Language",
     options: [
       { label: "Keep current", description: "Currently: $CURRENT_LANG" },
       { label: "English", description: "Default" },

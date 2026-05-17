@@ -96,7 +96,7 @@ Present plan summary (title, task count, key files), then proceed to Step 5.
 AskUserQuestion(
   questions=[{
     question: "Plan drift detected: {details}. How to proceed?",
-    header: "LETS",
+    header: "Drift",
     options: [
       { label: "Execute anyway", description: "Adapt implementation to current state" },
       { label: "Re-plan", description: "Run /lets:plan to update the plan" },
