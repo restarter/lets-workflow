@@ -42,6 +42,40 @@ When invoking a `/lets:*` slash command, execute every Step's bash block **liter
 
 **Why this matters:** state changes between commands (files appear/disappear, dotfiles are invisible to plain `ls`, sessions span editor + filesystem). The pre-checks in slash commands exist precisely because shortcutting them produces wrong branches and wrong outputs.
 
+## AskUserQuestion Conventions
+
+When invoking `AskUserQuestion`, command/skill spec files declare the **semantic contract** (`label`, `multiSelect`); you fill in `header`, `question`, and option `description` from English source strings, translating to `$LETS_LANGUAGE` at call time (standard prose-translation behavior). Do NOT pass spec strings verbatim if `$LETS_LANGUAGE` differs from English.
+
+1. **`header`** — descriptive 4-12 char chip about the question topic. Topic-naming nouns (`"Uncommitted"`, `"Next step"`, `"PR flow"`, `"Worktree"`), action gates (`"Approve"`, `"Confirm"`), state/error (`"Conflict"`, `"Retry"`), or workflow stage (`"Review"`, `"Diff"`). **Forbidden:** any header containing `"LETS"`, the command name itself, or generic placeholders like `"Question"`. If a `$LETS_LANGUAGE` translation would exceed 12 chars, choose a shorter synonym or abbreviation rather than truncate.
+2. **`question`** — concrete sentence ending with `?`, in `$LETS_LANGUAGE`. Include topic context if the preceding prose doesn't make it obvious.
+3. **option `label`** — 1-5 words, imperative ("Commit first") or noun-phrase ("Local merge"). When recommending one option, place it **first** AND append `(Recommended)` to that label. Never put `(Recommended)` in `description`. Keep `(Recommended)` in English regardless of `$LETS_LANGUAGE`.
+4. **option `description`** — 5-15 words about the **consequence** of picking, not a duplicate of label. Translate to `$LETS_LANGUAGE`.
+5. **`multiSelect: true`** — ONLY when options are non-exclusive (e.g. pick several experts, several approaches, several files). Default `false`.
+6. **`preview`** — for side-by-side comparison of visual artifacts (code snippets, ASCII mockups, file structures, config blocks, layout variants). Only with `multiSelect: false`. Skip for simple preference questions where labels + descriptions suffice.
+7. **Follow-through (auto-execute):** when the user picks an option whose `label` or `description` names a `/lets:*` command, IMMEDIATELY read that command's body via the `Read` tool and execute its flow inline. Do NOT just narrate "now run /lets:X". The command file lives inside the LETS plugin (the current command's body — being processed by you right now — uses `${CLAUDE_PLUGIN_ROOT}` references that Claude Code already substituted to the absolute plugin path; reuse that same root to construct the target path: `<plugin-root>/commands/<name>.md`). Auto-execute is equivalent to the user typing `/lets:<name>`; the invoked command's own approval gates and pre-checks apply as normal. **Exception:** option only *qualifies* the slash command with `later`, `if needed`, `optionally`, `or` — treat as prose hint, do not auto-execute. **AUTO MODE preserved:** auto-execute does NOT bypass approval gates inside the invoked command (push, close, external-facing ops still require explicit user approval per the invoked command's own flow).
+8. **Skip AskUserQuestion entirely** when only one sensible action exists. Execute the action and inform the user briefly.
+
+### Worked example
+
+```python
+AskUserQuestion(
+  questions=[{
+    question: "You have uncommitted changes. What to do?",   # in $LETS_LANGUAGE at runtime
+    header: "Uncommitted",                                    # 4-12 chars, topic chip
+    options: [
+      { label: "Commit first (Recommended)", description: "Run /lets:commit, then continue" },
+      { label: "Skip",        description: "Warn and continue without committing" },
+      { label: "Cancel",      description: "Stop and return to the task" }
+    ],
+    multiSelect: false
+  }]
+)
+
+# If user picks "Commit first" → Rule 7 fires: Read plugins/lets/commands/commit.md, execute its flow.
+# If user picks "Skip" → no /lets:* in label/description → no auto-execute; proceed inline.
+# If user picks "Cancel" → same.
+```
+
 ## Development Workflow
 
 **One rule above all: transparency. User sees everything, decides everything.**
