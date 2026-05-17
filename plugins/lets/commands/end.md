@@ -90,7 +90,7 @@ AskUserQuestion(
 ```
 
 **Handle response:**
-- **Commit** -> run `/lets:commit`, then continue
+- **Commit** -> read `${CLAUDE_PLUGIN_ROOT}/skills/commit/SKILL.md` via the Read tool and execute its flow, then continue
 - **Skip** -> continue
 
 ## Step 3: Save Progress to Beads (task-level context for multi-session work)
@@ -156,7 +156,7 @@ AskUserQuestion(
 
 **Handle response:**
 - **In progress** -> leave open, progress already saved in Step 3
-- **Ready to finish** -> suggest `/lets:done` first, then come back to `/lets:end`
+- **Ready to finish** -> read `${CLAUDE_PLUGIN_ROOT}/commands/done.md` via the Read tool and execute its flow first, then return to `/lets:end`
 
 ## Step 5: Create Session Summary (session-level context for next session bootstrap)
 

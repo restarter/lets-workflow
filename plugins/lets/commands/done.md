@@ -50,7 +50,7 @@ AskUserQuestion(
 ```
 
 **Handle response:**
-- **Commit first** -> run `/lets:commit`, then continue
+- **Commit first** -> read `${CLAUDE_PLUGIN_ROOT}/skills/commit/SKILL.md` via the Read tool and execute its flow, then continue
 - **Skip** -> warn and continue
 - **Cancel** -> stop, return to work
 
@@ -388,7 +388,7 @@ AskUserQuestion(
   4. If merge fails (conflicts, checks not passed) -> inform user, fall back to "Stay on branch"
 - **Stay on branch** -> stay on current branch, no checkout. User continues working freely.
 - **Next task** -> `git checkout {LETS_MERGE_BRANCH}`, then show `bd ready`, pick new task
-- **End session** -> `git checkout {LETS_MERGE_BRANCH}`, then suggest `/lets:end`
+- **End session** -> `git checkout {LETS_MERGE_BRANCH}`, then read `${CLAUDE_PLUGIN_ROOT}/commands/end.md` via the Read tool and execute its flow
 
 ### After PR ($LETS_PR_FLOW == github), IN worktree:
 
@@ -427,7 +427,7 @@ No "Next task" option - can't switch branches in a worktree. To start a new task
   3. If merge fails (conflicts, checks not passed) -> inform user, fall back to "Stay here"
   4. After merge, remind: "Worktree can be removed: `/lets:worktree remove {name}` from the main repo terminal."
 - **Stay here** -> stay in worktree. User continues working.
-- **End session** -> suggest `/lets:end`. After session ends, remind:
+- **End session** -> read `${CLAUDE_PLUGIN_ROOT}/commands/end.md` via the Read tool and execute its flow. After the end-session flow completes, remind:
   "After PR merges, clean up: `/lets:worktree remove {name}` from the main repo terminal."
 
 ### After local merge ($LETS_PR_FLOW != github), NOT in worktree:
@@ -456,7 +456,7 @@ AskUserQuestion(
 
 **Handle response:**
 - **Next task** -> show `bd ready`, pick new task
-- **End session** -> suggest `/lets:end`
+- **End session** -> read `${CLAUDE_PLUGIN_ROOT}/commands/end.md` via the Read tool and execute its flow
 
 ### After local merge ($LETS_PR_FLOW != github), IN worktree:
 
@@ -483,7 +483,7 @@ AskUserQuestion(
 
 **Handle response:**
 - **Remove worktree** -> inform: "Switch to main repo terminal and run `/lets:worktree remove {name}`" (cannot remove worktree from inside it)
-- **Keep** -> suggest `/lets:end` to save session context
+- **Keep** -> read `${CLAUDE_PLUGIN_ROOT}/commands/end.md` via the Read tool and execute its flow to save session context
 
 ## Rules
 
