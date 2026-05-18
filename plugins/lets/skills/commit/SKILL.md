@@ -26,7 +26,7 @@ If no changes - inform user and exit.
 
 ### Step 2: Active Task Detection
 
-Use the **detect-task** skill to find the active task (read `${CLAUDE_PLUGIN_ROOT}/skills/detect-task/SKILL.md` and follow its detection flow).
+Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detect-task")`.
 If multiple tasks found: ask user via AskUserQuestion to pick, or "None".
 If not found: commit without task link.
 

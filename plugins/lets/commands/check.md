@@ -244,7 +244,7 @@ If `--json` was provided, emit a structured object instead of the console report
 
 Skip entirely if `--json` was set, or if mode is PR / `--file` (those aren't tied to the active branch's task). For local modes, if issues were found, record in beads:
 
-Use the **detect-task** skill to find the active task (read `${CLAUDE_PLUGIN_ROOT}/skills/detect-task/SKILL.md` and follow its detection flow).
+Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detect-task")`.
 If multiple tasks found, skip beads comment.
 If active task found AND issues detected:
 

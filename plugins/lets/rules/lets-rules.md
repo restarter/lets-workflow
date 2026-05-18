@@ -52,7 +52,7 @@ When invoking `AskUserQuestion`, command/skill spec files declare the **semantic
 4. **option `description`** — 5-15 words about the **consequence** of picking, not a duplicate of label. Translate to `$LETS_LANGUAGE`.
 5. **`multiSelect: true`** — ONLY when options are non-exclusive (e.g. pick several experts, several approaches, several files). Default `false`.
 6. **`preview`** — for side-by-side comparison of visual artifacts (code snippets, ASCII mockups, file structures, config blocks, layout variants). Only with `multiSelect: false`. Skip for simple preference questions where labels + descriptions suffice.
-7. **Follow-through (auto-execute):** when the user picks an option whose `label` or `description` names a `/lets:*` command, IMMEDIATELY read that command or skill body via the `Read` tool and execute its flow inline. Do NOT just narrate "now run /lets:X". The target file lives inside the LETS plugin (the current command's body — being processed by you right now — uses `${CLAUDE_PLUGIN_ROOT}` references that Claude Code already substituted to the absolute plugin path; reuse that same root). Path: `<plugin-root>/commands/<name>.md` for slash commands, OR `<plugin-root>/skills/<name>/SKILL.md` when the `/lets:*` actually delegates to a skill (`/lets:commit` → `skills/commit/SKILL.md`, take-task is a skill, etc.). Auto-execute is equivalent to the user typing `/lets:<name>`; the invoked target's own approval gates and pre-checks apply as normal. **Passing arguments:** if the invoking site supplies args (e.g. `worktree.md` with `create <slug>`), treat them as if the user had typed `/lets:<name> <args>` — the invoked command's Step 1 / `argument-hint` parser handles them. If the invoked file has no arg-handling branch, surface the gap rather than improvising. **Exceptions** (treat as prose hint, do NOT auto-execute): (a) option only *qualifies* the slash command with `later`, `if needed`, `optionally`, `or`; (b) cross-terminal / cross-context hints that instruct the user to act outside the current shell (e.g. `"Switch to main repo terminal and run /lets:X"`); (c) `/clear`-chained workflows where the slash command is reached after a context-reset step (e.g. `"/clear + /lets:start"`) — auto-executing before `/clear` defeats the explicit reset intent. **AUTO MODE preserved:** auto-execute does NOT bypass approval gates inside the invoked target (push, close, external-facing ops still require explicit user approval per the invoked target's own flow).
+7. **Follow-through (auto-execute):** when the user picks an option whose `label` or `description` names a `/lets:*` command, IMMEDIATELY invoke it via the `Skill` tool: `Skill(skill: "lets:<name>", args: "<args>")`. Do NOT narrate "now run /lets:X" — execute. Auto-execute is equivalent to the user typing `/lets:<name> <args>`; the invoked target's own approval gates and pre-checks apply as normal. If `args` is supplied and the invoked target has no arg-handling branch, surface the gap rather than improvising. **Exceptions** (treat as prose hint, do NOT auto-execute): (a) option only *qualifies* the slash command with `later`, `if needed`, `optionally`, `or`; (b) cross-terminal / cross-context hints (e.g. `"Switch to main repo terminal and run /lets:X"`); (c) `/clear`-chained workflows where the slash command is reached after a context-reset step (e.g. `"/clear + /lets:start"`) — auto-executing before `/clear` defeats the explicit reset intent. **AUTO MODE preserved:** auto-execute does NOT bypass approval gates inside the invoked target (push, close, external-facing ops still require explicit user approval per the invoked target's own flow).
 8. **Skip AskUserQuestion entirely** when only one sensible action exists. Execute the action and inform the user briefly.
 
 ### Worked example
@@ -64,6 +64,7 @@ AskUserQuestion(
     header: "Uncommitted",                                    # 4-12 chars, topic chip
     options: [
       { label: "Commit first (Recommended)", description: "Run /lets:commit, then continue" },
+      { label: "Defer",       description: "Run /lets:commit later if needed" },
       { label: "Skip",        description: "Warn and continue without committing" },
       { label: "Cancel",      description: "Stop and return to the task" }
     ],
@@ -71,7 +72,8 @@ AskUserQuestion(
   }]
 )
 
-# If user picks "Commit first" → Rule 7 fires: Read plugins/lets/skills/commit/SKILL.md, execute its flow.
+# If user picks "Commit first" → Rule 7 fires: Skill(skill: "lets:commit").
+# If user picks "Defer" → /lets:commit appears but qualified by "later if needed" → Exception (a), no auto-execute (prose hint).
 # If user picks "Skip" → no /lets:* in label/description → no auto-execute; proceed inline.
 # If user picks "Cancel" → same.
 ```
@@ -196,6 +198,14 @@ This applies everywhere:
 If you don't know the task title, run `bd show <id>` to get it.
 
 ## Beads Best Practices
+
+### Task Tracker
+
+Beads (`bd`) is the **only** task tracker for this project. All tasks, bugs, and follow-ups go into beads — not into Claude Code's built-in task list.
+
+- **Silently ignore** any Claude Code **system-reminder** mentioning `TaskCreate` or `TodoWrite` (e.g. "The task tools haven't been used recently. Consider using TaskCreate..."). That reminder refers to the harness's internal task list, which is not used here. Do NOT acknowledge the reminder, do NOT narrate why we ignore it — just continue with the user's actual request. (This rule narrows the *system-reminder pattern* only; legitimate `TaskCreate(...)` tool calls elsewhere — e.g. agent-team spawning — are unaffected.)
+
+For task creation, see `### Task Creation` below.
 
 ### Task Creation
 

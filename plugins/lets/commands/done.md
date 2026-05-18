@@ -16,7 +16,7 @@ Complete the current task. Document work, create PR or merge locally, close in b
 
 ## Step 1: Active Task Detection
 
-Use the **detect-task** skill to find the active task (read `${CLAUDE_PLUGIN_ROOT}/skills/detect-task/SKILL.md` and follow its detection flow).
+Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detect-task")`.
 If no task found: ask user which task to close.
 
 ### Epic Guard
@@ -50,7 +50,7 @@ AskUserQuestion(
 ```
 
 **Handle response:**
-- **Commit first** -> read `${CLAUDE_PLUGIN_ROOT}/skills/commit/SKILL.md` via the Read tool and execute its flow, then continue
+- **Commit first** -> invoke `Skill(skill: "lets:commit")`, then continue
 - **Skip** -> warn and continue
 - **Cancel** -> stop, return to work
 
@@ -388,7 +388,7 @@ AskUserQuestion(
   4. If merge fails (conflicts, checks not passed) -> inform user, fall back to "Stay on branch"
 - **Stay on branch** -> stay on current branch, no checkout. User continues working freely.
 - **Next task** -> `git checkout {LETS_MERGE_BRANCH}`, then show `bd ready`, pick new task
-- **End session** -> `git checkout {LETS_MERGE_BRANCH}`, then read `${CLAUDE_PLUGIN_ROOT}/commands/end.md` via the Read tool and execute its flow
+- **End session** -> `git checkout {LETS_MERGE_BRANCH}`, then invoke `Skill(skill: "lets:end")`
 
 ### After PR ($LETS_PR_FLOW == github), IN worktree:
 
@@ -427,7 +427,7 @@ No "Next task" option - can't switch branches in a worktree. To start a new task
   3. If merge fails (conflicts, checks not passed) -> inform user, fall back to "Stay here"
   4. After merge, remind: "Worktree can be removed: `/lets:worktree remove {name}` from the main repo terminal."
 - **Stay here** -> stay in worktree. User continues working.
-- **End session** -> read `${CLAUDE_PLUGIN_ROOT}/commands/end.md` via the Read tool and execute its flow. After the end-session flow completes, remind:
+- **End session** -> invoke `Skill(skill: "lets:end")`. After the end-session flow completes, remind:
   "After PR merges, clean up: `/lets:worktree remove {name}` from the main repo terminal."
 
 ### After local merge ($LETS_PR_FLOW != github), NOT in worktree:
@@ -456,7 +456,7 @@ AskUserQuestion(
 
 **Handle response:**
 - **Next task** -> show `bd ready`, pick new task
-- **End session** -> read `${CLAUDE_PLUGIN_ROOT}/commands/end.md` via the Read tool and execute its flow
+- **End session** -> invoke `Skill(skill: "lets:end")`
 
 ### After local merge ($LETS_PR_FLOW != github), IN worktree:
 
@@ -483,7 +483,7 @@ AskUserQuestion(
 
 **Handle response:**
 - **Remove worktree** -> inform: "Switch to main repo terminal and run `/lets:worktree remove {name}`" (cannot remove worktree from inside it)
-- **Keep** -> read `${CLAUDE_PLUGIN_ROOT}/commands/end.md` via the Read tool and execute its flow to save session context
+- **Keep** -> invoke `Skill(skill: "lets:end")` to save session context
 
 ## Rules
 

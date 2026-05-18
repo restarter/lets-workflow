@@ -50,7 +50,7 @@ Available experts (map to `lets:*` agents):
 
 **Shorthand mapping:** User can type short names like "security" or "sec" - map to the correct agent subagent_type.
 
-**Actor handling:** If expert is `actor`, the remaining argument should contain a personality source (URL or file path) followed by the question. Example: `/lets:ask actor https://example.com/persona.md "question"`. Use the **actor-fetch-personality** skill (read `${CLAUDE_PLUGIN_ROOT}/skills/actor-fetch-personality/SKILL.md`) to fetch and validate the personality. If no source provided, ask via AskUserQuestion: "Personality source? (URL or file path)". Pass fetched content as `PERSONALITY:` block in the Task prompt (see Step 4).
+**Actor handling:** If expert is `actor`, the remaining argument should contain a personality source (URL or file path) followed by the question. Example: `/lets:ask actor https://example.com/persona.md "question"`. Invoke `Skill(skill: "lets:actor-fetch-personality", args: "<personality-source-from-user>")` to fetch and validate the personality. If no source provided, ask via AskUserQuestion: "Personality source? (URL or file path)". Pass fetched content as `PERSONALITY:` block in the Task prompt (see Step 4).
 
 **If no expert specified**, select top 4 most relevant based on conversation context and use **AskUserQuestion**:
 
@@ -123,7 +123,7 @@ Show the agent's response:
 
 ## Step 6: Link Answer to Active Task
 
-Use the **detect-task** skill to find the active task (read `${CLAUDE_PLUGIN_ROOT}/skills/detect-task/SKILL.md` and follow its detection flow).
+Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detect-task")`.
 If multiple tasks found, skip beads comment.
 If active task found:
 

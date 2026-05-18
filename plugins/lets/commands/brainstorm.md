@@ -143,7 +143,7 @@ AskUserQuestion(
 | explorer | No | Already used in phase 1 |
 | actor | Yes | External perspective via loaded persona (user must provide source) |
 
-**Actor note:** If actor is selected, use the **actor-fetch-personality** skill (read `${CLAUDE_PLUGIN_ROOT}/skills/actor-fetch-personality/SKILL.md`) to fetch personality. Pass `PERSONALITY:` block in the actor's Task prompt only.
+**Actor note:** If actor is selected, invoke `Skill(skill: "lets:actor-fetch-personality", args: "<personality-source-from-user>")` to fetch the personality. Pass the returned `PERSONALITY:` block in the actor's Task prompt only.
 
 Show selection before launching (no user gate - brainstorm = momentum):
 

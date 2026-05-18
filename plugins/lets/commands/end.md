@@ -69,7 +69,7 @@ Cleanup:  /lets:worktree remove {name} (if task completed)
 git status --short
 ```
 
-Use the **detect-task** skill to find the active task (read `${CLAUDE_PLUGIN_ROOT}/skills/detect-task/SKILL.md` and follow its detection flow).
+Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detect-task")`.
 
 ## Step 2: Handle Uncommitted Changes
 
@@ -90,7 +90,7 @@ AskUserQuestion(
 ```
 
 **Handle response:**
-- **Commit** -> read `${CLAUDE_PLUGIN_ROOT}/skills/commit/SKILL.md` via the Read tool and execute its flow, then continue
+- **Commit** -> invoke `Skill(skill: "lets:commit")`, then continue
 - **Skip** -> continue
 
 ## Step 3: Save Progress to Beads (task-level context for multi-session work)
@@ -156,7 +156,7 @@ AskUserQuestion(
 
 **Handle response:**
 - **In progress** -> leave open, progress already saved in Step 3
-- **Ready to finish** -> read `${CLAUDE_PLUGIN_ROOT}/commands/done.md` via the Read tool and execute its flow first, then return to `/lets:end`
+- **Ready to finish** -> invoke `Skill(skill: "lets:done")` first, then return to `/lets:end`
 
 ## Step 5: Create Session Summary (session-level context for next session bootstrap)
 
