@@ -50,7 +50,7 @@ Available experts (map to `lets:*` agents):
 
 **Shorthand mapping:** User can type short names like "security" or "sec" - map to the correct agent subagent_type.
 
-**Actor handling:** If expert is `actor`, the remaining argument should contain a personality source (URL or file path) followed by the question. Example: `/lets:ask actor https://example.com/persona.md "question"`. Use the **actor-fetch-personality** skill (read `${CLAUDE_PLUGIN_ROOT}/skills/actor-fetch-personality/SKILL.md`) to fetch and validate the personality. If no source provided, ask via AskUserQuestion: "Personality source? (URL or file path)". Pass fetched content as `PERSONALITY:` block in the Task prompt (see Step 4).
+**Actor handling:** If expert is `actor`, the remaining argument should contain a personality source (URL or file path) followed by the question. Example: `/lets:ask actor https://example.com/persona.md "question"`. Invoke `Skill(skill: "lets:actor-fetch-personality", args: "<personality-source-from-user>")` to fetch and validate the personality. If no source provided, ask via AskUserQuestion: "Personality source? (URL or file path)". Pass fetched content as `PERSONALITY:` block in the Task prompt (see Step 4).
 
 **If no expert specified**, select top 4 most relevant based on conversation context and use **AskUserQuestion**:
 

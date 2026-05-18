@@ -172,7 +172,7 @@ Scan the diff for file patterns:
 | `lets:pragmatist` | Large changes (> 200 lines) | Small changes |
 | `lets:actor` | Explicit user request only | Always (never auto-selected) |
 
-**Actor note:** Actor is never auto-selected. When user explicitly requests it, use the **actor-fetch-personality** skill (read `${CLAUDE_PLUGIN_ROOT}/skills/actor-fetch-personality/SKILL.md`) to fetch personality. Pass `PERSONALITY:` block in the actor's Task prompt only.
+**Actor note:** Actor is never auto-selected. When user explicitly requests it, invoke `Skill(skill: "lets:actor-fetch-personality", args: "<personality-source-from-user>")` to fetch the personality. Pass the returned `PERSONALITY:` block in the actor's Task prompt only.
 
 ### 4.2.1 File Mode Adjustments
 
