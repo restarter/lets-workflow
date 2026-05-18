@@ -112,7 +112,7 @@ git remote -v 2>/dev/null | head -1 | grep -q . && echo "HAS_REMOTE" || echo "NO
 
 Pick the GitHub option's `description` from the four cases below — branch on (`GH_AUTH` / `GH_NONE`) × (`HAS_REMOTE` / `NO_REMOTE`):
 
-- `GH_AUTH` + `HAS_REMOTE` → `"/lets:done pushes the branch and opens a PR"` (the safe-default case; per Rule 3 of `## AskUserQuestion Conventions` the `(Recommended)` marker stays in the label, not here)
+- `GH_AUTH` + `HAS_REMOTE` → `"PR workflow via gh CLI (lets:done will push the branch and open a PR)"` (the safe-default case; per Rule 3 of `## AskUserQuestion Conventions` the `(Recommended)` marker stays in the label, not here. Future-tense "will push" + the `lets:done` mention as a parenthetical noun phrase keeps Rule 7 from auto-firing on PR-flow setup — the user is configuring, not invoking)
 - `GH_AUTH` + `NO_REMOTE` → `"⚠ gh authenticated but this repo has no git remote — add one (git remote add origin ...) before /lets:done, or it fails at push"`
 - `GH_NONE` + `HAS_REMOTE` → `"Needs gh auth (gh auth login) first"`
 - `GH_NONE` + `NO_REMOTE` → `"Needs gh auth (gh auth login) AND a git remote"`
