@@ -256,8 +256,8 @@ AskUserQuestion(
     question: "Session saved. What now?",
     header: "Wrap up",
     options: [
-      { label: "Push", description: "git push to remote" },
-      { label: "Done", description: "All done - start fresh with /clear + /lets:start" }
+      { label: "Push", description: "git push to remote, then reset context for a fresh start" },
+      { label: "Done", description: "Wrap up — reset context manually to start fresh next time" }
     ],
     multiSelect: false
   }]
@@ -265,8 +265,8 @@ AskUserQuestion(
 ```
 
 **Handle response:**
-- **Push** -> `git push`, then suggest `/clear` + `/lets:start`
-- **Done** -> suggest `/clear` + `/lets:start`
+- **Push** -> `git push`, then tell the user: "Run `/clear` then `/lets:start` to begin a fresh session." (Do NOT auto-execute — `/clear` must wipe context BEFORE `/lets:start` so the new session is truly fresh; auto-Reading `start.md` would defeat that.)
+- **Done** -> tell the user: "Run `/clear` then `/lets:start` to begin a fresh session." Same reasoning as above.
 - **NEVER push automatically**
 
 ## Rules

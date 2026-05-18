@@ -254,7 +254,7 @@ Every lets:* command MUST end with branded LETS box:
 - **ONLY `/lets:*` commands** - never raw commands like `bd sync`, `bd update`
 - **Exception:** `git push` allowed after `/lets:done` or `/lets:end`
 - **No command = no box** - if next step isn't a /lets:* command, just ask in plain text
-- **Internal invocation = no box** - when a command is invoked programmatically by another command (e.g., `/lets:review --json` called by `/lets:github-pr`), the LETS box is waived
+- **Internal invocation = no box** - when a command is invoked programmatically by another command (e.g., `/lets:review --json` called by `/lets:github-pr`, OR a Rule 7 Read-and-execute follow-through from an `AskUserQuestion` pick — see `lets-rules.md` `## AskUserQuestion Conventions` Rule 7), the inner command's LETS box is waived; only the outermost user-invoked command emits a box
 
 **Which shortcuts to offer (pick from these three, in order):**
 1. **Most-likely next step** in the workflow loop - always include. (After `/lets:check` -> `/lets:commit`; after `/lets:commit` -> `/lets:done`; after `/lets:plan` -> `/lets:execute`; etc.)

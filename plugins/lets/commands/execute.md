@@ -107,6 +107,11 @@ AskUserQuestion(
 )
 ```
 
+**Handle response:**
+- **Execute anyway** -> proceed to Step 5
+- **Re-plan** -> read `${CLAUDE_PLUGIN_ROOT}/commands/plan.md` via the Read tool and execute its flow
+- **Cancel** -> stop, return to the user
+
 ## Step 5: Enter Native Plan Mode
 
 Present the plan summary to the user, then enter plan mode.
