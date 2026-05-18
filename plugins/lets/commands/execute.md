@@ -13,7 +13,7 @@ Load an implementation plan and execute it using Claude Code's native plan mode.
 
 ## Step 1: Active Task Detection
 
-Use the **detect-task** skill to find the active task (read `${CLAUDE_PLUGIN_ROOT}/skills/detect-task/SKILL.md` and follow its detection flow).
+Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detect-task")`.
 If not on a feature/worktree branch and no in-progress task found - ask user which task to execute.
 
 Verify not on main/master:

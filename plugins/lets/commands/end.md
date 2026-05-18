@@ -69,7 +69,7 @@ Cleanup:  /lets:worktree remove {name} (if task completed)
 git status --short
 ```
 
-Use the **detect-task** skill to find the active task (read `${CLAUDE_PLUGIN_ROOT}/skills/detect-task/SKILL.md` and follow its detection flow).
+Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detect-task")`.
 
 ## Step 2: Handle Uncommitted Changes
 

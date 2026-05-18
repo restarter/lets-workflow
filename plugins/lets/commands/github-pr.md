@@ -143,7 +143,7 @@ AskUserQuestion(
 
 Resolve task-id now - after checkout the branch name changes to the PR branch.
 
-Use the **detect-task** skill to find the active task (read `${CLAUDE_PLUGIN_ROOT}/skills/detect-task/SKILL.md` and follow its detection flow).
+Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detect-task")`.
 If ambiguous or not found: skip beads logging later.
 
 Store detected task-id for use in `bd comments add` calls throughout the lifecycle.
@@ -799,7 +799,7 @@ If in worktree (`$GIT_DIR` contains `worktrees/`): warn "Already in a worktree -
 Else: `gh pr checkout <PR>` (same stash handling as Step 2.3).
 
 **Detect active task** (before branch switch, same as Step 2.2):
-Use the **detect-task** skill (read `${CLAUDE_PLUGIN_ROOT}/skills/detect-task/SKILL.md`).
+Use the **detect-task** skill: `Skill(skill: "lets:detect-task")`.
 Store detected task_id for beads logging in 6.6.
 
 Check for existing `$PR_DIR/response.json`:

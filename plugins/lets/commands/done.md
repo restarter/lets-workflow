@@ -16,7 +16,7 @@ Complete the current task. Document work, create PR or merge locally, close in b
 
 ## Step 1: Active Task Detection
 
-Use the **detect-task** skill to find the active task (read `${CLAUDE_PLUGIN_ROOT}/skills/detect-task/SKILL.md` and follow its detection flow).
+Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detect-task")`.
 If no task found: ask user which task to close.
 
 ### Epic Guard

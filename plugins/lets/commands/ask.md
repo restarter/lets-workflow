@@ -123,7 +123,7 @@ Show the agent's response:
 
 ## Step 6: Link Answer to Active Task
 
-Use the **detect-task** skill to find the active task (read `${CLAUDE_PLUGIN_ROOT}/skills/detect-task/SKILL.md` and follow its detection flow).
+Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detect-task")`.
 If multiple tasks found, skip beads comment.
 If active task found:
 
