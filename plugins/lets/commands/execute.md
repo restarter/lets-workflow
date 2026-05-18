@@ -109,7 +109,7 @@ AskUserQuestion(
 
 **Handle response:**
 - **Execute anyway** -> proceed to Step 5
-- **Re-plan** -> read `${CLAUDE_PLUGIN_ROOT}/commands/plan.md` via the Read tool and execute its flow
+- **Re-plan** -> invoke `Skill(skill: "lets:plan")`
 - **Cancel** -> stop, return to the user
 
 ## Step 5: Enter Native Plan Mode

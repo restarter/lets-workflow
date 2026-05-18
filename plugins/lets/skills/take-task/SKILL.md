@@ -103,7 +103,7 @@ AskUserQuestion(
 
 Handle response:
 - **Branch** -> `git checkout -b <branch> {LETS_MERGE_BRANCH}` (from LETS Config)
-- **Worktree** -> read `${CLAUDE_PLUGIN_ROOT}/commands/worktree.md` via the Read tool and execute its flow with args `create <task-id>-<slug>`, then inform:
+- **Worktree** -> invoke `Skill(skill: "lets:worktree", args: "create <task-id>-<slug>")`, then inform:
   "Worktree created. Open a new terminal and run:"
   `cd {absolute-worktree-path} && claude`
   "Then use `/lets:start` to pick a task."
