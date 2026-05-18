@@ -4,6 +4,7 @@
 
 ### Added
 - New `## AskUserQuestion Conventions` section in `lets-rules.md` codifies 8 rules for `AskUserQuestion` calls: header chip style (4-12 chars descriptive, `"LETS"` forbidden), question wording, label/description format, `multiSelect` use, `preview` constraints, follow-through (read command body + execute), and skip-when-one-action. Includes a worked example. CLAUDE.md "When Adding/Modifying" table and "Command Checklist" point at it. (lets-uffs7)
+- **Rule: beads is the only tracker (lets-imi3b).** New `### Task Tracker` subsection in `lets-rules.md` `## Beads Best Practices` explicitly names beads (`bd`) as the sole task tracker for LETS projects, and instructs the model to silently ignore Claude Code's `TaskCreate` / `TodoWrite` system-reminders. Stops the conversational noise of the model narrating "ignoring TaskCreate reminder" every session.
 - Auto-execute follow-through: when an `AskUserQuestion` option's `label` or `description` names a `/lets:*` command (e.g. `/lets:done`'s "End session" option, whose description contains "Run /lets:end - save context and wrap up"), the model now invokes that command via the `Skill` tool (`Skill(skill: "lets:<name>", args: "<args>")`) instead of narrating "now run /lets:end". The invoked command's own approval gates still apply (push, close, external-facing ops). Exceptions for prose-only patterns (qualifiers like `later`/`if needed`, cross-terminal hints, `/clear`-chained workflows) are documented in Rule 7. (lets-sc15i + lets-5pkvh)
 
 ### Changed
