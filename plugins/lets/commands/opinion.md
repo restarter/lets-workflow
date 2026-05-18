@@ -49,7 +49,7 @@ Adjust based on decision complexity - add more experts for cross-cutting decisio
 AskUserQuestion(
   questions=[{
     question: "Planning {N} experts for this decision. That's a lot - confirm?",
-    header: "LETS",
+    header: "Confirm",
     options: [
       { label: "Launch all", description: "{N} experts, thorough analysis" },
       { label: "Reduce", description: "Suggest fewer, more focused experts" }
@@ -196,7 +196,7 @@ After presenting the recommendation, offer to explore it deeper:
 AskUserQuestion(
   questions=[{
     question: "What's next?",
-    header: "LETS",
+    header: "Decision",
     options: [
       { label: "Discuss", description: "Explore the recommendation - questions, trade-offs, assumptions" },
       { label: "Accept", description: "Recommendation is clear, move on" }

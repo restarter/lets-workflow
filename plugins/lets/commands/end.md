@@ -79,7 +79,7 @@ If there are uncommitted changes, use **AskUserQuestion**:
 AskUserQuestion(
   questions=[{
     question: "Uncommitted changes detected. What to do?",
-    header: "LETS",
+    header: "Uncommitted",
     options: [
       { label: "Commit", description: "Run /lets:commit before ending session" },
       { label: "Skip", description: "End without committing - changes stay on disk" }
@@ -90,7 +90,7 @@ AskUserQuestion(
 ```
 
 **Handle response:**
-- **Commit** -> run `/lets:commit`, then continue
+- **Commit** -> read `${CLAUDE_PLUGIN_ROOT}/skills/commit/SKILL.md` via the Read tool and execute its flow, then continue
 - **Skip** -> continue
 
 ## Step 3: Save Progress to Beads (task-level context for multi-session work)
@@ -144,7 +144,7 @@ For each in-progress task, use **AskUserQuestion**:
 AskUserQuestion(
   questions=[{
     question: "{task title} - still in progress?",
-    header: "LETS",
+    header: "Task status",
     options: [
       { label: "In progress", description: "Leave open - continue next session" },
       { label: "Ready to finish", description: "Run /lets:done first, then come back to /lets:end" }
@@ -156,7 +156,7 @@ AskUserQuestion(
 
 **Handle response:**
 - **In progress** -> leave open, progress already saved in Step 3
-- **Ready to finish** -> suggest `/lets:done` first, then come back to `/lets:end`
+- **Ready to finish** -> read `${CLAUDE_PLUGIN_ROOT}/commands/done.md` via the Read tool and execute its flow first, then return to `/lets:end`
 
 ## Step 5: Create Session Summary (session-level context for next session bootstrap)
 
@@ -254,10 +254,10 @@ Then use **AskUserQuestion** for next steps:
 AskUserQuestion(
   questions=[{
     question: "Session saved. What now?",
-    header: "LETS",
+    header: "Wrap up",
     options: [
-      { label: "Push", description: "git push to remote" },
-      { label: "Done", description: "All done - start fresh with /clear + /lets:start" }
+      { label: "Push", description: "git push to remote, then reset context for a fresh start" },
+      { label: "Done", description: "Wrap up — reset context manually to start fresh next time" }
     ],
     multiSelect: false
   }]
@@ -265,8 +265,8 @@ AskUserQuestion(
 ```
 
 **Handle response:**
-- **Push** -> `git push`, then suggest `/clear` + `/lets:start`
-- **Done** -> suggest `/clear` + `/lets:start`
+- **Push** -> `git push`, then tell the user: "Run `/clear` then `/lets:start` to begin a fresh session." (Do NOT auto-execute — `/clear` must wipe context BEFORE `/lets:start` so the new session is truly fresh; auto-Reading `start.md` would defeat that.)
+- **Done** -> tell the user: "Run `/clear` then `/lets:start` to begin a fresh session." Same reasoning as above.
 - **NEVER push automatically**
 
 ## Rules

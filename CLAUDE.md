@@ -230,6 +230,7 @@ Update these files:
 | All `agents/*.md` `## Constraints` sections | If changing the read-only Bash allowlist or constraint wording, sync the identical 1-line text across all 13 analyst agents (verify with `grep -h "You are read-only" agents/*.md \| sort -u` returning exactly one line) |
 | `commands/end.md` + `commands/done.md` session-id references | Channel per context (the rule): **inside a bash command** → `$CLAUDE_CODE_SESSION_ID` (Bash subprocess env var; bash expands it at runtime) — used by `done.md` Step 7 + `end.md` Step 3 `bd comments add` bodies and `end.md` Step 5 `find ... "${CLAUDE_CODE_SESSION_ID}.jsonl"`. **In plain markdown the model writes** → `${CLAUDE_SESSION_ID}` (Claude Code's command-load-time template substitution) — used by `end.md` Step 5's summary-template `- ID:` line. No `SESSION_ID=` alias anywhere. Verify with `grep -rn "SESSION_ID" plugins/lets/commands/`. Background + remaining adoption scope (subagents, statusline, `/lets:team` records): see `lets-bdkvd`. |
 | `cli/internal/cli/<name>.go` + register in `cli/internal/cli/root.go` | If adding a Go subcommand. Add `<name>_test.go` (`package cli_test`). Use `cmd.OutOrStdout()`. Domain logic goes in `cli/internal/<name>/` (see `initcmd/`, `updatecmd/`, `sessionstart/`, `statusline/`, `frontmatter/` for patterns). Update `cli/README.md` "Adding a subcommand" recipe if pattern changes. |
+| Any `commands/*.md` or `skills/*/SKILL.md` invoking `AskUserQuestion` | Follow `## AskUserQuestion Conventions` in `plugins/lets/rules/lets-rules.md` (header chip 4-12 chars descriptive, `(Recommended)` in label, `multiSelect` per rule, follow-through via `Read` tool per Rule 7). Spec strings hardcoded in English; orchestrator translates to `$LETS_LANGUAGE` at runtime. |
 
 ### Command Output Requirements
 
@@ -253,7 +254,7 @@ Every lets:* command MUST end with branded LETS box:
 - **ONLY `/lets:*` commands** - never raw commands like `bd sync`, `bd update`
 - **Exception:** `git push` allowed after `/lets:done` or `/lets:end`
 - **No command = no box** - if next step isn't a /lets:* command, just ask in plain text
-- **Internal invocation = no box** - when a command is invoked programmatically by another command (e.g., `/lets:review --json` called by `/lets:github-pr`), the LETS box is waived
+- **Internal invocation = no box** - when a command is invoked programmatically by another command (e.g., `/lets:review --json` called by `/lets:github-pr`, OR a Rule 7 Read-and-execute follow-through from an `AskUserQuestion` pick — see `lets-rules.md` `## AskUserQuestion Conventions` Rule 7), the inner command's LETS box is waived; only the outermost user-invoked command emits a box
 
 **Which shortcuts to offer (pick from these three, in order):**
 1. **Most-likely next step** in the workflow loop - always include. (After `/lets:check` -> `/lets:commit`; after `/lets:commit` -> `/lets:done`; after `/lets:plan` -> `/lets:execute`; etc.)
@@ -271,3 +272,4 @@ Don't exceed ~4 lines in a box. If a command genuinely has only one sensible nex
 - [ ] Follows session flow (start -> work -> commit -> done -> end)
 - [ ] Description is clear and actionable
 - [ ] **If file invokes any deferred tool** (`AskUserQuestion`, `EnterPlanMode`, `WebFetch`, etc.), include the `> **IMPORTANT:**` deferred-tool callout right after the file's brief description, before the first `## Step` (or first major section). Wording: see existing commands/skills for the standard block (search for `IMPORTANT:** If the spec below`)
+- [ ] **If file invokes `AskUserQuestion`**, follow `## AskUserQuestion Conventions` in `plugins/lets/rules/lets-rules.md` — header chip 4-12 chars descriptive (never `"LETS"`; command name is OK when it names the topic), `(Recommended)` in label not description, follow-through via `Read` tool (Rule 7) when an option names a `/lets:*` command

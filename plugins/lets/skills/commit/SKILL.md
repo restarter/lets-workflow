@@ -54,7 +54,7 @@ Then use **AskUserQuestion**:
 AskUserQuestion(
   questions=[{
     question: "Commit with this message?",
-    header: "LETS",
+    header: "Commit",
     options: [
       { label: "Commit", description: "Stage all changes and commit" },
       { label: "Cancel", description: "Don't commit, keep changes unstaged" }

@@ -128,7 +128,7 @@ Based on the **feature goal**, **user clarifications**, **project size**, and **
 AskUserQuestion(
   questions=[{
     question: "Planning {N} explorers for this feature. That's a lot - confirm?",
-    header: "LETS",
+    header: "Confirm",
     options: [
       { label: "Launch all", description: "{N} explorers, thorough coverage" },
       { label: "Reduce", description: "Suggest fewer, more focused explorers" }
@@ -209,7 +209,7 @@ Show the codebase map to user, then ask:
 AskUserQuestion(
   questions=[{
     question: "Codebase map ready. How to proceed?",
-    header: "LETS",
+    header: "Codebase",
     options: [
       { label: "Continue", description: "Looks good, let's discuss approaches" },
       { label: "Questions", description: "I have questions about the findings" },
@@ -263,7 +263,7 @@ Then ask which to develop into full architecture designs:
 AskUserQuestion(
   questions=[{
     question: "Which approaches should I develop into full architecture designs?",
-    header: "LETS",
+    header: "Approach",
     options: [
       { label: "A: {name}", description: "{1-line summary}" },
       { label: "B: {name}", description: "{1-line summary}" },
@@ -372,7 +372,7 @@ After all architects return, present results.
 AskUserQuestion(
   questions=[{
     question: "Which architecture to proceed with?",
-    header: "LETS",
+    header: "Architecture",
     options: [
       { label: "{Approach A name}", description: "{1-line summary}" },
       { label: "{Approach B name}", description: "{1-line summary}" },
@@ -398,7 +398,7 @@ Show the architecture design and ask:
 AskUserQuestion(
   questions=[{
     question: "Architecture design ready. Proceed?",
-    header: "LETS",
+    header: "Design",
     options: [
       { label: "Continue", description: "Looks good, proceed to expert evaluation" },
       { label: "Adjust", description: "I want to change something first" }
@@ -445,9 +445,9 @@ Based on what the feature touches, suggest relevant experts:
 AskUserQuestion(
   questions=[{
     question: "Which experts should evaluate the architecture?",
-    header: "LETS",
+    header: "Experts",
     options: [
-      { label: "Recommended", description: "{pragmatist + N domain experts based on feature}. Separate rate limit." },
+      { label: "Full panel (Recommended)", description: "Pragmatist + N domain experts based on feature. Separate rate limit." },
       { label: "Pragmatist only", description: "Quick evaluation, just overengineering check" },
       { label: "Skip evaluation", description: "Architecture is solid, go straight to plan" }
     ],
@@ -457,7 +457,7 @@ AskUserQuestion(
 ```
 
 **Handle response:**
-- **Recommended** -> dispatch recommended experts
+- **Full panel** -> dispatch recommended experts
 - **Pragmatist only** -> dispatch only pragmatist
 - **Skip evaluation** -> proceed directly to Step 9 (Plan Generation)
 - **Other** (free text) -> parse expert names from text, dispatch selected
@@ -509,7 +509,7 @@ Then:
 AskUserQuestion(
   questions=[{
     question: "How to proceed?",
-    header: "LETS",
+    header: "Findings",
     options: [
       { label: "Discuss", description: "Explore trade-offs, challenge assumptions, probe deeper" },
       { label: "Generate plan", description: "Architecture approved, write the implementation plan" },
@@ -589,7 +589,7 @@ When ready to wrap up:
 AskUserQuestion(
   questions=[{
     question: "Ready to generate the plan?",
-    header: "LETS",
+    header: "Plan ready",
     options: [
       { label: "Generate plan", description: "Discussion complete, write the implementation plan" },
       { label: "Keep exploring", description: "More to discuss" },

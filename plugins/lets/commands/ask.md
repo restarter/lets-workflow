@@ -58,7 +58,7 @@ Available experts (map to `lets:*` agents):
 AskUserQuestion(
   questions=[{
     question: "Which expert to ask?",
-    header: "LETS",
+    header: "Expert",
     options: [
       { label: "{expert 1}", description: "{expertise}" },
       { label: "{expert 2}", description: "{expertise}" },
