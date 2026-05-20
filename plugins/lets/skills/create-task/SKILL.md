@@ -1,11 +1,23 @@
 ---
 name: create-task
-description: This skill should be used when creating a beads task - "create task", "create issue", "bd create", "new task", "add task", "add issue". Ensures all required fields are provided and suggests epic labels. Triggers on any task creation in any context - commands, brainstorm, planning, or direct conversation.
+description: This skill should be used when creating a beads task - "create task", "create issue", "bd create", "new task", "add task", "add issue". Ensures all required fields are provided, enforces English-only task content, and suggests epic labels. Triggers on any task creation in any context - commands, brainstorm, planning, or direct conversation.
 ---
 
 # Create Task
 
 Standardized task creation that enforces required fields and suggests labels. Fires in any context where a beads task is being created - inside commands, during brainstorm, or in direct conversation.
+
+## IMPORTANT: Language
+
+**All task content MUST be in English regardless of conversation language.** If the user is speaking another language, translate to English before running `bd create`.
+
+Applies to every field:
+- `--title`
+- `--description` (problem statement, acceptance criteria, examples)
+- `--labels`
+- Any subsequent `bd comments add` / `bd update` on this task
+
+**Why:** tasks are searched, filtered, and cross-referenced across the team and external systems (Planfix, GitHub). Mixed-language tasks break `bd search` and confuse non-native-language readers.
 
 ## Why This Exists
 
@@ -96,7 +108,25 @@ API calls fail silently on network errors.
 - Surface final error to user"
 ```
 
-Wait for user approval before running.
+Then ask for explicit confirmation:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Create this task?",
+    header: "Create Task",
+    options: [
+      { label: "Create", description: "Run `bd create` with the fields shown above" },
+      { label: "Cancel", description: "Don't create — return to revise fields" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+Handle response:
+- **Create** → proceed to Step 4 (Execute).
+- **Cancel** → ask "Which field needs revising — title, description, labels, type, or priority?" Loop back to Step 2 (Compose Fields) with the user's update, then re-show the proposed command and ask again.
 
 ### Step 4: Execute
 
