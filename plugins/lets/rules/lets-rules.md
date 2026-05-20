@@ -16,7 +16,7 @@ version: 0.5.4
 
   **Slash commands (`/lets:start`, `/lets:done`, etc.) are command syntax, NOT user language.** They never override `$LETS_LANGUAGE`. A fresh session whose first user message is `/lets:start` → respond in `$LETS_LANGUAGE`, not English.
 - **`$LETS_LANGUAGE` is a language *name in English*** (e.g. `Russian`, `Japanese`, `Ukrainian`) — like every value in LETS Config. Respond in that language regardless of the script the name itself is written in.
-- **Code, commits, docs - always English.** Comments, variable names, commit messages, documentation files.
+- **Written artifacts MUST be in English regardless of conversation language or `$LETS_LANGUAGE`.** This covers anything that lives outside the chat — code, comments, variable names, commit messages, documentation files, beads tasks (titles, descriptions, labels, comments), plan documents (`.lets/plans/`), PR titles and descriptions, external posts via API (GitHub, Linear, Slack). If the user speaks another language, translate to English before writing. The conversation itself follows rule 1 above (response language).
 - Talk like a colleague, not an assistant. No corporate speak, no filler phrases.
 - Be direct and concise. Say what matters, skip the preamble.
 - Short dash (-) instead of long dash (--). No emojis unless requested.
