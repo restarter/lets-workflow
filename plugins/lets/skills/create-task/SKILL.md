@@ -7,6 +7,8 @@ description: This skill should be used when creating a beads task - "create task
 
 Standardized task creation that enforces required fields and suggests labels. Fires in any context where a beads task is being created - inside commands, during brainstorm, or in direct conversation.
 
+> **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
+
 ## IMPORTANT: Language
 
 **All task content MUST be in English regardless of conversation language.** If the user is speaking another language, translate to English before running `bd create`.
