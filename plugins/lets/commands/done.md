@@ -54,6 +54,19 @@ AskUserQuestion(
 - **Skip** -> warn and continue
 - **Cancel** -> stop, return to work
 
+## Already-Merged Guard
+
+If `$LETS_PR_FLOW == github`, the branch may already be merged - the PR was created and merged in a parallel session, so Step 8's `git push` + `gh pr create` would crash with `GraphQL: No commits between ...`.
+
+```bash
+git fetch origin --quiet 2>/dev/null
+gh pr list --head "$(git branch --show-current)" --state merged --json number,url --limit 1 2>/dev/null
+```
+
+If this returns a merged PR, the work already shipped: skip Steps 3-8 and finish via Step 9's "After PR" Merge & close handling - with one change, since the PR is already merged, do NOT run `gh pr merge`; do Step 7's completion comment, then `bd close` + (if not in a worktree) `git checkout {LETS_MERGE_BRANCH} && git pull`. Report the PR number/URL.
+
+Otherwise (no PR, or `gh` unavailable) continue to Step 3 - normal flow.
+
 ## Step 3: Verify Task Scope
 
 **Before closing - verify ALL requirements from the task description are met.**
