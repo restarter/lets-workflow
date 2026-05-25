@@ -233,17 +233,17 @@ GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
 ```
 
 **Key differences when in a worktree:**
-- Branch is `worktree-<name>` (set by `/lets:worktree create`) - use as-is, do NOT create a `feature/` branch
+- Branch is `worktree-<name>` (new) OR an attached existing branch (auto-detected by `/lets:worktree create`) - use as-is, do NOT create a `feature/` branch
 - `.lets/` is a symlink to main repo's `.lets/` - config, sessions, plans all shared
-- `.beads/redirect` points to main repo's `.beads/` - same task database
+- `.beads/.env` is a symlink to main repo's `.beads/.env` so `bd` discovers the same database via git common-dir; no `.beads/redirect` file (legacy bd-worktree mechanism, removed in lets-rqep4)
 - Session refs are per-branch: `.session-start-ref-worktree-<name>` (parallel sessions don't collide)
 - `$LETS_PROJECT_ROOT` is the worktree path (not main repo)
 - **Glob tool does NOT follow symlinks.** Always use Bash (`ls`, `cat`) to find/read files in `.lets/` and `.beads/` - never use Glob for symlinked paths
 
 **What NOT to do in a worktree:**
-- Don't create additional `feature/` branches - `worktree-<name>` IS the working branch
+- Don't create additional `feature/` branches - the worktree's branch IS the working branch
 - Don't run `/lets:worktree create` from inside a worktree
-- Don't modify `.lets/` or `.beads/` structure (they're shared via symlink/redirect)
+- Don't modify `.lets/` (whole-dir symlink) or `.beads/.env` (targeted symlink) — both are LETS-managed, shared with main
 
 **Lifecycle:** `/lets:worktree create <name>` (from main repo) -> new terminal: `cd .worktrees/<name>/ && claude` -> `/lets:start` -> work -> `/lets:done` -> `/lets:worktree remove <name>` (from main repo)
 
