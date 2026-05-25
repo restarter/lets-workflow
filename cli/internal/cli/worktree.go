@@ -258,6 +258,14 @@ func renderHumanRemove(w io.Writer, res *worktreecmd.RemoveResult) {
 	if res.Removed == nil {
 		return
 	}
+	// --branch-only flow leaves Path empty (the worktree was already removed
+	// by a prior call; this invocation only deleted the branch). Print a
+	// branch-only headline rather than the misleading "Worktree removed: "
+	// with an empty value (review S-1).
+	if res.Removed.Path == "" {
+		fmt.Fprintf(w, "Branch deleted: %s\n", res.Removed.Branch)
+		return
+	}
 	fmt.Fprintf(w, "Worktree removed: %s\n", res.Removed.Path)
 	branchStatus := "kept"
 	if res.Removed.BranchDeleted {

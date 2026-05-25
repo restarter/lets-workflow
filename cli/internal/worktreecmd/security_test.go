@@ -81,6 +81,50 @@ func TestCreate_SwitchMainIfNeeded_DirtyTreeRefuses(t *testing.T) {
 	}
 }
 
+// Refuses --switch-main-if-needed when main is mid-revert (S-12 — REVERT_HEAD
+// was missing from the marker list pre-fix).
+func TestCreate_SwitchMainIfNeeded_MidRevertRefuses(t *testing.T) {
+	repo := initRepo(t)
+	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitDir := filepath.Join(repo, ".git")
+	// Fake mid-revert by touching REVERT_HEAD.
+	if err := os.WriteFile(filepath.Join(gitDir, "REVERT_HEAD"), []byte("abc123\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{
+		Name: "main", Mode: worktreecmd.BranchAttach, SwitchMainIfNeeded: true,
+	})
+	var e *worktreecmd.Error
+	if !errors.As(err, &e) || e.Code != worktreecmd.ExitDirtyWorktree {
+		t.Fatalf("got %v, want ExitDirtyWorktree (mid-revert)", err)
+	}
+	if !strings.Contains(e.Kind, "mid_op") {
+		t.Errorf("error kind=%s, expected to contain mid_op", e.Kind)
+	}
+}
+
+// Refuses --switch-main-if-needed when main is mid-auto-merge (S-12 — git
+// 2.41+ AUTO_MERGE marker was missing pre-fix).
+func TestCreate_SwitchMainIfNeeded_MidAutoMergeRefuses(t *testing.T) {
+	repo := initRepo(t)
+	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitDir := filepath.Join(repo, ".git")
+	if err := os.WriteFile(filepath.Join(gitDir, "AUTO_MERGE"), []byte("conflict\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{
+		Name: "main", Mode: worktreecmd.BranchAttach, SwitchMainIfNeeded: true,
+	})
+	var e *worktreecmd.Error
+	if !errors.As(err, &e) || e.Code != worktreecmd.ExitDirtyWorktree {
+		t.Fatalf("got %v, want ExitDirtyWorktree (mid-auto-merge)", err)
+	}
+}
+
 // Refuses --switch-main-if-needed when main is mid-rebase.
 func TestCreate_SwitchMainIfNeeded_MidRebaseRefuses(t *testing.T) {
 	repo := initRepo(t)

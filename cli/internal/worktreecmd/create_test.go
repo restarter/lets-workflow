@@ -134,6 +134,38 @@ func TestCreate_LETSMergeBranchOther(t *testing.T) {
 	}
 }
 
+// Review S-2: a branch already checked out in ANOTHER worktree must surface
+// as ExitBranchConflict / kind=branch_in_use_other_worktree, not the generic
+// ExitGitFailed. Pre-fix, the catch-all classifier routed this to
+// ExitGitFailed and broke the typed-exit-code contract for scripts.
+//
+// We pre-create a worktree via raw `git worktree add` (simulating "user has
+// the branch in use from another tool or manual setup"), then attempt our
+// own Create against the same branch.
+func TestCreate_BranchInUseOtherWorktree(t *testing.T) {
+	repo := initRepo(t)
+	runIn(t, repo, "git", "branch", "feat")
+	// Pre-existing worktree on `feat` outside our managed `.worktrees/`.
+	externalWt := filepath.Join(repo, "external-wt")
+	runIn(t, repo, "git", "worktree", "add", externalWt, "feat")
+	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{
+		Name: "feat", Mode: worktreecmd.BranchAttach,
+	})
+	var e *worktreecmd.Error
+	if !errors.As(err, &e) {
+		t.Fatalf("expected *worktreecmd.Error, got %T: %v", err, err)
+	}
+	if e.Code != worktreecmd.ExitBranchConflict {
+		t.Errorf("Code=%d, want ExitBranchConflict (%d); err=%v", e.Code, worktreecmd.ExitBranchConflict, err)
+	}
+	if e.Kind != "branch_in_use_other_worktree" {
+		t.Errorf("Kind=%q, want branch_in_use_other_worktree", e.Kind)
+	}
+}
+
 func TestCreate_NoOp_Idempotency(t *testing.T) {
 	repo := initRepo(t)
 	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {

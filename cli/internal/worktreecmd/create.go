@@ -182,15 +182,27 @@ func Create(ctx context.Context, projectRoot string, opts CreateOptions) (*Creat
 		msg := redactCreds(strings.TrimSpace(string(out)))
 		kind := "git_worktree_add_failed"
 		code := ExitGitFailed
-		if strings.Contains(msg, "already exists") {
+		remediation := "if path is stale: lets worktree remove " + opts.Name + " (use --force if dirty)"
+		switch {
+		// Path collision (e.g. `.worktrees/foo` already exists or `worktree-foo`
+		// branch already exists when creating in new-branch mode).
+		case strings.Contains(msg, "already exists"):
 			kind = "worktree_path_exists"
 			code = ExitWorktreeExists
+		// Branch already checked out in ANOTHER worktree (review S-2). git
+		// emits "fatal: 'feat' is already used by worktree at '...'". Route
+		// to ExitBranchConflict so scripts can branch on it without parsing
+		// prose; remediation points at the offending worktree.
+		case strings.Contains(msg, "is already used by worktree"):
+			kind = "branch_in_use_other_worktree"
+			code = ExitBranchConflict
+			remediation = "the target branch is checked out in another worktree; lets worktree list to find it, then remove or pick a different name"
 		}
 		return fail(&Error{
 			Code:        code,
 			Kind:        kind,
 			Message:     msg,
-			Remediation: "if path is stale: lets worktree remove " + opts.Name + " (use --force if dirty)",
+			Remediation: remediation,
 			Cause:       err,
 		})
 	}
@@ -248,9 +260,19 @@ func Create(ctx context.Context, projectRoot string, opts CreateOptions) (*Creat
 			if err := os.Chmod(wtBeads, 0o700); err != nil {
 				return rollback(ctx, result, projectRoot, wtPath, plan, prevMainBranch, "chmod worktree .beads", err)
 			}
-			// Harden main side too (idempotent).
-			_ = os.Chmod(filepath.Join(projectRoot, ".beads"), 0o700)
-			_ = os.Chmod(mainBeadsEnv, 0o600)
+			// Harden main side too (idempotent). Best-effort: surface a
+			// StepWarn on failure rather than block creation, but DON'T pretend
+			// the hardening succeeded — review S-10 caught silent swallows that
+			// contradicted the doc claim ("chmod 0o600 on disk"). Failures are
+			// rare in practice (foreign uid, SMB/NFS, immutable bit) but visible
+			// when they happen.
+			mainBeads := filepath.Join(projectRoot, ".beads")
+			if err := os.Chmod(mainBeads, 0o700); err != nil && !os.IsNotExist(err) {
+				addStep(StepWarn, fmt.Sprintf("could not chmod 0o700 %s: %v — main .beads/ may be group/other-readable", mainBeads, err))
+			}
+			if err := os.Chmod(mainBeadsEnv, 0o600); err != nil {
+				addStep(StepWarn, fmt.Sprintf("could not chmod 0o600 %s: %v — credential file may be group/other-readable", mainBeadsEnv, err))
+			}
 			if err := CreateRelativeSymlink(filepath.Join(wtBeads, ".env"), mainBeadsEnv, projectRoot); err != nil {
 				return rollback(ctx, result, projectRoot, wtPath, plan, prevMainBranch, "symlink .beads/.env", err)
 			}
@@ -387,7 +409,14 @@ func ensureCleanTree(ctx context.Context, repo string) error {
 	if !filepath.IsAbs(gd) {
 		gd = filepath.Join(repo, gd)
 	}
-	for _, marker := range []string{"rebase-merge", "rebase-apply", "MERGE_HEAD", "CHERRY_PICK_HEAD", "BISECT_LOG"} {
+	// Mid-op markers we refuse to switch through. Review S-12 added
+	// REVERT_HEAD (git revert with conflicts) and AUTO_MERGE (git 2.41+
+	// recursive merge in progress) on top of the original five.
+	for _, marker := range []string{
+		"rebase-merge", "rebase-apply",
+		"MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD",
+		"BISECT_LOG", "AUTO_MERGE",
+	} {
 		if _, err := os.Stat(filepath.Join(gd, marker)); err == nil {
 			return &Error{
 				Code:        ExitDirtyWorktree,
