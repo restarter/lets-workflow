@@ -16,6 +16,34 @@ import (
 	"github.com/restarter/lets-workflow/cli/internal/initcmd"
 )
 
+// detectInsideWorktreeAt inspects whether the given path is inside a git
+// worktree (rather than the main repo). Unlike initcmd.DetectInsideWorktree
+// it does NOT use cwd — important for callers that operate on an explicit
+// projectRoot (and for tests that run from a worktree but target a fresh
+// temp repo). Returns false on any git error.
+func detectInsideWorktreeAt(ctx context.Context, path string) bool {
+	gitDir, err := exec.CommandContext(ctx, "git", "-C", path, "rev-parse", "--git-dir").Output()
+	if err != nil {
+		return false
+	}
+	commonDir, err := exec.CommandContext(ctx, "git", "-C", path, "rev-parse", "--git-common-dir").Output()
+	if err != nil {
+		return false
+	}
+	resolve := func(s string) string {
+		s = strings.TrimSpace(s)
+		if !filepath.IsAbs(s) {
+			abs, err := filepath.Abs(filepath.Join(path, s))
+			if err != nil {
+				return s
+			}
+			return abs
+		}
+		return s
+	}
+	return resolve(string(gitDir)) != resolve(string(commonDir))
+}
+
 // CreateOptions configures the create flow.
 type CreateOptions struct {
 	Name               string
@@ -71,12 +99,15 @@ func Create(ctx context.Context, projectRoot string, opts CreateOptions) (*Creat
 		return fail(&Error{Code: ExitUsage, Kind: "name_validation", Cause: err})
 	}
 
-	// Step 2: guard not-inside-worktree.
-	if initcmd.DetectInsideWorktree() {
+	// Step 2: guard not-inside-worktree. Uses projectRoot-anchored check so
+	// callers (and tests) that pass a fresh repo while running from inside an
+	// unrelated worktree are not falsely rejected.
+	if detectInsideWorktreeAt(ctx, projectRoot) {
 		addStep(StepErr, "guard: cannot create worktree from inside a worktree")
 		return fail(ErrInsideWorktree())
 	}
 	addStep(StepOK, "guard: in main repo")
+	_ = initcmd.DetectInsideWorktree // keep import warm; cwd-based variant still used by lets init
 
 	// Step 3: resolve base ref (LETS_MERGE_BRANCH from .lets/.env, fallback "main").
 	base := opts.Base
@@ -175,11 +206,84 @@ func Create(ctx context.Context, projectRoot string, opts CreateOptions) (*Creat
 		BaseRef:    plan.Base,
 	}
 	result.NextSteps = &NextSteps{AbsolutePath: wtPath}
-	_ = prevMainBranch // consumed by Task 4b rollback
 
-	// Task 4b appends: symlink steps, verify, success-OK or rollback.
-	// Skeleton ends here; full body in Task 4b.
-	panic("Task 4a stop point — 4b appends symlink + verify + success")
+	// Step 8: symlink .lets/ (replace any pre-existing dir that statusline may have created).
+	letsSymlinked := false
+	defensiveRemove := false
+	if !opts.NoSymlinkLets {
+		mainLets := filepath.Join(projectRoot, ".lets")
+		wtLets := filepath.Join(wtPath, ".lets")
+		if fi, err := os.Lstat(wtLets); err == nil {
+			if fi.Mode()&os.ModeSymlink == 0 {
+				// Real dir present (statusline-race or otherwise). Remove and replace.
+				_ = os.RemoveAll(wtLets)
+				defensiveRemove = true
+			} else {
+				_ = os.Remove(wtLets) // stale symlink
+			}
+		}
+		if err := CreateRelativeSymlink(wtLets, mainLets, projectRoot); err != nil {
+			return rollback(ctx, result, projectRoot, wtPath, plan, prevMainBranch, "symlink .lets/", err)
+		}
+		letsSymlinked = true
+		if defensiveRemove {
+			addStep(StepWarn, ".lets/ symlinked (defensive: pre-existing real dir removed; statusline race likely)")
+		} else {
+			addStep(StepOK, ".lets/ symlinked")
+		}
+	} else {
+		addStep(StepSkip, ".lets/ symlink disabled by flag")
+	}
+
+	// Step 9: symlink .beads/.env + chmod 700 (and hardenings).
+	beadsSymlinked := false
+	if !opts.NoSymlinkBeads {
+		mainBeadsEnv := filepath.Join(projectRoot, ".beads", ".env")
+		if _, err := os.Stat(mainBeadsEnv); err == nil {
+			wtBeads := filepath.Join(wtPath, ".beads")
+			// ORDER: MkdirAll → Chmod → Symlink (eliminate visibility window).
+			if err := os.MkdirAll(wtBeads, 0o700); err != nil {
+				return rollback(ctx, result, projectRoot, wtPath, plan, prevMainBranch, "mkdir .beads", err)
+			}
+			if err := os.Chmod(wtBeads, 0o700); err != nil {
+				return rollback(ctx, result, projectRoot, wtPath, plan, prevMainBranch, "chmod worktree .beads", err)
+			}
+			// Harden main side too (idempotent).
+			_ = os.Chmod(filepath.Join(projectRoot, ".beads"), 0o700)
+			_ = os.Chmod(mainBeadsEnv, 0o600)
+			if err := CreateRelativeSymlink(filepath.Join(wtBeads, ".env"), mainBeadsEnv, projectRoot); err != nil {
+				return rollback(ctx, result, projectRoot, wtPath, plan, prevMainBranch, "symlink .beads/.env", err)
+			}
+			beadsSymlinked = true
+			addStep(StepOK, ".beads/.env symlinked, chmod 700/600")
+		} else {
+			addStep(StepSkip, "no .beads/.env in main repo")
+		}
+	} else {
+		addStep(StepSkip, ".beads/.env symlink disabled by flag")
+	}
+
+	// Step 10: verify.
+	if err := VerifyCreate(ctx, projectRoot, wtPath, plan); err != nil {
+		return rollback(ctx, result, projectRoot, wtPath, plan, prevMainBranch, "verify failed", err)
+	}
+	addStep(StepOK, "verify: branch, symlinks, paths")
+
+	// Success.
+	result.OK = true
+	result.Worktree.LetsSymlinked = letsSymlinked
+	result.Worktree.BeadsSymlinked = beadsSymlinked
+	// Tracked-.lets/ opt-in warning.
+	if cmd := exec.CommandContext(ctx, "git", "-C", projectRoot, "check-ignore", "-q", ".lets/"); cmd.Run() != nil {
+		addStep(StepWarn, ".lets/ is NOT gitignored — tracked-`.lets/` opt-in not supported yet; symlink may show as untracked in worktree")
+	}
+	// Auto-switch UX: success-path notification. Main repo is now on a different
+	// branch than user started on; surface explicit restore command.
+	if prevMainBranch != "" {
+		addStep(StepWarn, fmt.Sprintf("main repo left on %s (was on %s); restore with: git -C %s switch %s",
+			resolveBaseFromEnv(projectRoot), prevMainBranch, projectRoot, prevMainBranch))
+	}
+	return result, nil
 }
 
 func checkGitVersion(ctx context.Context) error {
