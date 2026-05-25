@@ -26,6 +26,17 @@ func (e *Error) Error() string {
 // and lets callers inspect the underlying cause (e.g. *exec.ExitError).
 func (e *Error) Unwrap() error { return e.Cause }
 
+// ExitCode satisfies the cli-layer's exit-coder interface so main.go can
+// translate a typed worktreecmd error into the matching process exit code
+// (10..20 — see exit.go). Returns ExitGeneric when Code is zero so callers
+// don't fall through to a silent 0/success on a partially-initialized Error.
+func (e *Error) ExitCode() int {
+	if e.Code == 0 {
+		return ExitGeneric
+	}
+	return e.Code
+}
+
 // ErrInsideWorktree — raised when create is invoked from within a worktree.
 func ErrInsideWorktree() *Error {
 	return &Error{
