@@ -46,6 +46,16 @@ Anthropic prompt cache TTL is 5 minutes. Picking `delaySeconds`:
 
 For idle ticks with no specific signal to watch, default `1200-1800s` (20-30 min). User can always interrupt if they need you sooner.
 
+### Minute-boundary rounding gotcha (empirical, Experiment 1)
+
+`delaySeconds` is NOT honored exactly. The actual wakeup time is **rounded UP to the next clean minute boundary**. Binary cron expression is `MM HH * * *` (minute-only granularity).
+
+Examples from Experiment 1:
+- Requested `30s`, clamped to `60s`, actual scheduled `65s` (we were at HH:MM:55)
+- Same request next tick, actual scheduled `101s` (we were at HH:MM:19)
+
+**Implication:** for any tick under ~1min you get 60-119s of real delay. Designing precise polling cadences <2min is futile — pick `60s` (floor) and accept jitter, or accept >120s with predictable bucketing. Also note dispatch latency adds ~10-25s on top.
+
 ### Cancellation / collisions
 
 - Re-issuing `/loop` with the **same prompt** cancels the previous pending wakeup for that prompt (`ZP5(_)` in binary). One prompt = one live loop.
