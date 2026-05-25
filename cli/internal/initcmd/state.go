@@ -41,21 +41,20 @@ func DetectProjectRoot() string {
 	return gitutil.ProjectRoot("", 2*time.Second)
 }
 
-// DetectInsideWorktree returns true if the current dir is inside a git worktree
-// (not the main repo). Robust detection: --git-dir points at the worktree's
-// `<main>/.git/worktrees/<name>` while --git-common-dir points at the main
-// repo's `.git`. They differ iff we're inside a worktree. Substring matching
-// on the literal "/worktrees/" path component is fragile (path could legally
-// contain that segment elsewhere), so prefer the path-equality check.
+// DetectInsideWorktreeWithRoot returns (insideWorktree, mainRepoRoot) for the
+// current working directory. mainRepoRoot is empty when not inside any git
+// repo. Used by both DetectInsideWorktree (returns the bool only) and by
+// callers that also need the main repo path (e.g. `lets worktree info`).
 //
-// Normalize both paths via filepath.Abs before comparing - git returns
-// absolute when run from repo root and relative (e.g. "../../.git") when
-// run from a subdirectory, so the same .git can yield two different raw
-// strings. Without normalization a subfolder of the main repo would be
-// false-positively classified as a worktree (real bug surfaced during
-// Phase 4b smoke testing; fix had been discarded in the revert and is
-// re-applied here).
-func DetectInsideWorktree() bool {
+// Mechanism: `git rev-parse --git-dir` points at the worktree's
+// `<main>/.git/worktrees/<name>` when inside a worktree, while
+// `--git-common-dir` always points at the main repo's `.git`. They differ
+// iff we're inside a worktree. Normalize both paths via filepath.Abs before
+// comparing — git returns absolute when run from repo root and relative
+// (e.g. "../../.git") when run from a subdirectory, so without normalization
+// a subfolder of the main repo would be false-positively classified as a
+// worktree (Phase 4b smoke-test regression preserved here).
+func DetectInsideWorktreeWithRoot() (bool, string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
@@ -73,13 +72,22 @@ func DetectInsideWorktree() bool {
 
 	gitDir, ok := resolve("--git-dir")
 	if !ok {
-		return false
+		return false, ""
 	}
 	commonDir, ok := resolve("--git-common-dir")
 	if !ok {
-		return false
+		return false, ""
 	}
-	return gitDir != commonDir
+	// commonDir resolves to <main>/.git — parent is the main repo root.
+	mainRoot := filepath.Dir(commonDir)
+	return gitDir != commonDir, mainRoot
+}
+
+// DetectInsideWorktree delegates to DetectInsideWorktreeWithRoot for the
+// boolean answer (DRY).
+func DetectInsideWorktree() bool {
+	in, _ := DetectInsideWorktreeWithRoot()
+	return in
 }
 
 // DetectPluginRoot resolves plugin install dir.
