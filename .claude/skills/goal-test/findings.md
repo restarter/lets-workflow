@@ -4,6 +4,61 @@ Empirical observations from `/goal` experiments + web-research log. Newest at to
 
 ---
 
+### 2026-05-25 · Experiment 5 · Template A end-to-end on real cleanup task
+
+**Goal prompt:**
+```
+The file .claude/scheduled_tasks.lock is excluded from git: `git check-ignore .claude/scheduled_tasks.lock` returns exit code 0. There is a new commit on this branch with footer "Task: lets-53buy" that introduces this exclusion. Use /lets:commit (not direct git commit). Do NOT push.
+```
+
+**Method:** real cleanup task discovered organically during loop experiments — `.claude/scheduled_tasks.lock` was an untracked residue from Claude Code's /loop runtime. Drove the fix end-to-end under /goal: Read .gitignore → Edit (add pattern) → Bash verify → invoke /lets:commit skill (which itself invoked AskUserQuestion) → user approved → Bash commit + verify.
+
+**Outcome:** `✔ Goal achieved (1m · 1 turn · 3.4k tokens)`. Result commit: `14c184c chore(lets-53buy): ignore .claude/scheduled_tasks* cruft`.
+
+**KEY findings — Template A validated; cost model rewritten:**
+
+1. **Substantial multi-tool workflow converges in 1 turn.** This turn included: Read + Edit + 2 Bash + Skill invocation + AskUserQuestion (user pick) + Bash commit. All under the same /goal evaluator-cycle. Model never yielded to harness; only at the end did it stop. Evaluator saw the full transcript and approved.
+
+2. **AskUserQuestion is mid-turn, NOT end-turn.** User's response to AskUserQuestion is delivered as a tool result (like Bash output). Model continues processing in the same turn. **This means `/goal`-driven workflows can pause for user input without burning evaluator cycles.** Critical for Template A: `/lets:commit`'s approval gate is fully compatible with `/goal`.
+
+3. **AUTO MODE rule trumps /goal preamble without penalty.** /goal system preamble says `"do not pause to ask the user what to do"`. Project AUTO MODE rule says commits require explicit approval. Model honored project rule. Evaluator approved. No rejection, no impossible-flag, no BLOCK_CAP. **The tension resolves in favor of project rules.** This is the most important finding of the entire experiment series — it means /goal is safe to use in LETS contexts without rewriting rules.
+
+4. **Cost is dominated by turn count, not work-per-turn.** Final cost table:
+   | Experiment | Turns | Tokens | Wall | Complexity |
+   |---|---|---|---|---|
+   | Exp 1 smoke | 1 | 843 | 18s | trivial |
+   | Exp 2 silent | 1 | 2000 | 34s | trivial + ambiguous |
+   | Exp 3 compound success | 1 | 703 | 19s | medium |
+   | Exp 4 failure + recovery | **2** | **4100** | 60s | medium |
+   | **Exp 5 Template A end-to-end** | **1** | **3400** | 60s | substantial |
+
+   Exp 5 (most complex work) cheaper than Exp 4 (simple work + rejection cycle). **Design implication:** invest heavily in precise goal specs — each rejection cycle ≈ 2x the cost of the entire workflow. Vague conditions are not just behaviorally worse, they're financially expensive.
+
+5. **Template A pattern works without modification.** The pattern from SKILL.md (verifiable bd/git state + workflow phases + hard constraints) converged on first try with no goal rewriting needed. Suggests the pattern is sound.
+
+**Workflow steps observed (for future Template-A debugging):**
+
+1. Goal sets → model reads .gitignore (1 Read)
+2. Model edits .gitignore to add pattern (1 Edit)
+3. Model verifies via `git check-ignore` (1 Bash, exit code 0 confirms)
+4. Model invokes `/lets:commit` skill via Skill tool
+5. /lets:commit runs `git diff .gitignore` (1 Bash)
+6. /lets:commit presents commit message + AskUserQuestion("Commit?")
+7. User picks "Commit"
+8. /lets:commit runs `git add + git commit` + verify (1 Bash)
+9. Assistant summary text quoting evidence
+10. Evaluator yields ok=true
+
+All steps in one turn. ~3.4k tokens covers the full workflow including evaluator's eventual yield-judgment.
+
+**Sub-finding — UI rendering during long turns:**
+
+User's terminal showed each tool call collapsed inline (`Read 1 file`, `Update(.gitignore)`, `Bash(...)`, `Skill(lets:commit)`, etc.) before the final `✔ Goal achieved` line. Means the human's experience is real-time visibility of progress despite it being "one turn" to the model. Good for usability of long /goal runs.
+
+**Promote-to-plugin signal:** strong. Template A worked first-try end-to-end on a real task. Worth productizing as `/lets:goal` command with Template A/B/C presets.
+
+---
+
 ### 2026-05-25 · Experiment 4 · parallel-batch failure + rejection text capture
 
 **Goal prompt:**
