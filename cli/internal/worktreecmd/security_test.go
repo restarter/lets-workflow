@@ -103,16 +103,33 @@ func TestCreate_SwitchMainIfNeeded_MidRebaseRefuses(t *testing.T) {
 	}
 }
 
-// Credential-redaction sanity.
+// Credential-redaction sanity. Covers all four cred shapes git can emit
+// plus the bare-SSH no-op case. Scheme is PRESERVED in the redacted output
+// (per security review B-2 — scheme-flip masks transport-security bugs).
 func TestRedactCreds(t *testing.T) {
 	cases := map[string]string{
-		"https://alice:s3cret@github.com/repo.git": "https://***:***@github.com/repo.git",
-		"http://x:y@example/path":                  "https://***:***@example/path",
-		"plain https://github.com/repo no creds":   "plain https://github.com/repo no creds",
+		// classic user:password
+		"https://alice:s3cret@github.com/repo.git": "https://<redacted>@github.com/repo.git",
+		// http stays http (scheme preserved)
+		"http://x:y@example/path": "http://<redacted>@example/path",
+		// token-only (gh auth setup-git / x-access-token form) - WAS LEAKED PRE-B-2
+		"https://:ghp_abc123@github.com/x/y": "https://<redacted>@github.com/x/y",
+		// single-token without colon - WAS LEAKED PRE-B-2
+		"https://ghp_singletoken@github.com/x/y": "https://<redacted>@github.com/x/y",
+		// password contains @ - WAS PARTIAL-LEAKED PRE-B-2 ("ssword" tail).
+		// RE2's greedy [^\s/]* consumes up to the LAST `@` before `/` or
+		// whitespace, so the whole "user:p@ssword" disappears (best case).
+		"https://user:p@ssword@host/path": "https://<redacted>@host/path",
+		// bare SSH form - no scheme, untouched
+		"git@github.com:user/repo.git": "git@github.com:user/repo.git",
+		// plain URL, no creds - untouched
+		"plain https://github.com/repo no creds": "plain https://github.com/repo no creds",
+		// mid-text URL inside a longer error message
+		"fatal: Authentication failed for 'https://x:tok@github.com/foo/bar.git'": "fatal: Authentication failed for 'https://<redacted>@github.com/foo/bar.git'",
 	}
 	for in, want := range cases {
 		if got := worktreecmd.RedactCredsForTesting(in); got != want {
-			t.Errorf("redactCreds(%q) = %q, want %q", in, got, want)
+			t.Errorf("redactCreds(%q):\n  got  %q\n  want %q", in, got, want)
 		}
 	}
 }
