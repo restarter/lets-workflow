@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -144,6 +145,63 @@ func TestCreate_SwitchMainIfNeeded_MidRebaseRefuses(t *testing.T) {
 	}
 	if !strings.Contains(e.Kind, "mid_op") {
 		t.Errorf("error kind=%s, expected to contain mid_op", e.Kind)
+	}
+}
+
+// Verifies the post-S-1-followup fix: when Step 5 auto-switches main and a
+// LATER pre-rollback step (Step 6 EnsureGitignore) fails, the helper
+// restores main to the pre-switch branch. Without the restore, fail() would
+// leave the user's main repo on $LETS_MERGE_BRANCH while reporting an error
+// — a partial state change the user didn't ask for.
+//
+// Reproduction strategy: induce a Step 6 EnsureGitignore failure by
+// pre-creating `.lets/locks` as a regular FILE (not a directory). When
+// EnsureGitignore tries `os.MkdirAll(...) .lets/locks/...`, the FS rejects
+// because the parent path is a file. The Step 5 auto-switch has already
+// happened by then; the new restoreMainIfSwitched helper must reverse it.
+func TestCreate_SwitchMainIfNeeded_RestoresMainOnLaterFailure(t *testing.T) {
+	repo := initRepo(t)
+	// Pre-commit .gitignore so ensureCleanTree passes after we write .lets/.env.
+	if err := os.WriteFile(filepath.Join(repo, ".gitignore"), []byte(".lets/\n.worktrees/\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runIn(t, repo, "git", "add", ".gitignore")
+	runIn(t, repo, "git", "commit", "-m", "ignore .lets/.worktrees")
+	runIn(t, repo, "git", "branch", "develop")
+	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, ".lets", ".env"), []byte("LETS_MERGE_BRANCH=develop\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Block EnsureGitignore's MkdirAll(`.lets/locks`) by placing a regular
+	// file there: subsequent MkdirAll fails with "not a directory".
+	if err := os.WriteFile(filepath.Join(repo, ".lets", "locks"), []byte("blocker"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Main is currently on `main`. Attach mode + name=main → Step 5 sees
+	// cur == plan.Branch, auto-switches main → develop, then Step 6 fails.
+	res, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{
+		Name: "main", Mode: worktreecmd.BranchAttach, SwitchMainIfNeeded: true,
+	})
+	if err == nil || res.OK {
+		t.Fatalf("expected gitignore-update failure, got ok=%v err=%v", res.OK, err)
+	}
+	// The fix: main must be back on its original branch.
+	out, _ := exec.Command("git", "-C", repo, "branch", "--show-current").Output()
+	if got := strings.TrimSpace(string(out)); got != "main" {
+		t.Errorf("main was not restored: now on %q, want %q", got, "main")
+	}
+	// Surface check: a "restored main" step should be visible in the envelope.
+	sawRestore := false
+	for _, s := range res.Steps {
+		if strings.Contains(s.Message, "restored main") {
+			sawRestore = true
+		}
+	}
+	if !sawRestore {
+		t.Errorf("expected a 'restored main' step, got steps: %+v", res.Steps)
 	}
 }
 

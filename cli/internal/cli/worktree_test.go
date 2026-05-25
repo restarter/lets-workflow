@@ -162,6 +162,35 @@ func TestWorktreeRemove_Human(t *testing.T) {
 	}
 }
 
+// Pins the S-1 fix at the CLI surface: --branch-only on a worktree that has
+// already been removed prints "Branch deleted: <name>" rather than the
+// pre-fix misleading "Worktree removed: <blank>". Closes the test gap the
+// post-/lets:check review flagged — the RenderRemove change had package-
+// level coverage via the empty-Path branch but no end-to-end stdout pin.
+func TestWorktreeRemove_BranchOnly_Human(t *testing.T) {
+	repo := initTestRepo(t)
+	if _, _, err := runWorktreeCmd(t, repo, "create", "foo"); err != nil {
+		t.Fatal(err)
+	}
+	// R2: remove the worktree first (no --delete-branch).
+	if _, _, err := runWorktreeCmd(t, repo, "remove", "foo"); err != nil {
+		t.Fatalf("R2 remove failed: %v", err)
+	}
+	// R3: branch-only follow-up — worktree is gone, only the branch remains.
+	stdout, _, err := runWorktreeCmd(t, repo, "remove", "foo",
+		"--branch-only", "--branch", "worktree-foo", "--delete-branch")
+	if err != nil {
+		t.Fatalf("R3 branch-only remove failed: %v", err)
+	}
+	if !strings.Contains(stdout, "Branch deleted: worktree-foo") {
+		t.Errorf("expected 'Branch deleted: worktree-foo' headline, got: %q", stdout)
+	}
+	// Must NOT print the misleading worktree-removed headline with a blank.
+	if strings.Contains(stdout, "Worktree removed:") {
+		t.Errorf("unexpected 'Worktree removed:' line in branch-only output: %q", stdout)
+	}
+}
+
 func TestWorktreeInfo_Human(t *testing.T) {
 	repo := initTestRepo(t)
 	stdout, _, err := runWorktreeCmd(t, repo, "info")

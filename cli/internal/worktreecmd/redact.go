@@ -14,6 +14,14 @@ import "regexp"
 // Captured group 1 is the scheme (preserved in the redaction output so the
 // user can still locate the offending remote in their git config). The
 // non-captured middle ([^\s/]*@) is the part replaced wholesale.
+//
+// Trade-off (review post-S-1 followup #4): RE2's greedy [^\s/]* stops only
+// at `/` or whitespace, so it can over-absorb when the input contains
+// stray `@` symbols AFTER the host but before any `/` (e.g.
+// `https://u:p@h?q=x@y` matches `https://u:p@h?q=x@` and redacts to
+// `https://<redacted>@y`). This is acceptable for git stderr where URLs
+// are followed immediately by `/path` or whitespace, but worth knowing if
+// this helper is ever reused outside the git-stderr context.
 var credURLRE = regexp.MustCompile(`(https?://)[^\s/]*@`)
 
 // redactCreds replaces inline credentials in git output with <redacted>

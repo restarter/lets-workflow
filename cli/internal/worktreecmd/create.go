@@ -53,6 +53,22 @@ func Create(ctx context.Context, projectRoot string, opts CreateOptions) (*Creat
 		result.Error = &ErrorInfo{Kind: e.Kind, Message: e.Message, Remediation: e.Remediation}
 		return result, e
 	}
+	// restoreMainIfSwitched is called by the pre-rollback failure paths
+	// (Steps 6 + 7) to undo an earlier Step 5 --switch-main-if-needed.
+	// Without this, a Step 6 gitignore failure (or Step 7 git-worktree-add
+	// failure) after Step 5 auto-switched main would leave the user's main
+	// on the merge-branch when they expected the original. Steps 8/9/10
+	// route through rollback() which handles this itself.
+	restoreMainIfSwitched := func(prev string) {
+		if prev == "" {
+			return
+		}
+		if out, err := exec.CommandContext(ctx, "git", "-C", projectRoot, "switch", prev).CombinedOutput(); err != nil {
+			addStep(StepWarn, fmt.Sprintf("failed to restore main to %s after auto-switch: %s", prev, redactCreds(strings.TrimSpace(string(out)))))
+		} else {
+			addStep(StepOK, fmt.Sprintf("restored main to %s after auto-switch", prev))
+		}
+	}
 
 	// Pre-flight: minimum git version.
 	if err := checkGitVersion(ctx); err != nil {
@@ -133,6 +149,7 @@ func Create(ctx context.Context, projectRoot string, opts CreateOptions) (*Creat
 	// Step 6: ensure .gitignore entries via shared initcmd helper
 	// (race-safe via flock + integrity check after Task 3 hardening).
 	if err := initcmd.EnsureGitignore(projectRoot, []string{".worktrees/", ".lets"}); err != nil {
+		restoreMainIfSwitched(prevMainBranch)
 		return fail(&Error{
 			Code:    ExitFilesystem,
 			Kind:    "gitignore_update",
@@ -170,6 +187,7 @@ func Create(ctx context.Context, projectRoot string, opts CreateOptions) (*Creat
 			code = ExitBranchConflict
 			remediation = "the target branch is checked out in another worktree; lets worktree list to find it, then remove or pick a different name"
 		}
+		restoreMainIfSwitched(prevMainBranch)
 		return fail(&Error{
 			Code:        code,
 			Kind:        kind,

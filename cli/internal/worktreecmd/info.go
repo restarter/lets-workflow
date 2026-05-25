@@ -19,7 +19,6 @@ import (
 // dir is typically the current working directory but the signature lets
 // callers (and tests) target a specific path.
 func Info(ctx context.Context, dir string) (*InfoResult, error) {
-	_ = ctx // worktreecmd-context discipline; detector uses its own timeout
 	res := &InfoResult{
 		Envelope: Envelope{
 			SchemaVersion: SchemaVersion,
