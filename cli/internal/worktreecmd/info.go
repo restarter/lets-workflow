@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/restarter/lets-workflow/cli/internal/initcmd"
 )
 
 // Info classifies dir relative to git worktrees:
@@ -17,6 +19,7 @@ import (
 // dir is typically the current working directory but the signature lets
 // callers (and tests) target a specific path.
 func Info(ctx context.Context, dir string) (*InfoResult, error) {
+	_ = ctx // worktreecmd-context discipline; detector uses its own timeout
 	res := &InfoResult{
 		Envelope: Envelope{
 			SchemaVersion: SchemaVersion,
@@ -24,37 +27,13 @@ func Info(ctx context.Context, dir string) (*InfoResult, error) {
 			Steps:         []Step{},
 		},
 	}
-	// Probe dir directly via `git -C` rather than relying on initcmd's
-	// cwd-based DetectInsideWorktreeWithRoot — caller may have passed an
-	// arbitrary path while the orchestrator's cwd is elsewhere.
-	gitDirOut, err := exec.CommandContext(ctx, "git", "-C", dir, "rev-parse", "--git-dir").Output()
-	if err != nil {
+	// Use the consolidated initcmd detector (path-anchored variant).
+	inWt, mainRoot := initcmd.DetectInsideWorktreeAt(dir)
+	if mainRoot == "" {
 		res.OK = false
 		res.Error = &ErrorInfo{Kind: "not_in_repo", Message: "not inside a git repository"}
 		return res, &Error{Code: ExitNotInRepo, Kind: "not_in_repo"}
 	}
-	commonDirOut, err := exec.CommandContext(ctx, "git", "-C", dir, "rev-parse", "--git-common-dir").Output()
-	if err != nil {
-		res.OK = false
-		res.Error = &ErrorInfo{Kind: "not_in_repo", Message: "not inside a git repository"}
-		return res, &Error{Code: ExitNotInRepo, Kind: "not_in_repo"}
-	}
-	resolve := func(p, base string) string {
-		s := strings.TrimSpace(p)
-		if !filepath.IsAbs(s) {
-			if abs, err := filepath.Abs(filepath.Join(base, s)); err == nil {
-				s = abs
-			}
-		}
-		if real, err := filepath.EvalSymlinks(s); err == nil {
-			s = real
-		}
-		return s
-	}
-	gd := resolve(string(gitDirOut), dir)
-	cd := resolve(string(commonDirOut), dir)
-	inWt := gd != cd
-	mainRoot := filepath.Dir(cd) // <main>/.git → <main>
 
 	res.ProjectRoot = mainRoot
 	res.MainRoot = mainRoot

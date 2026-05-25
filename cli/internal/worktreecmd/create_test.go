@@ -264,12 +264,75 @@ func TestCreate_SwitchMainIfNeeded_RollbackRestoresPrev(t *testing.T) {
 	}
 }
 
+// S-11: TestRollback_RefusesPathEscape previously asserted only
+// `res.Rollback.Succeeded == false` and passed for the wrong reason
+// (/tmp/evil didn't exist so the destructive ops would have failed
+// harmlessly anyway). Hardened version creates a real attacker-controlled
+// directory outside the repo with a sentinel file, calls rollback, and
+// verifies:
+//
+//   1. The descendant guard refused (Rollback.Succeeded == false).
+//   2. The error kind matches the documented contract.
+//   3. The sentinel file is untouched (no destructive op ran).
 func TestRollback_RefusesPathEscape(t *testing.T) {
 	repo := initRepo(t)
+	// A real directory OUTSIDE the repo - rollback must NOT touch it.
+	evil := filepath.Join(t.TempDir(), "evil-outside-repo")
+	if err := os.MkdirAll(evil, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sentinel := filepath.Join(evil, "sentinel.txt")
+	if err := os.WriteFile(sentinel, []byte("must survive"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
 	plan := worktreecmd.BranchPlan{Mode: "created", Branch: "worktree-escape"}
 	res := &worktreecmd.CreateResult{Envelope: worktreecmd.Envelope{SchemaVersion: 1}}
-	_, _ = worktreecmd.PerformRollbackForTesting(context.Background(), res, repo, "/tmp/evil", plan, "", "test", errors.New("x"))
+	_, _ = worktreecmd.PerformRollbackForTesting(context.Background(), res, repo, evil, plan, "", "test", errors.New("x"))
+
 	if res.Rollback == nil || res.Rollback.Succeeded {
 		t.Errorf("rollback should have refused: %+v", res.Rollback)
+	}
+	if res.Error == nil || res.Error.Kind != "rollback_refused_path_escape" {
+		t.Errorf("expected rollback_refused_path_escape kind, got %+v", res.Error)
+	}
+	if _, err := os.Stat(sentinel); err != nil {
+		t.Errorf("sentinel deleted - rollback should have refused BEFORE destructive ops: %v", err)
+	}
+}
+
+// S-13: assertion test for the symlink_source_missing typed error
+// (ExitSymlinkSourceMissing=19). Was defined but had no test coverage.
+func TestCreateRelativeSymlink_SourceMissing(t *testing.T) {
+	repo := initRepo(t)
+	linkPath := filepath.Join(repo, "link-from")
+	missingTarget := filepath.Join(repo, "does-not-exist")
+	err := worktreecmd.CreateRelativeSymlink(linkPath, missingTarget, repo)
+	var e *worktreecmd.Error
+	if !errors.As(err, &e) || e.Code != worktreecmd.ExitSymlinkSourceMissing {
+		t.Errorf("got %v, want ExitSymlinkSourceMissing", err)
+	}
+	if e.Kind != "symlink_source_missing" {
+		t.Errorf("Kind=%q, want symlink_source_missing", e.Kind)
+	}
+}
+
+// S-13: assertion test for symlink_target_escapes_repo. Defense-in-depth
+// guard previously had no direct test.
+func TestCreateRelativeSymlink_TargetEscapesRepo(t *testing.T) {
+	repo := initRepo(t)
+	outsideDir := t.TempDir()
+	outside := filepath.Join(outsideDir, "outside-target")
+	if err := os.WriteFile(outside, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	linkPath := filepath.Join(repo, "link-from")
+	err := worktreecmd.CreateRelativeSymlink(linkPath, outside, repo)
+	var e *worktreecmd.Error
+	if !errors.As(err, &e) {
+		t.Fatalf("expected *worktreecmd.Error, got %T: %v", err, err)
+	}
+	if e.Kind != "symlink_target_escapes_repo" {
+		t.Errorf("Kind=%q, want symlink_target_escapes_repo (Code=%d)", e.Kind, e.Code)
 	}
 }

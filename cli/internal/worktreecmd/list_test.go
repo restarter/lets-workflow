@@ -4,6 +4,7 @@ package worktreecmd_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -58,6 +59,25 @@ func TestList_AgentKind(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("expected at least one agent worktree, got: %+v", res.Worktrees)
+	}
+}
+
+// S-14: TestList_NotInRepo confirms `lets worktree list` fails cleanly with
+// ExitGitFailed / kind=git_worktree_list_failed when projectRoot isn't a
+// git repo. Without this test, a regression that drops the error wrap and
+// returns (nil-or-empty-result, nil) would pass silently.
+func TestList_NotInRepo(t *testing.T) {
+	tmp := realTempDir(t)
+	_, err := worktreecmd.List(context.Background(), tmp)
+	var e *worktreecmd.Error
+	if !errors.As(err, &e) {
+		t.Fatalf("expected *worktreecmd.Error, got %T: %v", err, err)
+	}
+	if e.Code != worktreecmd.ExitGitFailed {
+		t.Errorf("Code=%d, want ExitGitFailed (%d)", e.Code, worktreecmd.ExitGitFailed)
+	}
+	if e.Kind != "git_worktree_list_failed" {
+		t.Errorf("Kind=%q, want git_worktree_list_failed", e.Kind)
 	}
 }
 

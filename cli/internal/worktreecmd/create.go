@@ -16,33 +16,6 @@ import (
 	"github.com/restarter/lets-workflow/cli/internal/initcmd"
 )
 
-// detectInsideWorktreeAt inspects whether the given path is inside a git
-// worktree (rather than the main repo). Unlike initcmd.DetectInsideWorktree
-// it does NOT use cwd — important for callers that operate on an explicit
-// projectRoot (and for tests that run from a worktree but target a fresh
-// temp repo). Returns false on any git error.
-func detectInsideWorktreeAt(ctx context.Context, path string) bool {
-	gitDir, err := exec.CommandContext(ctx, "git", "-C", path, "rev-parse", "--git-dir").Output()
-	if err != nil {
-		return false
-	}
-	commonDir, err := exec.CommandContext(ctx, "git", "-C", path, "rev-parse", "--git-common-dir").Output()
-	if err != nil {
-		return false
-	}
-	resolve := func(s string) string {
-		s = strings.TrimSpace(s)
-		if !filepath.IsAbs(s) {
-			abs, err := filepath.Abs(filepath.Join(path, s))
-			if err != nil {
-				return s
-			}
-			return abs
-		}
-		return s
-	}
-	return resolve(string(gitDir)) != resolve(string(commonDir))
-}
 
 // CreateOptions configures the create flow.
 type CreateOptions struct {
@@ -102,12 +75,11 @@ func Create(ctx context.Context, projectRoot string, opts CreateOptions) (*Creat
 	// Step 2: guard not-inside-worktree. Uses projectRoot-anchored check so
 	// callers (and tests) that pass a fresh repo while running from inside an
 	// unrelated worktree are not falsely rejected.
-	if detectInsideWorktreeAt(ctx, projectRoot) {
+	if inside, _ := initcmd.DetectInsideWorktreeAt(projectRoot); inside {
 		addStep(StepErr, "guard: cannot create worktree from inside a worktree")
 		return fail(ErrInsideWorktree())
 	}
 	addStep(StepOK, "guard: in main repo")
-	_ = initcmd.DetectInsideWorktree // keep import warm; cwd-based variant still used by lets init
 
 	// Step 3: resolve base ref (LETS_MERGE_BRANCH from .lets/.env, fallback "main").
 	base := opts.Base
