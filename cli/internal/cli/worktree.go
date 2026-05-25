@@ -5,9 +5,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -96,13 +94,13 @@ func newWorktreeCreateCmd() *cobra.Command {
 				if jsonOut {
 					fmt.Fprintln(cmd.ErrOrStderr(), string(jsonBytes))
 				} else if verbose && !quiet {
-					renderHumanCreate(cmd.ErrOrStderr(), res)
+					worktreecmd.RenderCreate(cmd.ErrOrStderr(), res)
 				}
 			case jsonOut:
 				fmt.Fprintln(cmd.OutOrStdout(), string(jsonBytes))
 			default:
 				if !quiet {
-					renderHumanCreate(cmd.OutOrStdout(), res)
+					worktreecmd.RenderCreate(cmd.OutOrStdout(), res)
 				}
 			}
 			return runErr
@@ -151,7 +149,7 @@ func newWorktreeRemoveCmd() *cobra.Command {
 			if jsonOut {
 				fmt.Fprintln(cmd.OutOrStdout(), string(jsonBytes))
 			} else if !quiet {
-				renderHumanRemove(cmd.OutOrStdout(), res)
+				worktreecmd.RenderRemove(cmd.OutOrStdout(), res)
 			}
 			return runErr
 		},
@@ -185,7 +183,7 @@ func newWorktreeListCmd() *cobra.Command {
 			if jsonOut {
 				fmt.Fprintln(cmd.OutOrStdout(), string(jsonBytes))
 			} else if !quiet {
-				renderHumanList(cmd.OutOrStdout(), res)
+				worktreecmd.RenderList(cmd.OutOrStdout(), res)
 			}
 			return runErr
 		},
@@ -216,7 +214,7 @@ func newWorktreeInfoCmd() *cobra.Command {
 			if jsonOut {
 				fmt.Fprintln(cmd.OutOrStdout(), string(jsonBytes))
 			} else if !quiet {
-				renderHumanInfo(cmd.OutOrStdout(), res)
+				worktreecmd.RenderInfo(cmd.OutOrStdout(), res)
 			}
 			return runErr
 		},
@@ -226,108 +224,6 @@ func newWorktreeInfoCmd() *cobra.Command {
 	return cmd
 }
 
-// renderHumanCreate writes a short, one-screen summary.
-func renderHumanCreate(w io.Writer, res *worktreecmd.CreateResult) {
-	if !res.OK && res.Error != nil {
-		fmt.Fprintf(w, "Error: %s\n", res.Error.Message)
-		if res.Error.Remediation != "" {
-			fmt.Fprintf(w, "Hint: %s\n", res.Error.Remediation)
-		}
-		if res.Rollback != nil && len(res.Rollback.Residual) > 0 {
-			fmt.Fprintf(w, "Residual paths (clean up manually): %s\n", strings.Join(res.Rollback.Residual, ", "))
-		}
-		return
-	}
-	if res.Worktree == nil {
-		return
-	}
-	fmt.Fprintf(w, "Worktree created: %s\n", res.Worktree.Path)
-	fmt.Fprintf(w, "Branch: %s (%s)\n", res.Worktree.Branch, res.Worktree.BranchMode)
-	fmt.Fprintf(w, "Symlinks: lets=%v beads=%v\n", res.Worktree.LetsSymlinked, res.Worktree.BeadsSymlinked)
-	fmt.Fprintf(w, "Next: cd %s && claude\n", res.Worktree.Path)
-}
-
-func renderHumanRemove(w io.Writer, res *worktreecmd.RemoveResult) {
-	if !res.OK && res.Error != nil {
-		fmt.Fprintf(w, "Error: %s\n", res.Error.Message)
-		if res.Error.Remediation != "" {
-			fmt.Fprintf(w, "Hint: %s\n", res.Error.Remediation)
-		}
-		return
-	}
-	if res.Removed == nil {
-		return
-	}
-	// --branch-only flow leaves Path empty (the worktree was already removed
-	// by a prior call; this invocation only deleted the branch). Print a
-	// branch-only headline rather than the misleading "Worktree removed: "
-	// with an empty value (review S-1).
-	if res.Removed.Path == "" {
-		fmt.Fprintf(w, "Branch deleted: %s\n", res.Removed.Branch)
-		return
-	}
-	fmt.Fprintf(w, "Worktree removed: %s\n", res.Removed.Path)
-	branchStatus := "kept"
-	if res.Removed.BranchDeleted {
-		branchStatus = "deleted"
-	}
-	fmt.Fprintf(w, "Branch: %s (%s)\n", res.Removed.Branch, branchStatus)
-	if res.Removed.Forced {
-		fmt.Fprintln(w, "Forced: true")
-	}
-}
-
-func renderHumanList(w io.Writer, res *worktreecmd.ListResult) {
-	if !res.OK && res.Error != nil {
-		fmt.Fprintf(w, "Error: %s\n", res.Error.Message)
-		return
-	}
-	fmt.Fprintf(w, "%-12s %-22s %-12s %-7s %-7s %-12s %s\n",
-		"NAME", "BRANCH", "KIND", "LETS", "BEADS", "CHANGES", "PATH")
-	for _, wt := range res.Worktrees {
-		changes := "clean"
-		if !wt.ChangesClean {
-			changes = fmt.Sprintf("%dm/%du", wt.ChangesModified, wt.ChangesUntracked)
-		}
-		fmt.Fprintf(w, "%-12s %-22s %-12s %-7v %-7v %-12s %s\n",
-			wt.Name, wt.Branch, wt.Kind, wt.LetsSymlinked, wt.BeadsSymlinked, changes, wt.Path)
-	}
-	mainBranch := ""
-	if res.Main != nil {
-		mainBranch = res.Main.Branch
-	}
-	fmt.Fprintf(w, "\n%d worktrees (main: %s)\n", len(res.Worktrees), mainBranch)
-}
-
-func renderHumanInfo(w io.Writer, res *worktreecmd.InfoResult) {
-	if !res.OK && res.Error != nil {
-		fmt.Fprintf(w, "Error: %s\n", res.Error.Message)
-		return
-	}
-	fmt.Fprintf(w, "In worktree: %v\n", res.InWorktree)
-	if res.Worktree != nil {
-		fmt.Fprintf(w, "Path:        %s\n", res.Worktree.Path)
-		if res.InWorktree {
-			fmt.Fprintf(w, "Main repo:   %s\n", res.MainRoot)
-		}
-		fmt.Fprintf(w, "Branch:      %s\n", res.Worktree.Branch)
-		if res.InWorktree {
-			lets := "local"
-			if res.Worktree.LetsSymlinked {
-				lets = "symlinked"
-			}
-			beads := "local"
-			if res.Worktree.BeadsSymlinked {
-				beads = "shared"
-			}
-			fmt.Fprintf(w, "LETS:        %s\n", lets)
-			fmt.Fprintf(w, "Beads:       %s\n", beads)
-		}
-		changes := "clean"
-		if !res.Worktree.ChangesClean {
-			changes = fmt.Sprintf("%d modified, %d untracked",
-				res.Worktree.ChangesModified, res.Worktree.ChangesUntracked)
-		}
-		fmt.Fprintf(w, "Changes:     %s\n", changes)
-	}
-}
+// Human-readable rendering lives in cli/internal/worktreecmd/render.go
+// (review S-8: domain package owns presentation alongside the envelope
+// shape; mirrors updatecmd.PrintReport precedent).
