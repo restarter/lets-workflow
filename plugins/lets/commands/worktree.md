@@ -202,7 +202,23 @@ AskUserQuestion(
 )
 ```
 
-On **Force remove**, retry with `--force`. On `error.kind=worktree_not_found`, exit cleanly. Capture `removed.branch` from the success envelope for R3.
+On `error.kind=unpushed_commits` (exit 21) ask separately — these are commits, not just dirty files:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "{error.message}. Remove anyway?",
+    header: "Unpushed",
+    options: [
+      { label: "Force remove", description: "Discard the unpushed commits along with the worktree" },
+      { label: "Cancel", description: "Push the branch first, then retry" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+On either **Force remove**, retry with `--force`. On `error.kind=worktree_not_found`, exit cleanly. Capture `removed.branch` from the success envelope for R3.
 
 ### Step R3: Branch Cleanup (optional)
 

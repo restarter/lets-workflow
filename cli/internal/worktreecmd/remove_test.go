@@ -99,6 +99,81 @@ func TestRemove_DeleteBranchUnmerged(t *testing.T) {
 	}
 }
 
+// Unpushed-commits guard: parity with pre-rewrite markdown Step R2. A
+// worktree with local commits ahead of upstream must block remove without
+// --force. The original safety net was lost when the markdown rewrote into
+// a thin dispatcher; this re-adds it as a typed error in the Go subcommand.
+func TestRemove_UnpushedCommitsBlocks(t *testing.T) {
+	repo := initRepo(t)
+	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cr, _ := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{Name: "foo", Mode: worktreecmd.BranchAuto})
+	// Stand up an upstream by registering the main repo itself as a remote,
+	// pointing the worktree's branch upstream at remote/main, then committing
+	// onto the worktree branch so log @{u}.. has output.
+	runIn(t, repo, "git", "remote", "add", "origin", repo)
+	runIn(t, repo, "git", "fetch", "origin", "--quiet")
+	runIn(t, cr.Worktree.Path, "git", "branch", "--set-upstream-to=origin/main")
+	runIn(t, cr.Worktree.Path, "git", "commit", "--allow-empty", "-m", "wt commit")
+
+	_, err := worktreecmd.Remove(context.Background(), repo, worktreecmd.RemoveOptions{Name: "foo"})
+	var e *worktreecmd.Error
+	if !errors.As(err, &e) || e.Code != worktreecmd.ExitUnpushedCommits || e.Kind != "unpushed_commits" {
+		t.Errorf("want ExitUnpushedCommits/unpushed_commits, got %v (kind=%q)", err, func() string {
+			if e == nil {
+				return ""
+			}
+			return e.Kind
+		}())
+	}
+}
+
+// --force bypasses the unpushed-commits guard the same way it bypasses the
+// dirty-worktree guard.
+func TestRemove_UnpushedCommitsForce(t *testing.T) {
+	repo := initRepo(t)
+	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cr, _ := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{Name: "foo", Mode: worktreecmd.BranchAuto})
+	runIn(t, repo, "git", "remote", "add", "origin", repo)
+	runIn(t, repo, "git", "fetch", "origin", "--quiet")
+	runIn(t, cr.Worktree.Path, "git", "branch", "--set-upstream-to=origin/main")
+	runIn(t, cr.Worktree.Path, "git", "commit", "--allow-empty", "-m", "wt commit")
+
+	res, err := worktreecmd.Remove(context.Background(), repo, worktreecmd.RemoveOptions{Name: "foo", Force: true})
+	if err != nil || !res.OK {
+		t.Fatalf("--force should bypass unpushed-commits guard: err=%v ok=%v", err, res.OK)
+	}
+}
+
+// No upstream configured (common for attach-mode worktrees on local-only
+// branches): the check is skipped with a warn step rather than blocking.
+func TestRemove_NoUpstreamSkipsCheck(t *testing.T) {
+	repo := initRepo(t)
+	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{Name: "foo", Mode: worktreecmd.BranchAuto}); err != nil {
+		t.Fatal(err)
+	}
+	// No remote, no upstream — `git log @{u}..` fails. Should warn-and-continue.
+	res, err := worktreecmd.Remove(context.Background(), repo, worktreecmd.RemoveOptions{Name: "foo"})
+	if err != nil || !res.OK {
+		t.Fatalf("no-upstream worktree should remove cleanly: err=%v ok=%v", err, res.OK)
+	}
+	hasWarn := false
+	for _, s := range res.Steps {
+		if s.Status == worktreecmd.StepWarn && strings.Contains(s.Message, "no upstream") {
+			hasWarn = true
+		}
+	}
+	if !hasWarn {
+		t.Errorf("expected a warn step about missing upstream; got steps=%+v", res.Steps)
+	}
+}
+
 // R3 single-trip flow: remove worktree first, then call --branch-only follow-up.
 func TestRemove_BranchOnly_AfterWorktreeRemoved(t *testing.T) {
 	repo := initRepo(t)

@@ -150,6 +150,32 @@ func Remove(ctx context.Context, projectRoot string, opts RemoveOptions) (*Remov
 	}
 	addStep(StepOK, "safety check (clean or --force)")
 
+	// Unpushed-commits safety net (parity with pre-rewrite markdown Step R2).
+	// `git log @{u}.. --oneline` lists local commits not present in the
+	// upstream branch. No upstream configured -> command fails: we surface
+	// a warn step and continue (caller can still see the branch will be
+	// deleted if --delete-branch is set). Skipped under --force.
+	if !opts.Force {
+		out, err := exec.CommandContext(ctx, "git", "-C", wtPath, "log", "@{u}..", "--oneline").CombinedOutput()
+		switch {
+		case err == nil && len(strings.TrimSpace(string(out))) > 0:
+			count := strings.Count(strings.TrimSpace(string(out)), "\n") + 1
+			return fail(&Error{
+				Code:        ExitUnpushedCommits,
+				Kind:        "unpushed_commits",
+				Message:     fmt.Sprintf("worktree has %d unpushed commit(s) on branch %q", count, branch),
+				Remediation: "push the branch (or pass --force to discard them along with the worktree)",
+			})
+		case err != nil:
+			// Most common cause: no upstream configured (e.g. attach-mode worktree
+			// pointing at a local-only branch). Don't block, but flag it so the
+			// JSON envelope makes the gap visible.
+			addStep(StepWarn, "skipped unpushed-commits check (no upstream configured)")
+		default:
+			addStep(StepOK, "no unpushed commits on upstream")
+		}
+	}
+
 	// Path-descendant guard before any destructive op.
 	if !pathDescendantOfWorktrees(projectRoot, wtPath) {
 		return fail(&Error{

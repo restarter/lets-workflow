@@ -5,8 +5,8 @@ package worktreecmd
 import "errors"
 
 // Exit codes returned by `lets worktree` subcommands. 0-2 are the standard
-// shell conventions; 10..20 are typed failure classes that scripts can
-// branch on without parsing prose. 21..29 reserved for future `adopt` and
+// shell conventions; 10..21 are typed failure classes that scripts can
+// branch on without parsing prose. 22..29 reserved for future `adopt` and
 // related subcommands (see backlog on lets-rqep4).
 const (
 	ExitOK                   = 0
@@ -23,7 +23,8 @@ const (
 	ExitStaleWorktreePath    = 18
 	ExitSymlinkSourceMissing = 19
 	ExitVerifyFailed         = 20
-	// Reserved 21..29 for future `lets worktree adopt` and related subcommands.
+	ExitUnpushedCommits      = 21
+	// Reserved 22..29 for future `lets worktree adopt` and related subcommands.
 	// Adopt would re-register an externally-created worktree path with LETS-managed
 	// symlinks. See lets-rqep4 backlog comment.
 )
