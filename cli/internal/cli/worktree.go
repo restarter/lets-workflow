@@ -111,7 +111,7 @@ func newWorktreeCreateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&base, "base", "", "Base ref for new branch (default: LETS_MERGE_BRANCH or main)")
 	cmd.Flags().BoolVar(&noSymLets, "no-symlink-lets", false, "Skip .lets/ symlink")
 	cmd.Flags().BoolVar(&noSymBeads, "no-symlink-beads", false, "Skip .beads/.env symlink")
-	cmd.Flags().BoolVar(&printCD, "print-cd", false, "Print worktree path to stdout (JSON to stderr); for $(...) substitution")
+	cmd.Flags().BoolVar(&printCD, "print-cd", false, "Print worktree path to stdout (pair with --json or --verbose to also emit stderr); for $(...) substitution")
 	cmd.Flags().BoolVar(&switchMain, "switch-main-if-needed", false, "Auto-switch main repo if attaching its current branch (requires clean tree)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
 	cmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Suppress human-readable output")
