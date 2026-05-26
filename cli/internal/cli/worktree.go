@@ -5,6 +5,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -12,6 +13,20 @@ import (
 	"github.com/restarter/lets-workflow/cli/internal/initcmd"
 	"github.com/restarter/lets-workflow/cli/internal/worktreecmd"
 )
+
+// emitErrorEnvelope is invoked from RunE early-returns that short-circuit
+// before worktreecmd builds an envelope (flag conflicts, not_in_repo,
+// getwd_failed). When jsonOut is set, writes a minimal envelope to w so
+// --json consumers parse valid JSON; otherwise it is a no-op. The error
+// is returned unmodified for `return emitErrorEnvelope(...)`-style use.
+func emitErrorEnvelope(w io.Writer, jsonOut bool, subcommand string, e *worktreecmd.Error) error {
+	if jsonOut {
+		env := worktreecmd.NewErrorEnvelope(subcommand, e.Kind, e.Message)
+		b, _ := json.MarshalIndent(env, "", "  ")
+		fmt.Fprintln(w, string(b))
+	}
+	return e
+}
 
 // NewWorktreeCmd builds `lets worktree` with its 4 subcommand factories.
 // Subcommands inherit SilenceUsage + SilenceErrors so cobra doesn't double-
@@ -54,20 +69,27 @@ func newWorktreeCreateCmd() *cobra.Command {
 		Short: "Create a new worktree or attach an existing branch",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// For create's early-returns, --json envelope goes to stderr when
+			// --print-cd is set (matching the success-path printCD+json branch
+			// below), otherwise stdout.
+			errOut := cmd.OutOrStdout()
+			if printCD {
+				errOut = cmd.ErrOrStderr()
+			}
 			if attach && newBranch {
-				return &worktreecmd.Error{
+				return emitErrorEnvelope(errOut, jsonOut, "create", &worktreecmd.Error{
 					Code:    worktreecmd.ExitUsage,
 					Kind:    "flag_conflict",
 					Message: "--attach and --new-branch are mutually exclusive",
-				}
+				})
 			}
 			projectRoot := initcmd.DetectProjectRoot()
 			if projectRoot == "" {
-				return &worktreecmd.Error{
+				return emitErrorEnvelope(errOut, jsonOut, "create", &worktreecmd.Error{
 					Code:    worktreecmd.ExitNotInRepo,
 					Kind:    "not_in_repo",
 					Message: "not inside a git repository",
-				}
+				})
 			}
 			mode := worktreecmd.BranchAuto
 			if attach {
@@ -132,11 +154,11 @@ func newWorktreeRemoveCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			projectRoot := initcmd.DetectProjectRoot()
 			if projectRoot == "" {
-				return &worktreecmd.Error{
+				return emitErrorEnvelope(cmd.OutOrStdout(), jsonOut, "remove", &worktreecmd.Error{
 					Code:    worktreecmd.ExitNotInRepo,
 					Kind:    "not_in_repo",
 					Message: "not inside a git repository",
-				}
+				})
 			}
 			res, runErr := worktreecmd.Remove(cmd.Context(), projectRoot, worktreecmd.RemoveOptions{
 				Name:         args[0],
@@ -174,11 +196,11 @@ func newWorktreeListCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			projectRoot := initcmd.DetectProjectRoot()
 			if projectRoot == "" {
-				return &worktreecmd.Error{
+				return emitErrorEnvelope(cmd.OutOrStdout(), jsonOut, "list", &worktreecmd.Error{
 					Code:    worktreecmd.ExitNotInRepo,
 					Kind:    "not_in_repo",
 					Message: "not inside a git repository",
-				}
+				})
 			}
 			res, runErr := worktreecmd.List(cmd.Context(), projectRoot)
 			jsonBytes, _ := json.MarshalIndent(res, "", "  ")
@@ -204,12 +226,12 @@ func newWorktreeInfoCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cwd, err := os.Getwd()
 			if err != nil {
-				return &worktreecmd.Error{
+				return emitErrorEnvelope(cmd.OutOrStdout(), jsonOut, "info", &worktreecmd.Error{
 					Code:    worktreecmd.ExitFilesystem,
 					Kind:    "getwd_failed",
 					Message: err.Error(),
 					Cause:   err,
-				}
+				})
 			}
 			res, runErr := worktreecmd.Info(cmd.Context(), cwd)
 			jsonBytes, _ := json.MarshalIndent(res, "", "  ")

@@ -66,6 +66,21 @@ type Envelope struct {
 	Steps         []Step     `json:"steps"`
 }
 
+// NewErrorEnvelope builds a populated Envelope for early-return errors
+// in the cli layer (before worktreecmd has a chance to build one itself).
+// Use when --json is set and the RunE bails out before calling worktreecmd
+// (flag_conflict, not_in_repo, getwd_failed). Without this, scripts that
+// expect a JSON envelope on --json would receive plain text on stderr only.
+func NewErrorEnvelope(subcommand, kind, message string) Envelope {
+	return Envelope{
+		SchemaVersion: SchemaVersion,
+		OK:            false,
+		Error:         &ErrorInfo{Kind: kind, Message: message},
+		Subcommand:    subcommand,
+		Steps:         []Step{},
+	}
+}
+
 // CreateResult is the create-subcommand envelope.
 type CreateResult struct {
 	Envelope
