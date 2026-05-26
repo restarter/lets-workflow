@@ -220,6 +220,28 @@ func TestRun_DevBinary(t *testing.T) {
 	}
 }
 
+// Regression: dev-<metadata> stamps produced by scripts/dev/run.sh must travel
+// the same dev short-circuits as the bare "dev" sentinel. Pre-fix, versionArtifact
+// pattern-matched the literal "dev" and let dev-feat-abc1234 fall through to
+// semver.Compare, which returned 0 for invalid semver and silently reported the
+// dev binary as "up to date". consistentVersions had the same bug.
+func TestRun_DevBinary_RichStamp(t *testing.T) {
+	pr, plug := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "dev-feat-abc1234")
+	r, err := Run(context.Background(), Options{LatestFn: stubLatest("0.6.0")}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if find(t, r, ".env").Status != StatusDev {
+		t.Errorf(".env status = %s, want dev (regen skipped on rich dev stamp)", find(t, r, ".env").Status)
+	}
+	if find(t, r, "binary").Status != StatusDev {
+		t.Errorf("binary status = %s, want dev (rich dev stamp must short-circuit semver compare)", find(t, r, "binary").Status)
+	}
+	if !r.Consistent {
+		t.Errorf("Consistent = false, want true (rich dev stamp must be excluded from comparison set)")
+	}
+}
+
 func TestRun_EnvHeaderRefreshed(t *testing.T) {
 	pr, plug := scaffold(t, "0.5.0", "0.6.0", "0.6.0", "0.6.0") // .env behind the (real) binary
 	r, err := Run(context.Background(), Options{LatestFn: stubLatest("0.6.0")}, pr, plug)

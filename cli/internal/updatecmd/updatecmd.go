@@ -125,12 +125,12 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 // versionArtifact builds an Artifact for a version-only artifact (binary, plugin).
 func versionArtifact(name, current string, latest LatestInfo, latestErr error, offline bool, action string) Artifact {
 	a := Artifact{Name: name, CurrentVersion: current}
-	switch current {
-	case "":
+	if current == "" {
 		a.Status = StatusUnknown
 		a.Detail = "could not determine installed version"
 		return a
-	case "dev":
+	}
+	if version.IsDevString(current) {
 		a.Status = StatusDev
 		a.Detail = "untagged dev build - no release comparison"
 		return a
@@ -165,12 +165,13 @@ func versionArtifact(name, current string, latest LatestInfo, latestErr error, o
 	return a
 }
 
-// consistentVersions reports whether all non-empty, non-"dev" version strings
-// among the args are mutually equal.
+// consistentVersions reports whether all non-empty, non-dev version strings
+// among the args are mutually equal. Dev sentinels (incl. dev-<metadata>) are
+// excluded from the comparison set - they have no semver to compare against.
 func consistentVersions(vs ...string) bool {
 	var seen string
 	for _, v := range vs {
-		if v == "" || v == "dev" {
+		if v == "" || version.IsDevString(v) {
 			continue
 		}
 		if seen == "" {
