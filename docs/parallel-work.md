@@ -29,7 +29,7 @@ cd .worktrees/auth-feature && claude     # new terminal — fresh session
 /lets:start                              # pick the task, start working
 ```
 
-Each worktree gets its own branch (`worktree-<name>`). The `.lets/` config, sessions, and plans are shared via a symlink, and the task database is shared via a redirect — so both terminals see the same backlog and the same config. You get the full LETS workflow in each one.
+Each worktree gets its own branch (`worktree-<name>` for new branches; or an existing branch if you pass an existing branch name and the auto-detect resolves to attach). The `.lets/` config, sessions, and plans are shared via a symlink; the task database is shared via a targeted `.beads/.env` symlink so `bd` finds the same database via git's common-dir — both terminals see the same backlog and the same config. You get the full LETS workflow in each one. **Credential threat-model:** `.beads/.env` is shared, so don't store cross-context secrets there.
 
 When you're done with a worktree: `/lets:done` (and `/lets:end`) inside it, then `/lets:worktree remove <name>` from the main repo.
 

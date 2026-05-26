@@ -1,12 +1,12 @@
 ---
-description: Worktree lifecycle management - create, list, remove interactive worktrees
+description: Worktree lifecycle management - create, list, remove, info on interactive worktrees
 ---
 
 # Worktree Management
 
-Create and manage interactive worktrees for parallel work sessions. Each worktree is an isolated working copy where you can run a separate Claude Code session with full LETS workflow.
+Thin dispatcher for interactive parallel worktrees. All filesystem/git work lives in the Go subcommand `lets worktree` (`cli/internal/worktreecmd/`); this skill captures user intent via `AskUserQuestion`, shells out with `--json`, and renders the result.
 
-**This is for interactive parallel sessions.** Agent worktrees (isolation: worktree) use native Claude Code behavior and don't need this command.
+**Interactive worktrees only.** Agent worktrees (`isolation: worktree`) use native Claude Code behavior — not this command.
 
 > **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
 
@@ -24,7 +24,7 @@ Create and manage interactive worktrees for parallel work sessions. Each worktre
 AskUserQuestion(
   questions=[{
     question: "What do you want to do with worktrees?",
-    header: "Worktree",
+    header: "Action",
     options: [
       { label: "Create", description: "Create a new worktree for parallel work" },
       { label: "List", description: "Show all active worktrees" },
@@ -40,27 +40,17 @@ AskUserQuestion(
 
 ## Create
 
-Create an interactive worktree with full LETS workflow support.
+Create an interactive worktree. The Go subcommand owns the guard, name validation, `.gitignore` ensure, `git worktree add`, symlinks (`.lets/`, `.beads/.env`), verify, and rollback. The skill drives the user choices.
 
-### Step C1: Guard - Not Already in Worktree
+### Step C1: Get Name
 
-```bash
-GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
-```
-
-If `$GIT_DIR` is not `.git` (contains `worktrees/`), you're already in a worktree:
-- Show: "Already in a worktree. Open a new terminal in the main repo to create another."
-- Stop.
-
-### Step C2: Get Name
-
-If name not provided via argument, ask:
+If name not provided via argument, use **AskUserQuestion**:
 
 ```
 AskUserQuestion(
   questions=[{
     question: "Name for the worktree? (lowercase, no spaces - used for directory and branch)",
-    header: "Name",
+    header: "NameMode",
     options: [
       { label: "From task", description: "Auto-generate from current or selected beads task" },
       { label: "Custom", description: "Enter a custom name" }
@@ -72,87 +62,21 @@ AskUserQuestion(
 
 **From task:** Run `bd ready --limit 5` and let user pick a task or use the current in-progress task. Generate name as `<task-id>-<slugified-title>` (e.g., `lets-hpi.3-worktree-start`).
 
-**Custom:** Use provided text. Slugify: lowercase, spaces to hyphens, remove special chars, max 50 chars.
+**Custom:** Use provided text. Slugify: lowercase, spaces to hyphens, remove special chars, max 50 chars (the Go validator allows up to 64; the skill pre-truncates to 50 to leave headroom for `worktree-` prefixes and tmux pane labels). `lets worktree create` will reject invalid names with exit 2.
 
-### Step C3: Verify .gitignore
-
-```bash
-LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-git check-ignore -q "${LETS_PROJECT_ROOT}/.worktrees/test" 2>/dev/null
-echo $?
-```
-
-If exit code is not 0 (not ignored):
-- Add `.worktrees/` to `.gitignore`
-- Inform user: "Added .worktrees/ to .gitignore"
-
-### Step C4: Create Worktree
+### Step C2: Create
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-WORKTREE_PATH="${LETS_PROJECT_ROOT}/.worktrees/${NAME}"
-BRANCH_NAME="worktree-${NAME}"
-```
-
-**With beads (preferred):**
-
-```bash
-LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-WORKTREE_PATH="${LETS_PROJECT_ROOT}/.worktrees/${NAME}"
-BRANCH_NAME="worktree-${NAME}"
 cd "$LETS_PROJECT_ROOT"
-bd worktree create "$WORKTREE_PATH" --branch "$BRANCH_NAME"
+lets worktree create "$NAME" --json
 ```
 
-This handles: `git worktree add` + `.beads/redirect` for shared beads database.
+The Go subcommand auto-detects attach vs new-branch: if `refs/heads/<NAME>` exists, attaches to it; otherwise creates `worktree-<NAME>` from `LETS_MERGE_BRANCH`. Pass `--attach` or `--new-branch` to force a mode. Pass `--switch-main-if-needed` to auto-switch main when attaching its current branch (refuses on dirty/mid-rebase tree). Pass `--no-symlink-lets` or `--no-symlink-beads` to skip a specific symlink.
 
-**Without beads (fallback):**
+Parse the JSON. On `ok=false`, surface `error.message` and `error.remediation` to the user; if `rollback.residual` is non-empty, list the paths so the user can clean up.
 
-```bash
-LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-WORKTREE_PATH="${LETS_PROJECT_ROOT}/.worktrees/${NAME}"
-BRANCH_NAME="worktree-${NAME}"
-cd "$LETS_PROJECT_ROOT"
-git worktree add -b "$BRANCH_NAME" "$WORKTREE_PATH"
-# If branch already exists, checkout it into the worktree
-# git worktree add "$WORKTREE_PATH" "$BRANCH_NAME"
-```
-
-### Step C5: Symlink .lets/
-
-```bash
-LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-WORKTREE_PATH="${LETS_PROJECT_ROOT}/.worktrees/${NAME}"
-
-if [ -d "${LETS_PROJECT_ROOT}/.lets" ] && [ ! -e "${WORKTREE_PATH}/.lets" ]; then
-  ln -s "${LETS_PROJECT_ROOT}/.lets" "${WORKTREE_PATH}/.lets"
-fi
-```
-
-This gives the worktree access to: `.env`, session history, plans, reviews, execution state.
-
-### Step C6: Verify
-
-```bash
-LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-WORKTREE_PATH="${LETS_PROJECT_ROOT}/.worktrees/${NAME}"
-
-# Worktree exists
-ls -la "$WORKTREE_PATH" | head -5
-
-# .lets/ symlink works
-ls -la "${WORKTREE_PATH}/.lets" 2>/dev/null
-
-# .beads/ redirect works (if beads)
-cat "${WORKTREE_PATH}/.beads/redirect" 2>/dev/null
-
-# Branch
-cd "$WORKTREE_PATH" && git branch --show-current
-```
-
-### Step C7: Ask Where to Continue
-
-After worktree is created, ask where the user wants to work:
+### Step C3: Ask Where to Continue
 
 ```
 AskUserQuestion(
@@ -160,7 +84,7 @@ AskUserQuestion(
     question: "Worktree created. Where do you want to continue?",
     header: "Continue",
     options: [
-      { label: "Stay on current branch", description: "Switch back to $LETS_MERGE_BRANCH and keep working here. Open worktree in a new terminal." },
+      { label: "Stay on current branch", description: "Keep working here. Open worktree in a new terminal." },
       { label: "Switch to worktree", description: "Continue in this session inside the worktree" }
     ],
     multiSelect: false
@@ -168,28 +92,24 @@ AskUserQuestion(
 )
 ```
 
-**Stay on current branch:**
-- `git checkout {LETS_MERGE_BRANCH}` (from LETS Config)
-- Show worktree launch command for new terminal
+**Stay on current branch:** Show the new-terminal command for the worktree.
+**Switch to worktree:** Stay in worktree dir, then suggest `/lets:start`.
 
-**Switch to worktree:**
-- Stay in worktree directory
-- Suggest `/lets:start`
+### Step C4: Output
 
-### Step C8: Output
+Use the JSON envelope's `worktree` block (`path`, `branch`, `branch_mode`, `lets_symlinked`, `beads_symlinked`).
 
 **If staying on current branch:**
 
 ```
-Worktree created: .worktrees/{name}/
-Branch: worktree-{name}
-Beads: {shared via redirect / not available}
-LETS: {symlinked / not available}
+Worktree created: {worktree.path}
+Branch: {worktree.branch} ({worktree.branch_mode})
+Symlinks: lets={worktree.lets_symlinked} beads={worktree.beads_symlinked}
 
 Open a new terminal for the worktree:
 
 ```bash
-cd {absolute-worktree-path} && claude
+cd {worktree.path} && claude
 ```
 
 ┌─ LETS ──────────────────────────┐
@@ -198,13 +118,19 @@ cd {absolute-worktree-path} && claude
 └─────────────────────────────────┘
 ```
 
+Recommended scripted idiom (e.g. tmux composition):
+
+```bash
+WT=$(lets worktree create my-feature --print-cd) || exit 1
+cd "$WT" && claude
+```
+
 **If switching to worktree:**
 
 ```
-Worktree created: .worktrees/{name}/
-Branch: worktree-{name}
-Beads: {shared via redirect / not available}
-LETS: {symlinked / not available}
+Worktree created: {worktree.path}
+Branch: {worktree.branch} ({worktree.branch_mode})
+Symlinks: lets={worktree.lets_symlinked} beads={worktree.beads_symlinked}
 
 ┌─ LETS ──────────────────────────┐
 │  Start?  /lets:start            │
@@ -216,41 +142,23 @@ LETS: {symlinked / not available}
 
 ## List
 
-Show all active worktrees with status.
-
-### Step L1: Get Worktree List
-
 ```bash
-git worktree list
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+lets worktree list --json --quiet
 ```
 
-### Step L2: Annotate Each Worktree
+Parse the JSON envelope's `worktrees[]` and `main` blocks. Each row exposes: `name`, `path`, `branch`, `kind` (`interactive` | `agent` | `other`), `lets_symlinked`, `beads_symlinked`, `changes_clean`, `changes_modified`, `changes_untracked`, optional `locked` / `prunable` / `detached`.
 
-For each worktree (skip the main one):
-
-```bash
-# Check .beads/redirect (use -f test, NOT cat - cat output breaks chaining)
-[ -f "${WORKTREE_PATH}/.beads/redirect" ] && echo "beads: shared" || echo "beads: local/stale"
-
-# Check .lets/ symlink
-[ -L "${WORKTREE_PATH}/.lets" ] && echo "lets: symlinked" || echo "lets: not available"
-
-# Check for uncommitted changes
-cd "${WORKTREE_PATH}" && git status --short 2>/dev/null | head -5
-```
-
-### Step L3: Output
+### Output
 
 ```
 ## Worktrees
 
-| Path | Branch | Beads | LETS | Changes |
-|------|--------|-------|------|---------|
-| .worktrees/{name} | worktree-{name} | shared | symlinked | clean / N files |
-| .worktrees/{name2} | worktree-{name2} | shared | symlinked | 3 files |
-| .claude/worktrees/{x} | worktree-{x} | stale | - | clean |
+| Path | Branch | Kind | LETS | Beads | Changes |
+|------|--------|------|------|-------|---------|
+| {worktrees[i].path} | {worktrees[i].branch} | {worktrees[i].kind} | {symlinked / -} | {symlinked / -} | clean / N modified / M untracked |
 
-{N} active worktrees
+{count} worktrees (main: {main.branch})
 
 ┌─ LETS ──────────────────────────┐
 │  Create?  /lets:worktree create │
@@ -258,96 +166,71 @@ cd "${WORKTREE_PATH}" && git status --short 2>/dev/null | head -5
 └─────────────────────────────────┘
 ```
 
-Note: `.claude/worktrees/` are agent worktrees (native Claude Code). `.worktrees/` are interactive (this command).
+`.claude/worktrees/` rows are agent worktrees (native Claude Code) — surface with `kind=agent`. `.worktrees/` rows are interactive (this command) — `kind=interactive`.
 
 ---
 
 ## Remove
 
-Remove an interactive worktree and clean up.
+Two-call flow because branch cleanup is a separate user decision after worktree removal:
 
-### Step R1: Identify Worktree
+### Step R1: Identify
 
-If name not provided via argument:
+If name not provided, list candidates with `lets worktree list --json --quiet` (filter `kind=interactive`) and ask user to pick. If a single interactive worktree exists, confirm it.
 
-```bash
-# List worktrees in .worktrees/
-ls -d .worktrees/*/ 2>/dev/null
-```
-
-If multiple exist, ask user which one to remove. If only one, confirm it.
-
-If none exist in `.worktrees/`, check `git worktree list` and show all non-main worktrees.
-
-### Step R2: Safety Check
+### Step R2: Remove Worktree
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-WORKTREE_PATH="${LETS_PROJECT_ROOT}/.worktrees/${NAME}"
-cd "$WORKTREE_PATH"
-git status --short
-git log @{upstream}.. --oneline 2>/dev/null
+cd "$LETS_PROJECT_ROOT"
+lets worktree remove "$NAME" --json
 ```
 
-If uncommitted changes or unpushed commits exist, use **AskUserQuestion**:
+Parse JSON. On `error.kind=dirty_worktree` (exit 14) ask:
 
 ```
 AskUserQuestion(
   questions=[{
     question: "Worktree has uncommitted changes. Remove anyway?",
-    header: "Worktree",
+    header: "Cleanup",
     options: [
-      { label: "Force remove", description: "Delete worktree and all uncommitted changes" },
-      { label: "Cancel", description: "Keep the worktree - commit or stash changes first" }
+      { label: "Force remove", description: "Delete worktree and discard changes" },
+      { label: "Cancel", description: "Keep the worktree - commit or stash first" }
     ],
     multiSelect: false
   }]
 )
 ```
 
-**Force remove** -> proceed with `--force`
-**Cancel** -> stop
-
-### Step R3: Remove
-
-```bash
-LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-WORKTREE_PATH="${LETS_PROJECT_ROOT}/.worktrees/${NAME}"
-
-# Remove .lets/ symlink first (points outside worktree)
-[ -L "${WORKTREE_PATH}/.lets" ] && rm "${WORKTREE_PATH}/.lets"
-
-cd "$LETS_PROJECT_ROOT"
-
-# Remove via bd (handles git worktree remove + beads cleanup)
-if command -v bd &>/dev/null && [ -d ".beads" ]; then
-  bd worktree remove "$WORKTREE_PATH" --force 2>/dev/null || \
-    git worktree remove "$WORKTREE_PATH" --force
-else
-  git worktree remove "$WORKTREE_PATH" --force
-fi
-
-# Prune stale worktree entries
-git worktree prune
-```
-
-### Step R4: Clean Up Branch (optional)
-
-```bash
-BRANCH_NAME="worktree-${NAME}"
-# Check if branch has been merged
-git branch --merged | grep -q "$BRANCH_NAME"
-```
-
-If branch is merged or has no unique commits, offer to delete it:
+On `error.kind=unpushed_commits` (exit 21) ask separately — these are commits, not just dirty files:
 
 ```
 AskUserQuestion(
   questions=[{
-    question: "Delete branch worktree-{name} too?",
+    question: "{error.message}. Remove anyway?",
+    header: "Unpushed",
+    options: [
+      { label: "Force remove", description: "Discard the unpushed commits along with the worktree" },
+      { label: "Cancel", description: "Push the branch first, then retry" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+On either **Force remove**, retry with `--force`. On `error.kind=worktree_not_found`, exit cleanly. Capture `removed.branch` from the success envelope for R3.
+
+### Step R3: Branch Cleanup (optional)
+
+Ask:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Delete branch {removed.branch} too?",
     header: "Branch",
     options: [
-      { label: "Delete", description: "Branch has no unique commits - safe to delete" },
+      { label: "Delete", description: "Branch deletion (-d, refuses if unmerged)" },
       { label: "Keep", description: "Keep the branch for reference" }
     ],
     multiSelect: false
@@ -355,14 +238,19 @@ AskUserQuestion(
 )
 ```
 
-**Delete** -> `git branch -d "$BRANCH_NAME"` (safe delete, fails if unmerged)
-**Keep** -> skip
+On **Delete**, follow up with `--branch-only` (the worktree is already gone — second `remove` would fail with `worktree_not_found`):
 
-### Step R5: Output
+```bash
+lets worktree remove "$NAME" --branch-only --branch "$BRANCH" --delete-branch --json
+```
+
+If response is `error.kind=branch_unmerged` (exit 15), ask user to confirm force delete; retry with `--force-branch`.
+
+### Step R4: Output
 
 ```
-Worktree removed: .worktrees/{name}/
-Branch: {deleted / kept}
+Worktree removed: {removed.path}
+Branch: {removed.branch} ({deleted / kept})
 
 ┌─ LETS ──────────────────────────┐
 │  List?  /lets:worktree list     │
@@ -373,53 +261,25 @@ Branch: {deleted / kept}
 
 ## Info
 
-Show worktree status for the current directory.
-
-### Step I1: Detect Worktree State
-
 ```bash
-GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
-TOPLEVEL=$(git rev-parse --show-toplevel 2>/dev/null)
-COMMON_DIR=$(git rev-parse --git-common-dir 2>/dev/null)
-MAIN_ROOT=$(cd "$COMMON_DIR/.." 2>/dev/null && pwd)
-BRANCH=$(git branch --show-current 2>/dev/null)
+lets worktree info --json --quiet
 ```
 
-### Step I2: Check Integrations
+Parse JSON. `in_worktree=true` means cwd is inside a worktree; `main_root` is the main repo path; `worktree` block has the worktree's data.
 
-```bash
-# Beads
-if [ -f ".beads/redirect" ]; then
-  echo "beads: shared (redirect -> $(cat .beads/redirect))"
-elif [ -d ".beads" ]; then
-  echo "beads: local (stale snapshot)"
-else
-  echo "beads: not available"
-fi
+### Output
 
-# LETS
-if [ -L ".lets" ]; then
-  echo "lets: symlinked -> $(readlink .lets)"
-elif [ -d ".lets" ]; then
-  echo "lets: local (main repo)"
-else
-  echo "lets: not available"
-fi
-```
-
-### Step I3: Output
-
-**If in a worktree:**
+**If in a worktree** (`in_worktree=true`):
 
 ```
 ## Worktree Info
 
-Location: {absolute path}
-Main repo: {main root path}
-Branch: {branch name}
-Beads: {shared via redirect / local (stale) / not available}
-LETS: {symlinked / not available}
-Changes: {clean / N uncommitted files}
+Location: {worktree.path}
+Main repo: {main_root}
+Branch: {worktree.branch}
+LETS: {symlinked / local}
+Beads: {shared / local}
+Changes: {clean / N modified, M untracked}
 
 ┌─ LETS ──────────────────────────┐
 │  List?    /lets:worktree list   │
@@ -427,13 +287,13 @@ Changes: {clean / N uncommitted files}
 └─────────────────────────────────┘
 ```
 
-**If in main repo:**
+**If in main repo** (`in_worktree=false`):
 
 ```
 ## Worktree Info
 
 You are in the main repository (not a worktree).
-Path: {toplevel}
+Path: {main_root}
 
 ┌─ LETS ──────────────────────────┐
 │  Create?  /lets:worktree create │
@@ -441,15 +301,33 @@ Path: {toplevel}
 └─────────────────────────────────┘
 ```
 
+On `error.kind=not_in_repo` (exit 10), surface "not inside a git repository" plainly — no LETS box.
+
+---
+
+## Migration recipe (from legacy bd-worktree state)
+
+If a worktree was created with `bd worktree create` (pre-lets-rqep4), it has `.beads/redirect` instead of `.beads/.env` symlink. Two-step migration:
+
+```bash
+# 1. Remove the legacy worktree (force because random .beads/ files).
+lets worktree remove <name> --force
+
+# 2. Recreate with current mechanism.
+lets worktree create <name>
+```
+
+The new worktree gets the LETS-managed `.lets/` symlink and (if the main has `.beads/.env`) a targeted `.beads/.env` symlink with chmod 0o600 / parent 0o700.
+
 ---
 
 ## Rules
 
-- **Interactive worktrees only** - agents use native Claude Code worktrees (isolation: worktree)
-- **Location:** `.worktrees/` at project root (NOT `.claude/worktrees/` - that's for agents)
-- **.gitignore:** verify `.worktrees/` is ignored before creating
-- **Never force-remove without user approval**
-- **Each worktree = separate terminal = separate Claude Code session**
-- `.lets/` symlinked for shared config, sessions, plans, reviews
-- `.beads/redirect` via `bd worktree create` for shared task database
-- Respond in user's language
+- **Interactive worktrees only.** Agent worktrees (`isolation: worktree`) use native Claude Code behavior.
+- **Location:** `.worktrees/` at project root (NOT `.claude/worktrees/` — that's for agents).
+- **`.gitignore` invariants:** `lets worktree create` calls `initcmd.EnsureGitignore` (race-safe via flock + integrity check). Both `.worktrees/` and `.lets` (no slash — matches dir AND symlink) are appended if absent.
+- **Branch lifecycle:** worktrees attach to existing branches by default; new branches are prefixed `worktree-<name>`. Refuses to attach the branch currently checked out in main (override with `--switch-main-if-needed` + clean tree).
+- **Never force-remove without user approval.** `--force` and `--force-branch` always pass through an AskUserQuestion gate.
+- **Each worktree = separate terminal = separate Claude Code session.**
+- **Credential threat model:** `.beads/.env` symlink means the same credential is shared across all worktrees. Don't store cross-context secrets there; the file is `chmod 0o600` on disk and main `.beads/` is `chmod 0o700` (hardened by Create).
+- Respond in user's language.

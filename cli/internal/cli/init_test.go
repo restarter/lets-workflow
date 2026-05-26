@@ -79,10 +79,28 @@ func chdirTo(t *testing.T, dir string) {
 
 // TestInit_GithubAndPRFlowConflict_Errors covers B13 from the 2026-05-08
 // review. The conflict check fires AFTER plugin-root resolution but BEFORE
-// any file mutation, so we can run it from the lets-workflow repo's own
-// cwd without side effects.
+// any file mutation. Pre-fix: the test ran in the orchestrator's cwd, which
+// may itself be a worktree (lets-rqep4 surfaced this when run from
+// .worktrees/...); the worktree-guard fired before the conflict check and
+// masked the assertion. Fix: chdir into a fresh non-worktree git repo for
+// the test's lifetime.
 func TestInit_GithubAndPRFlowConflict_Errors(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
 	plugin := makeFakePluginRoot(t)
+	gitDir := t.TempDir()
+	runCmd := func(args ...string) {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = gitDir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%v: %v\n%s", args, err, out)
+		}
+	}
+	runCmd("git", "-c", "init.defaultBranch=main", "init")
+	runCmd("git", "config", "user.email", "t@t")
+	runCmd("git", "config", "user.name", "t")
+	chdirTo(t, gitDir)
 
 	root := cli.NewRootCmd()
 	root.SetArgs([]string{

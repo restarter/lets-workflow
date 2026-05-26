@@ -92,9 +92,31 @@ The Makefile auto-derives the version from git tags (when HEAD is exactly on a t
 2. Register in `internal/cli/root.go`: `cmd.AddCommand(New<Name>Cmd())`
 3. Add `<name>_test.go` (use `package cli_test` for black-box tests; `package cli` only when testing unexported helpers)
 4. Use `cmd.OutOrStdout()` (not `fmt.Printf`) for testability
-5. Domain logic goes in `internal/<name>/` (see `initcmd/`, `sessionstart/`, `statusline/`, `frontmatter/` for patterns)
+5. Domain logic goes in `internal/<name>/` (see `initcmd/`, `updatecmd/`, `worktreecmd/`, `sessionstart/`, `statusline/`, `frontmatter/` for patterns)
 
 Example: `lets init` lives in `internal/cli/init.go` (cobra factory) and `internal/initcmd/` (orchestration, migration helpers, embedded shim).
+
+### Platform-specific primitives (unix vs windows)
+
+If the package needs Unix-only primitives (`syscall.Flock`, fifo, signals, etc.), gate the implementation with a build constraint and ship a Windows stub so cross-platform builds still link:
+
+```go
+// foo_unix.go
+//go:build unix
+
+package foocmd
+func Run(...) error { /* real impl using syscall.Flock etc. */ }
+```
+
+```go
+// foo_stub.go
+//go:build !unix
+
+package foocmd
+func Run(...) error { return errors.New("not yet supported on this platform") }
+```
+
+The same pattern applies at the cobra factory layer (`internal/cli/<name>.go` + `internal/cli/<name>_stub.go`) when the subcommand should still appear in `--help` on Windows but return a structured error. See `worktreecmd/` for a worked example (filesystem + git operations + 4-subcommand surface) and `internal/cli/worktree_stub.go` for the Windows-side no-op.
 
 ## `lets init`
 
@@ -172,3 +194,27 @@ Latest-release lookup hits `https://api.github.com/repos/restarter/lets-workflow
 Refuses: from a worktree (`--git-dir != --git-common-dir`) — `.claude/` isn't shared into worktrees.
 
 Same `--json` contract semantics as `lets init` (single JSON object, valid even on error, `SilenceUsage`/`SilenceErrors`, `TestResult_SchemaContract` guards `schema_version` bumps).
+
+## `lets worktree`
+
+Internal subcommand. Invoked by the `/lets:worktree` slash command (`commands/worktree.md`) as a thin dispatcher — markdown captures user intent via `AskUserQuestion`, shells out with `--json`, renders the result. All filesystem + git operations live here (`internal/cli/worktree.go` cobra factory + `internal/worktreecmd/` package, build constraint `//go:build unix`; Windows ships a no-op stub at `internal/cli/worktree_stub.go`).
+
+```bash
+lets worktree create <name> [--attach | --new-branch] [--switch-main-if-needed] [--no-symlink-lets] [--no-symlink-beads] [--print-cd] [--json]
+lets worktree remove <name> [--force] [--delete-branch [--force-branch]] [--branch-only --branch <name>] [--json]
+lets worktree list [--json]
+lets worktree info [--dir <path>] [--json]
+```
+
+Refuses: from inside a worktree (`create` only — the other three work in either repo), or when name validation fails (positive allowlist + `git check-ref-format`).
+
+### `lets worktree --json` contract
+
+Same shape conventions as `lets init` (single JSON object, valid even on error, `SilenceUsage` + `SilenceErrors`), with the additional structural notes below:
+
+- **Envelope core.** Every subcommand result embeds `Envelope` (`internal/worktreecmd/result.go`): `schema_version`, `ok`, `subcommand`, `project_root`, `steps[]`, optional `error`. Per-subcommand result wrappers (`CreateResult`, `RemoveResult`, `ListResult`, `InfoResult`) add their own payload keys (`worktree`, `next_steps`, `removed`, `worktrees`, `main`, `in_worktree`, `main_root`, `rollback`). `TestResult_SchemaContract` pins these keys for all 4 wrappers + the bare Envelope.
+- **Typed exit codes (10..21).** Defined in `internal/worktreecmd/exit.go`; scripts branch on `$?` without parsing prose. 22..29 reserved for a future `lets worktree adopt` subcommand. `main.go`'s `exitCoder` interface routes a typed `*worktreecmd.Error` (even through `fmt.Errorf("...%w", err)` wrapping) to the matching exit code; untyped errors fall through to `ExitGeneric` (1). `TestExitCoder_AsMatchesWorktreeError` (`cmd/lets/main_test.go`) pins that contract.
+- **`error.kind` taxonomy.** When `ok=false`, the typed `error` object carries a snake_case `kind` for programmatic branching (`dirty_worktree`, `unpushed_commits`, `worktree_path_exists`, `branch_unmerged`, `branch_checked_out_in_main`, `branch_in_use_other_worktree`, `not_in_repo`, `inside_worktree`, `post_create_failed`, `rollback_refused_path_escape`, …). One exit code can carry multiple kinds (`ExitBranchConflict=13` covers both attach-time conflict variants); parse `error.kind` for specifics.
+- **Rollback contract.** On `create` failure after `git worktree add` has run, `rollback` is populated with `{attempted, succeeded, residual: [...]}`. Residual entries name what couldn't be cleaned up (path, `branch:<name>`, `main_repo_on_branch:<actual> (expected <prev>)`) so the caller surfaces concrete cleanup instructions instead of hand-waving.
+- **Stream split for shell composition.** `--print-cd` writes the absolute worktree path to **stdout** (one line, no newline-padding) while keeping `--json` envelope on **stderr** — gh-style. Lets shell wrappers compose `cd "$(lets worktree create foo --print-cd)" && claude` without parsing JSON. Without `--print-cd`, `--json` envelope goes to stdout as usual.
+- **`next_steps.absolute_path`.** Load-bearing field that `commands/worktree.md` reads to tell the user where to `cd`. Renaming it without a `SchemaVersion` bump silently breaks the markdown skill — pinned by `TestResult_SchemaContract.create_success`.

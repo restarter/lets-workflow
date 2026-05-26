@@ -10,7 +10,8 @@
 SHELL := /bin/sh
 
 .PHONY: all build test test-fast vet lint fmt fmt-check install install-go clean help \
-        verify-versions bump release-tag
+        verify-versions bump release-tag \
+        dev dev-tmux dev-shell
 
 CLI_DIR := cli
 
@@ -46,6 +47,9 @@ help:
 	@echo "  verify-versions - Run scripts/release/verify-versions.sh (VERIFY_FLAGS=--against-tag for tag check)"
 	@echo "  bump            - Phase 1 of release: bump VERSION=X.Y.Z [DRY_RUN=1]"
 	@echo "  release-tag     - Phase 3 of release: tag main + push (triggers goreleaser)"
+	@echo "  dev             - Build dev cli/lets + exec claude --plugin-dir from this worktree"
+	@echo "  dev-tmux        - Spawn tmux with one Claude pane per .worktrees/* (TMUX-parallel)"
+	@echo "  dev-shell       - Build + spawn subshell with PATH prepended (no claude)"
 
 build:
 	cd $(CLI_DIR) && go build -trimpath $(LDFLAGS) -o lets ./cmd/lets
@@ -138,3 +142,27 @@ release-tag:
 	@echo ""
 	@echo "✓ Pushed tag v$(VERSION)"
 	@echo "  Watch: gh run watch  (release.yml triggered by tag push)"
+
+# dev: Build worktree-local cli/lets with a dev-<branch>-<sha>[-dirty] version
+# stamp, prepend $(CLI_DIR) to PATH, exec `claude --plugin-dir` from this
+# worktree. Per-TMUX-pane usage: one `make dev` per pane. No global install,
+# no marketplace mutation. Production `lets` install is unaffected.
+# Pass extra claude args via ARGS="...".
+#
+# No `: build` prereq — scripts/dev/run.sh owns the build with version
+# stamping via `make -C $REPO build VERSION=...`. A make-level prereq would
+# run `make build` once without VERSION (producing literal "dev" binary)
+# then the script would rebuild with the stamp — wasted cycle.
+dev:
+	@bash scripts/dev/run.sh claude $(ARGS)
+
+# dev-tmux: Spawn a tmux session with one Claude pane per .worktrees/<name>/.
+# Default = all worktrees. Pass WORKTREES="name1 name2" to limit. Threshold
+# prompt at >10 panes (errors out if stdin is not a TTY).
+dev-tmux:
+	@bash scripts/dev/run.sh tmux $(WORKTREES)
+
+# dev-shell: Build + spawn a subshell with PATH prepended. Useful for ad-hoc
+# `lets …` invocations without launching Claude.
+dev-shell:
+	@bash scripts/dev/run.sh shell

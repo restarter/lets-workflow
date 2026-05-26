@@ -149,10 +149,35 @@ func parseLegacyYaml(data []byte) (Prefs, error) {
 // EnsureGitignore appends entries to .gitignore if absent. Ensures trailing
 // newline before append. Idempotent.
 //
+// Concurrency-safe: takes an exclusive flock on .lets/locks/gitignore.lock for
+// the duration of read-modify-write. After write, re-reads the file and
+// verifies all requested entries are present — protects against silent
+// corruption on NFS/SMB-mounted .git where flock may degrade to no-op.
+//
 // Existing-entry detection skips blank lines and `#` comment lines so we
 // don't accidentally treat a line like "# .lets/" (commented out) as a real
 // entry that satisfies the requirement.
+//
+// NOTE: any future writer of root .gitignore MUST go through this helper
+// to avoid concurrent-write corruption.
 func EnsureGitignore(projectRoot string, entries []string) error {
+	// 1. Acquire exclusive flock (no-op on Windows; see flock_windows.go).
+	lockDir := filepath.Join(projectRoot, ".lets", "locks")
+	if err := os.MkdirAll(lockDir, 0o755); err != nil {
+		return fmt.Errorf("create lock dir: %w", err)
+	}
+	lockPath := filepath.Join(lockDir, "gitignore.lock")
+	lock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return fmt.Errorf("open lock: %w", err)
+	}
+	defer func() { _ = lock.Close() }()
+	if err := lockFile(lock); err != nil {
+		return fmt.Errorf("flock: %w", err)
+	}
+	defer func() { _ = unlockFile(lock) }()
+
+	// 2. Read-modify-write (shape unchanged from pre-hardening).
 	path := filepath.Join(projectRoot, ".gitignore")
 	data, err := os.ReadFile(path)
 	if err != nil && !os.IsNotExist(err) {
@@ -184,5 +209,29 @@ func EnsureGitignore(projectRoot string, entries []string) error {
 	for _, e := range toAppend {
 		buf = append(buf, []byte(e+"\n")...)
 	}
-	return AtomicWriteBytes(path, buf, 0o644)
+	if err := AtomicWriteBytes(path, buf, 0o644); err != nil {
+		return err
+	}
+
+	// 3. Read-after-write integrity check. Detects NFS/SMB flock degradation
+	// or concurrent overwrite by an external (non-EnsureGitignore) writer.
+	after, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read-after-write: %w", err)
+	}
+	afterSet := map[string]bool{}
+	s2 := bufio.NewScanner(strings.NewReader(string(after)))
+	for s2.Scan() {
+		line := strings.TrimSpace(s2.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		afterSet[line] = true
+	}
+	for _, e := range entries {
+		if !afterSet[e] {
+			return fmt.Errorf("gitignore concurrent-modification: entry %q missing after write; manually inspect .gitignore", e)
+		}
+	}
+	return nil
 }
