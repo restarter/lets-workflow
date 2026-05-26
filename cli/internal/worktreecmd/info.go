@@ -31,7 +31,7 @@ func Info(ctx context.Context, dir string) (*InfoResult, error) {
 	if mainRoot == "" {
 		res.OK = false
 		res.Error = &ErrorInfo{Kind: "not_in_repo", Message: "not inside a git repository"}
-		return res, &Error{Code: ExitNotInRepo, Kind: "not_in_repo"}
+		return res, &Error{Code: ExitNotInRepo, Kind: "not_in_repo", Message: "not inside a git repository"}
 	}
 
 	res.ProjectRoot = mainRoot

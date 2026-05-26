@@ -133,8 +133,9 @@ func newWorktreeRemoveCmd() *cobra.Command {
 			projectRoot := initcmd.DetectProjectRoot()
 			if projectRoot == "" {
 				return &worktreecmd.Error{
-					Code: worktreecmd.ExitNotInRepo,
-					Kind: "not_in_repo",
+					Code:    worktreecmd.ExitNotInRepo,
+					Kind:    "not_in_repo",
+					Message: "not inside a git repository",
 				}
 			}
 			res, runErr := worktreecmd.Remove(cmd.Context(), projectRoot, worktreecmd.RemoveOptions{
@@ -174,8 +175,9 @@ func newWorktreeListCmd() *cobra.Command {
 			projectRoot := initcmd.DetectProjectRoot()
 			if projectRoot == "" {
 				return &worktreecmd.Error{
-					Code: worktreecmd.ExitNotInRepo,
-					Kind: "not_in_repo",
+					Code:    worktreecmd.ExitNotInRepo,
+					Kind:    "not_in_repo",
+					Message: "not inside a git repository",
 				}
 			}
 			res, runErr := worktreecmd.List(cmd.Context(), projectRoot)
@@ -213,7 +215,13 @@ func newWorktreeInfoCmd() *cobra.Command {
 			jsonBytes, _ := json.MarshalIndent(res, "", "  ")
 			if jsonOut {
 				fmt.Fprintln(cmd.OutOrStdout(), string(jsonBytes))
-			} else if !quiet {
+			} else if !quiet && res.OK {
+				// On error, skip the human renderer — main.go prints the
+				// error to stderr via err.Error(). Without this guard,
+				// RenderInfo's "Error: ..." line duplicates main.go's
+				// "kind: message" line. (Same issue would happen for
+				// remove/list, but those return early before reaching
+				// their renderers on the same not_in_repo path.)
 				worktreecmd.RenderInfo(cmd.OutOrStdout(), res)
 			}
 			return runErr
