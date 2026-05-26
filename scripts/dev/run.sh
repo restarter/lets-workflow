@@ -4,7 +4,6 @@
 # Subcommands:
 #   scripts/dev/run.sh build            Build cli/lets with dev-<branch>-<sha>[-dirty] version.
 #   scripts/dev/run.sh info             Print dev state (binary, branch, plugin dir, conflicts).
-#   scripts/dev/run.sh shell            Build + spawn $SHELL with PATH prepended.
 #   scripts/dev/run.sh claude [args]    Build + exec `claude --plugin-dir <repo>/plugins/lets [args]`.
 #   scripts/dev/run.sh tmux [names...]  Spawn tmux session with one Claude pane per worktree.
 #
@@ -66,15 +65,8 @@ do_info() {
 	local global
 	global=$(command -v lets 2>/dev/null || true)
 	if [ -n "$global" ] && [ "$global" != "$CLI_BIN" ]; then
-		printf '⚠ Global:    %s (wins on PATH unless exported via dev shell|claude|tmux)\n' "$global"
+		printf '⚠ Global:    %s (wins on PATH unless exported via dev claude|tmux)\n' "$global"
 	fi
-}
-
-do_shell() {
-	do_build
-	echo "→ dev subshell. PATH=$CLI_DIR:..., plugin=$PLUGIN_DIR" >&2
-	echo "  launch claude with: claude --plugin-dir \"$PLUGIN_DIR\"" >&2
-	PATH="$CLI_DIR:$PATH" "${SHELL:-/bin/bash}"
 }
 
 do_claude() {
@@ -92,6 +84,17 @@ do_tmux() {
 		echo "ERROR: tmux not found on PATH (brew install tmux / apt install tmux)" >&2
 		exit 3
 	fi
+	# Resolve the MAIN repo working tree. When `make dev-tmux` is invoked from
+	# inside a worktree, $REPO (= git rev-parse --show-toplevel) is the worktree
+	# path, but worktrees live under <main>/.worktrees/, not <worktree>/.worktrees/.
+	# `git rev-parse --absolute-git-dir` returns:
+	#   - main repo:  <main>/.git
+	#   - worktree:   <main>/.git/worktrees/<name>
+	# Stripping /.git* gives <main> in both cases.
+	local git_dir main_repo
+	git_dir=$(git -C "$REPO" rev-parse --absolute-git-dir 2>/dev/null)
+	main_repo="${git_dir%/.git*}"
+	[ -d "$main_repo" ] || main_repo="$REPO" # fallback: should not happen, but keep do_tmux usable
 	# NOTE: no top-level `do_build` here. Each pane runs `make dev` independently,
 	# which resolves `git rev-parse --show-toplevel` to its OWN worktree and builds
 	# `<that-worktree>/cli/lets`. A build of the orchestrator's repo (run from
@@ -100,19 +103,19 @@ do_tmux() {
 	local worktrees=()
 	if [ $# -gt 0 ]; then
 		for name in "$@"; do
-			local p="$REPO/.worktrees/$name"
+			local p="$main_repo/.worktrees/$name"
 			[ -d "$p" ] || { echo "ERROR: $p not a worktree directory" >&2; exit 4; }
 			worktrees+=("$p")
 		done
 	else
-		for p in "$REPO/.worktrees"/*/; do
+		for p in "$main_repo/.worktrees"/*/; do
 			[ -d "$p" ] || continue
 			worktrees+=("${p%/}")
 		done
 	fi
 	local n=${#worktrees[@]}
 	if [ "$n" -eq 0 ]; then
-		echo "ERROR: no worktrees under $REPO/.worktrees/. Create one first: lets worktree create <name>" >&2
+		echo "ERROR: no worktrees under $main_repo/.worktrees/. Create one first: lets worktree create <name>" >&2
 		exit 5
 	fi
 	if [ "$n" -gt 10 ]; then
@@ -163,11 +166,10 @@ cmd=${1:-info}; [ $# -gt 0 ] && shift
 case "$cmd" in
 	build)  do_build ;;
 	info)   do_info ;;
-	shell)  do_shell ;;
 	claude) do_claude "$@" ;;
 	tmux)   do_tmux "$@" ;;
 	-h|--help|help)
-		echo "Usage: scripts/dev/run.sh {build|info|shell|claude [args]|tmux [names...]}"
+		echo "Usage: scripts/dev/run.sh {build|info|claude [args]|tmux [names...]}"
 		;;
 	*)
 		echo "ERROR: unknown subcommand '$cmd'. Try: scripts/dev/run.sh --help" >&2

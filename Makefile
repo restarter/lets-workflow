@@ -11,7 +11,7 @@ SHELL := /bin/sh
 
 .PHONY: all build test test-fast vet lint fmt fmt-check install install-go clean help \
         verify-versions bump release-tag \
-        dev dev-tmux dev-shell
+        dev dev-tmux
 
 CLI_DIR := cli
 
@@ -49,7 +49,6 @@ help:
 	@echo "  release-tag     - Phase 3 of release: tag main + push (triggers goreleaser)"
 	@echo "  dev             - Build dev cli/lets + exec claude --plugin-dir from this worktree"
 	@echo "  dev-tmux        - Spawn tmux with one Claude pane per .worktrees/* (TMUX-parallel)"
-	@echo "  dev-shell       - Build + spawn subshell with PATH prepended (no claude)"
 
 build:
 	cd $(CLI_DIR) && go build -trimpath $(LDFLAGS) -o lets ./cmd/lets
@@ -161,8 +160,3 @@ dev:
 # prompt at >10 panes (errors out if stdin is not a TTY).
 dev-tmux:
 	@bash scripts/dev/run.sh tmux $(WORKTREES)
-
-# dev-shell: Build + spawn a subshell with PATH prepended. Useful for ad-hoc
-# `lets …` invocations without launching Claude.
-dev-shell:
-	@bash scripts/dev/run.sh shell

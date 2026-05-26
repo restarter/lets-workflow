@@ -23,9 +23,10 @@ BRANCH=$(git branch --show-current)
 ```
 
 Extract beads task ID from branch name. Formats:
-- `feature/<task-id>-<slug>` - standard LETS branches
-- `worktree-<task-id>-<slug>` - worktree branches
-- `worktree-<custom-name>` - no task ID, use fallback
+- `feature/<task-id>-<slug>` - standard LETS branches (main repo)
+- `worktree-<task-id>-<slug>` - worktree branches created via `/lets:worktree create` in new-branch mode (the LETS convention)
+- `worktree-<custom-name>` - worktree branch without an embedded task ID; use fallback
+- any other shape (e.g. `feature/foo`, `bugfix/bar`) - attached existing branch via `/lets:worktree create --attach`; no task ID in the name; use fallback
 
 Beads ID pattern: `<prefix>-<alphanum>[.<number>]`
 Examples: `lets-abc`, `lets-abc.1`, `proj-xyz.42`
