@@ -271,9 +271,9 @@ func TestCreate_SwitchMainIfNeeded_RollbackRestoresPrev(t *testing.T) {
 // directory outside the repo with a sentinel file, calls rollback, and
 // verifies:
 //
-//   1. The descendant guard refused (Rollback.Succeeded == false).
-//   2. The error kind matches the documented contract.
-//   3. The sentinel file is untouched (no destructive op ran).
+//  1. The descendant guard refused (Rollback.Succeeded == false).
+//  2. The error kind matches the documented contract.
+//  3. The sentinel file is untouched (no destructive op ran).
 func TestRollback_RefusesPathEscape(t *testing.T) {
 	repo := initRepo(t)
 	// A real directory OUTSIDE the repo - rollback must NOT touch it.

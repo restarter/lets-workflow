@@ -84,22 +84,22 @@ func TestValidateName_AcceptsValid(t *testing.T) {
 
 func TestValidateName_RejectsInvalid(t *testing.T) {
 	cases := []string{
-		"",                                                                       // empty
-		"FOO",                                                                    // uppercase
-		"foo bar",                                                                // space
-		"foo/bar",                                                                // slash
-		".foo",                                                                   // leading dot
-		"-foo",                                                                   // leading dash
-		"foo..bar",                                                               // double dot
-		"foo.lock",                                                               // .lock suffix
-		"foo:bar",                                                                // colon (git reject)
-		"foo@{x}",                                                                // @{
-		"foo~1",                                                                  // tilde
-		"foo^",                                                                   // caret
-		"foo?",                                                                   // question mark
-		"foo*",                                                                   // asterisk
-		"foo[bar",                                                                // bracket
-		"foo\x00bar",                                                             // NUL byte
+		"",           // empty
+		"FOO",        // uppercase
+		"foo bar",    // space
+		"foo/bar",    // slash
+		".foo",       // leading dot
+		"-foo",       // leading dash
+		"foo..bar",   // double dot
+		"foo.lock",   // .lock suffix
+		"foo:bar",    // colon (git reject)
+		"foo@{x}",    // @{
+		"foo~1",      // tilde
+		"foo^",       // caret
+		"foo?",       // question mark
+		"foo*",       // asterisk
+		"foo[bar",    // bracket
+		"foo\x00bar", // NUL byte
 		"this-name-is-way-too-long-to-be-allowed-as-a-worktree-identifier-here", // >64 chars
 	}
 	for _, c := range cases {

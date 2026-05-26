@@ -17,11 +17,11 @@ import (
 // Subcommands inherit SilenceUsage + SilenceErrors so cobra doesn't double-
 // print after a JSON envelope is emitted. Stream contract per subcommand:
 //
-//   --print-cd : stdout = path (success), stderr = JSON when --json, else
-//                human-readable prose suppressed unless --verbose.
-//   --json     : stdout = JSON envelope; human prose suppressed.
-//   default    : stdout = human-readable rendering.
-//   --quiet    : suppresses human prose entirely (JSON/path paths unaffected).
+//	--print-cd : stdout = path (success), stderr = JSON when --json, else
+//	             human-readable prose suppressed unless --verbose.
+//	--json     : stdout = JSON envelope; human prose suppressed.
+//	default    : stdout = human-readable rendering.
+//	--quiet    : suppresses human prose entirely (JSON/path paths unaffected).
 func NewWorktreeCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:           "worktree",

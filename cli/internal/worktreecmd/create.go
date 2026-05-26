@@ -16,7 +16,6 @@ import (
 	"github.com/restarter/lets-workflow/cli/internal/initcmd"
 )
 
-
 // CreateOptions configures the create flow.
 type CreateOptions struct {
 	Name               string
@@ -371,7 +370,7 @@ func resolveBaseFromEnv(projectRoot string) string {
 	if err != nil {
 		return "main"
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	vals, err := envfile.Parse(f)
 	if err != nil {
 		return "main"

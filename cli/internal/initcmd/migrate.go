@@ -171,7 +171,7 @@ func EnsureGitignore(projectRoot string, entries []string) error {
 	if err != nil {
 		return fmt.Errorf("open lock: %w", err)
 	}
-	defer lock.Close()
+	defer func() { _ = lock.Close() }()
 	if err := lockFile(lock); err != nil {
 		return fmt.Errorf("flock: %w", err)
 	}
