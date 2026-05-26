@@ -23,22 +23,25 @@ CLI_DIR="$REPO/cli"
 CLI_BIN="$CLI_DIR/lets"
 PLUGIN_DIR="$REPO/plugins/lets"
 
-# dev_version produces "dev-<branch>-<sha>[-dirty]". Slashes in branch names
-# (e.g. feature/x) are replaced with hyphens because the value flows through
-# Makefile's VERSION= which is touchy about special chars in ldflag values.
+# dev_version produces "dev-<branch>-<sha>[-dirty]". Branch names can contain
+# any char git permits (slashes, dots, etc.) but the value flows through
+# Makefile's VERSION= and then -ldflags, which break on anything outside
+# [A-Za-z0-9._-]. Use `tr -c` as a whitelist (defense in depth: not just
+# slashes) so any future weird branch name still produces a valid ldflag.
 #
 # Detached HEAD fallback: `git rev-parse --abbrev-ref HEAD` returns the
 # literal "HEAD" when no branch is checked out (mid-bisect, mid-`git worktree
 # add --detach`, manual sha checkout). symbolic-ref returns the branch ref
 # OR fails when detached — use that to detect and label clearly.
 dev_version() {
-	local branch sha dirty=""
+	local branch sha dirty="" safe_branch
 	branch=$(git -C "$REPO" symbolic-ref --short HEAD 2>/dev/null) || branch="detached"
 	sha=$(git -C "$REPO" rev-parse --short=7 HEAD)
 	if [ -n "$(git -C "$REPO" status --porcelain 2>/dev/null)" ]; then
 		dirty="-dirty"
 	fi
-	printf 'dev-%s-%s%s' "${branch//\//-}" "$sha" "$dirty"
+	safe_branch=$(printf '%s' "$branch" | tr -c 'A-Za-z0-9._-' '-')
+	printf 'dev-%s-%s%s' "$safe_branch" "$sha" "$dirty"
 }
 
 do_build() {
@@ -132,12 +135,25 @@ do_tmux() {
 	fi
 	local session="lets-dev-$$"
 	echo "→ tmux session '$session' with $n pane(s)" >&2
-	local first_wt="${worktrees[0]}"
-	tmux new-session -d -s "$session" -c "$first_wt" "cd '$first_wt' && exec make dev"
+	local first_wt first_q
+	first_wt="${worktrees[0]}"
+	# %q quoting: defense-in-depth against worktree paths with apostrophes /
+	# spaces / shell metacharacters. ValidateName blocks these upstream when
+	# the worktree is LETS-managed, but tmux can also target arbitrary
+	# user-supplied .worktrees/* dirs (S-16).
+	printf -v first_q '%q' "$first_wt"
+	tmux new-session -d -s "$session" -c "$first_wt" "cd $first_q && exec make dev"
+	# remain-on-exit on: keep the pane visible (with its scrollback) when
+	# `make dev` exits — without this a build failure closes the pane and
+	# the user attaches to a session with fewer-than-N panes and no clue
+	# what happened (S-14).
+	tmux set-option -t "$session" remain-on-exit on
 	local i
 	for ((i=1; i<n; i++)); do
-		local wt="${worktrees[i]}"
-		tmux split-window -t "$session" -c "$wt" "cd '$wt' && exec make dev"
+		local wt wt_q
+		wt="${worktrees[i]}"
+		printf -v wt_q '%q' "$wt"
+		tmux split-window -t "$session" -c "$wt" "cd $wt_q && exec make dev"
 		tmux select-layout -t "$session" tiled
 	done
 	echo "  attach: tmux attach -t '$session'" >&2
