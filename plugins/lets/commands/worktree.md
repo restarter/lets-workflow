@@ -1,5 +1,5 @@
 ---
-description: Worktree lifecycle management - create, list, remove interactive worktrees
+description: Worktree lifecycle management - create, list, remove, info on interactive worktrees
 ---
 
 # Worktree Management
@@ -62,7 +62,7 @@ AskUserQuestion(
 
 **From task:** Run `bd ready --limit 5` and let user pick a task or use the current in-progress task. Generate name as `<task-id>-<slugified-title>` (e.g., `lets-hpi.3-worktree-start`).
 
-**Custom:** Use provided text. Slugify: lowercase, spaces to hyphens, remove special chars, max 50 chars. `lets worktree create` will reject invalid names with exit 2.
+**Custom:** Use provided text. Slugify: lowercase, spaces to hyphens, remove special chars, max 50 chars (the Go validator allows up to 64; the skill pre-truncates to 50 to leave headroom for `worktree-` prefixes and tmux pane labels). `lets worktree create` will reject invalid names with exit 2.
 
 ### Step C2: Create
 
