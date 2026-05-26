@@ -4,7 +4,6 @@
 # Subcommands:
 #   scripts/dev/run.sh build            Build cli/lets with dev-<branch>-<sha>[-dirty] version.
 #   scripts/dev/run.sh info             Print dev state (binary, branch, plugin dir, conflicts).
-#   scripts/dev/run.sh shell            Build + spawn $SHELL with PATH prepended.
 #   scripts/dev/run.sh claude [args]    Build + exec `claude --plugin-dir <repo>/plugins/lets [args]`.
 #   scripts/dev/run.sh tmux [names...]  Spawn tmux session with one Claude pane per worktree.
 #
@@ -66,15 +65,8 @@ do_info() {
 	local global
 	global=$(command -v lets 2>/dev/null || true)
 	if [ -n "$global" ] && [ "$global" != "$CLI_BIN" ]; then
-		printf '⚠ Global:    %s (wins on PATH unless exported via dev shell|claude|tmux)\n' "$global"
+		printf '⚠ Global:    %s (wins on PATH unless exported via dev claude|tmux)\n' "$global"
 	fi
-}
-
-do_shell() {
-	do_build
-	echo "→ dev subshell. PATH=$CLI_DIR:..., plugin=$PLUGIN_DIR" >&2
-	echo "  launch claude with: claude --plugin-dir \"$PLUGIN_DIR\"" >&2
-	PATH="$CLI_DIR:$PATH" "${SHELL:-/bin/bash}"
 }
 
 do_claude() {
@@ -163,11 +155,10 @@ cmd=${1:-info}; [ $# -gt 0 ] && shift
 case "$cmd" in
 	build)  do_build ;;
 	info)   do_info ;;
-	shell)  do_shell ;;
 	claude) do_claude "$@" ;;
 	tmux)   do_tmux "$@" ;;
 	-h|--help|help)
-		echo "Usage: scripts/dev/run.sh {build|info|shell|claude [args]|tmux [names...]}"
+		echo "Usage: scripts/dev/run.sh {build|info|claude [args]|tmux [names...]}"
 		;;
 	*)
 		echo "ERROR: unknown subcommand '$cmd'. Try: scripts/dev/run.sh --help" >&2

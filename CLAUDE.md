@@ -24,7 +24,7 @@ cli/                              # Go CLI - companion binary (Phase 2+, lets-7v
 Makefile                          # Repo-root build (build/test/vet/lint/fmt/install/clean)
 .editorconfig                     # Editor whitespace/charset settings
 .github/workflows/                # CI: ci.yml (Go build/vet/test/lint on PRs+pushes), verify-versions.yml (source-tree version coherence), release.yml (tag-driven goreleaser)
-scripts/dev/                      # Dev workflow helpers (make dev / dev-tmux / dev-shell)
+scripts/dev/                      # Dev workflow helpers (make dev / dev-tmux)
 scripts/release/                  # Release tooling: bump-version.sh + verify-versions.sh (used by Makefile bump/release-tag)
 scripts/remote/dolt/              # Dolt SQL server VPS deployment + ad-hoc backup (NOT plugin)
 scripts/remote/beads-web/         # beads-web (Rust kanban board) VPS deployment (NOT plugin)
@@ -41,14 +41,13 @@ Testing the LETS plugin against unmerged changes — across parallel worktrees, 
 
 - **`make dev`** in a worktree builds `cli/lets` with version `dev-<branch>-<sha>[-dirty]`, prepends `<worktree>/cli/` to PATH, and execs `claude --plugin-dir <worktree>/plugins/lets`. Each invocation is self-contained — no global install, no marketplace mutation.
 - **`make dev-tmux`** auto-discovers `.worktrees/*/` and spawns a tmux session with one Claude pane per worktree. Pass `WORKTREES="name1 name2"` to limit. Threshold prompt at >10.
-- **`make dev-shell`** builds + spawns a subshell with PATH prepended, for `lets …` ad-hoc.
-- Implementation: `scripts/dev/run.sh` (subcommands: `build|info|shell|claude|tmux`). The Makefile targets are thin shims for discoverability via `make help`.
+- Implementation: `scripts/dev/run.sh` (subcommands: `build|info|claude|tmux`). The Makefile targets are thin shims for discoverability via `make help`.
 
 **Gotcha — `LETS_ENV_VERSION` stamping.** Running `lets init` from a dev binary writes `LETS_ENV_VERSION=dev-<branch>-<sha>[-dirty]` into `.lets/.env` (because `initcmd/render.go:70` writes `version.Version` literally). Reversible by running prod `lets init`, which restores the proper semver stamp. If you don't want to churn `.env`, skip `lets init` on the dev binary.
 
 **Gotcha — Claude-inside-Claude.** `make dev` must run from a **host terminal**, not from a Bash tool inside an existing Claude session. The Bash tool spawns a subshell that `exec`s the inner `claude`; the outer Claude's tool harness captures stdin/stdout, so the inner Claude has no terminal to interact through and hangs. Symptom: the Bash tool times out with no visible Claude prompt. Use a fresh tmux pane or terminal window instead.
 
-**Gotcha — old worktrees.** `make dev`, `make dev-tmux`, AND `make dev-shell` all require `scripts/dev/run.sh` plus the corresponding Makefile targets to exist in the worktree's branch HEAD. Worktrees created before this tooling shipped (or on feature branches that haven't pulled main) will fail with `bash: scripts/dev/run.sh: No such file or directory` or `make: *** No rule to make target 'dev'`. Three fixes (cheapest first): (a) `git checkout main -- Makefile scripts/dev/` from inside the affected worktree — fast but leaves the working tree dirty (uncommitted staged files), so plan to `git restore --staged Makefile scripts/dev/` or commit the migration on the worktree's branch; (b) rebase the worktree's branch onto main; (c) `lets worktree remove <name> && lets worktree create <name>`. `make dev-tmux` is the more dangerous case — it opens panes in ALL worktrees, any of which might be stuck on an old branch. Use `make dev-tmux WORKTREES="up-to-date-only"` to limit, or migrate all worktrees first.
+**Gotcha — old worktrees.** Both `make dev` and `make dev-tmux` require `scripts/dev/run.sh` plus the corresponding Makefile targets to exist in the worktree's branch HEAD. Worktrees created before this tooling shipped (or on feature branches that haven't pulled main) will fail with `bash: scripts/dev/run.sh: No such file or directory` or `make: *** No rule to make target 'dev'`. Three fixes (cheapest first): (a) `git checkout main -- Makefile scripts/dev/` from inside the affected worktree — fast but leaves the working tree dirty (uncommitted staged files), so plan to `git restore --staged Makefile scripts/dev/` or commit the migration on the worktree's branch; (b) rebase the worktree's branch onto main; (c) `lets worktree remove <name> && lets worktree create <name>`. `make dev-tmux` is the more dangerous case — it opens panes in ALL worktrees, any of which might be stuck on an old branch. Use `make dev-tmux WORKTREES="up-to-date-only"` to limit, or migrate all worktrees first.
 
 **Production `lets` install** at `~/.local/bin/lets` is unaffected — the dev binary lives at `<worktree>/cli/lets` and only wins on PATH for the `make dev` exec'd process.
 
