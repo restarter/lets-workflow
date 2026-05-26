@@ -24,7 +24,11 @@ func TestSkillWorktreeArgs_ValidSubcommands(t *testing.T) {
 		}
 		if d.IsDir() {
 			name := d.Name()
-			if name == "docs-local" || name == ".lets" || name == "node_modules" || name == "vendor" {
+			// .worktrees and .git are critical: from inside a worktree this walk
+			// resolves UP to the main repo, and would otherwise scan every sibling
+			// worktree's plugins/lets/skills/... — failing locally on any sibling
+			// worktree carrying a feature branch that renames a subcommand.
+			if name == "docs-local" || name == ".lets" || name == ".worktrees" || name == ".git" || name == "node_modules" || name == "vendor" {
 				return filepath.SkipDir
 			}
 			return nil
