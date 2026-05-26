@@ -94,7 +94,9 @@ func Remove(ctx context.Context, projectRoot string, opts RemoveOptions) (*Remov
 		if opts.ForceBranch {
 			deleteFlag = "-D"
 		}
-		if out, err := exec.CommandContext(ctx, "git", "-C", projectRoot, "branch", deleteFlag, opts.Branch).CombinedOutput(); err != nil {
+		// `--` between flags and the branch name prevents git from treating a
+		// branch name that starts with "-" as another flag.
+		if out, err := exec.CommandContext(ctx, "git", "-C", projectRoot, "branch", deleteFlag, "--", opts.Branch).CombinedOutput(); err != nil {
 			kind := "branch_delete_failed"
 			code := ExitGitFailed
 			if !opts.ForceBranch && strings.Contains(string(out), "not fully merged") {
@@ -203,7 +205,8 @@ func Remove(ctx context.Context, projectRoot string, opts RemoveOptions) (*Remov
 		if opts.ForceBranch {
 			deleteFlag = "-D"
 		}
-		if out, err := exec.CommandContext(ctx, "git", "-C", projectRoot, "branch", deleteFlag, branch).CombinedOutput(); err != nil {
+		// `--` separator: see branch-only path above.
+		if out, err := exec.CommandContext(ctx, "git", "-C", projectRoot, "branch", deleteFlag, "--", branch).CombinedOutput(); err != nil {
 			if !opts.ForceBranch && strings.Contains(string(out), "not fully merged") {
 				return fail(&Error{
 					Code:        ExitBranchUnmerged,

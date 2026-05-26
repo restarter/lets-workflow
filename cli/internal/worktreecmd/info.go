@@ -38,15 +38,26 @@ func Info(ctx context.Context, dir string) (*InfoResult, error) {
 	res.MainRoot = mainRoot
 	res.InWorktree = inWt
 
+	// Resolve `dir` (which may be a subdirectory of the worktree) to the
+	// worktree's root so the .lets / .beads/.env symlink probes hit the
+	// actual symlink locations. Falls back to the caller-supplied dir if
+	// git can't resolve.
+	probeRoot := dir
+	if out, err := exec.CommandContext(ctx, "git", "-C", dir, "rev-parse", "--show-toplevel").Output(); err == nil {
+		if top := strings.TrimSpace(string(out)); top != "" {
+			probeRoot = top
+		}
+	}
+
 	branch := ""
-	if out, err := exec.CommandContext(ctx, "git", "-C", dir, "branch", "--show-current").Output(); err == nil {
+	if out, err := exec.CommandContext(ctx, "git", "-C", probeRoot, "branch", "--show-current").Output(); err == nil {
 		branch = strings.TrimSpace(string(out))
 	}
-	headOut, _ := exec.CommandContext(ctx, "git", "-C", dir, "rev-parse", "HEAD").Output()
-	e := porcelainEntry{Path: dir, Branch: branch, HEAD: strings.TrimSpace(string(headOut))}
+	headOut, _ := exec.CommandContext(ctx, "git", "-C", probeRoot, "rev-parse", "HEAD").Output()
+	e := porcelainEntry{Path: probeRoot, Branch: branch, HEAD: strings.TrimSpace(string(headOut))}
 	wt := annotateWorktree(ctx, mainRoot, e)
 	if inWt {
-		wt.Name = filepath.Base(dir)
+		wt.Name = filepath.Base(probeRoot)
 	}
 	res.Worktree = &wt
 	res.OK = true

@@ -108,8 +108,19 @@ func rollback(ctx context.Context, result *CreateResult, projectRoot, wtPath str
 	return result, e
 }
 
+// pathDescendantOfWorktrees verifies wtPath sits beneath projectRoot/.worktrees/.
+// Both paths are symlink-resolved first to defeat /var ↔ /private/var (macOS) and
+// any user-installed symlink at the repo root — without this, a symlinked
+// project root flips the relative path into something starting with ".." and
+// remove() refuses on a perfectly legitimate worktree.
 func pathDescendantOfWorktrees(projectRoot, wtPath string) bool {
-	rel, err := filepath.Rel(projectRoot, wtPath)
+	resolve := func(p string) string {
+		if real, err := filepath.EvalSymlinks(p); err == nil {
+			return real
+		}
+		return p
+	}
+	rel, err := filepath.Rel(resolve(projectRoot), resolve(wtPath))
 	if err != nil {
 		return false
 	}
