@@ -99,12 +99,6 @@ func DetectInsideWorktreeAt(path string) (bool, string) {
 	return gitDir != commonDir, mainRoot
 }
 
-// DetectInsideWorktreeWithRoot is the cwd-based shorthand for
-// DetectInsideWorktreeAt(""). Kept for backwards source compatibility.
-func DetectInsideWorktreeWithRoot() (bool, string) {
-	return DetectInsideWorktreeAt("")
-}
-
 // DetectInsideWorktree returns just the boolean for cwd. DRY shim over
 // DetectInsideWorktreeAt.
 func DetectInsideWorktree() bool {
