@@ -92,9 +92,31 @@ The Makefile auto-derives the version from git tags (when HEAD is exactly on a t
 2. Register in `internal/cli/root.go`: `cmd.AddCommand(New<Name>Cmd())`
 3. Add `<name>_test.go` (use `package cli_test` for black-box tests; `package cli` only when testing unexported helpers)
 4. Use `cmd.OutOrStdout()` (not `fmt.Printf`) for testability
-5. Domain logic goes in `internal/<name>/` (see `initcmd/`, `sessionstart/`, `statusline/`, `frontmatter/` for patterns)
+5. Domain logic goes in `internal/<name>/` (see `initcmd/`, `updatecmd/`, `worktreecmd/`, `sessionstart/`, `statusline/`, `frontmatter/` for patterns)
 
 Example: `lets init` lives in `internal/cli/init.go` (cobra factory) and `internal/initcmd/` (orchestration, migration helpers, embedded shim).
+
+### Platform-specific primitives (unix vs windows)
+
+If the package needs Unix-only primitives (`syscall.Flock`, fifo, signals, etc.), gate the implementation with a build constraint and ship a Windows stub so cross-platform builds still link:
+
+```go
+// foo_unix.go
+//go:build unix
+
+package foocmd
+func Run(...) error { /* real impl using syscall.Flock etc. */ }
+```
+
+```go
+// foo_stub.go
+//go:build !unix
+
+package foocmd
+func Run(...) error { return errors.New("not yet supported on this platform") }
+```
+
+The same pattern applies at the cobra factory layer (`internal/cli/<name>.go` + `internal/cli/<name>_stub.go`) when the subcommand should still appear in `--help` on Windows but return a structured error. See `worktreecmd/` for a worked example (filesystem + git operations + 4-subcommand surface) and `internal/cli/worktree_stub.go` for the Windows-side no-op.
 
 ## `lets init`
 
