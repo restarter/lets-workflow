@@ -232,6 +232,8 @@ GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
 # ".git" = main repo, contains "worktrees/" = inside a worktree
 ```
 
+`lets worktree info` (`--json` for structured output) is the higher-level equivalent — returns `in_worktree`, `main_root`, current branch, and symlink status. Use it when you need more than the boolean, e.g. resolving the main repo path from inside a worktree via `main_root` instead of computing it manually.
+
 **Key differences when in a worktree:**
 - Branch is `worktree-<name>` (new) OR an attached existing branch (auto-detected by `/lets:worktree create`) - use as-is, do NOT create a `feature/` branch
 - `.lets/` is a symlink to main repo's `.lets/` - config, sessions, plans all shared
@@ -244,6 +246,12 @@ GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
 - Don't create additional `feature/` branches - the worktree's branch IS the working branch
 - Don't run `/lets:worktree create` from inside a worktree
 - Don't modify `.lets/` (whole-dir symlink) or `.beads/.env` (targeted symlink) — both are LETS-managed, shared with main
+
+**Remove safety nets.** `/lets:worktree remove` blocks on two conditions, each surfaced as a distinct `error.kind` in the JSON envelope — don't treat them as the same problem:
+- `dirty_worktree` (exit 14) — uncommitted changes in the working tree. Fix: commit/stash first, or pass `--force` to discard.
+- `unpushed_commits` (exit 21) — local commits on the worktree's branch not present on upstream. Fix: push the branch (typical after `/lets:done` created a PR), or `--force` to discard them along with the worktree.
+
+The skill walks the user through an `AskUserQuestion` for each kind — follow that prompt, don't fall through to generic error-handling.
 
 **Lifecycle:** `/lets:worktree create <name>` (from main repo) -> new terminal: `cd .worktrees/<name>/ && claude` -> `/lets:start` -> work -> `/lets:done` -> `/lets:worktree remove <name>` (from main repo)
 
