@@ -12,6 +12,7 @@ dolt-server.*
 dolt-monitor.*
 .worktrees/
 .claude/worktrees/
+.claude/scheduled_tasks*
 .beads/
 /docs-local/
 /scripts/deprecated/
