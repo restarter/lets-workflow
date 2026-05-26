@@ -67,15 +67,32 @@ do_info() {
 	fi
 }
 
+do_shell() {
+	do_build
+	echo "→ dev subshell. PATH=$CLI_DIR:..., plugin=$PLUGIN_DIR" >&2
+	echo "  launch claude with: claude --plugin-dir \"$PLUGIN_DIR\"" >&2
+	PATH="$CLI_DIR:$PATH" "${SHELL:-/bin/bash}"
+}
+
+do_claude() {
+	do_build
+	if ! command -v claude >/dev/null 2>&1; then
+		echo "ERROR: claude not found on PATH (install Claude Code first)" >&2
+		exit 3
+	fi
+	echo "→ launching: claude --plugin-dir $PLUGIN_DIR" >&2
+	PATH="$CLI_DIR:$PATH" exec claude --plugin-dir "$PLUGIN_DIR" "$@"
+}
+
 cmd=${1:-info}; [ $# -gt 0 ] && shift
 case "$cmd" in
 	build)  do_build ;;
 	info)   do_info ;;
+	shell)  do_shell ;;
+	claude) do_claude "$@" ;;
 	-h|--help|help)
-		# Task 1 advertises only what Task 1 implements. Tasks 2 & 3 widen this
-		# line as they add subcommands — keeps --help honest if the PR is
-		# inspected mid-bisect at this commit.
-		echo "Usage: scripts/dev/run.sh {build|info}"
+		# Task 2 widens --help to include shell + claude. Task 3 extends to tmux.
+		echo "Usage: scripts/dev/run.sh {build|info|shell|claude [args]}"
 		;;
 	*)
 		echo "ERROR: unknown subcommand '$cmd'. Try: scripts/dev/run.sh --help" >&2
