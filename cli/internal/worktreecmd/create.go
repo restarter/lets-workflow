@@ -59,14 +59,23 @@ func Create(ctx context.Context, projectRoot string, opts CreateOptions) (*Creat
 	// failure) after Step 5 auto-switched main would leave the user's main
 	// on the merge-branch when they expected the original. Steps 8/9/10
 	// route through rollback() which handles this itself.
+	//
+	// When the restore itself fails (transient git issue, foreign uid, etc.)
+	// we surface a residual via result.Rollback so the JSON envelope makes
+	// the partial state visible alongside the primary error — not buried
+	// in Steps[] (review S-3).
 	restoreMainIfSwitched := func(prev string) {
 		if prev == "" {
 			return
 		}
-		if out, err := exec.CommandContext(ctx, "git", "-C", projectRoot, "switch", prev).CombinedOutput(); err != nil {
-			addStep(StepWarn, fmt.Sprintf("failed to restore main to %s after auto-switch: %s", prev, redactCreds(strings.TrimSpace(string(out)))))
-		} else {
-			addStep(StepOK, fmt.Sprintf("restored main to %s after auto-switch", prev))
+		if !restoreMainBranch(ctx, projectRoot, prev, &result.Envelope, "restore: ") {
+			if result.Rollback == nil {
+				result.Rollback = &RollbackInfo{Attempted: true, Succeeded: false}
+			} else {
+				result.Rollback.Succeeded = false
+			}
+			result.Rollback.Residual = append(result.Rollback.Residual,
+				fmt.Sprintf("main_repo_on_branch:%s (expected %s)", currentBranchOr(ctx, projectRoot), prev))
 		}
 	}
 

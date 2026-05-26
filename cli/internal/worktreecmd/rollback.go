@@ -39,19 +39,9 @@ func rollback(ctx context.Context, result *CreateResult, projectRoot, wtPath str
 
 	// 0) Restore main repo's branch if auto-switch happened (do this FIRST so
 	//    user's working state is restored even if other steps fail).
-	if prevMainBranch != "" {
-		if out, err := exec.CommandContext(ctx, "git", "-C", projectRoot, "switch", prevMainBranch).CombinedOutput(); err != nil {
-			rb.Succeeded = false
-			result.Steps = append(result.Steps, Step{
-				Status:  StepWarn,
-				Message: fmt.Sprintf("rollback: failed to restore main to %s: %s", prevMainBranch, redactCreds(strings.TrimSpace(string(out)))),
-			})
-		} else {
-			result.Steps = append(result.Steps, Step{
-				Status:  StepOK,
-				Message: fmt.Sprintf("rollback: main restored to %s", prevMainBranch),
-			})
-		}
+	if !restoreMainBranch(ctx, projectRoot, prevMainBranch, &result.Envelope, "rollback: ") {
+		rb.Succeeded = false
+		residual = append(residual, fmt.Sprintf("main_repo_on_branch:%s (expected %s)", currentBranchOr(ctx, projectRoot), prevMainBranch))
 	}
 
 	// 1) git worktree remove --force.
@@ -106,6 +96,53 @@ func rollback(ctx context.Context, result *CreateResult, projectRoot, wtPath str
 	}
 	result.Error = &ErrorInfo{Kind: e.Kind, Message: e.Message, Remediation: e.Remediation}
 	return result, e
+}
+
+// restoreMainBranch switches the main repo back to prev. Returns true on
+// success (or no-op when prev == ""), false when the switch itself fails.
+// Both branches of the result append a step into env.Steps using the given
+// label prefix so log readers can distinguish inline failures ("restore: ")
+// from rollback-driven ones ("rollback: ").
+//
+// Used by:
+//   - rollback() before destructive cleanup (FIRST step).
+//   - create.go Step 6 + Step 7 inline failure paths (gitignore or git
+//     worktree add failure after --switch-main-if-needed already moved main).
+//
+// A false return tells the caller to surface a residual in the JSON envelope
+// so partial state is visible alongside the primary error, not buried in
+// Steps[]. Pre-S-3 the inline paths called a closure that only logged a warn
+// step — review found that masked the partial state.
+func restoreMainBranch(ctx context.Context, projectRoot, prev string, env *Envelope, stepPrefix string) bool {
+	if prev == "" {
+		return true
+	}
+	if out, err := exec.CommandContext(ctx, "git", "-C", projectRoot, "switch", prev).CombinedOutput(); err != nil {
+		env.Steps = append(env.Steps, Step{
+			Status:  StepWarn,
+			Message: fmt.Sprintf("%sfailed to restore main to %s: %s", stepPrefix, prev, redactCreds(strings.TrimSpace(string(out)))),
+		})
+		return false
+	}
+	env.Steps = append(env.Steps, Step{
+		Status:  StepOK,
+		Message: fmt.Sprintf("%srestored main to %s", stepPrefix, prev),
+	})
+	return true
+}
+
+// currentBranchOr returns the current branch of dir, or "<unknown>" when
+// the call fails. Used to enrich residual messages with where main actually
+// is right now, not just where the caller wanted it back.
+func currentBranchOr(ctx context.Context, dir string) string {
+	out, err := exec.CommandContext(ctx, "git", "-C", dir, "branch", "--show-current").Output()
+	if err != nil {
+		return "<unknown>"
+	}
+	if s := strings.TrimSpace(string(out)); s != "" {
+		return s
+	}
+	return "<detached>"
 }
 
 // pathDescendantOfWorktrees verifies wtPath sits beneath projectRoot/.worktrees/.
