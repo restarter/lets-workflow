@@ -42,6 +42,14 @@ func TestInfo_InWorktree(t *testing.T) {
 	if res.MainRoot != repo {
 		t.Errorf("MainRoot=%s, want %s", res.MainRoot, repo)
 	}
+	// ProjectRoot semantics: pinned to MainRoot in worktree mode so the
+	// JSON envelope's "project_root" stays a stable handle across worktree
+	// switches. A silent flip to cr.Worktree.Path here would break every
+	// consumer (LETS_PROJECT_ROOT injection, statusline) that treats
+	// project_root as the main repo path. Catch the drift early.
+	if res.ProjectRoot != repo {
+		t.Errorf("ProjectRoot=%s, want %s (must equal MainRoot in worktree mode)", res.ProjectRoot, repo)
+	}
 	if res.Worktree == nil || res.Worktree.Branch != "worktree-x" {
 		t.Errorf("expected branch worktree-x, got %+v", res.Worktree)
 	}

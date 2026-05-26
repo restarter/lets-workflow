@@ -6,6 +6,11 @@ import (
 	"github.com/restarter/lets-workflow/cli/internal/version"
 )
 
+// DO NOT t.Parallel() this test or its subtests. They mutate version.Version
+// (a package global) and rely on Go's default serial execution for safety;
+// the t.Cleanup restore only runs after the whole test, so concurrent subtests
+// would race on the global. Same caution applies to any future test that
+// touches version.Version — keep it serial.
 func TestIsDev(t *testing.T) {
 	origVersion := version.Version
 	t.Cleanup(func() { version.Version = origVersion })
