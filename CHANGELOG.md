@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.5.5] - 2026-05-27
+
 ### Added
 - **`/lets:check --branch` and `/lets:review --branch` (lets-id3d6).** Full-branch review against `$LETS_MERGE_BRANCH` using a three-dot diff (`git diff main...HEAD` — same shape GitHub renders for a PR), so you can do a PR-equivalent review locally before pushing without needing a draft PR. Guards: refuses on the merge branch itself, refuses if `$LETS_MERGE_BRANCH` is unset/empty (mirrors `/lets:done`'s pattern), refuses if the merge ref is missing locally (with a `git fetch origin MB:MB` hint that creates the local branch, not just the remote ref), refuses if zero commits ahead. JSON `mode` values: `check-branch` (preserves check.md's `check-*` prefix) and `branch-review` (preserves review.md's `{kind}-review` naming consistent with `local-review` / `plan-review`). Branch reviews save to a dedicated artifact `.lets/reviews/{date}-branch-review.md` (PR-equivalent diff deserves its own file). Workflow Option A in `review.md` documents `--branch` as an optional final pass for multi-commit branches before pushing.
 - New `## AskUserQuestion Conventions` section in `lets-rules.md` codifies 8 rules for `AskUserQuestion` calls: header chip style (4-12 chars descriptive, `"LETS"` forbidden), question wording, label/description format, `multiSelect` use, `preview` constraints, follow-through (invoke via Skill tool), and skip-when-one-action. Includes a worked example. CLAUDE.md "When Adding/Modifying" table and "Command Checklist" point at it. (lets-uffs7)
@@ -408,7 +410,8 @@ Initial release with expert agents team.
 - SessionStart hook injecting workflow rules
 - Plugin structure: commands, agents, hooks
 
-[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.5.4...HEAD
+[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.5.5...HEAD
+[0.5.5]: https://github.com/restarter/lets-workflow/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/restarter/lets-workflow/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/restarter/lets-workflow/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/restarter/lets-workflow/compare/v0.5.1...v0.5.2
