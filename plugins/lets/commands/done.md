@@ -279,18 +279,25 @@ Next steps presented via AskUserQuestion (replaces LETS box).
 
 Add completion comment to the task. **MANDATORY:** the `Claude session: $CLAUDE_CODE_SESSION_ID` line MUST appear in the comment between `## Completed` and `### Commits` — don't drop it. `$CLAUDE_CODE_SESSION_ID` is the Bash subprocess env var Claude Code injects (see CLAUDE.md → "Claude Code session identity"); bash expands it inside the double-quoted argument at runtime, so `bd` receives the literal session UUID. No pre-assignment / template substitution needed.
 
-**Commit range — substitute `<range>` in the template below:**
-
-- **If HEAD == `$LETS_MERGE_BRANCH` (trunk-mode):** `<range>` = `${START_REF}..HEAD` (same boundary Step 4's trunk-mode block used).
-- **Otherwise (HEAD is a feature branch):** `<range>` = `{LETS_MERGE_BRANCH}..HEAD`.
+**Self-contained bash** — computes `RANGE` locally so the bd comment is correct regardless of whether Step 4's `START_REF` is still in scope (each Bash tool call is a fresh shell — no cross-Step env). Trunk-mode: range from `session-start-ref`. Otherwise: range from `$LETS_MERGE_BRANCH`. Git operations use bash `$(...)` substitution; only the narrative fields stay as orchestrator-filled `{...}` templates.
 
 ```bash
-bd comments add <task-id> "## Completed {YYYY-MM-DD}
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+HEAD_BRANCH=$(git branch --show-current)
+if [ "$HEAD_BRANCH" = "{LETS_MERGE_BRANCH}" ]; then
+  BRANCH_SLUG=$(echo "$HEAD_BRANCH" | tr '/' '-')
+  START_REF=$(cat "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}" 2>/dev/null)
+  RANGE="${START_REF}..HEAD"
+else
+  RANGE="{LETS_MERGE_BRANCH}..HEAD"
+fi
+
+bd comments add <task-id> "## Completed $(date +%Y-%m-%d)
 
 Claude session: $CLAUDE_CODE_SESSION_ID
 
 ### Commits
-{git log <range> --oneline}
+$(git log $RANGE --oneline)
 
 ### Summary
 {1-2 sentence overview of what was done}
@@ -299,7 +306,7 @@ Claude session: $CLAUDE_CODE_SESSION_ID
 - {any important choices made during this task}
 
 ### Files changed
-{git diff --stat <range>}"
+$(git diff --stat $RANGE)"
 ```
 
 ## Step 8: Finish Task
