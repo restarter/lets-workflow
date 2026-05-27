@@ -26,6 +26,20 @@ If type is **epic** - do NOT close it automatically:
 - Inform user: "This is an epic. Epics stay open for future tasks."
 - Offer: close a specific child task instead, or confirm epic closure if user insists.
 
+## Trunk-mode Routing
+
+Several steps below have a conditional branch for **trunk-mode** — when HEAD is `$LETS_MERGE_BRANCH` (user opted in via the `take-task` picker option "Stay on current branch"). The check is HEAD-based at runtime via `git branch --show-current` compared to `$LETS_MERGE_BRANCH` from LETS Config; no persistent flag.
+
+In trunk-mode the following gates fire:
+- Step 4 commit range: `session-start-ref..HEAD` (not `$LETS_MERGE_BRANCH..HEAD`, which is empty when HEAD IS the merge-branch)
+- Already-Merged Guard: **skip** (PR on same-source-target is not a valid PR, nothing to detect)
+- Step 6 confirm: trunk-mode wording (push + close, no PR)
+- Step 7 bd comment: commit range uses `session-start-ref..HEAD` (same reason as Step 4)
+- Step 8 finish: upstream-aware push + `bd close` (no PR, no merge, no `git branch -d`)
+- Step 9 output: trunk-mode "Next" options (no "Merge & close", no "Switch to merge-branch")
+
+Trunk-mode requires `detect-task` (Step 1) to have returned an active task. If no task — abort with the standard "no task" path.
+
 ## Step 2: Check Uncommitted Changes
 
 ```bash
@@ -55,6 +69,8 @@ AskUserQuestion(
 - **Cancel** -> stop, return to work
 
 ## Already-Merged Guard
+
+**Skip this entire guard if HEAD == `$LETS_MERGE_BRANCH` (trunk-mode):** PR on same-source-target is not a valid PR. Nothing to detect, nothing to short-circuit — proceed directly to Step 3.
 
 If `$LETS_PR_FLOW == github`, the branch may already be merged - the PR was created and merged in a parallel session, so Step 8's `git push` + `gh pr create` would crash with `GraphQL: No commits between ...`.
 
@@ -127,6 +143,23 @@ Use `$LETS_MERGE_BRANCH` from LETS Config. Fallback: `git symbolic-ref refs/remo
 
 **Guard:** if `$LETS_MERGE_BRANCH` is unset or empty, STOP with error: "LETS_MERGE_BRANCH is not configured. Edit `.lets/.env` or run `/lets:init`. Refusing to proceed - empty value would cause `git checkout` no-op and merge into wrong branch." Do NOT use the fallback for merge/checkout operations - the fallback is for context only (showing the diff against a reasonable base). Merge target must be explicit.
 
+**If HEAD == `$LETS_MERGE_BRANCH` (trunk-mode):** use the session-start-ref as the lower bound, since `$LETS_MERGE_BRANCH..HEAD` is empty when HEAD IS the merge-branch.
+
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+HEAD_BRANCH=$(git branch --show-current)
+BRANCH_SLUG=$(echo "$HEAD_BRANCH" | tr '/' '-')
+START_REF=$(cat "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}" 2>/dev/null)
+if [ -z "$START_REF" ]; then
+  echo "ERROR: no session-start-ref for branch $HEAD_BRANCH. Trunk-mode needs the session boundary. Recover manually: 'git rev-parse HEAD~N > .lets/sessions/.session-start-ref-${BRANCH_SLUG}' to set N commits back as the boundary, then re-run /lets:done. Or re-trigger via /lets:start (loses current done flow context)."
+  exit 1
+fi
+git log ${START_REF}..HEAD --oneline
+git diff --stat ${START_REF}..HEAD
+```
+
+**Otherwise (HEAD is a feature branch):**
+
 ```bash
 git log {LETS_MERGE_BRANCH}..HEAD --oneline
 git diff --stat {LETS_MERGE_BRANCH}..HEAD
@@ -184,6 +217,26 @@ Show what will happen based on `$LETS_PR_FLOW` from LETS Config:
 
 > **Note:** Conditionals below are binary (`== github` vs `!= github`). When Bitbucket integration lands, every `!= github` branch needs a 3rd case (currently `bitbucket` value falls into local-merge path). Search for `LETS_PR_FLOW != github` to find all sites.
 
+### If HEAD == `$LETS_MERGE_BRANCH` (trunk-mode):
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Ready to finish {task title} on {LETS_MERGE_BRANCH}?",
+    header: "Finish",
+    options: [
+      { label: "Finish", description: "Push to {LETS_MERGE_BRANCH} and close task (no PR — same-source-target)" },
+      { label: "Keep working", description: "Not done yet - go back to the task" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Handle response:**
+- **Finish** -> proceed to Step 7
+- **Keep working** -> stop, return to work
+
 ### If $LETS_PR_FLOW == github:
 
 ```
@@ -226,6 +279,8 @@ Next steps presented via AskUserQuestion (replaces LETS box).
 
 Add completion comment to the task. **MANDATORY:** the `Claude session: $CLAUDE_CODE_SESSION_ID` line MUST appear in the comment between `## Completed` and `### Commits` — don't drop it. `$CLAUDE_CODE_SESSION_ID` is the Bash subprocess env var Claude Code injects (see CLAUDE.md → "Claude Code session identity"); bash expands it inside the double-quoted argument at runtime, so `bd` receives the literal session UUID. No pre-assignment / template substitution needed.
 
+**Commit range in trunk-mode:** if HEAD == `$LETS_MERGE_BRANCH`, substitute `${START_REF}..HEAD` for `main..HEAD` in the templates below — same boundary Step 4 used. Otherwise the Commits and Files-changed sections will be empty (HEAD IS the merge-branch).
+
 ```bash
 bd comments add <task-id> "## Completed {YYYY-MM-DD}
 
@@ -261,6 +316,29 @@ If in a worktree, resolve the main repo path:
 ```bash
 MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." 2>/dev/null && pwd)
 ```
+
+### If HEAD == `$LETS_MERGE_BRANCH` (trunk-mode):
+
+Push any unpushed commits, then close the task. No PR, no merge, no branch deletion.
+
+**Upstream-aware push** — first-push case (no upstream configured) must NOT silently no-op. The naive `git log @{u}..HEAD 2>/dev/null` returns 0 commits when upstream is unset, which would skip push entirely while `bd close` still runs — leaving the task marked done with work only on the local clone. This block detects upstream first:
+
+```bash
+if git rev-parse --abbrev-ref @{u} >/dev/null 2>&1; then
+  # Upstream exists — push only when ahead
+  UNPUSHED=$(git log @{u}..HEAD --oneline | wc -l | tr -d ' ')
+  if [ "$UNPUSHED" -gt 0 ]; then
+    git push origin {LETS_MERGE_BRANCH}
+  fi
+else
+  # First push from this clone — set upstream
+  git push -u origin {LETS_MERGE_BRANCH}
+fi
+
+bd close <task-id> --reason="Trunk-mode: committed on {LETS_MERGE_BRANCH}, no PR"
+```
+
+After this, skip the `### If $LETS_PR_FLOW == github (PR flow)` / `!= github` blocks below — they don't apply in trunk-mode.
 
 ### If $LETS_PR_FLOW == github (PR flow):
 
@@ -364,6 +442,32 @@ bd close <task-id> --reason="Merged locally from worktree. Commits: {list}"
 Do NOT delete the branch or remove the worktree here - `/lets:worktree remove` handles cleanup.
 
 ## Step 9: Output
+
+### After trunk-mode finish (HEAD == `$LETS_MERGE_BRANCH`):
+
+```
+Task: **{title}** ({task-id}) - CLOSED
+Branch: {LETS_MERGE_BRANCH} (trunk-mode, no PR)
+Pushed: {N} commits to origin/{LETS_MERGE_BRANCH}
+```
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Task done. What's next?",
+    header: "Next step",
+    options: [
+      { label: "Next task", description: "Pick another task to work on (stays on {LETS_MERGE_BRANCH})" },
+      { label: "End session", description: "Run /lets:end - save context and wrap up" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Handle response:**
+- **Next task** -> show `bd ready`, pick new task
+- **End session** -> invoke `Skill(skill: "lets:end")`
 
 ### After PR ($LETS_PR_FLOW == github), NOT in worktree:
 
@@ -505,4 +609,5 @@ AskUserQuestion(
 - Document BEFORE finishing (Step 7 before Step 8)
 - If PR flow: task stays open, user closes after merge
 - If local merge: task closes immediately
+- If HEAD == `$LETS_MERGE_BRANCH` (trunk-mode): skip PR creation (same-source-target is not a valid PR), push (upstream-aware) + `bd close` instead — regardless of `$LETS_PR_FLOW`
 - Respond in user's language
