@@ -43,7 +43,7 @@ AskUserQuestion(
     header: "Target",
     options: [
       { label: "Local changes", description: "Uncommitted changes in working tree" },
-      { label: "Branch", description: "Full branch vs $LETS_MERGE_BRANCH (three-dot, like a PR)" },
+      { label: "Branch", description: "Full branch vs {LETS_MERGE_BRANCH} (three-dot, like a PR)" },
       { label: "Plan", description: "Review implementation plan from .lets/plans/" },
       { label: "Last commit", description: "Review the most recent commit" }
     ],

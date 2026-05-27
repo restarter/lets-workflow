@@ -98,7 +98,7 @@ AskUserQuestion(
     options: [
       { label: "Branch (Recommended)", description: "Regular feature branch in current repo" },
       { label: "Worktree", description: "Separate directory for parallel work in another terminal" },
-      { label: "Stay on current branch", description: "Skip branch creation. On $LETS_MERGE_BRANCH: /lets:done pushes + closes (no PR). On a custom branch: normal PR flow." }
+      { label: "Stay on current branch", description: "Skip branch creation. On {LETS_MERGE_BRANCH}: /lets:done pushes + closes (no PR). On a custom branch: normal PR flow." }
     ],
     multiSelect: false
   }]
