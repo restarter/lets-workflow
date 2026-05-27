@@ -245,7 +245,7 @@ AskUserQuestion(
     question: "Ready to finish {task title}?",
     header: "Finish",
     options: [
-      { label: "Finish", description: "Push branch and create PR to $LETS_MERGE_BRANCH" },
+      { label: "Finish", description: "Push branch and create PR to {LETS_MERGE_BRANCH}" },
       { label: "Keep working", description: "Not done yet - go back to the task" }
     ],
     multiSelect: false
@@ -261,7 +261,7 @@ AskUserQuestion(
     question: "Ready to finish {task title}?",
     header: "Finish",
     options: [
-      { label: "Finish", description: "Merge to $LETS_MERGE_BRANCH and delete branch" },
+      { label: "Finish", description: "Merge to {LETS_MERGE_BRANCH} and delete branch" },
       { label: "Keep working", description: "Not done yet - go back to the task" }
     ],
     multiSelect: false
@@ -363,7 +363,7 @@ If gh is not installed or not authenticated, use **AskUserQuestion**:
 ```
 AskUserQuestion(
   questions=[{
-    question: "gh CLI is not available but $LETS_PR_FLOW=github. What to do?",
+    question: "gh CLI is not available but {LETS_PR_FLOW}=github. What to do?",
     header: "gh CLI",
     options: [
       { label: "Local merge", description: "Fall back to local merge for this task" },
@@ -497,10 +497,10 @@ AskUserQuestion(
     question: "Task done. What's next?",
     header: "Next step",
     options: [
-      { label: "Merge & close", description: "Merge PR #{number}, close task, switch to $LETS_MERGE_BRANCH" },
+      { label: "Merge & close", description: "Merge PR #{number}, close task, switch to {LETS_MERGE_BRANCH}" },
       { label: "Stay on branch", description: "Stay on feature branch - for PR fixes or follow-up work" },
-      { label: "Next task", description: "Switch to $LETS_MERGE_BRANCH, pick another task" },
-      { label: "End session", description: "Switch to $LETS_MERGE_BRANCH, run /lets:end" }
+      { label: "Next task", description: "Switch to {LETS_MERGE_BRANCH}, pick another task" },
+      { label: "End session", description: "Switch to {LETS_MERGE_BRANCH}, run /lets:end" }
     ],
     multiSelect: false
   }]
