@@ -97,7 +97,8 @@ AskUserQuestion(
     header: "Workspace",
     options: [
       { label: "Branch (Recommended)", description: "Regular feature branch in current repo" },
-      { label: "Worktree", description: "Separate directory for parallel work in another terminal" }
+      { label: "Worktree", description: "Separate directory for parallel work in another terminal" },
+      { label: "Stay on current branch", description: "Skip branch creation. On $LETS_MERGE_BRANCH: /lets:done pushes + closes (no PR). On a custom branch: normal PR flow." }
     ],
     multiSelect: false
   }]
@@ -111,6 +112,10 @@ Handle response:
   `cd {absolute-worktree-path} && claude`
   "Then use `/lets:start` to pick a task."
   Stop here - the worktree session continues in a separate terminal.
+- **Stay on current branch** -> skip `git checkout -b`; stay on the current branch (could be `$LETS_MERGE_BRANCH` or any pre-existing branch). Print one line:
+  "Staying on `{current branch}`. No new branch created."
+  If `HEAD == $LETS_MERGE_BRANCH`, append: " Trunk-mode: `/lets:done` will push + close (no PR — same-source-target)."
+  Continue to Step 5 (session-start-ref is saved as usual).
 
 ### Step 5: Save Session Start Reference
 
@@ -154,6 +159,7 @@ When invoked by `/lets:start` - skip this output, the command has its own.
 - Never create feature/ branch inside a worktree
 - Never work without saving session start ref
 - Never skip `bd update --status=in_progress`
+- Never auto-create a feature branch when user picked "Stay on current branch"
 
 ## Integration
 
