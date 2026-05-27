@@ -1,6 +1,6 @@
 ---
 description: Quick sanity check - code (inline 6-perspective) or plan (--plan).
-argument-hint: "[PR-url-or-number|--local|--staged|--last-commit|--plan|--file <path>] [--json]"
+argument-hint: "[PR-url-or-number|--local|--staged|--last-commit|--branch|--plan|--file <path>] [--json]"
 ---
 
 # Quick Local Code Check
@@ -14,6 +14,7 @@ Fast inline sanity check from 6 perspectives. Same target selection as `/lets:re
 /lets:check --local              # uncommitted changes (explicit)
 /lets:check --staged             # only staged changes
 /lets:check --last-commit        # last commit
+/lets:check --branch             # full branch vs $LETS_MERGE_BRANCH (three-dot, like a PR)
 /lets:check <PR-url-or-number>   # quick PR sanity (gh pr diff, inline - no agents)
 /lets:check --file <path>        # quick sanity of an existing file (full content, not a diff)
 /lets:check --plan               # quick plan sanity check
@@ -43,6 +44,7 @@ Parse the argument(s):
 | `--local` / *no argument* | Local (default) | `git diff` (uncommitted) |
 | `--staged` | Local | `git diff --staged` |
 | `--last-commit` | Local | `git diff HEAD~1` |
+| `--branch` | Local | `git diff {LETS_MERGE_BRANCH}...HEAD` (three-dot, merge-base diff) |
 
 `--json` is a modifier that can accompany any code mode (not plan mode): emit structured JSON instead of the console report (see Step 4.5). Skip the LETS box and the beads comment when `--json` is set - the caller handles output.
 
@@ -82,12 +84,23 @@ Output same format as code check, then:
 
 ## Step 1: Get Target
 
-### Local mode (`--local` / default / `--staged` / `--last-commit`):
+### Local mode (`--local` / default / `--staged` / `--last-commit` / `--branch`):
 
 ```bash
-git diff              # default / --local: uncommitted
-git diff --staged     # --staged
-git diff HEAD~1       # --last-commit
+git diff                                    # default / --local: uncommitted
+git diff --staged                           # --staged
+git diff HEAD~1                             # --last-commit
+git diff {LETS_MERGE_BRANCH}...HEAD         # --branch (three-dot, merge-base diff)
+```
+
+For `--branch` mode, run these guards first. **If any guard prints output, STOP the entire command, surface that message to the user, and skip remaining steps** — bash `exit` only terminates the spawned shell, not the orchestrator's command flow.
+
+```bash
+[ -z "{LETS_MERGE_BRANCH}" ] && echo "LETS_MERGE_BRANCH is not configured. Edit .lets/.env or run /lets:init." && exit
+CURRENT=$(git branch --show-current)
+[ "$CURRENT" = "{LETS_MERGE_BRANCH}" ] && echo "On {LETS_MERGE_BRANCH} - nothing to review against itself." && exit
+git rev-parse --verify "{LETS_MERGE_BRANCH}" >/dev/null 2>&1 || { echo "Merge branch '{LETS_MERGE_BRANCH}' not found locally. Run: git fetch origin {LETS_MERGE_BRANCH}:{LETS_MERGE_BRANCH}"; exit; }
+[ "$(git rev-list --count {LETS_MERGE_BRANCH}..HEAD)" = "0" ] && echo "Branch has no commits ahead of {LETS_MERGE_BRANCH}." && exit
 ```
 
 If no changes, inform user and exit.
@@ -121,6 +134,7 @@ cat "$LETS_PROJECT_ROOT/CLAUDE.md" 2>/dev/null | head -100
 
 Mode-specific extras:
 - **Local:** `git diff --stat` (or `--staged` / `HEAD~1`)
+- **Branch:** `git log {LETS_MERGE_BRANCH}..HEAD --oneline` (commit list — two-dot: commits unique to HEAD) + `git diff {LETS_MERGE_BRANCH}...HEAD --stat` (three-dot: merge-base diff, PR-equivalent)
 - **PR:** `gh pr view <PR> --json title,body` for context; `gh pr diff <PR> --name-only` for the file list
 - **File:** `cat "$LETS_PROJECT_ROOT/$(dirname {path})/CLAUDE.md" 2>/dev/null` for any directory-local rules
 
@@ -238,7 +252,7 @@ If `--json` was provided, emit a structured object instead of the console report
 }
 ```
 
-`mode` values: `check-local` | `check-staged` | `check-last-commit` | `check-PR-{number}` | `check-file`. After emitting, STOP - skip Step 5 and the Output box; the caller handles output and task linking.
+`mode` values: `check-local` | `check-staged` | `check-last-commit` | `check-branch` | `check-PR-{number}` | `check-file`. After emitting, STOP - skip Step 5 and the Output box; the caller handles output and task linking.
 
 ## Step 5: Link to Active Task
 
@@ -258,14 +272,14 @@ If clean (no issues) - skip, don't add noise to the task.
 
 Skip the box entirely when `--json` was set. Otherwise the box offers the `/lets:review` upgrade path for the same target:
 
-**Local modes (`--local` / default / `--staged` / `--last-commit`), GOOD or REVIEW:**
+**Local modes (`--local` / default / `--staged` / `--last-commit` / `--branch`), GOOD or REVIEW:**
 ```
 ┌─ LETS ────────────────────────────────────┐
 │  Commit?       /lets:commit               │
 │  Deep review?  /lets:review --local       │
 └───────────────────────────────────────────┘
 ```
-(swap `--local` for `--staged` / `--last-commit` to match the mode used)
+(swap `--local` for `--staged` / `--last-commit` / `--branch` to match the mode used)
 
 **PR mode, GOOD or REVIEW:**
 ```
@@ -300,10 +314,10 @@ Skip the box entirely when `--json` was set. Otherwise the box offers the `/lets
 Work -> /lets:check -> /lets:commit -> Push -> PR -> /lets:review <PR> (or /lets:github-pr <PR>)
          ^                                            ^
     Quick inline check (any target:                Full agent review
-    local / staged / PR / file / plan)             multiple specialists
+    local / staged / branch / PR / file / plan)    multiple specialists
 ```
 
-Same flags as `/lets:review` (`--local`, `--staged`, `--last-commit`, `<PR>`, `--file`, `--plan`, `--json`) - reach for `/lets:check` when you want a fast pass, `/lets:review` when you want depth.
+Same flags as `/lets:review` (`--local`, `--staged`, `--last-commit`, `--branch`, `<PR>`, `--file`, `--plan`, `--json`) - reach for `/lets:check` when you want a fast pass, `/lets:review` when you want depth.
 
 ## Notes
 

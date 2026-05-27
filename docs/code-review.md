@@ -8,9 +8,9 @@ LETS has three levels of review, from a 30-second sanity check to a full PR life
 | Full code review | `/lets:review` | ~2-3 min | Dynamic agent selection — only the experts relevant to your changes. |
 | Full PR lifecycle (GitHub) | `/lets:github-pr <PR>` | Interactive | Analyze, discuss, post inline comments, follow up on fixes, approve. |
 
-Both `/lets:check` and `/lets:review` accept the same targets: working tree (default), staged changes, last commit, a PR, a specific file (`--file <path>`), or a plan (`--plan`).
+Both `/lets:check` and `/lets:review` accept the same targets: working tree (default), staged changes, last commit, the full branch vs the merge branch (`--branch` — three-dot diff against `$LETS_MERGE_BRANCH`, the same shape GitHub renders for a PR), a PR, a specific file (`--file <path>`), or a plan (`--plan`).
 
-**Rule of thumb:** small change → `/lets:check` → commit. Significant change → `/lets:check` → `/lets:review --local` → fix → commit → PR. PR already open → `/lets:review <PR>`, or the full `/lets:github-pr` lifecycle.
+**Rule of thumb:** small change → `/lets:check` → commit. Significant change → `/lets:check` → `/lets:review --local` → fix → commit → PR. Multi-commit branch heading for a push → add `/lets:review --branch` for a final PR-equivalent pass before pushing. PR already open → `/lets:review <PR>`, or the full `/lets:github-pr` lifecycle.
 
 ## `/lets:check` — quick sanity check
 

@@ -1,6 +1,6 @@
 ---
 description: Full code review with dynamic agent selection (up to 12 specialized agents). Analyzes changes first, selects relevant experts. Also reviews implementation plans.
-argument-hint: "[PR-url-or-number|--local|--staged|--last-commit|--plan|--file <path>] [--json]"
+argument-hint: "[PR-url-or-number|--local|--staged|--last-commit|--branch|--plan|--file <path>] [--json]"
 ---
 
 # Full Code Review
@@ -20,6 +20,7 @@ Comprehensive code review with dynamic agent selection based on change types. Up
 /lets:review --local             # Uncommitted changes
 /lets:review --staged            # Staged changes only
 /lets:review --last-commit       # Last commit
+/lets:review --branch            # Full branch vs $LETS_MERGE_BRANCH (three-dot, like a PR)
 /lets:review --plan              # Review latest plan in .lets/plans/
 /lets:review --plan <path>       # Review specific plan file
 /lets:review --file <path>       # Review an existing file (full content, not diff)
@@ -29,7 +30,7 @@ Comprehensive code review with dynamic agent selection based on change types. Up
 
 **If argument provided:**
 - PR URL/number -> GitHub PR mode
-- `--local` / `--staged` / `--last-commit` -> Local mode
+- `--local` / `--staged` / `--last-commit` / `--branch` -> Local mode
 - `--plan` / `--plan <path>` -> **Plan review mode** (skip to Plan Review section below)
 - `--file <path>` -> **File review mode** - reviews entire file content, not a diff
 
@@ -42,9 +43,9 @@ AskUserQuestion(
     header: "Target",
     options: [
       { label: "Local changes", description: "Uncommitted changes in working tree" },
-      { label: "Staged", description: "Only staged changes (git diff --staged)" },
-      { label: "Last commit", description: "Review the most recent commit" },
-      { label: "Plan", description: "Review implementation plan from .lets/plans/" }
+      { label: "Branch", description: "Full branch vs $LETS_MERGE_BRANCH (three-dot, like a PR)" },
+      { label: "Plan", description: "Review implementation plan from .lets/plans/" },
+      { label: "Last commit", description: "Review the most recent commit" }
     ],
     multiSelect: false
   }]
@@ -53,10 +54,12 @@ AskUserQuestion(
 
 **Handle response:**
 - **Local changes** -> local mode with `git diff`
-- **Staged** -> local mode with `git diff --staged`
+- **Branch** -> local mode with `git diff {LETS_MERGE_BRANCH}...HEAD` (run guards from Step 2 first)
 - **Last commit** -> local mode with `git diff HEAD~1`
 - **Plan** -> skip to Plan Review section
 - **Other** (free text) -> treat as PR number or URL, use GitHub PR mode
+
+Note: `--staged` is flag-only (not in the interactive menu). Use `/lets:review --staged` directly.
 
 **If plan mode selected:** skip to **Plan Review** section below.
 
@@ -64,7 +67,7 @@ AskUserQuestion(
 
 If `--json` is present alongside any mode:
 - Save review output as structured JSON instead of markdown
-- File: `.lets/reviews/{date}-{mode}.json` (e.g., `2026-02-26-PR-42.json`, `2026-02-26-local-review.json`)
+- File: `.lets/reviews/{date}-{mode}.json` (e.g., `2026-02-26-PR-42.json`, `2026-02-26-local-review.json`, `2026-02-26-branch-review.json`)
 - Skip markdown report generation (Step 8)
 - Skip GitHub PR comment posting (Step 9) - JSON mode implies the caller handles output
 
@@ -93,6 +96,19 @@ git diff --staged
 
 # Last commit
 git diff HEAD~1
+
+# Full branch vs merge branch (three-dot, merge-base diff)
+git diff {LETS_MERGE_BRANCH}...HEAD
+```
+
+For `--branch` mode, run these guards first. **If any guard prints output, STOP the entire command, surface that message to the user, and skip remaining steps** — bash `exit` only terminates the spawned shell, not the orchestrator's command flow.
+
+```bash
+[ -z "{LETS_MERGE_BRANCH}" ] && echo "LETS_MERGE_BRANCH is not configured. Edit .lets/.env or run /lets:init." && exit
+CURRENT=$(git branch --show-current)
+[ "$CURRENT" = "{LETS_MERGE_BRANCH}" ] && echo "On {LETS_MERGE_BRANCH} - nothing to review against itself." && exit
+git rev-parse --verify "{LETS_MERGE_BRANCH}" >/dev/null 2>&1 || { echo "Merge branch '{LETS_MERGE_BRANCH}' not found locally. Run: git fetch origin {LETS_MERGE_BRANCH}:{LETS_MERGE_BRANCH}"; exit; }
+[ "$(git rev-list --count {LETS_MERGE_BRANCH}..HEAD)" = "0" ] && echo "Branch has no commits ahead of {LETS_MERGE_BRANCH}." && exit
 ```
 
 If no changes found, inform user and exit.
@@ -130,7 +146,14 @@ gh pr view <PR> --json title,body,commits
 cat CLAUDE.md 2>/dev/null | head -200
 
 # Get changed file list
-git diff --name-only  # (or --staged, HEAD~1)
+git diff --name-only  # (or --staged, HEAD~1, or {LETS_MERGE_BRANCH}...HEAD for --branch)
+```
+
+For `--branch` mode, also surface the commit list and stat so the reviewing agents see branch scope:
+
+```bash
+git log {LETS_MERGE_BRANCH}..HEAD --oneline     # two-dot: commits unique to HEAD
+git diff {LETS_MERGE_BRANCH}...HEAD --stat      # three-dot: merge-base diff (PR-equivalent)
 ```
 
 ## Step 4: Analyze Changes & Select Agents
@@ -325,6 +348,7 @@ mkdir -p "$LETS_PROJECT_ROOT/.lets/reviews"
 Save to:
 - PR mode: `.lets/reviews/{date}-PR-{number}.md`
 - Local mode: `.lets/reviews/{date}-local-review.md`
+- Branch mode: `.lets/reviews/{date}-branch-review.md` (own file - PR-equivalent diff deserves its own artifact)
 
 Content: Full review report with all issues, verdict, and summary.
 
@@ -372,6 +396,8 @@ Write to `.lets/reviews/{date}-{mode}.json`:
   }
 }
 ```
+
+`mode` values: `PR-{number}` | `local-review` | `branch-review` | (plan modes are handled by the Plan Review section, not this path).
 
 After saving, inform user: "Review saved to: {path}"
 Then STOP - skip Step 9 (Output) and Step 10 (Link to task).
@@ -734,6 +760,8 @@ bd comments add <task-id> "Plan review: {verdict}. {N} issues found."
 ```
 Work -> /lets:review --local -> Fix issues -> /lets:commit -> Push -> PR
 ```
+
+For multi-commit branches, add `/lets:review --branch` between `/lets:commit` and `Push` for a final PR-equivalent pass (three-dot diff against `$LETS_MERGE_BRANCH` — same shape GitHub would show). On a single-commit branch `--branch` ≡ `--last-commit`, so it's optional polish, not prescription.
 
 ### Option B: Review after PR
 ```
