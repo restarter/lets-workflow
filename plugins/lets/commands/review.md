@@ -101,9 +101,10 @@ git diff HEAD~1
 git diff {LETS_MERGE_BRANCH}...HEAD
 ```
 
-For `--branch` mode, run these guards first (exit if any fails):
+For `--branch` mode, run these guards first. **If any guard prints output, STOP the entire command, surface that message to the user, and skip remaining steps** — bash `exit` only terminates the spawned shell, not the orchestrator's command flow.
 
 ```bash
+[ -z "{LETS_MERGE_BRANCH}" ] && echo "LETS_MERGE_BRANCH is not configured. Edit .lets/.env or run /lets:init." && exit
 CURRENT=$(git branch --show-current)
 [ "$CURRENT" = "{LETS_MERGE_BRANCH}" ] && echo "On {LETS_MERGE_BRANCH} - nothing to review against itself." && exit
 git rev-parse --verify "{LETS_MERGE_BRANCH}" >/dev/null 2>&1 || { echo "Merge branch '{LETS_MERGE_BRANCH}' not found locally. Run: git fetch origin {LETS_MERGE_BRANCH}:{LETS_MERGE_BRANCH}"; exit; }
@@ -151,8 +152,8 @@ git diff --name-only  # (or --staged, HEAD~1, or {LETS_MERGE_BRANCH}...HEAD for 
 For `--branch` mode, also surface the commit list and stat so the reviewing agents see branch scope:
 
 ```bash
-git log {LETS_MERGE_BRANCH}..HEAD --oneline
-git diff {LETS_MERGE_BRANCH}...HEAD --stat
+git log {LETS_MERGE_BRANCH}..HEAD --oneline     # two-dot: commits unique to HEAD
+git diff {LETS_MERGE_BRANCH}...HEAD --stat      # three-dot: merge-base diff (PR-equivalent)
 ```
 
 ## Step 4: Analyze Changes & Select Agents
@@ -757,10 +758,10 @@ bd comments add <task-id> "Plan review: {verdict}. {N} issues found."
 
 ### Option A: Review before PR (recommended for significant changes)
 ```
-Work -> /lets:review --local -> Fix issues -> /lets:commit -> /lets:review --branch -> Push -> PR
+Work -> /lets:review --local -> Fix issues -> /lets:commit -> Push -> PR
 ```
 
-(`--local` reviews uncommitted work in flight; `--branch` reviews the whole branch as a PR-equivalent diff just before pushing.)
+For multi-commit branches, add `/lets:review --branch` between `/lets:commit` and `Push` for a final PR-equivalent pass (three-dot diff against `$LETS_MERGE_BRANCH` — same shape GitHub would show). On a single-commit branch `--branch` ≡ `--last-commit`, so it's optional polish, not prescription.
 
 ### Option B: Review after PR
 ```

@@ -93,9 +93,10 @@ git diff HEAD~1                             # --last-commit
 git diff {LETS_MERGE_BRANCH}...HEAD         # --branch (three-dot, merge-base diff)
 ```
 
-For `--branch` mode, run these guards first (exit if any fails):
+For `--branch` mode, run these guards first. **If any guard prints output, STOP the entire command, surface that message to the user, and skip remaining steps** — bash `exit` only terminates the spawned shell, not the orchestrator's command flow.
 
 ```bash
+[ -z "{LETS_MERGE_BRANCH}" ] && echo "LETS_MERGE_BRANCH is not configured. Edit .lets/.env or run /lets:init." && exit
 CURRENT=$(git branch --show-current)
 [ "$CURRENT" = "{LETS_MERGE_BRANCH}" ] && echo "On {LETS_MERGE_BRANCH} - nothing to review against itself." && exit
 git rev-parse --verify "{LETS_MERGE_BRANCH}" >/dev/null 2>&1 || { echo "Merge branch '{LETS_MERGE_BRANCH}' not found locally. Run: git fetch origin {LETS_MERGE_BRANCH}:{LETS_MERGE_BRANCH}"; exit; }
@@ -133,7 +134,7 @@ cat "$LETS_PROJECT_ROOT/CLAUDE.md" 2>/dev/null | head -100
 
 Mode-specific extras:
 - **Local:** `git diff --stat` (or `--staged` / `HEAD~1`)
-- **Branch:** `git log {LETS_MERGE_BRANCH}..HEAD --oneline` (commit list) + `git diff {LETS_MERGE_BRANCH}...HEAD --stat`
+- **Branch:** `git log {LETS_MERGE_BRANCH}..HEAD --oneline` (commit list — two-dot: commits unique to HEAD) + `git diff {LETS_MERGE_BRANCH}...HEAD --stat` (three-dot: merge-base diff, PR-equivalent)
 - **PR:** `gh pr view <PR> --json title,body` for context; `gh pr diff <PR> --name-only` for the file list
 - **File:** `cat "$LETS_PROJECT_ROOT/$(dirname {path})/CLAUDE.md" 2>/dev/null` for any directory-local rules
 
@@ -271,7 +272,7 @@ If clean (no issues) - skip, don't add noise to the task.
 
 Skip the box entirely when `--json` was set. Otherwise the box offers the `/lets:review` upgrade path for the same target:
 
-**Local modes (`--local` / default / `--staged` / `--last-commit`), GOOD or REVIEW:**
+**Local modes (`--local` / default / `--staged` / `--last-commit` / `--branch`), GOOD or REVIEW:**
 ```
 ┌─ LETS ────────────────────────────────────┐
 │  Commit?       /lets:commit               │
@@ -313,7 +314,7 @@ Skip the box entirely when `--json` was set. Otherwise the box offers the `/lets
 Work -> /lets:check -> /lets:commit -> Push -> PR -> /lets:review <PR> (or /lets:github-pr <PR>)
          ^                                            ^
     Quick inline check (any target:                Full agent review
-    local / staged / PR / file / plan)             multiple specialists
+    local / staged / branch / PR / file / plan)    multiple specialists
 ```
 
 Same flags as `/lets:review` (`--local`, `--staged`, `--last-commit`, `--branch`, `<PR>`, `--file`, `--plan`, `--json`) - reach for `/lets:check` when you want a fast pass, `/lets:review` when you want depth.
