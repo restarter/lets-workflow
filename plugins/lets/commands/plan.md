@@ -711,13 +711,19 @@ Derive plan filename from the current branch:
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 BRANCH=$(git branch --show-current)
-SLUG="${BRANCH#feature/}"   # e.g., 0nf.10-improve-brainstorm
+if [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ]; then
+  # Trunk-mode: branch name has no task scope, derive slug from task-id (from detect-task in Step 2)
+  SLUG="{TASK_ID}"
+else
+  SLUG="${BRANCH#feature/}"   # e.g., 0nf.10-improve-brainstorm
+fi
 mkdir -p "$LETS_PROJECT_ROOT/.lets/plans"
 ```
 
 Write plan to: `.lets/plans/{branch-slug}.md`
 
 Example: branch `feature/0nf.10-improve-brainstorm` -> `.lets/plans/0nf.10-improve-brainstorm.md`
+Trunk-mode example: branch `main`, task `lets-abc` -> `.lets/plans/lets-abc.md`
 
 ### Record in Beads
 

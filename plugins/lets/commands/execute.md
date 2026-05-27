@@ -16,24 +16,45 @@ Load an implementation plan and execute it using Claude Code's native plan mode.
 Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detect-task")`.
 If not on a feature/worktree branch and no in-progress task found - ask user which task to execute.
 
-Verify not on main/master:
-```bash
-# If on main or master - STOP
-# "Cannot execute on main branch. Switch to a feature branch first: /lets:start"
+**If on `$LETS_MERGE_BRANCH`** — `/lets:execute` usually expects a feature branch. Soft-gate before proceeding:
+
 ```
+AskUserQuestion(
+  questions=[{
+    question: "You're on {LETS_MERGE_BRANCH}. /lets:execute usually wants a feature branch. Proceed?",
+    header: "Trunk-mode",
+    options: [
+      { label: "Take a branch (Recommended)", description: "Stop, take a feature branch via /lets:start" },
+      { label: "Continue here", description: "Proceed in trunk-mode (plan lookup uses task-id)" },
+      { label: "Cancel", description: "Stop, return to work" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Handle response:**
+- **Take a branch (Recommended)** -> stop. Inform user: "Run `/lets:start <id>` and pick **Branch**, then `/lets:execute` again."
+- **Continue here** -> proceed to Step 2 (trunk-mode is detected at runtime by Step 2's `[ "$BRANCH" = "{LETS_MERGE_BRANCH}" ]` check; no flag passed).
+- **Cancel** -> stop, return to user.
 
 ## Step 2: Load Plan
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 BRANCH=$(git branch --show-current)
+
+# Trunk-mode: primary lookup is task-id (plan.md saves as <task-id>.md when HEAD == merge-branch)
+if [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ]; then
+  cat "$LETS_PROJECT_ROOT/.lets/plans/${TASK_ID}.md" 2>/dev/null
+fi
+
+# Standard lookup (also covers feature/* + worktrees)
 SLUG=${BRANCH#feature/}
 cat "$LETS_PROJECT_ROOT/.lets/plans/${SLUG}.md" 2>/dev/null
-
-# Fallback: try without feature/ prefix (worktrees)
 cat "$LETS_PROJECT_ROOT/.lets/plans/${BRANCH}.md" 2>/dev/null
 
-# Fallback: match by task-id
+# Wildcard fallback: match by task-id (catches trunk-mode plans + naming drift)
 ls "$LETS_PROJECT_ROOT/.lets/plans/"*${TASK_ID}* 2>/dev/null
 ```
 
@@ -164,7 +185,7 @@ $(git log --oneline ${START_REF}..HEAD)"
 
 - **NEVER execute blindly** - read actual file state before every change
 - **NEVER commit without user approval** - use `/lets:commit` at plan commit points
-- **NEVER work on main/master** - verify feature/worktree branch in Step 1
+- **Don't work on `$LETS_MERGE_BRANCH` without explicit opt-in** - Step 1 soft-gates with a prompt; user must pick "Continue here" to enable trunk-mode (plan lookup uses task-id)
 - **Adapt, don't paste** - plan intent matters more than plan text
 - **Stop on mismatch** - if reality diverges significantly from plan, surface it immediately
 - Respond in user's language
