@@ -279,7 +279,10 @@ Next steps presented via AskUserQuestion (replaces LETS box).
 
 Add completion comment to the task. **MANDATORY:** the `Claude session: $CLAUDE_CODE_SESSION_ID` line MUST appear in the comment between `## Completed` and `### Commits` — don't drop it. `$CLAUDE_CODE_SESSION_ID` is the Bash subprocess env var Claude Code injects (see CLAUDE.md → "Claude Code session identity"); bash expands it inside the double-quoted argument at runtime, so `bd` receives the literal session UUID. No pre-assignment / template substitution needed.
 
-**Commit range in trunk-mode:** if HEAD == `$LETS_MERGE_BRANCH`, substitute `${START_REF}..HEAD` for `main..HEAD` in the templates below — same boundary Step 4 used. Otherwise the Commits and Files-changed sections will be empty (HEAD IS the merge-branch).
+**Commit range — substitute `<range>` in the template below:**
+
+- **If HEAD == `$LETS_MERGE_BRANCH` (trunk-mode):** `<range>` = `${START_REF}..HEAD` (same boundary Step 4's trunk-mode block used).
+- **Otherwise (HEAD is a feature branch):** `<range>` = `{LETS_MERGE_BRANCH}..HEAD`.
 
 ```bash
 bd comments add <task-id> "## Completed {YYYY-MM-DD}
@@ -287,7 +290,7 @@ bd comments add <task-id> "## Completed {YYYY-MM-DD}
 Claude session: $CLAUDE_CODE_SESSION_ID
 
 ### Commits
-{git log main..HEAD --oneline}
+{git log <range> --oneline}
 
 ### Summary
 {1-2 sentence overview of what was done}
@@ -296,7 +299,7 @@ Claude session: $CLAUDE_CODE_SESSION_ID
 - {any important choices made during this task}
 
 ### Files changed
-{git diff --stat main..HEAD}"
+{git diff --stat <range>}"
 ```
 
 ## Step 8: Finish Task
@@ -380,7 +383,7 @@ gh pr create --title "<type>: <task title>" --body "$(cat <<'EOF'
 {task description from beads}
 
 ## Changes
-{git log main..HEAD --oneline}
+{git log {LETS_MERGE_BRANCH}..HEAD --oneline}
 
 ## Task
 {task-id}: {title}
