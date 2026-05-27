@@ -1,7 +1,7 @@
 {
   "name": "lets",
   "description": "Development workflow with session management, code review, and task tracking",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "author": {
     "name": "restarter",
     "url": "https://github.com/restarter"
