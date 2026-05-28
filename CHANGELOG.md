@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Fixed
+- **Command-flow hygiene polish (lets-k1zfj).** `/lets:commit` LETS box on incomplete work suggests `/lets:check` and `/lets:note` instead of `/lets:end` — session-end is reached explicitly via `/lets:done` (when scope is complete) or when the user runs `/lets:end`, not as a commit-pause shortcut. `/lets:done` "Next task" option now explicitly delegates to the `take-task` skill via `Skill(skill: "lets:take-task", args: "<task-id>")` instead of leaving the pick dangling at "show bd ready, pick new task" with no follow-through; the 3 paired AskUserQuestion `description` strings (trunk-mode, github + not-worktree, local + not-worktree variants) updated to match. `take-task` Output box is now suppressed when invoked from `/lets:done` (matching the existing `/lets:start` exception) — avoids double navigation prompts (done's AskUserQuestion + take-task's LETS box) per CLAUDE.md "Internal invocation = no box".
+
+### Changed
+- **`/lets:start` Step 3 no longer embeds heavy `/lets:status overview` (lets-k1zfj).** Previously every session start triggered the overview view (~17 bd subprocess calls via stats + per-label loop ×12 + ready + in_progress + optional gh pr list). Replaced with `bd list --status=in_progress` (what's claimed) + delegation to `/lets:status ready` (what's available, epic-grouped) — about 3 bd calls per session start. Overview view itself is untouched in this PR; its redesign (slim / mini view / status quo, plus the underlying `lets status --json` Go subcommand for reliable bd aggregation) is folded into lets-qsgmd.
+
 ## [0.5.5] - 2026-05-27
 
 ### Added
