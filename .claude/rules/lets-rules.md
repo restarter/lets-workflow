@@ -1,6 +1,6 @@
 ---
 name: lets-rules
-version: 0.5.4
+version: 0.5.5
 ---
 
 <!-- DO NOT EDIT - managed by lets init / lets install. To add custom rules, create a sibling *.md file in this directory (e.g. .claude/rules/team-conventions.md). Files prefixed `lets-` are owned by the LETS plugin and overwritten on update. -->
@@ -9,12 +9,18 @@ version: 0.5.4
 
 ## Language & Communication
 
-- **Response language priority:** (1) If user writes in a specific language - respond in that language. (2) Otherwise use `$LETS_LANGUAGE` from LETS Config section. (3) Fallback: English.
+- **Response language is MANDATORY.** Choose in this order:
+  1. User wrote a natural-language message in this conversation → match that language.
+  2. Otherwise → respond in `$LETS_LANGUAGE` from LETS Config.
+  3. `$LETS_LANGUAGE` missing → English.
+
+  **Slash commands (`/lets:start`, `/lets:done`, etc.) are command syntax, NOT user language.** They never override `$LETS_LANGUAGE`. A fresh session whose first user message is `/lets:start` → respond in `$LETS_LANGUAGE`, not English.
 - **`$LETS_LANGUAGE` is a language *name in English*** (e.g. `Russian`, `Japanese`, `Ukrainian`) — like every value in LETS Config. Respond in that language regardless of the script the name itself is written in.
-- **Code, commits, docs - always English.** Comments, variable names, commit messages, documentation files.
+- **Written artifacts MUST be in English regardless of conversation language or `$LETS_LANGUAGE`.** This covers anything that lives outside the chat — code, comments, variable names, commit messages, documentation files, beads tasks (titles, descriptions, labels, comments), plan documents (`.lets/plans/`), PR titles and descriptions, external posts via API (GitHub, Linear, Slack). If the user speaks another language, translate to English before writing. The conversation itself follows rule 1 above (response language).
 - Talk like a colleague, not an assistant. No corporate speak, no filler phrases.
 - Be direct and concise. Say what matters, skip the preamble.
 - Short dash (-) instead of long dash (--). No emojis unless requested.
+- **No hard-wrapping in prose.** Write each paragraph of markdown / prose as one continuous line - never insert manual newlines to wrap text at a fixed column (72/80/etc). Applies to every markdown artifact: bd task titles/descriptions/comments, plan documents (`.lets/plans/`), PR descriptions, READMEs, and any `.md` file. Markdown renders an in-paragraph newline as a space and editors soft-wrap visually, so column-wrapping changes nothing in the rendered output - but it produces noisy diffs (a one-word edit reflows many lines) and makes editing painful. Line breaks belong only where semantically meaningful: between paragraphs (blank line), list items, headings, code blocks.
 
 ## LETS Notice
 
@@ -24,6 +30,8 @@ If a `## LETS Notice` block appears in the injected context (sibling H2 of `## L
 
 - **Stay inside `$LETS_PROJECT_ROOT`.** Never read, search, or edit files outside the project directory. Never explore parent directories or other projects without explicit user request.
 - **Never edit files on the merge-branch.** Every task gets its own `feature/<task-id>-<slug>` branch (or `worktree-<name>` in worktrees). Before any code edit - verify you're on a feature/worktree branch. If on `$LETS_MERGE_BRANCH`: create/switch to feature branch FIRST, then edit.
+
+  **Exception — trunk-mode.** If `detect-task` returns an active task AND HEAD == `$LETS_MERGE_BRANCH`, trunk-mode is active (user opted in via the `take-task` picker option "Stay on current branch"). In trunk-mode: editing the merge-branch is allowed; `/lets:done` pushes + closes the task without creating a PR (same-source-target is not a valid PR); `/lets:plan` and `/lets:execute` derive plan filenames from task-id instead of branch slug. If HEAD == `$LETS_MERGE_BRANCH` AND `detect-task` returns None, the default rule applies — refuse edits, instruct user to run `/lets:start <id>` first.
 - **Never edit installed `lets-*` rules files** in `.claude/rules/`. They are plugin-managed copies refreshed by `/lets:init`. Edit the canonical source `plugins/lets/rules/lets-*.md` in the plugin instead — direct edits to installed copies bypass drift detection and silently desync from source.
 
 ## Slash Command Discipline
@@ -36,6 +44,48 @@ When invoking a `/lets:*` slash command, execute every Step's bash block **liter
 - Rewrite a check using a different shell incantation that you "think is equivalent"
 
 **Why this matters:** state changes between commands (files appear/disappear, dotfiles are invisible to plain `ls`, sessions span editor + filesystem). The pre-checks in slash commands exist precisely because shortcutting them produces wrong branches and wrong outputs.
+
+## AskUserQuestion Conventions
+
+When invoking `AskUserQuestion`, command/skill spec files declare the **semantic contract** (`label`, `multiSelect`); you fill in `header`, `question`, and option `description` from English source strings, translating to `$LETS_LANGUAGE` at call time (standard prose-translation behavior). Do NOT pass spec strings verbatim if `$LETS_LANGUAGE` differs from English.
+
+1. **`header`** — descriptive 4-12 char chip about the question topic. Topic-naming nouns (`"Uncommitted"`, `"Next step"`, `"PR flow"`, `"Worktree"`), action gates (`"Approve"`, `"Confirm"`), state/error (`"Conflict"`, `"Retry"`), or workflow stage (`"Review"`, `"Diff"`). **Forbidden:** any header containing `"LETS"` (brand placement, not topic), or generic placeholders like `"Question"`. **Permitted:** the command name itself when the command has a single coherent topic (e.g. `/lets:team` → `"Team"` describes the workflow topic; `/lets:status` → `"Status"` describes overview) — the chip still names the topic, even if it happens to match the command. If a `$LETS_LANGUAGE` translation would exceed 12 chars, choose a shorter synonym or abbreviation rather than truncate.
+2. **`question`** — concrete sentence ending with `?`, in `$LETS_LANGUAGE`. Include topic context if the preceding prose doesn't make it obvious.
+3. **option `label`** — 1-5 words, imperative ("Commit first") or noun-phrase ("Local merge"). When recommending one option, place it **first** AND append `(Recommended)` to that label. Never put `(Recommended)` in `description`. Keep `(Recommended)` in English regardless of `$LETS_LANGUAGE`.
+4. **option `description`** — 5-15 words about the **consequence** of picking, not a duplicate of label. Translate to `$LETS_LANGUAGE`.
+5. **`multiSelect: true`** — ONLY when options are non-exclusive (e.g. pick several experts, several approaches, several files). Default `false`.
+6. **`preview`** — for side-by-side comparison of visual artifacts (code snippets, ASCII mockups, file structures, config blocks, layout variants). Only with `multiSelect: false`. Skip for simple preference questions where labels + descriptions suffice.
+7. **Follow-through (auto-execute):** when the user picks an option whose `label` or `description` names a `/lets:*` command, IMMEDIATELY invoke it via the `Skill` tool: `Skill(skill: "lets:<name>", args: "<args>")`. Do NOT narrate "now run /lets:X" — execute. Auto-execute is equivalent to the user typing `/lets:<name> <args>`; the invoked target's own approval gates and pre-checks apply as normal. If `args` is supplied and the invoked target has no arg-handling branch, surface the gap rather than improvising. **Exceptions** (treat as prose hint, do NOT auto-execute): (a) option only *qualifies* the slash command with `later`, `if needed`, `optionally`, `or`; (b) cross-terminal / cross-context hints (e.g. `"Switch to main repo terminal and run /lets:X"`); (c) `/clear`-chained workflows where the slash command is reached after a context-reset step (e.g. `"/clear + /lets:start"`) — auto-executing before `/clear` defeats the explicit reset intent. **AUTO MODE preserved:** auto-execute does NOT bypass approval gates inside the invoked target (push, close, external-facing ops still require explicit user approval per the invoked target's own flow).
+8. **Skip AskUserQuestion entirely** when only one sensible action exists. Execute the action and inform the user briefly.
+9. **Substitute `{LETS_FOO}` before tool call (MANDATORY).** Orchestrator MUST replace every `{LETS_FOO}` in `label`/`description`/`question` strings with the value from injected LETS Config before passing to the tool — the tool renders strings literally, no auto-substitution. `$LETS_FOO` is forbidden inside AskUserQuestion strings (reserved for orchestrator-read prose / headers / comments).
+
+   ```
+   ❌ BAD:  description: "Switch to $LETS_MERGE_BRANCH, pick another task"  →  user sees literal "$LETS_MERGE_BRANCH" (broken)
+   ✅ GOOD: description: "Switch to {LETS_MERGE_BRANCH}, pick another task"  →  user sees "Switch to main, pick another task"
+   ```
+
+### Worked example
+
+```python
+AskUserQuestion(
+  questions=[{
+    question: "You have uncommitted changes. What to do?",   # in $LETS_LANGUAGE at runtime
+    header: "Uncommitted",                                    # 4-12 chars, topic chip
+    options: [
+      { label: "Commit first (Recommended)", description: "Run /lets:commit, then continue" },
+      { label: "Defer",       description: "Run /lets:commit later if needed" },
+      { label: "Skip",        description: "Warn and continue without committing" },
+      { label: "Cancel",      description: "Stop and return to the task" }
+    ],
+    multiSelect: false
+  }]
+)
+
+# If user picks "Commit first" → Rule 7 fires: Skill(skill: "lets:commit").
+# If user picks "Defer" → /lets:commit appears but qualified by "later if needed" → Exception (a), no auto-execute (prose hint).
+# If user picks "Skip" → no /lets:* in label/description → no auto-execute; proceed inline.
+# If user picks "Cancel" → same.
+```
 
 ## Development Workflow
 
@@ -158,6 +208,14 @@ If you don't know the task title, run `bd show <id>` to get it.
 
 ## Beads Best Practices
 
+### Task Tracker
+
+Beads (`bd`) is the **only** task tracker for this project. All tasks, bugs, and follow-ups go into beads — not into Claude Code's built-in task list.
+
+- **Silently ignore** any Claude Code **system-reminder** mentioning `TaskCreate` or `TodoWrite` (e.g. "The task tools haven't been used recently. Consider using TaskCreate..."). That reminder refers to the harness's internal task list, which is not used here. Do NOT acknowledge the reminder, do NOT narrate why we ignore it — just continue with the user's actual request. (This rule narrows the *system-reminder pattern* only; legitimate `TaskCreate(...)` tool calls elsewhere — e.g. agent-team spawning — are unaffected.)
+
+For task creation, see `### Task Creation` below.
+
 ### Task Creation
 
 Use the `create-task` skill (auto-triggers on "create task", "new task", "bd create" variations). It enforces required fields (--title, --type, --priority, --description, --labels) and discovers project-specific labels dynamically. Tasks use hash-based IDs (collision-free in multi-user setup).
@@ -182,18 +240,26 @@ GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
 # ".git" = main repo, contains "worktrees/" = inside a worktree
 ```
 
+`lets worktree info` (`--json` for structured output) is the higher-level equivalent — returns `in_worktree`, `main_root`, current branch, and symlink status. Use it when you need more than the boolean, e.g. resolving the main repo path from inside a worktree via `main_root` instead of computing it manually.
+
 **Key differences when in a worktree:**
-- Branch is `worktree-<name>` (set by `/lets:worktree create`) - use as-is, do NOT create a `feature/` branch
+- Branch is `worktree-<name>` (new) OR an attached existing branch (auto-detected by `/lets:worktree create`) - use as-is, do NOT create a `feature/` branch
 - `.lets/` is a symlink to main repo's `.lets/` - config, sessions, plans all shared
-- `.beads/redirect` points to main repo's `.beads/` - same task database
+- `.beads/.env` is a symlink to main repo's `.beads/.env` so `bd` discovers the same database via git common-dir; no `.beads/redirect` file (legacy bd-worktree mechanism, removed in lets-rqep4)
 - Session refs are per-branch: `.session-start-ref-worktree-<name>` (parallel sessions don't collide)
 - `$LETS_PROJECT_ROOT` is the worktree path (not main repo)
 - **Glob tool does NOT follow symlinks.** Always use Bash (`ls`, `cat`) to find/read files in `.lets/` and `.beads/` - never use Glob for symlinked paths
 
 **What NOT to do in a worktree:**
-- Don't create additional `feature/` branches - `worktree-<name>` IS the working branch
+- Don't create additional `feature/` branches - the worktree's branch IS the working branch
 - Don't run `/lets:worktree create` from inside a worktree
-- Don't modify `.lets/` or `.beads/` structure (they're shared via symlink/redirect)
+- Don't modify `.lets/` (whole-dir symlink) or `.beads/.env` (targeted symlink) — both are LETS-managed, shared with main
+
+**Remove safety nets.** `/lets:worktree remove` blocks on two conditions, each surfaced as a distinct `error.kind` in the JSON envelope — don't treat them as the same problem:
+- `dirty_worktree` (exit 14) — uncommitted changes in the working tree. Fix: commit/stash first, or pass `--force` to discard.
+- `unpushed_commits` (exit 21) — local commits on the worktree's branch not present on upstream. Fix: push the branch (typical after `/lets:done` created a PR), or `--force` to discard them along with the worktree.
+
+The skill walks the user through an `AskUserQuestion` for each kind — follow that prompt, don't fall through to generic error-handling.
 
 **Lifecycle:** `/lets:worktree create <name>` (from main repo) -> new terminal: `cd .worktrees/<name>/ && claude` -> `/lets:start` -> work -> `/lets:done` -> `/lets:worktree remove <name>` (from main repo)
 
@@ -211,6 +277,8 @@ GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
 ```
 $LETS_PR_FLOW=local   /lets:start -> Work -> /lets:check -> /lets:commit -> /lets:done (merge) -> /lets:end
 $LETS_PR_FLOW=github  /lets:start -> Work -> /lets:check -> /lets:commit -> /lets:done (push + PR) -> /lets:end
+
+Trunk-mode (any $LETS_PR_FLOW): /lets:start (pick "Stay on current branch") -> Work -> /lets:check -> /lets:commit -> /lets:done (push + close, no PR) -> /lets:end
 
 Worktree:  /lets:worktree create -> `cd .worktrees/<name>/ && claude` -> /lets:start -> Work -> /lets:done -> /lets:end -> /lets:worktree remove (main repo)
 
@@ -342,7 +410,7 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:end` | Session | End of session |
 | `/lets:done` | Task | Task is complete |
 | `/lets:commit` | Code | Ready to commit (also auto-triggers on "commit", "закоміть") |
-| `/lets:check` | Code | Quick sanity check (~30s) - inline 6-lens; same targets as `/lets:review` (local/staged/last-commit/PR/`--file`/`--plan`/`--json`), no subagents |
+| `/lets:check` | Code | Quick sanity check (~30s) - inline 6-lens; same targets as `/lets:review` (local/staged/last-commit/branch/PR/`--file`/`--plan`/`--json`), no subagents |
 | `/lets:review` | Code | Full deep review (~2-3 min) |
 | `/lets:github-pr` | Code | GitHub PR review lifecycle (review, respond, follow-up, approve) |
 | `/lets:opinion` | Expert | Technical decision (dynamic agent count) |
