@@ -190,9 +190,11 @@ Remaining: {brief list}
 
 ┌─ LETS ─────────────────────────┐
 │  Check?  /lets:check           │
-│  End?    /lets:end             │
+│  Note?   /lets:note            │
 └────────────────────────────────┘
 ```
+
+`/lets:end` is for session end, not commit-pause. After a partial commit the next moves are reviewing (`/lets:check`) or recording context (`/lets:note`); session-end fires explicitly later via `/lets:done` (when scope is complete) or when the user runs `/lets:end`.
 
 ## Integration
 
