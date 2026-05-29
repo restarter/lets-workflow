@@ -256,18 +256,20 @@ AskUserQuestion(
     question: "Session saved. What now?",
     header: "Wrap up",
     options: [
-      { label: "Push", description: "git push to remote, then reset context for a fresh start" },
-      { label: "Done", description: "Wrap up — reset context manually to start fresh next time" }
+      { label: "Compact (Recommended)", description: "Run /compact - keep this window with a compacted summary and continue lighter" },
+      { label: "Push then compact", description: "git push to remote, then run /compact" },
+      { label: "Clear & restart", description: "Run /clear then /lets:start for a fully fresh session" }
     ],
     multiSelect: false
   }]
 )
 ```
 
-**Handle response:**
-- **Push** -> `git push`, then tell the user: "Run `/clear` then `/lets:start` to begin a fresh session." (Do NOT auto-execute — `/clear` must wipe context BEFORE `/lets:start` so the new session is truly fresh; auto-Reading `start.md` would defeat that.)
-- **Done** -> tell the user: "Run `/clear` then `/lets:start` to begin a fresh session." Same reasoning as above.
-- **NEVER push automatically**
+**Handle response** (`/compact` and `/clear` are Claude Code commands the model cannot run — emit them as prose for the user to type, never auto-execute):
+- **Compact** -> tell the user: "Run `/compact` to compact this session's context and keep working in the same window. The PreCompact hook re-injects the workflow rules, and the summary just saved survives compaction."
+- **Push then compact** -> `git push`, then tell the user: "Run `/compact` to compact context and keep working here."
+- **Clear & restart** -> tell the user: "Run `/clear` then `/lets:start` to begin a fully fresh session." (`/clear` must wipe context BEFORE `/lets:start`, so do NOT auto-execute — auto-Reading `start.md` would defeat the reset.)
+- **NEVER push automatically** — the `git push` above runs only because the user explicitly picked it.
 
 ## Rules
 
@@ -276,4 +278,5 @@ AskUserQuestion(
 - **Suggest `/lets:done`** if task seems complete
 - **NEVER push without explicit user approval**
 - Always write session summary (local)
+- **Recommend `/compact` first** at session end - it keeps the window with a compacted summary (lighter); `/clear` + `/lets:start` is the full-reset alternative
 - Respond in user's language
