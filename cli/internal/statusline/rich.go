@@ -86,6 +86,34 @@ const (
 
 const barWidth = 8 // gauge cells (spec §5)
 
+// growthLadder maps a monotonic session growth score (cost.total_lines_added)
+// to the brand emoji on Line 1 (spec §8.2, tropical finale). The plant matures
+// as you edit more this session; it is session-scoped — total_lines_added resets
+// each new session, so a fresh session starts back at 🌱. E1 caveat: emoji ignore
+// ANSI color, so the brand color comes from the bold "LETS Workflow" text, not
+// the glyph.
+var growthLadder = []struct {
+	min   int
+	emoji string
+}{
+	{0, glyphSprout}, // 🌱 sprout
+	{50, "🪴"},        // potted plant
+	{100, "🌿"},       // leafy bush
+	{250, "🌳"},       // tree
+	{500, "🌴"},       // palm (tropical finale)
+}
+
+// brandEmoji returns the last ladder stage whose threshold linesAdded meets.
+func brandEmoji(linesAdded int) string {
+	e := growthLadder[0].emoji
+	for _, g := range growthLadder {
+		if linesAdded >= g.min {
+			e = g.emoji
+		}
+	}
+	return e
+}
+
 // Usage thresholds, inclusive lower bound (spec §5).
 const (
 	threshMid  = 60 // pct >= 60 -> warn
@@ -94,9 +122,9 @@ const (
 
 // Width breakpoints on COLUMNS (spec §4).
 const (
-	bpFull    = 106 // Full (bars + reset timers + PR) needs ~103 cols (measured); a touch above
-	bpMid     = 88  // Mid keeps the bars (no reset timers) — fits ~85 cols
-	bpNarrow  = 68  // Narrow: 2 lines, no bars
+	bpFull    = 106    // Full (bars + reset timers + PR) needs ~103 cols (measured); a touch above
+	bpMid     = 88     // Mid keeps the bars (no reset timers) — fits ~85 cols
+	bpNarrow  = 68     // Narrow: 2 lines, no bars
 	bpDefault = bpFull // DEC-2: COLUMNS confirmed passed by CC (130/92 captured live); fail open to Full when it is somehow absent rather than to the degraded Narrow tier
 )
 
@@ -451,7 +479,7 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	full := tier == tierFull
 
 	// --- Line 1: identity ---
-	brand := p.sage + glyphSprout + " " + ansiBold + "LETS Workflow" + R
+	brand := p.sage + brandEmoji(in.Cost.TotalLinesAdded) + " " + ansiBold + "LETS Workflow" + R
 	if full {
 		ver := version.Version
 		if !version.IsDev() {

@@ -156,8 +156,8 @@ func TestRenderRich_TierLineCounts(t *testing.T) {
 		width     int
 		wantLines int
 	}{
-		{"Full", bpFull, 4},    // identity, task, budget, tip
-		{"Mid", bpMid, 4},      // identity, task, budget, tip
+		{"Full", bpFull, 4},     // identity, task, budget, tip
+		{"Mid", bpMid, 4},       // identity, task, budget, tip
 		{"Narrow", bpNarrow, 2}, // branch+diff, gauges
 		{"Min", 50, 1},          // single line
 	}
@@ -428,5 +428,29 @@ func TestReadTaskStatus(t *testing.T) {
 				t.Errorf("comment=%q, want %q", comment, tt.wantComment)
 			}
 		})
+	}
+}
+
+func TestBrandEmoji(t *testing.T) {
+	tests := []struct {
+		linesAdded int
+		want       string
+	}{
+		{0, "🌱"},
+		{49, "🌱"},
+		{50, "🪴"},
+		{99, "🪴"},
+		{100, "🌿"},
+		{249, "🌿"},
+		{250, "🌳"},
+		{499, "🌳"},
+		{500, "🌴"},
+		{5000, "🌴"},
+		{-10, "🌱"}, // never below stage 0
+	}
+	for _, tt := range tests {
+		if got := brandEmoji(tt.linesAdded); got != tt.want {
+			t.Errorf("brandEmoji(%d)=%q, want %q", tt.linesAdded, got, tt.want)
+		}
 	}
 }
