@@ -425,9 +425,10 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		}
 		fmt.Fprintln(w, gutter+clip(line, contentMax))
 	}
-	// rule emits the "├───" tee divider sized to the content width (capped to
-	// fullMaxLine so a wide terminal doesn't draw a 200-dash rule).
-	rule := func() {
+	// ruleWith emits a horizontal rule led by corner glyph, sized to the content
+	// width (capped to fullMaxLine so a wide terminal doesn't draw a 200-dash
+	// rule). "├" tees the budget/task split; "└" closes the gutter at the bottom.
+	ruleWith := func(corner string) {
 		n := contentMax
 		if n > fullMaxLine {
 			n = fullMaxLine
@@ -435,8 +436,10 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		if n < 1 {
 			return
 		}
-		fmt.Fprintln(w, p.sep+"├"+strings.Repeat("─", n)+R)
+		fmt.Fprintln(w, p.sep+corner+strings.Repeat("─", n)+R)
 	}
+	rule := func() { ruleWith("├") }
+	ruleBottom := func() { ruleWith("└") }
 	// join concatenates non-empty parts with the " · " separator.
 	join := func(parts ...string) string {
 		kept := make([]string, 0, len(parts))
@@ -531,6 +534,7 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 			}
 			emit(clip(p.sage+glyphTip+R+" "+p.dim+ansiItalic+t+R, tipMax))
 		}
+		ruleBottom() // close the gutter at the bottom
 		return nil
 	}
 
@@ -598,5 +602,6 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	if t := tipOfMoment(time.Now()); t != "" {
 		emitFull(p.sage + glyphTip + R + " " + p.dim + ansiItalic + t + R)
 	}
+	ruleBottom() // close the gutter at the bottom
 	return nil
 }

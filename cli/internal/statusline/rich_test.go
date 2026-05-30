@@ -156,10 +156,10 @@ func TestRenderRich_TierLineCounts(t *testing.T) {
 		width     int
 		wantLines int
 	}{
-		{"Full", bpWide, 5},     // identity, budget, divider, task, tip
-		{"Compact-wide", 95, 5}, // identity, gauges, divider, task, tip
-		{"Compact-70", 70, 5},   // identity, gauges, divider, task, tip
-		{"Compact-45", 45, 5},   // identity, gauges, divider, task, tip
+		{"Full", bpWide, 6},     // identity, budget, ├divider, task, tip, └bottom
+		{"Compact-wide", 95, 6}, // identity, gauges, ├divider, task, tip, └bottom
+		{"Compact-70", 70, 6},   // identity, gauges, ├divider, task, tip, └bottom
+		{"Compact-45", 45, 6},   // identity, gauges, ├divider, task, tip, └bottom
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -192,8 +192,9 @@ func TestRenderRich_NoTaskDropsLine(t *testing.T) {
 		t.Fatalf("renderRich: %v", err)
 	}
 	lines := splitNonEmptyLines(buf.String())
-	if len(lines) != 3 {
-		t.Errorf("no-task Full tier: got %d lines, want 3:\n%s", len(lines), buf.String())
+	if len(lines) != 4 {
+		// identity, budget, tip, └bottom — no task line, no ├ divider.
+		t.Errorf("no-task Full tier: got %d lines, want 4:\n%s", len(lines), buf.String())
 	}
 }
 
