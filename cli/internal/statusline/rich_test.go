@@ -325,12 +325,12 @@ func TestLevelForWidth(t *testing.T) {
 		width int
 		want  int
 	}{
-		{79, tierMin},
-		{80, tierNarrow},
-		{109, tierNarrow},
-		{110, tierMid},
-		{159, tierMid},
-		{160, tierFull},
+		{bpNarrow - 1, tierMin},
+		{bpNarrow, tierNarrow},
+		{bpMid - 1, tierNarrow},
+		{bpMid, tierMid},
+		{bpFull - 1, tierMid},
+		{bpFull, tierFull},
 		{500, tierFull},
 		{0, tierMin},
 	}

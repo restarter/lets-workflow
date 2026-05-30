@@ -94,10 +94,10 @@ const (
 
 // Width breakpoints on COLUMNS (spec §4).
 const (
-	bpFull    = 160
-	bpMid     = 110
-	bpNarrow  = 80
-	bpDefault = bpFull // DEC-2: fail open to Full when COLUMNS is unknown (CC statusline subprocesses historically don't inherit COLUMNS) rather than pinning everyone to the degraded Narrow tier
+	bpFull    = 106 // Full (bars + reset timers + PR) needs ~103 cols (measured); a touch above
+	bpMid     = 88  // Mid keeps the bars (no reset timers) — fits ~85 cols
+	bpNarrow  = 68  // Narrow: 2 lines, no bars
+	bpDefault = bpFull // DEC-2: COLUMNS confirmed passed by CC (130/92 captured live); fail open to Full when it is somehow absent rather than to the degraded Narrow tier
 )
 
 // Render tiers (ascending detail).
@@ -416,7 +416,10 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		}
 		return s
 	}
-	gaugeLP := func(label string, pct int) string { // label + pct, no bar
+	gaugeBar := func(label string, pct int) string { // label + bar + pct, no reset timer (Mid)
+		return p.label + label + R + " " + p.miniBar(pct) + " " + p.threshold(pct) + strconv.Itoa(pct) + "%" + R
+	}
+	gaugeLP := func(label string, pct int) string { // label + pct, no bar (Narrow)
 		return p.label + label + R + " " + p.threshold(pct) + strconv.Itoa(pct) + "%" + R
 	}
 
@@ -513,13 +516,13 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		if sevenOK {
 			gauges = append(gauges, gaugeFull("7d", sevenP, sevenReset))
 		}
-	} else {
-		gauges = append(gauges, gaugeLP("window", winPct))
+	} else { // Mid: bars, but no reset timers (to fit a narrower window)
+		gauges = append(gauges, gaugeBar("window", winPct))
 		if fiveOK {
-			gauges = append(gauges, gaugeLP("5h", fiveP))
+			gauges = append(gauges, gaugeBar("5h", fiveP))
 		}
 		if sevenOK {
-			gauges = append(gauges, gaugeLP("7d", sevenP))
+			gauges = append(gauges, gaugeBar("7d", sevenP))
 		}
 	}
 	emit(budget + segSep + join(gauges...))
