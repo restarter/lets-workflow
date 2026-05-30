@@ -135,10 +135,14 @@ const (
 const (
 	bpWide    = 72     // Full at >= this; Compact below
 	bpDefault = bpWide // DEC-2: COLUMNS confirmed passed by CC; fail open to Full when it is somehow absent
-	// bpFill: below this width the box fills the whole window (boxW = COLUMNS-4)
-	// so the tip/content get the full width; at/above it the box hugs the content
-	// instead of stretching across a wide screen.
+	// bpFill: below this width the box fills the whole window so the tip/content
+	// get the full width; at/above it the box hugs the content instead of
+	// stretching across a wide screen.
 	bpFill = 90
+	// boxRightMargin: cells left empty on the right so the box never reaches the
+	// last column. A line exactly COLUMNS wide can wrap when an ambiguous-width
+	// glyph (☑, →) renders wider than cellWidth counts it, breaking the border.
+	boxRightMargin = 2
 )
 
 // fullMaxLine bounds the box's inner width so a wide terminal doesn't stretch
@@ -507,7 +511,8 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		// Narrow window (< bpFill): fill the full width so the tip/content get
 		// all the room. Wide window: hug the content (sized by the plain rows;
 		// title/tip never set the width) so the box doesn't stretch the screen.
-		boxW := width - 4
+		lim := width - 4 - boxRightMargin // keep a right margin (see boxRightMargin)
+		boxW := lim                       // narrow window: fill to the margin
 		if width >= bpFill {
 			boxW = 1
 			for _, r := range rows {
@@ -519,7 +524,7 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 				}
 			}
 		}
-		if lim := width - 4; boxW > lim {
+		if boxW > lim {
 			boxW = lim
 		}
 		if boxW > fullMaxLine {
