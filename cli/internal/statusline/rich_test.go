@@ -90,7 +90,7 @@ func writeTaskStatus(t *testing.T, line string) string {
 func TestRenderRich_EmptyInputFull(t *testing.T) {
 	dir := t.TempDir() // no task-status file
 	var buf bytes.Buffer
-	if err := renderRich(&buf, Input{}, "", "", usage{}, bpWide, dir, false); err != nil {
+	if err := renderRich(&buf, Input{}, "", "", usage{}, bpWide, dir, false, true); err != nil {
 		t.Fatalf("renderRich: %v", err)
 	}
 	out := buf.String()
@@ -127,7 +127,7 @@ func TestRenderRich_EmptyInputAllTiers(t *testing.T) {
 	widths := []int{bpWide, 95, 70, 45}
 	for _, w := range widths {
 		var buf bytes.Buffer
-		if err := renderRich(&buf, Input{}, "", "", usage{}, w, dir, false); err != nil {
+		if err := renderRich(&buf, Input{}, "", "", usage{}, w, dir, false, true); err != nil {
 			t.Fatalf("renderRich width=%d: %v", w, err)
 		}
 		for _, line := range splitNonEmptyLines(buf.String()) {
@@ -156,7 +156,7 @@ func TestRenderRich_TierLineCounts(t *testing.T) {
 		width     int
 		wantLines int
 	}{
-		{"Full-wide", 120, 7},  // ┌top, identity, budget, ├divider, task, tip, └bottom
+		{"Full-wide", 120, 7},   // ┌top, identity, budget, ├divider, task, tip, └bottom
 		{"Full-min", bpWide, 7}, // Full at the breakpoint (box hugs the narrow width)
 		{"Compact-68", 68, 7},   // ┌top, identity, gauges, ├divider, task, tip, └bottom
 		{"Compact-45", 45, 7},   // narrowest sampled Compact
@@ -164,7 +164,7 @@ func TestRenderRich_TierLineCounts(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			if err := renderRich(&buf, in, branch, "folder", usage{}, tt.width, dir, false); err != nil {
+			if err := renderRich(&buf, in, branch, "folder", usage{}, tt.width, dir, false, true); err != nil {
 				t.Fatalf("renderRich: %v", err)
 			}
 			lines := splitNonEmptyLines(buf.String())
@@ -188,7 +188,7 @@ func TestRenderRich_NoTaskDropsLine(t *testing.T) {
 	dir := t.TempDir()
 	in := richTestInput()
 	var buf bytes.Buffer
-	if err := renderRich(&buf, in, "main", "folder", usage{}, bpWide, dir, false); err != nil {
+	if err := renderRich(&buf, in, "main", "folder", usage{}, bpWide, dir, false, true); err != nil {
 		t.Fatalf("renderRich: %v", err)
 	}
 	lines := splitNonEmptyLines(buf.String())
@@ -202,7 +202,7 @@ func TestRenderRich_NoTaskDropsLine(t *testing.T) {
 func TestRenderRich_LightPaletteNoPanic(t *testing.T) {
 	dir := t.TempDir()
 	var buf bytes.Buffer
-	if err := renderRich(&buf, richTestInput(), "feature/lets-aaaaa-x", "f", usage{}, bpWide, dir, true); err != nil {
+	if err := renderRich(&buf, richTestInput(), "feature/lets-aaaaa-x", "f", usage{}, bpWide, dir, true, true); err != nil {
 		t.Fatalf("renderRich light: %v", err)
 	}
 	if buf.Len() == 0 {
@@ -477,7 +477,7 @@ func TestRenderRich_BoxAligned(t *testing.T) {
 		for bname, branch := range branches {
 			for _, width := range []int{120, 106, 95, 70, 50} {
 				var buf bytes.Buffer
-				if err := renderRich(&buf, in, branch, "folder", usage{}, width, dir, light); err != nil {
+				if err := renderRich(&buf, in, branch, "folder", usage{}, width, dir, light, true); err != nil {
 					t.Fatalf("light=%v branch=%s width=%d: %v", light, bname, width, err)
 				}
 				lines := splitNonEmptyLines(buf.String())
@@ -524,10 +524,10 @@ func TestRenderRich_TierContent(t *testing.T) {
 	in.ContextWindow.ContextWindowSize = 1000000
 
 	var full, compact bytes.Buffer
-	if err := renderRich(&full, in, branch, "folder", usage{}, 160, dir, false); err != nil {
+	if err := renderRich(&full, in, branch, "folder", usage{}, 160, dir, false, true); err != nil {
 		t.Fatalf("full: %v", err)
 	}
-	if err := renderRich(&compact, in, branch, "folder", usage{}, 65, dir, false); err != nil {
+	if err := renderRich(&compact, in, branch, "folder", usage{}, 65, dir, false, true); err != nil {
 		t.Fatalf("compact: %v", err)
 	}
 	fp, cp := stripANSI(full.String()), stripANSI(compact.String())
@@ -557,7 +557,7 @@ func TestRenderRich_FlexTitleKeepsSuffix(t *testing.T) {
 	dir := writeTaskStatus(t, long)
 	branch := "feature/lets-ds6bc-statusline-2-0"
 	var buf bytes.Buffer
-	if err := renderRich(&buf, richTestInput(), branch, "folder", usage{}, 120, dir, false); err != nil {
+	if err := renderRich(&buf, richTestInput(), branch, "folder", usage{}, 120, dir, false, true); err != nil {
 		t.Fatalf("renderRich: %v", err)
 	}
 	plain := stripANSI(buf.String())

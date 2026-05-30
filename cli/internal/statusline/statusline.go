@@ -113,14 +113,16 @@ type Input struct {
 }
 
 // Render decodes the input JSON, fetches usage cache (or spawns background
-// refresh if stale), and writes the 2-line formatted statusline to w.
+// refresh if stale), and writes the statusline to w. The rich multi-line box is
+// the DEFAULT; compact=true selects the legacy 2-line output. showTip toggles
+// the rich bottom tip line (env LETS_STATUSLINE_TIP=off/0/false also disables).
 //
 // Resilient to empty/invalid stdin: Claude Code occasionally invokes the
 // statusline command with no input (e.g. during /reload-plugins or initial
 // render before the IPC pipe is wired). Empty input → render with zero-value
 // Input (defaults to cwd-based detection). A blank statusline error is more
 // disruptive than missing context.
-func Render(stdin io.Reader, w io.Writer, light, rich bool) error {
+func Render(stdin io.Reader, w io.Writer, light, compact, showTip bool) error {
 	data, err := io.ReadAll(stdin)
 	if err != nil {
 		return fmt.Errorf("read stdin: %w", err)
@@ -155,28 +157,32 @@ func Render(stdin io.Reader, w io.Writer, light, rich bool) error {
 		spawnBackgroundFetch(cacheDir)
 	}
 
-	// Rich (multi-line) level: the --rich flag OR LETS_STATUSLINE_LEVEL=rich.
-	// Default (compact) keeps the frozen 2-line output below, unchanged.
-	if rich || strings.EqualFold(strings.TrimSpace(os.Getenv("LETS_STATUSLINE_LEVEL")), "rich") {
-		// Background-refresh the task-status cache off the hot path (same
-		// detached-subprocess pattern as usage). Only the rich Line 2 consumes
-		// it, so the trigger lives in this branch. The id is free (branch name);
-		// the bd call happens in the detached child, never inline.
-		if id := taskIDFromBranch(branch); id != "" && !taskStatusFresh(cacheDir, id, taskStatusTTL) {
-			// On a task SWITCH (cached id differs) the cache holds no data for
-			// this id, so without a debounce every render in the fetch window
-			// re-spawns bd. Write an id-only placeholder first: it renders
-			// immediately and reads "fresh", collapsing the burst to one fetch.
-			// On a same-id TTL refresh we skip the placeholder to keep showing
-			// the stale-but-real title while bd refreshes.
-			if cachedTaskID(cacheDir) != id {
-				_ = writeTaskStatusPlaceholder(cacheDir, id)
-			}
-			spawnBackgroundTaskFetch(cacheDir, id)
-		}
-		return renderRich(w, in, branch, folder, u, detectWidth(), cacheDir, light)
+	// Legacy 2-line output, opt-in via --compact (kept as a fallback for
+	// terminals where the rich box's emoji/box-drawing misbehaves).
+	if compact {
+		return renderLines(w, in, branch, folder, u)
 	}
-	return renderLines(w, in, branch, folder, u)
+
+	// Rich box is the default. env LETS_STATUSLINE_TIP=off/0/false hides the tip.
+	if v := strings.ToLower(strings.TrimSpace(os.Getenv("LETS_STATUSLINE_TIP"))); v == "off" || v == "0" || v == "false" || v == "no" {
+		showTip = false
+	}
+	// Background-refresh the task-status cache off the hot path (same detached-
+	// subprocess pattern as usage). Only the rich Line 2 consumes it. The id is
+	// free (branch name); the bd call happens in the detached child, never inline.
+	if id := taskIDFromBranch(branch); id != "" && !taskStatusFresh(cacheDir, id, taskStatusTTL) {
+		// On a task SWITCH (cached id differs) the cache holds no data for this
+		// id, so without a debounce every render in the fetch window re-spawns
+		// bd. Write an id-only placeholder first: it renders immediately and
+		// reads "fresh", collapsing the burst to one fetch. On a same-id TTL
+		// refresh we skip the placeholder to keep showing the stale-but-real
+		// title while bd refreshes.
+		if cachedTaskID(cacheDir) != id {
+			_ = writeTaskStatusPlaceholder(cacheDir, id)
+		}
+		spawnBackgroundTaskFetch(cacheDir, id)
+	}
+	return renderRich(w, in, branch, folder, u, detectWidth(), cacheDir, light, showTip)
 }
 
 // RunFetchOnly is the entry point used by the background subprocess.

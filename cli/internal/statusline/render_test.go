@@ -165,25 +165,43 @@ func TestUsageColor(t *testing.T) {
 	}
 }
 
-// TestRender_Dispatch guards the rich-vs-compact seam in Render (the dispatch
-// that the debug-capture removal touched): rich=false must stay the frozen
-// 2-line compact output (no box), rich=true must emit the boxed rich output.
+// TestRender_Dispatch guards the rich-vs-compact seam in Render: the DEFAULT
+// (compact=false) emits the boxed rich output; --compact (compact=true) emits
+// the legacy 2-line output (no box).
 func TestRender_Dispatch(t *testing.T) {
 	const payload = `{"workspace":{"current_dir":"/tmp"},"model":{"display_name":"Opus"},"context_window":{"used_percentage":10,"context_window_size":1000000}}`
 
 	var compact bytes.Buffer
-	if err := Render(strings.NewReader(payload), &compact, false, false); err != nil {
+	if err := Render(strings.NewReader(payload), &compact, false, true, true); err != nil { // compact=true
 		t.Fatalf("compact Render: %v", err)
 	}
 	if strings.Contains(compact.String(), "┌") {
-		t.Errorf("compact output should not be boxed:\n%s", compact.String())
+		t.Errorf("--compact output should not be boxed:\n%s", compact.String())
 	}
 
 	var rich bytes.Buffer
-	if err := Render(strings.NewReader(payload), &rich, false, true); err != nil {
+	if err := Render(strings.NewReader(payload), &rich, false, false, true); err != nil { // default = rich
 		t.Fatalf("rich Render: %v", err)
 	}
 	if !strings.Contains(rich.String(), "┌") {
-		t.Errorf("rich output should be boxed (contain ┌):\n%s", rich.String())
+		t.Errorf("default output should be boxed (contain ┌):\n%s", rich.String())
+	}
+}
+
+// TestRender_NoTip: showTip=false hides the tip glyph row.
+func TestRender_NoTip(t *testing.T) {
+	const payload = `{"workspace":{"current_dir":"/tmp"},"model":{"display_name":"Opus"},"context_window":{"used_percentage":10,"context_window_size":1000000}}`
+	var on, off bytes.Buffer
+	if err := Render(strings.NewReader(payload), &on, false, false, true); err != nil {
+		t.Fatalf("tip-on: %v", err)
+	}
+	if err := Render(strings.NewReader(payload), &off, false, false, false); err != nil {
+		t.Fatalf("tip-off: %v", err)
+	}
+	if !strings.Contains(on.String(), "💡") {
+		t.Errorf("showTip=true should render the 💡 tip line:\n%s", on.String())
+	}
+	if strings.Contains(off.String(), "💡") {
+		t.Errorf("showTip=false should hide the 💡 tip line:\n%s", off.String())
 	}
 }

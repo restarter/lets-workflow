@@ -476,7 +476,7 @@ func tipOfMoment(now time.Time) string {
 
 // renderRich draws the width-responsive Quiet Rails layout. Never calls
 // bd/network per render.
-func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int, cacheDir string, light bool) error {
+func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int, cacheDir string, light, showTip bool) error {
 	p := paletteDark
 	if light {
 		p = paletteLight
@@ -634,7 +634,7 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 			emitFlex(p.clay+glyphTask+" "+id+R, mid, "")
 		}
 		// Line 4: rotating tip — glyph (prefix) + text (truncatable mid).
-		if t := tipOfMoment(time.Now()); t != "" {
+		if t := tipOfMoment(time.Now()); showTip && t != "" {
 			emitFlex(p.sage+glyphTip+R+" ", p.dim+ansiItalic+t+R, "")
 		}
 		flush() // size + draw the box around the collected rows
@@ -712,7 +712,7 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	}
 
 	// --- Line 4: rotating tip — glyph (prefix) + text (truncatable mid) ---
-	if t := tipOfMoment(time.Now()); t != "" {
+	if t := tipOfMoment(time.Now()); showTip && t != "" {
 		emitFlex(p.sage+glyphTip+R+" ", p.dim+ansiItalic+t+R, "")
 	}
 	flush() // size + draw the box around the collected rows
