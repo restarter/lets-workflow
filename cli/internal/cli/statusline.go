@@ -18,10 +18,12 @@ import (
 // via background subprocess. No stdin/stdout interaction.
 func NewStatuslineCmd() *cobra.Command {
 	var (
-		fetchOnly bool
-		cacheDir  string
-		light     bool
-		rich      bool
+		fetchOnly     bool
+		fetchTaskOnly bool
+		taskID        string
+		cacheDir      string
+		light         bool
+		rich          bool
 	)
 
 	cmd := &cobra.Command{
@@ -50,13 +52,20 @@ stdin or stdout interaction in this mode.`,
 			if fetchOnly {
 				return statusline.RunFetchOnly(cacheDir)
 			}
+			if fetchTaskOnly {
+				return statusline.RunFetchTaskOnly(cacheDir, taskID)
+			}
 			return statusline.Render(cmd.InOrStdin(), cmd.OutOrStdout(), light, rich)
 		},
 	}
 	cmd.Flags().BoolVar(&fetchOnly, "fetch-usage-only", false,
 		"Internal: refresh usage cache and exit (used by background subprocess)")
+	cmd.Flags().BoolVar(&fetchTaskOnly, "fetch-task-only", false,
+		"Internal: refresh task-status cache and exit (used by background subprocess)")
+	cmd.Flags().StringVar(&taskID, "task-id", "",
+		"Task id to query (required when --fetch-task-only is set)")
 	cmd.Flags().StringVar(&cacheDir, "cache-dir", "",
-		"Cache directory (required when --fetch-usage-only is set)")
+		"Cache directory (required when --fetch-usage-only / --fetch-task-only is set)")
 	cmd.Flags().BoolVar(&light, "light", false,
 		"Use the light-terminal palette (rich level only)")
 	cmd.Flags().BoolVar(&rich, "rich", false,

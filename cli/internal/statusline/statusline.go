@@ -165,6 +165,13 @@ func Render(stdin io.Reader, w io.Writer, light, rich bool) error {
 				_ = f.Close()
 			}
 		}
+		// Background-refresh the task-status cache off the hot path (same
+		// detached-subprocess pattern as usage). Only the rich Line 2 consumes
+		// it, so the trigger lives in this branch. The id is free (branch name);
+		// the bd call happens in the detached child, never inline.
+		if id := taskIDFromBranch(branch); id != "" && !taskStatusFresh(cacheDir, id, taskStatusTTL) {
+			spawnBackgroundTaskFetch(cacheDir, id)
+		}
 		return renderRich(w, in, branch, folder, u, detectWidth(), cacheDir, light)
 	}
 	return renderLines(w, in, branch, folder, u)
@@ -174,6 +181,13 @@ func Render(stdin io.Reader, w io.Writer, light, rich bool) error {
 // It fetches usage and writes cache, then returns. No stdin/stdout I/O.
 func RunFetchOnly(cacheDir string) error {
 	return fetchAndCacheUsage(cacheDir)
+}
+
+// RunFetchTaskOnly is the entry point for the detached task-status refresh
+// (`lets statusline --fetch-task-only`). Queries bd for the task and writes the
+// task-status cache. No stdin/stdout I/O.
+func RunFetchTaskOnly(cacheDir, taskID string) error {
+	return fetchAndCacheTaskStatus(cacheDir, taskID)
 }
 
 // detectProjectRoot wraps `git -C <dir> rev-parse --show-toplevel`.
@@ -228,4 +242,22 @@ func spawnBackgroundFetch(cacheDir string) {
 	_ = cmd.Start()
 	// Do NOT call cmd.Wait() - that would block the parent. Brief zombie is
 	// reclaimed by the kernel once the short-lived parent exits.
+}
+
+// spawnBackgroundTaskFetch starts a detached subprocess that queries bd for the
+// active task and refreshes cacheDir/task-status. Same detach mechanics as
+// spawnBackgroundFetch; the bd call stays off the render hot path. bd is
+// resolved from the inherited PATH — if it's absent the child fails silently
+// and Line 2 degrades to id-only, which is the documented graceful path.
+func spawnBackgroundTaskFetch(cacheDir, taskID string) {
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	cmd := exec.Command(exe, "statusline", "--fetch-task-only", "--cache-dir", cacheDir, "--task-id", taskID)
+	cmd.Stdin = nil
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	detachProcessGroup(cmd)
+	_ = cmd.Start()
 }
