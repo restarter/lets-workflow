@@ -571,3 +571,46 @@ func TestRenderRich_FlexTitleKeepsSuffix(t *testing.T) {
 		t.Errorf("note count must survive a long title:\n%s", plain)
 	}
 }
+
+func TestTaskIDFromBranch(t *testing.T) {
+	tests := map[string]string{
+		"feature/lets-ds6bc-statusline-2-0":  "lets-ds6bc",
+		"worktree-lets-ds6bc-statusline-2-0": "lets-ds6bc",
+		"bug/lets-asdsad-asdasd":             "lets-asdsad",
+		"fix/lets-abc-foo":                   "lets-abc",
+		"bugfix-2/lets-abc-foo":              "lets-abc", // hyphenated prefix stripped
+		"lets-hdrdr.3-subtask":               "lets-hdrdr.3",
+		"main":                               "",
+		"":                                   "",
+	}
+	for branch, want := range tests {
+		if got := taskIDFromBranch(branch); got != want {
+			t.Errorf("taskIDFromBranch(%q)=%q, want %q", branch, got, want)
+		}
+	}
+}
+
+// TestRenderRich_TaskLineGated: the task line shows only when the cache confirms
+// a real task (taskOK && title); a bogus/no-beads branch shows no task line.
+func TestRenderRich_TaskLineGated(t *testing.T) {
+	in := richTestInput()
+
+	// Confirmed task in cache -> task line present.
+	dir := writeTaskStatus(t, "lets-ds6bc|Real Title|2|2099-01-01T00:00:00Z")
+	var ok bytes.Buffer
+	if err := renderRich(&ok, in, "feature/lets-ds6bc-x", "f", usage{}, 120, dir, false, true); err != nil {
+		t.Fatalf("confirmed: %v", err)
+	}
+	if !strings.Contains(stripANSI(ok.String()), "☑ lets-ds6bc Real Title") {
+		t.Errorf("confirmed task should render the task line:\n%s", stripANSI(ok.String()))
+	}
+
+	// Branch yields a candidate id but no cache entry -> no task line.
+	var bogus bytes.Buffer
+	if err := renderRich(&bogus, in, "my-random-branch", "f", usage{}, 120, t.TempDir(), false, true); err != nil {
+		t.Fatalf("bogus: %v", err)
+	}
+	if strings.Contains(stripANSI(bogus.String()), "☑") {
+		t.Errorf("unconfirmed/bogus branch must NOT render a task line:\n%s", stripANSI(bogus.String()))
+	}
+}

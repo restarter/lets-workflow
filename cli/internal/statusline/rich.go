@@ -319,12 +319,17 @@ func kfmt(n int) string {
 
 var taskIDRe = regexp.MustCompile(`[a-z][a-z0-9]*-[a-z0-9]+(?:\.[0-9]+)?`)
 
-// taskIDFromBranch extracts a beads task id from the branch name (detect-task
-// pattern <prefix>-<alphanum>[.N]). Free — no bd call.
+// taskIDFromBranch extracts a candidate beads task id from the branch name
+// (convention <prefix>-<alphanum>[.N]). Free — no bd call; the id is only
+// CANDIDATE here, the renderer shows the task line only once bd confirms it.
+// Strips any "<word>/" prefix (feature/, bug/, fix/, bugfix-2/, ...) and the
+// "worktree-" prefix so the first match is the real id, not the prefix.
 func taskIDFromBranch(branch string) string {
-	b := strings.TrimPrefix(branch, "feature/")
-	b = strings.TrimPrefix(b, "worktree-")
-	return taskIDRe.FindString(b)
+	if i := strings.LastIndex(branch, "/"); i >= 0 {
+		branch = branch[i+1:]
+	}
+	branch = strings.TrimPrefix(branch, "worktree-")
+	return taskIDRe.FindString(branch)
 }
 
 // inWorktree reports whether we're inside a git worktree, cheaply: prefer the
@@ -623,15 +628,12 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 			g = append(g, gaugeCompact("7d", sevenP, sevenReset))
 		}
 		emit(join(g...))
-		// Line 3: task — id (prefix) + title (truncatable mid). notes/age/hint
-		// dropped in Compact to save width.
-		if id != "" {
+		// Line 3: task — only when bd CONFIRMED a real task (taskOK && title). A
+		// bare/bogus branch id or a no-beads project shows no task line. id is the
+		// prefix, title the truncatable mid; notes/age/hint dropped in Compact.
+		if taskOK && title != "" {
 			rule() // tee divider between gauges and task
-			mid := ""
-			if taskOK && title != "" {
-				mid = " " + p.text + title + R
-			}
-			emitFlex(p.clay+glyphTask+" "+id+R, mid, "")
+			emitFlex(p.clay+glyphTask+" "+id+R, " "+p.text+title+R, "")
 		}
 		// Line 4: rotating tip — glyph (prefix) + text (truncatable mid).
 		if t := tipOfMoment(time.Now()); showTip && t != "" {
@@ -688,16 +690,13 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	}
 	emitFull(budget + marker + join(gauges...))
 
-	// --- Line 3: task — id (prefix) + title (truncatable mid) + notes/age/hint
-	//     (suffix, always kept). Dropped entirely if no active task. ---
-	if id != "" {
+	// --- Line 3: task — only when bd CONFIRMED a real task (taskOK && title).
+	//     id (prefix) + title (truncatable mid) + notes/age/hint (suffix, kept).
+	//     A bare/bogus branch id or a no-beads project shows no task line. ---
+	if taskOK && title != "" {
 		rule() // tee divider between budget and task
-		mid := ""
-		if taskOK && title != "" {
-			mid = " " + p.text + title + R
-		}
 		noteSeg := ""
-		if taskOK && notes > 0 {
+		if notes > 0 {
 			noteSeg = p.label + glyphNote + " " + strconv.Itoa(notes) + R
 			if age := relAgo(lastComment); age != "" {
 				noteSeg += " " + p.dim + age + R
@@ -708,7 +707,7 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		if noteSeg != "" {
 			tail = noteSeg + " " + hint
 		}
-		emitFlex(p.clay+glyphTask+" "+id+R, mid, segSep+tail)
+		emitFlex(p.clay+glyphTask+" "+id+R, " "+p.text+title+R, segSep+tail)
 	}
 
 	// --- Line 4: rotating tip — glyph (prefix) + text (truncatable mid) ---
