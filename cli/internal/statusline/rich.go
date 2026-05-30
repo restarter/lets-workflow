@@ -135,6 +135,10 @@ const (
 const (
 	bpWide    = 72     // Full at >= this; Compact below
 	bpDefault = bpWide // DEC-2: COLUMNS confirmed passed by CC; fail open to Full when it is somehow absent
+	// bpFill: below this width the box fills the whole window (boxW = COLUMNS-4)
+	// so the tip/content get the full width; at/above it the box hugs the content
+	// instead of stretching across a wide screen.
+	bpFill = 90
 )
 
 // fullMaxLine bounds the box's inner width so a wide terminal doesn't stretch
@@ -500,13 +504,19 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	}
 	rule := func() { dividerAfter = len(rows) - 1 } // ├ divider after the last row so far
 	flush := func() {
-		boxW := 1
-		for _, r := range rows {
-			if r.flex {
-				continue // title/tip fit the box; they never set its width
-			}
-			if cw := cellWidth(r.plain); cw > boxW {
-				boxW = cw
+		// Narrow window (< bpFill): fill the full width so the tip/content get
+		// all the room. Wide window: hug the content (sized by the plain rows;
+		// title/tip never set the width) so the box doesn't stretch the screen.
+		boxW := width - 4
+		if width >= bpFill {
+			boxW = 1
+			for _, r := range rows {
+				if r.flex {
+					continue
+				}
+				if cw := cellWidth(r.plain); cw > boxW {
+					boxW = cw
+				}
 			}
 		}
 		if lim := width - 4; boxW > lim {
