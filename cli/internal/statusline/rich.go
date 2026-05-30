@@ -490,28 +490,47 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	marker := p.sage + ansiBold + separatorAngle + R // " » "
 	segSep := p.sep + separatorMidDot + R            // " · "
 
-	// Closed box frame. W is the inner content width; the box is W+4 cells wide
-	// ("│ " + content + " │"). Cell-accurate (fitCell) so the right border lines
-	// up across rows holding different counts of double-width emoji.
-	boxW := width - 4
-	if boxW > fullMaxLine {
-		boxW = fullMaxLine
-	}
-	if boxW < 1 {
-		boxW = 1
-	}
-	border := func(left, right string) {
-		fmt.Fprintln(w, p.sep+left+strings.Repeat("─", boxW+2)+right+R)
-	}
+	// Closed box frame that HUGS the content: rows are collected, then the box
+	// is sized to the widest row (capped to fullMaxLine and width-4) so the right
+	// border sits just past the longest line, not at a fixed column. Cell-
+	// accurate (fitCell) so the border aligns despite double-width emoji.
+	var rows []string
+	dividerAfter := -1
 	emit := func(line string) {
 		if visibleWidth(line) == 0 {
 			return
 		}
-		fmt.Fprintln(w, p.sep+"│ "+R+fitCell(line, boxW)+p.sep+" │"+R)
+		rows = append(rows, line)
 	}
-	rule := func() { border("├", "┤") }      // budget/task divider
-	topBorder := func() { border("┌", "┐") } // open frame top
-	botBorder := func() { border("└", "┘") } // close frame bottom
+	rule := func() { dividerAfter = len(rows) - 1 } // ├ divider after the last row so far
+	flush := func() {
+		boxW := 1
+		for _, r := range rows {
+			if cw := cellWidth(r); cw > boxW {
+				boxW = cw
+			}
+		}
+		if lim := width - 4; boxW > lim {
+			boxW = lim
+		}
+		if boxW > fullMaxLine {
+			boxW = fullMaxLine
+		}
+		if boxW < 1 {
+			boxW = 1
+		}
+		border := func(left, right string) {
+			fmt.Fprintln(w, p.sep+left+strings.Repeat("─", boxW+2)+right+R)
+		}
+		border("┌", "┐")
+		for i, r := range rows {
+			fmt.Fprintln(w, p.sep+"│ "+R+fitCell(r, boxW)+p.sep+" │"+R)
+			if i == dividerAfter {
+				border("├", "┤")
+			}
+		}
+		border("└", "┘")
+	}
 	// join concatenates non-empty parts with the " · " separator.
 	join := func(parts ...string) string {
 		kept := make([]string, 0, len(parts))
@@ -567,8 +586,6 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		ver = "v" + ver
 	}
 
-	topBorder() // open the box (shared by both tiers)
-
 	// ===== Compact tier: 4 trimmed lines, designed for ~70 cols =====
 	if tier == tierCompact {
 		// Line 1: brand+version » branch · diff (no worktree pill, no PR; short "LETS").
@@ -595,18 +612,14 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		}
 		// Line 4: rotating tip, clipped to min(width, 70).
 		if t := tipOfMoment(time.Now()); t != "" {
-			tipMax := boxW
-			if tipMax > 70 {
-				tipMax = 70
-			}
-			emit(clip(p.sage+glyphTip+R+" "+p.dim+ansiItalic+t+R, tipMax))
+			emit(clip(p.sage+glyphTip+R+" "+p.dim+ansiItalic+t+R, 70))
 		}
-		botBorder() // close the box
+		flush() // size + draw the box around the collected rows
 		return nil
 	}
 
 	// ===== Full tier: 4 lines, everything (each capped to fullMaxLine) =====
-	emitFull := emit // box emit already fits content to boxW
+	emitFull := emit // rows are sized to the box at flush() time
 
 	// --- Line 1: identity (branch truncated so the line stays under the cap) ---
 	brand := p.sage + brandEmoji(in.Cost.TotalLinesAdded) + " " + ansiBold + "LETS Workflow" + R + " " + p.dim + ver + R
@@ -665,10 +678,10 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		emitFull(head + segSep + tail)
 	}
 
-	// --- Line 4: rotating tip ---
+	// --- Line 4: rotating tip (capped so a long tip doesn't widen the box) ---
 	if t := tipOfMoment(time.Now()); t != "" {
-		emitFull(p.sage + glyphTip + R + " " + p.dim + ansiItalic + t + R)
+		emitFull(clip(p.sage+glyphTip+R+" "+p.dim+ansiItalic+t+R, 70))
 	}
-	botBorder() // close the box
+	flush() // size + draw the box around the collected rows
 	return nil
 }
