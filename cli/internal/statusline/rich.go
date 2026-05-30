@@ -140,9 +140,11 @@ const (
 	// stretching across a wide screen.
 	bpFill = 90
 	// boxRightMargin: cells left empty on the right so the box never reaches the
-	// last column. A line exactly COLUMNS wide can wrap when an ambiguous-width
-	// glyph (☑, →) renders wider than cellWidth counts it, breaking the border.
-	boxRightMargin = 2
+	// last column. Claude Code's actual statusline area is a few cells narrower
+	// than the COLUMNS it passes (left indent + reserved gutter), and ambiguous-
+	// width glyphs (☑, →, ⎇) render wider than cellWidth counts — so without a
+	// margin CC truncates each line with its own "…". 4 covers both.
+	boxRightMargin = 4
 )
 
 // fullMaxLine bounds the box's inner width so a wide terminal doesn't stretch
