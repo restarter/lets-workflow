@@ -23,25 +23,86 @@ import (
 )
 
 // Input mirrors the JSON Claude Code pipes to the statusline command.
-// Only fields we use are decoded.
+// PROTOTYPE (lets-ds6bc): expanded to decode the FULL documented payload so the
+// max "rich" level can show everything. Compact (renderLines) still only reads
+// model/workspace/cwd/context_window — additive, so it is unaffected.
 type Input struct {
-	Model struct {
+	Cwd            string `json:"cwd"`
+	SessionID      string `json:"session_id"`
+	SessionName    string `json:"session_name"`
+	TranscriptPath string `json:"transcript_path"`
+	Version        string `json:"version"`
+	Model          struct {
+		ID          string `json:"id"`
 		DisplayName string `json:"display_name"`
 	} `json:"model"`
 	Workspace struct {
-		CurrentDir string `json:"current_dir"`
+		CurrentDir  string `json:"current_dir"`
+		ProjectDir  string `json:"project_dir"`
+		GitWorktree bool   `json:"git_worktree"`
+		Repo        struct {
+			Host  string `json:"host"`
+			Owner string `json:"owner"`
+			Name  string `json:"name"`
+		} `json:"repo"`
 	} `json:"workspace"`
-	Cwd           string `json:"cwd"`
+	OutputStyle struct {
+		Name string `json:"name"`
+	} `json:"output_style"`
+	Cost struct {
+		TotalCostUSD      float64 `json:"total_cost_usd"`
+		TotalDurationMs   int64   `json:"total_duration_ms"`
+		TotalLinesAdded   int     `json:"total_lines_added"`
+		TotalLinesRemoved int     `json:"total_lines_removed"`
+	} `json:"cost"`
 	ContextWindow struct {
-		UsedPercentage    float64 `json:"used_percentage"`
-		ContextWindowSize int     `json:"context_window_size"`
-		CurrentUsage      struct {
+		TotalInputTokens    int     `json:"total_input_tokens"`
+		TotalOutputTokens   int     `json:"total_output_tokens"`
+		UsedPercentage      float64 `json:"used_percentage"`
+		RemainingPercentage float64 `json:"remaining_percentage"`
+		ContextWindowSize   int     `json:"context_window_size"`
+		CurrentUsage        struct {
 			CacheReadInputTokens     int `json:"cache_read_input_tokens"`
 			CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
 			InputTokens              int `json:"input_tokens"`
 			OutputTokens             int `json:"output_tokens"`
 		} `json:"current_usage"`
 	} `json:"context_window"`
+	Exceeds200k bool `json:"exceeds_200k_tokens"`
+	Effort      struct {
+		Level string `json:"level"`
+	} `json:"effort"`
+	Thinking struct {
+		Enabled bool `json:"enabled"`
+	} `json:"thinking"`
+	FastMode   bool `json:"fast_mode"`
+	RateLimits struct {
+		FiveHour struct {
+			UsedPercentage float64 `json:"used_percentage"`
+			ResetsAt       string  `json:"resets_at"`
+		} `json:"five_hour"`
+		SevenDay struct {
+			UsedPercentage float64 `json:"used_percentage"`
+			ResetsAt       string  `json:"resets_at"`
+		} `json:"seven_day"`
+	} `json:"rate_limits"`
+	Vim struct {
+		Mode string `json:"mode"`
+	} `json:"vim"`
+	Agent struct {
+		Name string `json:"name"`
+	} `json:"agent"`
+	PR struct {
+		Number      int    `json:"number"`
+		URL         string `json:"url"`
+		ReviewState string `json:"review_state"`
+	} `json:"pr"`
+	Worktree struct {
+		Name           string `json:"name"`
+		Path           string `json:"path"`
+		Branch         string `json:"branch"`
+		OriginalBranch string `json:"original_branch"`
+	} `json:"worktree"`
 }
 
 // Render decodes the input JSON, fetches usage cache (or spawns background
@@ -87,6 +148,20 @@ func Render(stdin io.Reader, w io.Writer) error {
 		spawnBackgroundFetch(cacheDir)
 	}
 
+	// PROTOTYPE (lets-ds6bc): max "rich" level behind LETS_STATUSLINE_LEVEL=rich.
+	// Default (compact) keeps the frozen 2-line output below, unchanged.
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("LETS_STATUSLINE_LEVEL")), "rich") {
+		_ = os.MkdirAll(cacheDir, 0o755)
+		_ = os.WriteFile(filepath.Join(cacheDir, "last-input.json"), data, 0o600) // capture real payload for inspection
+		// DEBUG (lets-ds6bc): does Claude Code pass terminal width to the
+		// statusline subprocess? Append the env we see on each live render.
+		if f, err := os.OpenFile(filepath.Join(cacheDir, "statusline-debug.txt"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600); err == nil {
+			fmt.Fprintf(f, "%s COLUMNS=%q LINES=%q TERM=%q TERM_PROGRAM=%q detectWidth()=%d\n",
+				time.Now().Format("15:04:05"), os.Getenv("COLUMNS"), os.Getenv("LINES"), os.Getenv("TERM"), os.Getenv("TERM_PROGRAM"), detectWidth())
+			_ = f.Close()
+		}
+		return renderRich(w, in, branch, folder, u, detectWidth(), cacheDir)
+	}
 	return renderLines(w, in, branch, folder, u)
 }
 
