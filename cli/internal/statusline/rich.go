@@ -624,9 +624,14 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 
 	// --- Line 1: identity (branch truncated so the line stays under the cap) ---
 	brand := p.sage + brandEmoji(in.Cost.TotalLinesAdded) + " " + ansiBold + "LETS Workflow" + R + " " + p.dim + ver + R
-	pillSeg := ""
+	// Location segment right after the marker: the worktree pill when inside a
+	// worktree (its name == branch, so the cwd path would be redundant), else
+	// the cwd folder.
+	locSeg := ""
 	if inWorktree(in, branch) {
-		pillSeg = p.pillBg + p.label + " worktree " + R
+		locSeg = p.pillBg + p.label + " worktree " + R
+	} else if folder != "" && folder != "." && folder != "/" {
+		locSeg = p.label + glyphFolder + " " + folder + R
 	}
 	prSeg := ""
 	if in.PR.Number > 0 {
@@ -635,11 +640,7 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 			prSeg += " " + p.prStateColor(in.PR.ReviewState) + in.PR.ReviewState + R
 		}
 	}
-	folderSeg := ""
-	if folder != "" && folder != "." && folder != "/" {
-		folderSeg = p.label + glyphFolder + " " + folder + R
-	}
-	emitFull(brand + marker + join(folderSeg, p.clay+glyphBranch+" "+truncRunes(bf, branchMaxFull)+R, diffSeg, pillSeg, prSeg))
+	emitFull(brand + marker + join(locSeg, p.clay+glyphBranch+" "+truncRunes(bf, branchMaxFull)+R, diffSeg, prSeg))
 
 	// --- Line 2: budget (model + colored effort » window/5h/7d, no bars) ---
 	budget := p.gold + glyphModel + " " + ansiBold + in.Model.DisplayName + R
