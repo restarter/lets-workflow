@@ -164,3 +164,26 @@ func TestUsageColor(t *testing.T) {
 		}
 	}
 }
+
+// TestRender_Dispatch guards the rich-vs-compact seam in Render (the dispatch
+// that the debug-capture removal touched): rich=false must stay the frozen
+// 2-line compact output (no box), rich=true must emit the boxed rich output.
+func TestRender_Dispatch(t *testing.T) {
+	const payload = `{"workspace":{"current_dir":"/tmp"},"model":{"display_name":"Opus"},"context_window":{"used_percentage":10,"context_window_size":1000000}}`
+
+	var compact bytes.Buffer
+	if err := Render(strings.NewReader(payload), &compact, false, false); err != nil {
+		t.Fatalf("compact Render: %v", err)
+	}
+	if strings.Contains(compact.String(), "┌") {
+		t.Errorf("compact output should not be boxed:\n%s", compact.String())
+	}
+
+	var rich bytes.Buffer
+	if err := Render(strings.NewReader(payload), &rich, false, true); err != nil {
+		t.Fatalf("rich Render: %v", err)
+	}
+	if !strings.Contains(rich.String(), "┌") {
+		t.Errorf("rich output should be boxed (contain ┌):\n%s", rich.String())
+	}
+}
