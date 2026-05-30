@@ -509,22 +509,15 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 			g = append(g, gaugeCompact("7d", sevenP, sevenReset))
 		}
 		emit(join(g...))
-		// Line 3: task — id only (no title), notes + age + hint. Dropped if no task.
+		// Line 3: task — id + title (notes/age/hint dropped to save width). The
+		// title is end-truncated to the line by emit's clip. Dropped if no task.
 		if id != "" {
 			rule() // tee divider between gauges and task
-			noteSeg := ""
-			if taskOK && notes > 0 {
-				noteSeg = p.label + glyphNote + " " + strconv.Itoa(notes) + R
-				if age := relAgo(lastComment); age != "" {
-					noteSeg += " " + p.dim + age + R
-				}
+			head := p.clay + glyphTask + " " + id + R
+			if taskOK && title != "" {
+				head += " " + p.text + title + R
 			}
-			hint := p.sage + glyphArrow + R + " " + p.dim + "/lets:note" + R
-			tail := hint
-			if noteSeg != "" {
-				tail = noteSeg + " " + hint
-			}
-			emit(p.clay + glyphTask + " " + id + R + segSep + tail)
+			emit(head)
 		}
 		// Line 4: rotating tip, clipped to min(width, 70).
 		if t := tipOfMoment(time.Now()); t != "" {
