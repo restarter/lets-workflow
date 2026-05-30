@@ -135,9 +135,8 @@ const (
 // still bound every line to ~100 so a wide terminal doesn't stretch the bar full
 // width; branch/title are truncated first so the trailing segments survive.
 const (
-	fullMaxLine   = 100 // hard cap per Full line
-	branchMaxFull = 30  // branch truncated to this in Full line 1
-	titleMaxFull  = 48  // task title truncated to this in Full line 2
+	fullMaxLine  = 100 // hard cap per Full line
+	titleMaxFull = 48  // task title truncated to this in Full line 2
 )
 
 // truncRunes end-truncates a PLAIN (un-colored) string to max runes, appending
@@ -644,7 +643,7 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 			prSeg += " " + p.prStateColor(in.PR.ReviewState) + in.PR.ReviewState + R
 		}
 	}
-	emitFull(brand + marker + join(locSeg, p.clay+glyphBranch+" "+truncRunes(bf, branchMaxFull)+R, diffSeg, prSeg))
+	emitFull(brand + marker + join(locSeg, p.clay+glyphBranch+" "+bf+R, diffSeg, prSeg))
 
 	// --- Line 2: budget (model + colored effort » window/5h/7d, no bars) ---
 	budget := p.gold + glyphModel + " " + ansiBold + in.Model.DisplayName + R
