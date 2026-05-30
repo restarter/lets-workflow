@@ -498,7 +498,16 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		// Line 1: brand+version » branch · diff (no worktree pill, no PR; short "LETS").
 		emit(p.sage + brandEmoji(in.Cost.TotalLinesAdded) + " " + ansiBold + "LETS" + R + " " + p.dim + ver + R +
 			marker + join(p.clay+glyphBranch+" "+bf+R, diffSeg))
-		// Line 2: task — id only (no title), notes + age + hint. Dropped if no task.
+		// Line 2: window·5h·7d label+pct+timer, no bars.
+		g := []string{gaugeCompact("window", winPct, "")}
+		if fiveOK {
+			g = append(g, gaugeCompact("5h", fiveP, fiveReset))
+		}
+		if sevenOK {
+			g = append(g, gaugeCompact("7d", sevenP, sevenReset))
+		}
+		emit(join(g...))
+		// Line 3: task — id only (no title), notes + age + hint. Dropped if no task.
 		if id != "" {
 			noteSeg := ""
 			if taskOK && notes > 0 {
@@ -514,15 +523,6 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 			}
 			emit(p.clay + glyphTask + " " + id + R + segSep + tail)
 		}
-		// Line 3: window·5h·7d label+pct+timer, no bars.
-		g := []string{gaugeCompact("window", winPct, "")}
-		if fiveOK {
-			g = append(g, gaugeCompact("5h", fiveP, fiveReset))
-		}
-		if sevenOK {
-			g = append(g, gaugeCompact("7d", sevenP, sevenReset))
-		}
-		emit(join(g...))
 		// Line 4: rotating tip, clipped to min(width, 70).
 		if t := tipOfMoment(time.Now()); t != "" {
 			tipMax := width
@@ -552,7 +552,21 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	}
 	emitFull(brand + marker + join(p.clay+glyphBranch+" "+truncRunes(bf, branchMaxFull)+R, diffSeg, pillSeg, prSeg))
 
-	// --- Line 2: task (title truncated; dropped entirely if no active task) ---
+	// --- Line 2: budget (model + colored effort + 3 gauges with bars + timers) ---
+	budget := p.gold + glyphModel + " " + ansiBold + in.Model.DisplayName + R
+	if in.Effort.Level != "" {
+		budget += " " + p.effortColor(in.Effort.Level) + in.Effort.Level + R
+	}
+	gauges := []string{gaugeFull("window", winPct, "")}
+	if fiveOK {
+		gauges = append(gauges, gaugeFull("5h", fiveP, fiveReset))
+	}
+	if sevenOK {
+		gauges = append(gauges, gaugeFull("7d", sevenP, sevenReset))
+	}
+	emitFull(budget + segSep + join(gauges...))
+
+	// --- Line 3: task (title truncated; dropped entirely if no active task) ---
 	if id != "" {
 		head := p.clay + glyphTask + " " + id + R
 		if taskOK && title != "" {
@@ -572,20 +586,6 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		}
 		emitFull(head + segSep + tail)
 	}
-
-	// --- Line 3: budget (model + colored effort + 3 gauges with bars + timers) ---
-	budget := p.gold + glyphModel + " " + ansiBold + in.Model.DisplayName + R
-	if in.Effort.Level != "" {
-		budget += " " + p.effortColor(in.Effort.Level) + in.Effort.Level + R
-	}
-	gauges := []string{gaugeFull("window", winPct, "")}
-	if fiveOK {
-		gauges = append(gauges, gaugeFull("5h", fiveP, fiveReset))
-	}
-	if sevenOK {
-		gauges = append(gauges, gaugeFull("7d", sevenP, sevenReset))
-	}
-	emitFull(budget + segSep + join(gauges...))
 
 	// --- Line 4: rotating tip ---
 	if t := tipOfMoment(time.Now()); t != "" {
