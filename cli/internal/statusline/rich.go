@@ -131,26 +131,10 @@ const (
 	bpDefault = bpWide // DEC-2: COLUMNS confirmed passed by CC; fail open to Full when it is somehow absent
 )
 
-// Full-tier length caps (visible runes). Full only renders at >= bpWide, but we
-// still bound every line to ~100 so a wide terminal doesn't stretch the bar full
-// width; branch/title are truncated first so the trailing segments survive.
-const (
-	fullMaxLine  = 100 // hard cap per Full line
-	titleMaxFull = 48  // task title truncated to this in Full line 2
-)
-
-// truncRunes end-truncates a PLAIN (un-colored) string to max runes, appending
-// an ellipsis on overflow. Used to bound branch/title before they're colored.
-func truncRunes(s string, max int) string {
-	r := []rune(s)
-	if max < 1 || len(r) <= max {
-		return s
-	}
-	if max == 1 {
-		return "…"
-	}
-	return string(r[:max-1]) + "…"
-}
+// fullMaxLine bounds the box's inner width so a wide terminal doesn't stretch
+// the bar full width. Long rows (branch, title, tip) are not pre-truncated —
+// the box's fitCell end-truncates whatever overflows this width.
+const fullMaxLine = 100
 
 // effortColor maps an effort level to a color mirroring the /effort picker
 // gradient (faster→smarter): low gold, medium green, high blue, xhigh purple,
@@ -496,16 +480,30 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	// accurate (fitCell) so the border aligns despite double-width emoji.
 	var rows []string
 	dividerAfter := -1
+	tipIdx := -1
 	emit := func(line string) {
 		if visibleWidth(line) == 0 {
 			return
 		}
 		rows = append(rows, line)
 	}
+	// emitTip appends the rotating tip but marks it so it does NOT drive the box
+	// width — otherwise the box would visibly resize every time the tip rotates.
+	// The tip is still fitCell'd to the final width like any row.
+	emitTip := func(line string) {
+		if visibleWidth(line) == 0 {
+			return
+		}
+		rows = append(rows, line)
+		tipIdx = len(rows) - 1
+	}
 	rule := func() { dividerAfter = len(rows) - 1 } // ├ divider after the last row so far
 	flush := func() {
 		boxW := 1
-		for _, r := range rows {
+		for i, r := range rows {
+			if i == tipIdx {
+				continue // the tip fits the box; it never sets the box width
+			}
 			if cw := cellWidth(r); cw > boxW {
 				boxW = cw
 			}
@@ -612,7 +610,7 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		}
 		// Line 4: rotating tip, clipped to min(width, 70).
 		if t := tipOfMoment(time.Now()); t != "" {
-			emit(clip(p.sage+glyphTip+R+" "+p.dim+ansiItalic+t+R, 70))
+			emitTip(p.sage + glyphTip + R + " " + p.dim + ansiItalic + t + R)
 		}
 		flush() // size + draw the box around the collected rows
 		return nil
@@ -670,7 +668,7 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		rule() // tee divider between budget and task
 		head := p.clay + glyphTask + " " + id + R
 		if taskOK && title != "" {
-			head += " " + p.text + truncRunes(title, titleMaxFull) + R
+			head += " " + p.text + title + R // box fitCell truncates if it overflows
 		}
 		noteSeg := ""
 		if taskOK && notes > 0 {
@@ -687,9 +685,9 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		emitFull(head + segSep + tail)
 	}
 
-	// --- Line 4: rotating tip (capped so a long tip doesn't widen the box) ---
+	// --- Line 4: rotating tip (box fitCell truncates if it overflows) ---
 	if t := tipOfMoment(time.Now()); t != "" {
-		emitFull(clip(p.sage+glyphTip+R+" "+p.dim+ansiItalic+t+R, 70))
+		emitTip(p.sage + glyphTip + R + " " + p.dim + ansiItalic + t + R)
 	}
 	flush() // size + draw the box around the collected rows
 	return nil

@@ -437,26 +437,6 @@ func TestBrandEmoji(t *testing.T) {
 	}
 }
 
-func TestTruncRunes(t *testing.T) {
-	tests := []struct {
-		in   string
-		max  int
-		want string
-	}{
-		{"short", 10, "short"},
-		{"exactfit12ch", 12, "exactfit12ch"},
-		{"truncate me please", 10, "truncate …"},
-		{"abc", 1, "…"},
-		{"abc", 0, "abc"}, // max < 1 => unchanged
-		{"日本語テキスト", 4, "日本語…"},
-	}
-	for _, tt := range tests {
-		if got := truncRunes(tt.in, tt.max); got != tt.want {
-			t.Errorf("truncRunes(%q, %d)=%q, want %q", tt.in, tt.max, got, tt.want)
-		}
-	}
-}
-
 func TestEffortColor(t *testing.T) {
 	p := paletteDark
 	// Each level must yield a distinct color; unknown falls back to dim.
