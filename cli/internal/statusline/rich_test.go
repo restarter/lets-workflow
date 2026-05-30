@@ -2,11 +2,34 @@ package statusline
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// TestInput_GitWorktreeVariants guards the lets-ds6bc regression: Claude Code
+// sends workspace.git_worktree as a STRING (the worktree path) inside a
+// worktree, not a bool. The field must NOT be decoded into a typed struct
+// field, or json.Unmarshal fails and blanks the whole statusline. All three
+// shapes (string / bool / absent) must decode without error.
+func TestInput_GitWorktreeVariants(t *testing.T) {
+	cases := []string{
+		`{"workspace":{"git_worktree":"/some/path","current_dir":"/x"}}`, // string — the crash case
+		`{"workspace":{"git_worktree":true,"current_dir":"/x"}}`,         // bool
+		`{"workspace":{"current_dir":"/x"}}`,                             // absent
+	}
+	for _, payload := range cases {
+		var in Input
+		if err := json.Unmarshal([]byte(payload), &in); err != nil {
+			t.Fatalf("git_worktree variant must not break Unmarshal: %v\n  payload: %s", err, payload)
+		}
+		if in.Workspace.CurrentDir != "/x" {
+			t.Errorf("current_dir not decoded for %s: got %q", payload, in.Workspace.CurrentDir)
+		}
+	}
+}
 
 // ----------------------------------------------------------------------------
 // Helpers

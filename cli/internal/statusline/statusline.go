@@ -37,10 +37,13 @@ type Input struct {
 		DisplayName string `json:"display_name"`
 	} `json:"model"`
 	Workspace struct {
-		CurrentDir  string `json:"current_dir"`
-		ProjectDir  string `json:"project_dir"`
-		GitWorktree bool   `json:"git_worktree"`
-		Repo        struct {
+		CurrentDir string `json:"current_dir"`
+		ProjectDir string `json:"project_dir"`
+		// NOTE: workspace.git_worktree is intentionally NOT decoded — Claude
+		// Code sends it as a STRING (the worktree path) in worktrees, not a
+		// bool, which would fail json.Unmarshal and blank the whole bar. We
+		// detect worktrees via worktree.name instead (see inWorktree).
+		Repo struct {
 			Host  string `json:"host"`
 			Owner string `json:"owner"`
 			Name  string `json:"name"`
