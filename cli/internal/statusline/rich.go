@@ -85,6 +85,7 @@ const (
 	glyphTip    = "💡"
 	glyphPR     = "⇄"
 	glyphArrow  = "→"
+	glyphFolder = "📁"
 )
 
 // growthLadder maps a monotonic session growth score (cost.total_lines_added)
@@ -241,7 +242,7 @@ func clip(s string, max int) string {
 // border will drift by a cell on lines containing a missing entry.
 var wideRunes = map[rune]bool{
 	'🌱': true, '🪴': true, '🌿': true, '🌳': true, '🌴': true, // brand ladder
-	'📋': true, '💡': true, // note, tip
+	'📋': true, '💡': true, '📁': true, // note, tip, folder
 }
 
 func runeCells(r rune) int {
@@ -634,7 +635,11 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 			prSeg += " " + p.prStateColor(in.PR.ReviewState) + in.PR.ReviewState + R
 		}
 	}
-	emitFull(brand + marker + join(p.clay+glyphBranch+" "+truncRunes(bf, branchMaxFull)+R, diffSeg, pillSeg, prSeg))
+	folderSeg := ""
+	if folder != "" && folder != "." && folder != "/" {
+		folderSeg = p.label + glyphFolder + " " + folder + R
+	}
+	emitFull(brand + marker + join(folderSeg, p.clay+glyphBranch+" "+truncRunes(bf, branchMaxFull)+R, diffSeg, pillSeg, prSeg))
 
 	// --- Line 2: budget (model + colored effort » window/5h/7d, no bars) ---
 	budget := p.gold + glyphModel + " " + ansiBold + in.Model.DisplayName + R
