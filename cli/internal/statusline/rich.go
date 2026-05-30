@@ -450,18 +450,22 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		return p.label + label + R + " " + p.threshold(pct) + strconv.Itoa(pct) + "%" + R
 	}
 
-	// ===== Min tier: two lines — brand+version / branch · window% · 5h% =====
+	// ===== Min tier: three lines — brand+version / branch / window·5h·7d % =====
 	if tier == tierMin {
 		ver := version.Version
 		if !version.IsDev() {
 			ver = "v" + ver
 		}
 		emit(p.sage + brandEmoji(in.Cost.TotalLinesAdded) + " " + ansiBold + "LETS" + R + " " + p.dim + ver + R)
-		parts := []string{p.clay + bf + R, p.threshold(winPct) + strconv.Itoa(winPct) + "%" + R}
+		emit(p.clay + bf + R)
+		g := []string{gaugeLP("window", winPct)}
 		if fiveOK {
-			parts = append(parts, p.threshold(fiveP)+strconv.Itoa(fiveP)+"%"+R)
+			g = append(g, gaugeLP("5h", fiveP))
 		}
-		emit(join(parts...))
+		if sevenOK {
+			g = append(g, gaugeLP("7d", sevenP))
+		}
+		emit(join(g...))
 		return nil
 	}
 
