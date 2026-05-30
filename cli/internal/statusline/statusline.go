@@ -113,7 +113,7 @@ type Input struct {
 // render before the IPC pipe is wired). Empty input → render with zero-value
 // Input (defaults to cwd-based detection). A blank statusline error is more
 // disruptive than missing context.
-func Render(stdin io.Reader, w io.Writer) error {
+func Render(stdin io.Reader, w io.Writer, light bool) error {
 	data, err := io.ReadAll(stdin)
 	if err != nil {
 		return fmt.Errorf("read stdin: %w", err)
@@ -160,7 +160,7 @@ func Render(stdin io.Reader, w io.Writer) error {
 				time.Now().Format("15:04:05"), os.Getenv("COLUMNS"), os.Getenv("LINES"), os.Getenv("TERM"), os.Getenv("TERM_PROGRAM"), detectWidth())
 			_ = f.Close()
 		}
-		return renderRich(w, in, branch, folder, u, detectWidth(), cacheDir)
+		return renderRich(w, in, branch, folder, u, detectWidth(), cacheDir, light)
 	}
 	return renderLines(w, in, branch, folder, u)
 }

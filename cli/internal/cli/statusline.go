@@ -20,6 +20,7 @@ func NewStatuslineCmd() *cobra.Command {
 	var (
 		fetchOnly bool
 		cacheDir  string
+		light     bool
 	)
 
 	cmd := &cobra.Command{
@@ -48,12 +49,14 @@ stdin or stdout interaction in this mode.`,
 			if fetchOnly {
 				return statusline.RunFetchOnly(cacheDir)
 			}
-			return statusline.Render(cmd.InOrStdin(), cmd.OutOrStdout())
+			return statusline.Render(cmd.InOrStdin(), cmd.OutOrStdout(), light)
 		},
 	}
 	cmd.Flags().BoolVar(&fetchOnly, "fetch-usage-only", false,
 		"Internal: refresh usage cache and exit (used by background subprocess)")
 	cmd.Flags().StringVar(&cacheDir, "cache-dir", "",
 		"Cache directory (required when --fetch-usage-only is set)")
+	cmd.Flags().BoolVar(&light, "light", false,
+		"Use the light-terminal palette (rich level only)")
 	return cmd
 }

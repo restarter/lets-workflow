@@ -13,26 +13,123 @@ import (
 	"github.com/restarter/lets-workflow/cli/internal/version"
 )
 
-// rich.go — PROTOTYPE rich statusline (lets-ds6bc), variant "B + task line".
+// rich.go — "Quiet Rails" rich statusline (lets-ds6bc), Direction A spec
+// (reference/LETS Statusline Spec.md). Behind LETS_STATUSLINE_LEVEL=rich; the
+// default compact path (renderLines, render.go) is untouched and frozen.
 //
-// 4 lines, high-signal only (the kitchen-sink dump was trimmed):
-//   1: 🌱 LETS vX » branch [worktree] · +/-diff
-//   2: Task » task-id (title) · 📝 notes (last-comment ago) · → /lets:note   (cheap cache read, no bd)
-//   3: model ·effort » ctx N% (toks) · 5h N% (reset) · 7d N% (reset)
-//   4: Tip » rotating workflow hint (loading-screen style, time-bucketed)
+// 4 lines, width-responsive (levelForWidth / spec §4):
+//   1 Identity: 🌱 LETS Workflow <ver> » branch · +A -D · [worktree] · PR
+//   2 Task:     task-id (title) · note-count age → /lets:note
+//   3 Budget:   model effort · window <bar> % · 5h <bar> % reset · 7d <bar> % reset
+//   4 Tip:      rotating workflow hint
 //
-// Gated behind LETS_STATUSLINE_LEVEL=rich; the default compact path
-// (renderLines, render.go) is untouched and frozen. NOT final — still iterating.
+// ansiReset / separatorAngle / separatorMidDot live in render.go (reused here).
 
-// detectWidth reads terminal width from the COLUMNS env var Claude Code sets
-// (CC >= 2.1.153); falls back to 80 when absent/unparseable.
+// ---- SGR attributes ----
+const (
+	ansiBold   = "\033[1m"
+	ansiItalic = "\033[3m"
+)
+
+// palette holds the resolved tokens for one terminal background (spec §1).
+// pillBg is a 48;2 background; all other fields are 38;2 foregrounds.
+type palette struct {
+	sage, clay, gold, ok, warn, alert string // accents
+	text, label, dim, sep, pillBg     string // neutrals
+}
+
+var paletteDark = palette{
+	sage:   "\033[38;2;123;166;137m",
+	clay:   "\033[38;2;207;142;128m",
+	gold:   "\033[38;2;205;166;92m",
+	ok:     "\033[38;2;127;169;139m",
+	warn:   "\033[38;2;203;162;78m",
+	alert:  "\033[38;2;201;119;107m",
+	text:   "\033[38;2;215;217;224m",
+	label:  "\033[38;2;138;143;163m",
+	dim:    "\033[38;2;91;96;114m",
+	sep:    "\033[38;2;60;65;80m",
+	pillBg: "\033[48;2;42;46;58m",
+}
+
+var paletteLight = palette{
+	sage:   "\033[38;2;78;131;105m",
+	clay:   "\033[38;2;181;112;95m",
+	gold:   "\033[38;2;169;132;47m",
+	ok:     "\033[38;2;78;131;105m",
+	warn:   "\033[38;2;169;132;47m",
+	alert:  "\033[38;2;184;91;77m",
+	text:   "\033[38;2;44;46;54m",
+	label:  "\033[38;2;107;113;133m",
+	dim:    "\033[38;2;154;159;176m",
+	sep:    "\033[38;2;213;209;198m",
+	pillBg: "\033[48;2;230;226;216m",
+}
+
+// Glyphs — universal Unicode/emoji set that renders on macOS and Linux without
+// a special font (deliberately NOT Nerd Font: no font dependency to maintain).
+// model uses ✦ (U+2726); ↻ ⇄ ⎇ are monochrome symbols, the rest are emoji.
+const (
+	glyphSprout   = "🌱"
+	glyphBranch   = "⎇"
+	glyphTask     = "☑"
+	glyphNote     = "📝"
+	glyphModel    = "✦"
+	glyphTip      = "💡"
+	glyphWorktree = "🗂"
+	glyphPR       = "⇄"
+	glyphReset    = "↻"
+	glyphArrow    = "→"
+	barFill       = "█"
+	barEmpty      = "░"
+)
+
+const barWidth = 8 // gauge cells (spec §5)
+
+// Usage thresholds, inclusive lower bound (spec §5).
+const (
+	threshMid  = 60 // pct >= 60 -> warn
+	threshHigh = 85 // pct >= 85 -> alert
+)
+
+// Width breakpoints on COLUMNS (spec §4).
+const (
+	bpFull    = 160
+	bpMid     = 110
+	bpNarrow  = 80
+	bpDefault = 80 // assumed when COLUMNS is unknown
+)
+
+// Render tiers (ascending detail).
+const (
+	tierMin = iota
+	tierNarrow
+	tierMid
+	tierFull
+)
+
+func levelForWidth(width int) int {
+	switch {
+	case width >= bpFull:
+		return tierFull
+	case width >= bpMid:
+		return tierMid
+	case width >= bpNarrow:
+		return tierNarrow
+	default:
+		return tierMin
+	}
+}
+
+// detectWidth reads terminal width from the COLUMNS env var Claude Code sets;
+// falls back to bpDefault when absent/unparseable.
 func detectWidth() int {
 	if c := strings.TrimSpace(os.Getenv("COLUMNS")); c != "" {
 		if n, err := strconv.Atoi(c); err == nil && n >= 20 && n <= 400 {
 			return n
 		}
 	}
-	return 80
+	return bpDefault
 }
 
 var ansiSGRRe = regexp.MustCompile("\x1b\\[[0-9;]*m")
@@ -40,117 +137,88 @@ var ansiSGRRe = regexp.MustCompile("\x1b\\[[0-9;]*m")
 func stripANSI(s string) string { return ansiSGRRe.ReplaceAllString(s, "") }
 func visibleWidth(s string) int { return len([]rune(stripANSI(s))) }
 
-// middleEllipsis trims to a visible-width budget. PROTOTYPE caveat: on overflow
-// it falls back to plain (ANSI-stripped) text. Lines fit on a normal terminal.
-func middleEllipsis(s string, max int) string {
-	if max <= 1 {
+// clip end-truncates to a visible-width budget, preserving ANSI escapes so the
+// kept prefix stays colored. Adds an ellipsis + reset on overflow.
+func clip(s string, max int) string {
+	if max <= 1 || visibleWidth(s) <= max {
 		return s
 	}
-	plain := []rune(stripANSI(s))
-	if len(plain) <= max {
-		return s
-	}
-	keep := max - 1
-	left := keep / 2
-	right := keep - left
-	return string(plain[:left]) + "…" + string(plain[len(plain)-right:]) + ansiReset
-}
-
-type rgb struct{ r, g, b int }
-
-func lerp(a, b rgb, t float64) rgb {
-	f := func(x, y int) int { return int(float64(x) + (float64(y)-float64(x))*t) }
-	return rgb{f(a.r, b.r), f(a.g, b.g), f(a.b, b.b)}
-}
-
-// gradientAt maps t in [0,1] across green->yellow->red, pinned to the usageColor
-// thresholds (0.5 yellow, 0.8 red) so the bar agrees with the numeric %.
-func gradientAt(t float64) rgb {
-	green, yellow, red := rgb{130, 200, 130}, rgb{255, 200, 80}, rgb{255, 100, 100}
-	switch {
-	case t < 0.5:
-		return lerp(green, yellow, t/0.5)
-	case t < 0.8:
-		return lerp(yellow, red, (t-0.5)/0.3)
-	default:
-		return red
-	}
-}
-
-func fgRGB(c rgb) string { return fmt.Sprintf("\033[38;2;%d;%d;%dm", c.r, c.g, c.b) }
-
-func gradientBar(pct float64, width int) string {
-	if width < 4 {
-		width = 4
-	}
-	filled := int(pct/100*float64(width) + 0.5)
-	if filled > width {
-		filled = width
-	}
-	if filled < 0 {
-		filled = 0
-	}
+	runes := []rune(s)
 	var b strings.Builder
-	for i := 0; i < width; i++ {
-		t := float64(i) / float64(width-1)
-		if i < filled {
-			b.WriteString(fgRGB(gradientAt(t)))
-			b.WriteString("█")
-		} else {
-			b.WriteString(ansiTanDim)
-			b.WriteString("░")
+	vis := 0
+	for i := 0; i < len(runes); {
+		if runes[i] == '\x1b' { // copy the whole \x1b[...m verbatim, uncounted
+			j := i
+			for j < len(runes) && runes[j] != 'm' {
+				j++
+			}
+			if j < len(runes) {
+				j++
+			}
+			b.WriteString(string(runes[i:j]))
+			i = j
+			continue
 		}
+		if vis >= max-1 {
+			break
+		}
+		b.WriteRune(runes[i])
+		vis++
+		i++
 	}
+	b.WriteString("…" + ansiReset)
+	return b.String()
+}
+
+// threshold maps a usage pct to its accent token (spec §5).
+func (p palette) threshold(pct int) string {
+	switch {
+	case pct >= threshHigh:
+		return p.alert
+	case pct >= threshMid:
+		return p.warn
+	default:
+		return p.ok
+	}
+}
+
+// miniBar renders the 8-cell gauge: filled cells in the threshold color, empty
+// cells in sep (spec §5 / A3).
+func (p palette) miniBar(pct int) string {
+	if pct < 0 {
+		pct = 0
+	}
+	if pct > 100 {
+		pct = 100
+	}
+	filled := (pct*barWidth + 50) / 100
+	var b strings.Builder
+	b.WriteString(p.threshold(pct))
+	b.WriteString(strings.Repeat(barFill, filled))
+	b.WriteString(p.sep)
+	b.WriteString(strings.Repeat(barEmpty, barWidth-filled))
 	b.WriteString(ansiReset)
 	return b.String()
 }
 
 var taskIDRe = regexp.MustCompile(`[a-z][a-z0-9]*-[a-z0-9]+(?:\.[0-9]+)?`)
 
-// taskIDFromBranch extracts a beads task id from the branch name, mirroring the
-// detect-task SKILL pattern <prefix>-<alphanum>[.N]. Free — no bd call.
+// taskIDFromBranch extracts a beads task id from the branch name (detect-task
+// pattern <prefix>-<alphanum>[.N]). Free — no bd call.
 func taskIDFromBranch(branch string) string {
 	b := strings.TrimPrefix(branch, "feature/")
 	b = strings.TrimPrefix(b, "worktree-")
 	return taskIDRe.FindString(b)
 }
 
-func branchKind(branch, merge string) string {
-	switch {
-	case branch == "":
-		return "none"
-	case branch == merge:
-		return "merge"
-	case strings.HasPrefix(branch, "worktree-"):
-		return "worktree"
-	case strings.HasPrefix(branch, "feature/"):
-		return "feature"
-	default:
-		return "other"
-	}
+// inWorktree reports whether we're inside a git worktree, cheaply: prefer the
+// stdin signal, fall back to the branch-name convention. No git fork.
+func inWorktree(in Input, branch string) bool {
+	return in.Worktree.Name != "" || strings.HasPrefix(branch, "worktree-")
 }
 
-func phaseHint(kind string, hasTask bool) string {
-	switch kind {
-	case "merge", "none":
-		return "/lets:start"
-	case "worktree":
-		return "/lets:done"
-	case "feature":
-		return "/lets:check"
-	default:
-		if hasTask {
-			return "/lets:check"
-		}
-		return "/lets:start"
-	}
-}
-
-func ktok(n int) string { return strconv.Itoa(n/1000) + "k" }
-
-// relAgo renders a past ISO timestamp as a compact "N min ago" / "Nh ago" /
-// "Nd ago". Empty for blank/invalid/future input. Mirrors computeDelta's parse
-// but counts backwards (stdlib time.Parse — no extra dep, Windows-safe).
+// relAgo renders a past ISO timestamp as "N min ago" / "Nh ago" / "Nd ago".
+// Empty for blank/invalid/future input.
 func relAgo(iso string) string {
 	if iso == "" {
 		return ""
@@ -186,13 +254,13 @@ func relAgo(iso string) string {
 	}
 }
 
-// readTaskStatus reads a cheap on-change cache (PROTOTYPE: written by hand;
-// real wiring = /lets:start /lets:done /lets:note). Single line:
+// readTaskStatus reads a cheap on-change cache (PROTOTYPE: written by hand; real
+// wiring = /lets:start /lets:done /lets:note). Single line:
 //
 //	<task-id>|<status>|<title>|<note-count>|<last-comment-iso>
 //
-// This is the per-render-cheap alternative to a bd network call. Returns ok=false
-// (graceful degrade) when the file is missing or the cached task != active task.
+// Returns ok=false (graceful degrade) when the file is missing or the cached
+// task != active task.
 func readTaskStatus(cacheDir, taskID string) (status, title string, notes int, lastComment string, ok bool) {
 	b, err := os.ReadFile(filepath.Join(cacheDir, "task-status"))
 	if err != nil {
@@ -216,37 +284,29 @@ func readTaskStatus(cacheDir, taskID string) (status, title string, notes int, l
 	return
 }
 
-// gitBranchIcon is the Powerline/Nerd Font git-branch glyph (needs a Nerd Font;
-// swap to "⎇" (⎇) if your terminal shows tofu). worktreeMark flags a worktree.
-const gitBranchIcon = ""
-// wtBadge is a "worktree" label shown right after the branch when inside a
-// worktree — a slate pill (cool bg, readable fg) so it stays legible without
-// competing with the branch name.
-const wtBadge = "\033[48;2;56;59;68m\033[38;2;168;174;188m worktree \033[0m"
-
-// agoBadge renders the last-comment age as dim italic grey in parens — no
-// background block; reads as passive, disabled-looking metadata.
-func agoBadge(text string) string {
-	return "\033[2;3;38;2;140;140;145m(" + text + ")\033[0m"
+// prStateColor maps pr.review_state to an accent (spec §6 / A5).
+func (p palette) prStateColor(state string) string {
+	switch state {
+	case "approved":
+		return p.ok
+	case "changes_requested":
+		return p.alert
+	default: // pending, review_required, ""
+		return p.warn
+	}
 }
 
-// inWorktree reports whether we're inside a git worktree, cheaply: prefer the
-// stdin signals (workspace.git_worktree / worktree.name), fall back to the
-// branch-name convention. No git fork.
-func inWorktree(in Input, branch string) bool {
-	return in.Workspace.GitWorktree || in.Worktree.Name != "" || strings.HasPrefix(branch, "worktree-")
+// limit resolves a rate-limit gauge: prefer the live payload, fall back to the
+// usage cache. ok=false when neither has data.
+func limit(payloadPct float64, payloadReset string, cacheP int, cacheReset string, cacheOK bool) (pct int, reset string, ok bool) {
+	if payloadPct > 0 {
+		return int(payloadPct + 0.5), payloadReset, true
+	}
+	if cacheOK {
+		return cacheP, cacheReset, true
+	}
+	return 0, "", false
 }
-
-// ansiTip styles the rotating hint line: dim italic grey, reads as a quote.
-const ansiTip = "\033[2;3;38;2;150;150;155m"
-
-// Per-line label colors (Task / Model / Tip) — distinct muted hues so the
-// left-edge label reads as a colour-coded category, not data.
-const (
-	ansiLabelTask  = "\033[38;2;140;185;150m" // muted green
-	ansiLabelModel = "\033[38;2;185;155;215m" // muted violet
-	ansiLabelTip   = "\033[38;2;140;170;205m" // steel blue
-)
 
 // tips are loading-screen-style workflow hints. tipOfMoment rotates through them
 // so the bottom line cycles as you work. English-only (written artifact).
@@ -314,135 +374,175 @@ func tipOfMoment(now time.Time) string {
 	return tips[idx]
 }
 
-// renderRich draws the 4-line "B + task line" layout. Each segment is omitted
-// when empty; each line is width-ellipsised. Never calls bd/network per render.
-func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int, cacheDir string) error {
-	const reset = ansiReset
-	sep := ansiSepGold + separatorAngle + reset
-	mid := ansiGray + separatorMidDot + reset
+// renderRich draws the width-responsive Quiet Rails layout. Never calls
+// bd/network per render.
+func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int, cacheDir string, light bool) error {
+	p := paletteDark
+	if light {
+		p = paletteLight
+	}
+	tier := levelForWidth(width)
+	R := ansiReset
+	marker := p.sage + ansiBold + separatorAngle + R // " » "
+	segSep := p.sep + separatorMidDot + R            // " · "
 
 	emit := func(line string) {
 		if visibleWidth(line) == 0 {
 			return
 		}
-		fmt.Fprintln(w, middleEllipsis(line, width))
+		fmt.Fprintln(w, clip(line, width))
 	}
-	seg := func(parts ...string) string {
-		out := parts[:0]
-		for _, p := range parts {
-			if visibleWidth(p) > 0 {
-				out = append(out, p)
+	// join concatenates non-empty parts with the " · " separator.
+	join := func(parts ...string) string {
+		kept := make([]string, 0, len(parts))
+		for _, x := range parts {
+			if visibleWidth(x) > 0 {
+				kept = append(kept, x)
 			}
 		}
-		return strings.Join(out, mid)
+		return strings.Join(kept, segSep)
 	}
 
-	// --- Line 1: header + branch ---
-	verCLI := version.Version
-	if !version.IsDev() {
-		verCLI = "v" + verCLI
-	}
+	// ----- shared values -----
 	bf := branch
 	if bf == "" {
 		bf = folder
 	}
 	if inWorktree(in, branch) {
-		bf = strings.TrimPrefix(bf, "worktree-") // the worktree pill already says it
+		bf = strings.TrimPrefix(bf, "worktree-")
 	}
-	l1 := fmt.Sprintf("%s %sLETS Workflow %s%s", leafEmoji, ansiBoldGold, verCLI, reset)
-	l1 += sep + ansiBranch + gitBranchIcon + " " + bf + reset
-	var l1r []string
-	if a, d := in.Cost.TotalLinesAdded, in.Cost.TotalLinesRemoved; a > 0 || d > 0 {
-		l1r = append(l1r, ansiGreen+fmt.Sprintf("+%d", a)+reset+ansiTanDim+"/"+reset+ansiRed+fmt.Sprintf("-%d", d)+reset)
-	}
-	if inWorktree(in, branch) {
-		l1r = append(l1r, wtBadge)
-	}
-	if r := seg(l1r...); r != "" {
-		l1 += mid + r
-	}
-	emit(l1)
-
-	// --- Line 2: active task status + notes + /lets:note (cheap cache read) ---
 	id := taskIDFromBranch(branch)
-	if id != "" {
-		_, title, notes, lastComment, ok := readTaskStatus(cacheDir, id)
-		l2 := ansiLabelTask + "Task " + reset + sep + ansiBranch + id + reset
-		if ok && title != "" {
-			l2 += " " + ansiTanDim + "(" + title + ")" + reset
-		}
-		var l2r []string
-		if ok && notes > 0 {
-			notesSeg := ansiTanDim + fmt.Sprintf("📝 %d", notes) + reset
-			if ago := relAgo(lastComment); ago != "" {
-				notesSeg += " " + agoBadge(ago)
+	_, title, notes, lastComment, taskOK := readTaskStatus(cacheDir, id)
+	winPct := int(in.ContextWindow.UsedPercentage + 0.5)
+	fiveP, fiveReset, fiveOK := limit(in.RateLimits.FiveHour.UsedPercentage, in.RateLimits.FiveHour.ResetsAt, u.fiveHour, u.fiveHourReset, u.fiveHourOK)
+	sevenP, sevenReset, sevenOK := limit(in.RateLimits.SevenDay.UsedPercentage, in.RateLimits.SevenDay.ResetsAt, u.sevenDay, u.sevenDayReset, u.sevenDayOK)
+
+	diffSeg := ""
+	if a, d := in.Cost.TotalLinesAdded, in.Cost.TotalLinesRemoved; a > 0 || d > 0 {
+		diffSeg = p.ok + "+" + strconv.Itoa(a) + R + " " + p.alert + "-" + strconv.Itoa(d) + R
+	}
+
+	// gauge variants
+	gaugeFull := func(label string, pct int, resetISO string) string {
+		s := p.label + label + R + " " + p.miniBar(pct) + " " + p.threshold(pct) + strconv.Itoa(pct) + "%" + R
+		if resetISO != "" {
+			if dl := computeDelta(resetISO); dl != "" {
+				s += " " + p.dim + glyphReset + " " + dl + R
 			}
-			l2r = append(l2r, notesSeg)
 		}
-		l2r = append(l2r, ansiTanDim+"→ /lets:note"+reset)
-		if r := seg(l2r...); r != "" {
-			l2 += mid + r
-		}
-		emit(l2)
+		return s
+	}
+	gaugeLP := func(label string, pct int) string { // label + pct, no bar
+		return p.label + label + R + " " + p.threshold(pct) + strconv.Itoa(pct) + "%" + R
 	}
 
-	// --- Line 3: Model » name · effort · ctx N% (toks) · 5h · 7d ---
-	l3 := ansiLabelModel + "Model" + reset + sep + ansiBoldOrange + in.Model.DisplayName + reset
-	var l3r []string
-	if in.Effort.Level != "" {
-		l3r = append(l3r, ansiTanDim+in.Effort.Level+reset)
-	}
-	if pct := in.ContextWindow.UsedPercentage; pct > 0 {
-		ctx := ansiTan + fmt.Sprintf("window %d%%", int(pct+0.5)) + reset
-		used := in.ContextWindow.CurrentUsage.CacheReadInputTokens +
-			in.ContextWindow.CurrentUsage.CacheCreationInputTokens +
-			in.ContextWindow.CurrentUsage.InputTokens +
-			in.ContextWindow.CurrentUsage.OutputTokens
-		if used > 0 && in.ContextWindow.ContextWindowSize > 0 {
-			ctx += " " + ansiTanDim + "(" + ktok(used) + "/" + ktok(in.ContextWindow.ContextWindowSize) + ")" + reset
+	// ===== Min tier: one line — branch · window% · 5h% =====
+	if tier == tierMin {
+		parts := []string{p.clay + bf + R, p.threshold(winPct) + strconv.Itoa(winPct) + "%" + R}
+		if fiveOK {
+			parts = append(parts, p.threshold(fiveP)+strconv.Itoa(fiveP)+"%"+R)
 		}
-		l3r = append(l3r, ctx)
+		emit(join(parts...))
+		return nil
 	}
-	fiveP, fiveReset, fiveOK := 0, "", false
-	if in.RateLimits.FiveHour.UsedPercentage > 0 {
-		fiveP, fiveReset, fiveOK = int(in.RateLimits.FiveHour.UsedPercentage+0.5), in.RateLimits.FiveHour.ResetsAt, true
-	} else if u.fiveHourOK {
-		fiveP, fiveReset, fiveOK = u.fiveHour, u.fiveHourReset, true
-	}
-	if fiveOK {
-		s := usageColor(fiveP) + fmt.Sprintf("5h %d%%", fiveP) + reset
-		if d := computeDelta(fiveReset); d != "" {
-			s += " " + ansiTanDim + "(" + d + ")" + reset
-		}
-		l3r = append(l3r, s)
-	}
-	sevenP, sevenReset, sevenOK := 0, "", false
-	if in.RateLimits.SevenDay.UsedPercentage > 0 {
-		sevenP, sevenReset, sevenOK = int(in.RateLimits.SevenDay.UsedPercentage+0.5), in.RateLimits.SevenDay.ResetsAt, true
-	} else if u.sevenDayOK {
-		sevenP, sevenReset, sevenOK = u.sevenDay, u.sevenDayReset, true
-	}
-	if sevenOK {
-		s := usageColor(sevenP) + fmt.Sprintf("7d %d%%", sevenP) + reset
-		if d := computeDelta(sevenReset); d != "" {
-			s += " " + ansiTanDim + "(" + d + ")" + reset
-		}
-		l3r = append(l3r, s)
-	}
-	if r := seg(l3r...); r != "" {
-		l3 += mid + r
-	}
-	emit(l3)
 
-	// --- Line 4: rotating workflow tip (loading-screen style) ---
+	// ===== Narrow tier: two lines =====
+	if tier == tierNarrow {
+		emit(join(p.clay+glyphBranch+" "+bf+R, diffSeg))
+		g := []string{gaugeLP("window", winPct)}
+		if fiveOK {
+			g = append(g, gaugeLP("5h", fiveP))
+		}
+		if sevenOK {
+			g = append(g, gaugeLP("7d", sevenP))
+		}
+		emit(join(g...))
+		return nil
+	}
+
+	// ===== Full / Mid tiers: four lines =====
+	full := tier == tierFull
+
+	// --- Line 1: identity ---
+	brand := p.sage + glyphSprout + " " + ansiBold + "LETS Workflow" + R
+	if full {
+		ver := version.Version
+		if !version.IsDev() {
+			ver = "v" + ver
+		}
+		brand += " " + p.dim + ver + R
+	}
+	pillSeg := ""
+	if inWorktree(in, branch) {
+		pillSeg = p.pillBg + p.label + " " + glyphWorktree + " worktree " + R
+	}
+	prSeg := ""
+	if full && in.PR.Number > 0 {
+		prSeg = p.label + glyphPR + " #" + strconv.Itoa(in.PR.Number) + R
+		if in.PR.ReviewState != "" {
+			prSeg += " " + p.prStateColor(in.PR.ReviewState) + in.PR.ReviewState + R
+		}
+	}
+	emit(brand + marker + join(p.clay+glyphBranch+" "+bf+R, diffSeg, pillSeg, prSeg))
+
+	// --- Line 2: task (dropped entirely if no active task) ---
+	if id != "" {
+		head := p.clay + glyphTask + " " + id + R
+		if taskOK && title != "" {
+			head += " " + p.text + title + R
+		}
+		noteSeg := ""
+		if taskOK && notes > 0 {
+			noteSeg = p.label + glyphNote + " " + strconv.Itoa(notes) + R
+			if full {
+				if age := relAgo(lastComment); age != "" {
+					noteSeg += " " + p.dim + age + R
+				}
+			}
+		}
+		tail := noteSeg
+		if full {
+			hint := p.sage + glyphArrow + R + " " + p.dim + "/lets:note" + R
+			if tail != "" {
+				tail += " " + hint
+			} else {
+				tail = hint
+			}
+		}
+		if tail != "" {
+			head += segSep + tail
+		}
+		emit(head)
+	}
+
+	// --- Line 3: budget ---
+	budget := p.gold + glyphModel + " " + ansiBold + in.Model.DisplayName + R
+	if full && in.Effort.Level != "" {
+		budget += " " + p.dim + in.Effort.Level + R
+	}
+	var gauges []string
+	if full {
+		gauges = append(gauges, gaugeFull("window", winPct, ""))
+		if fiveOK {
+			gauges = append(gauges, gaugeFull("5h", fiveP, fiveReset))
+		}
+		if sevenOK {
+			gauges = append(gauges, gaugeFull("7d", sevenP, sevenReset))
+		}
+	} else {
+		gauges = append(gauges, gaugeLP("window", winPct))
+		if fiveOK {
+			gauges = append(gauges, gaugeLP("5h", fiveP))
+		}
+		if sevenOK {
+			gauges = append(gauges, gaugeLP("7d", sevenP))
+		}
+	}
+	emit(budget + segSep + join(gauges...))
+
+	// --- Line 4: rotating tip ---
 	if t := tipOfMoment(time.Now()); t != "" {
-		label := ansiLabelTip + "Tip  " + reset + sep
-		body := t
-		if avail := width - visibleWidth(label); avail > 1 && len([]rune(body)) > avail {
-			body = string([]rune(body)[:avail-1]) + "…"
-		}
-		fmt.Fprintln(w, label+ansiTip+body+reset)
+		emit(p.sage + glyphTip + R + " " + p.dim + ansiItalic + t + R)
 	}
-
 	return nil
 }
