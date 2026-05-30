@@ -324,7 +324,7 @@ All plugin-generated files live under `.lets/` (gitignored); interactive worktre
 
 `/lets:init` wires the LETS statusline into `.claude/settings.json` — by default a compact 2-line bar (branch, model, context window, usage).
 
-An **experimental** rich multi-line statusline is available as opt-in (ships in a later release). It draws a bordered box with identity, budget (model + effort + usage), task, and a rotating tip line — width-responsive (Full ≥106 cols, Compact below), universal emoji glyphs (no Nerd Font needed), light/dark palettes. Enable it by pointing `settings.json` at the `--rich` flag (add `--light` for a light terminal), or set `LETS_STATUSLINE_LEVEL=rich`:
+An **experimental** rich multi-line statusline is available as opt-in (ships in a later release). It draws a bordered box with identity, budget (model + effort + usage), task, and a rotating tip line — width-responsive (Full ≥72 cols, Compact below), universal emoji glyphs (no Nerd Font needed), light/dark palettes. Enable it by pointing `settings.json` at the `--rich` flag (add `--light` for a light terminal), or set `LETS_STATUSLINE_LEVEL=rich`:
 
 ```json
 {
