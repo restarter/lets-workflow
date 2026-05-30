@@ -221,16 +221,15 @@ func cellWidth(s string) int {
 	return n
 }
 
-// fitCell returns s adjusted to exactly w terminal cells: padded with trailing
-// spaces when short, cell-accurately truncated with an ellipsis when long. ANSI
-// escapes are preserved (uncounted). Used to square off box rows.
-func fitCell(s string, w int) string {
-	cw := cellWidth(s)
-	if cw == w {
-		return s
+// clipCell cell-accurately truncates s to AT MOST w cells, appending an ellipsis
+// on overflow (no padding). Returns "" for w < 1. ANSI escapes are preserved
+// (uncounted). The truncatable flex segment of a row goes through this.
+func clipCell(s string, w int) string {
+	if w < 1 {
+		return ""
 	}
-	if cw < w {
-		return s + strings.Repeat(" ", w-cw)
+	if cellWidth(s) <= w {
+		return s
 	}
 	runes := []rune(s)
 	var b strings.Builder
@@ -257,10 +256,36 @@ func fitCell(s string, w int) string {
 		i++
 	}
 	b.WriteString("…" + ansiReset)
-	for cellWidth(b.String()) < w { // a broken-before-wide-rune can leave a gap
-		b.WriteString(" ")
-	}
 	return b.String()
+}
+
+// fitCell adjusts s to EXACTLY w terminal cells: pad short with trailing spaces,
+// clip long with clipCell. ANSI escapes preserved. Used to square off box rows.
+func fitCell(s string, w int) string {
+	cw := cellWidth(s)
+	if cw < w {
+		return s + strings.Repeat(" ", w-cw)
+	}
+	if cw == w {
+		return s
+	}
+	out := clipCell(s, w)
+	for cellWidth(out) < w { // a broken-before-wide-rune can leave a gap
+		out += " "
+	}
+	return out
+}
+
+// richRow is one box line. A plain row drives the box width and is fit whole.
+// A flex row has a fixed prefix + suffix and a truncatable middle that absorbs
+// overflow — so a long task title shrinks before the notes/age/hint suffix is
+// lost — and it does NOT drive the box width.
+type richRow struct {
+	plain  string // plain row: the whole line (drives box width)
+	prefix string // flex row: fixed left
+	mid    string // flex row: truncatable middle (shrinks first)
+	suffix string // flex row: fixed right
+	flex   bool   // true => flex row (does not drive width)
 }
 
 // threshold maps a usage pct to its accent token (spec §5).
@@ -453,34 +478,32 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	// is sized to the widest row (capped to fullMaxLine and width-4) so the right
 	// border sits just past the longest line, not at a fixed column. Cell-
 	// accurate (fitCell) so the border aligns despite double-width emoji.
-	var rows []string
+	var rows []richRow
 	dividerAfter := -1
-	noSize := map[int]bool{}
 	emit := func(line string) {
 		if visibleWidth(line) == 0 {
 			return
 		}
-		rows = append(rows, line)
+		rows = append(rows, richRow{plain: line})
 	}
-	// emitFlex appends a row that does NOT drive the box width — the task title
-	// and the rotating tip. The box is sized only by the stable structural rows
-	// (identity + budget/gauges); a long title or a rotating tip is fitCell'd
-	// into that width instead of stretching or resizing the box.
-	emitFlex := func(line string) {
-		if visibleWidth(line) == 0 {
+	// emitFlex appends a flex row (prefix + truncatable mid + suffix): the box is
+	// sized only by the plain rows (identity + budget/gauges), and at flush the
+	// mid is clipped so prefix+mid+suffix fits the box. The title (mid) shrinks
+	// first; the id (prefix) and the notes/age/hint (suffix) stay in the frame.
+	emitFlex := func(prefix, mid, suffix string) {
+		if visibleWidth(prefix)+visibleWidth(mid)+visibleWidth(suffix) == 0 {
 			return
 		}
-		rows = append(rows, line)
-		noSize[len(rows)-1] = true
+		rows = append(rows, richRow{prefix: prefix, mid: mid, suffix: suffix, flex: true})
 	}
 	rule := func() { dividerAfter = len(rows) - 1 } // ├ divider after the last row so far
 	flush := func() {
 		boxW := 1
-		for i, r := range rows {
-			if noSize[i] {
+		for _, r := range rows {
+			if r.flex {
 				continue // title/tip fit the box; they never set its width
 			}
-			if cw := cellWidth(r); cw > boxW {
+			if cw := cellWidth(r.plain); cw > boxW {
 				boxW = cw
 			}
 		}
@@ -493,12 +516,19 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		if boxW < 1 {
 			boxW = 1
 		}
+		renderRow := func(r richRow) string {
+			if !r.flex {
+				return fitCell(r.plain, boxW)
+			}
+			budget := boxW - cellWidth(r.prefix) - cellWidth(r.suffix)
+			return fitCell(r.prefix+clipCell(r.mid, budget)+r.suffix, boxW)
+		}
 		border := func(left, right string) {
 			fmt.Fprintln(w, p.sep+left+strings.Repeat("─", boxW+2)+right+R)
 		}
 		border("┌", "┐")
 		for i, r := range rows {
-			fmt.Fprintln(w, p.sep+"│ "+R+fitCell(r, boxW)+p.sep+" │"+R)
+			fmt.Fprintln(w, p.sep+"│ "+R+renderRow(r)+p.sep+" │"+R)
 			if i == dividerAfter {
 				border("├", "┤")
 			}
@@ -574,19 +604,19 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 			g = append(g, gaugeCompact("7d", sevenP, sevenReset))
 		}
 		emit(join(g...))
-		// Line 3: task — id + title (notes/age/hint dropped to save width). emitFlex:
-		// the title is fitCell'd to the box at flush; it doesn't widen the box.
+		// Line 3: task — id (prefix) + title (truncatable mid). notes/age/hint
+		// dropped in Compact to save width.
 		if id != "" {
 			rule() // tee divider between gauges and task
-			head := p.clay + glyphTask + " " + id + R
+			mid := ""
 			if taskOK && title != "" {
-				head += " " + p.text + title + R
+				mid = " " + p.text + title + R
 			}
-			emitFlex(head)
+			emitFlex(p.clay+glyphTask+" "+id+R, mid, "")
 		}
-		// Line 4: rotating tip — emitFlex (fitCell'd to the box, never widens it).
+		// Line 4: rotating tip — glyph (prefix) + text (truncatable mid).
 		if t := tipOfMoment(time.Now()); t != "" {
-			emitFlex(p.sage + glyphTip + R + " " + p.dim + ansiItalic + t + R)
+			emitFlex(p.sage+glyphTip+R+" ", p.dim+ansiItalic+t+R, "")
 		}
 		flush() // size + draw the box around the collected rows
 		return nil
@@ -639,13 +669,13 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	}
 	emitFull(budget + marker + join(gauges...))
 
-	// --- Line 3: task (emitFlex — title is fitCell'd to the box, never widens it;
-	//     dropped entirely if no active task) ---
+	// --- Line 3: task — id (prefix) + title (truncatable mid) + notes/age/hint
+	//     (suffix, always kept). Dropped entirely if no active task. ---
 	if id != "" {
 		rule() // tee divider between budget and task
-		head := p.clay + glyphTask + " " + id + R
+		mid := ""
 		if taskOK && title != "" {
-			head += " " + p.text + title + R
+			mid = " " + p.text + title + R
 		}
 		noteSeg := ""
 		if taskOK && notes > 0 {
@@ -659,12 +689,12 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		if noteSeg != "" {
 			tail = noteSeg + " " + hint
 		}
-		emitFlex(head + segSep + tail)
+		emitFlex(p.clay+glyphTask+" "+id+R, mid, segSep+tail)
 	}
 
-	// --- Line 4: rotating tip — emitFlex (fitCell'd to the box, never widens it) ---
+	// --- Line 4: rotating tip — glyph (prefix) + text (truncatable mid) ---
 	if t := tipOfMoment(time.Now()); t != "" {
-		emitFlex(p.sage + glyphTip + R + " " + p.dim + ansiItalic + t + R)
+		emitFlex(p.sage+glyphTip+R+" ", p.dim+ansiItalic+t+R, "")
 	}
 	flush() // size + draw the box around the collected rows
 	return nil
