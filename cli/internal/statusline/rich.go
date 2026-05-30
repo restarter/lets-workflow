@@ -624,14 +624,18 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 
 	// --- Line 1: identity (branch truncated so the line stays under the cap) ---
 	brand := p.sage + brandEmoji(in.Cost.TotalLinesAdded) + " " + ansiBold + "LETS Workflow" + R + " " + p.dim + ver + R
-	// Location segment right after the marker: the worktree pill when inside a
-	// worktree (its name == branch, so the cwd path would be redundant), else
-	// the cwd folder.
-	locSeg := ""
+	// Location badge right after the marker: a "📁 <name>" pill, where name is
+	// "worktree" inside a worktree (its name == branch, so the cwd path would be
+	// redundant) or the cwd folder otherwise. One universal folder badge.
+	locName := ""
 	if inWorktree(in, branch) {
-		locSeg = p.pillBg + p.label + " worktree " + R
+		locName = "worktree"
 	} else if folder != "" && folder != "." && folder != "/" {
-		locSeg = p.label + glyphFolder + " " + folder + R
+		locName = folder
+	}
+	locSeg := ""
+	if locName != "" {
+		locSeg = p.pillBg + p.label + " " + glyphFolder + " " + locName + " " + R
 	}
 	prSeg := ""
 	if in.PR.Number > 0 {
