@@ -2,6 +2,8 @@ package statusline
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -139,6 +141,46 @@ func writeUsageCache(path string, u usage) error {
 		return err
 	}
 	return os.Rename(tmp, path)
+}
+
+// flexISO decodes a reset timestamp that may arrive as either a JSON string
+// (ISO-8601, like the Anthropic usage API) or a JSON number (Unix epoch, like
+// Claude Code's statusline payload). Decoding NEVER fails the surrounding
+// payload: anything unrecognized normalizes to "" — the gauge's reset timer is
+// just omitted, the same graceful path as a missing field. This guards the
+// class of bug where one variable-typed field blanks the entire bar (cf. the
+// git_worktree string/bool case).
+type flexISO string
+
+func (f *flexISO) UnmarshalJSON(b []byte) error {
+	*f = flexISO(parseFlexISO(b))
+	return nil
+}
+
+// parseFlexISO converts a raw JSON token (string | number | null) to an ISO
+// string, or "" when it can't. A number is treated as a Unix epoch; seconds
+// (~1.7e9) vs milliseconds (~1.7e12) are disambiguated by magnitude.
+func parseFlexISO(b []byte) string {
+	b = bytes.TrimSpace(b)
+	if len(b) == 0 || string(b) == "null" {
+		return ""
+	}
+	if b[0] == '"' {
+		var s string
+		if err := json.Unmarshal(b, &s); err != nil {
+			return ""
+		}
+		return s
+	}
+	var n float64
+	if err := json.Unmarshal(b, &n); err != nil || n <= 0 {
+		return ""
+	}
+	sec := int64(n)
+	if sec >= 1_000_000_000_000 { // >= 1e12 → milliseconds
+		sec /= 1000
+	}
+	return time.Unix(sec, 0).UTC().Format("2006-01-02T15:04:05Z")
 }
 
 // parseISO normalizes an ISO-8601 timestamp — strips fractional seconds, a

@@ -82,11 +82,15 @@ type Input struct {
 	RateLimits struct {
 		FiveHour struct {
 			UsedPercentage float64 `json:"used_percentage"`
-			ResetsAt       string  `json:"resets_at"`
+			// resets_at is flexISO, not string: Claude Code's statusline payload
+			// sends it as a NUMBER (Unix epoch), while the Anthropic usage API
+			// sends an ISO string. A plain string field fails json.Unmarshal on
+			// the number and blanks the whole bar (same class as git_worktree).
+			ResetsAt flexISO `json:"resets_at"`
 		} `json:"five_hour"`
 		SevenDay struct {
 			UsedPercentage float64 `json:"used_percentage"`
-			ResetsAt       string  `json:"resets_at"`
+			ResetsAt       flexISO `json:"resets_at"`
 		} `json:"seven_day"`
 	} `json:"rate_limits"`
 	Vim struct {

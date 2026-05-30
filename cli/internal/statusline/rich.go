@@ -426,8 +426,8 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	id := taskIDFromBranch(branch)
 	title, notes, lastComment, taskOK := readTaskStatus(cacheDir, id)
 	winPct := int(in.ContextWindow.UsedPercentage + 0.5)
-	fiveP, fiveReset, fiveOK := limit(in.RateLimits.FiveHour.UsedPercentage, in.RateLimits.FiveHour.ResetsAt, u.fiveHour, u.fiveHourReset, u.fiveHourOK)
-	sevenP, sevenReset, sevenOK := limit(in.RateLimits.SevenDay.UsedPercentage, in.RateLimits.SevenDay.ResetsAt, u.sevenDay, u.sevenDayReset, u.sevenDayOK)
+	fiveP, fiveReset, fiveOK := limit(in.RateLimits.FiveHour.UsedPercentage, string(in.RateLimits.FiveHour.ResetsAt), u.fiveHour, u.fiveHourReset, u.fiveHourOK)
+	sevenP, sevenReset, sevenOK := limit(in.RateLimits.SevenDay.UsedPercentage, string(in.RateLimits.SevenDay.ResetsAt), u.sevenDay, u.sevenDayReset, u.sevenDayOK)
 
 	diffSeg := ""
 	if a, d := in.Cost.TotalLinesAdded, in.Cost.TotalLinesRemoved; a > 0 || d > 0 {

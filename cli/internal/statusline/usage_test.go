@@ -1,6 +1,7 @@
 package statusline
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -144,5 +145,47 @@ func TestValidateISO(t *testing.T) {
 		if got := validateISO(tt.in); got != tt.want {
 			t.Errorf("validateISO(%q): got %q, want %q", tt.in, got, tt.want)
 		}
+	}
+}
+
+func TestParseFlexISO(t *testing.T) {
+	// Future epoch (seconds) used by the number-path cases.
+	const sec = int64(1780000000) // 2026-05-28T...Z, deterministic
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"iso string passthrough", `"2026-05-30T18:50:07Z"`, "2026-05-30T18:50:07Z"},
+		{"empty string", `""`, ""},
+		{"null", `null`, ""},
+		{"zero number", `0`, ""},
+		{"negative number", `-5`, ""},
+		{"garbage", `{"x":1}`, ""},
+		{"epoch seconds", `1780000000`, time.Unix(sec, 0).UTC().Format("2006-01-02T15:04:05Z")},
+		{"epoch milliseconds", `1780000000000`, time.Unix(sec, 0).UTC().Format("2006-01-02T15:04:05Z")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := parseFlexISO([]byte(tt.in)); got != tt.want {
+				t.Errorf("parseFlexISO(%s)=%q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFlexISO_UnmarshalNeverFailsPayload(t *testing.T) {
+	// The whole point: a number in resets_at must not fail the surrounding
+	// json.Unmarshal. Decode a minimal payload with a numeric resets_at.
+	var in Input
+	raw := []byte(`{"rate_limits":{"five_hour":{"resets_at":1780000000},"seven_day":{"resets_at":"2026-05-30T00:00:00Z"}}}`)
+	if err := json.Unmarshal(raw, &in); err != nil {
+		t.Fatalf("unmarshal should not fail on numeric resets_at: %v", err)
+	}
+	if in.RateLimits.FiveHour.ResetsAt == "" {
+		t.Error("numeric resets_at should decode to a non-empty ISO")
+	}
+	if string(in.RateLimits.SevenDay.ResetsAt) != "2026-05-30T00:00:00Z" {
+		t.Errorf("string resets_at passthrough failed: %q", in.RateLimits.SevenDay.ResetsAt)
 	}
 }
