@@ -549,3 +549,25 @@ func TestRenderRich_TierContent(t *testing.T) {
 		}
 	}
 }
+
+// TestRenderRich_FlexTitleKeepsSuffix: a long task title must clip (…) while the
+// note-count + hint suffix stays inside the box, not get eaten by the title.
+func TestRenderRich_FlexTitleKeepsSuffix(t *testing.T) {
+	long := "lets-ds6bc|" + strings.Repeat("very long title segment ", 8) + "|9|2099-01-01T00:00:00Z"
+	dir := writeTaskStatus(t, long)
+	branch := "feature/lets-ds6bc-statusline-2-0"
+	var buf bytes.Buffer
+	if err := renderRich(&buf, richTestInput(), branch, "folder", usage{}, 120, dir, false); err != nil {
+		t.Fatalf("renderRich: %v", err)
+	}
+	plain := stripANSI(buf.String())
+	if !strings.Contains(plain, "…") {
+		t.Errorf("long title should be clipped with an ellipsis:\n%s", plain)
+	}
+	if !strings.Contains(plain, "/lets:note") {
+		t.Errorf("suffix (→ /lets:note) must survive a long title:\n%s", plain)
+	}
+	if !strings.Contains(plain, "📋 9") {
+		t.Errorf("note count must survive a long title:\n%s", plain)
+	}
+}
