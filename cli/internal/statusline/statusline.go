@@ -163,6 +163,15 @@ func Render(stdin io.Reader, w io.Writer, light, rich bool) error {
 		// it, so the trigger lives in this branch. The id is free (branch name);
 		// the bd call happens in the detached child, never inline.
 		if id := taskIDFromBranch(branch); id != "" && !taskStatusFresh(cacheDir, id, taskStatusTTL) {
+			// On a task SWITCH (cached id differs) the cache holds no data for
+			// this id, so without a debounce every render in the fetch window
+			// re-spawns bd. Write an id-only placeholder first: it renders
+			// immediately and reads "fresh", collapsing the burst to one fetch.
+			// On a same-id TTL refresh we skip the placeholder to keep showing
+			// the stale-but-real title while bd refreshes.
+			if cachedTaskID(cacheDir) != id {
+				_ = writeTaskStatusPlaceholder(cacheDir, id)
+			}
 			spawnBackgroundTaskFetch(cacheDir, id)
 		}
 		return renderRich(w, in, branch, folder, u, detectWidth(), cacheDir, light)

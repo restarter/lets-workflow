@@ -37,6 +37,28 @@ func taskStatusFresh(cacheDir, taskID string, ttl time.Duration) bool {
 	return id == taskID
 }
 
+// cachedTaskID returns the task id recorded in the cache, or "" if absent.
+func cachedTaskID(cacheDir string) string {
+	b, err := os.ReadFile(filepath.Join(cacheDir, "task-status"))
+	if err != nil {
+		return ""
+	}
+	id, _, _ := strings.Cut(strings.TrimSpace(string(b)), "|")
+	return id
+}
+
+// writeTaskStatusPlaceholder writes an id-only cache line (empty title/notes)
+// so a just-switched-to task renders immediately as id-only AND the cache reads
+// "fresh" for this id — debouncing the detached bd fetch to a single in-flight
+// call instead of re-spawning one per render until bd returns. The real fetch
+// overwrites it with the title when it completes.
+func writeTaskStatusPlaceholder(cacheDir, taskID string) error {
+	if err := os.MkdirAll(cacheDir, 0o700); err != nil {
+		return err
+	}
+	return writeTaskStatusCache(filepath.Join(cacheDir, "task-status"), taskID+"||")
+}
+
 // bdIssue is the subset of `bd show <id> --json` we consume. The command emits
 // a single-element array with comments embedded, so one bd call covers title +
 // note count + last-comment timestamp.
@@ -68,12 +90,21 @@ func taskStatusLine(taskID string, bdShowJSON []byte) (string, error) {
 	return taskID + "|" + sanitizeField(it.Title) + "|" + strconv.Itoa(notes) + "|" + lastISO, nil
 }
 
-// sanitizeField strips the cache's structural characters (the "|" delimiter and
-// newlines) from a free-text field so a title can't corrupt the single-line,
-// pipe-delimited format.
+// sanitizeField neutralizes a free-text field (a bd task title) before it is
+// cached and later rendered raw to the terminal. It folds the "|" delimiter to
+// "/" (so it can't corrupt the pipe-delimited cache line) and replaces EVERY C0
+// control byte (< 0x20 — including ESC/CR/LF) plus DEL with a space, so a title
+// from the shared multi-writer tracker can't smuggle terminal escape sequences
+// (cursor moves, screen clears, title/clipboard OSC) onto the statusline.
 func sanitizeField(s string) string {
-	r := strings.NewReplacer("|", "/", "\n", " ", "\r", " ")
-	return strings.TrimSpace(r.Replace(s))
+	s = strings.ReplaceAll(s, "|", "/")
+	s = strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return ' '
+		}
+		return r
+	}, s)
+	return strings.TrimSpace(s)
 }
 
 // fetchAndCacheTaskStatus runs `bd show <id> --json` and writes the derived

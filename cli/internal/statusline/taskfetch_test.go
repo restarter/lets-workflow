@@ -76,11 +76,43 @@ func TestSanitizeField(t *testing.T) {
 		{"carriage\rreturn", "carriage return"},
 		{"  trim me  ", "trim me"},
 		{"", ""},
+		// Terminal-escape injection: ESC + C0 controls + DEL all fold to space.
+		{"evil\x1b[2Jclear", "evil [2Jclear"},
+		{"osc\x1b]0;pwn\x07end", "osc ]0;pwn end"},
+		{"tab\there", "tab here"},
+		{"del\x7fbyte", "del byte"},
 	}
 	for _, tt := range tests {
 		if got := sanitizeField(tt.in); got != tt.want {
 			t.Errorf("sanitizeField(%q)=%q, want %q", tt.in, got, tt.want)
 		}
+		// Hard invariant: no C0 control byte or DEL survives.
+		for _, r := range sanitizeField(tt.in) {
+			if r < 0x20 || r == 0x7f {
+				t.Errorf("sanitizeField(%q) leaked control byte %U", tt.in, r)
+			}
+		}
+	}
+}
+
+func TestWriteTaskStatusPlaceholder(t *testing.T) {
+	dir := t.TempDir()
+	if got := cachedTaskID(dir); got != "" {
+		t.Errorf("empty cache: cachedTaskID=%q, want empty", got)
+	}
+	if err := writeTaskStatusPlaceholder(dir, "lets-ds6bc"); err != nil {
+		t.Fatalf("placeholder: %v", err)
+	}
+	if got := cachedTaskID(dir); got != "lets-ds6bc" {
+		t.Errorf("cachedTaskID=%q, want lets-ds6bc", got)
+	}
+	// Placeholder is fresh for its id (debounce) and renders as id-only.
+	if !taskStatusFresh(dir, "lets-ds6bc", taskStatusTTL) {
+		t.Error("placeholder should read fresh for its own id")
+	}
+	title, notes, comment, ok := readTaskStatus(dir, "lets-ds6bc")
+	if !ok || title != "" || notes != 0 || comment != "" {
+		t.Errorf("placeholder should be id-only: ok=%v title=%q notes=%d comment=%q", ok, title, notes, comment)
 	}
 }
 
