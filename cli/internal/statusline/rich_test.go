@@ -156,10 +156,10 @@ func TestRenderRich_TierLineCounts(t *testing.T) {
 		width     int
 		wantLines int
 	}{
-		{"Full", bpWide, 4},     // identity, task, budget, tip
-		{"Compact-wide", 95, 4}, // identity, task, gauges, tip
-		{"Compact-70", 70, 4},   // identity, task, gauges, tip
-		{"Compact-45", 45, 4},   // identity, task, gauges, tip
+		{"Full", bpWide, 5},     // identity, budget, divider, task, tip
+		{"Compact-wide", 95, 5}, // identity, gauges, divider, task, tip
+		{"Compact-70", 70, 5},   // identity, gauges, divider, task, tip
+		{"Compact-45", 45, 5},   // identity, gauges, divider, task, tip
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

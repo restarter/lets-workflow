@@ -414,11 +414,28 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	marker := p.sage + ansiBold + separatorAngle + R // " » "
 	segSep := p.sep + separatorMidDot + R            // " · "
 
+	// Left frame (variant B): every line is prefixed with a "│ " gutter; a
+	// "├──" tee separates the budget block from the task block. The gutter eats
+	// 2 cells, so content clips to width-2.
+	gutter := p.sep + "│ " + R
+	contentMax := width - 2
 	emit := func(line string) {
 		if visibleWidth(line) == 0 {
 			return
 		}
-		fmt.Fprintln(w, clip(line, width))
+		fmt.Fprintln(w, gutter+clip(line, contentMax))
+	}
+	// rule emits the "├───" tee divider sized to the content width (capped to
+	// fullMaxLine so a wide terminal doesn't draw a 200-dash rule).
+	rule := func() {
+		n := contentMax
+		if n > fullMaxLine {
+			n = fullMaxLine
+		}
+		if n < 1 {
+			return
+		}
+		fmt.Fprintln(w, p.sep+"├"+strings.Repeat("─", n)+R)
 	}
 	// join concatenates non-empty parts with the " · " separator.
 	join := func(parts ...string) string {
@@ -491,6 +508,7 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		emit(join(g...))
 		// Line 3: task — id only (no title), notes + age + hint. Dropped if no task.
 		if id != "" {
+			rule() // tee divider between gauges and task
 			noteSeg := ""
 			if taskOK && notes > 0 {
 				noteSeg = p.label + glyphNote + " " + strconv.Itoa(notes) + R
@@ -556,6 +574,7 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 
 	// --- Line 3: task (title truncated; dropped entirely if no active task) ---
 	if id != "" {
+		rule() // tee divider between budget and task
 		head := p.clay + glyphTask + " " + id + R
 		if taskOK && title != "" {
 			head += " " + p.text + truncRunes(title, titleMaxFull) + R
