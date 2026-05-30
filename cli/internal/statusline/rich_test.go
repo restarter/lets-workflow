@@ -451,3 +451,45 @@ func TestBrandEmoji(t *testing.T) {
 		}
 	}
 }
+
+func TestTruncRunes(t *testing.T) {
+	tests := []struct {
+		in   string
+		max  int
+		want string
+	}{
+		{"short", 10, "short"},
+		{"exactfit12ch", 12, "exactfit12ch"},
+		{"truncate me please", 10, "truncate …"},
+		{"abc", 1, "…"},
+		{"abc", 0, "abc"}, // max < 1 => unchanged
+		{"日本語テキスト", 4, "日本語…"},
+	}
+	for _, tt := range tests {
+		if got := truncRunes(tt.in, tt.max); got != tt.want {
+			t.Errorf("truncRunes(%q, %d)=%q, want %q", tt.in, tt.max, got, tt.want)
+		}
+	}
+}
+
+func TestEffortColor(t *testing.T) {
+	p := paletteDark
+	// Each level must yield a distinct color; unknown falls back to dim.
+	levels := []string{"low", "medium", "high", "xhigh", "max"}
+	seen := map[string]string{}
+	for _, l := range levels {
+		c := p.effortColor(l)
+		if c == "" {
+			t.Errorf("effortColor(%q) empty", l)
+		}
+		for prev, pc := range seen {
+			if pc == c {
+				t.Errorf("effortColor(%q) collides with %q: %q", l, prev, c)
+			}
+		}
+		seen[l] = c
+	}
+	if p.effortColor("bogus") != p.dim {
+		t.Errorf("unknown effort should be dim")
+	}
+}

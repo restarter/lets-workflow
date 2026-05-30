@@ -77,7 +77,6 @@ const (
 	glyphModel  = "✦"
 	glyphTip    = "💡"
 	glyphPR     = "⇄"
-	glyphReset  = "↻"
 	glyphArrow  = "→"
 	barFill     = "█"
 	barEmpty    = "░"
@@ -127,6 +126,49 @@ const (
 	bpWide    = 106    // Full at >= this; Compact below
 	bpDefault = bpWide // DEC-2: COLUMNS confirmed passed by CC; fail open to Full when it is somehow absent
 )
+
+// Full-tier length caps (visible runes). Full only renders at >= bpWide, but we
+// still bound every line to ~100 so a wide terminal doesn't stretch the bar full
+// width; branch/title are truncated first so the trailing segments survive.
+const (
+	fullMaxLine   = 100 // hard cap per Full line
+	branchMaxFull = 30  // branch truncated to this in Full line 1
+	titleMaxFull  = 48  // task title truncated to this in Full line 2
+)
+
+// truncRunes end-truncates a PLAIN (un-colored) string to max runes, appending
+// an ellipsis on overflow. Used to bound branch/title before they're colored.
+func truncRunes(s string, max int) string {
+	r := []rune(s)
+	if max < 1 || len(r) <= max {
+		return s
+	}
+	if max == 1 {
+		return "…"
+	}
+	return string(r[:max-1]) + "…"
+}
+
+// effortColor maps an effort level to a color mirroring the /effort picker
+// gradient (faster→smarter): low gold, medium green, high blue, xhigh purple,
+// max/ultra red. Blue/purple aren't palette tokens (the palette is earthy), so
+// they're fixed mid-tones that read on both backgrounds. Unknown → dim.
+func (p palette) effortColor(level string) string {
+	switch level {
+	case "low":
+		return p.gold
+	case "medium":
+		return p.ok
+	case "high":
+		return "\033[38;2;108;153;217m" // blue
+	case "xhigh":
+		return "\033[38;2;176;130;217m" // purple
+	case "max", "ultra", "ultracode":
+		return p.alert
+	default:
+		return p.dim
+	}
+}
 
 // Render tiers.
 const (
@@ -427,11 +469,11 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	}
 
 	// gauge variants
-	gaugeFull := func(label string, pct int, resetISO string) string { // label + bar + pct + ↻ timer (Full)
+	gaugeFull := func(label string, pct int, resetISO string) string { // label + bar + pct + compact timer (Full)
 		s := p.label + label + R + " " + p.miniBar(pct) + " " + p.threshold(pct) + strconv.Itoa(pct) + "%" + R
 		if resetISO != "" {
-			if dl := computeDelta(resetISO); dl != "" {
-				s += " " + p.dim + glyphReset + " " + dl + R
+			if dl := computeDeltaCompact(resetISO); dl != "" {
+				s += " " + p.dim + dl + R
 			}
 		}
 		return s
@@ -439,7 +481,7 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	gaugeCompact := func(label string, pct int, resetISO string) string { // label + pct + timer, no bar (Compact)
 		s := p.label + label + R + " " + p.threshold(pct) + strconv.Itoa(pct) + "%" + R
 		if resetISO != "" {
-			if dl := computeDelta(resetISO); dl != "" {
+			if dl := computeDeltaCompact(resetISO); dl != "" {
 				s += " " + p.dim + dl + R
 			}
 		}
@@ -492,8 +534,10 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		return nil
 	}
 
-	// ===== Full tier: 4 lines, everything =====
-	// --- Line 1: identity ---
+	// ===== Full tier: 4 lines, everything (each capped to fullMaxLine) =====
+	emitFull := func(line string) { emit(clip(line, fullMaxLine)) }
+
+	// --- Line 1: identity (branch truncated so the line stays under the cap) ---
 	brand := p.sage + brandEmoji(in.Cost.TotalLinesAdded) + " " + ansiBold + "LETS Workflow" + R + " " + p.dim + ver + R
 	pillSeg := ""
 	if inWorktree(in, branch) {
@@ -506,13 +550,13 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 			prSeg += " " + p.prStateColor(in.PR.ReviewState) + in.PR.ReviewState + R
 		}
 	}
-	emit(brand + marker + join(p.clay+glyphBranch+" "+bf+R, diffSeg, pillSeg, prSeg))
+	emitFull(brand + marker + join(p.clay+glyphBranch+" "+truncRunes(bf, branchMaxFull)+R, diffSeg, pillSeg, prSeg))
 
-	// --- Line 2: task (dropped entirely if no active task) ---
+	// --- Line 2: task (title truncated; dropped entirely if no active task) ---
 	if id != "" {
 		head := p.clay + glyphTask + " " + id + R
 		if taskOK && title != "" {
-			head += " " + p.text + title + R
+			head += " " + p.text + truncRunes(title, titleMaxFull) + R
 		}
 		noteSeg := ""
 		if taskOK && notes > 0 {
@@ -526,13 +570,13 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		if noteSeg != "" {
 			tail = noteSeg + " " + hint
 		}
-		emit(head + segSep + tail)
+		emitFull(head + segSep + tail)
 	}
 
-	// --- Line 3: budget (model + effort + 3 gauges with bars + timers) ---
+	// --- Line 3: budget (model + colored effort + 3 gauges with bars + timers) ---
 	budget := p.gold + glyphModel + " " + ansiBold + in.Model.DisplayName + R
 	if in.Effort.Level != "" {
-		budget += " " + p.dim + in.Effort.Level + R
+		budget += " " + p.effortColor(in.Effort.Level) + in.Effort.Level + R
 	}
 	gauges := []string{gaugeFull("window", winPct, "")}
 	if fiveOK {
@@ -541,11 +585,11 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	if sevenOK {
 		gauges = append(gauges, gaugeFull("7d", sevenP, sevenReset))
 	}
-	emit(budget + segSep + join(gauges...))
+	emitFull(budget + segSep + join(gauges...))
 
 	// --- Line 4: rotating tip ---
 	if t := tipOfMoment(time.Now()); t != "" {
-		emit(p.sage + glyphTip + R + " " + p.dim + ansiItalic + t + R)
+		emitFull(p.sage + glyphTip + R + " " + p.dim + ansiItalic + t + R)
 	}
 	return nil
 }

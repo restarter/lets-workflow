@@ -210,6 +210,32 @@ func parseISO(iso string) (time.Time, bool) {
 	return t, true
 }
 
+// computeDeltaCompact is computeDelta without the inner space — "1h52m",
+// "4d22h", "45m" — for the dense rich gauges. computeDelta keeps its spaced form
+// because the frozen compact statusline path (render.go) depends on it
+// byte-for-byte.
+func computeDeltaCompact(iso string) string {
+	t, ok := parseISO(iso)
+	if !ok {
+		return ""
+	}
+	diff := time.Until(t)
+	if diff <= 0 {
+		return "now"
+	}
+	days := int(diff.Hours()) / 24
+	hours := int(diff.Hours()) % 24
+	minutes := int(diff.Minutes()) % 60
+	switch {
+	case days > 0:
+		return fmt.Sprintf("%dd%dh", days, hours)
+	case hours > 0:
+		return fmt.Sprintf("%dh%dm", hours, minutes)
+	default:
+		return fmt.Sprintf("%dm", minutes)
+	}
+}
+
 // computeDelta returns human-readable time-until-reset (e.g. "2d 3h", "45m").
 // Empty for invalid timestamps, "now" for past/elapsed.
 func computeDelta(iso string) string {
