@@ -17,11 +17,18 @@ import (
 // (reference/LETS Statusline Spec.md). Behind LETS_STATUSLINE_LEVEL=rich; the
 // default compact path (renderLines, render.go) is untouched and frozen.
 //
-// 4 lines, width-responsive (levelForWidth / spec §4):
-//   1 Identity: 🌱 LETS Workflow <ver> » branch · +A -D · [worktree] · PR
-//   2 Task:     task-id (title) · note-count age → /lets:note
-//   3 Budget:   model effort · window <bar> % · 5h <bar> % reset · 7d <bar> % reset
-//   4 Tip:      rotating workflow hint
+// Two tiers (levelForWidth): Full (>= bpWide) and Compact (below), both wrapped
+// in a closed box frame (┌─┐ / │ / ├─┤ / └─┘) sized cell-accurately (fitCell)
+// so the right border aligns despite double-width emoji. Layout:
+//   ┌──────────────────────────────────────────────────────────┐
+//   │ <plant> LETS[ Workflow] <ver> » branch · +A -D · [pill] · PR │  identity
+//   │ <model> <effort> » window % (used/total) · 5h % (Δ) · 7d % (Δ) │  budget
+//   ├──────────────────────────────────────────────────────────┤
+//   │ task-id [title] [· note-count age → /lets:note (Full only)]  │  task
+//   │ <tip>                                                       │  tip
+//   └──────────────────────────────────────────────────────────┘
+// Compact drops version/pill/PR/effort detail and the bars; task line is
+// id+title only. No bd/network per render.
 //
 // ansiReset / separatorAngle / separatorMidDot live in render.go (reused here).
 
@@ -228,6 +235,75 @@ func clip(s string, max int) string {
 	return b.String()
 }
 
+// wideRunes are the glyphs this renderer emits that occupy 2 terminal cells
+// (emoji). Everything else (the monochrome symbols, box-drawing, text) is 1
+// cell. Keep this in sync with the glyph set + growthLadder, or the box's right
+// border will drift by a cell on lines containing a missing entry.
+var wideRunes = map[rune]bool{
+	'🌱': true, '🪴': true, '🌿': true, '🌳': true, '🌴': true, // brand ladder
+	'📋': true, '💡': true, // note, tip
+}
+
+func runeCells(r rune) int {
+	if wideRunes[r] {
+		return 2
+	}
+	return 1
+}
+
+// cellWidth is the visible terminal-cell width (ANSI-stripped, emoji counted as
+// 2). Used for box framing where the right border must align across lines that
+// hold different numbers of double-width emoji.
+func cellWidth(s string) int {
+	n := 0
+	for _, r := range stripANSI(s) {
+		n += runeCells(r)
+	}
+	return n
+}
+
+// fitCell returns s adjusted to exactly w terminal cells: padded with trailing
+// spaces when short, cell-accurately truncated with an ellipsis when long. ANSI
+// escapes are preserved (uncounted). Used to square off box rows.
+func fitCell(s string, w int) string {
+	cw := cellWidth(s)
+	if cw == w {
+		return s
+	}
+	if cw < w {
+		return s + strings.Repeat(" ", w-cw)
+	}
+	runes := []rune(s)
+	var b strings.Builder
+	cells := 0
+	for i := 0; i < len(runes); {
+		if runes[i] == '\x1b' { // copy the whole escape verbatim, uncounted
+			j := i
+			for j < len(runes) && runes[j] != 'm' {
+				j++
+			}
+			if j < len(runes) {
+				j++
+			}
+			b.WriteString(string(runes[i:j]))
+			i = j
+			continue
+		}
+		rw := runeCells(runes[i])
+		if cells+rw > w-1 { // leave 1 cell for the ellipsis
+			break
+		}
+		b.WriteRune(runes[i])
+		cells += rw
+		i++
+	}
+	b.WriteString("…" + ansiReset)
+	for cellWidth(b.String()) < w { // a broken-before-wide-rune can leave a gap
+		b.WriteString(" ")
+	}
+	return b.String()
+}
+
 // threshold maps a usage pct to its accent token (spec §5).
 func (p palette) threshold(pct int) string {
 	switch {
@@ -414,32 +490,28 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	marker := p.sage + ansiBold + separatorAngle + R // " » "
 	segSep := p.sep + separatorMidDot + R            // " · "
 
-	// Left frame (variant B): every line is prefixed with a "│ " gutter; a
-	// "├──" tee separates the budget block from the task block. The gutter eats
-	// 2 cells, so content clips to width-2.
-	gutter := p.sep + "│ " + R
-	contentMax := width - 2
+	// Closed box frame. W is the inner content width; the box is W+4 cells wide
+	// ("│ " + content + " │"). Cell-accurate (fitCell) so the right border lines
+	// up across rows holding different counts of double-width emoji.
+	boxW := width - 4
+	if boxW > fullMaxLine {
+		boxW = fullMaxLine
+	}
+	if boxW < 1 {
+		boxW = 1
+	}
+	border := func(left, right string) {
+		fmt.Fprintln(w, p.sep+left+strings.Repeat("─", boxW+2)+right+R)
+	}
 	emit := func(line string) {
 		if visibleWidth(line) == 0 {
 			return
 		}
-		fmt.Fprintln(w, gutter+clip(line, contentMax))
+		fmt.Fprintln(w, p.sep+"│ "+R+fitCell(line, boxW)+p.sep+" │"+R)
 	}
-	// ruleWith emits a horizontal rule led by corner glyph, sized to the content
-	// width (capped to fullMaxLine so a wide terminal doesn't draw a 200-dash
-	// rule). "├" tees the budget/task split; "└" closes the gutter at the bottom.
-	ruleWith := func(corner string) {
-		n := contentMax
-		if n > fullMaxLine {
-			n = fullMaxLine
-		}
-		if n < 1 {
-			return
-		}
-		fmt.Fprintln(w, p.sep+corner+strings.Repeat("─", n)+R)
-	}
-	rule := func() { ruleWith("├") }
-	ruleBottom := func() { ruleWith("└") }
+	rule := func() { border("├", "┤") }      // budget/task divider
+	topBorder := func() { border("┌", "┐") } // open frame top
+	botBorder := func() { border("└", "┘") } // close frame bottom
 	// join concatenates non-empty parts with the " · " separator.
 	join := func(parts ...string) string {
 		kept := make([]string, 0, len(parts))
@@ -495,6 +567,8 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		ver = "v" + ver
 	}
 
+	topBorder() // open the box (shared by both tiers)
+
 	// ===== Compact tier: 4 trimmed lines, designed for ~70 cols =====
 	if tier == tierCompact {
 		// Line 1: brand+version » branch · diff (no worktree pill, no PR; short "LETS").
@@ -521,18 +595,18 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		}
 		// Line 4: rotating tip, clipped to min(width, 70).
 		if t := tipOfMoment(time.Now()); t != "" {
-			tipMax := width
+			tipMax := boxW
 			if tipMax > 70 {
 				tipMax = 70
 			}
 			emit(clip(p.sage+glyphTip+R+" "+p.dim+ansiItalic+t+R, tipMax))
 		}
-		ruleBottom() // close the gutter at the bottom
+		botBorder() // close the box
 		return nil
 	}
 
 	// ===== Full tier: 4 lines, everything (each capped to fullMaxLine) =====
-	emitFull := func(line string) { emit(clip(line, fullMaxLine)) }
+	emitFull := emit // box emit already fits content to boxW
 
 	// --- Line 1: identity (branch truncated so the line stays under the cap) ---
 	brand := p.sage + brandEmoji(in.Cost.TotalLinesAdded) + " " + ansiBold + "LETS Workflow" + R + " " + p.dim + ver + R
@@ -595,6 +669,6 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	if t := tipOfMoment(time.Now()); t != "" {
 		emitFull(p.sage + glyphTip + R + " " + p.dim + ansiItalic + t + R)
 	}
-	ruleBottom() // close the gutter at the bottom
+	botBorder() // close the box
 	return nil
 }

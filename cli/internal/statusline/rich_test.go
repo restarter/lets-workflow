@@ -156,10 +156,10 @@ func TestRenderRich_TierLineCounts(t *testing.T) {
 		width     int
 		wantLines int
 	}{
-		{"Full", bpWide, 6},     // identity, budget, ├divider, task, tip, └bottom
-		{"Compact-wide", 95, 6}, // identity, gauges, ├divider, task, tip, └bottom
-		{"Compact-70", 70, 6},   // identity, gauges, ├divider, task, tip, └bottom
-		{"Compact-45", 45, 6},   // identity, gauges, ├divider, task, tip, └bottom
+		{"Full", bpWide, 7},     // ┌top, identity, budget, ├divider, task, tip, └bottom
+		{"Compact-wide", 95, 7}, // ┌top, identity, gauges, ├divider, task, tip, └bottom
+		{"Compact-70", 70, 7},   // ┌top, identity, gauges, ├divider, task, tip, └bottom
+		{"Compact-45", 45, 7},   // ┌top, identity, gauges, ├divider, task, tip, └bottom
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -192,9 +192,9 @@ func TestRenderRich_NoTaskDropsLine(t *testing.T) {
 		t.Fatalf("renderRich: %v", err)
 	}
 	lines := splitNonEmptyLines(buf.String())
-	if len(lines) != 4 {
-		// identity, budget, tip, └bottom — no task line, no ├ divider.
-		t.Errorf("no-task Full tier: got %d lines, want 4:\n%s", len(lines), buf.String())
+	if len(lines) != 5 {
+		// ┌top, identity, budget, tip, └bottom — no task line, no ├ divider.
+		t.Errorf("no-task Full tier: got %d lines, want 5:\n%s", len(lines), buf.String())
 	}
 }
 
@@ -476,5 +476,65 @@ func TestEffortColor(t *testing.T) {
 	}
 	if p.effortColor("bogus") != p.dim {
 		t.Errorf("unknown effort should be dim")
+	}
+}
+
+func TestCellWidth(t *testing.T) {
+	tests := []struct {
+		s    string
+		want int
+	}{
+		{"abc", 3},
+		{"", 0},
+		{"🌱", 2},                // wide emoji
+		{"📋 7", 4},              // emoji + space + digit
+		{"⎇ x", 3},              // monochrome symbol is 1 cell
+		{"\033[1mhi\033[0m", 2}, // ANSI stripped
+		{"🌴🌴", 4},
+	}
+	for _, tt := range tests {
+		if got := cellWidth(tt.s); got != tt.want {
+			t.Errorf("cellWidth(%q)=%d, want %d", tt.s, got, tt.want)
+		}
+	}
+}
+
+func TestFitCell(t *testing.T) {
+	// Pads short content with spaces to exactly w cells.
+	if got := fitCell("ab", 5); cellWidth(got) != 5 {
+		t.Errorf("fitCell pad: cellWidth=%d, want 5 (%q)", cellWidth(got), got)
+	}
+	// Truncates long content to exactly w cells (ellipsis included).
+	if got := fitCell("abcdefghij", 5); cellWidth(got) != 5 {
+		t.Errorf("fitCell trunc: cellWidth=%d, want 5 (%q)", cellWidth(got), got)
+	}
+	// Wide emoji near the boundary still lands on exactly w cells.
+	if got := fitCell("🌱🌱🌱🌱", 5); cellWidth(got) != 5 {
+		t.Errorf("fitCell emoji: cellWidth=%d, want 5 (%q)", cellWidth(got), got)
+	}
+}
+
+// TestRenderRich_BoxAligned asserts every emitted line has the SAME cell width
+// (the box's right border lines up) across tiers and widths.
+func TestRenderRich_BoxAligned(t *testing.T) {
+	dir := writeTaskStatus(t, "lets-ds6bc|StatusLine 2.0 with a deliberately long title to force truncation|7|2099-01-01T00:00:00Z")
+	branch := "feature/lets-ds6bc-statusline-2-0"
+	in := richTestInput()
+	for _, width := range []int{120, 106, 95, 70, 50} {
+		var buf bytes.Buffer
+		if err := renderRich(&buf, in, branch, "folder", usage{}, width, dir, false); err != nil {
+			t.Fatalf("width=%d: %v", width, err)
+		}
+		lines := splitNonEmptyLines(buf.String())
+		if len(lines) == 0 {
+			t.Fatalf("width=%d: no lines", width)
+		}
+		want := cellWidth(lines[0])
+		for i, ln := range lines {
+			if got := cellWidth(ln); got != want {
+				t.Errorf("width=%d line %d cellWidth=%d, want %d (ragged box): %q",
+					width, i, got, want, stripANSI(ln))
+			}
+		}
 	}
 }
