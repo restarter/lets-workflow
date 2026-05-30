@@ -73,7 +73,7 @@ const (
 	glyphSprout = "🌱"
 	glyphBranch = "⎇"
 	glyphTask   = "☑"
-	glyphNote   = "📝"
+	glyphNote   = "📋"
 	glyphModel  = "✦"
 	glyphTip    = "💡"
 	glyphPR     = "⇄"
