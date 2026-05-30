@@ -273,38 +273,6 @@ func TestPrStateColor(t *testing.T) {
 	}
 }
 
-func TestClip(t *testing.T) {
-	// Within budget: unchanged.
-	s := "hello"
-	if got := clip(s, 10); got != s {
-		t.Errorf("clip within budget changed string: got %q", got)
-	}
-
-	// Plain truncation adds "…".
-	got := clip("abcdefghij", 5)
-	if !strings.HasSuffix(got, "…"+ansiReset) {
-		t.Errorf("clip should append ellipsis+reset: got %q", got)
-	}
-	if vw := visibleWidth(got); vw > 5 {
-		t.Errorf("clipped visible width %d exceeds budget 5: %q", vw, got)
-	}
-
-	// ANSI-colored string keeps its escape codes when truncated.
-	colored := ansiReset + paletteDark.clay + "abcdefghij" + ansiReset
-	clipped := clip(colored, 5)
-	if !strings.Contains(clipped, paletteDark.clay) {
-		t.Errorf("clip dropped color escape: %q", clipped)
-	}
-	if !strings.HasSuffix(clipped, "…"+ansiReset) {
-		t.Errorf("clip colored should append ellipsis+reset: %q", clipped)
-	}
-
-	// max <= 1 is a no-op guard.
-	if got := clip("abcdef", 1); got != "abcdef" {
-		t.Errorf("clip(max=1) should be no-op: got %q", got)
-	}
-}
-
 func TestLevelForWidth(t *testing.T) {
 	tests := []struct {
 		width int

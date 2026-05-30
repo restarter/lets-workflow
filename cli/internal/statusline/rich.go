@@ -27,8 +27,12 @@ import (
 //   │ task-id [title] [· note-count age → /lets:note (Full only)]  │  task
 //   │ <tip>                                                       │  tip
 //   └──────────────────────────────────────────────────────────┘
-// Compact drops version/pill/PR/effort detail and the bars; task line is
-// id+title only. No bd/network per render.
+// Compact keeps brand+version but drops the location pill, PR and effort, and
+// shows a shorter "LETS" brand; its task line is id+title only (no note-count/
+// age/hint). Neither tier has progress bars — usage is shown as percentages
+// with token counts (window) and paren reset deltas (5h/7d). The box is sized
+// by the identity + budget rows only; the task title and tip are fit into that
+// width (emitFlex) so they never stretch the box. No bd/network per render.
 //
 // ansiReset / separatorAngle / separatorMidDot live in render.go (reused here).
 
@@ -122,10 +126,10 @@ const (
 	threshHigh = 85 // pct >= 85 -> alert
 )
 
-// Width breakpoint on COLUMNS — two tiers only. Full (everything: bars + reset
-// timers + PR + worktree pill + task title) needs ~103 cols, so it shows at
-// >= bpWide. Below that, Compact: 4 trimmed lines designed for ~70 cols, no
-// bars, short "LETS" brand, id-only task line, tip clipped to 70.
+// Width breakpoint on COLUMNS — two tiers only. Full (everything: reset timers,
+// PR, location pill, task title + notes/age/hint) needs ~103 cols, so it shows
+// at >= bpWide. Below that, Compact: trimmed lines for ~70 cols — short "LETS"
+// brand, id+title task line, no PR/effort/note detail.
 const (
 	bpWide    = 106    // Full at >= this; Compact below
 	bpDefault = bpWide // DEC-2: COLUMNS confirmed passed by CC; fail open to Full when it is somehow absent
@@ -186,43 +190,14 @@ var ansiSGRRe = regexp.MustCompile("\x1b\\[[0-9;]*m")
 func stripANSI(s string) string { return ansiSGRRe.ReplaceAllString(s, "") }
 func visibleWidth(s string) int { return len([]rune(stripANSI(s))) }
 
-// clip end-truncates to a visible-width budget, preserving ANSI escapes so the
-// kept prefix stays colored. Adds an ellipsis + reset on overflow.
-func clip(s string, max int) string {
-	if max <= 1 || visibleWidth(s) <= max {
-		return s
-	}
-	runes := []rune(s)
-	var b strings.Builder
-	vis := 0
-	for i := 0; i < len(runes); {
-		if runes[i] == '\x1b' { // copy the whole \x1b[...m verbatim, uncounted
-			j := i
-			for j < len(runes) && runes[j] != 'm' {
-				j++
-			}
-			if j < len(runes) {
-				j++
-			}
-			b.WriteString(string(runes[i:j]))
-			i = j
-			continue
-		}
-		if vis >= max-1 {
-			break
-		}
-		b.WriteRune(runes[i])
-		vis++
-		i++
-	}
-	b.WriteString("…" + ansiReset)
-	return b.String()
-}
-
 // wideRunes are the glyphs this renderer emits that occupy 2 terminal cells
-// (emoji). Everything else (the monochrome symbols, box-drawing, text) is 1
-// cell. Keep this in sync with the glyph set + growthLadder, or the box's right
-// border will drift by a cell on lines containing a missing entry.
+// (emoji). Everything else is treated as 1 cell. Keep this in sync with the
+// glyph set + growthLadder, or the box's right border will drift by a cell on
+// lines containing a missing entry. CAVEAT: ☑ (U+2611) and → (U+2192) are
+// East-Asian *Ambiguous* width — 1 cell on most terminals (incl. the default
+// macOS set) but 2 in some CJK/legacy configs; on those the right border can
+// drift. Perfect alignment across all terminals isn't achievable with a static
+// map; verify on your terminal (or swap those glyphs) if the border looks off.
 var wideRunes = map[rune]bool{
 	'🌱': true, '🪴': true, '🌿': true, '🌳': true, '🌴': true, // brand ladder
 	'📋': true, '💡': true, '📁': true, // note, tip, folder
@@ -480,29 +455,30 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	// accurate (fitCell) so the border aligns despite double-width emoji.
 	var rows []string
 	dividerAfter := -1
-	tipIdx := -1
+	noSize := map[int]bool{}
 	emit := func(line string) {
 		if visibleWidth(line) == 0 {
 			return
 		}
 		rows = append(rows, line)
 	}
-	// emitTip appends the rotating tip but marks it so it does NOT drive the box
-	// width — otherwise the box would visibly resize every time the tip rotates.
-	// The tip is still fitCell'd to the final width like any row.
-	emitTip := func(line string) {
+	// emitFlex appends a row that does NOT drive the box width — the task title
+	// and the rotating tip. The box is sized only by the stable structural rows
+	// (identity + budget/gauges); a long title or a rotating tip is fitCell'd
+	// into that width instead of stretching or resizing the box.
+	emitFlex := func(line string) {
 		if visibleWidth(line) == 0 {
 			return
 		}
 		rows = append(rows, line)
-		tipIdx = len(rows) - 1
+		noSize[len(rows)-1] = true
 	}
 	rule := func() { dividerAfter = len(rows) - 1 } // ├ divider after the last row so far
 	flush := func() {
 		boxW := 1
 		for i, r := range rows {
-			if i == tipIdx {
-				continue // the tip fits the box; it never sets the box width
+			if noSize[i] {
+				continue // title/tip fit the box; they never set its width
 			}
 			if cw := cellWidth(r); cw > boxW {
 				boxW = cw
@@ -598,19 +574,19 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 			g = append(g, gaugeCompact("7d", sevenP, sevenReset))
 		}
 		emit(join(g...))
-		// Line 3: task — id + title (notes/age/hint dropped to save width). The
-		// title is end-truncated to the line by emit's clip. Dropped if no task.
+		// Line 3: task — id + title (notes/age/hint dropped to save width). emitFlex:
+		// the title is fitCell'd to the box at flush; it doesn't widen the box.
 		if id != "" {
 			rule() // tee divider between gauges and task
 			head := p.clay + glyphTask + " " + id + R
 			if taskOK && title != "" {
 				head += " " + p.text + title + R
 			}
-			emit(head)
+			emitFlex(head)
 		}
-		// Line 4: rotating tip, clipped to min(width, 70).
+		// Line 4: rotating tip — emitFlex (fitCell'd to the box, never widens it).
 		if t := tipOfMoment(time.Now()); t != "" {
-			emitTip(p.sage + glyphTip + R + " " + p.dim + ansiItalic + t + R)
+			emitFlex(p.sage + glyphTip + R + " " + p.dim + ansiItalic + t + R)
 		}
 		flush() // size + draw the box around the collected rows
 		return nil
@@ -663,12 +639,13 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	}
 	emitFull(budget + marker + join(gauges...))
 
-	// --- Line 3: task (title truncated; dropped entirely if no active task) ---
+	// --- Line 3: task (emitFlex — title is fitCell'd to the box, never widens it;
+	//     dropped entirely if no active task) ---
 	if id != "" {
 		rule() // tee divider between budget and task
 		head := p.clay + glyphTask + " " + id + R
 		if taskOK && title != "" {
-			head += " " + p.text + title + R // box fitCell truncates if it overflows
+			head += " " + p.text + title + R
 		}
 		noteSeg := ""
 		if taskOK && notes > 0 {
@@ -682,12 +659,12 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		if noteSeg != "" {
 			tail = noteSeg + " " + hint
 		}
-		emitFull(head + segSep + tail)
+		emitFlex(head + segSep + tail)
 	}
 
-	// --- Line 4: rotating tip (box fitCell truncates if it overflows) ---
+	// --- Line 4: rotating tip — emitFlex (fitCell'd to the box, never widens it) ---
 	if t := tipOfMoment(time.Now()); t != "" {
-		emitTip(p.sage + glyphTip + R + " " + p.dim + ansiItalic + t + R)
+		emitFlex(p.sage + glyphTip + R + " " + p.dim + ansiItalic + t + R)
 	}
 	flush() // size + draw the box around the collected rows
 	return nil
