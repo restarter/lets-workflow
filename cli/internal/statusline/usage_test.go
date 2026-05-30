@@ -189,3 +189,31 @@ func TestFlexISO_UnmarshalNeverFailsPayload(t *testing.T) {
 		t.Errorf("string resets_at passthrough failed: %q", in.RateLimits.SevenDay.ResetsAt)
 	}
 }
+
+func TestComputeDeltaCompact(t *testing.T) {
+	now := time.Now().UTC()
+	iso := func(d time.Duration) string { return now.Add(d).Format("2006-01-02T15:04:05Z") }
+
+	if got := computeDeltaCompact(""); got != "" {
+		t.Errorf("empty -> %q, want empty", got)
+	}
+	if got := computeDeltaCompact("garbage"); got != "" {
+		t.Errorf("invalid -> %q, want empty", got)
+	}
+	if got := computeDeltaCompact(iso(-time.Hour)); got != "now" {
+		t.Errorf("past -> %q, want now", got)
+	}
+	// Compact format has NO inner space, unlike computeDelta ("2d 3h" vs "2d3h").
+	for _, d := range []time.Duration{50 * time.Hour, 3 * time.Hour, 45 * time.Minute} {
+		got := computeDeltaCompact(iso(d))
+		if strings.Contains(got, " ") {
+			t.Errorf("compact delta should have no space: %q (delta=%s)", got, d)
+		}
+	}
+	if got := computeDeltaCompact(iso(50 * time.Hour)); !strings.Contains(got, "d") || !strings.Contains(got, "h") {
+		t.Errorf("days-ahead -> %q, want NdNh", got)
+	}
+	if got := computeDeltaCompact(iso(45 * time.Minute)); !strings.HasSuffix(got, "m") {
+		t.Errorf("minutes-ahead -> %q, want Nm", got)
+	}
+}

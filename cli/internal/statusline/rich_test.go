@@ -466,23 +466,86 @@ func TestFitCell(t *testing.T) {
 // (the box's right border lines up) across tiers and widths.
 func TestRenderRich_BoxAligned(t *testing.T) {
 	dir := writeTaskStatus(t, "lets-ds6bc|StatusLine 2.0 with a deliberately long title to force truncation|7|2099-01-01T00:00:00Z")
+	in := richTestInput()
+	// Cover both palettes AND a pathologically long branch — the alignment
+	// invariant (every row the same cellWidth) is the box's headline correctness.
+	branches := map[string]string{
+		"normal": "feature/lets-ds6bc-statusline-2-0",
+		"long":   "feature/lets-ds6bc-a-very-long-branch-name-that-overflows-narrow-tiers",
+	}
+	for _, light := range []bool{false, true} {
+		for bname, branch := range branches {
+			for _, width := range []int{120, 106, 95, 70, 50} {
+				var buf bytes.Buffer
+				if err := renderRich(&buf, in, branch, "folder", usage{}, width, dir, light); err != nil {
+					t.Fatalf("light=%v branch=%s width=%d: %v", light, bname, width, err)
+				}
+				lines := splitNonEmptyLines(buf.String())
+				if len(lines) == 0 {
+					t.Fatalf("light=%v branch=%s width=%d: no lines", light, bname, width)
+				}
+				want := cellWidth(lines[0])
+				for i, ln := range lines {
+					if got := cellWidth(ln); got != want {
+						t.Errorf("light=%v branch=%s width=%d line %d cellWidth=%d, want %d (ragged box): %q",
+							light, bname, width, i, got, want, stripANSI(ln))
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestLimit(t *testing.T) {
+	// payload reset present -> payload authoritative (even at a genuine 0%).
+	if p, r, ok := limit(58.4, "2099-01-01T00:00:00Z", 0, "", false); !ok || p != 58 || r != "2099-01-01T00:00:00Z" {
+		t.Errorf("payload present: got (%d,%q,%v), want (58,reset,true)", p, r, ok)
+	}
+	if p, _, ok := limit(0, "2099-01-01T00:00:00Z", 99, "x", true); !ok || p != 0 {
+		t.Errorf("live 0%% must stay 0/authoritative, not fall to cache: got (%d,_,%v)", p, ok)
+	}
+	// payload absent -> fall back to cache.
+	if p, r, ok := limit(0, "", 73, "2099-02-02T00:00:00Z", true); !ok || p != 73 || r != "2099-02-02T00:00:00Z" {
+		t.Errorf("cache fallback: got (%d,%q,%v), want (73,reset,true)", p, r, ok)
+	}
+	// both absent -> not ok.
+	if _, _, ok := limit(0, "", 0, "", false); ok {
+		t.Error("both absent should return ok=false")
+	}
+}
+
+// TestRenderRich_TierContent asserts the tiers differ by CONTENT, not just line
+// count: Full carries the long brand, PR, effort and token detail; Compact drops
+// them and uses the short "LETS" brand.
+func TestRenderRich_TierContent(t *testing.T) {
+	dir := writeTaskStatus(t, "lets-ds6bc|Statusline 2.0 rich renderer|3|2099-01-01T00:00:00Z")
 	branch := "feature/lets-ds6bc-statusline-2-0"
 	in := richTestInput()
-	for _, width := range []int{120, 106, 95, 70, 50} {
-		var buf bytes.Buffer
-		if err := renderRich(&buf, in, branch, "folder", usage{}, width, dir, false); err != nil {
-			t.Fatalf("width=%d: %v", width, err)
+	in.ContextWindow.ContextWindowSize = 1000000
+
+	var full, compact bytes.Buffer
+	if err := renderRich(&full, in, branch, "folder", usage{}, 160, dir, false); err != nil {
+		t.Fatalf("full: %v", err)
+	}
+	if err := renderRich(&compact, in, branch, "folder", usage{}, 80, dir, false); err != nil {
+		t.Fatalf("compact: %v", err)
+	}
+	fp, cp := stripANSI(full.String()), stripANSI(compact.String())
+
+	for _, want := range []string{"LETS Workflow", "#91", "approved", "high", "/1000k)"} {
+		if !strings.Contains(fp, want) {
+			t.Errorf("Full tier missing %q:\n%s", want, fp)
 		}
-		lines := splitNonEmptyLines(buf.String())
-		if len(lines) == 0 {
-			t.Fatalf("width=%d: no lines", width)
-		}
-		want := cellWidth(lines[0])
-		for i, ln := range lines {
-			if got := cellWidth(ln); got != want {
-				t.Errorf("width=%d line %d cellWidth=%d, want %d (ragged box): %q",
-					width, i, got, want, stripANSI(ln))
-			}
+	}
+	if strings.Contains(cp, "LETS Workflow") {
+		t.Errorf("Compact tier should use short 'LETS' brand, not 'LETS Workflow':\n%s", cp)
+	}
+	if !strings.Contains(cp, "LETS") {
+		t.Errorf("Compact tier missing 'LETS' brand:\n%s", cp)
+	}
+	for _, drop := range []string{"#91", "approved"} {
+		if strings.Contains(cp, drop) {
+			t.Errorf("Compact tier should drop %q:\n%s", drop, cp)
 		}
 	}
 }
