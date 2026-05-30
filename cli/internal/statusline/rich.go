@@ -70,18 +70,17 @@ var paletteLight = palette{
 // a special font (deliberately NOT Nerd Font: no font dependency to maintain).
 // model uses ✦ (U+2726); ↻ ⇄ ⎇ are monochrome symbols, the rest are emoji.
 const (
-	glyphSprout   = "🌱"
-	glyphBranch   = "⎇"
-	glyphTask     = "☑"
-	glyphNote     = "📝"
-	glyphModel    = "✦"
-	glyphTip      = "💡"
-	glyphWorktree = "🗂"
-	glyphPR       = "⇄"
-	glyphReset    = "↻"
-	glyphArrow    = "→"
-	barFill       = "█"
-	barEmpty      = "░"
+	glyphSprout = "🌱"
+	glyphBranch = "⎇"
+	glyphTask   = "☑"
+	glyphNote   = "📝"
+	glyphModel  = "✦"
+	glyphTip    = "💡"
+	glyphPR     = "⇄"
+	glyphReset  = "↻"
+	glyphArrow  = "→"
+	barFill     = "█"
+	barEmpty    = "░"
 )
 
 const barWidth = 8 // gauge cells (spec §5)
@@ -489,7 +488,7 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	}
 	pillSeg := ""
 	if inWorktree(in, branch) {
-		pillSeg = p.pillBg + p.label + " " + glyphWorktree + " worktree " + R
+		pillSeg = p.pillBg + p.label + " worktree " + R
 	}
 	prSeg := ""
 	if full && in.PR.Number > 0 {
