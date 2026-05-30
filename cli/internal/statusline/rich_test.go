@@ -159,7 +159,7 @@ func TestRenderRich_TierLineCounts(t *testing.T) {
 		{"Full", bpFull, 4},     // identity, task, budget, tip
 		{"Mid", bpMid, 4},       // identity, task, budget, tip
 		{"Narrow", bpNarrow, 2}, // branch+diff, gauges
-		{"Min", 50, 1},          // single line
+		{"Min", 40, 2},          // brand+version, branch · window% · 5h%
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

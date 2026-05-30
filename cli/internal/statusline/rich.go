@@ -123,7 +123,7 @@ const (
 const (
 	bpFull    = 106    // Full (bars + reset timers + PR) needs ~103 cols (measured); a touch above
 	bpMid     = 88     // Mid keeps the bars (no reset timers) — fits ~85 cols
-	bpNarrow  = 68     // Narrow: 2 lines, no bars
+	bpNarrow  = 51     // Narrow: 2 lines, no bars (51-87); Min kicks in at <=50
 	bpDefault = bpFull // DEC-2: COLUMNS confirmed passed by CC (130/92 captured live); fail open to Full when it is somehow absent rather than to the degraded Narrow tier
 )
 
@@ -450,8 +450,13 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		return p.label + label + R + " " + p.threshold(pct) + strconv.Itoa(pct) + "%" + R
 	}
 
-	// ===== Min tier: one line — branch · window% · 5h% =====
+	// ===== Min tier: two lines — brand+version / branch · window% · 5h% =====
 	if tier == tierMin {
+		ver := version.Version
+		if !version.IsDev() {
+			ver = "v" + ver
+		}
+		emit(p.sage + brandEmoji(in.Cost.TotalLinesAdded) + " " + ansiBold + "LETS" + R + " " + p.dim + ver + R)
 		parts := []string{p.clay + bf + R, p.threshold(winPct) + strconv.Itoa(winPct) + "%" + R}
 		if fiveOK {
 			parts = append(parts, p.threshold(fiveP)+strconv.Itoa(fiveP)+"%"+R)
