@@ -156,10 +156,10 @@ func TestRenderRich_TierLineCounts(t *testing.T) {
 		width     int
 		wantLines int
 	}{
-		{"Full", bpWide, 7},     // ┌top, identity, budget, ├divider, task, tip, └bottom
-		{"Compact-wide", 95, 7}, // ┌top, identity, gauges, ├divider, task, tip, └bottom
-		{"Compact-70", 70, 7},   // ┌top, identity, gauges, ├divider, task, tip, └bottom
-		{"Compact-45", 45, 7},   // ┌top, identity, gauges, ├divider, task, tip, └bottom
+		{"Full-wide", 120, 7},  // ┌top, identity, budget, ├divider, task, tip, └bottom
+		{"Full-min", bpWide, 7}, // Full at the breakpoint (box hugs the narrow width)
+		{"Compact-68", 68, 7},   // ┌top, identity, gauges, ├divider, task, tip, └bottom
+		{"Compact-45", 45, 7},   // narrowest sampled Compact
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -527,7 +527,7 @@ func TestRenderRich_TierContent(t *testing.T) {
 	if err := renderRich(&full, in, branch, "folder", usage{}, 160, dir, false); err != nil {
 		t.Fatalf("full: %v", err)
 	}
-	if err := renderRich(&compact, in, branch, "folder", usage{}, 80, dir, false); err != nil {
+	if err := renderRich(&compact, in, branch, "folder", usage{}, 65, dir, false); err != nil {
 		t.Fatalf("compact: %v", err)
 	}
 	fp, cp := stripANSI(full.String()), stripANSI(compact.String())

@@ -126,12 +126,14 @@ const (
 	threshHigh = 85 // pct >= 85 -> alert
 )
 
-// Width breakpoint on COLUMNS — two tiers only. Full (everything: reset timers,
-// PR, location pill, task title + notes/age/hint) needs ~103 cols, so it shows
-// at >= bpWide. Below that, Compact: trimmed lines for ~70 cols — short "LETS"
-// brand, id+title task line, no PR/effort/note detail.
+// Width breakpoint on COLUMNS — two tiers only. Full (reset timers, PR, location
+// pill, task notes/age/hint) shows at >= bpWide; below that, Compact: trimmed
+// lines — short "LETS" brand, id+title task line, no PR/effort/note detail. The
+// box always hugs the content and is capped at min(fullMaxLine, COLUMNS-4), so
+// at the lower Full widths (72-100) the box simply hugs the terminal and the
+// identity/budget rows clip — Full degrades gracefully rather than needing 100+.
 const (
-	bpWide    = 106    // Full at >= this; Compact below
+	bpWide    = 72     // Full at >= this; Compact below
 	bpDefault = bpWide // DEC-2: COLUMNS confirmed passed by CC; fail open to Full when it is somehow absent
 )
 
