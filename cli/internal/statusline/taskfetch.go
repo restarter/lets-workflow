@@ -80,12 +80,16 @@ func sanitizeField(s string) string {
 // 4-field line to cacheDir/task-status. Used by the detached
 // `--fetch-task-only` subprocess; errors are silent (no UI consumes them).
 func fetchAndCacheTaskStatus(cacheDir, taskID string) error {
-	if taskID == "" {
-		return errors.New("no task id")
+	// Defense in depth: taskID normally comes from taskIDFromBranch (regex,
+	// can't start with "-"), but --task-id can be passed arbitrary input. Reject
+	// a leading "-" so it can't be smuggled as a bd flag, and pass it after "--"
+	// so bd's parser treats it strictly as a positional argument.
+	if taskID == "" || strings.HasPrefix(taskID, "-") {
+		return errors.New("invalid task id")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "bd", "show", taskID, "--json").Output()
+	out, err := exec.CommandContext(ctx, "bd", "show", "--json", "--", taskID).Output()
 	if err != nil {
 		return err
 	}

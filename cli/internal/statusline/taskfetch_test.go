@@ -144,3 +144,13 @@ func TestWriteTaskStatusCache_RoundTrip(t *testing.T) {
 		t.Errorf("mode=%o, want 600", info.Mode().Perm())
 	}
 }
+
+func TestFetchAndCacheTaskStatus_RejectsBadID(t *testing.T) {
+	// Guard fires before any exec, so no bd needed. Leading "-" or empty must
+	// be rejected (argv flag-smuggling defense).
+	for _, id := range []string{"", "-rf", "--json"} {
+		if err := fetchAndCacheTaskStatus(t.TempDir(), id); err == nil {
+			t.Errorf("fetchAndCacheTaskStatus(%q) = nil, want error", id)
+		}
+	}
+}
