@@ -141,14 +141,14 @@ func writeUsageCache(path string, u usage) error {
 	return os.Rename(tmp, path)
 }
 
-// computeDelta returns human-readable time-until-reset (e.g. "2d 3h", "45m").
-// Empty string for past/invalid timestamps. Uses stdlib time.Parse - no
-// macOS-vs-Linux date pitfalls (free Windows portability).
-func computeDelta(iso string) string {
+// parseISO normalizes an ISO-8601 timestamp — strips fractional seconds, a
+// ±HH:MM offset, and a trailing Z — then parses it as UTC. ok=false on
+// blank/invalid input. Shared by computeDelta (future) and relAgo (past) so the
+// fragile normalization lives in one place (mirrors the old bash sed sequence).
+func parseISO(iso string) (time.Time, bool) {
 	if iso == "" {
-		return ""
+		return time.Time{}, false
 	}
-	// Mirror bash sed sequence: strip .NNN, ±HH:MM, trailing Z.
 	s := iso
 	if i := strings.IndexByte(s, '.'); i != -1 {
 		j := i + 1
@@ -161,9 +161,18 @@ func computeDelta(iso string) string {
 	if len(s) >= 6 && (s[len(s)-6] == '+' || s[len(s)-6] == '-') && s[len(s)-3] == ':' {
 		s = s[:len(s)-6]
 	}
-
 	t, err := time.ParseInLocation("2006-01-02T15:04:05", s, time.UTC)
 	if err != nil {
+		return time.Time{}, false
+	}
+	return t, true
+}
+
+// computeDelta returns human-readable time-until-reset (e.g. "2d 3h", "45m").
+// Empty for invalid timestamps, "now" for past/elapsed.
+func computeDelta(iso string) string {
+	t, ok := parseISO(iso)
+	if !ok {
 		return ""
 	}
 	diff := time.Until(t)

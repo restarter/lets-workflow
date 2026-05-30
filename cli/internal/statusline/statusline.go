@@ -113,7 +113,7 @@ type Input struct {
 // render before the IPC pipe is wired). Empty input → render with zero-value
 // Input (defaults to cwd-based detection). A blank statusline error is more
 // disruptive than missing context.
-func Render(stdin io.Reader, w io.Writer, light bool) error {
+func Render(stdin io.Reader, w io.Writer, light, rich bool) error {
 	data, err := io.ReadAll(stdin)
 	if err != nil {
 		return fmt.Errorf("read stdin: %w", err)
@@ -148,17 +148,19 @@ func Render(stdin io.Reader, w io.Writer, light bool) error {
 		spawnBackgroundFetch(cacheDir)
 	}
 
-	// PROTOTYPE (lets-ds6bc): max "rich" level behind LETS_STATUSLINE_LEVEL=rich.
+	// Rich (multi-line) level: the --rich flag OR LETS_STATUSLINE_LEVEL=rich.
 	// Default (compact) keeps the frozen 2-line output below, unchanged.
-	if strings.EqualFold(strings.TrimSpace(os.Getenv("LETS_STATUSLINE_LEVEL")), "rich") {
-		_ = os.MkdirAll(cacheDir, 0o755)
-		_ = os.WriteFile(filepath.Join(cacheDir, "last-input.json"), data, 0o600) // capture real payload for inspection
-		// DEBUG (lets-ds6bc): does Claude Code pass terminal width to the
-		// statusline subprocess? Append the env we see on each live render.
-		if f, err := os.OpenFile(filepath.Join(cacheDir, "statusline-debug.txt"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600); err == nil {
-			fmt.Fprintf(f, "%s COLUMNS=%q LINES=%q TERM=%q TERM_PROGRAM=%q detectWidth()=%d\n",
-				time.Now().Format("15:04:05"), os.Getenv("COLUMNS"), os.Getenv("LINES"), os.Getenv("TERM"), os.Getenv("TERM_PROGRAM"), detectWidth())
-			_ = f.Close()
+	if rich || strings.EqualFold(strings.TrimSpace(os.Getenv("LETS_STATUSLINE_LEVEL")), "rich") {
+		// Debug capture is opt-in (LETS_STATUSLINE_DEBUG) so it never touches
+		// disk for normal users on this hot, per-render path.
+		if os.Getenv("LETS_STATUSLINE_DEBUG") != "" {
+			_ = os.MkdirAll(cacheDir, 0o755)
+			_ = os.WriteFile(filepath.Join(cacheDir, "last-input.json"), data, 0o600)
+			if f, err := os.OpenFile(filepath.Join(cacheDir, "statusline-debug.txt"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600); err == nil {
+				fmt.Fprintf(f, "%s COLUMNS=%q LINES=%q TERM=%q TERM_PROGRAM=%q detectWidth()=%d\n",
+					time.Now().Format("15:04:05"), os.Getenv("COLUMNS"), os.Getenv("LINES"), os.Getenv("TERM"), os.Getenv("TERM_PROGRAM"), detectWidth())
+				_ = f.Close()
+			}
 		}
 		return renderRich(w, in, branch, folder, u, detectWidth(), cacheDir, light)
 	}

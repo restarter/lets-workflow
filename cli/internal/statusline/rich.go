@@ -97,7 +97,7 @@ const (
 	bpFull    = 160
 	bpMid     = 110
 	bpNarrow  = 80
-	bpDefault = 80 // assumed when COLUMNS is unknown
+	bpDefault = bpFull // DEC-2: fail open to Full when COLUMNS is unknown (CC statusline subprocesses historically don't inherit COLUMNS) rather than pinning everyone to the degraded Narrow tier
 )
 
 // Render tiers (ascending detail).
@@ -220,23 +220,8 @@ func inWorktree(in Input, branch string) bool {
 // relAgo renders a past ISO timestamp as "N min ago" / "Nh ago" / "Nd ago".
 // Empty for blank/invalid/future input.
 func relAgo(iso string) string {
-	if iso == "" {
-		return ""
-	}
-	s := iso
-	if i := strings.IndexByte(s, '.'); i != -1 {
-		j := i + 1
-		for j < len(s) && s[j] >= '0' && s[j] <= '9' {
-			j++
-		}
-		s = s[:i] + s[j:]
-	}
-	s = strings.TrimSuffix(s, "Z")
-	if len(s) >= 6 && (s[len(s)-6] == '+' || s[len(s)-6] == '-') && s[len(s)-3] == ':' {
-		s = s[:len(s)-6]
-	}
-	t, err := time.ParseInLocation("2006-01-02T15:04:05", s, time.UTC)
-	if err != nil {
+	t, ok := parseISO(iso)
+	if !ok {
 		return ""
 	}
 	diff := time.Since(t)
@@ -257,28 +242,25 @@ func relAgo(iso string) string {
 // readTaskStatus reads a cheap on-change cache (PROTOTYPE: written by hand; real
 // wiring = /lets:start /lets:done /lets:note). Single line:
 //
-//	<task-id>|<status>|<title>|<note-count>|<last-comment-iso>
+//	<task-id>|<title>|<note-count>|<last-comment-iso>
 //
 // Returns ok=false (graceful degrade) when the file is missing or the cached
 // task != active task.
-func readTaskStatus(cacheDir, taskID string) (status, title string, notes int, lastComment string, ok bool) {
+func readTaskStatus(cacheDir, taskID string) (title string, notes int, lastComment string, ok bool) {
 	b, err := os.ReadFile(filepath.Join(cacheDir, "task-status"))
 	if err != nil {
 		return
 	}
-	parts := strings.SplitN(strings.TrimSpace(string(b)), "|", 5)
+	parts := strings.SplitN(strings.TrimSpace(string(b)), "|", 4)
 	if len(parts) < 2 || parts[0] != taskID {
 		return
 	}
-	status = parts[1]
+	title = parts[1]
 	if len(parts) > 2 {
-		title = parts[2]
+		notes, _ = strconv.Atoi(parts[2])
 	}
 	if len(parts) > 3 {
-		notes, _ = strconv.Atoi(parts[3])
-	}
-	if len(parts) > 4 {
-		lastComment = parts[4]
+		lastComment = parts[3]
 	}
 	ok = true
 	return
@@ -299,7 +281,9 @@ func (p palette) prStateColor(state string) string {
 // limit resolves a rate-limit gauge: prefer the live payload, fall back to the
 // usage cache. ok=false when neither has data.
 func limit(payloadPct float64, payloadReset string, cacheP int, cacheReset string, cacheOK bool) (pct int, reset string, ok bool) {
-	if payloadPct > 0 {
+	// resets_at present => the live rate-limit block is in the payload, so even
+	// a genuine 0% reading is authoritative — don't conflate it with "absent".
+	if payloadReset != "" {
 		return int(payloadPct + 0.5), payloadReset, true
 	}
 	if cacheOK {
@@ -412,7 +396,7 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		bf = strings.TrimPrefix(bf, "worktree-")
 	}
 	id := taskIDFromBranch(branch)
-	_, title, notes, lastComment, taskOK := readTaskStatus(cacheDir, id)
+	title, notes, lastComment, taskOK := readTaskStatus(cacheDir, id)
 	winPct := int(in.ContextWindow.UsedPercentage + 0.5)
 	fiveP, fiveReset, fiveOK := limit(in.RateLimits.FiveHour.UsedPercentage, in.RateLimits.FiveHour.ResetsAt, u.fiveHour, u.fiveHourReset, u.fiveHourOK)
 	sevenP, sevenReset, sevenOK := limit(in.RateLimits.SevenDay.UsedPercentage, in.RateLimits.SevenDay.ResetsAt, u.sevenDay, u.sevenDayReset, u.sevenDayOK)

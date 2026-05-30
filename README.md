@@ -320,6 +320,23 @@ LETS_TRACKER=beads
 
 All plugin-generated files live under `.lets/` (gitignored); interactive worktrees under `.worktrees/`.
 
+### Statusline
+
+`/lets:init` wires the LETS statusline into `.claude/settings.json` — by default a compact 2-line bar (branch, model, context window, usage).
+
+An **experimental** rich multi-line statusline is available as opt-in (ships in a later release). It adds identity, task, budget gauges, and a rotating tip line, with width-responsive tiers and universal emoji glyphs (no Nerd Font needed). Enable it by pointing `settings.json` at the `--rich` flag, or set `LETS_STATUSLINE_LEVEL=rich`:
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "lets statusline --rich"
+  }
+}
+```
+
+Add `--light` for light-background terminals (default palette is dark).
+
 ## 📦 Dependencies
 
 | Dependency | Required | Purpose |

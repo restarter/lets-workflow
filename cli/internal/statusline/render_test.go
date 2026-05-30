@@ -91,6 +91,61 @@ func TestRenderLines_VersionInHeader(t *testing.T) {
 	}
 }
 
+// TestRenderLines_ByteIdentityGolden locks the EXACT bytes of the frozen
+// 2-line compact output. This is the byte-lock that the Contains-based tests
+// above cannot enforce: any reordering, recoloring, or whitespace change in
+// renderLines fails here. The version segment is the only environment-variant
+// piece (dev vs tagged), so it is composed from version.Version/IsDev() rather
+// than hard-coded — everything else is a literal byte sequence.
+func TestRenderLines_ByteIdentityGolden(t *testing.T) {
+	var in Input
+	in.Model.DisplayName = "Opus 4.7"
+	in.ContextWindow.UsedPercentage = 35.5
+	in.ContextWindow.ContextWindowSize = 200000
+	in.ContextWindow.CurrentUsage.InputTokens = 70000
+	u := usage{fiveHour: 85, fiveHourOK: true, sevenDay: 30, sevenDayOK: true}
+
+	var buf bytes.Buffer
+	if err := renderLines(&buf, in, "feature/test", "fallback-folder", u); err != nil {
+		t.Fatalf("renderLines: %v", err)
+	}
+
+	verDisplay := version.Version
+	if !version.IsDev() {
+		verDisplay = "v" + verDisplay
+	}
+
+	// Golden captured from current behavior. Pieces correspond 1:1 to the
+	// Fprintf sequence in renderLines (render.go). \x1b == ESC.
+	const (
+		esc      = "\x1b"
+		reset    = esc + "[0m"
+		boldGold = esc + "[1;38;2;255;215;0m"
+		sepGold  = esc + "[38;2;153;122;0m"
+		branch   = esc + "[38;2;232;160;144m"
+		boldOrng = esc + "[1;38;2;255;175;50m"
+		tan      = esc + "[38;2;190;176;140m"
+		tanDim   = esc + "[2;38;2;190;176;140m"
+		gray     = esc + "[90m"
+		green    = esc + "[38;2;130;200;130m"
+		red      = esc + "[38;2;255;100;100m"
+		leaf     = "\xf0\x9f\x8c\xb1" // 🌱
+	)
+	sep := sepGold + " \xc2\xbb " + reset // " » "
+	dot := gray + " \xc2\xb7 " + reset    // " · "
+
+	want := leaf + " " + boldGold + "LETS Workflow " + verDisplay + reset + sep +
+		branch + "feature/test" + reset + "\n" +
+		boldOrng + "Opus 4.7" + reset + sep +
+		tan + "window 36%" + reset + " " + tanDim + "(70k/200k)" + reset + dot +
+		red + "5h 85%" + reset + dot +
+		green + "7d 30%" + reset
+
+	if got := buf.String(); got != want {
+		t.Errorf("byte-identity mismatch.\n got: %q\nwant: %q", got, want)
+	}
+}
+
 func TestUsageColor(t *testing.T) {
 	tests := []struct {
 		pct  int
