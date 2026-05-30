@@ -233,37 +233,21 @@ func TestThreshold(t *testing.T) {
 	}
 }
 
-func TestMiniBar(t *testing.T) {
-	p := paletteDark
-
-	// Clamp: <0 behaves like 0 (zero filled), >100 like 100 (all filled).
-	zero := p.miniBar(-10)
-	full := p.miniBar(150)
-	if strings.Count(stripANSI(zero), barFill) != 0 {
-		t.Errorf("miniBar(-10) should clamp to 0 filled: %q", stripANSI(zero))
+func TestKfmt(t *testing.T) {
+	tests := []struct {
+		n    int
+		want string
+	}{
+		{0, "0k"},
+		{500, "1k"},
+		{499, "0k"},
+		{380000, "380k"},
+		{1000000, "1000k"},
+		{375400, "375k"},
 	}
-	if strings.Count(stripANSI(full), barFill) != barWidth {
-		t.Errorf("miniBar(150) should clamp to %d filled: %q", barWidth, stripANSI(full))
-	}
-
-	// filled-count == round(pct/100*8).
-	roundFilled := func(pct int) int { return (pct*barWidth + 50) / 100 }
-	for _, pct := range []int{41, 58, 73, 91} {
-		bar := p.miniBar(pct)
-		gotFilled := strings.Count(stripANSI(bar), barFill)
-		gotEmpty := strings.Count(stripANSI(bar), barEmpty)
-		wantFilled := roundFilled(pct)
-		if gotFilled != wantFilled {
-			t.Errorf("miniBar(%d): filled=%d, want %d", pct, gotFilled, wantFilled)
-		}
-		if gotFilled+gotEmpty != barWidth {
-			t.Errorf("miniBar(%d): filled+empty=%d, want %d", pct, gotFilled+gotEmpty, barWidth)
-		}
-		// Exactly one color token (the threshold accent) precedes the sep token.
-		idxThresh := strings.Index(bar, p.threshold(pct))
-		idxSep := strings.Index(bar, p.sep)
-		if idxThresh < 0 || idxSep < 0 || idxThresh >= idxSep {
-			t.Errorf("miniBar(%d): expected threshold color before sep, bar=%q", pct, bar)
+	for _, tt := range tests {
+		if got := kfmt(tt.n); got != tt.want {
+			t.Errorf("kfmt(%d)=%q, want %q", tt.n, got, tt.want)
 		}
 	}
 }

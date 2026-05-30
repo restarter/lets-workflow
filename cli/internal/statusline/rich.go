@@ -78,11 +78,7 @@ const (
 	glyphTip    = "💡"
 	glyphPR     = "⇄"
 	glyphArrow  = "→"
-	barFill     = "█"
-	barEmpty    = "░"
 )
-
-const barWidth = 8 // gauge cells (spec §5)
 
 // growthLadder maps a monotonic session growth score (cost.total_lines_added)
 // to the brand emoji on Line 1 (spec §8.2, tropical finale). The plant matures
@@ -244,23 +240,9 @@ func (p palette) threshold(pct int) string {
 	}
 }
 
-// miniBar renders the 8-cell gauge: filled cells in the threshold color, empty
-// cells in sep (spec §5 / A3).
-func (p palette) miniBar(pct int) string {
-	if pct < 0 {
-		pct = 0
-	}
-	if pct > 100 {
-		pct = 100
-	}
-	filled := (pct*barWidth + 50) / 100
-	var b strings.Builder
-	b.WriteString(p.threshold(pct))
-	b.WriteString(strings.Repeat(barFill, filled))
-	b.WriteString(p.sep)
-	b.WriteString(strings.Repeat(barEmpty, barWidth-filled))
-	b.WriteString(ansiReset)
-	return b.String()
+// kfmt renders a token count in thousands, rounded: 380000 -> "380k".
+func kfmt(n int) string {
+	return strconv.Itoa((n+500)/1000) + "k"
 }
 
 var taskIDRe = regexp.MustCompile(`[a-z][a-z0-9]*-[a-z0-9]+(?:\.[0-9]+)?`)
@@ -469,11 +451,11 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	}
 
 	// gauge variants
-	gaugeFull := func(label string, pct int, resetISO string) string { // label + bar + pct + compact timer (Full)
-		s := p.label + label + R + " " + p.miniBar(pct) + " " + p.threshold(pct) + strconv.Itoa(pct) + "%" + R
+	gaugeParens := func(label string, pct int, resetISO string) string { // label + pct + (delta), no bar (Full)
+		s := p.label + label + R + " " + p.threshold(pct) + strconv.Itoa(pct) + "%" + R
 		if resetISO != "" {
-			if dl := computeDeltaCompact(resetISO); dl != "" {
-				s += " " + p.dim + dl + R
+			if dl := computeDelta(resetISO); dl != "" {
+				s += " " + p.dim + "(" + dl + ")" + R
 			}
 		}
 		return s
@@ -552,19 +534,25 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	}
 	emitFull(brand + marker + join(p.clay+glyphBranch+" "+truncRunes(bf, branchMaxFull)+R, diffSeg, pillSeg, prSeg))
 
-	// --- Line 2: budget (model + colored effort + 3 gauges with bars + timers) ---
+	// --- Line 2: budget (model + colored effort » window/5h/7d, no bars) ---
 	budget := p.gold + glyphModel + " " + ansiBold + in.Model.DisplayName + R
 	if in.Effort.Level != "" {
 		budget += " " + p.effortColor(in.Effort.Level) + in.Effort.Level + R
 	}
-	gauges := []string{gaugeFull("window", winPct, "")}
+	// window: pct + (used/total tokens); 5h/7d: pct + (reset delta).
+	winSeg := p.label + "window" + R + " " + p.threshold(winPct) + strconv.Itoa(winPct) + "%" + R
+	if sz := in.ContextWindow.ContextWindowSize; sz > 0 {
+		used := int(in.ContextWindow.UsedPercentage/100*float64(sz) + 0.5)
+		winSeg += " " + p.dim + "(" + kfmt(used) + "/" + kfmt(sz) + ")" + R
+	}
+	gauges := []string{winSeg}
 	if fiveOK {
-		gauges = append(gauges, gaugeFull("5h", fiveP, fiveReset))
+		gauges = append(gauges, gaugeParens("5h", fiveP, fiveReset))
 	}
 	if sevenOK {
-		gauges = append(gauges, gaugeFull("7d", sevenP, sevenReset))
+		gauges = append(gauges, gaugeParens("7d", sevenP, sevenReset))
 	}
-	emitFull(budget + segSep + join(gauges...))
+	emitFull(budget + marker + join(gauges...))
 
 	// --- Line 3: task (title truncated; dropped entirely if no active task) ---
 	if id != "" {
