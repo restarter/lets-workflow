@@ -155,7 +155,7 @@ This includes hook debug logs, temp files, and any runtime artifacts.
 .lets/reviews/           # Saved review reports
 .lets/plans/             # Implementation plans
 .lets/execution/         # Execution state (PR review: pr-{number}/, team records: team-*.json)
-.lets/cache/             # Cached data (usage stats; update-check.json — /lets:update latest-release lookup, 1h TTL)
+.lets/cache/             # Cached data (usage stats; update-check.json — /lets:update latest-release lookup, 1h TTL; task-status — rich statusline task cache id|title|notes|iso, self-refreshed via detached bd show, 90s TTL)
 # Worktrees (outside .lets/ to avoid circular symlinks):
 # .worktrees/            # Interactive worktrees only (agent worktrees use native Claude Code behavior)
 ```
