@@ -119,33 +119,26 @@ const (
 	threshHigh = 85 // pct >= 85 -> alert
 )
 
-// Width breakpoints on COLUMNS (spec §4).
+// Width breakpoint on COLUMNS — two tiers only. Full (everything: bars + reset
+// timers + PR + worktree pill + task title) needs ~103 cols, so it shows at
+// >= bpWide. Below that, Compact: 4 trimmed lines designed for ~70 cols, no
+// bars, short "LETS" brand, id-only task line, tip clipped to 70.
 const (
-	bpFull    = 106    // Full (bars + reset timers + PR) needs ~103 cols (measured); a touch above
-	bpMid     = 88     // Mid keeps the bars (no reset timers) — fits ~85 cols
-	bpNarrow  = 51     // Narrow: 2 lines, no bars (51-87); Min kicks in at <=50
-	bpDefault = bpFull // DEC-2: COLUMNS confirmed passed by CC (130/92 captured live); fail open to Full when it is somehow absent rather than to the degraded Narrow tier
+	bpWide    = 106    // Full at >= this; Compact below
+	bpDefault = bpWide // DEC-2: COLUMNS confirmed passed by CC; fail open to Full when it is somehow absent
 )
 
-// Render tiers (ascending detail).
+// Render tiers.
 const (
-	tierMin = iota
-	tierNarrow
-	tierMid
+	tierCompact = iota
 	tierFull
 )
 
 func levelForWidth(width int) int {
-	switch {
-	case width >= bpFull:
+	if width >= bpWide {
 		return tierFull
-	case width >= bpMid:
-		return tierMid
-	case width >= bpNarrow:
-		return tierNarrow
-	default:
-		return tierMin
 	}
+	return tierCompact
 }
 
 // detectWidth reads terminal width from the COLUMNS env var Claude Code sets;
@@ -434,7 +427,7 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	}
 
 	// gauge variants
-	gaugeFull := func(label string, pct int, resetISO string) string {
+	gaugeFull := func(label string, pct int, resetISO string) string { // label + bar + pct + ↻ timer (Full)
 		s := p.label + label + R + " " + p.miniBar(pct) + " " + p.threshold(pct) + strconv.Itoa(pct) + "%" + R
 		if resetISO != "" {
 			if dl := computeDelta(resetISO); dl != "" {
@@ -443,64 +436,71 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		}
 		return s
 	}
-	gaugeBar := func(label string, pct int) string { // label + bar + pct, no reset timer (Mid)
-		return p.label + label + R + " " + p.miniBar(pct) + " " + p.threshold(pct) + strconv.Itoa(pct) + "%" + R
-	}
-	gaugeLP := func(label string, pct int) string { // label + pct, no bar (Narrow)
-		return p.label + label + R + " " + p.threshold(pct) + strconv.Itoa(pct) + "%" + R
+	gaugeCompact := func(label string, pct int, resetISO string) string { // label + pct + timer, no bar (Compact)
+		s := p.label + label + R + " " + p.threshold(pct) + strconv.Itoa(pct) + "%" + R
+		if resetISO != "" {
+			if dl := computeDelta(resetISO); dl != "" {
+				s += " " + p.dim + dl + R
+			}
+		}
+		return s
 	}
 
-	// ===== Min tier: three lines — brand+version / branch / window·5h·7d % =====
-	if tier == tierMin {
-		ver := version.Version
-		if !version.IsDev() {
-			ver = "v" + ver
+	ver := version.Version
+	if !version.IsDev() {
+		ver = "v" + ver
+	}
+
+	// ===== Compact tier: 4 trimmed lines, designed for ~70 cols =====
+	if tier == tierCompact {
+		// Line 1: brand+version » branch · diff (no worktree pill, no PR; short "LETS").
+		emit(p.sage + brandEmoji(in.Cost.TotalLinesAdded) + " " + ansiBold + "LETS" + R + " " + p.dim + ver + R +
+			marker + join(p.clay+glyphBranch+" "+bf+R, diffSeg))
+		// Line 2: task — id only (no title), notes + age + hint. Dropped if no task.
+		if id != "" {
+			noteSeg := ""
+			if taskOK && notes > 0 {
+				noteSeg = p.label + glyphNote + " " + strconv.Itoa(notes) + R
+				if age := relAgo(lastComment); age != "" {
+					noteSeg += " " + p.dim + age + R
+				}
+			}
+			hint := p.sage + glyphArrow + R + " " + p.dim + "/lets:note" + R
+			tail := hint
+			if noteSeg != "" {
+				tail = noteSeg + " " + hint
+			}
+			emit(p.clay + glyphTask + " " + id + R + segSep + tail)
 		}
-		emit(p.sage + brandEmoji(in.Cost.TotalLinesAdded) + " " + ansiBold + "LETS" + R + " " + p.dim + ver + R)
-		emit(p.clay + bf + R)
-		g := []string{gaugeLP("window", winPct)}
+		// Line 3: window·5h·7d label+pct+timer, no bars.
+		g := []string{gaugeCompact("window", winPct, "")}
 		if fiveOK {
-			g = append(g, gaugeLP("5h", fiveP))
+			g = append(g, gaugeCompact("5h", fiveP, fiveReset))
 		}
 		if sevenOK {
-			g = append(g, gaugeLP("7d", sevenP))
+			g = append(g, gaugeCompact("7d", sevenP, sevenReset))
 		}
 		emit(join(g...))
+		// Line 4: rotating tip, clipped to min(width, 70).
+		if t := tipOfMoment(time.Now()); t != "" {
+			tipMax := width
+			if tipMax > 70 {
+				tipMax = 70
+			}
+			emit(clip(p.sage+glyphTip+R+" "+p.dim+ansiItalic+t+R, tipMax))
+		}
 		return nil
 	}
 
-	// ===== Narrow tier: two lines =====
-	if tier == tierNarrow {
-		emit(join(p.clay+glyphBranch+" "+bf+R, diffSeg))
-		g := []string{gaugeLP("window", winPct)}
-		if fiveOK {
-			g = append(g, gaugeLP("5h", fiveP))
-		}
-		if sevenOK {
-			g = append(g, gaugeLP("7d", sevenP))
-		}
-		emit(join(g...))
-		return nil
-	}
-
-	// ===== Full / Mid tiers: four lines =====
-	full := tier == tierFull
-
+	// ===== Full tier: 4 lines, everything =====
 	// --- Line 1: identity ---
-	brand := p.sage + brandEmoji(in.Cost.TotalLinesAdded) + " " + ansiBold + "LETS Workflow" + R
-	if full {
-		ver := version.Version
-		if !version.IsDev() {
-			ver = "v" + ver
-		}
-		brand += " " + p.dim + ver + R
-	}
+	brand := p.sage + brandEmoji(in.Cost.TotalLinesAdded) + " " + ansiBold + "LETS Workflow" + R + " " + p.dim + ver + R
 	pillSeg := ""
 	if inWorktree(in, branch) {
 		pillSeg = p.pillBg + p.label + " worktree " + R
 	}
 	prSeg := ""
-	if full && in.PR.Number > 0 {
+	if in.PR.Number > 0 {
 		prSeg = p.label + glyphPR + " #" + strconv.Itoa(in.PR.Number) + R
 		if in.PR.ReviewState != "" {
 			prSeg += " " + p.prStateColor(in.PR.ReviewState) + in.PR.ReviewState + R
@@ -517,49 +517,29 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		noteSeg := ""
 		if taskOK && notes > 0 {
 			noteSeg = p.label + glyphNote + " " + strconv.Itoa(notes) + R
-			if full {
-				if age := relAgo(lastComment); age != "" {
-					noteSeg += " " + p.dim + age + R
-				}
+			if age := relAgo(lastComment); age != "" {
+				noteSeg += " " + p.dim + age + R
 			}
 		}
-		tail := noteSeg
-		if full {
-			hint := p.sage + glyphArrow + R + " " + p.dim + "/lets:note" + R
-			if tail != "" {
-				tail += " " + hint
-			} else {
-				tail = hint
-			}
+		hint := p.sage + glyphArrow + R + " " + p.dim + "/lets:note" + R
+		tail := hint
+		if noteSeg != "" {
+			tail = noteSeg + " " + hint
 		}
-		if tail != "" {
-			head += segSep + tail
-		}
-		emit(head)
+		emit(head + segSep + tail)
 	}
 
-	// --- Line 3: budget ---
+	// --- Line 3: budget (model + effort + 3 gauges with bars + timers) ---
 	budget := p.gold + glyphModel + " " + ansiBold + in.Model.DisplayName + R
-	if full && in.Effort.Level != "" {
+	if in.Effort.Level != "" {
 		budget += " " + p.dim + in.Effort.Level + R
 	}
-	var gauges []string
-	if full {
-		gauges = append(gauges, gaugeFull("window", winPct, ""))
-		if fiveOK {
-			gauges = append(gauges, gaugeFull("5h", fiveP, fiveReset))
-		}
-		if sevenOK {
-			gauges = append(gauges, gaugeFull("7d", sevenP, sevenReset))
-		}
-	} else { // Mid: bars, but no reset timers (to fit a narrower window)
-		gauges = append(gauges, gaugeBar("window", winPct))
-		if fiveOK {
-			gauges = append(gauges, gaugeBar("5h", fiveP))
-		}
-		if sevenOK {
-			gauges = append(gauges, gaugeBar("7d", sevenP))
-		}
+	gauges := []string{gaugeFull("window", winPct, "")}
+	if fiveOK {
+		gauges = append(gauges, gaugeFull("5h", fiveP, fiveReset))
+	}
+	if sevenOK {
+		gauges = append(gauges, gaugeFull("7d", sevenP, sevenReset))
 	}
 	emit(budget + segSep + join(gauges...))
 

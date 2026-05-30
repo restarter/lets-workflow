@@ -90,7 +90,7 @@ func writeTaskStatus(t *testing.T, line string) string {
 func TestRenderRich_EmptyInputFull(t *testing.T) {
 	dir := t.TempDir() // no task-status file
 	var buf bytes.Buffer
-	if err := renderRich(&buf, Input{}, "", "", usage{}, bpFull, dir, false); err != nil {
+	if err := renderRich(&buf, Input{}, "", "", usage{}, bpWide, dir, false); err != nil {
 		t.Fatalf("renderRich: %v", err)
 	}
 	out := buf.String()
@@ -116,15 +116,15 @@ func TestRenderRich_EmptyInputFull(t *testing.T) {
 				t.Errorf("line starts with separator+space: %q", plain)
 			}
 		}
-		if vw := visibleWidth(line); vw > bpFull {
-			t.Errorf("line spills width %d > %d: %q", vw, bpFull, plain)
+		if vw := visibleWidth(line); vw > bpWide {
+			t.Errorf("line spills width %d > %d: %q", vw, bpWide, plain)
 		}
 	}
 }
 
 func TestRenderRich_EmptyInputAllTiers(t *testing.T) {
 	dir := t.TempDir()
-	widths := []int{bpFull, bpMid, bpNarrow, 50}
+	widths := []int{bpWide, 95, 70, 45}
 	for _, w := range widths {
 		var buf bytes.Buffer
 		if err := renderRich(&buf, Input{}, "", "", usage{}, w, dir, false); err != nil {
@@ -156,10 +156,10 @@ func TestRenderRich_TierLineCounts(t *testing.T) {
 		width     int
 		wantLines int
 	}{
-		{"Full", bpFull, 4},     // identity, task, budget, tip
-		{"Mid", bpMid, 4},       // identity, task, budget, tip
-		{"Narrow", bpNarrow, 2}, // branch+diff, gauges
-		{"Min", 40, 3},          // brand+version, branch, window·5h·7d %
+		{"Full", bpWide, 4},     // identity, task, budget, tip
+		{"Compact-wide", 95, 4}, // identity, task, gauges, tip
+		{"Compact-70", 70, 4},   // identity, task, gauges, tip
+		{"Compact-45", 45, 4},   // identity, task, gauges, tip
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -188,7 +188,7 @@ func TestRenderRich_NoTaskDropsLine(t *testing.T) {
 	dir := t.TempDir()
 	in := richTestInput()
 	var buf bytes.Buffer
-	if err := renderRich(&buf, in, "main", "folder", usage{}, bpFull, dir, false); err != nil {
+	if err := renderRich(&buf, in, "main", "folder", usage{}, bpWide, dir, false); err != nil {
 		t.Fatalf("renderRich: %v", err)
 	}
 	lines := splitNonEmptyLines(buf.String())
@@ -201,7 +201,7 @@ func TestRenderRich_NoTaskDropsLine(t *testing.T) {
 func TestRenderRich_LightPaletteNoPanic(t *testing.T) {
 	dir := t.TempDir()
 	var buf bytes.Buffer
-	if err := renderRich(&buf, richTestInput(), "feature/lets-aaaaa-x", "f", usage{}, bpFull, dir, true); err != nil {
+	if err := renderRich(&buf, richTestInput(), "feature/lets-aaaaa-x", "f", usage{}, bpWide, dir, true); err != nil {
 		t.Fatalf("renderRich light: %v", err)
 	}
 	if buf.Len() == 0 {
@@ -325,14 +325,11 @@ func TestLevelForWidth(t *testing.T) {
 		width int
 		want  int
 	}{
-		{bpNarrow - 1, tierMin},
-		{bpNarrow, tierNarrow},
-		{bpMid - 1, tierNarrow},
-		{bpMid, tierMid},
-		{bpFull - 1, tierMid},
-		{bpFull, tierFull},
+		{bpWide - 1, tierCompact},
+		{bpWide, tierFull},
 		{500, tierFull},
-		{0, tierMin},
+		{0, tierCompact},
+		{70, tierCompact},
 	}
 	for _, tt := range tests {
 		if got := levelForWidth(tt.width); got != tt.want {
