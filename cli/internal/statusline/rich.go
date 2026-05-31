@@ -553,7 +553,9 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		border("┌", "┐")
 		for i, r := range rows {
 			fmt.Fprintln(w, p.sep+"│ "+R+renderRow(r)+p.sep+" │"+R)
-			if i == dividerAfter {
+			// Draw the divider only if there's a row below it — never ├ right
+			// above └ (e.g. no task AND no tip).
+			if i == dividerAfter && i < len(rows)-1 {
 				border("├", "┤")
 			}
 		}
@@ -628,11 +630,11 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 			g = append(g, gaugeCompact("7d", sevenP, sevenReset))
 		}
 		emit(join(g...))
-		// Line 3: task — only when bd CONFIRMED a real task (taskOK && title). A
-		// bare/bogus branch id or a no-beads project shows no task line. id is the
-		// prefix, title the truncatable mid; notes/age/hint dropped in Compact.
+		rule() // divider ALWAYS after gauges — consistent frame with/without task
+		// Line 3: task — only when bd CONFIRMED a real task (taskOK && title); a
+		// bare/bogus branch id or a no-beads project drops ONLY this line (the
+		// divider stays). id is the prefix, title the truncatable mid.
 		if taskOK && title != "" {
-			rule() // tee divider between gauges and task
 			emitFlex(p.clay+glyphTask+" "+id+R, " "+p.text+title+R, "")
 		}
 		// Line 4: rotating tip — glyph (prefix) + text (truncatable mid).
@@ -690,11 +692,11 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	}
 	emitFull(budget + marker + join(gauges...))
 
-	// --- Line 3: task — only when bd CONFIRMED a real task (taskOK && title).
-	//     id (prefix) + title (truncatable mid) + notes/age/hint (suffix, kept).
-	//     A bare/bogus branch id or a no-beads project shows no task line. ---
+	rule() // divider ALWAYS after budget — consistent frame with/without task
+	// --- Line 3: task — only when bd CONFIRMED a real task (taskOK && title);
+	//     id (prefix) + title (truncatable mid) + notes/age/hint (suffix). A
+	//     bare/bogus branch id or no-beads drops ONLY this line (divider stays). ---
 	if taskOK && title != "" {
-		rule() // tee divider between budget and task
 		noteSeg := ""
 		if notes > 0 {
 			noteSeg = p.label + glyphNote + " " + strconv.Itoa(notes) + R

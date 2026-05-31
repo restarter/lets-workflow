@@ -182,8 +182,8 @@ func TestRenderRich_TierLineCounts(t *testing.T) {
 	}
 }
 
-// TestRenderRich_NoTaskDropsLine verifies the task line is dropped entirely
-// when the branch carries no task id (Full tier => identity, budget, tip = 3).
+// TestRenderRich_NoTaskDropsLine verifies ONLY the task line is dropped when the
+// branch carries no task id — the frame (divider) stays for a consistent box.
 func TestRenderRich_NoTaskDropsLine(t *testing.T) {
 	dir := t.TempDir()
 	in := richTestInput()
@@ -192,9 +192,9 @@ func TestRenderRich_NoTaskDropsLine(t *testing.T) {
 		t.Fatalf("renderRich: %v", err)
 	}
 	lines := splitNonEmptyLines(buf.String())
-	if len(lines) != 5 {
-		// ┌top, identity, budget, tip, └bottom — no task line, no ├ divider.
-		t.Errorf("no-task Full tier: got %d lines, want 5:\n%s", len(lines), buf.String())
+	if len(lines) != 6 {
+		// ┌top, identity, budget, ├divider, tip, └bottom — task line dropped, divider kept.
+		t.Errorf("no-task Full tier: got %d lines, want 6:\n%s", len(lines), buf.String())
 	}
 }
 
