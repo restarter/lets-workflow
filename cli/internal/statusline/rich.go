@@ -84,7 +84,7 @@ const (
 	glyphSprout = "🌱"
 	glyphBranch = "⎇"
 	glyphTask   = "✓"
-	glyphNote   = "✎"
+	glyphNote   = "💬"
 	glyphModel  = "✦"
 	glyphTip    = "?"
 	glyphPR     = "⇄"
@@ -212,7 +212,7 @@ func visibleWidth(s string) int { return len([]rune(stripANSI(s))) }
 // map; verify on your terminal (or swap those glyphs) if the border looks off.
 var wideRunes = map[rune]bool{
 	'🌱': true, '🪴': true, '🌿': true, '🌳': true, '🌴': true, // brand ladder
-	'📁': true, // folder pill (only non-brand emoji left; rest are text glyphs)
+	'📁': true, '💬': true, // folder pill, note-count bubble
 }
 
 func runeCells(r rune) int {
@@ -635,7 +635,7 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		}
 		// Line 4: rotating tip — glyph (prefix) + text (truncatable mid).
 		if t := tipOfMoment(time.Now()); showTip && t != "" {
-			emitFlex(p.sage+glyphTip+R+" ", p.dim+ansiItalic+t+R, "")
+			emitFlex(p.dim+glyphTip+R+" ", p.dim+ansiItalic+t+R, "")
 		}
 		flush() // size + draw the box around the collected rows
 		return nil
@@ -695,7 +695,7 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	if taskOK && title != "" {
 		noteSeg := ""
 		if notes > 0 {
-			noteSeg = p.label + glyphNote + " " + strconv.Itoa(notes) + R
+			noteSeg = p.label + strconv.Itoa(notes) + " " + glyphNote + R
 			if age := relAgo(lastComment); age != "" {
 				noteSeg += " " + p.dim + "(" + age + ")" + R
 			}
@@ -710,7 +710,7 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 
 	// --- Line 4: rotating tip — glyph (prefix) + text (truncatable mid) ---
 	if t := tipOfMoment(time.Now()); showTip && t != "" {
-		emitFlex(p.sage+glyphTip+R+" ", p.dim+ansiItalic+t+R, "")
+		emitFlex(p.dim+glyphTip+R+" ", p.dim+ansiItalic+t+R, "")
 	}
 	flush() // size + draw the box around the collected rows
 	return nil

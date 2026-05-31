@@ -203,12 +203,15 @@ func TestComputeDeltaCompact(t *testing.T) {
 	if got := computeDeltaCompact(iso(-time.Hour)); got != "now" {
 		t.Errorf("past -> %q, want now", got)
 	}
-	// Compact format has NO inner space, unlike computeDelta ("2d 3h" vs "2d3h").
-	for _, d := range []time.Duration{50 * time.Hour, 3 * time.Hour, 45 * time.Minute} {
+	// Spaced magnitudes via fmtDur ("2d 1h", "2h 59m"); sub-hour is bare "Nm".
+	for _, d := range []time.Duration{50 * time.Hour, 3 * time.Hour} {
 		got := computeDeltaCompact(iso(d))
-		if strings.Contains(got, " ") {
-			t.Errorf("compact delta should have no space: %q (delta=%s)", got, d)
+		if !strings.Contains(got, " ") {
+			t.Errorf("multi-unit delta should be spaced: %q (delta=%s)", got, d)
 		}
+	}
+	if got := computeDeltaCompact(iso(45 * time.Minute)); strings.Contains(got, " ") {
+		t.Errorf("sub-hour delta should be bare minutes: %q", got)
 	}
 	if got := computeDeltaCompact(iso(50 * time.Hour)); !strings.Contains(got, "d") || !strings.Contains(got, "h") {
 		t.Errorf("days-ahead -> %q, want NdNh", got)

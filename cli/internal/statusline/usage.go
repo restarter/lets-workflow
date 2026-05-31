@@ -210,21 +210,20 @@ func parseISO(iso string) (time.Time, bool) {
 	return t, true
 }
 
-// fmtDur renders a positive duration as a compact magnitude — "45m", "1h52m",
-// "4d22h". Single source of truth for every relative-time label in the rich
-// statusline: reset deltas (computeDeltaCompact, future) and task age (relAgo,
-// past) both route through it, so the two surfaces never drift in format. The
-// frozen compact path (render.go via computeDelta) keeps its own spaced form for
-// the golden tests — that is the one intentional exception.
+// fmtDur renders a positive duration as a spaced magnitude — "45m", "1h 52m",
+// "4d 22h". Single source of truth for every relative-time label in the rich
+// statusline: reset deltas (computeDeltaCompact) and task age (relAgo) both route
+// through it, so the two surfaces never drift in format. The frozen compact path
+// (render.go via computeDelta) keeps its own copy for the golden tests.
 func fmtDur(d time.Duration) string {
 	hours := int(d.Hours()) % 24
 	minutes := int(d.Minutes()) % 60
 	days := int(d.Hours()) / 24
 	switch {
 	case days > 0:
-		return fmt.Sprintf("%dd%dh", days, hours)
+		return fmt.Sprintf("%dd %dh", days, hours)
 	case int(d.Hours()) > 0:
-		return fmt.Sprintf("%dh%dm", hours, minutes)
+		return fmt.Sprintf("%dh %dm", hours, minutes)
 	default:
 		return fmt.Sprintf("%dm", minutes)
 	}

@@ -567,7 +567,7 @@ func TestRenderRich_FlexTitleKeepsSuffix(t *testing.T) {
 	if !strings.Contains(plain, "/lets:note") {
 		t.Errorf("suffix (→ /lets:note) must survive a long title:\n%s", plain)
 	}
-	if !strings.Contains(plain, "✎ 9") {
+	if !strings.Contains(plain, "9 💬") {
 		t.Errorf("note count must survive a long title:\n%s", plain)
 	}
 }
