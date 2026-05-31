@@ -331,10 +331,10 @@ func TestRelAgo(t *testing.T) {
 	if got := relAgo("garbage"); got != "" {
 		t.Errorf("relAgo(garbage): got %q, want \"\"", got)
 	}
-	// <1m → "just now". Use a fixed past instant (year 2000) so the bucket
-	// suffix is stable regardless of when the test runs.
-	if got := relAgo("2000-01-01T00:00:00Z"); !strings.HasSuffix(got, "d ago") {
-		t.Errorf("relAgo(year 2000): expected \"...d ago\", got %q", got)
+	// Days-scale past → compact "<N>d<H>h ago" via fmtDur. Use a fixed past
+	// instant (year 2000) so the day bucket is stable regardless of run time.
+	if got := relAgo("2000-01-01T00:00:00Z"); !strings.HasSuffix(got, "h ago") || !strings.Contains(got, "d") {
+		t.Errorf("relAgo(year 2000): expected \"...d..h ago\", got %q", got)
 	}
 }
 
@@ -435,7 +435,7 @@ func TestCellWidth(t *testing.T) {
 		{"abc", 3},
 		{"", 0},
 		{"🌱", 2},                // wide emoji
-		{"📋 7", 4},              // emoji + space + digit
+		{"📁 7", 4},              // emoji + space + digit
 		{"⎇ x", 3},              // monochrome symbol is 1 cell
 		{"\033[1mhi\033[0m", 2}, // ANSI stripped
 		{"🌴🌴", 4},
@@ -567,7 +567,7 @@ func TestRenderRich_FlexTitleKeepsSuffix(t *testing.T) {
 	if !strings.Contains(plain, "/lets:note") {
 		t.Errorf("suffix (→ /lets:note) must survive a long title:\n%s", plain)
 	}
-	if !strings.Contains(plain, "📋 9") {
+	if !strings.Contains(plain, "✎ 9") {
 		t.Errorf("note count must survive a long title:\n%s", plain)
 	}
 }
@@ -601,7 +601,7 @@ func TestRenderRich_TaskLineGated(t *testing.T) {
 	if err := renderRich(&ok, in, "feature/lets-ds6bc-x", "f", usage{}, 120, dir, false, true); err != nil {
 		t.Fatalf("confirmed: %v", err)
 	}
-	if !strings.Contains(stripANSI(ok.String()), "☑ lets-ds6bc Real Title") {
+	if !strings.Contains(stripANSI(ok.String()), "✓ lets-ds6bc Real Title") {
 		t.Errorf("confirmed task should render the task line:\n%s", stripANSI(ok.String()))
 	}
 
@@ -610,7 +610,7 @@ func TestRenderRich_TaskLineGated(t *testing.T) {
 	if err := renderRich(&bogus, in, "my-random-branch", "f", usage{}, 120, t.TempDir(), false, true); err != nil {
 		t.Fatalf("bogus: %v", err)
 	}
-	if strings.Contains(stripANSI(bogus.String()), "☑") {
+	if strings.Contains(stripANSI(bogus.String()), "✓ lets-") {
 		t.Errorf("unconfirmed/bogus branch must NOT render a task line:\n%s", stripANSI(bogus.String()))
 	}
 }

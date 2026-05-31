@@ -83,10 +83,10 @@ var paletteLight = palette{
 const (
 	glyphSprout = "🌱"
 	glyphBranch = "⎇"
-	glyphTask   = "☑"
-	glyphNote   = "📋"
+	glyphTask   = "✓"
+	glyphNote   = "✎"
 	glyphModel  = "✦"
-	glyphTip    = "💡"
+	glyphTip    = "?"
 	glyphPR     = "⇄"
 	glyphArrow  = "→"
 	glyphFolder = "📁"
@@ -150,7 +150,7 @@ const (
 // fullMaxLine bounds the box's inner width so a wide terminal doesn't stretch
 // the bar full width. Long rows (branch, title, tip) are not pre-truncated —
 // the box's fitCell end-truncates whatever overflows this width.
-const fullMaxLine = 100
+const fullMaxLine = 120
 
 // effortColor maps an effort level to a color mirroring the /effort picker
 // gradient (faster→smarter): low gold, medium green, high blue, xhigh purple,
@@ -212,7 +212,7 @@ func visibleWidth(s string) int { return len([]rune(stripANSI(s))) }
 // map; verify on your terminal (or swap those glyphs) if the border looks off.
 var wideRunes = map[rune]bool{
 	'🌱': true, '🪴': true, '🌿': true, '🌳': true, '🌴': true, // brand ladder
-	'📋': true, '💡': true, '📁': true, // note, tip, folder
+	'📁': true, // folder pill (only non-brand emoji left; rest are text glyphs)
 }
 
 func runeCells(r rune) int {
@@ -338,26 +338,22 @@ func inWorktree(in Input, branch string) bool {
 	return in.Worktree.Name != "" || strings.HasPrefix(branch, "worktree-")
 }
 
-// relAgo renders a past ISO timestamp as "N min ago" / "Nh ago" / "Nd ago".
-// Empty for blank/invalid/future input.
+// relAgo renders a past ISO timestamp as a compact age — "37m ago", "1h52m ago",
+// "4d22h ago" — sharing fmtDur with the reset deltas so the two never drift.
+// "just now" under a minute; empty for blank/invalid/future input.
 func relAgo(iso string) string {
 	t, ok := parseISO(iso)
 	if !ok {
 		return ""
 	}
 	diff := time.Since(t)
-	switch {
-	case diff < 0:
+	if diff < 0 {
 		return ""
-	case diff < time.Minute:
-		return "just now"
-	case diff < time.Hour:
-		return fmt.Sprintf("%d min ago", int(diff.Minutes()))
-	case diff < 24*time.Hour:
-		return fmt.Sprintf("%dh ago", int(diff.Hours()))
-	default:
-		return fmt.Sprintf("%dd ago", int(diff.Hours())/24)
 	}
+	if diff < time.Minute {
+		return "just now"
+	}
+	return fmtDur(diff) + " ago"
 }
 
 // readTaskStatus reads a cheap on-change cache (PROTOTYPE: written by hand; real
@@ -701,7 +697,7 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		if notes > 0 {
 			noteSeg = p.label + glyphNote + " " + strconv.Itoa(notes) + R
 			if age := relAgo(lastComment); age != "" {
-				noteSeg += " " + p.dim + age + R
+				noteSeg += " " + p.dim + "(" + age + ")" + R
 			}
 		}
 		hint := p.sage + glyphArrow + R + " " + p.dim + "/lets:note" + R

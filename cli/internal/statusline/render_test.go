@@ -198,10 +198,10 @@ func TestRender_NoTip(t *testing.T) {
 	if err := Render(strings.NewReader(payload), &off, false, false, false); err != nil {
 		t.Fatalf("tip-off: %v", err)
 	}
-	if !strings.Contains(on.String(), "💡") {
-		t.Errorf("showTip=true should render the 💡 tip line:\n%s", on.String())
+	if !strings.Contains(on.String(), "?") {
+		t.Errorf("showTip=true should render the ? tip line:\n%s", on.String())
 	}
-	if strings.Contains(off.String(), "💡") {
-		t.Errorf("showTip=false should hide the 💡 tip line:\n%s", off.String())
+	if strings.Contains(off.String(), "?") {
+		t.Errorf("showTip=false should hide the ? tip line:\n%s", off.String())
 	}
 }

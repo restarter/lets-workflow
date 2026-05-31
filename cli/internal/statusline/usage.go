@@ -210,6 +210,26 @@ func parseISO(iso string) (time.Time, bool) {
 	return t, true
 }
 
+// fmtDur renders a positive duration as a compact magnitude — "45m", "1h52m",
+// "4d22h". Single source of truth for every relative-time label in the rich
+// statusline: reset deltas (computeDeltaCompact, future) and task age (relAgo,
+// past) both route through it, so the two surfaces never drift in format. The
+// frozen compact path (render.go via computeDelta) keeps its own spaced form for
+// the golden tests — that is the one intentional exception.
+func fmtDur(d time.Duration) string {
+	hours := int(d.Hours()) % 24
+	minutes := int(d.Minutes()) % 60
+	days := int(d.Hours()) / 24
+	switch {
+	case days > 0:
+		return fmt.Sprintf("%dd%dh", days, hours)
+	case int(d.Hours()) > 0:
+		return fmt.Sprintf("%dh%dm", hours, minutes)
+	default:
+		return fmt.Sprintf("%dm", minutes)
+	}
+}
+
 // computeDeltaCompact is computeDelta without the inner space — "1h52m",
 // "4d22h", "45m" — for the dense rich gauges. computeDelta keeps its spaced form
 // because the frozen compact statusline path (render.go) depends on it
@@ -223,17 +243,7 @@ func computeDeltaCompact(iso string) string {
 	if diff <= 0 {
 		return "now"
 	}
-	days := int(diff.Hours()) / 24
-	hours := int(diff.Hours()) % 24
-	minutes := int(diff.Minutes()) % 60
-	switch {
-	case days > 0:
-		return fmt.Sprintf("%dd%dh", days, hours)
-	case hours > 0:
-		return fmt.Sprintf("%dh%dm", hours, minutes)
-	default:
-		return fmt.Sprintf("%dm", minutes)
-	}
+	return fmtDur(diff)
 }
 
 // computeDelta returns human-readable time-until-reset (e.g. "2d 3h", "45m").
