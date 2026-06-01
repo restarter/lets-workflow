@@ -152,7 +152,7 @@ Branch: {branch-name}
 └───────────────────────────────┘
 ```
 
-When invoked by `/lets:start` - skip this output, the command has its own.
+When invoked by `/lets:start` OR `/lets:done` (via `Skill` tool) - skip this output, the calling command has its own. Per CLAUDE.md "Internal invocation = no box".
 
 ## Anti-patterns
 
