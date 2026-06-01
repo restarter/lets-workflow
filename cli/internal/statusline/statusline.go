@@ -23,36 +23,106 @@ import (
 )
 
 // Input mirrors the JSON Claude Code pipes to the statusline command.
-// Only fields we use are decoded.
+// PROTOTYPE (lets-ds6bc): expanded to decode the FULL documented payload so the
+// max "rich" level can show everything. Compact (renderLines) still only reads
+// model/workspace/cwd/context_window — additive, so it is unaffected.
 type Input struct {
-	Model struct {
+	Cwd            string `json:"cwd"`
+	SessionID      string `json:"session_id"`
+	SessionName    string `json:"session_name"`
+	TranscriptPath string `json:"transcript_path"`
+	Version        string `json:"version"`
+	Model          struct {
+		ID          string `json:"id"`
 		DisplayName string `json:"display_name"`
 	} `json:"model"`
 	Workspace struct {
 		CurrentDir string `json:"current_dir"`
+		ProjectDir string `json:"project_dir"`
+		// NOTE: workspace.git_worktree is intentionally NOT decoded — Claude
+		// Code sends it as a STRING (the worktree path) in worktrees, not a
+		// bool, which would fail json.Unmarshal and blank the whole bar. We
+		// detect worktrees via worktree.name instead (see inWorktree).
+		Repo struct {
+			Host  string `json:"host"`
+			Owner string `json:"owner"`
+			Name  string `json:"name"`
+		} `json:"repo"`
 	} `json:"workspace"`
-	Cwd           string `json:"cwd"`
+	OutputStyle struct {
+		Name string `json:"name"`
+	} `json:"output_style"`
+	Cost struct {
+		TotalCostUSD      float64 `json:"total_cost_usd"`
+		TotalDurationMs   int64   `json:"total_duration_ms"`
+		TotalLinesAdded   int     `json:"total_lines_added"`
+		TotalLinesRemoved int     `json:"total_lines_removed"`
+	} `json:"cost"`
 	ContextWindow struct {
-		UsedPercentage    float64 `json:"used_percentage"`
-		ContextWindowSize int     `json:"context_window_size"`
-		CurrentUsage      struct {
+		TotalInputTokens    int     `json:"total_input_tokens"`
+		TotalOutputTokens   int     `json:"total_output_tokens"`
+		UsedPercentage      float64 `json:"used_percentage"`
+		RemainingPercentage float64 `json:"remaining_percentage"`
+		ContextWindowSize   int     `json:"context_window_size"`
+		CurrentUsage        struct {
 			CacheReadInputTokens     int `json:"cache_read_input_tokens"`
 			CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
 			InputTokens              int `json:"input_tokens"`
 			OutputTokens             int `json:"output_tokens"`
 		} `json:"current_usage"`
 	} `json:"context_window"`
+	Exceeds200k bool `json:"exceeds_200k_tokens"`
+	Effort      struct {
+		Level string `json:"level"`
+	} `json:"effort"`
+	Thinking struct {
+		Enabled bool `json:"enabled"`
+	} `json:"thinking"`
+	FastMode   bool `json:"fast_mode"`
+	RateLimits struct {
+		FiveHour struct {
+			UsedPercentage float64 `json:"used_percentage"`
+			// resets_at is flexISO, not string: Claude Code's statusline payload
+			// sends it as a NUMBER (Unix epoch), while the Anthropic usage API
+			// sends an ISO string. A plain string field fails json.Unmarshal on
+			// the number and blanks the whole bar (same class as git_worktree).
+			ResetsAt flexISO `json:"resets_at"`
+		} `json:"five_hour"`
+		SevenDay struct {
+			UsedPercentage float64 `json:"used_percentage"`
+			ResetsAt       flexISO `json:"resets_at"`
+		} `json:"seven_day"`
+	} `json:"rate_limits"`
+	Vim struct {
+		Mode string `json:"mode"`
+	} `json:"vim"`
+	Agent struct {
+		Name string `json:"name"`
+	} `json:"agent"`
+	PR struct {
+		Number      int    `json:"number"`
+		URL         string `json:"url"`
+		ReviewState string `json:"review_state"`
+	} `json:"pr"`
+	Worktree struct {
+		Name           string `json:"name"`
+		Path           string `json:"path"`
+		Branch         string `json:"branch"`
+		OriginalBranch string `json:"original_branch"`
+	} `json:"worktree"`
 }
 
 // Render decodes the input JSON, fetches usage cache (or spawns background
-// refresh if stale), and writes the 2-line formatted statusline to w.
+// refresh if stale), and writes the statusline to w. The rich multi-line box is
+// the DEFAULT; compact=true selects the legacy 2-line output. showTip toggles
+// the rich bottom tip line (env LETS_STATUSLINE_TIP=off/0/false also disables).
 //
 // Resilient to empty/invalid stdin: Claude Code occasionally invokes the
 // statusline command with no input (e.g. during /reload-plugins or initial
 // render before the IPC pipe is wired). Empty input → render with zero-value
 // Input (defaults to cwd-based detection). A blank statusline error is more
 // disruptive than missing context.
-func Render(stdin io.Reader, w io.Writer) error {
+func Render(stdin io.Reader, w io.Writer, light, compact, showTip bool) error {
 	data, err := io.ReadAll(stdin)
 	if err != nil {
 		return fmt.Errorf("read stdin: %w", err)
@@ -87,13 +157,45 @@ func Render(stdin io.Reader, w io.Writer) error {
 		spawnBackgroundFetch(cacheDir)
 	}
 
-	return renderLines(w, in, branch, folder, u)
+	// Legacy 2-line output, opt-in via --compact (kept as a fallback for
+	// terminals where the rich box's emoji/box-drawing misbehaves).
+	if compact {
+		return renderLines(w, in, branch, folder, u)
+	}
+
+	// Rich box is the default. env LETS_STATUSLINE_TIP=off/0/false hides the tip.
+	if v := strings.ToLower(strings.TrimSpace(os.Getenv("LETS_STATUSLINE_TIP"))); v == "off" || v == "0" || v == "false" || v == "no" {
+		showTip = false
+	}
+	// Background-refresh the task-status cache off the hot path (same detached-
+	// subprocess pattern as usage). Only the rich Line 2 consumes it. The id is
+	// free (branch name); the bd call happens in the detached child, never inline.
+	if id := taskIDFromBranch(branch); id != "" && !taskStatusFresh(cacheDir, id, taskStatusTTL) {
+		// On a task SWITCH (cached id differs) the cache holds no data for this
+		// id, so without a debounce every render in the fetch window re-spawns
+		// bd. Write an id-only placeholder first: it renders immediately and
+		// reads "fresh", collapsing the burst to one fetch. On a same-id TTL
+		// refresh we skip the placeholder to keep showing the stale-but-real
+		// title while bd refreshes.
+		if cachedTaskID(cacheDir) != id {
+			_ = writeTaskStatusPlaceholder(cacheDir, id)
+		}
+		spawnBackgroundTaskFetch(cacheDir, id)
+	}
+	return renderRich(w, in, branch, folder, u, detectWidth(), cacheDir, light, showTip)
 }
 
 // RunFetchOnly is the entry point used by the background subprocess.
 // It fetches usage and writes cache, then returns. No stdin/stdout I/O.
 func RunFetchOnly(cacheDir string) error {
 	return fetchAndCacheUsage(cacheDir)
+}
+
+// RunFetchTaskOnly is the entry point for the detached task-status refresh
+// (`lets statusline --fetch-task-only`). Queries bd for the task and writes the
+// task-status cache. No stdin/stdout I/O.
+func RunFetchTaskOnly(cacheDir, taskID string) error {
+	return fetchAndCacheTaskStatus(cacheDir, taskID)
 }
 
 // detectProjectRoot wraps `git -C <dir> rev-parse --show-toplevel`.
@@ -148,4 +250,22 @@ func spawnBackgroundFetch(cacheDir string) {
 	_ = cmd.Start()
 	// Do NOT call cmd.Wait() - that would block the parent. Brief zombie is
 	// reclaimed by the kernel once the short-lived parent exits.
+}
+
+// spawnBackgroundTaskFetch starts a detached subprocess that queries bd for the
+// active task and refreshes cacheDir/task-status. Same detach mechanics as
+// spawnBackgroundFetch; the bd call stays off the render hot path. bd is
+// resolved from the inherited PATH — if it's absent the child fails silently
+// and Line 2 degrades to id-only, which is the documented graceful path.
+func spawnBackgroundTaskFetch(cacheDir, taskID string) {
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	cmd := exec.Command(exe, "statusline", "--fetch-task-only", "--cache-dir", cacheDir, "--task-id", taskID)
+	cmd.Stdin = nil
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	detachProcessGroup(cmd)
+	_ = cmd.Start()
 }

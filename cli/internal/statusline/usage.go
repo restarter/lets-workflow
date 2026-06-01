@@ -2,6 +2,8 @@ package statusline
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -141,14 +143,54 @@ func writeUsageCache(path string, u usage) error {
 	return os.Rename(tmp, path)
 }
 
-// computeDelta returns human-readable time-until-reset (e.g. "2d 3h", "45m").
-// Empty string for past/invalid timestamps. Uses stdlib time.Parse - no
-// macOS-vs-Linux date pitfalls (free Windows portability).
-func computeDelta(iso string) string {
-	if iso == "" {
+// flexISO decodes a reset timestamp that may arrive as either a JSON string
+// (ISO-8601, like the Anthropic usage API) or a JSON number (Unix epoch, like
+// Claude Code's statusline payload). Decoding NEVER fails the surrounding
+// payload: anything unrecognized normalizes to "" — the gauge's reset timer is
+// just omitted, the same graceful path as a missing field. This guards the
+// class of bug where one variable-typed field blanks the entire bar (cf. the
+// git_worktree string/bool case).
+type flexISO string
+
+func (f *flexISO) UnmarshalJSON(b []byte) error {
+	*f = flexISO(parseFlexISO(b))
+	return nil
+}
+
+// parseFlexISO converts a raw JSON token (string | number | null) to an ISO
+// string, or "" when it can't. A number is treated as a Unix epoch; seconds
+// (~1.7e9) vs milliseconds (~1.7e12) are disambiguated by magnitude.
+func parseFlexISO(b []byte) string {
+	b = bytes.TrimSpace(b)
+	if len(b) == 0 || string(b) == "null" {
 		return ""
 	}
-	// Mirror bash sed sequence: strip .NNN, ±HH:MM, trailing Z.
+	if b[0] == '"' {
+		var s string
+		if err := json.Unmarshal(b, &s); err != nil {
+			return ""
+		}
+		return s
+	}
+	var n float64
+	if err := json.Unmarshal(b, &n); err != nil || n <= 0 {
+		return ""
+	}
+	sec := int64(n)
+	if sec >= 1_000_000_000_000 { // >= 1e12 → milliseconds
+		sec /= 1000
+	}
+	return time.Unix(sec, 0).UTC().Format("2006-01-02T15:04:05Z")
+}
+
+// parseISO normalizes an ISO-8601 timestamp — strips fractional seconds, a
+// ±HH:MM offset, and a trailing Z — then parses it as UTC. ok=false on
+// blank/invalid input. Shared by computeDelta (future) and relAgo (past) so the
+// fragile normalization lives in one place (mirrors the old bash sed sequence).
+func parseISO(iso string) (time.Time, bool) {
+	if iso == "" {
+		return time.Time{}, false
+	}
 	s := iso
 	if i := strings.IndexByte(s, '.'); i != -1 {
 		j := i + 1
@@ -161,9 +203,53 @@ func computeDelta(iso string) string {
 	if len(s) >= 6 && (s[len(s)-6] == '+' || s[len(s)-6] == '-') && s[len(s)-3] == ':' {
 		s = s[:len(s)-6]
 	}
-
 	t, err := time.ParseInLocation("2006-01-02T15:04:05", s, time.UTC)
 	if err != nil {
+		return time.Time{}, false
+	}
+	return t, true
+}
+
+// fmtDur renders a positive duration as a spaced magnitude — "45m", "1h 52m",
+// "4d 22h". Single source of truth for every relative-time label in the rich
+// statusline: reset deltas (computeDeltaCompact) and task age (relAgo) both route
+// through it, so the two surfaces never drift in format. The frozen compact path
+// (render.go via computeDelta) keeps its own copy for the golden tests.
+func fmtDur(d time.Duration) string {
+	hours := int(d.Hours()) % 24
+	minutes := int(d.Minutes()) % 60
+	days := int(d.Hours()) / 24
+	switch {
+	case days > 0:
+		return fmt.Sprintf("%dd %dh", days, hours)
+	case int(d.Hours()) > 0:
+		return fmt.Sprintf("%dh %dm", hours, minutes)
+	default:
+		return fmt.Sprintf("%dm", minutes)
+	}
+}
+
+// computeDeltaCompact is computeDelta without the inner space — "1h52m",
+// "4d22h", "45m" — for the dense rich gauges. computeDelta keeps its spaced form
+// because the frozen compact statusline path (render.go) depends on it
+// byte-for-byte.
+func computeDeltaCompact(iso string) string {
+	t, ok := parseISO(iso)
+	if !ok {
+		return ""
+	}
+	diff := time.Until(t)
+	if diff <= 0 {
+		return "now"
+	}
+	return fmtDur(diff)
+}
+
+// computeDelta returns human-readable time-until-reset (e.g. "2d 3h", "45m").
+// Empty for invalid timestamps, "now" for past/elapsed.
+func computeDelta(iso string) string {
+	t, ok := parseISO(iso)
+	if !ok {
 		return ""
 	}
 	diff := time.Until(t)
