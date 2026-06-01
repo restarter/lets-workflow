@@ -88,7 +88,7 @@ const (
 	glyphModel  = "✦"
 	glyphTip    = "*"
 	glyphPR     = "⇄"
-	glyphArrow  = "→"
+	glyphArrow  = "←"
 	glyphFolder = "⌂"
 	glyphPlant  = "⚘" // static brand mark (text, 1 cell) — growth ladder parked below
 )
@@ -508,16 +508,9 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	}
 	tier := levelForWidth(width)
 	R := ansiReset
-	// The » marker takes the color of the segment it "opens": brand rows lead with
-	// the sage LETS mark, the budget row leads with the gold model mark.
-	markerBrand := p.sage + ansiBold + separatorAngle + R // " » " after LETS
-	markerModel := p.gold + ansiBold + separatorAngle + R // " » " after the model
-	// Each row's separators share that row's lead color: the identity row is sage
-	// (opened by LETS), the budget row is gold (opened by the model), the task row
-	// is clay (opened by the ✓ id) — so a whole line reads as one color family,
-	// marker/arrow and dots alike.
-	sepBrand := p.sage + separatorMidDot + R // " · " identity row
-	sepModel := p.gold + separatorMidDot + R // " · " budget row
+	// Single neutral separator everywhere — the gray middot · . No » marker on any
+	// row (the brand/model/title still lead their rows, just without a glyph gap).
+	segSep := p.sep + separatorMidDot + R // " · "
 
 	// Closed box frame that HUGS the content: rows are collected, then the box
 	// is sized to the widest row (capped to fullMaxLine and width-4) so the right
@@ -601,12 +594,12 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	}
 
 	// ----- shared values -----
+	// Show the branch name VERBATIM — no "worktree-" prefix stripping. The bar is
+	// a search anchor: trimming it means a user grepping for the displayed name
+	// wouldn't find the real branch. The location pill already signals "worktree".
 	bf := branch
 	if bf == "" {
 		bf = folder
-	}
-	if inWorktree(in, branch) {
-		bf = strings.TrimPrefix(bf, "worktree-")
 	}
 	id := taskIDFromBranch(branch)
 	title, notes, lastComment, taskOK := readTaskStatus(cacheDir, id)
@@ -652,7 +645,7 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	if tier == tierCompact {
 		// Line 1: brand+version » branch · diff (no worktree pill, no PR; short "LETS").
 		emit(p.sage + brandEmoji(in.Cost.TotalLinesAdded) + " " + ansiBold + "LETS" + R + " " + p.dim + ver + R +
-			markerBrand + joinSep(sepBrand, p.clay+glyphBranch+" "+bf+R, diffSeg))
+			segSep + joinSep(segSep, p.clay+glyphBranch+" "+bf+R, diffSeg))
 		// Line 2: window·5h·7d label+pct+timer, no bars.
 		g := []string{gaugeCompact("window", winPct, "")}
 		if fiveOK {
@@ -661,7 +654,7 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		if sevenOK {
 			g = append(g, gaugeCompact("7d", sevenP, sevenReset))
 		}
-		emit(joinSep(sepModel, g...))
+		emit(joinSep(segSep, g...))
 		rule() // divider ALWAYS after gauges — consistent frame with/without task
 		// Line 3: task — only when bd CONFIRMED a real task (taskOK && title); a
 		// bare/bogus branch id or a no-beads project drops ONLY this line (the
@@ -682,13 +675,11 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 
 	// --- Line 1: identity (branch truncated so the line stays under the cap) ---
 	brand := p.sage + brandEmoji(in.Cost.TotalLinesAdded) + " " + ansiBold + "LETS Workflow" + R + " " + p.dim + ver + R
-	// Location badge right after the marker: a "📁 <name>" pill, where name is
-	// "worktree" inside a worktree (its name == branch, so the cwd path would be
-	// redundant) or the cwd folder otherwise. One universal folder badge.
+	// Location badge right after the marker: a "<name>" pill with the cwd folder.
+	// Suppressed inside a worktree — the "worktree-…" branch name already says it,
+	// so a "worktree" pill would just be noise.
 	locName := ""
-	if inWorktree(in, branch) {
-		locName = "worktree"
-	} else if folder != "" && folder != "." && folder != "/" {
+	if !inWorktree(in, branch) && folder != "" && folder != "." && folder != "/" {
 		locName = folder
 	}
 	locSeg := ""
@@ -702,7 +693,7 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 			prSeg += " " + p.prStateColor(in.PR.ReviewState) + in.PR.ReviewState + R
 		}
 	}
-	emitFull(brand + markerBrand + joinSep(sepBrand, locSeg, p.clay+glyphBranch+" "+bf+R, diffSeg, prSeg))
+	emitFull(brand + segSep + joinSep(segSep, locSeg, p.clay+glyphBranch+" "+bf+R, diffSeg, prSeg))
 
 	// --- Line 2: budget (model + colored effort » window/5h/7d, no bars) ---
 	budget := p.gold + glyphModel + " " + p.modelName(p.gold, in.Model.DisplayName)
@@ -723,7 +714,7 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	if sevenOK {
 		gauges = append(gauges, gaugeParens("7d", sevenP, sevenReset))
 	}
-	emitFull(budget + markerModel + joinSep(sepModel, gauges...))
+	emitFull(budget + segSep + joinSep(segSep, gauges...))
 
 	rule() // divider ALWAYS after budget — consistent frame with/without task
 	// --- Line 3: task — only when bd CONFIRMED a real task (taskOK && title);
@@ -741,15 +732,14 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 				noteSeg += " " + p.dim + "(" + age + ")" + R
 			}
 		}
-		// Task row is the clay family (opened by the clay ✓ id): the » marker after
-		// the title and the → hint arrow share clay, matching the per-row logic.
-		sepTask := p.clay + ansiBold + separatorAngle + R // " » " after the title
-		hint := p.clay + glyphArrow + R + " " + p.dim + "/lets:note" + R
+		// Neutral gray middot after the title (no » outside the identity row); the
+		// → /lets:note hint is fully dim too.
+		hint := p.dim + glyphArrow + " /lets:note" + R
 		tail := hint
 		if noteSeg != "" {
 			tail = noteSeg + " " + hint
 		}
-		emitFlex(p.clay+glyphTask+" "+id+R, " "+p.text+title+R, sepTask+tail)
+		emitFlex(p.clay+glyphTask+" "+id+R, " "+p.text+title+R, segSep+tail)
 	}
 
 	// --- Line 4: rotating tip — glyph (prefix) + text (truncatable mid) ---
