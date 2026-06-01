@@ -188,7 +188,9 @@ func TestRender_Dispatch(t *testing.T) {
 	}
 }
 
-// TestRender_NoTip: showTip=false hides the tip glyph row.
+// TestRender_NoTip: showTip=false drops the bottom tip row from the box.
+// (Asserts on line count, not glyph: the tip glyph is plain text and could also
+// appear inside a tip's wording.)
 func TestRender_NoTip(t *testing.T) {
 	const payload = `{"workspace":{"current_dir":"/tmp"},"model":{"display_name":"Opus"},"context_window":{"used_percentage":10,"context_window_size":1000000}}`
 	var on, off bytes.Buffer
@@ -198,10 +200,10 @@ func TestRender_NoTip(t *testing.T) {
 	if err := Render(strings.NewReader(payload), &off, false, false, false); err != nil {
 		t.Fatalf("tip-off: %v", err)
 	}
-	if !strings.Contains(on.String(), "?") {
-		t.Errorf("showTip=true should render the ? tip line:\n%s", on.String())
-	}
-	if strings.Contains(off.String(), "?") {
-		t.Errorf("showTip=false should hide the ? tip line:\n%s", off.String())
+	onLines := len(splitNonEmptyLines(on.String()))
+	offLines := len(splitNonEmptyLines(off.String()))
+	if onLines <= offLines {
+		t.Errorf("showTip=true should render more rows than showTip=false: on=%d off=%d\non:\n%s\noff:\n%s",
+			onLines, offLines, on.String(), off.String())
 	}
 }

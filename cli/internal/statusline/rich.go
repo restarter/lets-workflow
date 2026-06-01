@@ -84,12 +84,13 @@ const (
 	glyphSprout = "🌱"
 	glyphBranch = "⎇"
 	glyphTask   = "✓"
-	glyphNote   = "💬"
+	glyphNote   = "¶"
 	glyphModel  = "✦"
-	glyphTip    = "?"
+	glyphTip    = "*"
 	glyphPR     = "⇄"
 	glyphArrow  = "→"
-	glyphFolder = "📁"
+	glyphFolder = "⌂"
+	glyphPlant  = "⚘" // static brand mark (text, 1 cell) — growth ladder parked below
 )
 
 // growthLadder maps a monotonic session growth score (cost.total_lines_added)
@@ -98,32 +99,40 @@ const (
 // each new session, so a fresh session starts back at 🌱. E1 caveat: emoji ignore
 // ANSI color, so the brand color comes from the bold "LETS Workflow" text, not
 // the glyph.
-var growthLadder = []struct {
-	min   int
-	emoji string
-}{
-	{0, glyphSprout}, // 🌱 sprout
-	{50, "🪴"},        // potted plant
-	{100, "🌿"},       // leafy bush
-	{250, "🌳"},       // tree
-	{500, "🌴"},       // palm (tropical finale)
-}
+// growthLadder — PARKED. The session-growth brand ladder (🌱→🪴→🌿→🌳→🌴 by
+// cost.total_lines_added) is currently disabled in favor of a single static
+// text mark (glyphPlant ⚘) for a consistent, monochrome identity line. To
+// restore the growth animation: un-comment this var + the laddered brandEmoji
+// below, drop the static brandEmoji, and re-add 🌱🪴🌿🌳🌴 to wideRunes.
+//
+// var growthLadder = []struct {
+// 	min   int
+// 	emoji string
+// }{
+// 	{0, glyphSprout}, // 🌱 sprout
+// 	{50, "🪴"},        // potted plant
+// 	{100, "🌿"},       // leafy bush
+// 	{250, "🌳"},       // tree
+// 	{500, "🌴"},       // palm (tropical finale)
+// }
+//
+// func brandEmoji(linesAdded int) string {
+// 	e := growthLadder[0].emoji
+// 	for _, g := range growthLadder {
+// 		if linesAdded >= g.min {
+// 			e = g.emoji
+// 		}
+// 	}
+// 	return e
+// }
 
-// brandEmoji returns the last ladder stage whose threshold linesAdded meets.
-func brandEmoji(linesAdded int) string {
-	e := growthLadder[0].emoji
-	for _, g := range growthLadder {
-		if linesAdded >= g.min {
-			e = g.emoji
-		}
-	}
-	return e
-}
+// brandEmoji returns the static brand mark. (Growth ladder parked — see above.)
+func brandEmoji(int) string { return glyphPlant }
 
 // Usage thresholds, inclusive lower bound (spec §5).
 const (
-	threshMid  = 60 // pct >= 60 -> warn
-	threshHigh = 85 // pct >= 85 -> alert
+	threshMid  = 50 // pct >= 50 -> warn
+	threshHigh = 75 // pct >= 75 -> alert
 )
 
 // Width breakpoint on COLUMNS — two tiers only. Full (reset timers, PR, location
@@ -211,8 +220,10 @@ func visibleWidth(s string) int { return len([]rune(stripANSI(s))) }
 // drift. Perfect alignment across all terminals isn't achievable with a static
 // map; verify on your terminal (or swap those glyphs) if the border looks off.
 var wideRunes = map[rune]bool{
-	'🌱': true, '🪴': true, '🌿': true, '🌳': true, '🌴': true, // brand ladder
-	'📁': true, '💬': true, // folder pill, note-count bubble
+	// All emitted glyphs are currently 1-cell text — brand ⚘, folder ⌂, notes ¶,
+	// model ✦, task ✓, tip ?. Parked emoji that would belong here if restored:
+	// '🌱': true, '🪴': true, '🌿': true, '🌳': true, '🌴': true, // brand ladder (parked; static ⚘ now)
+	// '📁': true, '💬': true, // folder pill / note bubble (replaced by ⌂ / ¶)
 }
 
 func runeCells(r rune) int {
@@ -315,6 +326,19 @@ func (p palette) threshold(pct int) string {
 // kfmt renders a token count in thousands, rounded: 380000 -> "380k".
 func kfmt(n int) string {
 	return strconv.Itoa((n+500)/1000) + "k"
+}
+
+// modelName colors a Claude Code model display name: the head (e.g. "Opus 4.8")
+// stays bold/accent, while a trailing parenthetical the harness appends (e.g.
+// "(1M context)") is dimmed — nothing is dropped. lead is the accent applied to
+// the head; the parenthetical always uses p.dim. The first "(" splits the two.
+func (p palette) modelName(lead, name string) string {
+	if i := strings.IndexByte(name, '('); i >= 0 {
+		head := strings.TrimRight(name[:i], " ")
+		paren := name[i:]
+		return lead + ansiBold + head + ansiReset + " " + p.dim + paren + ansiReset
+	}
+	return lead + ansiBold + name + ansiReset
 }
 
 var taskIDRe = regexp.MustCompile(`[a-z][a-z0-9]*-[a-z0-9]+(?:\.[0-9]+)?`)
@@ -484,8 +508,16 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	}
 	tier := levelForWidth(width)
 	R := ansiReset
-	marker := p.sage + ansiBold + separatorAngle + R // " » "
-	segSep := p.sep + separatorMidDot + R            // " · "
+	// The » marker takes the color of the segment it "opens": brand rows lead with
+	// the sage LETS mark, the budget row leads with the gold model mark.
+	markerBrand := p.sage + ansiBold + separatorAngle + R // " » " after LETS
+	markerModel := p.gold + ansiBold + separatorAngle + R // " » " after the model
+	// Each row's separators share that row's lead color: the identity row is sage
+	// (opened by LETS), the budget row is gold (opened by the model), the task row
+	// is clay (opened by the ✓ id) — so a whole line reads as one color family,
+	// marker/arrow and dots alike.
+	sepBrand := p.sage + separatorMidDot + R // " · " identity row
+	sepModel := p.gold + separatorMidDot + R // " · " budget row
 
 	// Closed box frame that HUGS the content: rows are collected, then the box
 	// is sized to the widest row (capped to fullMaxLine and width-4) so the right
@@ -557,15 +589,15 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		}
 		border("└", "┘")
 	}
-	// join concatenates non-empty parts with the " · " separator.
-	join := func(parts ...string) string {
+	// joinSep concatenates non-empty parts with the given separator.
+	joinSep := func(sep string, parts ...string) string {
 		kept := make([]string, 0, len(parts))
 		for _, x := range parts {
 			if visibleWidth(x) > 0 {
 				kept = append(kept, x)
 			}
 		}
-		return strings.Join(kept, segSep)
+		return strings.Join(kept, sep)
 	}
 
 	// ----- shared values -----
@@ -588,8 +620,11 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	}
 
 	// gauge variants
+	// The label shares the percentage's threshold color so the whole "window 44%"
+	// pair reads as one colored unit at a glance (the reset delta stays dim).
 	gaugeParens := func(label string, pct int, resetISO string) string { // label + pct + (delta), no bar (Full)
-		s := p.label + label + R + " " + p.threshold(pct) + strconv.Itoa(pct) + "%" + R
+		tc := p.threshold(pct)
+		s := tc + label + " " + strconv.Itoa(pct) + "%" + R
 		if resetISO != "" {
 			if dl := computeDelta(resetISO); dl != "" {
 				s += " " + p.dim + "(" + dl + ")" + R
@@ -598,7 +633,8 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		return s
 	}
 	gaugeCompact := func(label string, pct int, resetISO string) string { // label + pct + timer, no bar (Compact)
-		s := p.label + label + R + " " + p.threshold(pct) + strconv.Itoa(pct) + "%" + R
+		tc := p.threshold(pct)
+		s := tc + label + " " + strconv.Itoa(pct) + "%" + R
 		if resetISO != "" {
 			if dl := computeDeltaCompact(resetISO); dl != "" {
 				s += " " + p.dim + dl + R
@@ -616,7 +652,7 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	if tier == tierCompact {
 		// Line 1: brand+version » branch · diff (no worktree pill, no PR; short "LETS").
 		emit(p.sage + brandEmoji(in.Cost.TotalLinesAdded) + " " + ansiBold + "LETS" + R + " " + p.dim + ver + R +
-			marker + join(p.clay+glyphBranch+" "+bf+R, diffSeg))
+			markerBrand + joinSep(sepBrand, p.clay+glyphBranch+" "+bf+R, diffSeg))
 		// Line 2: window·5h·7d label+pct+timer, no bars.
 		g := []string{gaugeCompact("window", winPct, "")}
 		if fiveOK {
@@ -625,7 +661,7 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		if sevenOK {
 			g = append(g, gaugeCompact("7d", sevenP, sevenReset))
 		}
-		emit(join(g...))
+		emit(joinSep(sepModel, g...))
 		rule() // divider ALWAYS after gauges — consistent frame with/without task
 		// Line 3: task — only when bd CONFIRMED a real task (taskOK && title); a
 		// bare/bogus branch id or a no-beads project drops ONLY this line (the
@@ -657,7 +693,7 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	}
 	locSeg := ""
 	if locName != "" {
-		locSeg = p.pillBg + p.label + " " + glyphFolder + " " + locName + " " + R
+		locSeg = p.pillBg + p.label + " " + locName + " " + R
 	}
 	prSeg := ""
 	if in.PR.Number > 0 {
@@ -666,15 +702,16 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 			prSeg += " " + p.prStateColor(in.PR.ReviewState) + in.PR.ReviewState + R
 		}
 	}
-	emitFull(brand + marker + join(locSeg, p.clay+glyphBranch+" "+bf+R, diffSeg, prSeg))
+	emitFull(brand + markerBrand + joinSep(sepBrand, locSeg, p.clay+glyphBranch+" "+bf+R, diffSeg, prSeg))
 
 	// --- Line 2: budget (model + colored effort » window/5h/7d, no bars) ---
-	budget := p.gold + glyphModel + " " + ansiBold + in.Model.DisplayName + R
+	budget := p.gold + glyphModel + " " + p.modelName(p.gold, in.Model.DisplayName)
 	if in.Effort.Level != "" {
 		budget += " " + p.effortColor(in.Effort.Level) + in.Effort.Level + R
 	}
-	// window: pct + (used/total tokens); 5h/7d: pct + (reset delta).
-	winSeg := p.label + "window" + R + " " + p.threshold(winPct) + strconv.Itoa(winPct) + "%" + R
+	// window: pct + (used/total tokens); 5h/7d: pct + (reset delta). Label shares
+	// the threshold color with the pct (matches the 5h/7d gauges above).
+	winSeg := p.threshold(winPct) + "window " + strconv.Itoa(winPct) + "%" + R
 	if sz := in.ContextWindow.ContextWindowSize; sz > 0 {
 		used := int(in.ContextWindow.UsedPercentage/100*float64(sz) + 0.5)
 		winSeg += " " + p.dim + "(" + kfmt(used) + "/" + kfmt(sz) + ")" + R
@@ -686,7 +723,7 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	if sevenOK {
 		gauges = append(gauges, gaugeParens("7d", sevenP, sevenReset))
 	}
-	emitFull(budget + marker + join(gauges...))
+	emitFull(budget + markerModel + joinSep(sepModel, gauges...))
 
 	rule() // divider ALWAYS after budget — consistent frame with/without task
 	// --- Line 3: task — only when bd CONFIRMED a real task (taskOK && title);
@@ -695,17 +732,24 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	if taskOK && title != "" {
 		noteSeg := ""
 		if notes > 0 {
-			noteSeg = p.label + strconv.Itoa(notes) + " " + glyphNote + R
+			label := " comments"
+			if notes == 1 {
+				label = " comment"
+			}
+			noteSeg = p.label + strconv.Itoa(notes) + label + R
 			if age := relAgo(lastComment); age != "" {
 				noteSeg += " " + p.dim + "(" + age + ")" + R
 			}
 		}
-		hint := p.sage + glyphArrow + R + " " + p.dim + "/lets:note" + R
+		// Task row is the clay family (opened by the clay ✓ id): the » marker after
+		// the title and the → hint arrow share clay, matching the per-row logic.
+		sepTask := p.clay + ansiBold + separatorAngle + R // " » " after the title
+		hint := p.clay + glyphArrow + R + " " + p.dim + "/lets:note" + R
 		tail := hint
 		if noteSeg != "" {
 			tail = noteSeg + " " + hint
 		}
-		emitFlex(p.clay+glyphTask+" "+id+R, " "+p.text+title+R, segSep+tail)
+		emitFlex(p.clay+glyphTask+" "+id+R, " "+p.text+title+R, sepTask+tail)
 	}
 
 	// --- Line 4: rotating tip — glyph (prefix) + text (truncatable mid) ---

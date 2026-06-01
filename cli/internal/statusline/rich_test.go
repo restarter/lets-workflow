@@ -220,10 +220,10 @@ func TestThreshold(t *testing.T) {
 		pct  int
 		want string
 	}{
-		{59, p.ok},
-		{60, p.warn},
-		{84, p.warn},
-		{85, p.alert},
+		{49, p.ok},
+		{50, p.warn},
+		{74, p.warn},
+		{75, p.alert},
 		{0, p.ok},
 		{100, p.alert},
 	}
@@ -382,25 +382,10 @@ func TestReadTaskStatus(t *testing.T) {
 }
 
 func TestBrandEmoji(t *testing.T) {
-	tests := []struct {
-		linesAdded int
-		want       string
-	}{
-		{0, "🌱"},
-		{49, "🌱"},
-		{50, "🪴"},
-		{99, "🪴"},
-		{100, "🌿"},
-		{249, "🌿"},
-		{250, "🌳"},
-		{499, "🌳"},
-		{500, "🌴"},
-		{5000, "🌴"},
-		{-10, "🌱"}, // never below stage 0
-	}
-	for _, tt := range tests {
-		if got := brandEmoji(tt.linesAdded); got != tt.want {
-			t.Errorf("brandEmoji(%d)=%q, want %q", tt.linesAdded, got, tt.want)
+	// Growth ladder parked — brandEmoji is a static text mark for now.
+	for _, n := range []int{-10, 0, 49, 50, 100, 250, 500, 5000} {
+		if got := brandEmoji(n); got != glyphPlant {
+			t.Errorf("brandEmoji(%d)=%q, want %q", n, got, glyphPlant)
 		}
 	}
 }
@@ -434,11 +419,11 @@ func TestCellWidth(t *testing.T) {
 	}{
 		{"abc", 3},
 		{"", 0},
-		{"🌱", 2},                // wide emoji
-		{"📁 7", 4},              // emoji + space + digit
+		{"⌂", 1},                // folder mark — text, 1 cell
+		{"⌂ 7", 3},              // glyph + space + digit
 		{"⎇ x", 3},              // monochrome symbol is 1 cell
 		{"\033[1mhi\033[0m", 2}, // ANSI stripped
-		{"🌴🌴", 4},
+		{"¶✦✓", 3},              // note/model/task marks — all 1 cell
 	}
 	for _, tt := range tests {
 		if got := cellWidth(tt.s); got != tt.want {
@@ -456,8 +441,8 @@ func TestFitCell(t *testing.T) {
 	if got := fitCell("abcdefghij", 5); cellWidth(got) != 5 {
 		t.Errorf("fitCell trunc: cellWidth=%d, want 5 (%q)", cellWidth(got), got)
 	}
-	// Wide emoji near the boundary still lands on exactly w cells.
-	if got := fitCell("🌱🌱🌱🌱", 5); cellWidth(got) != 5 {
+	// Padding/truncation lands on exactly w cells for multi-rune input too.
+	if got := fitCell("¶✦✓⌂", 5); cellWidth(got) != 5 {
 		t.Errorf("fitCell emoji: cellWidth=%d, want 5 (%q)", cellWidth(got), got)
 	}
 }
@@ -567,7 +552,7 @@ func TestRenderRich_FlexTitleKeepsSuffix(t *testing.T) {
 	if !strings.Contains(plain, "/lets:note") {
 		t.Errorf("suffix (→ /lets:note) must survive a long title:\n%s", plain)
 	}
-	if !strings.Contains(plain, "9 💬") {
+	if !strings.Contains(plain, "9 comments") {
 		t.Errorf("note count must survive a long title:\n%s", plain)
 	}
 }
