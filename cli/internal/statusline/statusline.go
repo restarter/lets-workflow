@@ -115,14 +115,15 @@ type Input struct {
 // Render decodes the input JSON, fetches usage cache (or spawns background
 // refresh if stale), and writes the statusline to w. The rich multi-line box is
 // the DEFAULT; compact=true selects the legacy 2-line output. showTip toggles
-// the rich bottom tip line (env LETS_STATUSLINE_TIP=off/0/false also disables).
+// the rich bottom tip line (env LETS_STATUSLINE_TIP=off/0/false also disables);
+// showDir toggles the Full-tier location pill (env LETS_STATUSLINE_DIR=off too).
 //
 // Resilient to empty/invalid stdin: Claude Code occasionally invokes the
 // statusline command with no input (e.g. during /reload-plugins or initial
 // render before the IPC pipe is wired). Empty input → render with zero-value
 // Input (defaults to cwd-based detection). A blank statusline error is more
 // disruptive than missing context.
-func Render(stdin io.Reader, w io.Writer, light, compact, showTip bool) error {
+func Render(stdin io.Reader, w io.Writer, light, compact, showTip, showDir bool) error {
 	data, err := io.ReadAll(stdin)
 	if err != nil {
 		return fmt.Errorf("read stdin: %w", err)
@@ -169,9 +170,13 @@ func Render(stdin io.Reader, w io.Writer, light, compact, showTip bool) error {
 		return renderLines(w, in, branch, folder, u)
 	}
 
-	// Rich box is the default. env LETS_STATUSLINE_TIP=off/0/false hides the tip.
+	// Rich box is the default. env LETS_STATUSLINE_TIP=off/0/false hides the tip;
+	// LETS_STATUSLINE_DIR=off/0/false hides the Full-tier location pill.
 	if v := strings.ToLower(strings.TrimSpace(os.Getenv("LETS_STATUSLINE_TIP"))); v == "off" || v == "0" || v == "false" || v == "no" {
 		showTip = false
+	}
+	if v := strings.ToLower(strings.TrimSpace(os.Getenv("LETS_STATUSLINE_DIR"))); v == "off" || v == "0" || v == "false" || v == "no" {
+		showDir = false
 	}
 	// Background-refresh the task-status cache off the hot path (same detached-
 	// subprocess pattern as usage). Only the rich Line 2 consumes it. The id is
@@ -188,7 +193,7 @@ func Render(stdin io.Reader, w io.Writer, light, compact, showTip bool) error {
 		}
 		spawnBackgroundTaskFetch(cacheDir, id)
 	}
-	return renderRich(w, in, branch, folder, u, detectWidth(), cacheDir, light, showTip)
+	return renderRich(w, in, branch, folder, u, detectWidth(), cacheDir, light, showTip, showDir)
 }
 
 // RunFetchOnly is the entry point used by the background subprocess.

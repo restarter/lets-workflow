@@ -172,7 +172,7 @@ func TestRender_Dispatch(t *testing.T) {
 	const payload = `{"workspace":{"current_dir":"/tmp"},"model":{"display_name":"Opus"},"context_window":{"used_percentage":10,"context_window_size":1000000}}`
 
 	var compact bytes.Buffer
-	if err := Render(strings.NewReader(payload), &compact, false, true, true); err != nil { // compact=true
+	if err := Render(strings.NewReader(payload), &compact, false, true, true, true); err != nil { // compact=true
 		t.Fatalf("compact Render: %v", err)
 	}
 	if strings.Contains(compact.String(), "┌") {
@@ -180,7 +180,7 @@ func TestRender_Dispatch(t *testing.T) {
 	}
 
 	var rich bytes.Buffer
-	if err := Render(strings.NewReader(payload), &rich, false, false, true); err != nil { // default = rich
+	if err := Render(strings.NewReader(payload), &rich, false, false, true, true); err != nil { // default = rich
 		t.Fatalf("rich Render: %v", err)
 	}
 	if !strings.Contains(rich.String(), "┌") {
@@ -194,10 +194,10 @@ func TestRender_Dispatch(t *testing.T) {
 func TestRender_NoTip(t *testing.T) {
 	const payload = `{"workspace":{"current_dir":"/tmp"},"model":{"display_name":"Opus"},"context_window":{"used_percentage":10,"context_window_size":1000000}}`
 	var on, off bytes.Buffer
-	if err := Render(strings.NewReader(payload), &on, false, false, true); err != nil {
+	if err := Render(strings.NewReader(payload), &on, false, false, true, true); err != nil {
 		t.Fatalf("tip-on: %v", err)
 	}
-	if err := Render(strings.NewReader(payload), &off, false, false, false); err != nil {
+	if err := Render(strings.NewReader(payload), &off, false, false, false, true); err != nil {
 		t.Fatalf("tip-off: %v", err)
 	}
 	onLines := len(splitNonEmptyLines(on.String()))

@@ -510,7 +510,7 @@ func tipOfMoment(now time.Time) string {
 
 // renderRich draws the width-responsive Quiet Rails layout. Never calls
 // bd/network per render.
-func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int, cacheDir string, light, showTip bool) error {
+func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int, cacheDir string, light, showTip, showDir bool) error {
 	p := paletteDark
 	if light {
 		p = paletteLight
@@ -691,9 +691,10 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	// --- Line 1: identity (branch truncated so the line stays under the cap) ---
 	brand := p.sage + brandEmoji(in.Cost.TotalLinesAdded) + " " + ansiBold + "LETS Workflow" + R + " " + p.dim + ver + R
 	// Location badge right after the marker (Full tier only — Compact drops it for
-	// width). Inside a worktree it's just the word "worktree" — the worktree dir
-	// name equals the branch name, so repeating it here would be noise. Outside a
-	// worktree it's the project root folder name.
+	// width; --no-dir / LETS_STATUSLINE_DIR=off hides it too). Inside a worktree
+	// it's just the word "worktree" — the worktree dir name equals the branch
+	// name, so repeating it here would be noise. Outside a worktree it's the
+	// project root folder name.
 	locName := ""
 	if inWorktree(in, branch) {
 		locName = "worktree"
@@ -701,7 +702,7 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		locName = folder
 	}
 	locSeg := ""
-	if locName != "" {
+	if showDir && locName != "" {
 		locSeg = p.pillBg + p.label + " " + glyphFolder + " " + locName + " " + R
 	}
 	prSeg := ""
