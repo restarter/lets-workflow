@@ -218,3 +218,20 @@ Same shape conventions as `lets init` (single JSON object, valid even on error, 
 - **Rollback contract.** On `create` failure after `git worktree add` has run, `rollback` is populated with `{attempted, succeeded, residual: [...]}`. Residual entries name what couldn't be cleaned up (path, `branch:<name>`, `main_repo_on_branch:<actual> (expected <prev>)`) so the caller surfaces concrete cleanup instructions instead of hand-waving.
 - **Stream split for shell composition.** `--print-cd` writes the absolute worktree path to **stdout** (one line, no newline-padding) while keeping `--json` envelope on **stderr** — gh-style. Lets shell wrappers compose `cd "$(lets worktree create foo --print-cd)" && claude` without parsing JSON. Without `--print-cd`, `--json` envelope goes to stdout as usual.
 - **`next_steps.absolute_path`.** Load-bearing field that `commands/worktree.md` reads to tell the user where to `cd`. Renaming it without a `SchemaVersion` bump silently breaks the markdown skill — pinned by `TestResult_SchemaContract.create_success`.
+
+## lets statusline
+
+Internal subcommand. Renders the Claude Code statusline; the project's `.claude/settings.json` invokes `lets statusline` directly (no flag) on every render. `lets init` points `statusLine.command` at it via value-match against `"lets statusline"`, leaving foreign user-customized commands alone. The legacy bash shim (`plugins/lets/scripts/lets/statusline.sh`, and the per-project `.lets/statusline.sh`) was retired in `lets-8ilsl`; `MigrateStatuslineSh` deletes a byte-equal legacy shim (matched against the frozen `internal/initcmd/embedded_statusline_shim.sh` snapshot) and calls `SetStatusLine`.
+
+**Rich box is the default.** `internal/statusline/rich.go` renders a closed box (`┌─┐ │ ├─┤ └─┘`) wrapping identity / budget / task / rotating-tip lines. Flags:
+
+- `--compact` — fall back to the legacy 2-line `renderLines` (for terminals where the box misbehaves).
+- `--light` — light palette (default is dark).
+- `--no-tip` (or env `LETS_STATUSLINE_TIP=off`/`0`/`false`) — hide the bottom tip line.
+- `--rich` — hidden accepted no-op (rich is already the default).
+
+**Width.** Two `COLUMNS`-driven tiers: **Full** (≥ `bpWide`=72) and **Compact** (< 72; fails open to Full when `COLUMNS` is absent). Below `bpFill`=90 the box fills the window (more tip room); at/above it hugs the widest line. Always capped at `fullMaxLine`=100 with a `boxRightMargin`=4 right gutter (CC's render area is a few cells narrower than the `COLUMNS` it passes, plus ambiguous-width glyphs). Sized **cell-accurately** — `cellWidth`/`fitCell` count the known wide-emoji set as 2 cells so the right border aligns. **When adding a new emoji glyph, add it to `wideRunes` or the border drifts.** Rows are `richRow{plain | prefix+mid+suffix}`: the task title / tip live in a flex `mid` that clips first, keeping the id + notes/hint suffix in frame. Universal emoji glyphs (no Nerd Font), growth-stage brand emoji (🌱→🪴→🌿→🌳→🌴 by session `cost.total_lines_added`), color-graded effort, no progress bars (token counts + paren reset deltas).
+
+**Task line (off the render hot path).** Reads `.lets/cache/task-status`, self-refreshed by a detached `lets statusline --fetch-task-only` subprocess (`bd show`, 90s TTL, id-only placeholder debounces the spawn) — no bd/network on the render path.
+
+**Payload robustness.** `flexISO` decodes a numeric `resets_at`; `workspace.git_worktree` is intentionally not decoded (CC sends a string) — either would otherwise blank the bar. `sanitizeField` strips C0/ESC bytes from the bd title (shared-tracker escape-injection defense).
