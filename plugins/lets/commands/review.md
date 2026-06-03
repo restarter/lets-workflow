@@ -1,6 +1,6 @@
 ---
 description: Full code review with dynamic agent selection (up to 12 specialized agents). Analyzes changes first, selects relevant experts. Also reviews implementation plans.
-argument-hint: "[PR-url-or-number|--local|--staged|--last-commit|--branch|--plan|--file <path>] [--json]"
+argument-hint: "[PR-url-or-number|--local|--staged|--last-commit|--branch|--plan|--file <path>] [--json] [--workflow]"
 ---
 
 # Full Code Review
@@ -24,6 +24,7 @@ Comprehensive code review with dynamic agent selection based on change types. Up
 /lets:review --plan              # Review latest plan in .lets/plans/
 /lets:review --plan <path>       # Review specific plan file
 /lets:review --file <path>       # Review an existing file (full content, not diff)
+/lets:review --workflow          # Run via Dynamic Workflow (off-context fan-out); combinable with any code mode + --json
 ```
 
 ## Step 1: Determine Review Mode
@@ -70,6 +71,43 @@ If `--json` is present alongside any mode:
 - File: `.lets/reviews/{date}-{mode}.json` (e.g., `2026-02-26-PR-42.json`, `2026-02-26-local-review.json`, `2026-02-26-branch-review.json`)
 - Skip markdown report generation (Step 8)
 - Skip GitHub PR comment posting (Step 9) - JSON mode implies the caller handles output
+
+### Workflow execution flag
+
+If `--workflow` is present alongside any **code** mode (`--local` / `--staged` / `--last-commit` / `--branch` / `<PR>` / `--file`):
+- Run the agent fan-out + aggregation inside a Dynamic Workflow instead of launching agents via the Task tool (Step 5/6).
+- Combinable with `--json` (the workflow returns the aggregate; Claude still writes the JSON file in Step 8.5).
+- NOT supported with `--plan` (the plan-review path is a separate follow-up) - if both are present, tell the user `--workflow` does not apply to plan review yet and run the standard plan-review path.
+
+### Choosing the execution path (interactive)
+
+When `--workflow` was NOT explicitly passed, decide the execution path as follows - **for code modes only** (never for `--plan`):
+
+- If the `Workflow` tool is **not** available this session -> silently use the standard Task-based path. Do NOT show the option (no clutter for users without Dynamic Workflows).
+- If the `Workflow` tool **is** available -> ask the user which path via `AskUserQuestion`:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "How should I run this review?",
+    header: "Run mode",
+    options: [
+      { label: "Standard (Recommended)", description: "Agents via Task tool - full per-agent reports visible inline" },
+      { label: "Workflow", description: "Dynamic Workflow - off-context fan-out, only the aggregate returns" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Handle response:**
+- **Standard** -> standard path (Step 5 as written).
+- **Workflow** -> treat as if `--workflow` was set: go to `## Workflow Mode (--workflow)` after agent selection.
+- **Other** (free text) -> if it names a path, honor it; otherwise default to Standard.
+
+For the **bare no-argument invocation**, combine this with the Step 1 "What are we reviewing?" question in a single `AskUserQuestion` call (two questions) so the user answers target + run mode at once - but only include the run-mode question when the `Workflow` tool is available.
+
+An explicit `--workflow` flag always wins over this prompt (no question asked).
 
 ## Step 2: Get Changes
 
@@ -261,6 +299,8 @@ Skipped for file mode:
 
 ## Step 5: Launch Selected Agents (Parallel)
 
+**If `--workflow` was parsed:** skip this step and Step 6 - go to the `## Workflow Mode (--workflow)` section below, then resume at Step 6.5. The rest of Step 5 is the standard Task-based path.
+
 **CRITICAL:** Launch ALL selected agents in a SINGLE message with multiple Task tool calls.
 
 For each selected agent, use the Task tool with:
@@ -302,7 +342,160 @@ CODE:
 
 ```
 
+## Workflow Mode (--workflow)
+
+Runs when `--workflow` was parsed in Step 1 (code modes only). Replaces Step 5 (Task launch) and Step 6 (aggregation): both happen inside the Dynamic Workflow so the per-agent reports never enter this conversation - only the aggregated object returns.
+
+### W1: Preflight
+
+If the `Workflow` tool is NOT available this session, STOP the workflow path and tell the user:
+
+> `--workflow` needs Claude Code >= 2.1.154 on a paid plan (Dynamic Workflows is a research preview). Re-run without `--workflow` to use the standard agent flow.
+
+Do NOT silently fall back - the user opted in explicitly; surface the gap and let them choose.
+
+### W2: Build args
+
+Use the agents SELECTED in Step 4 (do not re-select). **Exclude `lets:actor`** from workflow mode - the inline skeleton does not inject the `PERSONALITY:` block, so an actor selection would lose its identity. If the user explicitly selected actor, tell them actor is not supported with `--workflow` yet and run the standard Task-based path instead.
+
+Construct the `args` object:
+
+```
+{
+  agents: [ { name: "compliance" }, { name: "security" }, ... ],  // selected agent short-names (no "lets:" prefix)
+  mode: "PR-42" | "local-review" | "branch-review" | "file",
+  projectRoot: "{LETS_PROJECT_ROOT from LETS Config}",
+  claudeMd: "{CLAUDE.md content gathered in Step 3}",
+  changedFiles: "{changed-file list with stats, or single path for --file}",
+  code: "{full diff, or full file content for --file}",
+  smallDiff: true | false,        // true when diff < 50 lines -> NIT findings are kept
+  systemicCheck: true | false      // false for --file mode (no diff baseline)
+}
+```
+
+Pass `args` as a real JSON value to the Workflow tool - NOT a JSON-encoded string. (The runtime may still deliver `args` to the script as a JSON string, so the skeleton defensively parses it at the top - see the first line of the script body.)
+
+### W3: Invoke the workflow
+
+Call `Workflow({ script: <the skeleton below, verbatim>, args: <W2 args> })`. The skeleton is static - all per-review data travels in `args`.
+
+**The workflow runs in the BACKGROUND.** The tool returns immediately with a task ID / `runId` - NOT the aggregate. Do not try to read findings from the tool's immediate return. The fan-out continues in the background and a `<task-notification>` arrives when it completes; the orchestrator is re-invoked at that point. Optionally tell the user "Review fan-out running in the background - {N} agents" so the wait is visible (they can watch via `/workflows`).
+
+```javascript
+export const meta = {
+  name: 'lets-review',
+  description: 'Fan out selected lets:* review agents and aggregate findings off-context',
+  phases: [{ title: 'Review', detail: 'one structured agent per selected expert' }],
+}
+
+const FINDING_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    findings: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          title: { type: 'string' },
+          tier: { type: 'string', enum: ['BLOCKER', 'SUGGESTION', 'NIT'] },
+          file: { type: 'string' },
+          line: { type: ['integer', 'null'] },
+          description: { type: 'string' },
+          suggestion: { type: 'string' },
+          systemic: { type: 'boolean' },
+          systemic_count: { type: ['integer', 'null'] },
+        },
+        required: ['title', 'tier', 'description'],
+      },
+    },
+  },
+  required: ['findings'],
+}
+
+const TIER_RANK = { BLOCKER: 0, SUGGESTION: 1, NIT: 2 }
+
+const input = typeof args === 'string' ? JSON.parse(args) : (args || {})
+const { agents, mode, projectRoot, claudeMd, changedFiles, code, smallDiff, systemicCheck } = input
+
+const systemicBlock = systemicCheck
+  ? `SYSTEMIC PATTERN CHECK:\nFor each finding, grep the codebase to check if the same pattern exists elsewhere. If it appears in 2+ other files, set systemic=true and systemic_count, frame it as project-wide tech debt, and downgrade the tier by one level.\n`
+  : ''
+
+function buildPrompt() {
+  return `ultrathink
+
+PROJECT_ROOT: ${projectRoot}. Do NOT read or search files outside this directory.
+
+MODE: review
+
+${systemicBlock}CLAUDE.MD RULES:
+${claudeMd}
+
+CHANGED FILES:
+${changedFiles}
+
+CODE:
+${code}
+
+Return your findings as structured output: an array under "findings". Each finding has tier (one of BLOCKER, SUGGESTION, NIT), file, line (or null), a short title, a description, and a concrete suggestion. Use the tier definitions and scoring rules from your own system prompt. If there are no issues, return an empty findings array - do not fabricate.`
+}
+
+phase('Review')
+const perAgent = await parallel(agents.map(a => () =>
+  agent(buildPrompt(), { agentType: `lets:${a.name}`, label: `review:${a.name}`, schema: FINDING_SCHEMA })
+    .then(r => (r && r.findings ? r.findings : []).map(f => ({ ...f, agent: a.name })))
+))
+
+// --- aggregation: MIRRORS Step 6 (NIT-filter / systemic-split / dedupe) + Step 7 (verdict thresholds), run off-context.
+//     KEEP IN SYNC with that prose - a drift makes the --workflow path and the Task path disagree on the same diff. ---
+let all = perAgent.filter(Boolean).flat()
+all = all.filter(f => f.tier !== 'NIT' || smallDiff)            // NIT only for small diffs
+
+const systemic = all.filter(f => f.systemic)
+const regular = all.filter(f => !f.systemic)
+
+const byKey = new Map()                                         // dedupe, keep highest tier
+for (const f of regular) {
+  const key = `${f.file || ''}::${String(f.title).toLowerCase().trim()}`
+  const prev = byKey.get(key)
+  if (!prev || TIER_RANK[f.tier] < TIER_RANK[prev.tier]) byKey.set(key, f)
+}
+const findings = [...byKey.values()].sort((x, y) => TIER_RANK[x.tier] - TIER_RANK[y.tier])
+
+const blockers = findings.filter(f => f.tier === 'BLOCKER').length
+const suggestions = findings.filter(f => f.tier === 'SUGGESTION').length
+const verdict = blockers > 0
+  ? 'CHANGES REQUESTED'
+  : suggestions >= 3 ? 'APPROVED WITH SUGGESTIONS' : 'APPROVED'
+
+const summary = {}
+for (const a of agents) {
+  const n = findings.filter(f => f.agent === a.name).length
+  summary[a.name] = n === 0 ? 'pass' : `${n} issue${n > 1 ? 's' : ''}`
+}
+
+return {
+  verdict,
+  findings: findings.map((f, i) => ({ id: i + 1, ...f })),
+  systemic,
+  summary,
+  counts: { blockers, suggestions, total: findings.length },
+}
+```
+
+### W4: Rejoin the standard flow (on workflow completion)
+
+When the workflow's completion notification arrives, the orchestrator resumes with the workflow's returned aggregate object as the result - **this** is the only thing that enters context (the per-agent reports stayed in script variables). If the workflow failed or returned nothing, surface the error and offer the standard `/lets:review` (Task-based) flow; do not silently drop the review. With the aggregate in hand:
+- **Step 6.5** - grep-verify each `systemic[]` entry. If an agent was wrong (pattern only in this file), reclassify it into `findings` at its original tier and recompute the verdict from the new counts. Otherwise trust the script's `verdict`.
+- **Step 8** - save the markdown report (render from the returned object).
+- **Step 8.5** - if `--json`, write `.lets/reviews/{date}-{mode}.json`. The workflow's `findings` and `verdict` map 1:1 onto the Step 8.5 shape - keep those field names exactly (`/lets:github-pr` reads only those two). The rest of the Step 8.5 wrapper is NOT in the return object and Claude must supply it: add top-level `date`, `mode`, and `findings_count`; and transform each `systemic[]` entry from the finding shape (`{title, file, line, tier, ...}`) into the Step 8.5 systemic shape `{title, count, description}` (use `systemic_count` as `count`). Do not write the raw return object verbatim.
+- **Step 9 / Step 10** - output/post and link to task exactly as the standard flow.
+
 ## Step 6: Filter & Aggregate Results
+
+**Workflow mode:** the script already filtered, deduped, separated systemic, sorted, and computed the verdict. Skip this step - the aggregate is in the Workflow return value. Continue at Step 6.5. The skeleton mirrors the filter/dedupe rules below; **keep them in sync** (see the Keep-in-sync note under Step 7).
 
 Wait for all agents, then:
 
@@ -335,6 +528,8 @@ Systemic findings go into a separate section in the final report (see Step 9).
 | 0 [BLOCKER]s, 0-2 [SUGGESTION]s | APPROVED |
 | 0 [BLOCKER]s, 3+ [SUGGESTION]s | APPROVED WITH SUGGESTIONS |
 | 1+ [BLOCKER]s | CHANGES REQUESTED |
+
+> **Keep in sync (--workflow):** the `## Workflow Mode` skeleton reimplements this table in JS (`const verdict = blockers > 0 ? ... : suggestions >= 3 ? ...`). Any change to these thresholds MUST be mirrored there, and vice versa - otherwise the two paths return different verdicts for the same diff. (Pinned by a shared test when the skeleton graduates to a committed file - lets-odo4o roadmap.)
 
 ## Step 8: Save Review (BEFORE output)
 
