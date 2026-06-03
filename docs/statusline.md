@@ -20,7 +20,7 @@ and a rotating tip:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ ⚘ LETS Workflow dev · 📁 lets-workflow · ⎇ main · +120 -30 · ⇄ #94 approved   │
+│ ⚘ LETS Workflow dev · ☰ lets-workflow · ⎇ main · +120 -30 · ⇄ #94 approved    │
 │ ✦ Opus 4.8 (1M context) high · window 42% (424k/1000k) · 5h 58% (2h 10m) …    │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ ✓ lets-ds6bc Statusline 2.0 · 3 comments (2h) ← /lets:note                    │
@@ -28,7 +28,7 @@ and a rotating tip:
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Line 1 — identity.** Brand + `lets` version, a `📁` location pill, the branch,
+**Line 1 — identity.** Brand + `lets` version, a `☰` location pill, the branch,
 the session diff (`+added -removed`), and the PR (`⇄ #94` + review state) when
 one is open.
 
@@ -46,14 +46,14 @@ consistent. Hide it explicitly with `--no-task`, which also skips the background
 
 ### Glyphs
 
-All glyphs are plain text (no [Nerd Font](https://www.nerdfonts.com/) needed) so
-they take the palette color and stay one cell wide — except `📁`, which is an
-emoji (see [Caveats](#caveats)).
+All glyphs are plain text (no [Nerd Font](https://www.nerdfonts.com/) needed), so
+they take the palette color and stay one cell wide — no emoji, nothing to render
+as a "tofu" box on a bare terminal.
 
 | Glyph | Means |
 |---|---|
 | `⚘` | LETS brand |
-| `📁` | location (folder / worktree) |
+| `☰` | location (folder / worktree) |
 | `⎇` | git branch |
 | `⇄` | pull request |
 | `✦` | model |
@@ -128,13 +128,11 @@ under `.lets/cache/`:
 
 ## Caveats
 
-- **`📁` needs an emoji font.** On macOS (and Linux with an emoji font installed)
-  it renders fine. On a bare Linux box with no emoji font it may show as a
-  "tofu" box and can throw the right border off by a cell. If that happens, hide
-  the pill with `--no-dir`. The text glyphs (`⚘ ⎇ ✦ …`) don't have this issue.
 - **Border alignment** depends on your terminal counting glyph widths the way the
-  renderer does. The box leaves a small right margin to absorb the common cases;
-  if a border still drifts, it's an ambiguous-width glyph in your font.
+  renderer does. All glyphs are plain 1-cell text (no emoji), so the box leaves a
+  small right margin to absorb ambiguous-width edge cases; if a border still
+  drifts, it's an ambiguous-width glyph rendering double in your font — hide the
+  affected element (`--no-dir` / `--no-tip` / `--no-task`) or file an issue.
 
 ## See also
 

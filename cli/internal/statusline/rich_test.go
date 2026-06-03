@@ -589,6 +589,82 @@ func TestRenderRich_NoTask(t *testing.T) {
 	}
 }
 
+// TestRenderRich_AllRowsOff: the all-off state (--no-task + --no-tip, no confirmed
+// task) must still produce a valid box — top, identity, budget, bottom (4 lines)
+// with NO dangling ├ divider above the └ bottom. This is the only path where
+// rule() fires with no row after it; the conditional-divider guard must hold.
+func TestRenderRich_AllRowsOff(t *testing.T) {
+	dir := t.TempDir() // no task-status → no task line regardless
+	in := richTestInput()
+	for _, w := range []int{120, 65} { // Full + Compact
+		var buf bytes.Buffer
+		// light=false, showTip=false, showDir=true, showTask=false
+		if err := renderRich(&buf, in, "feature/lets-ds6bc-x", "folder", usage{}, w, dir, false, false, true, false); err != nil {
+			t.Fatalf("width=%d: %v", w, err)
+		}
+		if n := len(splitNonEmptyLines(buf.String())); n != 4 {
+			t.Errorf("width=%d: want 4 lines (top,identity,budget,bottom), got %d:\n%s", w, n, buf.String())
+		}
+		if strings.Contains(stripANSI(buf.String()), "├") {
+			t.Errorf("width=%d: dangling ├ divider with no row below it:\n%s", w, buf.String())
+		}
+	}
+}
+
+// TestRenderRich_WorktreePill: inside a worktree the location pill reads the
+// literal "worktree", never the folder basename (which equals the branch).
+func TestRenderRich_WorktreePill(t *testing.T) {
+	dir := t.TempDir()
+	in := richTestInput()
+	in.Worktree.Name = "wt1" // inWorktree via Worktree.Name; branch has no "worktree" text
+	var buf bytes.Buffer
+	if err := renderRich(&buf, in, "feature/lets-ds6bc-x", "zzfolderzz", usage{}, 160, dir, false, true, true, true); err != nil {
+		t.Fatalf("renderRich: %v", err)
+	}
+	out := stripANSI(buf.String())
+	if !strings.Contains(out, "worktree") {
+		t.Errorf("worktree session should show the 'worktree' pill:\n%s", out)
+	}
+	if strings.Contains(out, "zzfolderzz") {
+		t.Errorf("worktree pill must NOT show the folder basename:\n%s", out)
+	}
+}
+
+// TestInWorktree pins both OR'd signals (Worktree.Name set, or a worktree- branch).
+func TestInWorktree(t *testing.T) {
+	cases := []struct {
+		name, branch, wtName string
+		want                 bool
+	}{
+		{"branch-prefix", "worktree-foo", "", true},
+		{"worktree-name", "feature/x", "wt1", true},
+		{"neither", "feature/x", "", false},
+		{"main", "main", "", false},
+	}
+	for _, c := range cases {
+		var in Input
+		in.Worktree.Name = c.wtName
+		if got := inWorktree(in, c.branch); got != c.want {
+			t.Errorf("%s: inWorktree(%q, name=%q)=%v, want %v", c.name, c.branch, c.wtName, got, c.want)
+		}
+	}
+}
+
+// TestRenderRich_BareFolderSuppressed: a bare "." folder with no branch must not
+// render a stray "☰ ." pill or "⎇ ." branch segment (empty-stdin / non-repo).
+func TestRenderRich_BareFolderSuppressed(t *testing.T) {
+	dir := t.TempDir()
+	in := richTestInput()
+	var buf bytes.Buffer
+	if err := renderRich(&buf, in, "", ".", usage{}, 160, dir, false, false, true, false); err != nil {
+		t.Fatalf("renderRich: %v", err)
+	}
+	out := stripANSI(buf.String())
+	if strings.Contains(out, "⎇ .") || strings.Contains(out, "☰ .") {
+		t.Errorf("bare '.' folder/branch must be suppressed, not rendered:\n%s", out)
+	}
+}
+
 // TestRenderRich_FlexTitleKeepsSuffix: a long task title must clip (…) while the
 // note-count + hint suffix stays inside the box, not get eaten by the title.
 func TestRenderRich_FlexTitleKeepsSuffix(t *testing.T) {

@@ -89,7 +89,7 @@ const (
 	glyphTip    = "*"
 	glyphPR     = "⇄"
 	glyphArrow  = "←"
-	glyphFolder = "📁" // location-pill mark (emoji, 2 cells — MUST be in wideRunes)
+	glyphFolder = "☰" // location-pill mark (U+2630, text, 1 cell — takes palette color)
 	glyphPlant  = "⚘" // static brand mark (text, 1 cell) — growth ladder parked below
 )
 
@@ -220,11 +220,10 @@ func visibleWidth(s string) int { return len([]rune(stripANSI(s))) }
 // drift. Perfect alignment across all terminals isn't achievable with a static
 // map; verify on your terminal (or swap those glyphs) if the border looks off.
 var wideRunes = map[rune]bool{
-	// Folder pill uses the 📁 emoji (2 cells, ignores ANSI color) — it MUST stay
-	// here or the right border drifts a cell on the identity row. The other
-	// emitted glyphs are 1-cell text — brand ⚘, notes ¶, model ✦, task ✓, tip ?.
-	'📁': true,
-	// Parked emoji that would belong here if the growth ladder is restored:
+	// All emitted glyphs are currently 1-cell text — brand ⚘, folder ☰, notes ¶,
+	// model ✦, task ✓, tip *, branch ⎇, PR ⇄, arrow ←. No emoji, so this map is
+	// empty and the border never drifts. Parked emoji that would belong here if
+	// the growth ladder is restored:
 	// '🌱': true, '🪴': true, '🌿': true, '🌳': true, '🌴': true, // brand ladder (parked; static ⚘ now)
 }
 
@@ -610,6 +609,12 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	if bf == "" {
 		bf = folder
 	}
+	// Drop the branch segment entirely for a meaningless value (empty / bare cwd)
+	// rather than rendering a stray "⎇ ." on empty-stdin or a non-repo dir.
+	branchSeg := ""
+	if bf != "" && bf != "." && bf != "/" {
+		branchSeg = p.clay + glyphBranch + " " + bf + R
+	}
 	id := taskIDFromBranch(branch)
 	title, notes, lastComment, taskOK := readTaskStatus(cacheDir, id)
 	winPct := int(in.ContextWindow.UsedPercentage + 0.5)
@@ -653,8 +658,11 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	// ===== Compact tier: 4 trimmed lines, designed for ~70 cols =====
 	if tier == tierCompact {
 		// Line 1: brand+version » branch · diff (no worktree pill, no PR; short "LETS").
-		emit(p.sage + brandEmoji(in.Cost.TotalLinesAdded) + " " + ansiBold + "LETS" + R + " " + p.dim + ver + R +
-			segSep + joinSep(segSep, p.clay+glyphBranch+" "+bf+R, diffSeg))
+		brandC := p.sage + brandEmoji(in.Cost.TotalLinesAdded) + " " + ansiBold + "LETS" + R + " " + p.dim + ver + R
+		if restC := joinSep(segSep, branchSeg, diffSeg); restC != "" {
+			brandC += segSep + restC
+		}
+		emit(brandC)
 		// Line 2: model + effort (without the "(… context)" paren — the paren is
 		// the first thing to shed at this width; model name + effort stay because
 		// they're high-signal) » window·5h·7d label+pct+timer, no bars.
@@ -712,7 +720,11 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 			prSeg += " " + p.prStateColor(in.PR.ReviewState) + in.PR.ReviewState + R
 		}
 	}
-	emitFull(brand + segSep + joinSep(segSep, locSeg, p.clay+glyphBranch+" "+bf+R, diffSeg, prSeg))
+	identity := brand
+	if rest := joinSep(segSep, locSeg, branchSeg, diffSeg, prSeg); rest != "" {
+		identity += segSep + rest
+	}
+	emitFull(identity)
 
 	// --- Line 2: budget (model + colored effort » window/5h/7d, no bars) ---
 	budget := p.gold + glyphModel + " " + p.modelName(p.gold, in.Model.DisplayName, true)

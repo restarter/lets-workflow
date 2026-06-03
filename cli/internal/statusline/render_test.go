@@ -207,3 +207,51 @@ func TestRender_NoTip(t *testing.T) {
 			onLines, offLines, on.String(), off.String())
 	}
 }
+
+// TestEnvOff pins the LETS_STATUSLINE_* falsey-value parsing (the env override
+// path for --no-tip/--no-dir/--no-task). All three keys share envOff, so testing
+// one key across the value matrix covers the parsing for all.
+func TestEnvOff(t *testing.T) {
+	for _, v := range []string{"off", "0", "false", "no", "OFF", "False", " no "} {
+		t.Setenv("LETS_STATUSLINE_TIP", v)
+		if !envOff("LETS_STATUSLINE_TIP") {
+			t.Errorf("envOff(%q) = false, want true", v)
+		}
+	}
+	for _, v := range []string{"", "on", "1", "true", "yes", "garbage"} {
+		t.Setenv("LETS_STATUSLINE_TIP", v)
+		if envOff("LETS_STATUSLINE_TIP") {
+			t.Errorf("envOff(%q) = true, want false", v)
+		}
+	}
+}
+
+// TestRender_EnvTipOff drives Render through the env override path end-to-end:
+// LETS_STATUSLINE_TIP=off must drop the tip row even with showTip=true.
+func TestRender_EnvTipOff(t *testing.T) {
+	payload := `{"model":{"display_name":"Opus"},"context_window":{"used_percentage":5}}`
+	var on, off bytes.Buffer
+	if err := Render(strings.NewReader(payload), &on, false, false, true, true, true); err != nil {
+		t.Fatalf("on: %v", err)
+	}
+	t.Setenv("LETS_STATUSLINE_TIP", "off")
+	if err := Render(strings.NewReader(payload), &off, false, false, true, true, true); err != nil {
+		t.Fatalf("off: %v", err)
+	}
+	if onN, offN := len(splitNonEmptyLines(on.String())), len(splitNonEmptyLines(off.String())); offN >= onN {
+		t.Errorf("LETS_STATUSLINE_TIP=off should drop the tip line: on=%d off=%d", onN, offN)
+	}
+}
+
+// TestRender_ScrubsEscapes: an injected CSI in a payload field must not survive
+// into the output as a raw escape sequence (our own coloring is SGR ...m only).
+func TestRender_ScrubsEscapes(t *testing.T) {
+	payload := `{"model":{"display_name":"Opus\u001b[2JX"},"context_window":{"used_percentage":5}}`
+	var buf bytes.Buffer
+	if err := Render(strings.NewReader(payload), &buf, false, false, true, true, true); err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if strings.Contains(buf.String(), "\x1b[2J") {
+		t.Errorf("injected ESC[2J survived into output:\n%q", buf.String())
+	}
+}
