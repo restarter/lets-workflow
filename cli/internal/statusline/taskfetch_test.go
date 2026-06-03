@@ -3,6 +3,7 @@ package statusline
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -184,5 +185,37 @@ func TestFetchAndCacheTaskStatus_RejectsBadID(t *testing.T) {
 		if err := fetchAndCacheTaskStatus(t.TempDir(), id); err == nil {
 			t.Errorf("fetchAndCacheTaskStatus(%q) = nil, want error", id)
 		}
+	}
+}
+
+// TestStripControl: the shared escape-injection barrier neutralizes C0, ESC,
+// DEL and C1 control bytes while keeping printable text (incl. the now-inert
+// "[2J" that loses its ESC introducer).
+func TestStripControl(t *testing.T) {
+	in := "ok\x1b[2J\x07\x7f end"
+	got := stripControl(in)
+	for _, r := range got {
+		if r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f) {
+			t.Errorf("stripControl leaked control %U in %q", r, got)
+		}
+	}
+	if !strings.Contains(got, "ok") || !strings.Contains(got, "end") || !strings.Contains(got, "[2J") {
+		t.Errorf("stripControl dropped printable text: %q", got)
+	}
+}
+
+// TestTaskStatusLine_LatestComment: the last-comment timestamp is the MAX by
+// parsed time, not the last array element (bd output ordering isn't a contract).
+func TestTaskStatusLine_LatestComment(t *testing.T) {
+	js := []byte(`[{"id":"lets-ds6bc","title":"T","comments":[` +
+		`{"created_at":"2026-06-01T10:00:00Z"},` +
+		`{"created_at":"2026-06-03T10:00:00Z"},` + // latest, NOT last in the array
+		`{"created_at":"2026-06-02T10:00:00Z"}]}]`)
+	line, err := taskStatusLine("lets-ds6bc", js)
+	if err != nil {
+		t.Fatalf("taskStatusLine: %v", err)
+	}
+	if !strings.HasSuffix(line, "|2026-06-03T10:00:00Z") {
+		t.Errorf("want latest comment 2026-06-03 by max(created_at), got %q", line)
 	}
 }

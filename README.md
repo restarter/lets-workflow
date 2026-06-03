@@ -322,7 +322,7 @@ All plugin-generated files live under `.lets/` (gitignored); interactive worktre
 
 ### Statusline
 
-`/lets:init` wires the LETS statusline into `.claude/settings.json` (`lets statusline`). By default it draws a bordered multi-line box — identity (brand, folder/worktree, branch, diff, PR), budget (model + effort + usage), task, and a rotating tip line — width-responsive (Full ≥72 cols, Compact below), universal emoji glyphs (no Nerd Font needed), light/dark palettes.
+`/lets:init` wires the LETS statusline into `.claude/settings.json` (`lets statusline`). By default it draws a bordered multi-line box — identity (brand, folder/worktree, branch, diff, PR), budget (model + effort + usage), task, and a rotating tip line — width-responsive (Full ≥72 cols, Compact below), universal text glyphs (no Nerd Font or emoji needed), light/dark palettes.
 
 Flags (set in `settings.json`'s `command`):
 
@@ -330,6 +330,8 @@ Flags (set in `settings.json`'s `command`):
 |---|---|
 | `--light` | Light-terminal palette (default dark) |
 | `--no-tip` *(or env `LETS_STATUSLINE_TIP=off`)* | Hide the bottom tip line |
+| `--no-dir` *(or env `LETS_STATUSLINE_DIR=off`)* | Hide the location pill |
+| `--no-task` *(or env `LETS_STATUSLINE_TASK=off`)* | Hide the task line (also skips the background `bd` refresh) |
 | `--compact` | Legacy 2-line bar (fallback if the box misbehaves) |
 
 ```json
@@ -341,7 +343,7 @@ Flags (set in `settings.json`'s `command`):
 }
 ```
 
-Add `--light` for light-background terminals (default palette is dark).
+Add `--light` for light-background terminals (default palette is dark). Full details — line anatomy, width tiers, worktree behavior — in **[docs/statusline.md](docs/statusline.md)**.
 
 ## 📦 Dependencies
 

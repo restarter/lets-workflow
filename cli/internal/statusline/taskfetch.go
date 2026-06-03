@@ -83,28 +83,48 @@ func taskStatusLine(taskID string, bdShowJSON []byte) (string, error) {
 	}
 	it := issues[0]
 	notes := len(it.Comments)
+	// Pick the most-recent comment by parsed timestamp, not array position — bd's
+	// output ordering is not a guaranteed contract (the Dolt/remote backend can
+	// merge multi-writer comments out of order), and string position would then
+	// show the wrong "(37m ago)" age. parseISO normalizes timezones so the
+	// comparison is chronological, not lexicographic.
 	lastISO := ""
-	if notes > 0 {
-		lastISO = validateISO(it.Comments[notes-1].CreatedAt)
+	var lastT time.Time
+	for _, c := range it.Comments {
+		iso := validateISO(c.CreatedAt)
+		if iso == "" {
+			continue
+		}
+		if t, ok := parseISO(iso); ok && (lastISO == "" || t.After(lastT)) {
+			lastISO, lastT = iso, t
+		}
 	}
 	return taskID + "|" + sanitizeField(it.Title) + "|" + strconv.Itoa(notes) + "|" + lastISO, nil
 }
 
-// sanitizeField neutralizes a free-text field (a bd task title) before it is
-// cached and later rendered raw to the terminal. It folds the "|" delimiter to
-// "/" (so it can't corrupt the pipe-delimited cache line) and replaces EVERY C0
-// control byte (< 0x20 — including ESC/CR/LF) plus DEL with a space, so a title
-// from the shared multi-writer tracker can't smuggle terminal escape sequences
-// (cursor moves, screen clears, title/clipboard OSC) onto the statusline.
-func sanitizeField(s string) string {
-	s = strings.ReplaceAll(s, "|", "/")
-	s = strings.Map(func(r rune) rune {
-		if r < 0x20 || r == 0x7f {
+// stripControl neutralizes terminal control bytes in any externally-sourced
+// field before it is rendered: every C0 control (< 0x20, including ESC/CR/LF),
+// DEL (0x7f), and the C1 control range (0x80-0x9f, which can act as CSI/OSC
+// introducers on some terminals) becomes a space. This is the shared
+// escape-injection barrier for EVERY untrusted rendered field — the folder /
+// worktree / branch name (filesystem- and ref-controlled), the model name, PR
+// state, effort, and the bd task title. It must run on the RAW value before our
+// own ANSI SGR coloring is wrapped around it, so the renderer's colors survive
+// while injected `\x1b[2J` / OSC / cursor sequences do not.
+func stripControl(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f) {
 			return ' '
 		}
 		return r
 	}, s)
-	return strings.TrimSpace(s)
+}
+
+// sanitizeField is stripControl plus the cache-specific concerns for the bd task
+// title: it folds the "|" delimiter to "/" (so it can't corrupt the
+// pipe-delimited cache line) and trims surrounding whitespace.
+func sanitizeField(s string) string {
+	return strings.TrimSpace(stripControl(strings.ReplaceAll(s, "|", "/")))
 }
 
 // fetchAndCacheTaskStatus runs `bd show <id> --json` and writes the derived
