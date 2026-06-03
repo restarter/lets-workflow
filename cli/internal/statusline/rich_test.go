@@ -90,7 +90,7 @@ func writeTaskStatus(t *testing.T, line string) string {
 func TestRenderRich_EmptyInputFull(t *testing.T) {
 	dir := t.TempDir() // no task-status file
 	var buf bytes.Buffer
-	if err := renderRich(&buf, Input{}, "", "", usage{}, bpWide, dir, false, true, true); err != nil {
+	if err := renderRich(&buf, Input{}, "", "", usage{}, bpWide, dir, false, true, true, true); err != nil {
 		t.Fatalf("renderRich: %v", err)
 	}
 	out := buf.String()
@@ -127,7 +127,7 @@ func TestRenderRich_EmptyInputAllTiers(t *testing.T) {
 	widths := []int{bpWide, 95, 70, 45}
 	for _, w := range widths {
 		var buf bytes.Buffer
-		if err := renderRich(&buf, Input{}, "", "", usage{}, w, dir, false, true, true); err != nil {
+		if err := renderRich(&buf, Input{}, "", "", usage{}, w, dir, false, true, true, true); err != nil {
 			t.Fatalf("renderRich width=%d: %v", w, err)
 		}
 		for _, line := range splitNonEmptyLines(buf.String()) {
@@ -164,7 +164,7 @@ func TestRenderRich_TierLineCounts(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			if err := renderRich(&buf, in, branch, "folder", usage{}, tt.width, dir, false, true, true); err != nil {
+			if err := renderRich(&buf, in, branch, "folder", usage{}, tt.width, dir, false, true, true, true); err != nil {
 				t.Fatalf("renderRich: %v", err)
 			}
 			lines := splitNonEmptyLines(buf.String())
@@ -188,7 +188,7 @@ func TestRenderRich_NoTaskDropsLine(t *testing.T) {
 	dir := t.TempDir()
 	in := richTestInput()
 	var buf bytes.Buffer
-	if err := renderRich(&buf, in, "main", "folder", usage{}, bpWide, dir, false, true, true); err != nil {
+	if err := renderRich(&buf, in, "main", "folder", usage{}, bpWide, dir, false, true, true, true); err != nil {
 		t.Fatalf("renderRich: %v", err)
 	}
 	lines := splitNonEmptyLines(buf.String())
@@ -202,7 +202,7 @@ func TestRenderRich_NoTaskDropsLine(t *testing.T) {
 func TestRenderRich_LightPaletteNoPanic(t *testing.T) {
 	dir := t.TempDir()
 	var buf bytes.Buffer
-	if err := renderRich(&buf, richTestInput(), "feature/lets-aaaaa-x", "f", usage{}, bpWide, dir, true, true, true); err != nil {
+	if err := renderRich(&buf, richTestInput(), "feature/lets-aaaaa-x", "f", usage{}, bpWide, dir, true, true, true, true); err != nil {
 		t.Fatalf("renderRich light: %v", err)
 	}
 	if buf.Len() == 0 {
@@ -462,7 +462,7 @@ func TestRenderRich_BoxAligned(t *testing.T) {
 		for bname, branch := range branches {
 			for _, width := range []int{120, 106, 95, 70, 50} {
 				var buf bytes.Buffer
-				if err := renderRich(&buf, in, branch, "folder", usage{}, width, dir, light, true, true); err != nil {
+				if err := renderRich(&buf, in, branch, "folder", usage{}, width, dir, light, true, true, true); err != nil {
 					t.Fatalf("light=%v branch=%s width=%d: %v", light, bname, width, err)
 				}
 				lines := splitNonEmptyLines(buf.String())
@@ -511,10 +511,10 @@ func TestRenderRich_TierContent(t *testing.T) {
 	in.ContextWindow.ContextWindowSize = 1000000
 
 	var full, compact bytes.Buffer
-	if err := renderRich(&full, in, branch, "folder", usage{}, 160, dir, false, true, true); err != nil {
+	if err := renderRich(&full, in, branch, "folder", usage{}, 160, dir, false, true, true, true); err != nil {
 		t.Fatalf("full: %v", err)
 	}
-	if err := renderRich(&compact, in, branch, "folder", usage{}, 65, dir, false, true, true); err != nil {
+	if err := renderRich(&compact, in, branch, "folder", usage{}, 65, dir, false, true, true, true); err != nil {
 		t.Fatalf("compact: %v", err)
 	}
 	fp, cp := stripANSI(full.String()), stripANSI(compact.String())
@@ -548,10 +548,10 @@ func TestRenderRich_NoDir(t *testing.T) {
 	branch := "feature/lets-ds6bc-x" // not a worktree → pill shows the folder name
 
 	var on, off bytes.Buffer
-	if err := renderRich(&on, in, branch, "myproj", usage{}, 160, dir, false, true, true); err != nil {
+	if err := renderRich(&on, in, branch, "myproj", usage{}, 160, dir, false, true, true, true); err != nil {
 		t.Fatalf("showDir on: %v", err)
 	}
-	if err := renderRich(&off, in, branch, "myproj", usage{}, 160, dir, false, true, false); err != nil {
+	if err := renderRich(&off, in, branch, "myproj", usage{}, 160, dir, false, true, false, true); err != nil {
 		t.Fatalf("showDir off: %v", err)
 	}
 	if !strings.Contains(stripANSI(on.String()), "myproj") {
@@ -562,6 +562,33 @@ func TestRenderRich_NoDir(t *testing.T) {
 	}
 }
 
+// TestRenderRich_NoTask: showTask gates the task line — false drops it (the
+// divider stays for a consistent frame), true keeps it (--no-task /
+// LETS_STATUSLINE_TASK=off).
+func TestRenderRich_NoTask(t *testing.T) {
+	dir := writeTaskStatus(t, "lets-ds6bc|Statusline 2.0|3|2099-01-01T00:00:00Z")
+	branch := "feature/lets-ds6bc-statusline-2-0"
+	in := richTestInput()
+
+	var on, off bytes.Buffer
+	if err := renderRich(&on, in, branch, "folder", usage{}, 120, dir, false, true, true, true); err != nil {
+		t.Fatalf("showTask on: %v", err)
+	}
+	if err := renderRich(&off, in, branch, "folder", usage{}, 120, dir, false, true, true, false); err != nil {
+		t.Fatalf("showTask off: %v", err)
+	}
+	if !strings.Contains(stripANSI(on.String()), "Statusline 2.0") {
+		t.Errorf("showTask=true should show the task line:\n%s", on.String())
+	}
+	if strings.Contains(stripANSI(off.String()), "Statusline 2.0") {
+		t.Errorf("showTask=false should hide the task line:\n%s", off.String())
+	}
+	// Frame stays consistent: hiding the task line drops exactly one row.
+	if onN, offN := len(splitNonEmptyLines(on.String())), len(splitNonEmptyLines(off.String())); offN != onN-1 {
+		t.Errorf("showTask=false should drop exactly the task row: on=%d off=%d", onN, offN)
+	}
+}
+
 // TestRenderRich_FlexTitleKeepsSuffix: a long task title must clip (…) while the
 // note-count + hint suffix stays inside the box, not get eaten by the title.
 func TestRenderRich_FlexTitleKeepsSuffix(t *testing.T) {
@@ -569,7 +596,7 @@ func TestRenderRich_FlexTitleKeepsSuffix(t *testing.T) {
 	dir := writeTaskStatus(t, long)
 	branch := "feature/lets-ds6bc-statusline-2-0"
 	var buf bytes.Buffer
-	if err := renderRich(&buf, richTestInput(), branch, "folder", usage{}, 120, dir, false, true, true); err != nil {
+	if err := renderRich(&buf, richTestInput(), branch, "folder", usage{}, 120, dir, false, true, true, true); err != nil {
 		t.Fatalf("renderRich: %v", err)
 	}
 	plain := stripANSI(buf.String())
@@ -610,7 +637,7 @@ func TestRenderRich_TaskLineGated(t *testing.T) {
 	// Confirmed task in cache -> task line present.
 	dir := writeTaskStatus(t, "lets-ds6bc|Real Title|2|2099-01-01T00:00:00Z")
 	var ok bytes.Buffer
-	if err := renderRich(&ok, in, "feature/lets-ds6bc-x", "f", usage{}, 120, dir, false, true, true); err != nil {
+	if err := renderRich(&ok, in, "feature/lets-ds6bc-x", "f", usage{}, 120, dir, false, true, true, true); err != nil {
 		t.Fatalf("confirmed: %v", err)
 	}
 	if !strings.Contains(stripANSI(ok.String()), "✓ lets-ds6bc Real Title") {
@@ -619,7 +646,7 @@ func TestRenderRich_TaskLineGated(t *testing.T) {
 
 	// Branch yields a candidate id but no cache entry -> no task line.
 	var bogus bytes.Buffer
-	if err := renderRich(&bogus, in, "my-random-branch", "f", usage{}, 120, t.TempDir(), false, true, true); err != nil {
+	if err := renderRich(&bogus, in, "my-random-branch", "f", usage{}, 120, t.TempDir(), false, true, true, true); err != nil {
 		t.Fatalf("bogus: %v", err)
 	}
 	if strings.Contains(stripANSI(bogus.String()), "✓ lets-") {

@@ -27,6 +27,7 @@ func NewStatuslineCmd() *cobra.Command {
 		compact       bool
 		noTip         bool
 		noDir         bool
+		noTask        bool
 	)
 
 	cmd := &cobra.Command{
@@ -39,6 +40,7 @@ multi-line statusline to stdout. Wire it into .claude/settings.json:
   --light     light-terminal palette (default dark)
   --no-tip    hide the bottom tip line (also: env LETS_STATUSLINE_TIP=off)
   --no-dir    hide the location pill (also: env LETS_STATUSLINE_DIR=off)
+  --no-task   hide the task line (also: env LETS_STATUSLINE_TASK=off)
   --compact   render the legacy 2-line statusline instead of the rich box
 
 With --fetch-usage-only / --fetch-task-only: runs as a background process
@@ -65,7 +67,7 @@ stdin or stdout interaction in those modes.`,
 				return statusline.RunFetchTaskOnly(cacheDir, taskID)
 			}
 			_ = rich // accepted for back-compat; rich is the default
-			return statusline.Render(cmd.InOrStdin(), cmd.OutOrStdout(), light, compact, !noTip, !noDir)
+			return statusline.Render(cmd.InOrStdin(), cmd.OutOrStdout(), light, compact, !noTip, !noDir, !noTask)
 		},
 	}
 	cmd.Flags().BoolVar(&fetchOnly, "fetch-usage-only", false,
@@ -82,6 +84,8 @@ stdin or stdout interaction in those modes.`,
 		"Hide the bottom tip line (also: env LETS_STATUSLINE_TIP=off)")
 	cmd.Flags().BoolVar(&noDir, "no-dir", false,
 		"Hide the location pill (also: env LETS_STATUSLINE_DIR=off)")
+	cmd.Flags().BoolVar(&noTask, "no-task", false,
+		"Hide the task line (also: env LETS_STATUSLINE_TASK=off)")
 	cmd.Flags().BoolVar(&compact, "compact", false,
 		"Render the legacy 2-line statusline instead of the rich box")
 	cmd.Flags().BoolVar(&rich, "rich", false,

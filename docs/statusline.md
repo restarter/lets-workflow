@@ -39,7 +39,8 @@ time until each resets. No progress bars — just numbers.
 **Line 3 — task.** The active beads task (`✓ <id> <title>`) when the branch maps
 to a real, bd-confirmed task, with the comment count and a `← /lets:note` hint.
 A branch with no task drops *only* this line — the divider stays so the frame is
-consistent.
+consistent. Hide it explicitly with `--no-task`, which also skips the background
+`bd` lookup that refreshes it.
 
 **Line 4 — tip.** A rotating workflow hint. Hide it with `--no-tip`.
 
@@ -95,6 +96,7 @@ Set these in the `command` string in `.claude/settings.json` — e.g.
 | `--light` | — | Light-terminal palette (default is dark) |
 | `--no-tip` | `LETS_STATUSLINE_TIP=off` | Hide the bottom tip line |
 | `--no-dir` | `LETS_STATUSLINE_DIR=off` | Hide the location pill |
+| `--no-task` | `LETS_STATUSLINE_TASK=off` | Hide the task line (also skips its background `bd` refresh) |
 | `--compact` | — | Render the legacy 2-line bar instead of the box (fallback for terminals where the box misbehaves) |
 
 The env equivalents accept `off`, `0`, `false`, or `no`. (Note: env vars only

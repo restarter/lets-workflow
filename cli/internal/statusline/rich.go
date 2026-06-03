@@ -510,7 +510,7 @@ func tipOfMoment(now time.Time) string {
 
 // renderRich draws the width-responsive Quiet Rails layout. Never calls
 // bd/network per render.
-func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int, cacheDir string, light, showTip, showDir bool) error {
+func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int, cacheDir string, light, showTip, showDir, showTask bool) error {
 	p := paletteDark
 	if light {
 		p = paletteLight
@@ -674,7 +674,7 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 		// Line 3: task — only when bd CONFIRMED a real task (taskOK && title); a
 		// bare/bogus branch id or a no-beads project drops ONLY this line (the
 		// divider stays). id is the prefix, title the truncatable mid.
-		if taskOK && title != "" {
+		if showTask && taskOK && title != "" {
 			emitFlex(p.clay+glyphTask+" "+id+R, " "+p.text+title+R, "")
 		}
 		// Line 4: rotating tip — glyph (prefix) + text (truncatable mid).
@@ -738,8 +738,9 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	rule() // divider ALWAYS after budget — consistent frame with/without task
 	// --- Line 3: task — only when bd CONFIRMED a real task (taskOK && title);
 	//     id (prefix) + title (truncatable mid) + notes/age/hint (suffix). A
-	//     bare/bogus branch id or no-beads drops ONLY this line (divider stays). ---
-	if taskOK && title != "" {
+	//     bare/bogus branch id or no-beads drops ONLY this line (divider stays).
+	//     --no-task / LETS_STATUSLINE_TASK=off hides it regardless. ---
+	if showTask && taskOK && title != "" {
 		noteSeg := ""
 		if notes > 0 {
 			label := " comments"

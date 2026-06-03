@@ -116,14 +116,16 @@ type Input struct {
 // refresh if stale), and writes the statusline to w. The rich multi-line box is
 // the DEFAULT; compact=true selects the legacy 2-line output. showTip toggles
 // the rich bottom tip line (env LETS_STATUSLINE_TIP=off/0/false also disables);
-// showDir toggles the Full-tier location pill (env LETS_STATUSLINE_DIR=off too).
+// showDir toggles the Full-tier location pill (env LETS_STATUSLINE_DIR=off too);
+// showTask toggles the task line and its background bd refresh (env
+// LETS_STATUSLINE_TASK=off too).
 //
 // Resilient to empty/invalid stdin: Claude Code occasionally invokes the
 // statusline command with no input (e.g. during /reload-plugins or initial
 // render before the IPC pipe is wired). Empty input → render with zero-value
 // Input (defaults to cwd-based detection). A blank statusline error is more
 // disruptive than missing context.
-func Render(stdin io.Reader, w io.Writer, light, compact, showTip, showDir bool) error {
+func Render(stdin io.Reader, w io.Writer, light, compact, showTip, showDir, showTask bool) error {
 	data, err := io.ReadAll(stdin)
 	if err != nil {
 		return fmt.Errorf("read stdin: %w", err)
@@ -178,10 +180,14 @@ func Render(stdin io.Reader, w io.Writer, light, compact, showTip, showDir bool)
 	if v := strings.ToLower(strings.TrimSpace(os.Getenv("LETS_STATUSLINE_DIR"))); v == "off" || v == "0" || v == "false" || v == "no" {
 		showDir = false
 	}
+	if v := strings.ToLower(strings.TrimSpace(os.Getenv("LETS_STATUSLINE_TASK"))); v == "off" || v == "0" || v == "false" || v == "no" {
+		showTask = false
+	}
 	// Background-refresh the task-status cache off the hot path (same detached-
-	// subprocess pattern as usage). Only the rich Line 2 consumes it. The id is
+	// subprocess pattern as usage). Only the rich task line consumes it. The id is
 	// free (branch name); the bd call happens in the detached child, never inline.
-	if id := taskIDFromBranch(branch); id != "" && !taskStatusFresh(cacheDir, id, taskStatusTTL) {
+	// Skipped when the task line is hidden — no point spawning bd for nothing.
+	if id := taskIDFromBranch(branch); showTask && id != "" && !taskStatusFresh(cacheDir, id, taskStatusTTL) {
 		// On a task SWITCH (cached id differs) the cache holds no data for this
 		// id, so without a debounce every render in the fetch window re-spawns
 		// bd. Write an id-only placeholder first: it renders immediately and
@@ -193,7 +199,7 @@ func Render(stdin io.Reader, w io.Writer, light, compact, showTip, showDir bool)
 		}
 		spawnBackgroundTaskFetch(cacheDir, id)
 	}
-	return renderRich(w, in, branch, folder, u, detectWidth(), cacheDir, light, showTip, showDir)
+	return renderRich(w, in, branch, folder, u, detectWidth(), cacheDir, light, showTip, showDir, showTask)
 }
 
 // RunFetchOnly is the entry point used by the background subprocess.

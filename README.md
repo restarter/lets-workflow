@@ -331,6 +331,7 @@ Flags (set in `settings.json`'s `command`):
 | `--light` | Light-terminal palette (default dark) |
 | `--no-tip` *(or env `LETS_STATUSLINE_TIP=off`)* | Hide the bottom tip line |
 | `--no-dir` *(or env `LETS_STATUSLINE_DIR=off`)* | Hide the location pill |
+| `--no-task` *(or env `LETS_STATUSLINE_TASK=off`)* | Hide the task line (also skips the background `bd` refresh) |
 | `--compact` | Legacy 2-line bar (fallback if the box misbehaves) |
 
 ```json
