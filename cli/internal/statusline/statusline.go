@@ -149,7 +149,13 @@ func Render(stdin io.Reader, w io.Writer, light, compact, showTip bool) error {
 	cacheDir := filepath.Join(projectRoot, ".lets", "cache")
 
 	branch := detectBranch(dir)
+	// folder = the project/worktree root basename (git top-level), NOT the cwd
+	// basename — otherwise the location pill shows whatever subdir you cd into
+	// (e.g. "cli") instead of a stable project/worktree name.
 	folder := filepath.Base(dir)
+	if projectRoot != "" {
+		folder = filepath.Base(projectRoot)
+	}
 
 	u := readUsageCache(filepath.Join(cacheDir, "usage"))
 

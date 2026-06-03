@@ -500,12 +500,14 @@ func TestLimit(t *testing.T) {
 }
 
 // TestRenderRich_TierContent asserts the tiers differ by CONTENT, not just line
-// count: Full carries the long brand, PR, effort and token detail; Compact drops
-// them and uses the short "LETS" brand.
+// count: Full carries the long brand, PR, token detail, and the model's
+// "(… context)" paren; Compact uses the short "LETS" brand and drops the PR,
+// token detail, and paren — but KEEPS the model name + effort.
 func TestRenderRich_TierContent(t *testing.T) {
 	dir := writeTaskStatus(t, "lets-ds6bc|Statusline 2.0 rich renderer|3|2099-01-01T00:00:00Z")
 	branch := "feature/lets-ds6bc-statusline-2-0"
 	in := richTestInput()
+	in.Model.DisplayName = "Opus 4.7 (1M context)"
 	in.ContextWindow.ContextWindowSize = 1000000
 
 	var full, compact bytes.Buffer
@@ -517,7 +519,7 @@ func TestRenderRich_TierContent(t *testing.T) {
 	}
 	fp, cp := stripANSI(full.String()), stripANSI(compact.String())
 
-	for _, want := range []string{"LETS Workflow", "#91", "approved", "high", "/1000k)"} {
+	for _, want := range []string{"LETS Workflow", "#91", "approved", "high", "/1000k)", "1M context"} {
 		if !strings.Contains(fp, want) {
 			t.Errorf("Full tier missing %q:\n%s", want, fp)
 		}
@@ -525,10 +527,13 @@ func TestRenderRich_TierContent(t *testing.T) {
 	if strings.Contains(cp, "LETS Workflow") {
 		t.Errorf("Compact tier should use short 'LETS' brand, not 'LETS Workflow':\n%s", cp)
 	}
-	if !strings.Contains(cp, "LETS") {
-		t.Errorf("Compact tier missing 'LETS' brand:\n%s", cp)
+	// Compact keeps the model head + effort, just without the paren.
+	for _, want := range []string{"LETS", "Opus 4.7", "high"} {
+		if !strings.Contains(cp, want) {
+			t.Errorf("Compact tier missing %q:\n%s", want, cp)
+		}
 	}
-	for _, drop := range []string{"#91", "approved"} {
+	for _, drop := range []string{"#91", "approved", "1M context"} {
 		if strings.Contains(cp, drop) {
 			t.Errorf("Compact tier should drop %q:\n%s", drop, cp)
 		}
