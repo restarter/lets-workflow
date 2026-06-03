@@ -330,6 +330,7 @@ Flags (set in `settings.json`'s `command`):
 |---|---|
 | `--light` | Light-terminal palette (default dark) |
 | `--no-tip` *(or env `LETS_STATUSLINE_TIP=off`)* | Hide the bottom tip line |
+| `--no-dir` *(or env `LETS_STATUSLINE_DIR=off`)* | Hide the location pill |
 | `--compact` | Legacy 2-line bar (fallback if the box misbehaves) |
 
 ```json
@@ -341,7 +342,7 @@ Flags (set in `settings.json`'s `command`):
 }
 ```
 
-Add `--light` for light-background terminals (default palette is dark).
+Add `--light` for light-background terminals (default palette is dark). Full details — line anatomy, width tiers, worktree behavior — in **[docs/statusline.md](docs/statusline.md)**.
 
 ## 📦 Dependencies
 
