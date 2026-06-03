@@ -40,7 +40,66 @@ Likewise: the **frontmatter `version`** in `lets-rules.md` (and `plugin.json`, `
 
 `commands/`, `skills/`, `agents/`, `rules/` are read by Claude (the model), never by humans. Write for the model: terse, structured, parseable; tables and bullets over prose; `MANDATORY` / `NEVER` / `IMPORTANT` markers where a constraint must be locked onto. Match the existing style. Human-facing docs live in `README.md` and `CLAUDE.md`.
 
-When adding a config key, command, skill, or agent, follow the checklists in `CLAUDE.md` ("Adding a new config key", "When Adding/Modifying Commands, Skills, or Agents", "Command Checklist") — they list every file that needs to stay in sync.
+When adding a config key, command, skill, or agent, follow the checklists in "## Editing commands, skills, agents, config keys" below — they list every file that needs to stay in sync. `CLAUDE.md` keeps the canonical *decisions*; the step-by-step *procedures* live here.
+
+## Editing commands, skills, agents, config keys
+
+> Paths below are relative to `plugins/lets/` (the plugin root) unless they start with `cli/`, `scripts/`, `docs/`, or are repo-root files (`README.md`, `CLAUDE.md`).
+
+Update these files:
+
+| File | What to update |
+|------|----------------|
+| `plugins/lets/rules/lets-rules.md` | Skill Quick Reference table. Edit ONLY here, never the installed `.claude/rules/lets-rules.md`. **Do NOT bump frontmatter `version` per change** — it's bumped once per release at ceremony time (`scripts/release/bump-version.sh`; see `RELEASING.md`). A rules edit on a feature branch accumulates under the current target version. |
+| `commands/install-deprecated.md` | Essential Skills / Planning Skills tables |
+| `CLAUDE.md` Key Concepts | If adding a new skill |
+| `README.md` | Agent table, feature descriptions |
+| All `agents/*.md` `## Constraints` sections | If changing the read-only Bash allowlist or constraint wording, sync the identical 1-line text across all 13 analyst agents (verify with `grep -h "You are read-only" agents/*.md \| sort -u` returning exactly one line) |
+| `commands/end.md` + `commands/done.md` session-id references | Channel per context (the rule): **inside a bash command** → `$CLAUDE_CODE_SESSION_ID` (Bash subprocess env var; bash expands it at runtime) — used by `done.md` Step 7 + `end.md` Step 3 `bd comments add` bodies and `end.md` Step 5 `find ... "${CLAUDE_CODE_SESSION_ID}.jsonl"`. **In plain markdown the model writes** → `${CLAUDE_SESSION_ID}` (Claude Code's command-load-time template substitution) — used by `end.md` Step 5's summary-template `- ID:` line. No `SESSION_ID=` alias anywhere. Verify with `grep -rn "SESSION_ID" plugins/lets/commands/`. Background + remaining adoption scope (subagents, statusline, `/lets:team` records): see `lets-bdkvd`. |
+| `cli/internal/cli/<name>.go` + register in `cli/internal/cli/root.go` | If adding a Go subcommand. Add `<name>_test.go` (`package cli_test`). Use `cmd.OutOrStdout()`. Domain logic goes in `cli/internal/<name>/` (see `initcmd/`, `updatecmd/`, `worktreecmd/`, `sessionstart/`, `statusline/`, `frontmatter/` for patterns). If the package needs platform-specific primitives (`syscall.Flock` etc.), gate with `//go:build unix` and add a `<name>_stub.go` (`//go:build !unix`) per the `worktreecmd` pattern so cross-platform builds keep working. Update `cli/README.md` "Adding a subcommand" recipe if pattern changes. |
+| Any `commands/*.md` or `skills/*/SKILL.md` invoking `AskUserQuestion` | Follow `## AskUserQuestion Conventions` in `plugins/lets/rules/lets-rules.md` (header chip 4-12 chars descriptive, `(Recommended)` in label, `multiSelect` per rule, follow-through via `Skill` tool per Rule 7, `{LETS_FOO}` substitution per Rule 9). Spec strings hardcoded in English; orchestrator translates to `$LETS_LANGUAGE` at runtime. |
+
+### Command output requirements
+
+Every lets:* command MUST end with a branded LETS box:
+
+```
+┌─ LETS ─────────────────┐
+│  [action]? [command]   │
+└────────────────────────┘
+```
+
+**Box format:**
+- Header: `┌─ LETS ─` + padding with `─` + `┐`
+- Lines: `│  ` + content + padding + ` │`
+- Footer: `└─` + padding with `─` + `┘`
+- Min width: 25 chars
+- **All boxes in one file MUST have the same width** - use the widest box's content as the reference and pad the rest. (Quick check: extract every box, the header/content/footer line lengths must all match per-box and across boxes in the file.)
+
+**Content guidelines:**
+- Short action word + `?` (e.g., "Commit?", "Next?", "Fix?")
+- **ONLY `/lets:*` commands** - never raw commands like `bd sync`, `bd update`
+- **Exception:** `git push` allowed after `/lets:done` or `/lets:end`
+- **No command = no box** - if next step isn't a /lets:* command, just ask in plain text
+- **Internal invocation = no box** - when a command is invoked programmatically by another command (e.g., `/lets:review --json` called by `/lets:github-pr`, OR a Rule 7 Skill-tool follow-through from an `AskUserQuestion` pick — see `lets-rules.md` `## AskUserQuestion Conventions` Rule 7), the inner command's LETS box is waived; only the outermost user-invoked command emits a box
+
+**Which shortcuts to offer (pick from these three, in order):**
+1. **Most-likely next step** in the workflow loop - always include. (After `/lets:check` -> `/lets:commit`; after `/lets:commit` -> `/lets:done`; after `/lets:plan` -> `/lets:execute`; etc.)
+2. **A lighter/faster alternative**, if one exists - include when applicable. Pairs: `/lets:check` is the lighter `/lets:review`; `/lets:check --plan` is the lighter `/lets:review --plan`; `/lets:ask` is the lighter `/lets:opinion`. If a box offers the heavy command, offer the light one alongside it (and pass the matching flag - `/lets:review --local` -> also `/lets:check --local`).
+3. **An escape hatch** - `/lets:start` (new task), `/lets:end` (wrap session), or `/lets:status` (where am I). Pure-navigation boxes (e.g. `Start? /lets:start` after `/lets:init`) are *only* an escape hatch and that's fine - don't pad them with irrelevant options.
+
+Don't exceed ~4 lines in a box. If a command genuinely has only one sensible next step, one line is correct.
+
+### Command checklist
+
+- [ ] Has LETS box in output section
+- [ ] LETS box shortcuts follow the guidance above (most-likely next step + lighter alternative where one exists + escape hatch); all boxes in the file are the same width
+- [ ] Updates Skill Quick Reference in `plugins/lets/rules/lets-rules.md` (and bump frontmatter `version`)
+- [ ] Updates `/lets:install` Essential Skills / Planning Skills tables
+- [ ] Follows session flow (start -> work -> commit -> done -> end)
+- [ ] Description is clear and actionable
+- [ ] **If file invokes any deferred tool** (`AskUserQuestion`, `EnterPlanMode`, `WebFetch`, etc.), include the `> **IMPORTANT:**` deferred-tool callout right after the file's brief description, before the first `## Step` (or first major section). Wording: see existing commands/skills for the standard block (search for `IMPORTANT:** If the spec below`)
+- [ ] **If file invokes `AskUserQuestion`**, follow `## AskUserQuestion Conventions` in `plugins/lets/rules/lets-rules.md` — header chip 4-12 chars descriptive (never `"LETS"`; command name is OK when it names the topic), `(Recommended)` in label not description, follow-through via `Skill` tool (Rule 7) when an option names a `/lets:*` command, **substitute `{LETS_FOO}` placeholders before tool call (Rule 9)** — never use `$LETS_FOO` inside `label`/`description`/`question` strings
 
 ## Commits & PRs
 
