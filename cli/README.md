@@ -235,3 +235,22 @@ Internal subcommand. Renders the Claude Code statusline; the project's `.claude/
 **Task line (off the render hot path).** Reads `.lets/cache/task-status`, self-refreshed by a detached `lets statusline --fetch-task-only` subprocess (`bd show`, 90s TTL, id-only placeholder debounces the spawn) — no bd/network on the render path.
 
 **Payload robustness.** `flexISO` decodes a numeric `resets_at`; `workspace.git_worktree` is intentionally not decoded (CC sends a string) — either would otherwise blank the bar. `sanitizeField` strips C0/ESC bytes from the bd title (shared-tracker escape-injection defense).
+
+## lets hook
+
+Two cobra subcommands wired to Claude Code hooks: `lets hook session-start` (SessionStart) and `lets hook precompact` (PreCompact). Both take `--rules=${CLAUDE_PLUGIN_ROOT}/rules/lets-rules.md` and currently share output via `sessionstart.Run()` — the subcommands stay distinct for future divergence (e.g. context snapshotting before compaction). Project root is detected via `git rev-parse --show-toplevel` with an `os.Getwd()` fallback.
+
+Output (≈2KB, well under Claude Code's 10K hook cap — `lets-q9bx7`):
+
+- Optional `## LETS Notice` — a drift check (`frontmatter.ReadVersion` on the plugin vs `.claude/rules/lets-rules.md`). The canonical messages in `internal/drift/drift.go::Message` tell the user to run `/lets:update` for `outdated`/`unknown`/`ahead`, and `/lets:init` only when the rules file is `missing`. `sessionstart.go::driftCheck` appends a one-line "surface this to the user" instruction to the block (hook-only, NOT part of `drift.Message`; `commands/start.md` carries the same rule so a large slash command can't crowd the notice out).
+- `## LETS Config` — the whitelisted `LETS_*` values + an `### About these values` explainer embedded from `internal/hook/sessionstart/local_config_explainer.md`.
+
+The workflow rules themselves do NOT travel through the hook — they live in `.claude/rules/lets-rules.md` (the uncapped project-instructions channel), copied there by `lets init` and frontmatter-version-tracked. **Dual-hook rationale:** SessionStart on a `compact` source re-injects rules into the post-compaction context; PreCompact ensures rules are in the pre-compaction context the auto-summary is generated from — together they prevent workflow drift after compaction in long sessions.
+
+## JSON envelope conventions
+
+Every `lets <sub> --json` emits a single JSON object on stdout, valid even on `ok=false` (partial-completion contract — `steps[]` carries work done before the error; `error` carries `kind`/`message`/`remediation`). The cobra layer sets `SilenceUsage` + `SilenceErrors`; the human-readable error duplicates `result.Error` to stderr.
+
+**`SchemaVersion` is per-package, not shared.** `initcmd`, `updatecmd`, and `worktreecmd` each declare their own `const SchemaVersion = 1`, so a breaking change in one doesn't force a coordinated bump in the others. Field additions are minor (consumers ignore unknown fields); each package's `TestResult_SchemaContract` test fails on key drift, forcing a conscious bump decision.
+
+**New `--json` subcommand packages should copy `worktreecmd`'s pattern** — a shared `Envelope` core + per-subcommand result wrappers — rather than inventing a new shape. Per-subcommand contracts: the `### ... --json contract` subsections above (`lets init`, `lets update`, `lets worktree`).
