@@ -30,6 +30,20 @@ CLI changes **must** keep `make test` and `make build` green, and update testdat
 
 To run the plugin from a local checkout in Claude Code: `/plugin marketplace add ./lets-workflow` then `/plugin install lets`.
 
+### Dev binary: `make dev` / `make dev-tmux`
+
+`make dev` in a worktree builds `cli/lets` (version `dev-<branch>-<sha>[-dirty]`), prepends `<worktree>/cli/` to PATH, and execs `claude --plugin-dir <worktree>/plugins/lets` — self-contained, no global install, no marketplace mutation. `make dev-tmux` auto-discovers `.worktrees/*/` and spawns one Claude pane per worktree (`WORKTREES="a b"` to limit). Implementation: `scripts/dev/run.sh`. The most important gotcha (run `make dev` from a host terminal, never from a Bash tool inside Claude) is in `CLAUDE.md` "## Local Development"; the rest:
+
+**`LETS_ENV_VERSION` stamping.** Running `lets init` from a dev binary writes `LETS_ENV_VERSION=dev-<branch>-<sha>[-dirty]` into `.lets/.env` (because `initcmd/render.go` writes `version.Version` literally). Reversible by running prod `lets init`, which restores the proper semver stamp. If you don't want to churn `.env`, skip `lets init` on the dev binary.
+
+**Old worktrees.** Both `make dev` and `make dev-tmux` require `scripts/dev/run.sh` plus the corresponding Makefile targets to exist in the worktree's branch HEAD. Worktrees created before this tooling shipped (or on feature branches that haven't pulled main) will fail with `bash: scripts/dev/run.sh: No such file or directory` or `make: *** No rule to make target 'dev'`. Three fixes (cheapest first): (a) `git checkout main -- Makefile scripts/dev/` from inside the affected worktree — fast but leaves the working tree dirty (uncommitted staged files), so plan to `git restore --staged Makefile scripts/dev/` or commit the migration on the worktree's branch; (b) rebase the worktree's branch onto main; (c) `lets worktree remove <name> && lets worktree create <name>`. `make dev-tmux` is the more dangerous case — it opens panes in ALL worktrees, any of which might be stuck on an old branch. Use `make dev-tmux WORKTREES="up-to-date-only"` to limit, or migrate all worktrees first.
+
+**Production install unaffected.** The production `lets` at `~/.local/bin/lets` is untouched — the dev binary lives at `<worktree>/cli/lets` and only wins on PATH for the `make dev` exec'd process.
+
+**Trust the branch.** Because `make dev` prepends `<worktree>/cli/` to PATH, any executable in `<worktree>/cli/` — including a malicious `cli/git`, `cli/curl`, etc. shipped by an untrusted branch — would shadow the system binary for the duration of the inner Claude session. The exposure is limited to the dev process (the PATH change isn't exported), but treat `make dev` like `make` on the branch: only run it on branches you'd run arbitrary code from.
+
+**`IsDev()` semantics.** `version.IsDev()` returns true for the literal string `"dev"` AND for any `"dev-<non-empty>"` form. Statusline + `lets update` already consume `IsDev()` correctly — dev-stamped binaries render without a `v` prefix and skip env regeneration as expected.
+
 ## Editing rules — the one thing that bites people
 
 **Never edit `.claude/rules/lets-rules.md`.** That's the *installed copy*, plugin-managed; it's regenerated from the canonical source by `/lets:init` / `/lets:update`. Edit `plugins/lets/rules/lets-rules.md` instead. Editing the installed copy bypasses our own drift detection and silently desyncs.
