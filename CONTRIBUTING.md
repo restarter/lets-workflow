@@ -101,6 +101,30 @@ Don't exceed ~4 lines in a box. If a command genuinely has only one sensible nex
 - [ ] **If file invokes any deferred tool** (`AskUserQuestion`, `EnterPlanMode`, `WebFetch`, etc.), include the `> **IMPORTANT:**` deferred-tool callout right after the file's brief description, before the first `## Step` (or first major section). Wording: see existing commands/skills for the standard block (search for `IMPORTANT:** If the spec below`)
 - [ ] **If file invokes `AskUserQuestion`**, follow `## AskUserQuestion Conventions` in `plugins/lets/rules/lets-rules.md` — header chip 4-12 chars descriptive (never `"LETS"`; command name is OK when it names the topic), `(Recommended)` in label not description, follow-through via `Skill` tool (Rule 7) when an option names a `/lets:*` command, **substitute `{LETS_FOO}` placeholders before tool call (Rule 9)** — never use `$LETS_FOO` inside `label`/`description`/`question` strings
 
+### Adding a new config key
+
+Single source of truth for canonical metadata: `cli/internal/letsconfig/keys.go::Keys`. Single source of truth for Prefs↔Key wiring: `cli/internal/initcmd/render.go::Prefs.AsValues()`.
+
+Required edits:
+
+1. Append `Key{Name, Comment, Default}` entry to `letsconfig.Keys`. Name MUST start with `LETS_`.
+2. Add field to `Prefs` struct in `cli/internal/initcmd/render.go` AND add ONE entry to `Prefs.AsValues()` map (one-line addition right below the field).
+3. Bump frontmatter `version` in `plugins/lets/rules/lets-rules.md` so SessionStart drift check fires for installed users on next session.
+
+If the key is exposed via the `/lets:init` slash command (most are):
+
+4. Add a `--<key>` cobra flag in `cli/internal/cli/init.go` and wire it through `flagOrDefault(flag<X>, defaults["LETS_X"])` in prefs construction.
+5. Add an AskUserQuestion in `plugins/lets/commands/init.md` (Step 2 first-time path + Step 3d "Keep current" option in change-config path).
+
+Auto-derived (no edit needed):
+- `.lets/.env` content (renderEnv → renderTemplate(Header, p.AsValues()))
+- `.lets/.env.example` content (renderEnvExample → renderTemplate(ExampleHeader, Defaults()))
+- SessionStart hook env-injection whitelist (sessionstart imports `letsconfig.Names()`)
+- Regenerate wiring (`RegenerateEnv` uses `p.AsValues()`, iterates `letsconfig.Keys`)
+- Future `/lets:doctor` validation + display
+
+Then document in CLAUDE.md's "LETS Config keys" table + `README.md` Configuration block, and add consuming logic in the relevant commands.
+
 ## Commits & PRs
 
 - **Conventional commits**: `feat:`, `fix:`, `refactor:`, `docs:`, `chore:`, `test:`. Subject under 50 chars, imperative mood ("add" not "added"). Optional `(task-id)` scope when the work is tracked. See `.claude/rules/git.md`.

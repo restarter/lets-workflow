@@ -182,28 +182,7 @@ mkdir -p "$LETS_PROJECT_ROOT/.lets/sessions"
 
 ### Adding a new config key
 
-Single source of truth for canonical metadata: `cli/internal/letsconfig/keys.go::Keys`.
-Single source of truth for Prefs↔Key wiring: `cli/internal/initcmd/render.go::Prefs.AsValues()`.
-
-Required edits:
-
-1. Append `Key{Name, Comment, Default}` entry to `letsconfig.Keys`. Name MUST start with `LETS_`.
-2. Add field to `Prefs` struct in `cli/internal/initcmd/render.go` AND add ONE entry to `Prefs.AsValues()` map (one-line addition right below the field).
-3. Bump frontmatter `version` in `plugins/lets/rules/lets-rules.md` so SessionStart drift check fires for installed users on next session.
-
-If the key is exposed via the `/lets:init` slash command (most are):
-
-4. Add a `--<key>` cobra flag in `cli/internal/cli/init.go` and wire it through `flagOrDefault(flag<X>, defaults["LETS_X"])` in prefs construction.
-5. Add an AskUserQuestion in `plugins/lets/commands/init.md` (Step 2 first-time path + Step 3d "Keep current" option in change-config path).
-
-Auto-derived (no edit needed):
-- `.lets/.env` content (renderEnv → renderTemplate(Header, p.AsValues()))
-- `.lets/.env.example` content (renderEnvExample → renderTemplate(ExampleHeader, Defaults()))
-- SessionStart hook env-injection whitelist (sessionstart imports `letsconfig.Names()`)
-- Regenerate wiring (`RegenerateEnv` uses `p.AsValues()`, iterates `letsconfig.Keys`)
-- Future `/lets:doctor` validation + display
-
-Then document in this CLAUDE.md "LETS Config keys" table + `README.md` Configuration block, and add consuming logic in the relevant commands.
+Single source of truth: `cli/internal/letsconfig/keys.go::Keys` (canonical metadata) and `cli/internal/initcmd/render.go::Prefs.AsValues()` (Prefs↔Key wiring). The full step-by-step recipe — `Keys` entry, `Prefs` field, cobra flag, `init.md` AskUserQuestion, what's auto-derived, what to document — lives in `CONTRIBUTING.md` ("### Adding a new config key").
 
 ## Dependencies
 
