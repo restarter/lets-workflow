@@ -108,38 +108,9 @@ Testing the LETS plugin against unmerged changes — across parallel worktrees, 
 
 ## Release Flow
 
-Two-phase tag-driven pipeline. See `RELEASING.md` for the maintainer ceremony.
+Two-phase tag-driven pipeline (bump → review → tag → distribute). The full maintainer ceremony — phase-by-phase commands, prerelease handling, recovery, and the design rationale (why two phases / bash / goreleaser, prerelease CHANGELOG handling) — lives in `RELEASING.md` (see its `## Rationale` for the "why").
 
-```
-Phase 1: Bump (manual, on release/X.Y.Z branch)
-  scripts/release/bump-version.sh: edits source-tree version + (stable only) CHANGELOG,
-                                   runs gates, commits. Does NOT push, does NOT tag.
-                                   Stable: 4 files (3 source-tree + CHANGELOG promote)
-                                   Prerelease (X.Y.Z-rc.N): 3 files only, CHANGELOG intact
-Phase 2: Review (PR to main)
-  .github/workflows/verify-versions.yml: PR-time source-tree coherence check
-  .github/workflows/ci.yml:              PR-time Go build + vet + test + lint
-  (both are required status checks on the `main protection` ruleset; the release
-   PR is gated by them like any other PR — no tag-push CI, the tagged commit is
-   already validated here, and Phase 4's goreleaser cross-builds all 5 platforms)
-Phase 3: Tag (manual, on main)
-  make release-tag VERSION=X.Y.Z: tags merge commit + pushes tag
-Phase 4: Distribute (automated, on tag push)
-  .github/workflows/release.yml:
-    - guard job:   verify-versions.sh --against-tag
-    - release job: goreleaser builds 5 archives + checksums, uploads to GH Releases
-                   release notes from CHANGELOG [X.Y.Z] (stable) or [Unreleased] (prerelease)
-```
-
-**Why two phases** — bump is reviewable (can revert), tag is reproducible (same tag → same binaries). Mixing them means tag commits to changes that haven't been reviewed.
-
-**Why bash for orchestration** — bump-version.sh + verify-versions.sh are file-edits + gates, natural for bash + jq + awk. No Go binary involvement; CI doesn't need `setup-go` for verify.
-
-**Why goreleaser** — single declarative config builds 5 platforms in parallel, handles archives + checksums + GH Release creation + prerelease detection (semver suffix `-rc.1` etc.). Battle-tested in beads and similar Go CLIs.
-
-**Source-tree version invariants** — single semver string across `plugin.json`, `marketplace.json`, `lets-rules.md` frontmatter (binary version derives from git tag via ldflags). Drift between any of these fails `verify-versions.yml`.
-
-**Prereleases skip CHANGELOG mutation** — rc/beta/alpha tags exist as validation snapshots; the full release entry is reserved for the stable tag. release.yml synthesizes prerelease notes from `[Unreleased]`. PREV_TAG (used to compute compare-link bottom of CHANGELOG) filters prereleases so stable releases compare against the previous **stable** tag.
+**Source-tree version invariant:** a single semver string spans `plugin.json`, `marketplace.json`, and `lets-rules.md` frontmatter (the binary version derives from the git tag via ldflags). Drift between any of these fails `verify-versions.yml`. Bumped once per release at ceremony time — never per change.
 
 ## File Storage
 
