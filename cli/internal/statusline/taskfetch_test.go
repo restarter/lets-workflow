@@ -192,7 +192,7 @@ func TestFetchAndCacheTaskStatus_RejectsBadID(t *testing.T) {
 // DEL and C1 control bytes while keeping printable text (incl. the now-inert
 // "[2J" that loses its ESC introducer).
 func TestStripControl(t *testing.T) {
-	in := "ok\x1b[2J\x07\x7f end"
+	in := "ok\x1b[2J\x07\x7f\u009b\u0080 end"
 	got := stripControl(in)
 	for _, r := range got {
 		if r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f) {
