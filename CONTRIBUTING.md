@@ -30,6 +30,20 @@ CLI changes **must** keep `make test` and `make build` green, and update testdat
 
 To run the plugin from a local checkout in Claude Code: `/plugin marketplace add ./lets-workflow` then `/plugin install lets`.
 
+### Dev binary: `make dev` / `make dev-tmux`
+
+`make dev` in a worktree builds `cli/lets` (version `dev-<branch>-<sha>[-dirty]`), prepends `<worktree>/cli/` to PATH, and execs `claude --plugin-dir <worktree>/plugins/lets` — self-contained, no global install, no marketplace mutation. `make dev-tmux` auto-discovers `.worktrees/*/` and spawns one Claude pane per worktree (`WORKTREES="a b"` to limit). Implementation: `scripts/dev/run.sh`. The most important gotcha (run `make dev` from a host terminal, never from a Bash tool inside Claude) is in `CLAUDE.md` "## Local Development"; the rest:
+
+**`LETS_ENV_VERSION` stamping.** Running `lets init` from a dev binary writes `LETS_ENV_VERSION=dev-<branch>-<sha>[-dirty]` into `.lets/.env` (because `initcmd/render.go` writes `version.Version` literally). Reversible by running prod `lets init`, which restores the proper semver stamp. If you don't want to churn `.env`, skip `lets init` on the dev binary.
+
+**Old worktrees.** Both `make dev` and `make dev-tmux` require `scripts/dev/run.sh` plus the corresponding Makefile targets to exist in the worktree's branch HEAD. Worktrees created before this tooling shipped (or on feature branches that haven't pulled main) will fail with `bash: scripts/dev/run.sh: No such file or directory` or `make: *** No rule to make target 'dev'`. Three fixes (cheapest first): (a) `git checkout main -- Makefile scripts/dev/` from inside the affected worktree — fast but leaves the working tree dirty (uncommitted staged files), so plan to `git restore --staged Makefile scripts/dev/` or commit the migration on the worktree's branch; (b) rebase the worktree's branch onto main; (c) `lets worktree remove <name> && lets worktree create <name>`. `make dev-tmux` is the more dangerous case — it opens panes in ALL worktrees, any of which might be stuck on an old branch. Use `make dev-tmux WORKTREES="up-to-date-only"` to limit, or migrate all worktrees first.
+
+**Production install unaffected.** The production `lets` at `~/.local/bin/lets` is untouched — the dev binary lives at `<worktree>/cli/lets` and only wins on PATH for the `make dev` exec'd process.
+
+**Trust the branch.** Because `make dev` prepends `<worktree>/cli/` to PATH, any executable in `<worktree>/cli/` — including a malicious `cli/git`, `cli/curl`, etc. shipped by an untrusted branch — would shadow the system binary for the duration of the inner Claude session. The exposure is limited to the dev process (the PATH change isn't exported), but treat `make dev` like `make` on the branch: only run it on branches you'd run arbitrary code from.
+
+**`IsDev()` semantics.** `version.IsDev()` returns true for the literal string `"dev"` AND for any `"dev-<non-empty>"` form. Statusline + `lets update` already consume `IsDev()` correctly — dev-stamped binaries render without a `v` prefix and skip env regeneration as expected.
+
 ## Editing rules — the one thing that bites people
 
 **Never edit `.claude/rules/lets-rules.md`.** That's the *installed copy*, plugin-managed; it's regenerated from the canonical source by `/lets:init` / `/lets:update`. Edit `plugins/lets/rules/lets-rules.md` instead. Editing the installed copy bypasses our own drift detection and silently desyncs.
@@ -40,7 +54,90 @@ Likewise: the **frontmatter `version`** in `lets-rules.md` (and `plugin.json`, `
 
 `commands/`, `skills/`, `agents/`, `rules/` are read by Claude (the model), never by humans. Write for the model: terse, structured, parseable; tables and bullets over prose; `MANDATORY` / `NEVER` / `IMPORTANT` markers where a constraint must be locked onto. Match the existing style. Human-facing docs live in `README.md` and `CLAUDE.md`.
 
-When adding a config key, command, skill, or agent, follow the checklists in `CLAUDE.md` ("Adding a new config key", "When Adding/Modifying Commands, Skills, or Agents", "Command Checklist") — they list every file that needs to stay in sync.
+When adding a config key, command, skill, or agent, follow the checklists in "## Editing commands, skills, agents, config keys" below — they list every file that needs to stay in sync. `CLAUDE.md` keeps the canonical *decisions*; the step-by-step *procedures* live here.
+
+## Editing commands, skills, agents, config keys
+
+> Paths below are relative to `plugins/lets/` (the plugin root) unless they start with `cli/`, `scripts/`, `docs/`, or are repo-root files (`README.md`, `CLAUDE.md`).
+
+Update these files:
+
+| File | What to update |
+|------|----------------|
+| `plugins/lets/rules/lets-rules.md` | Skill Quick Reference table. Edit ONLY here, never the installed `.claude/rules/lets-rules.md`. **Do NOT bump frontmatter `version` per change** — it's bumped once per release at ceremony time (`scripts/release/bump-version.sh`; see `RELEASING.md`). A rules edit on a feature branch accumulates under the current target version. |
+| `commands/install-deprecated.md` | Essential Skills / Planning Skills tables |
+| `CLAUDE.md` Key Concepts | If adding a new skill |
+| `README.md` | Agent table, feature descriptions |
+| All `agents/*.md` `## Constraints` sections | If changing the read-only Bash allowlist or constraint wording, sync the identical 1-line text across all 13 analyst agents (verify with `grep -h "You are read-only" agents/*.md \| sort -u` returning exactly one line) |
+| `commands/end.md` + `commands/done.md` session-id references | Channel per context (the rule): **inside a bash command** → `$CLAUDE_CODE_SESSION_ID` (Bash subprocess env var; bash expands it at runtime) — used by `done.md` Step 7 + `end.md` Step 3 `bd comments add` bodies and `end.md` Step 5 `find ... "${CLAUDE_CODE_SESSION_ID}.jsonl"`. **In plain markdown the model writes** → `${CLAUDE_SESSION_ID}` (Claude Code's command-load-time template substitution) — used by `end.md` Step 5's summary-template `- ID:` line. No `SESSION_ID=` alias anywhere. Verify with `grep -rn "SESSION_ID" plugins/lets/commands/`. Background + remaining adoption scope (subagents, statusline, `/lets:team` records): see `lets-bdkvd`. |
+| `cli/internal/cli/<name>.go` + register in `cli/internal/cli/root.go` | If adding a Go subcommand. Add `<name>_test.go` (`package cli_test`). Use `cmd.OutOrStdout()`. Domain logic goes in `cli/internal/<name>/` (see `initcmd/`, `updatecmd/`, `worktreecmd/`, `sessionstart/`, `statusline/`, `frontmatter/` for patterns). If the package needs platform-specific primitives (`syscall.Flock` etc.), gate with `//go:build unix` and add a `<name>_stub.go` (`//go:build !unix`) per the `worktreecmd` pattern so cross-platform builds keep working. Update `cli/README.md` "Adding a subcommand" recipe if pattern changes. |
+| Any `commands/*.md` or `skills/*/SKILL.md` invoking `AskUserQuestion` | Follow `## AskUserQuestion Conventions` in `plugins/lets/rules/lets-rules.md` (header chip 4-12 chars descriptive, `(Recommended)` in label, `multiSelect` per rule, follow-through via `Skill` tool per Rule 7, `{LETS_FOO}` substitution per Rule 9). Spec strings hardcoded in English; orchestrator translates to `$LETS_LANGUAGE` at runtime. |
+
+### Command output requirements
+
+Every lets:* command MUST end with a branded LETS box:
+
+```
+┌─ LETS ─────────────────┐
+│  [action]? [command]   │
+└────────────────────────┘
+```
+
+**Box format:**
+- Header: `┌─ LETS ─` + padding with `─` + `┐`
+- Lines: `│  ` + content + padding + ` │`
+- Footer: `└─` + padding with `─` + `┘`
+- Min width: 25 chars
+- **All boxes in one file MUST have the same width** - use the widest box's content as the reference and pad the rest. (Quick check: extract every box, the header/content/footer line lengths must all match per-box and across boxes in the file.)
+
+**Content guidelines:**
+- Short action word + `?` (e.g., "Commit?", "Next?", "Fix?")
+- **ONLY `/lets:*` commands** - never raw commands like `bd sync`, `bd update`
+- **Exception:** `git push` allowed after `/lets:done` or `/lets:end`
+- **No command = no box** - if next step isn't a /lets:* command, just ask in plain text
+- **Internal invocation = no box** - when a command is invoked programmatically by another command (e.g., `/lets:review --json` called by `/lets:github-pr`, OR a Rule 7 Skill-tool follow-through from an `AskUserQuestion` pick — see `lets-rules.md` `## AskUserQuestion Conventions` Rule 7), the inner command's LETS box is waived; only the outermost user-invoked command emits a box
+
+**Which shortcuts to offer (pick from these three, in order):**
+1. **Most-likely next step** in the workflow loop - always include. (After `/lets:check` -> `/lets:commit`; after `/lets:commit` -> `/lets:done`; after `/lets:plan` -> `/lets:execute`; etc.)
+2. **A lighter/faster alternative**, if one exists - include when applicable. Pairs: `/lets:check` is the lighter `/lets:review`; `/lets:check --plan` is the lighter `/lets:review --plan`; `/lets:ask` is the lighter `/lets:opinion`. If a box offers the heavy command, offer the light one alongside it (and pass the matching flag - `/lets:review --local` -> also `/lets:check --local`).
+3. **An escape hatch** - `/lets:start` (new task), `/lets:end` (wrap session), or `/lets:status` (where am I). Pure-navigation boxes (e.g. `Start? /lets:start` after `/lets:init`) are *only* an escape hatch and that's fine - don't pad them with irrelevant options.
+
+Don't exceed ~4 lines in a box. If a command genuinely has only one sensible next step, one line is correct.
+
+### Command checklist
+
+- [ ] Has LETS box in output section
+- [ ] LETS box shortcuts follow the guidance above (most-likely next step + lighter alternative where one exists + escape hatch); all boxes in the file are the same width
+- [ ] Updates Skill Quick Reference in `plugins/lets/rules/lets-rules.md` (and bump frontmatter `version`)
+- [ ] Updates `/lets:install` Essential Skills / Planning Skills tables
+- [ ] Follows session flow (start -> work -> commit -> done -> end)
+- [ ] Description is clear and actionable
+- [ ] **If file invokes any deferred tool** (`AskUserQuestion`, `EnterPlanMode`, `WebFetch`, etc.), include the `> **IMPORTANT:**` deferred-tool callout right after the file's brief description, before the first `## Step` (or first major section). Wording: see existing commands/skills for the standard block (search for `IMPORTANT:** If the spec below`)
+- [ ] **If file invokes `AskUserQuestion`**, follow `## AskUserQuestion Conventions` in `plugins/lets/rules/lets-rules.md` — header chip 4-12 chars descriptive (never `"LETS"`; command name is OK when it names the topic), `(Recommended)` in label not description, follow-through via `Skill` tool (Rule 7) when an option names a `/lets:*` command, **substitute `{LETS_FOO}` placeholders before tool call (Rule 9)** — never use `$LETS_FOO` inside `label`/`description`/`question` strings
+
+### Adding a new config key
+
+Single source of truth for canonical metadata: `cli/internal/letsconfig/keys.go::Keys`. Single source of truth for Prefs↔Key wiring: `cli/internal/initcmd/render.go::Prefs.AsValues()`.
+
+Required edits:
+
+1. Append `Key{Name, Comment, Default}` entry to `letsconfig.Keys`. Name MUST start with `LETS_`.
+2. Add field to `Prefs` struct in `cli/internal/initcmd/render.go` AND add ONE entry to `Prefs.AsValues()` map (one-line addition right below the field).
+3. Bump frontmatter `version` in `plugins/lets/rules/lets-rules.md` so SessionStart drift check fires for installed users on next session.
+
+If the key is exposed via the `/lets:init` slash command (most are):
+
+4. Add a `--<key>` cobra flag in `cli/internal/cli/init.go` and wire it through `flagOrDefault(flag<X>, defaults["LETS_X"])` in prefs construction.
+5. Add an AskUserQuestion in `plugins/lets/commands/init.md` (Step 2 first-time path + Step 3d "Keep current" option in change-config path).
+
+Auto-derived (no edit needed):
+- `.lets/.env` content (renderEnv → renderTemplate(Header, p.AsValues()))
+- `.lets/.env.example` content (renderEnvExample → renderTemplate(ExampleHeader, Defaults()))
+- SessionStart hook env-injection whitelist (sessionstart imports `letsconfig.Names()`)
+- Regenerate wiring (`RegenerateEnv` uses `p.AsValues()`, iterates `letsconfig.Keys`)
+- Future `/lets:doctor` validation + display
+
+Then document in CLAUDE.md's "LETS Config keys" table + `README.md` Configuration block, and add consuming logic in the relevant commands.
 
 ## Commits & PRs
 

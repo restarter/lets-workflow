@@ -43,17 +43,9 @@ Testing the LETS plugin against unmerged changes — across parallel worktrees, 
 - **`make dev-tmux`** auto-discovers `.worktrees/*/` and spawns a tmux session with one Claude pane per worktree. Pass `WORKTREES="name1 name2"` to limit. Threshold prompt at >10.
 - Implementation: `scripts/dev/run.sh` (subcommands: `build|info|claude|tmux`). The Makefile targets are thin shims for discoverability via `make help`.
 
-**Gotcha — `LETS_ENV_VERSION` stamping.** Running `lets init` from a dev binary writes `LETS_ENV_VERSION=dev-<branch>-<sha>[-dirty]` into `.lets/.env` (because `initcmd/render.go:70` writes `version.Version` literally). Reversible by running prod `lets init`, which restores the proper semver stamp. If you don't want to churn `.env`, skip `lets init` on the dev binary.
-
 **Gotcha — Claude-inside-Claude.** `make dev` must run from a **host terminal**, not from a Bash tool inside an existing Claude session. The Bash tool spawns a subshell that `exec`s the inner `claude`; the outer Claude's tool harness captures stdin/stdout, so the inner Claude has no terminal to interact through and hangs. Symptom: the Bash tool times out with no visible Claude prompt. Use a fresh tmux pane or terminal window instead.
 
-**Gotcha — old worktrees.** Both `make dev` and `make dev-tmux` require `scripts/dev/run.sh` plus the corresponding Makefile targets to exist in the worktree's branch HEAD. Worktrees created before this tooling shipped (or on feature branches that haven't pulled main) will fail with `bash: scripts/dev/run.sh: No such file or directory` or `make: *** No rule to make target 'dev'`. Three fixes (cheapest first): (a) `git checkout main -- Makefile scripts/dev/` from inside the affected worktree — fast but leaves the working tree dirty (uncommitted staged files), so plan to `git restore --staged Makefile scripts/dev/` or commit the migration on the worktree's branch; (b) rebase the worktree's branch onto main; (c) `lets worktree remove <name> && lets worktree create <name>`. `make dev-tmux` is the more dangerous case — it opens panes in ALL worktrees, any of which might be stuck on an old branch. Use `make dev-tmux WORKTREES="up-to-date-only"` to limit, or migrate all worktrees first.
-
-**Production `lets` install** at `~/.local/bin/lets` is unaffected — the dev binary lives at `<worktree>/cli/lets` and only wins on PATH for the `make dev` exec'd process.
-
-**Trust the branch.** Because `make dev` prepends `<worktree>/cli/` to PATH, any executable in `<worktree>/cli/` — including a malicious `cli/git`, `cli/curl`, etc. shipped by an untrusted branch — would shadow the system binary for the duration of the inner Claude session. The exposure is limited to the dev process (PATH change isn't exported), but treat `make dev` like `make` on the branch: only run it on branches you'd run arbitrary code from.
-
-**`IsDev()` semantics.** `version.IsDev()` returns true for the literal string `"dev"` AND for any `"dev-<non-empty>"` form. Statusline + `lets update` already consume `IsDev()` correctly — dev-stamped binaries render without a `v` prefix and skip env regeneration as expected.
+The remaining dev-binary gotchas — `LETS_ENV_VERSION` stamping, old worktrees, PATH-shadowing ("trust the branch"), and `IsDev()` semantics — live in `CONTRIBUTING.md` "### Dev binary: `make dev` / `make dev-tmux`".
 
 ## Key Concepts
 
@@ -65,15 +57,15 @@ Testing the LETS plugin against unmerged changes — across parallel worktrees, 
 - **Agents** = experts dispatched by commands. `/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:brainstorm` dispatch via subagents. `/lets:team` dispatches via Agent Teams (parallel, worktree isolation). `actor` is a meta-agent that loads external personalities (URL or file) and adapts them to LETS modes
 - **Orchestrators** = commands that delegate to other commands. `/lets:github-pr` orchestrates `/lets:review` for full PR lifecycle
 - **Hooks** = SessionStart + PreCompact inject workflow rules (PreCompact preserves rules across context compaction in long sessions)
-- **Statusline** = `lets statusline` Go subcommand. Project `.claude/settings.json` invokes it directly. `lets init` detects the canonical command via value-match against `"lets statusline"`; foreign user-customized commands are left alone. Legacy bash shim `plugins/lets/scripts/lets/statusline.sh` removed in lets-8ilsl. Byte-equal detection of pre-deletion installs (.lets/statusline.sh) handled via the frozen `cli/internal/initcmd/embedded_statusline_shim.sh` snapshot — `MigrateStatuslineSh` deletes matching legacy shims and triggers `SetStatusLine` to point settings.json at `lets statusline`. **The rich multi-line box (`cli/internal/statusline/rich.go`) is the DEFAULT** for `lets statusline` (no flag) — a closed **box** (`┌─┐ │ ├─┤ └─┘`) wrapping identity / budget / task / rotating-tip lines. Flags: `--compact` falls back to the legacy 2-line `renderLines` (kept for terminals where the box misbehaves), `--light` uses the light palette (default dark), `--no-tip` (or env `LETS_STATUSLINE_TIP=off`/`0`/`false`) hides the bottom tip line, `--no-dir` (or env `LETS_STATUSLINE_DIR=off`/`0`/`false`) hides the Full-tier location pill, `--no-task` (or env `LETS_STATUSLINE_TASK=off`/`0`/`false`) hides the task line AND skips its background `bd` refresh. `--rich` is a hidden accepted no-op (rich is already default). Two `COLUMNS`-driven tiers — **Full** (≥`bpWide`=72) and **Compact** (<72; fails open to Full when COLUMNS is absent). Box width: below `bpFill`=90 it fills the window (more tip room), at/above it hugs the widest line; always capped at `fullMaxLine`=120 and left a `boxRightMargin`=4 right gutter (CC's render area is a few cells narrower than the COLUMNS it passes + ambiguous-width glyphs). Sized **cell-accurately** (`cellWidth`/`fitCell`; `wideRunes` maps any 2-cell glyph — **currently empty**, since every emitted glyph is 1-cell text) so the right border aligns — **if a 2-cell emoji glyph is ever added, register it in `wideRunes` or the border drifts**. Rows are `richRow{plain | prefix+mid+suffix}`: the task title / tip live in a flex `mid` that clips first, keeping the id + notes/hint suffix in the frame. The **Full-tier location pill** shows the project/worktree root folder name (git top-level basename via `detectProjectRoot`, stable across `cd` into subdirs like `cli/`), or the literal word `worktree` inside a worktree (the dir name already equals the branch, so repeating it is noise). **Compact** (<72) drops the pill, PR, and the model's `(… context)` paren and shortens `window`→`w`, but **keeps model name + effort** (high-signal); a meaningless `.`/empty folder/branch is suppressed rather than rendered as a stray `⎇ .`. Universal 1-cell text glyphs (no Nerd Font, no emoji — `wideRunes` is empty so the border never drifts), a static `⚘` brand mark (the 🌱→🪴→🌿→🌳→🌴 growth ladder is implemented but parked behind it), color-graded effort, no progress bars (token counts + paren reset deltas instead). The task line reads `.lets/cache/task-status`, self-refreshed by a detached `lets statusline --fetch-task-only` subprocess (`bd show`, 90s TTL, id-only placeholder debounces the spawn) — no bd/network on the render path. Payload-robustness: `flexISO` decodes numeric `resets_at`, and `workspace.git_worktree` is intentionally not decoded (CC sends a string) — both would otherwise blank the bar. Terminal escape-injection defense: `stripControl` folds C0/ESC/DEL/C1 control bytes to spaces in **every** externally-sourced rendered field — folder/branch/worktree name (filesystem- and ref-controlled), `model.display_name`, `pr.review_state`, `effort` — applied in `Render` before the renderer wraps its own ANSI; `sanitizeField` is `stripControl` plus the `|`-fold/trim for the pipe-delimited bd-title cache line.
-- **`.env` versioning** — first key `LETS_ENV_VERSION` records which `lets` binary version last regenerated the file. `lets init` regenerates when version mismatches the running binary OR when CLI prefs flags are passed with new values. `RegenerateEnv` (`cli/internal/initcmd/env.go`) is the canonical writer; preserves user values + foreign keys (under `# User-added keys` separator), refreshes header. A hand-deleted `LETS_*` key is restored to its `letsconfig.Defaults()` value (not left empty) via `mergePrefs`. NOT in `letsconfig.Keys` whitelist (metadata, not user-config) — hook session injection skips it. Reused by `/lets:update` (calls `RegenerateEnv` with a near-empty `Prefs` — only the default tracker; the existing `.env`'s user values are read regardless — so it just refreshes the header) (lets-hdrdr.3).
-- **`lets worktree create/remove/list/info`** — Go subcommand (`cli/internal/worktreecmd/`, build constraint `//go:build unix`) owns filesystem/git work for interactive worktrees: name validation (`git check-ref-format` final pass), not-inside-worktree guard, attach-vs-new-branch auto-detect (`--attach`/`--new-branch` to force), `.gitignore` hardening (race-safe via flock + read-after-write integrity check in `initcmd.EnsureGitignore`), atomic `git worktree add`, `.lets/` whole-dir symlink, `.beads/.env` targeted symlink + chmod 0o600/0o700 (replaces the legacy `.beads/redirect` mechanism from bd v0.x), verify, and rollback (residual paths in JSON envelope's `rollback.residual`). JSON envelope `schema_version=1`, typed exit codes 10..20 (21..29 reserved for future `adopt` subcommand), `--print-cd` to write the worktree path to stdout for `$(...)` shell composition (`cd "$(lets worktree create foo --print-cd)" && claude`). The slash command `commands/worktree.md` is a thin dispatcher: capture intent via `AskUserQuestion`, shell out with `--json`, render the result. Windows users get a no-op stub at `cli/internal/cli/worktree_stub.go` (`//go:build !unix`) returning a structured "not yet supported" error for each subcommand; full Windows port tracked in `lets-rqep4` backlog (lets-rqep4).
-- **`/lets:update`** — sync a project with the current release. Slash command `commands/update.md` shells `lets update --json` (mirrors `/lets:init → lets init`); the `lets update` Go subcommand (`cli/internal/updatecmd/`) checks 4 drift-able artifacts: `.lets/.env` (via `RegenerateEnv`; skipped on a `dev` binary so `LETS_ENV_VERSION` isn't downgraded to `dev`) and `.claude/rules/lets-rules.md` (via `drift.Check` + re-copy with `initcmd.AtomicWriteBytes`) are auto-synced; the `lets` binary and the Claude Code plugin are version-checked against the latest GitHub release (`releases/latest`, cached 1h at `.lets/cache/update-check.json` with stale-cache fallback, `--offline` to skip the network, `--refresh-cache` to bypass the cache) and reported with an upgrade command (can't self-replace). Reports `consistent` (binary == plugin == installed-rules version) to flag partial upgrades. Worktree-guarded like `lets init`. Does NOT prompt for config or touch `settings.json`/beads — that's `lets init`'s job (init = setup; update = sync). Rules-drift Notice messages point users here for `unknown`/`outdated`/`ahead`; `/lets:init` only for `missing` (lets-hdrdr.3).
+- **Statusline** = `lets statusline` Go subcommand; `.claude/settings.json` invokes it directly, `lets init` wires it via value-match against `"lets statusline"` (foreign user-customized commands left alone). **The rich multi-line box (`cli/internal/statusline/rich.go`) is the DEFAULT** (identity / budget / task / rotating-tip; the Full tier adds a location pill); flags `--compact` / `--light` / `--no-tip` / `--no-dir` / `--no-task`. Glyphs are 1-cell text (no emoji), so `wideRunes` is empty — **if a 2-cell glyph is ever added, register it in `wideRunes` or the box border drifts.** The task line reads `.lets/cache/task-status`, self-refreshed by a detached `--fetch-task-only` subprocess — no bd/network on the render path. Flags, `COLUMNS` tiers, width math, payload-robustness, escape-injection defense, and legacy-shim migration: `cli/README.md` "## lets statusline".
+- **`.env` versioning** — the first key `LETS_ENV_VERSION` records which `lets` binary version last regenerated `.lets/.env`. `RegenerateEnv` (`cli/internal/initcmd/env.go`) is the canonical writer (preserves user values + foreign keys under `# User-added keys`; restores a hand-deleted `LETS_*` key to its `letsconfig.Defaults()` value). It is NOT in the `letsconfig.Keys` whitelist (metadata, not user-config), so the hook's session injection skips it. `lets init` regenerates on version mismatch or new prefs; `/lets:update` reuses it to refresh the header. Detail: `cli/README.md` "## lets init" / "## lets update".
+- **`lets worktree create/remove/list/info`** — Go subcommand (`cli/internal/worktreecmd/`, `//go:build unix`) owns the filesystem/git work for interactive worktrees: name validation, not-inside-worktree guard, attach-vs-new-branch auto-detect, race-safe `.gitignore` hardening, atomic `git worktree add`, `.lets/` whole-dir symlink + `.beads/.env` targeted symlink, verify, and rollback. `commands/worktree.md` is a thin `--json` dispatcher (captures intent via `AskUserQuestion`); Windows gets a no-op stub (`lets-rqep4`). JSON envelope, typed exit codes, `--print-cd`, and the rollback contract: `cli/README.md` "## lets worktree".
+- **`/lets:update`** — sync a project with the current release. `commands/update.md` shells `lets update --json` (mirrors `/lets:init → lets init`); the Go subcommand (`cli/internal/updatecmd/`) auto-syncs `.lets/.env` (via `RegenerateEnv`, skipped on a `dev` binary) and `.claude/rules/lets-rules.md` (via `drift.Check` + re-copy), then version-checks the `lets` binary + the plugin against the latest GitHub release (report-only — can't self-replace). Does NOT prompt for config or touch `settings.json`/beads — that's `lets init`'s job (init = setup; update = sync). Rules-drift Notices point here for `unknown`/`outdated`/`ahead`; `/lets:init` only for `missing`. The 4-artifact table + caching detail: `cli/README.md` "## lets update" (lets-hdrdr.3).
 - **Skills** = reusable actions in `skills/<name>/SKILL.md`. Two types: user-facing (auto-discovered, triggered via description match; can also be invoked via the `Skill` tool) and internal (not auto-discovered, invoked by commands via the `Skill` tool when needed). Examples: `create-task`, `commit`, `take-task` (user-facing), `detect-task`, `actor-fetch-personality` (internal)
 
 ## Architecture Decisions
 
-- **Audience for plugin source.** Everything in `commands/`, `skills/`, `agents/`, `rules/lets-rules.md` is read by Claude (orchestrator and subagents) - never by humans. Write for the model: direct, structured, parseable. No rhetorical flourishes, no human-onboarding tone. Use markers (`MANDATORY`, `NEVER`, `IMPORTANT`) where the model needs to lock onto a constraint. Tables and bullet lists beat prose. Examples are templates the model imitates - keep them precise. Human-facing docs live in `README.md` and `CLAUDE.md` (this file).
+- **Audience for plugin source** — `commands/`, `skills/`, `agents/`, `rules/lets-rules.md` are read by the model (orchestrator + subagents), never by humans: write terse, structured, marker-driven (`MANDATORY`/`NEVER`/`IMPORTANT`), tables over prose. Human-facing docs are `README.md` + `CLAUDE.md`. Full guidance: `CONTRIBUTING.md` "## Audience of plugin source".
 - **Claude Code session-id channels (two of them — pick the right one).**
   - `${CLAUDE_SESSION_ID}` — **template substitution** in command/skill markdown: Claude Code rewrites it to the literal session UUID before the model reads the spec. Available since Claude Code v2.1.9. Use when a top-level orchestrator markdown needs the value pre-rendered (e.g. inside a markdown template the model later writes via the Write tool).
   - `$CLAUDE_CODE_SESSION_ID` — **Bash subprocess env var** Claude Code injects into every Bash tool invocation. Use inside bash commands — `bash` expands it at runtime, no template/model magic needed. **Preferred** for bash-only contexts (e.g. `bd comments add "... $CLAUDE_CODE_SESSION_ID ..."`) because it sidesteps the placeholder-skip fragility QA found in template-substitution-inside-multiline-args (`lets-bdkvd` QA #13). Also the only channel subagents and external scripts can read.
@@ -93,14 +85,13 @@ Testing the LETS plugin against unmerged changes — across parallel worktrees, 
 - All analyst agents are read-only with uniform tools: `Read, Grep, Glob, Bash`. No `Edit/Write`. Exception: `agents/implementer.md` adds `Edit/Write` for `/lets:team` parallel implementation in isolated worktrees.
 - `/lets:team` uses Agent Teams (TeamCreate, Agent with isolation: worktree) for parallel implementation. All other commands use subagents for analysis.
 - All analyst agents have prompt-level read-only Bash constraints in their `## Constraints` section (identical 1-line allowlist across all 13). `hooks/validate-readonly.sh.old` exists as a PreToolUse hook prototype (not yet registered - agent frontmatter hooks silently ignored)
-- **JSON envelope conventions (`--json` subcommands).** Every `lets <sub> --json` emits a single JSON object on stdout, valid even on `ok=false` (partial-completion contract — `steps[]` carries work done before the error, `error` carries `kind`/`message`/`remediation`). Cobra layer sets `SilenceUsage` + `SilenceErrors`; human-readable error duplicates `result.Error` to stderr. **`SchemaVersion` is per-package**, not shared — `initcmd`, `updatecmd`, `worktreecmd` each declare their own `const SchemaVersion = 1` so a breaking change in one doesn't force a coordinated bump in the others. Field additions are minor (consumers ignore unknown fields); each package has a `TestResult_SchemaContract` test that fails on key drift, forcing a conscious decision to bump. New `--json` subcommand packages should **copy `worktreecmd`'s pattern** (shared `Envelope` core + per-subcommand result wrappers) rather than inventing a new shape. Full per-subcommand contracts in `cli/README.md` (`lets init --json contract`, `lets update`, `lets worktree --json contract`).
+- **JSON envelope (`--json` subcommands).** Every `lets <sub> --json` emits a single JSON object, valid even on `ok=false` (partial-completion: `steps[]` + a typed `error`). **`SchemaVersion` is per-package** — `initcmd`/`updatecmd`/`worktreecmd` each own a `const SchemaVersion`, guarded by a `TestResult_SchemaContract` test; new `--json` packages copy `worktreecmd`'s shape. Mechanics + per-subcommand contracts: `cli/README.md` "## JSON envelope conventions".
 - Interactive worktrees managed via `/lets:worktree` command. Hook prototypes `hooks/worktree-setup.sh.old` and `hooks/worktree-cleanup.sh.old` (deferred - caused agent auto-cleanup issues)
 - Worktrees stored in `.worktrees/` at project root - `.lets/` symlinked for interactive sessions
-- **Trunk-mode** — per-task opt-in via `take-task` Step 4 picker option "Stay on current branch". Detected at runtime by `HEAD == $LETS_MERGE_BRANCH` (no state file, no flag — survives context compaction; consistent with `$LETS_PR_FLOW` substitution pattern). In trunk-mode: `/lets:done` pushes (upstream-aware: `rev-parse --abbrev-ref @{u}` guard + `git push -u origin` for first-push) and closes the task without creating a PR (same-source-target is not a valid PR); `/lets:plan` derives the plan slug from task-id instead of branch slug (avoids `.lets/plans/main.md` collisions across tasks); `/lets:execute` soft-gates with AskUserQuestion instead of hard-refusing on `$LETS_MERGE_BRANCH`. Exception clause for the "Never edit files on the merge-branch" rule documented in `plugins/lets/rules/lets-rules.md` line 32 sub-paragraph. Use for quick docs / spec / small-fix work where PR ceremony is overhead. Mutually exclusive with worktree (the picker doesn't fire inside worktrees — take-task Step 3 short-circuits). Implementation: `lets-3o9d7`.
-- **SessionStart hook** invokes the Go subcommand `lets hook session-start --rules=${CLAUDE_PLUGIN_ROOT}/rules/lets-rules.md`. It emits: optional `## LETS Notice` (drift check via `frontmatter.ReadVersion` on plugin vs `.claude/rules/lets-rules.md`; the canonical messages in `cli/internal/drift/drift.go::Message` tell the user to run `/lets:update` for `outdated`/`unknown`/`ahead`, `/lets:init` only when the rules file is `missing`; `sessionstart.go::driftCheck` appends a one-line "surface this to the user" instruction to the block — hook-only, NOT part of `drift.Message` — and `commands/start.md` carries the same rule, so a big slash command like `/lets:start` can't crowd the notice out) + `## LETS Config` block (values + `### About these values` explainer embedded from `cli/internal/hook/sessionstart/local_config_explainer.md`). Total output ~2KB - well under Claude Code's 10K hook output cap (lets-q9bx7). Workflow rules themselves live in the project's `.claude/rules/lets-rules.md` (uncapped project-instructions channel), copied there by `lets init` and version-tracked via frontmatter. Project root detected via `git rev-parse --show-toplevel` with `os.Getwd()` fallback.
-- **PreCompact hook** invokes `lets hook precompact --rules=${CLAUDE_PLUGIN_ROOT}/rules/lets-rules.md` (separate cobra subcommand, currently shares output behavior with `session-start` via `sessionstart.Run()`). Distinct subcommand kept for future divergence (e.g. context snapshotting before compaction).
+- **Trunk-mode** — per-task opt-in via the `take-task` picker ("Stay on current branch"), detected at runtime by `HEAD == $LETS_MERGE_BRANCH` (no state file — survives compaction). In trunk-mode: `/lets:done` pushes + closes the task without a PR (same-source-target isn't a valid PR); `/lets:plan` derives the plan slug from task-id (avoids `.lets/plans/main.md` collisions); `/lets:execute` soft-gates instead of hard-refusing on `$LETS_MERGE_BRANCH`. An exception to the "never edit the merge-branch" rule (see `plugins/lets/rules/lets-rules.md`). For quick docs/spec/small-fix work; mutually exclusive with worktree. Implementation: `lets-3o9d7`.
+- **SessionStart + PreCompact hooks** invoke `lets hook session-start|precompact`, emitting an optional `## LETS Notice` (rules-drift check) + a `## LETS Config` block. The workflow rules themselves do NOT travel through the hook — they live in `.claude/rules/lets-rules.md` (the uncapped project-instructions channel), copied there by `lets init` and frontmatter-version-tracked. Output mechanics, drift messages, and project-root detection: `cli/README.md` "## lets hook".
 - The bash `session-start.sh` was deleted along with its yaml→env migration block - lets-p732a closed.
-- Dual-hook pattern (same effective output on both events): SessionStart on `compact` source re-injects rules into the post-compaction context; PreCompact ensures rules are in the pre-compaction context that the auto-summary is generated from - prevents workflow drift after compaction in long sessions.
+- **Dual-hook pattern** — same output on both events keeps workflow rules present across context compaction: SessionStart on a `compact` source re-injects them post-compaction; PreCompact seeds the pre-compaction context the auto-summary is built from. Prevents workflow drift in long sessions.
 - User-facing skills: auto-discovered by Claude Code, appear in skill list, trigger on description match. Frontmatter description must NOT use YAML quotes.
 - Internal skills: hidden from the user-facing `/lets:` autocomplete via `user-invocable: false` in the frontmatter (Claude Code supports this — see `code.claude.com/docs` skills frontmatter). The model can still use them when commands explicitly ask; commands invoke them via `Skill(skill: "lets:<name>", args: "...")`. Claude Code resolves the `lets:` namespace regardless of whether the plugin is loaded via marketplace install or `--plugin-dir` dev mode (no relative-path fragility). No accidental user triggering, no context cost until invoked. Current internal skills: `detect-task`, `actor-fetch-personality`.
 - Commands define WHAT to do and orchestrate the flow. User-facing skills define full reusable flows (steps, user gates) that auto-trigger on natural language. Internal skills define shared procedures read by commands on demand. Commands delegate to skills for shared operations.
@@ -108,38 +99,9 @@ Testing the LETS plugin against unmerged changes — across parallel worktrees, 
 
 ## Release Flow
 
-Two-phase tag-driven pipeline. See `RELEASING.md` for the maintainer ceremony.
+Two-phase tag-driven pipeline (bump → review → tag → distribute). The full maintainer ceremony — phase-by-phase commands, prerelease handling, recovery, and the design rationale (why two phases / bash / goreleaser, prerelease CHANGELOG handling) — lives in `RELEASING.md` (see its `## Rationale` for the "why").
 
-```
-Phase 1: Bump (manual, on release/X.Y.Z branch)
-  scripts/release/bump-version.sh: edits source-tree version + (stable only) CHANGELOG,
-                                   runs gates, commits. Does NOT push, does NOT tag.
-                                   Stable: 4 files (3 source-tree + CHANGELOG promote)
-                                   Prerelease (X.Y.Z-rc.N): 3 files only, CHANGELOG intact
-Phase 2: Review (PR to main)
-  .github/workflows/verify-versions.yml: PR-time source-tree coherence check
-  .github/workflows/ci.yml:              PR-time Go build + vet + test + lint
-  (both are required status checks on the `main protection` ruleset; the release
-   PR is gated by them like any other PR — no tag-push CI, the tagged commit is
-   already validated here, and Phase 4's goreleaser cross-builds all 5 platforms)
-Phase 3: Tag (manual, on main)
-  make release-tag VERSION=X.Y.Z: tags merge commit + pushes tag
-Phase 4: Distribute (automated, on tag push)
-  .github/workflows/release.yml:
-    - guard job:   verify-versions.sh --against-tag
-    - release job: goreleaser builds 5 archives + checksums, uploads to GH Releases
-                   release notes from CHANGELOG [X.Y.Z] (stable) or [Unreleased] (prerelease)
-```
-
-**Why two phases** — bump is reviewable (can revert), tag is reproducible (same tag → same binaries). Mixing them means tag commits to changes that haven't been reviewed.
-
-**Why bash for orchestration** — bump-version.sh + verify-versions.sh are file-edits + gates, natural for bash + jq + awk. No Go binary involvement; CI doesn't need `setup-go` for verify.
-
-**Why goreleaser** — single declarative config builds 5 platforms in parallel, handles archives + checksums + GH Release creation + prerelease detection (semver suffix `-rc.1` etc.). Battle-tested in beads and similar Go CLIs.
-
-**Source-tree version invariants** — single semver string across `plugin.json`, `marketplace.json`, `lets-rules.md` frontmatter (binary version derives from git tag via ldflags). Drift between any of these fails `verify-versions.yml`.
-
-**Prereleases skip CHANGELOG mutation** — rc/beta/alpha tags exist as validation snapshots; the full release entry is reserved for the stable tag. release.yml synthesizes prerelease notes from `[Unreleased]`. PREV_TAG (used to compute compare-link bottom of CHANGELOG) filters prereleases so stable releases compare against the previous **stable** tag.
+**Source-tree version invariant:** a single semver string spans `plugin.json`, `marketplace.json`, and `lets-rules.md` frontmatter (the binary version derives from the git tag via ldflags). Drift between any of these fails `verify-versions.yml`. Bumped once per release at ceremony time — never per change.
 
 ## File Storage
 
@@ -211,28 +173,7 @@ mkdir -p "$LETS_PROJECT_ROOT/.lets/sessions"
 
 ### Adding a new config key
 
-Single source of truth for canonical metadata: `cli/internal/letsconfig/keys.go::Keys`.
-Single source of truth for Prefs↔Key wiring: `cli/internal/initcmd/render.go::Prefs.AsValues()`.
-
-Required edits:
-
-1. Append `Key{Name, Comment, Default}` entry to `letsconfig.Keys`. Name MUST start with `LETS_`.
-2. Add field to `Prefs` struct in `cli/internal/initcmd/render.go` AND add ONE entry to `Prefs.AsValues()` map (one-line addition right below the field).
-3. Bump frontmatter `version` in `plugins/lets/rules/lets-rules.md` so SessionStart drift check fires for installed users on next session.
-
-If the key is exposed via the `/lets:init` slash command (most are):
-
-4. Add a `--<key>` cobra flag in `cli/internal/cli/init.go` and wire it through `flagOrDefault(flag<X>, defaults["LETS_X"])` in prefs construction.
-5. Add an AskUserQuestion in `plugins/lets/commands/init.md` (Step 2 first-time path + Step 3d "Keep current" option in change-config path).
-
-Auto-derived (no edit needed):
-- `.lets/.env` content (renderEnv → renderTemplate(Header, p.AsValues()))
-- `.lets/.env.example` content (renderEnvExample → renderTemplate(ExampleHeader, Defaults()))
-- SessionStart hook env-injection whitelist (sessionstart imports `letsconfig.Names()`)
-- Regenerate wiring (`RegenerateEnv` uses `p.AsValues()`, iterates `letsconfig.Keys`)
-- Future `/lets:doctor` validation + display
-
-Then document in this CLAUDE.md "LETS Config keys" table + `README.md` Configuration block, and add consuming logic in the relevant commands.
+Single source of truth: `cli/internal/letsconfig/keys.go::Keys` (canonical metadata) and `cli/internal/initcmd/render.go::Prefs.AsValues()` (Prefs↔Key wiring). The full step-by-step recipe — `Keys` entry, `Prefs` field, cobra flag, `init.md` AskUserQuestion, what's auto-derived, what to document — lives in `CONTRIBUTING.md` ("### Adding a new config key").
 
 ## Dependencies
 
@@ -244,57 +185,4 @@ Then document in this CLAUDE.md "LETS Config keys" table + `README.md` Configura
 
 **Unreleased-features rule:** don't document `[Unreleased]`-only features in this file as if they already shipped. If you describe a feature that isn't in a tagged release yet, tag it `(ships in vX.Y)` (or `(merged; ships next release)`); drop the tag at the release ceremony when the version moves forward. This avoids the trap QA hit on v0.5.0 — descriptions of features that lived only in `[Unreleased]` CHANGELOG read as available, sending testers down dead-end paths.
 
-Update these files:
-
-| File | What to update |
-|------|----------------|
-| `plugins/lets/rules/lets-rules.md` | Skill Quick Reference table. Edit ONLY here, never the installed `.claude/rules/lets-rules.md`. **Do NOT bump frontmatter `version` per change** — it's bumped once per release at ceremony time (`scripts/release/bump-version.sh`; see RELEASING.md / the Release Flow section). A rules edit on a feature branch accumulates under the current target version. |
-| `commands/install-deprecated.md` | Essential Skills / Planning Skills tables |
-| `CLAUDE.md` Key Concepts | If adding a new skill |
-| `README.md` | Agent table, feature descriptions |
-| All `agents/*.md` `## Constraints` sections | If changing the read-only Bash allowlist or constraint wording, sync the identical 1-line text across all 13 analyst agents (verify with `grep -h "You are read-only" agents/*.md \| sort -u` returning exactly one line) |
-| `commands/end.md` + `commands/done.md` session-id references | Channel per context (the rule): **inside a bash command** → `$CLAUDE_CODE_SESSION_ID` (Bash subprocess env var; bash expands it at runtime) — used by `done.md` Step 7 + `end.md` Step 3 `bd comments add` bodies and `end.md` Step 5 `find ... "${CLAUDE_CODE_SESSION_ID}.jsonl"`. **In plain markdown the model writes** → `${CLAUDE_SESSION_ID}` (Claude Code's command-load-time template substitution) — used by `end.md` Step 5's summary-template `- ID:` line. No `SESSION_ID=` alias anywhere. Verify with `grep -rn "SESSION_ID" plugins/lets/commands/`. Background + remaining adoption scope (subagents, statusline, `/lets:team` records): see `lets-bdkvd`. |
-| `cli/internal/cli/<name>.go` + register in `cli/internal/cli/root.go` | If adding a Go subcommand. Add `<name>_test.go` (`package cli_test`). Use `cmd.OutOrStdout()`. Domain logic goes in `cli/internal/<name>/` (see `initcmd/`, `updatecmd/`, `worktreecmd/`, `sessionstart/`, `statusline/`, `frontmatter/` for patterns). If the package needs platform-specific primitives (`syscall.Flock` etc.), gate with `//go:build unix` and add a `<name>_stub.go` (`//go:build !unix`) per the `worktreecmd` pattern so cross-platform builds keep working. Update `cli/README.md` "Adding a subcommand" recipe if pattern changes. |
-| Any `commands/*.md` or `skills/*/SKILL.md` invoking `AskUserQuestion` | Follow `## AskUserQuestion Conventions` in `plugins/lets/rules/lets-rules.md` (header chip 4-12 chars descriptive, `(Recommended)` in label, `multiSelect` per rule, follow-through via `Skill` tool per Rule 7, `{LETS_FOO}` substitution per Rule 9). Spec strings hardcoded in English; orchestrator translates to `$LETS_LANGUAGE` at runtime. |
-
-### Command Output Requirements
-
-Every lets:* command MUST end with branded LETS box:
-
-```
-┌─ LETS ─────────────────┐
-│  [action]? [command]   │
-└────────────────────────┘
-```
-
-**Box format:**
-- Header: `┌─ LETS ─` + padding with `─` + `┐`
-- Lines: `│  ` + content + padding + ` │`
-- Footer: `└─` + padding with `─` + `┘`
-- Min width: 25 chars
-- **All boxes in one file MUST have the same width** - use the widest box's content as the reference and pad the rest. (Quick check: extract every box, the header/content/footer line lengths must all match per-box and across boxes in the file.)
-
-**Content guidelines:**
-- Short action word + `?` (e.g., "Commit?", "Next?", "Fix?")
-- **ONLY `/lets:*` commands** - never raw commands like `bd sync`, `bd update`
-- **Exception:** `git push` allowed after `/lets:done` or `/lets:end`
-- **No command = no box** - if next step isn't a /lets:* command, just ask in plain text
-- **Internal invocation = no box** - when a command is invoked programmatically by another command (e.g., `/lets:review --json` called by `/lets:github-pr`, OR a Rule 7 Skill-tool follow-through from an `AskUserQuestion` pick — see `lets-rules.md` `## AskUserQuestion Conventions` Rule 7), the inner command's LETS box is waived; only the outermost user-invoked command emits a box
-
-**Which shortcuts to offer (pick from these three, in order):**
-1. **Most-likely next step** in the workflow loop - always include. (After `/lets:check` -> `/lets:commit`; after `/lets:commit` -> `/lets:done`; after `/lets:plan` -> `/lets:execute`; etc.)
-2. **A lighter/faster alternative**, if one exists - include when applicable. Pairs: `/lets:check` is the lighter `/lets:review`; `/lets:check --plan` is the lighter `/lets:review --plan`; `/lets:ask` is the lighter `/lets:opinion`. If a box offers the heavy command, offer the light one alongside it (and pass the matching flag - `/lets:review --local` -> also `/lets:check --local`).
-3. **An escape hatch** - `/lets:start` (new task), `/lets:end` (wrap session), or `/lets:status` (where am I). Pure-navigation boxes (e.g. `Start? /lets:start` after `/lets:init`) are *only* an escape hatch and that's fine - don't pad them with irrelevant options.
-
-Don't exceed ~4 lines in a box. If a command genuinely has only one sensible next step, one line is correct.
-
-### Command Checklist
-
-- [ ] Has LETS box in output section
-- [ ] LETS box shortcuts follow the guidance above (most-likely next step + lighter alternative where one exists + escape hatch); all boxes in the file are the same width
-- [ ] Updates Skill Quick Reference in `plugins/lets/rules/lets-rules.md` (and bump frontmatter `version`)
-- [ ] Updates `/lets:install` Essential Skills / Planning Skills tables
-- [ ] Follows session flow (start -> work -> commit -> done -> end)
-- [ ] Description is clear and actionable
-- [ ] **If file invokes any deferred tool** (`AskUserQuestion`, `EnterPlanMode`, `WebFetch`, etc.), include the `> **IMPORTANT:**` deferred-tool callout right after the file's brief description, before the first `## Step` (or first major section). Wording: see existing commands/skills for the standard block (search for `IMPORTANT:** If the spec below`)
-- [ ] **If file invokes `AskUserQuestion`**, follow `## AskUserQuestion Conventions` in `plugins/lets/rules/lets-rules.md` — header chip 4-12 chars descriptive (never `"LETS"`; command name is OK when it names the topic), `(Recommended)` in label not description, follow-through via `Skill` tool (Rule 7) when an option names a `/lets:*` command, **substitute `{LETS_FOO}` placeholders before tool call (Rule 9)** — never use `$LETS_FOO` inside `label`/`description`/`question` strings
+**Full file-sync checklist, the LETS box output spec, and the per-command checklist live in `CONTRIBUTING.md` ("## Editing commands, skills, agents, config keys").** Modifying a command/skill/agent? Read it — it names every file that must stay in sync: the rules `Skill Quick Reference`, every `agents/*.md` `## Constraints` line, the `/lets:install` skill tables, `README.md`, the `end.md`/`done.md` session-id channels, and the Go-subcommand wiring.
