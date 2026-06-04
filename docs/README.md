@@ -13,5 +13,6 @@ Reference docs for the LETS Workflow plugin. If you haven't set it up yet, start
 | [tasks.md](tasks.md) | Task tracking with beads — why it's there, the task lifecycle, taking and creating tasks, notes, `/lets:brainstorm`, beads memory, and shared backlogs for teams. |
 | [commands.md](commands.md) | Full reference for every `/lets:*` command — flags, when to use which. |
 | [configuration.md](configuration.md) | `.lets/.env` settings, the `.lets/` file layout, `lets init` vs `bd init` setup order, and dependencies. |
+| [statusline.md](statusline.md) | The bottom-bar box — what each line shows, width tiers, worktree behavior, and the `--light` / `--no-tip` / `--no-dir` / `--no-task` / `--compact` flags. |
 
 Building on the plugin itself? See [`CONTRIBUTING.md`](../CONTRIBUTING.md) and [`CLAUDE.md`](../CLAUDE.md) at the repo root.

@@ -172,7 +172,7 @@ func TestRender_Dispatch(t *testing.T) {
 	const payload = `{"workspace":{"current_dir":"/tmp"},"model":{"display_name":"Opus"},"context_window":{"used_percentage":10,"context_window_size":1000000}}`
 
 	var compact bytes.Buffer
-	if err := Render(strings.NewReader(payload), &compact, false, true, true); err != nil { // compact=true
+	if err := Render(strings.NewReader(payload), &compact, false, true, true, true, true); err != nil { // compact=true
 		t.Fatalf("compact Render: %v", err)
 	}
 	if strings.Contains(compact.String(), "┌") {
@@ -180,7 +180,7 @@ func TestRender_Dispatch(t *testing.T) {
 	}
 
 	var rich bytes.Buffer
-	if err := Render(strings.NewReader(payload), &rich, false, false, true); err != nil { // default = rich
+	if err := Render(strings.NewReader(payload), &rich, false, false, true, true, true); err != nil { // default = rich
 		t.Fatalf("rich Render: %v", err)
 	}
 	if !strings.Contains(rich.String(), "┌") {
@@ -194,10 +194,10 @@ func TestRender_Dispatch(t *testing.T) {
 func TestRender_NoTip(t *testing.T) {
 	const payload = `{"workspace":{"current_dir":"/tmp"},"model":{"display_name":"Opus"},"context_window":{"used_percentage":10,"context_window_size":1000000}}`
 	var on, off bytes.Buffer
-	if err := Render(strings.NewReader(payload), &on, false, false, true); err != nil {
+	if err := Render(strings.NewReader(payload), &on, false, false, true, true, true); err != nil {
 		t.Fatalf("tip-on: %v", err)
 	}
-	if err := Render(strings.NewReader(payload), &off, false, false, false); err != nil {
+	if err := Render(strings.NewReader(payload), &off, false, false, false, true, true); err != nil {
 		t.Fatalf("tip-off: %v", err)
 	}
 	onLines := len(splitNonEmptyLines(on.String()))
@@ -205,5 +205,53 @@ func TestRender_NoTip(t *testing.T) {
 	if onLines <= offLines {
 		t.Errorf("showTip=true should render more rows than showTip=false: on=%d off=%d\non:\n%s\noff:\n%s",
 			onLines, offLines, on.String(), off.String())
+	}
+}
+
+// TestEnvOff pins the LETS_STATUSLINE_* falsey-value parsing (the env override
+// path for --no-tip/--no-dir/--no-task). All three keys share envOff, so testing
+// one key across the value matrix covers the parsing for all.
+func TestEnvOff(t *testing.T) {
+	for _, v := range []string{"off", "0", "false", "no", "OFF", "False", " no "} {
+		t.Setenv("LETS_STATUSLINE_TIP", v)
+		if !envOff("LETS_STATUSLINE_TIP") {
+			t.Errorf("envOff(%q) = false, want true", v)
+		}
+	}
+	for _, v := range []string{"", "on", "1", "true", "yes", "garbage"} {
+		t.Setenv("LETS_STATUSLINE_TIP", v)
+		if envOff("LETS_STATUSLINE_TIP") {
+			t.Errorf("envOff(%q) = true, want false", v)
+		}
+	}
+}
+
+// TestRender_EnvTipOff drives Render through the env override path end-to-end:
+// LETS_STATUSLINE_TIP=off must drop the tip row even with showTip=true.
+func TestRender_EnvTipOff(t *testing.T) {
+	payload := `{"model":{"display_name":"Opus"},"context_window":{"used_percentage":5}}`
+	var on, off bytes.Buffer
+	if err := Render(strings.NewReader(payload), &on, false, false, true, true, true); err != nil {
+		t.Fatalf("on: %v", err)
+	}
+	t.Setenv("LETS_STATUSLINE_TIP", "off")
+	if err := Render(strings.NewReader(payload), &off, false, false, true, true, true); err != nil {
+		t.Fatalf("off: %v", err)
+	}
+	if onN, offN := len(splitNonEmptyLines(on.String())), len(splitNonEmptyLines(off.String())); offN >= onN {
+		t.Errorf("LETS_STATUSLINE_TIP=off should drop the tip line: on=%d off=%d", onN, offN)
+	}
+}
+
+// TestRender_ScrubsEscapes: an injected CSI in a payload field must not survive
+// into the output as a raw escape sequence (our own coloring is SGR ...m only).
+func TestRender_ScrubsEscapes(t *testing.T) {
+	payload := `{"model":{"display_name":"Opus\u001b[2JX"},"context_window":{"used_percentage":5}}`
+	var buf bytes.Buffer
+	if err := Render(strings.NewReader(payload), &buf, false, false, true, true, true); err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if strings.Contains(buf.String(), "\x1b[2J") {
+		t.Errorf("injected ESC[2J survived into output:\n%q", buf.String())
 	}
 }

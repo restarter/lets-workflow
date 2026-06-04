@@ -112,17 +112,31 @@ type Input struct {
 	} `json:"worktree"`
 }
 
+// envOff reports whether a LETS_STATUSLINE_* override is set to a falsey value
+// (off/0/false/no, case-insensitive, trimmed). Used to let the env hide a row
+// without a flag; env can only force a row OFF, never force it back on.
+func envOff(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "off", "0", "false", "no":
+		return true
+	}
+	return false
+}
+
 // Render decodes the input JSON, fetches usage cache (or spawns background
 // refresh if stale), and writes the statusline to w. The rich multi-line box is
 // the DEFAULT; compact=true selects the legacy 2-line output. showTip toggles
-// the rich bottom tip line (env LETS_STATUSLINE_TIP=off/0/false also disables).
+// the rich bottom tip line (env LETS_STATUSLINE_TIP=off/0/false also disables);
+// showDir toggles the Full-tier location pill (env LETS_STATUSLINE_DIR=off too);
+// showTask toggles the task line and its background bd refresh (env
+// LETS_STATUSLINE_TASK=off too).
 //
 // Resilient to empty/invalid stdin: Claude Code occasionally invokes the
 // statusline command with no input (e.g. during /reload-plugins or initial
 // render before the IPC pipe is wired). Empty input → render with zero-value
 // Input (defaults to cwd-based detection). A blank statusline error is more
 // disruptive than missing context.
-func Render(stdin io.Reader, w io.Writer, light, compact, showTip bool) error {
+func Render(stdin io.Reader, w io.Writer, light, compact, showTip, showDir, showTask bool) error {
 	data, err := io.ReadAll(stdin)
 	if err != nil {
 		return fmt.Errorf("read stdin: %w", err)
@@ -138,6 +152,14 @@ func Render(stdin io.Reader, w io.Writer, light, compact, showTip bool) error {
 		}
 	}
 
+	// Escape-injection barrier: every externally-sourced field that gets rendered
+	// to the terminal is scrubbed of control bytes BEFORE our ANSI coloring wraps
+	// it (see stripControl). folder/branch are scrubbed below where they're
+	// derived; these come straight from the (Claude Code) JSON payload.
+	in.Model.DisplayName = stripControl(in.Model.DisplayName)
+	in.PR.ReviewState = stripControl(in.PR.ReviewState)
+	in.Effort.Level = stripControl(in.Effort.Level)
+
 	dir := in.Workspace.CurrentDir
 	if dir == "" {
 		dir = in.Cwd
@@ -148,12 +170,26 @@ func Render(stdin io.Reader, w io.Writer, light, compact, showTip bool) error {
 	}
 	cacheDir := filepath.Join(projectRoot, ".lets", "cache")
 
-	branch := detectBranch(dir)
-	folder := filepath.Base(dir)
+	branch := stripControl(detectBranch(dir))
+	// folder = the project/worktree root basename (git top-level), NOT the cwd
+	// basename — otherwise the location pill shows whatever subdir you cd into
+	// (e.g. "cli") instead of a stable project/worktree name. Empty when there's
+	// no resolvable directory (empty/invalid stdin), which suppresses the pill and
+	// the branch fallback rather than rendering a bare "⎇ .".
+	folder := ""
+	if projectRoot != "" {
+		folder = stripControl(filepath.Base(projectRoot))
+	}
 
 	u := readUsageCache(filepath.Join(cacheDir, "usage"))
 
-	if !u.fresh(cacheTTL) {
+	// The usage cache (Keychain/credentials.json → Anthropic usage API) is only a
+	// FALLBACK for older Claude Code that doesn't send rate limits in the payload.
+	// When the payload already carries them (resets_at present), limit() ignores
+	// the cache entirely — so don't spawn the detached credential-read + HTTPS
+	// fetch on the modern path; it would do work whose result is dead on arrival.
+	payloadHasLimits := in.RateLimits.FiveHour.ResetsAt != "" || in.RateLimits.SevenDay.ResetsAt != ""
+	if !payloadHasLimits && !u.fresh(cacheTTL) {
 		spawnBackgroundFetch(cacheDir)
 	}
 
@@ -163,14 +199,22 @@ func Render(stdin io.Reader, w io.Writer, light, compact, showTip bool) error {
 		return renderLines(w, in, branch, folder, u)
 	}
 
-	// Rich box is the default. env LETS_STATUSLINE_TIP=off/0/false hides the tip.
-	if v := strings.ToLower(strings.TrimSpace(os.Getenv("LETS_STATUSLINE_TIP"))); v == "off" || v == "0" || v == "false" || v == "no" {
+	// Rich box is the default. env LETS_STATUSLINE_{TIP,DIR,TASK}=off/0/false/no
+	// each force the corresponding row off (env can only hide, never force-on).
+	if envOff("LETS_STATUSLINE_TIP") {
 		showTip = false
 	}
+	if envOff("LETS_STATUSLINE_DIR") {
+		showDir = false
+	}
+	if envOff("LETS_STATUSLINE_TASK") {
+		showTask = false
+	}
 	// Background-refresh the task-status cache off the hot path (same detached-
-	// subprocess pattern as usage). Only the rich Line 2 consumes it. The id is
+	// subprocess pattern as usage). Only the rich task line consumes it. The id is
 	// free (branch name); the bd call happens in the detached child, never inline.
-	if id := taskIDFromBranch(branch); id != "" && !taskStatusFresh(cacheDir, id, taskStatusTTL) {
+	// Skipped when the task line is hidden — no point spawning bd for nothing.
+	if id := taskIDFromBranch(branch); showTask && id != "" && !taskStatusFresh(cacheDir, id, taskStatusTTL) {
 		// On a task SWITCH (cached id differs) the cache holds no data for this
 		// id, so without a debounce every render in the fetch window re-spawns
 		// bd. Write an id-only placeholder first: it renders immediately and
@@ -182,7 +226,7 @@ func Render(stdin io.Reader, w io.Writer, light, compact, showTip bool) error {
 		}
 		spawnBackgroundTaskFetch(cacheDir, id)
 	}
-	return renderRich(w, in, branch, folder, u, detectWidth(), cacheDir, light, showTip)
+	return renderRich(w, in, branch, folder, u, detectWidth(), cacheDir, light, showTip, showDir, showTask)
 }
 
 // RunFetchOnly is the entry point used by the background subprocess.

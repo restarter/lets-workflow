@@ -89,7 +89,7 @@ const (
 	glyphTip    = "*"
 	glyphPR     = "⇄"
 	glyphArrow  = "←"
-	glyphFolder = "⌂"
+	glyphFolder = "☰" // location-pill mark (U+2630, text, 1 cell — takes palette color)
 	glyphPlant  = "⚘" // static brand mark (text, 1 cell) — growth ladder parked below
 )
 
@@ -220,10 +220,11 @@ func visibleWidth(s string) int { return len([]rune(stripANSI(s))) }
 // drift. Perfect alignment across all terminals isn't achievable with a static
 // map; verify on your terminal (or swap those glyphs) if the border looks off.
 var wideRunes = map[rune]bool{
-	// All emitted glyphs are currently 1-cell text — brand ⚘, folder ⌂, notes ¶,
-	// model ✦, task ✓, tip ?. Parked emoji that would belong here if restored:
+	// All emitted glyphs are currently 1-cell text — brand ⚘, folder ☰, notes ¶,
+	// model ✦, task ✓, tip *, branch ⎇, PR ⇄, arrow ←. No emoji, so this map is
+	// empty and the border never drifts. Parked emoji that would belong here if
+	// the growth ladder is restored:
 	// '🌱': true, '🪴': true, '🌿': true, '🌳': true, '🌴': true, // brand ladder (parked; static ⚘ now)
-	// '📁': true, '💬': true, // folder pill / note bubble (replaced by ⌂ / ¶)
 }
 
 func runeCells(r rune) int {
@@ -332,9 +333,16 @@ func kfmt(n int) string {
 // stays bold/accent, while a trailing parenthetical the harness appends (e.g.
 // "(1M context)") is dimmed — nothing is dropped. lead is the accent applied to
 // the head; the parenthetical always uses p.dim. The first "(" splits the two.
-func (p palette) modelName(lead, name string) string {
+// modelName formats the model display name. With showParen=false the trailing
+// "(… context)" suffix is dropped entirely (used in the Compact tier, where the
+// paren is the first thing to shed); with true the head is bold and the paren
+// is dimmed (Full tier).
+func (p palette) modelName(lead, name string, showParen bool) string {
 	if i := strings.IndexByte(name, '('); i >= 0 {
 		head := strings.TrimRight(name[:i], " ")
+		if !showParen {
+			return lead + ansiBold + head + ansiReset
+		}
 		paren := name[i:]
 		return lead + ansiBold + head + ansiReset + " " + p.dim + paren + ansiReset
 	}
@@ -501,7 +509,7 @@ func tipOfMoment(now time.Time) string {
 
 // renderRich draws the width-responsive Quiet Rails layout. Never calls
 // bd/network per render.
-func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int, cacheDir string, light, showTip bool) error {
+func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int, cacheDir string, light, showTip, showDir, showTask bool) error {
 	p := paletteDark
 	if light {
 		p = paletteLight
@@ -601,6 +609,12 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	if bf == "" {
 		bf = folder
 	}
+	// Drop the branch segment entirely for a meaningless value (empty / bare cwd)
+	// rather than rendering a stray "⎇ ." on empty-stdin or a non-repo dir.
+	branchSeg := ""
+	if bf != "" && bf != "." && bf != "/" {
+		branchSeg = p.clay + glyphBranch + " " + bf + R
+	}
 	id := taskIDFromBranch(branch)
 	title, notes, lastComment, taskOK := readTaskStatus(cacheDir, id)
 	winPct := int(in.ContextWindow.UsedPercentage + 0.5)
@@ -644,22 +658,31 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	// ===== Compact tier: 4 trimmed lines, designed for ~70 cols =====
 	if tier == tierCompact {
 		// Line 1: brand+version » branch · diff (no worktree pill, no PR; short "LETS").
-		emit(p.sage + brandEmoji(in.Cost.TotalLinesAdded) + " " + ansiBold + "LETS" + R + " " + p.dim + ver + R +
-			segSep + joinSep(segSep, p.clay+glyphBranch+" "+bf+R, diffSeg))
-		// Line 2: window·5h·7d label+pct+timer, no bars.
-		g := []string{gaugeCompact("window", winPct, "")}
+		brandC := p.sage + brandEmoji(in.Cost.TotalLinesAdded) + " " + ansiBold + "LETS" + R + " " + p.dim + ver + R
+		if restC := joinSep(segSep, branchSeg, diffSeg); restC != "" {
+			brandC += segSep + restC
+		}
+		emit(brandC)
+		// Line 2: model + effort (without the "(… context)" paren — the paren is
+		// the first thing to shed at this width; model name + effort stay because
+		// they're high-signal) » window·5h·7d label+pct+timer, no bars.
+		budgetC := p.gold + glyphModel + " " + p.modelName(p.gold, in.Model.DisplayName, false)
+		if in.Effort.Level != "" {
+			budgetC += " " + p.effortColor(in.Effort.Level) + in.Effort.Level + R
+		}
+		g := []string{gaugeCompact("w", winPct, "")}
 		if fiveOK {
 			g = append(g, gaugeCompact("5h", fiveP, fiveReset))
 		}
 		if sevenOK {
 			g = append(g, gaugeCompact("7d", sevenP, sevenReset))
 		}
-		emit(joinSep(segSep, g...))
+		emit(budgetC + segSep + joinSep(segSep, g...))
 		rule() // divider ALWAYS after gauges — consistent frame with/without task
 		// Line 3: task — only when bd CONFIRMED a real task (taskOK && title); a
 		// bare/bogus branch id or a no-beads project drops ONLY this line (the
 		// divider stays). id is the prefix, title the truncatable mid.
-		if taskOK && title != "" {
+		if showTask && taskOK && title != "" {
 			emitFlex(p.clay+glyphTask+" "+id+R, " "+p.text+title+R, "")
 		}
 		// Line 4: rotating tip — glyph (prefix) + text (truncatable mid).
@@ -675,16 +698,20 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 
 	// --- Line 1: identity (branch truncated so the line stays under the cap) ---
 	brand := p.sage + brandEmoji(in.Cost.TotalLinesAdded) + " " + ansiBold + "LETS Workflow" + R + " " + p.dim + ver + R
-	// Location badge right after the marker: a "<name>" pill with the cwd folder.
-	// Suppressed inside a worktree — the "worktree-…" branch name already says it,
-	// so a "worktree" pill would just be noise.
+	// Location badge right after the marker (Full tier only — Compact drops it for
+	// width; --no-dir / LETS_STATUSLINE_DIR=off hides it too). Inside a worktree
+	// it's just the word "worktree" — the worktree dir name equals the branch
+	// name, so repeating it here would be noise. Outside a worktree it's the
+	// project root folder name.
 	locName := ""
-	if !inWorktree(in, branch) && folder != "" && folder != "." && folder != "/" {
+	if inWorktree(in, branch) {
+		locName = "worktree"
+	} else if folder != "" && folder != "." && folder != "/" {
 		locName = folder
 	}
 	locSeg := ""
-	if locName != "" {
-		locSeg = p.pillBg + p.label + " " + locName + " " + R
+	if showDir && locName != "" {
+		locSeg = p.pillBg + p.label + " " + glyphFolder + " " + locName + " " + R
 	}
 	prSeg := ""
 	if in.PR.Number > 0 {
@@ -693,10 +720,14 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 			prSeg += " " + p.prStateColor(in.PR.ReviewState) + in.PR.ReviewState + R
 		}
 	}
-	emitFull(brand + segSep + joinSep(segSep, locSeg, p.clay+glyphBranch+" "+bf+R, diffSeg, prSeg))
+	identity := brand
+	if rest := joinSep(segSep, locSeg, branchSeg, diffSeg, prSeg); rest != "" {
+		identity += segSep + rest
+	}
+	emitFull(identity)
 
 	// --- Line 2: budget (model + colored effort » window/5h/7d, no bars) ---
-	budget := p.gold + glyphModel + " " + p.modelName(p.gold, in.Model.DisplayName)
+	budget := p.gold + glyphModel + " " + p.modelName(p.gold, in.Model.DisplayName, true)
 	if in.Effort.Level != "" {
 		budget += " " + p.effortColor(in.Effort.Level) + in.Effort.Level + R
 	}
@@ -719,8 +750,9 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	rule() // divider ALWAYS after budget — consistent frame with/without task
 	// --- Line 3: task — only when bd CONFIRMED a real task (taskOK && title);
 	//     id (prefix) + title (truncatable mid) + notes/age/hint (suffix). A
-	//     bare/bogus branch id or no-beads drops ONLY this line (divider stays). ---
-	if taskOK && title != "" {
+	//     bare/bogus branch id or no-beads drops ONLY this line (divider stays).
+	//     --no-task / LETS_STATUSLINE_TASK=off hides it regardless. ---
+	if showTask && taskOK && title != "" {
 		noteSeg := ""
 		if notes > 0 {
 			label := " comments"
