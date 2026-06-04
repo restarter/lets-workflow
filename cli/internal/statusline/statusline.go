@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/restarter/lets-workflow/cli/internal/gitutil"
@@ -273,6 +274,20 @@ func detectBranch(dir string) string {
 	return ""
 }
 
+// backgroundSpawnsDisabled reports whether the detached self-exec refreshers
+// (spawnBackgroundFetch / spawnBackgroundTaskFetch) must be suppressed.
+//
+// Under `go test`, os.Executable() is the test binary, not the real `lets` CLI.
+// Re-exec'ing it with "statusline --fetch-…" makes Go's flag parser stop at the
+// "statusline" positional and run the whole test suite; every render test then
+// spawns a detached copy of the suite, which spawns more — an exponential fork
+// bomb. On Linux CI that exhausts the process table and the job dies with
+// SIGTERM (`go test -race ./...` → exit 143); on macOS `go test` reports PASS
+// and exits before the explosion is visible, silently leaking processes. The
+// production binary reports false and spawns normally; the real fetch path is
+// covered by integration tests that invoke the built binary.
+func backgroundSpawnsDisabled() bool { return testing.Testing() }
+
 // spawnBackgroundFetch starts a detached subprocess that fetches the usage
 // API and writes to cacheDir/usage. Mirrors bash:
 //
@@ -282,6 +297,9 @@ func detectBranch(dir string) string {
 // group (so the child survives the parent shell's SIGHUP on exit).
 // detachProcessGroup is build-tag split: spawn_unix.go vs spawn_windows.go.
 func spawnBackgroundFetch(cacheDir string) {
+	if backgroundSpawnsDisabled() {
+		return
+	}
 	exe, err := os.Executable()
 	if err != nil {
 		return
@@ -302,6 +320,9 @@ func spawnBackgroundFetch(cacheDir string) {
 // resolved from the inherited PATH — if it's absent the child fails silently
 // and Line 2 degrades to id-only, which is the documented graceful path.
 func spawnBackgroundTaskFetch(cacheDir, taskID string) {
+	if backgroundSpawnsDisabled() { // see backgroundSpawnsDisabled: no self-exec under `go test`
+		return
+	}
 	exe, err := os.Executable()
 	if err != nil {
 		return
