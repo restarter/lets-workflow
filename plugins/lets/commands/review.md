@@ -356,7 +356,7 @@ Do NOT silently fall back - the user opted in explicitly; surface the gap and le
 
 ### W2: Build args
 
-Use the agents SELECTED in Step 4 (do not re-select). **Exclude `lets:actor`** from workflow mode - the inline skeleton does not inject the `PERSONALITY:` block, so an actor selection would lose its identity. If the user explicitly selected actor, tell them actor is not supported with `--workflow` yet and run the standard Task-based path instead.
+Use the agents SELECTED in Step 4 (do not re-select). **Exclude `lets:actor`** from workflow mode - the skeleton does not inject the `PERSONALITY:` block, so an actor selection would lose its identity. If the user explicitly selected actor, tell them actor is not supported with `--workflow` yet and run the standard Task-based path instead.
 
 Construct the `args` object:
 
@@ -377,125 +377,30 @@ Pass `args` as a real JSON value to the Workflow tool - NOT a JSON-encoded strin
 
 ### W3: Invoke the workflow
 
-Call `Workflow({ script: <the skeleton below, verbatim>, args: <W2 args> })`. The skeleton is static - all per-review data travels in `args`.
+Call:
+
+```
+Workflow({ scriptPath: "${CLAUDE_PLUGIN_ROOT}/skills/review-workflow/review.workflow.js", args: <W2 args> })
+```
+
+The skeleton is a committed asset in the `review-workflow` skill (`skills/review-workflow/review.workflow.js`) - NOT reproduced inline. `${CLAUDE_PLUGIN_ROOT}` is substituted at command-load time, so this markdown already carries the literal absolute path. The script is static; all per-review data travels in `args`. See `skills/review-workflow/SKILL.md` for the `args` contract and the stage flow (fan-out -> dedupe -> verify -> aggregate).
+
+The skeleton's stages: **(1) Review** - fan out `lets:<name>` agents (structured `FINDING_SCHEMA`); **(2) Reduce** - NIT-filter (unless small diff), split systemic, dedupe keep-highest-tier, sort; **(3) Verify** - per BLOCKER/SUGGESTION, fan out `lets:skeptic` (2, or 3 for BLOCKER) with the asymmetric drop rule (Step 6.6); **(4) Aggregate** - verdict over the verified set, summary, `counts` incl. `refuted`. It returns `{ verdict, findings, systemic, summary, counts }`.
 
 **The workflow runs in the BACKGROUND.** The tool returns immediately with a task ID / `runId` - NOT the aggregate. Do not try to read findings from the tool's immediate return. The fan-out continues in the background and a `<task-notification>` arrives when it completes; the orchestrator is re-invoked at that point. Optionally tell the user "Review fan-out running in the background - {N} agents" so the wait is visible (they can watch via `/workflows`).
 
-```javascript
-export const meta = {
-  name: 'lets-review',
-  description: 'Fan out selected lets:* review agents and aggregate findings off-context',
-  phases: [{ title: 'Review', detail: 'one structured agent per selected expert' }],
-}
-
-const FINDING_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    findings: {
-      type: 'array',
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          title: { type: 'string' },
-          tier: { type: 'string', enum: ['BLOCKER', 'SUGGESTION', 'NIT'] },
-          file: { type: 'string' },
-          line: { type: ['integer', 'null'] },
-          description: { type: 'string' },
-          suggestion: { type: 'string' },
-          systemic: { type: 'boolean' },
-          systemic_count: { type: ['integer', 'null'] },
-        },
-        required: ['title', 'tier', 'description'],
-      },
-    },
-  },
-  required: ['findings'],
-}
-
-const TIER_RANK = { BLOCKER: 0, SUGGESTION: 1, NIT: 2 }
-
-const input = typeof args === 'string' ? JSON.parse(args) : (args || {})
-const { agents, mode, projectRoot, claudeMd, changedFiles, code, smallDiff, systemicCheck } = input
-
-const systemicBlock = systemicCheck
-  ? `SYSTEMIC PATTERN CHECK:\nFor each finding, grep the codebase to check if the same pattern exists elsewhere. If it appears in 2+ other files, set systemic=true and systemic_count, frame it as project-wide tech debt, and downgrade the tier by one level.\n`
-  : ''
-
-function buildPrompt() {
-  return `ultrathink
-
-PROJECT_ROOT: ${projectRoot}. Do NOT read or search files outside this directory.
-
-MODE: review
-
-${systemicBlock}CLAUDE.MD RULES:
-${claudeMd}
-
-CHANGED FILES:
-${changedFiles}
-
-CODE:
-${code}
-
-Return your findings as structured output: an array under "findings". Each finding has tier (one of BLOCKER, SUGGESTION, NIT), file, line (or null), a short title, a description, and a concrete suggestion. Use the tier definitions and scoring rules from your own system prompt. If there are no issues, return an empty findings array - do not fabricate.`
-}
-
-phase('Review')
-const perAgent = await parallel(agents.map(a => () =>
-  agent(buildPrompt(), { agentType: `lets:${a.name}`, label: `review:${a.name}`, schema: FINDING_SCHEMA })
-    .then(r => (r && r.findings ? r.findings : []).map(f => ({ ...f, agent: a.name })))
-))
-
-// --- aggregation: MIRRORS Step 6 (NIT-filter / systemic-split / dedupe) + Step 7 (verdict thresholds), run off-context.
-//     KEEP IN SYNC with that prose - a drift makes the --workflow path and the Task path disagree on the same diff. ---
-let all = perAgent.filter(Boolean).flat()
-all = all.filter(f => f.tier !== 'NIT' || smallDiff)            // NIT only for small diffs
-
-const systemic = all.filter(f => f.systemic)
-const regular = all.filter(f => !f.systemic)
-
-const byKey = new Map()                                         // dedupe, keep highest tier
-for (const f of regular) {
-  const key = `${f.file || ''}::${String(f.title).toLowerCase().trim()}`
-  const prev = byKey.get(key)
-  if (!prev || TIER_RANK[f.tier] < TIER_RANK[prev.tier]) byKey.set(key, f)
-}
-const findings = [...byKey.values()].sort((x, y) => TIER_RANK[x.tier] - TIER_RANK[y.tier])
-
-const blockers = findings.filter(f => f.tier === 'BLOCKER').length
-const suggestions = findings.filter(f => f.tier === 'SUGGESTION').length
-const verdict = blockers > 0
-  ? 'CHANGES REQUESTED'
-  : suggestions >= 3 ? 'APPROVED WITH SUGGESTIONS' : 'APPROVED'
-
-const summary = {}
-for (const a of agents) {
-  const n = findings.filter(f => f.agent === a.name).length
-  summary[a.name] = n === 0 ? 'pass' : `${n} issue${n > 1 ? 's' : ''}`
-}
-
-return {
-  verdict,
-  findings: findings.map((f, i) => ({ id: i + 1, ...f })),
-  systemic,
-  summary,
-  counts: { blockers, suggestions, total: findings.length },
-}
-```
-
 ### W4: Rejoin the standard flow (on workflow completion)
 
-When the workflow's completion notification arrives, the orchestrator resumes with the workflow's returned aggregate object as the result - **this** is the only thing that enters context (the per-agent reports stayed in script variables). If the workflow failed or returned nothing, surface the error and offer the standard `/lets:review` (Task-based) flow; do not silently drop the review. With the aggregate in hand:
+When the workflow's completion notification arrives, the orchestrator resumes with the workflow's returned aggregate object as the result - **this** is the only thing that enters context (the per-agent review reports AND the skeptic verdicts stayed in script variables). The findings are already verified (the script ran Step 6.6 as its Stage 3) and `counts.refuted` says how many were dropped/downgraded. If the workflow failed or returned nothing, surface the error and offer the standard `/lets:review` (Task-based) flow; do not silently drop the review. With the aggregate in hand:
 - **Step 6.5** - grep-verify each `systemic[]` entry. If an agent was wrong (pattern only in this file), reclassify it into `findings` at its original tier and recompute the verdict from the new counts. Otherwise trust the script's `verdict`.
+- **Step 6.6** - already done in-workflow (Stage 3); do NOT re-run skeptics. Surface `counts.refuted` as `refuted_count`; if `counts.verify_failed` > 0, warn that that many findings couldn't be verified (kept unverified).
 - **Step 8** - save the markdown report (render from the returned object).
 - **Step 8.5** - if `--json`, write `.lets/reviews/{date}-{mode}.json`. The workflow's `findings` and `verdict` map 1:1 onto the Step 8.5 shape - keep those field names exactly (`/lets:github-pr` reads only those two). The rest of the Step 8.5 wrapper is NOT in the return object and Claude must supply it: add top-level `date`, `mode`, and `findings_count`; and transform each `systemic[]` entry from the finding shape (`{title, file, line, tier, ...}`) into the Step 8.5 systemic shape `{title, count, description}` (use `systemic_count` as `count`). Do not write the raw return object verbatim.
 - **Step 9 / Step 10** - output/post and link to task exactly as the standard flow.
 
 ## Step 6: Filter & Aggregate Results
 
-**Workflow mode:** the script already filtered, deduped, separated systemic, sorted, and computed the verdict. Skip this step - the aggregate is in the Workflow return value. Continue at Step 6.5. The skeleton mirrors the filter/dedupe rules below; **keep them in sync** (see the Keep-in-sync note under Step 7).
+**Workflow mode:** the script already filtered, deduped, separated systemic, sorted, and computed the verdict. Skip this step - the aggregate is in the Workflow return value. Continue at Step 6.5. The `skills/review-workflow/review.workflow.js` script mirrors the filter/dedupe rules below; **keep them in sync** (see the Keep-in-sync note under Step 7).
 
 Wait for all agents, then:
 
@@ -519,9 +424,31 @@ grep -r "delete(" --include="*.php" -l | head -10
 
 Systemic findings go into a separate section in the final report (see Step 9).
 
+## Step 6.6: Verify Findings (Adversarial)
+
+Cut false positives before reporting: each finding gets a refutation pass from the `lets:skeptic` agent. This is core review methodology - it runs in BOTH execution modes; the only difference is WHERE the skeptics run.
+
+**Workflow mode:** this step already ran inside the workflow (its Stage 3) - the returned aggregate is already verified. Skip to Step 7.
+
+**Scope:** verify `[BLOCKER]` and `[SUGGESTION]` findings only (skip `[NIT]`).
+
+**Per finding:** launch `lets:skeptic` (via the Task tool in standard mode) N times - **N=2**, or **N=3** for a `[BLOCKER]`. Each skeptic gets the single finding + the code and returns `{real, confidence, reason}`.
+
+**Asymmetric drop rule (do NOT suppress real bugs):**
+- `[SUGGESTION]` -> drop on a simple majority `real=false`.
+- `[BLOCKER]` -> drop ONLY on near-unanimous high-confidence refutation (all skeptics `real=false`, or a majority at `high` confidence); otherwise **downgrade** to `[SUGGESTION]`. Never silently drop a `[BLOCKER]` on a weak/low-confidence refute.
+
+Survivors keep their (possibly downgraded) tier.
+
+**Standard-mode cap** (bounds the in-context blow-up; workflow mode needs no cap - it verifies off-context): always verify `[BLOCKER]`s; verify at most the top-K=5 `[SUGGESTION]`s; if total findings > 10, verify inline (you act as the skeptic, re-checking each against the code) instead of spawning per-finding agents. If the cap truncates verification, say so in the output - no silent caps.
+
+**Record `refuted_count`** (how many findings the verify pass dropped or downgraded) and surface it in Step 9 + Step 8.5. If any finding could NOT be verified (skeptics errored - `verify_failed` > 0), say so in the output: those findings are kept unverified, not silently treated as clean.
+
+**Keep in sync:** the `skills/review-workflow/review.workflow.js` script implements this same rule in JS (its `decide()`, the Verify stage). Any change here MUST be mirrored there.
+
 ## Step 7: Determine Verdict
 
-**Note:** Systemic findings do NOT count toward the verdict - they're informational.
+**Note:** Systemic findings do NOT count toward the verdict - they're informational. The verdict is computed over the **verified** finding set (after Step 6.6 - refuted findings are already dropped/downgraded).
 
 | Condition | Verdict |
 |-----------|---------|
@@ -529,7 +456,7 @@ Systemic findings go into a separate section in the final report (see Step 9).
 | 0 [BLOCKER]s, 3+ [SUGGESTION]s | APPROVED WITH SUGGESTIONS |
 | 1+ [BLOCKER]s | CHANGES REQUESTED |
 
-> **Keep in sync (--workflow):** the `## Workflow Mode` skeleton reimplements this table in JS (`const verdict = blockers > 0 ? ... : suggestions >= 3 ? ...`). Any change to these thresholds MUST be mirrored there, and vice versa - otherwise the two paths return different verdicts for the same diff. (Pinned by a shared test when the skeleton graduates to a committed file - lets-odo4o roadmap.)
+> **Keep in sync (--workflow):** the `skills/review-workflow/review.workflow.js` script reimplements this table in JS (its `computeVerdict()`: `const verdict = blockers > 0 ? ... : suggestions >= 3 ? ...`). Any change to these thresholds MUST be mirrored there, and vice versa - otherwise the two paths return different verdicts for the same diff. (No unit test pins this - the workflow runtime blocks clean testing; the keep-in-sync discipline + the live smoke test are the guards.)
 
 ## Step 8: Save Review (BEFORE output)
 
@@ -564,6 +491,8 @@ Write to `.lets/reviews/{date}-{mode}.json`:
   "mode": "PR-42",
   "verdict": "CHANGES REQUESTED",
   "findings_count": 5,
+  "refuted_count": 2,
+  "verify_failed": 0,
   "findings": [
     {
       "id": 1,
@@ -594,6 +523,8 @@ Write to `.lets/reviews/{date}-{mode}.json`:
 
 `mode` values: `PR-{number}` | `local-review` | `branch-review` | (plan modes are handled by the Plan Review section, not this path).
 
+`refuted_count` is additive (consumers that don't know it ignore it, e.g. `/lets:github-pr` reads only `findings` + `verdict`): the number of findings the Step 6.6 verify pass dropped or downgraded. Omit or `0` when no verification ran.
+
 After saving, inform user: "Review saved to: {path}"
 Then STOP - skip Step 9 (Output) and Step 10 (Link to task).
 The calling command handles output and task linking.
@@ -609,6 +540,8 @@ gh pr comment <PR> --body "$(cat <<'EOF'
 ### Code Review
 
 **Verdict:** {APPROVED | APPROVED WITH SUGGESTIONS | CHANGES REQUESTED}
+
+{If `refuted_count` > 0, add a line: `_Adversarial verify dropped/downgraded {refuted_count} finding(s)._`}
 
 Found {N} issues:
 

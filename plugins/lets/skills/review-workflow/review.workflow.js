@@ -1,0 +1,186 @@
+// ── META (required, pure literal) ──
+export const meta = {
+  name: 'lets-review',
+  description: 'Fan out review agents, adversarially verify findings, aggregate - all off-context',
+  phases: [{ title: 'Review' }, { title: 'Verify' }],
+}
+
+// ── ARGS (defensive parse - the runtime may deliver args as a JSON string) ──
+const input = typeof args === 'string' ? JSON.parse(args) : (args || {})
+const { agents, mode, projectRoot, claudeMd, changedFiles, code, smallDiff, systemicCheck } = input
+
+// ── SCHEMAS ──
+const FINDING_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    findings: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          title: { type: 'string' },
+          tier: { type: 'string', enum: ['BLOCKER', 'SUGGESTION', 'NIT'] },
+          file: { type: 'string' },
+          line: { type: ['integer', 'null'] },
+          description: { type: 'string' },
+          suggestion: { type: 'string' },
+          systemic: { type: 'boolean' },
+          systemic_count: { type: ['integer', 'null'] },
+        },
+        required: ['title', 'tier', 'description'],
+      },
+    },
+  },
+  required: ['findings'],
+}
+
+const VERDICT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    real: { type: 'boolean' },
+    confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+    reason: { type: 'string' },
+  },
+  required: ['real', 'confidence', 'reason'],
+}
+
+// ── PURE LOGIC (KEEP IN SYNC with review.md Step 6 / 6.6 / 7) ──
+const TIER_RANK = { BLOCKER: 0, SUGGESTION: 1, NIT: 2 }
+
+// Asymmetric drop rule (do NOT suppress real bugs):
+//  SUGGESTION -> drop on simple majority real=false.
+//  BLOCKER    -> drop ONLY on near-unanimous high-confidence refute; else downgrade; else keep.
+function decide(finding, votes) {
+  const n = votes.length
+  if (n === 0) return 'keep' // no evidence -> never drop
+  const falses = votes.filter(v => v.real === false)
+  const majorityFalse = falses.length * 2 > n
+  const allFalse = falses.length === n
+  const majorityHighFalse = falses.filter(v => v.confidence === 'high').length * 2 > n
+  if (finding.tier === 'BLOCKER') {
+    if (allFalse || majorityHighFalse) return 'drop'
+    if (majorityFalse) return 'downgrade'
+    return 'keep'
+  }
+  return majorityFalse ? 'drop' : 'keep'
+}
+
+function computeVerdict(findings) {
+  const blockers = findings.filter(f => f.tier === 'BLOCKER').length
+  const suggestions = findings.filter(f => f.tier === 'SUGGESTION').length
+  const verdict = blockers > 0
+    ? 'CHANGES REQUESTED'
+    : suggestions >= 3 ? 'APPROVED WITH SUGGESTIONS' : 'APPROVED'
+  return { verdict, blockers, suggestions }
+}
+
+// ── PROMPTS (built from args) ──
+const systemicBlock = systemicCheck
+  ? `SYSTEMIC PATTERN CHECK:\nFor each finding, grep the codebase to check if the same pattern exists elsewhere. If it appears in 2+ other files, set systemic=true and systemic_count, frame it as project-wide tech debt, and downgrade the tier by one level.\n`
+  : ''
+
+function reviewPrompt() {
+  return `ultrathink
+
+PROJECT_ROOT: ${projectRoot}. Do NOT read or search files outside this directory.
+
+MODE: review
+
+${systemicBlock}CLAUDE.MD RULES:
+${claudeMd}
+
+CHANGED FILES:
+${changedFiles}
+
+CODE:
+${code}
+
+Return your findings as structured output: an array under "findings". Each finding has tier (one of BLOCKER, SUGGESTION, NIT), file, line (or null), a short title, a description, and a concrete suggestion. Use the tier definitions and scoring rules from your own system prompt. If there are no issues, return an empty findings array - do not fabricate.`
+}
+
+function skepticPrompt(f) {
+  return `ultrathink
+
+PROJECT_ROOT: ${projectRoot}. Do NOT read or search files outside this directory.
+
+MODE: review (adversarial verification)
+
+You are verifying ONE finding. Try to REFUTE it against the actual code.
+
+FINDING:
+- tier: ${f.tier}
+- title: ${f.title}
+- where: ${f.file || '?'}:${f.line == null ? '?' : f.line}
+- description: ${f.description}
+
+CHANGED FILES:
+${changedFiles}
+
+CODE:
+${code}
+
+Return {real, confidence, reason}. real=true only if the issue genuinely holds against the code; real=false if it is already handled, unreachable, out of scope for this diff, or misread. Be a fair skeptic - do not refute a genuine issue. Calibrate confidence to your evidence.`
+}
+
+// ── ORCHESTRATION (multi-stage off-context chain) ──
+phase('Review')
+const raw = await parallel(agents.map(a => () =>
+  agent(reviewPrompt(), { agentType: `lets:${a.name}`, label: `review:${a.name}`, schema: FINDING_SCHEMA })
+    .then(r => (r && r.findings ? r.findings : []).map(f => ({ ...f, agent: a.name })))
+))
+
+// Reduce: NIT-filter (unless small diff) -> split systemic -> dedupe (keep highest tier) -> sort.
+let pool = raw.filter(Boolean).flat()
+pool = pool.filter(f => f.tier !== 'NIT' || smallDiff)
+const systemic = pool.filter(f => f.systemic)
+const regular = pool.filter(f => !f.systemic)
+const byKey = new Map()
+for (const f of regular) {
+  const key = `${f.file || ''}::${String(f.title).toLowerCase().trim()}`
+  const prev = byKey.get(key)
+  if (!prev || TIER_RANK[f.tier] < TIER_RANK[prev.tier]) byKey.set(key, f)
+}
+const deduped = [...byKey.values()].sort((x, y) => TIER_RANK[x.tier] - TIER_RANK[y.tier])
+
+// Stage 3: adversarial verification of BLOCKER/SUGGESTION findings.
+phase('Verify')
+const toVerify = deduped.filter(f => f.tier === 'BLOCKER' || f.tier === 'SUGGESTION')
+const passthrough = deduped.filter(f => f.tier !== 'BLOCKER' && f.tier !== 'SUGGESTION')
+
+const judged = await parallel(toVerify.map(f => () => {
+  const n = f.tier === 'BLOCKER' ? 3 : 2
+  return parallel(Array.from({ length: n }, () => () =>
+    agent(skepticPrompt(f), { agentType: 'lets:skeptic', label: `verify:${f.tier}`, schema: VERDICT_SCHEMA })))
+    .then(votes => ({ f, votes: votes.filter(Boolean) }))
+}))
+
+let refuted = 0
+let verifyFailed = 0 // findings whose skeptics all errored -> verification did NOT run (not "verified clean")
+const kept = []
+for (const j of judged.filter(Boolean)) {
+  if (j.votes.length === 0) verifyFailed++ // no usable verdict -> kept conservatively, but flag it
+  const action = decide(j.f, j.votes)
+  if (action === 'drop') { refuted++; continue }
+  if (action === 'downgrade') { refuted++; kept.push({ ...j.f, tier: 'SUGGESTION' }) }
+  else kept.push(j.f)
+}
+
+const finalFindings = [...kept, ...passthrough].sort((x, y) => TIER_RANK[x.tier] - TIER_RANK[y.tier])
+const { verdict, blockers, suggestions } = computeVerdict(finalFindings)
+
+const summary = {}
+for (const a of agents) {
+  const c = finalFindings.filter(f => f.agent === a.name).length
+  summary[a.name] = c === 0 ? 'pass' : `${c} issue${c > 1 ? 's' : ''}`
+}
+
+return {
+  verdict,
+  findings: finalFindings.map((f, i) => ({ id: i + 1, ...f })),
+  systemic,
+  summary,
+  counts: { blockers, suggestions, total: finalFindings.length, refuted, verify_failed: verifyFailed },
+}
