@@ -109,7 +109,7 @@ Testing the LETS plugin against unmerged changes — across parallel worktrees, 
 
 ## Dynamic Workflow Assets (authoring standard)
 
-A LETS command that orchestrates many agents can run them inside a Claude Code **Dynamic Workflow** (the `Workflow` tool) instead of the Task tool, so per-agent output stays off-context and only the aggregate enters the conversation. `skills/review-workflow/` is the **reference example**; `/lets:review --workflow` is the first consumer. New conversions (opinion, brainstorm, plan) follow this standard.
+A LETS command that orchestrates many agents can run them inside a Claude Code **Dynamic Workflow** (the `Workflow` tool) instead of the Task tool, so per-agent output stays off-context and only the aggregate enters the conversation. `skills/review-workflow/` is the **reference example**; `/lets:review --workflow` is the first consumer, `/lets:opinion --workflow` (the `opinion-workflow` skill) the second (both opt-in; ship next release). The opinion conversion adds a CONDITIONAL adversarial-challenge stage (only fires on weak consensus) and reuses the already-selected `lets:*` experts as cross-critics rather than a dedicated agent. Remaining conversions (brainstorm, plan) follow this standard.
 
 **When a workflow is worth it.** A single fan-out that immediately hands back to a user gate is barely more than Task subagents - the workflow earns its keep only with a **multi-stage off-context chain** (fan-out -> reduce -> verify/judge -> aggregate) with NO user checkpoint between stages. Every checkpoint forces intermediate results back into context and breaks the off-context win. So: want to steer each step -> use Task subagents; want autonomous multi-stage off-context -> use a workflow.
 

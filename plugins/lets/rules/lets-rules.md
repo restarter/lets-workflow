@@ -413,7 +413,7 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:check` | Code | Quick sanity check (~30s) - inline 6-lens; same targets as `/lets:review` (local/staged/last-commit/branch/PR/`--file`/`--plan`/`--json`), no subagents |
 | `/lets:review` | Code | Full deep review (~2-3 min) |
 | `/lets:github-pr` | Code | GitHub PR review lifecycle (review, respond, follow-up, approve) |
-| `/lets:opinion` | Expert | Technical decision (dynamic agent count) |
+| `/lets:opinion` | Expert | Technical decision (dynamic agent count; `--workflow` = off-context fan-out + adversarial challenge) |
 | `/lets:ask` | Expert | Quick expert consultation (1 agent) |
 | `/lets:brainstorm` | Planning | Interactive ideation - review backlog, explore ideas, quick brainstorm, cleanup |
 | `/lets:plan` | Planning | Structured planning with agents - architecture + implementation plan (`--fast` = orchestrator-only, skips explorer/architect/expert subagents) |
