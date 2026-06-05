@@ -10,7 +10,7 @@
       "name": "lets",
       "source": "./plugins/lets",
       "description": "Development workflow with session management, code review, and task tracking",
-      "version": "0.6.0"
+      "version": "0.6.1"
     }
   ]
 }
