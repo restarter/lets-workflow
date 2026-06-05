@@ -418,6 +418,7 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:brainstorm` | Planning | Interactive backlog ideation - review backlog, quick brainstorm, cleanup |
 | `/lets:explore` | Planning | Explore a topic from multiple expert angles (`--workflow` = off-context ideate fan-out) |
 | `/lets:plan` | Planning | Structured planning with agents - architecture + implementation plan (`--fast` = orchestrator-only, skips explorer/architect/expert subagents) |
+| `/lets:plan-workflow` | Planning | **PREVIEW** - autonomous planning via a Dynamic Workflow (goal + rubric up front, off-context, approve at end); folds into native `/lets:plan` later (lets-jsw00) |
 | `/lets:execute` | Planning | Execute plan from /lets:plan via native plan mode |
 | `/lets:status` | Utility | Task overview and project status |
 | `/lets:worktree` | Utility | Create/manage interactive worktrees for parallel work |
