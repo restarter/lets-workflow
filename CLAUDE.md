@@ -11,7 +11,7 @@ Monorepo layout: plugin source in `plugins/lets/` subdirectory, marketplace mani
 plugins/lets/                     # Plugin payload (everything ${CLAUDE_PLUGIN_ROOT} resolves to)
 ├── .claude-plugin/plugin.json    #   Plugin manifest (Claude Code; .codex-plugin/ planned for multi-agent)
 ├── commands/                     #   Slash commands (/lets:start, /lets:done, /lets:review, etc.)
-├── agents/                       #   14 expert agents dispatched by review/opinion/ask/plan/brainstorm/team
+├── agents/                       #   15 expert agents (review/opinion/ask/plan/brainstorm/team; skeptic verifies review findings)
 ├── skills/                       #   Reusable skills (user-facing auto-triggered + internal referenced by commands)
 ├── rules/lets-rules.md           #   Workflow rules (frontmatter `version`; copied to .claude/rules/ by `lets init`)
 └── hooks/                        #   SessionStart + PreCompact hooks (drift check + LETS Config only - no rules in stdout)
@@ -65,6 +65,7 @@ The remaining dev-binary gotchas — `LETS_ENV_VERSION` stamping, old worktrees,
 
 ## Architecture Decisions
 
+- **Adversarial verification + Dynamic Workflows (opt-in `--workflow`, ships next release).** `/lets:review` refutes every `[BLOCKER]`/`[SUGGESTION]` with `lets:skeptic` agents before reporting (asymmetric drop: SUGGESTION on a simple-majority `real=false`; BLOCKER only on near-unanimous high-confidence refute, downgraded on a simple-majority, else kept). Runs in BOTH standard (Task, capped) and `--workflow` (off-context) modes — `--workflow` is a pure performance lever, same verified findings. `/lets:review`, `/lets:opinion`, `/lets:explore` ship committed workflow skeletons (`skills/<name>-workflow/<name>.workflow.js`); authoring standard + runtime constraints in **Dynamic Workflow Assets** below.
 - **Audience for plugin source** — `commands/`, `skills/`, `agents/`, `rules/lets-rules.md` are read by the model (orchestrator + subagents), never by humans: write terse, structured, marker-driven (`MANDATORY`/`NEVER`/`IMPORTANT`), tables over prose. Human-facing docs are `README.md` + `CLAUDE.md`. Full guidance: `CONTRIBUTING.md` "## Audience of plugin source".
 - **Claude Code session-id channels (two of them — pick the right one).**
   - `${CLAUDE_SESSION_ID}` — **template substitution** in command/skill markdown: Claude Code rewrites it to the literal session UUID before the model reads the spec. Available since Claude Code v2.1.9. Use when a top-level orchestrator markdown needs the value pre-rendered (e.g. inside a markdown template the model later writes via the Write tool).
@@ -84,7 +85,7 @@ The remaining dev-binary gotchas — `LETS_ENV_VERSION` stamping, old worktrees,
 - `/lets:check` reviews inline (no subagent) for speed
 - All analyst agents are read-only with uniform tools: `Read, Grep, Glob, Bash`. No `Edit/Write`. Exception: `agents/implementer.md` adds `Edit/Write` for `/lets:team` parallel implementation in isolated worktrees.
 - `/lets:team` uses Agent Teams (TeamCreate, Agent with isolation: worktree) for parallel implementation. All other commands use subagents for analysis.
-- All analyst agents have prompt-level read-only Bash constraints in their `## Constraints` section (identical 1-line allowlist across all 13). `hooks/validate-readonly.sh.old` exists as a PreToolUse hook prototype (not yet registered - agent frontmatter hooks silently ignored)
+- All analyst agents have prompt-level read-only Bash constraints in their `## Constraints` section (identical 1-line allowlist across all 14). `hooks/validate-readonly.sh.old` exists as a PreToolUse hook prototype (not yet registered - agent frontmatter hooks silently ignored)
 - **JSON envelope (`--json` subcommands).** Every `lets <sub> --json` emits a single JSON object, valid even on `ok=false` (partial-completion: `steps[]` + a typed `error`). **`SchemaVersion` is per-package** — `initcmd`/`updatecmd`/`worktreecmd` each own a `const SchemaVersion`, guarded by a `TestResult_SchemaContract` test; new `--json` packages copy `worktreecmd`'s shape. Mechanics + per-subcommand contracts: `cli/README.md` "## JSON envelope conventions".
 - Interactive worktrees managed via `/lets:worktree` command. Hook prototypes `hooks/worktree-setup.sh.old` and `hooks/worktree-cleanup.sh.old` (deferred - caused agent auto-cleanup issues)
 - Worktrees stored in `.worktrees/` at project root - `.lets/` symlinked for interactive sessions
@@ -96,6 +97,35 @@ The remaining dev-binary gotchas — `LETS_ENV_VERSION` stamping, old worktrees,
 - Internal skills: hidden from the user-facing `/lets:` autocomplete via `user-invocable: false` in the frontmatter (Claude Code supports this — see `code.claude.com/docs` skills frontmatter). The model can still use them when commands explicitly ask; commands invoke them via `Skill(skill: "lets:<name>", args: "...")`. Claude Code resolves the `lets:` namespace regardless of whether the plugin is loaded via marketplace install or `--plugin-dir` dev mode (no relative-path fragility). No accidental user triggering, no context cost until invoked. Current internal skills: `detect-task`, `actor-fetch-personality`.
 - Commands define WHAT to do and orchestrate the flow. User-facing skills define full reusable flows (steps, user gates) that auto-trigger on natural language. Internal skills define shared procedures read by commands on demand. Commands delegate to skills for shared operations.
 - Gate for new skills: extract only if (a) user-facing with standalone trigger value, or (b) internal logic duplicated in 3+ commands.
+
+## Dynamic Workflow Assets (authoring standard)
+
+A LETS command that orchestrates many agents can run them inside a Claude Code **Dynamic Workflow** (the `Workflow` tool) instead of the Task tool, so per-agent output stays off-context and only the aggregate enters the conversation. `skills/review-workflow/` is the **reference example**; `/lets:review --workflow` is the first consumer, `/lets:opinion --workflow` (the `opinion-workflow` skill) the second (CONDITIONAL adversarial-challenge stage; reuses the selected `lets:*` experts as cross-critics), and `/lets:explore --workflow` (the `explore-workflow` skill) the third - topic ideation EXTRACTED from `/lets:brainstorm` into its own command, a transparent perf-lever (scout + signal-driven agent selection stay in-context; web-research + ideate fan-out + semantic cluster go off-context - the web stage gathers CURRENT community standards via WebSearch so ideation isn't limited to model priors; standard path does the equivalent web search in-context). All opt-in; ship next release. Remaining: `/lets:plan` (autonomous - sandboxed in `plan-workflow`, not yet folded into native) + `/lets:brainstorm`'s Review-backlog Heavy mode follow this standard.
+
+**When a workflow is worth it.** A single fan-out that immediately hands back to a user gate is barely more than Task subagents - the workflow earns its keep only with a **multi-stage off-context chain** (fan-out -> reduce -> verify/judge -> aggregate) with NO user checkpoint between stages. Every checkpoint forces intermediate results back into context and breaks the off-context win. So: want to steer each step -> use Task subagents; want autonomous multi-stage off-context -> use a workflow.
+
+**Layout & naming.** A workflow ships as a skill folder: `plugins/lets/skills/<name>-workflow/` holding `<name>.workflow.js` (the `.workflow.js` suffix is the marker) + `SKILL.md` (`user-invocable: false`; documents the `args` contract and states "this is a workflow asset invoked via `scriptPath`, not auto-triggered"). It is NOT a conversational skill - it is never `Skill()`-invoked.
+
+**Invocation contract.** The command builds `args`, then `Workflow({ scriptPath: "${CLAUDE_PLUGIN_ROOT}/skills/<name>-workflow/<name>.workflow.js", args })`, then persists the returned aggregate. `${CLAUDE_PLUGIN_ROOT}` is substituted at command-load time (the markdown carries the literal path). Script = static logic; `args` = all per-run data. The workflow runs in the **background** (returns a `runId`; the command flow resumes on the completion `<task-notification>`).
+
+**The 6 file sections** (canonical order): META (`export const meta`, pure literal) · ARGS (defensive parse) · SCHEMAS · pure logic · prompts · orchestration -> `return`.
+
+**6 conventions** (every workflow file):
+1. Defensive `args` parse first line: `const input = typeof args === 'string' ? JSON.parse(args) : (args || {})` (the runtime may deliver `args` as a JSON string).
+2. `agentType: "lets:<name>"` to reuse plugin agents - never duplicate an agent's logic in the script.
+3. `schema` wherever structured output feeds aggregation (forces StructuredOutput even when the agent's own format is markdown).
+4. args = dynamic data, script = static logic.
+5. `meta.phases` titles match the `phase()` calls.
+6. Keep-in-sync comment vs the command's prose spec - logic that exists in BOTH a no-workflow path (prose) and the JS lives twice; mark it.
+
+**Runtime must-obey** (empirically verified - lets-odo4o):
+- No filesystem - the script returns data; the command persists files.
+- No sibling `import`/`require` - all logic stays inline (`await import('./x.js')` fails).
+- No `Date.now()` / `Math.random()` / `new Date()`.
+- Top-level `await`/`return` are used (the runtime wraps the body) - so the file is NOT Node-importable and has no clean unit test. Validate behavior with a live smoke test; verify pure-logic correctness by a deterministic check of a copy if needed.
+- `agent({agentType})` resolves against the agents loaded at **session start** - a newly-added plugin agent is unavailable until the next session/reload. Make the script degrade gracefully when an agent can't resolve (e.g. a failed verifier -> keep the finding, flag it; never crash, never silently treat as done).
+
+**`scriptPath` confirmed** to load an arbitrary plugin-path file (not only session-dir scripts). Reusable runtime facts also live in `bd memories` (key `claude-code-workflow-runtime-constraints-*`).
 
 ## Release Flow
 

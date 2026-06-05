@@ -171,7 +171,7 @@ AUTO MODE (autonomous execution: `/loop`, `/lets:execute` auto-flow, `/lets:team
 
 ## Agent Rules
 
-- When launching expert agents for `/lets:review`, `/lets:github-pr`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:brainstorm` - use ONLY `lets:*` agents (`lets:architect`, `lets:security`, etc.)
+- When launching expert agents for `/lets:review`, `/lets:github-pr`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:brainstorm`, `/lets:explore` - use ONLY `lets:*` agents (`lets:architect`, `lets:security`, etc.)
 - `lets:actor` is a special meta-agent: requires explicit user request + personality source (URL or file path). Never auto-select. Use `actor-fetch-personality` skill to fetch personality before dispatch.
 - Never use `general-purpose` or other non-lets subagent types for expert work
 
@@ -413,9 +413,10 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:check` | Code | Quick sanity check (~30s) - inline 6-lens; same targets as `/lets:review` (local/staged/last-commit/branch/PR/`--file`/`--plan`/`--json`), no subagents |
 | `/lets:review` | Code | Full deep review (~2-3 min) |
 | `/lets:github-pr` | Code | GitHub PR review lifecycle (review, respond, follow-up, approve) |
-| `/lets:opinion` | Expert | Technical decision (dynamic agent count) |
+| `/lets:opinion` | Expert | Technical decision (dynamic agent count; `--workflow` = off-context fan-out + adversarial challenge) |
 | `/lets:ask` | Expert | Quick expert consultation (1 agent) |
-| `/lets:brainstorm` | Planning | Interactive ideation - review backlog, explore ideas, quick brainstorm, cleanup |
+| `/lets:brainstorm` | Planning | Interactive backlog ideation - review backlog, quick brainstorm, cleanup |
+| `/lets:explore` | Planning | Explore a topic from multiple expert angles (`--workflow` = off-context ideate fan-out) |
 | `/lets:plan` | Planning | Structured planning with agents - architecture + implementation plan (`--fast` = orchestrator-only, skips explorer/architect/expert subagents) |
 | `/lets:execute` | Planning | Execute plan from /lets:plan via native plan mode |
 | `/lets:status` | Utility | Task overview and project status |

@@ -1,21 +1,19 @@
 ---
-description: Interactive ideation - review backlog, explore ideas, quick brainstorm, cleanup
+description: Interactive backlog ideation - review backlog, quick brainstorm, cleanup (topic exploration moved to /lets:explore)
 argument-hint: "[topic or epic name]"
 ---
 
 # Brainstorm
 
-Interactive ideation with 4 modes. Heavy modes launch explorer + parallel agents for multi-perspective insights. Light modes work instantly.
+Interactive backlog ideation with 3 modes. The Heavy mode (Review backlog) launches an explorer + parallel agents for multi-perspective insights. Light modes work instantly.
 
-**This command helps with WHAT to build. For HOW to build it, use `/lets:plan`.**
+**To explore a specific topic/idea in depth, use `/lets:explore`. This command helps with the BACKLOG (what's tracked); for HOW to build something, use `/lets:plan`.**
 
 > **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
 
 ## Step 0: Choose Mode
 
-If argument provided AND it's clearly an idea/topic (not an epic name), go directly to Explore idea mode.
-
-Otherwise ask:
+If the argument is a specific idea/topic to explore in depth, point the user to `/lets:explore <topic>` (topic exploration lives there now). Otherwise use any argument as optional backlog context and ask:
 
 ```
 AskUserQuestion(
@@ -24,7 +22,6 @@ AskUserQuestion(
     header: "Brainstorm",
     options: [
       { label: "Review backlog", description: "Agents analyze project state, generate ideas and surface gaps (~2-3 min)" },
-      { label: "Explore idea", description: "Agents research a topic from different angles (~2-3 min)" },
       { label: "Quick brainstorm", description: "Fast context scan, direct conversation - no agents" },
       { label: "Cleanup", description: "Triage stale tasks - close, merge, reprioritize" }
     ],
@@ -34,24 +31,16 @@ AskUserQuestion(
 ```
 
 **Handle response:**
-- **Review backlog** -> set mode variables (Step R0), then Heavy Mode Flow
-- **Explore idea** -> set mode variables (Step E0), then Heavy Mode Flow
+- **Review backlog** -> Review Backlog Mode (below)
 - **Quick brainstorm** -> Step Q1
 - **Cleanup** -> Step C1
-- **Other** (free text) -> treat as topic for Explore idea mode
+- **Other** (free text) -> a specific topic to explore -> suggest `/lets:explore <topic>`
 
 ---
 
-## Heavy Mode Flow
+## Review Backlog Mode
 
-Shared flow for Review backlog and Explore idea modes. Each mode sets variables before entering this flow.
-
-**Mode variables** (set by calling mode before entering flow):
-- `{MODE_NAME}`: "Review backlog" or "Explore idea"
-- `{EXPLORER_PROMPT}`: mode-specific explorer prompt (see Step R0 / Step E0)
-- `{AGENT_PROMPT_TEMPLATE}`: mode-specific prompt for brainstorm agents
-- `{FORCED_AGENT}`: agent always included (pragmatist for backlog, architect for explore)
-- `{DIALOG_QUESTION}`: mode-specific dialog question text
+The one heavy mode: explorer scouts the project, parallel domain agents ideate over the backlog, results aggregate. (Quick brainstorm and Cleanup below are the light, no-agent modes.)
 
 ### Phase 1: Explorer - Gather Context
 
@@ -60,7 +49,70 @@ Launch explorer to build a context profile.
 ```
 Task(
   subagent_type="lets:explorer",
-  prompt="{EXPLORER_PROMPT}"
+  prompt="ultrathink
+
+BRAINSTORM SCOUT MODE. In this mode, your mapping role extends to surfacing signals and gaps - not just structure. Gather project context for a brainstorm session.
+
+PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
+
+GOAL: Build a Project State Profile for brainstorming. We need to understand what the project is, what work has been done, what's planned, and where gaps exist.
+
+AVAILABLE CONTEXT SOURCES (read what's relevant, skip what's not):
+
+1. BACKLOG STATE
+   Run: bd stats
+   Run: bd list --status=open -n 50
+   Run: bd list --status=in_progress
+   Run: bd list --status=done -n 20
+   Purpose: understand task distribution, priorities, what's active
+
+2. TASK DETAILS (selective - pick 5-10 most interesting tasks)
+   Run: bd show <task-id>
+   Run: bd comments <task-id>
+   Purpose: understand context, decisions, blockers on key tasks
+
+3. RECENT SESSION SUMMARIES
+   Read: .lets/sessions/*.md (most recent 3-5 files by name)
+   Purpose: what was worked on recently, what momentum exists
+
+4. CODEBASE SIGNALS
+   Grep for: TODO, FIXME, HACK, XXX across source files
+   Read: CLAUDE.md (project structure and architecture)
+   Purpose: understand technical debt signals and project shape
+
+5. RECENT GIT ACTIVITY
+   Run: git log --oneline -20
+   Run: git log --oneline --since='2 weeks ago' --format='%s'
+   Purpose: what areas are actively changing
+
+BUDGET: Be efficient. Read backlog first (sources 1-2), then decide which of sources 3-5 add value. If backlog is rich (50+ tasks with comments), you can skip session summaries. If backlog is sparse, lean more on git and codebase signals.
+
+Keep output concise - max ~500 words. This profile will be passed to multiple agents.
+
+OUTPUT FORMAT - Project State Profile:
+
+## Project State Profile
+
+### Project Shape
+{what this project is, tech stack, size - from CLAUDE.md}
+
+### Backlog Summary
+- Open: {N} tasks
+- In progress: {N}
+- Done recently: {N}
+- By area/label: {breakdown if labels exist}
+
+### Active Momentum
+{what's being worked on now, what sessions focused on recently}
+
+### Hot Areas
+{parts of codebase with most recent activity - files, modules}
+
+### Gaps & Signals
+- Missing coverage: {areas with no tasks but active code}
+- Stale tasks: {tasks open for a long time with no activity}
+- TODOs in code: {count and themes}
+- Recurring themes: {patterns across tasks/comments/sessions}"
 )
 ```
 
@@ -103,7 +155,7 @@ Scan the profile for signals and match to agents:
 | Many tasks, mixed priorities, scope questions | pragmatist |
 
 **Rules:**
-1. Always include `{FORCED_AGENT}` (pragmatist for backlog, architect for explore)
+1. Always include pragmatist (the forced agent for backlog review)
 2. Select agents matching signals found in profile
 3. More signals = more agents. No hard cap - include every agent that has a clear signal
 4. If only 1-2 signals matched, add architect + pragmatist for broader perspective
@@ -169,18 +221,47 @@ For each selected agent:
 ```
 Task(
   subagent_type="lets:{agent-name}",
-  prompt="{AGENT_PROMPT_TEMPLATE}"
+  prompt="ultrathink
+
+PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
+
+MODE: brainstorm (review backlog)
+
+Review the project's BACKLOG of tasks from your area of expertise. Surface gaps in WHAT'S BEING TRACKED: missing themes, priority imbalances, areas with no tasks but clear need from your domain.
+
+You are NOT reviewing code, counting duplications, finding stale files, or hunting bugs in source. The PROJECT STATE PROFILE below is your primary source. Use bd commands (bd show, bd comments) for task details. Code reads are allowed only as evidence for a backlog observation ("this critical area has no tasks tracking it"), never as primary investigation.
+
+PROJECT RULES (from CLAUDE.md):
+{CLAUDE.md summary, first 100 lines - architecture decisions and structure}
+
+PROJECT STATE PROFILE:
+{explorer output from Phase 1}
+
+INSTRUCTIONS:
+- Anchor on the BACKLOG STATE from the profile above (open/in-progress tasks, recent closures, gaps)
+- Generate 3-7 backlog-level insights from your domain lens: what tasks SHOULD exist but don't? what existing tasks need re-prioritization, scope changes, or to be split/closed?
+- Each insight must be backlog-actionable: not "improve testing" but "backlog has 0 tasks tracking auth flow regressions despite 4 recent auth changes, propose creating one"
+- Prioritize by impact (high/medium)
+- Connect to existing tasks: "task X could be extended to cover Y", "task A and B overlap, suggest merging"
+- If you reference code, frame as backlog evidence ("Pattern X exists in 5 files but no task tracks consolidation"), never as code review
+- Be opinionated: rank and recommend, don't just list
+
+OUTPUT FORMAT:
+
+## {Your Domain} Backlog Review
+
+### Missing from Backlog
+1. **{theme or task that should exist}** [Impact: high/medium]
+   {why this gap matters from your domain}
+   {suggested bd create command or task brief}
+
+### Existing Tasks Needing Adjustment
+- **{task-id}** ({title}): {what to change: bump priority, expand scope, split, deprioritize, close as obsolete, with reason}
+
+### Backlog Themes ({domain} lens)
+{1-2 observations about distribution, gaps, drift from project goals: what the backlog reveals about project priorities}"
 )
 ```
-
-The prompt template is set by the calling mode (Step R0 or Step E0). Both templates share this structure:
-
-- ultrathink prefix
-- PROJECT_ROOT
-- `MODE: brainstorm`
-- Context profile from explorer (keep concise - pass summary, not raw data)
-- Instructions specific to the mode
-- Output format
 
 Agents define their own brainstorm focus in their `## Modes` section - no mandatory context table needed.
 
@@ -220,7 +301,7 @@ After all agents respond:
 ```
 AskUserQuestion(
   questions=[{
-    question: "{DIALOG_QUESTION}",
+    question: "What catches your eye?",
     header: "Brainstorm",
     options: [
       { label: "Explore an idea", description: "Dig deeper into a specific idea or insight" },
@@ -245,269 +326,13 @@ Dialog continues until user signals done.
 If active task:
 
 ```bash
-bd comments add <task-id> "Brainstorm ({MODE_NAME}): {N} ideas from {M} agents.
+bd comments add <task-id> "Brainstorm (review backlog): {N} ideas from {M} agents.
 Top ideas: {top 2-3 titles}
 Tasks created: {list or 'none'}"
 ```
 
 If exploration produced a clear task idea but none created, ask:
 "Want me to create a task for this?" (plain text, not in LETS box).
-
----
-
-## Review Backlog Mode
-
-### Step R0: Set Mode Variables
-
-```
-MODE_NAME = "review backlog"
-FORCED_AGENT = pragmatist
-DIALOG_QUESTION = "What catches your eye?"
-```
-
-**EXPLORER_PROMPT:**
-
-```
-"ultrathink
-
-BRAINSTORM SCOUT MODE. In this mode, your mapping role extends to surfacing signals and gaps - not just structure. Gather project context for a brainstorm session.
-
-PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
-
-GOAL: Build a Project State Profile for brainstorming. We need to understand
-what the project is, what work has been done, what's planned, and where gaps exist.
-
-AVAILABLE CONTEXT SOURCES (read what's relevant, skip what's not):
-
-1. BACKLOG STATE
-   Run: bd stats
-   Run: bd list --status=open -n 50
-   Run: bd list --status=in_progress
-   Run: bd list --status=done -n 20
-   Purpose: understand task distribution, priorities, what's active
-
-2. TASK DETAILS (selective - pick 5-10 most interesting tasks)
-   Run: bd show <task-id>
-   Run: bd comments <task-id>
-   Purpose: understand context, decisions, blockers on key tasks
-
-3. RECENT SESSION SUMMARIES
-   Read: .lets/sessions/*.md (most recent 3-5 files by name)
-   Purpose: what was worked on recently, what momentum exists
-
-4. CODEBASE SIGNALS
-   Grep for: TODO, FIXME, HACK, XXX across source files
-   Read: CLAUDE.md (project structure and architecture)
-   Purpose: understand technical debt signals and project shape
-
-5. RECENT GIT ACTIVITY
-   Run: git log --oneline -20
-   Run: git log --oneline --since='2 weeks ago' --format='%s'
-   Purpose: what areas are actively changing
-
-BUDGET: Be efficient. Read backlog first (sources 1-2), then decide which
-of sources 3-5 add value. If backlog is rich (50+ tasks with comments),
-you can skip session summaries. If backlog is sparse, lean more on git
-and codebase signals.
-
-Keep output concise - max ~500 words. This profile will be passed to multiple agents.
-
-OUTPUT FORMAT - Project State Profile:
-
-## Project State Profile
-
-### Project Shape
-{what this project is, tech stack, size - from CLAUDE.md}
-
-### Backlog Summary
-- Open: {N} tasks
-- In progress: {N}
-- Done recently: {N}
-- By area/label: {breakdown if labels exist}
-
-### Active Momentum
-{what's being worked on now, what sessions focused on recently}
-
-### Hot Areas
-{parts of codebase with most recent activity - files, modules}
-
-### Gaps & Signals
-- Missing coverage: {areas with no tasks but active code}
-- Stale tasks: {tasks open for a long time with no activity}
-- TODOs in code: {count and themes}
-- Recurring themes: {patterns across tasks/comments/sessions}"
-```
-
-**AGENT_PROMPT_TEMPLATE:**
-
-```
-"ultrathink
-
-PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
-
-MODE: brainstorm (review backlog)
-
-Review the project's BACKLOG of tasks from your area of expertise. Surface gaps in WHAT'S BEING TRACKED: missing themes, priority imbalances, areas with no tasks but clear need from your domain.
-
-You are NOT reviewing code, counting duplications, finding stale files, or hunting bugs in source. The PROJECT STATE PROFILE below is your primary source. Use bd commands (bd show, bd comments) for task details. Code reads are allowed only as evidence for a backlog observation ("this critical area has no tasks tracking it"), never as primary investigation.
-
-PROJECT RULES (from CLAUDE.md):
-{CLAUDE.md summary, first 100 lines - architecture decisions and structure}
-
-PROJECT STATE PROFILE:
-{explorer output from Phase 1}
-
-INSTRUCTIONS:
-- Anchor on the BACKLOG STATE from the profile above (open/in-progress tasks, recent closures, gaps)
-- Generate 3-7 backlog-level insights from your domain lens: what tasks SHOULD exist but don't? what existing tasks need re-prioritization, scope changes, or to be split/closed?
-- Each insight must be backlog-actionable: not "improve testing" but "backlog has 0 tasks tracking auth flow regressions despite 4 recent auth changes, propose creating one"
-- Prioritize by impact (high/medium)
-- Connect to existing tasks: "task X could be extended to cover Y", "task A and B overlap, suggest merging"
-- If you reference code, frame as backlog evidence ("Pattern X exists in 5 files but no task tracks consolidation"), never as code review
-- Be opinionated: rank and recommend, don't just list
-
-OUTPUT FORMAT:
-
-## {Your Domain} Backlog Review
-
-### Missing from Backlog
-1. **{theme or task that should exist}** [Impact: high/medium]
-   {why this gap matters from your domain}
-   {suggested bd create command or task brief}
-
-### Existing Tasks Needing Adjustment
-- **{task-id}** ({title}): {what to change: bump priority, expand scope, split, deprioritize, close as obsolete, with reason}
-
-### Backlog Themes ({domain} lens)
-{1-2 observations about distribution, gaps, drift from project goals: what the backlog reveals about project priorities}"
-```
-
-Then enter Heavy Mode Flow (Phase 1).
-
----
-
-## Explore Idea Mode
-
-### Step E0: Capture Topic & Set Mode Variables
-
-If argument provided: use it as topic.
-If not: ask "What idea or topic do you want to explore?"
-
-Wait for answer before proceeding.
-
-```
-MODE_NAME = "explore: {topic}"
-FORCED_AGENT = architect
-DIALOG_QUESTION = "What resonates?"
-```
-
-**EXPLORER_PROMPT:**
-
-```
-"ultrathink
-
-BRAINSTORM SCOUT MODE. In this mode, your mapping role extends to surfacing signals and gaps - not just structure. Gather project context relevant to a specific topic.
-
-PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
-
-TOPIC: {user's topic}
-
-AVAILABLE CONTEXT SOURCES (read what's relevant to this topic):
-
-1. RELATED TASKS
-   Run: bd search {topic keywords}
-   Run: bd list --status=open -n 30
-   Purpose: find tasks related to this topic
-   Note: if bd search returns no results, fall back to bd list and scan titles manually
-
-2. TASK DETAILS (for related tasks found above)
-   Run: bd show <task-id>
-   Run: bd comments <task-id>
-   Purpose: understand existing thinking on this topic
-
-3. RELATED CODE
-   Grep for: {topic keywords} across source files
-   Glob for: files in areas related to the topic
-   Read: key files that relate to the idea
-   Purpose: understand what exists already
-
-4. PROJECT CONTEXT
-   Read: CLAUDE.md
-   Purpose: understand where this topic fits in the project
-
-5. SESSION HISTORY
-   Read: .lets/sessions/*.md (scan for topic mentions)
-   Purpose: has this been discussed before?
-
-BUDGET: Focus on sources 1-3. Source 4 is always worth reading.
-Source 5 only if sources 1-2 are sparse.
-
-Keep output concise - max ~500 words. This profile will be passed to multiple agents.
-
-OUTPUT FORMAT - Topic Context Profile:
-
-## Topic Context Profile: {topic}
-
-### What Exists Already
-{code, tasks, or prior work related to this topic}
-
-### Related Tasks
-{list of tasks touching this area, with status}
-
-### Prior Discussions
-{anything from task comments or sessions about this topic}
-
-### Codebase Touchpoints
-{files and modules this topic would affect}"
-```
-
-**AGENT_PROMPT_TEMPLATE:**
-
-```
-"ultrathink
-
-PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
-
-MODE: brainstorm
-
-Explore a specific topic from your area of expertise.
-
-You are NOT reviewing code or evaluating a decision. You are thinking through
-an idea and generating insights, questions, and angles from your domain.
-
-TOPIC: {user's topic}
-
-PROJECT RULES (from CLAUDE.md):
-{CLAUDE.md summary, first 100 lines - architecture decisions and structure}
-
-TOPIC CONTEXT PROFILE:
-{explorer output from Phase 1}
-
-INSTRUCTIONS:
-- Think about this topic through YOUR expertise lens
-- Read relevant code if needed to ground your thinking
-- Generate 2-4 insights: non-obvious angles, risks, opportunities
-- Surface questions the user should answer before proceeding
-- Suggest approaches or patterns from your domain that apply
-- If this topic has been partially explored before (see context), build on it
-- Be specific to THIS project, not generic advice
-
-OUTPUT FORMAT:
-
-## {Your Domain} Perspective on: {topic}
-
-### Insights
-1. **{insight}**
-   {2-3 sentences: why this matters, how it connects}
-
-### Questions to Consider
-- {question from your domain perspective}
-
-### Suggested Approach
-{concrete recommendation for how to approach this topic from your domain}"
-```
-
-Then enter Heavy Mode Flow (Phase 1).
 
 ---
 
@@ -625,7 +450,7 @@ Analyze loaded data and group:
 ```
 
 If no issues found in a category, skip it.
-If backlog is clean, say so and suggest Review backlog or Explore idea instead.
+If backlog is clean, say so and suggest Review backlog or `/lets:explore` instead.
 
 ### Step C3: Interactive Triage
 
@@ -681,7 +506,7 @@ bd comments add <task-id> "Cleanup: closed {N}, reprioritized {M}, labeled {L}, 
 
 ## Output
 
-### After Review Backlog / Explore Idea modes:
+### After Review Backlog mode:
 
 ```
 ┌─ LETS ─────────────────────────┐
@@ -713,7 +538,7 @@ bd comments add <task-id> "Cleanup: closed {N}, reprioritized {M}, labeled {L}, 
 
 - All task mutations (create, close, update) require user approval
 - No agents in Quick brainstorm and Cleanup modes
-- Explorer + agents only in Review backlog and Explore idea modes
+- Explorer + agents only in Review backlog mode
 - All agents launched in a SINGLE message (parallel)
 - If explorer fails or returns thin profile (<5 tasks), degrade to Quick mode
 - Explorer profile max ~500 words (passed to multiple agents)

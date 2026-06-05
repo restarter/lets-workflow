@@ -87,7 +87,8 @@ Team:     /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /le
 | `/lets:team` | Utility | Parallel implementation with Agent Teams |
 | `/lets:status` | Utility | Task overview anytime |
 | `/lets:note` | Utility | Add note to active task |
-| `/lets:brainstorm` | Planning | Interactive ideation - review backlog, explore ideas, quick brainstorm, cleanup |
+| `/lets:brainstorm` | Planning | Interactive backlog ideation - review backlog, quick brainstorm, cleanup |
+| `/lets:explore` | Planning | Explore a topic from multiple expert angles - scout, web research, fan out agents (`--workflow` = off-context) |
 
 ### Auto-triggered Skills
 

@@ -112,7 +112,8 @@ Then, inside the Claude Code session:
 
 | Command | Description |
 |---------|-------------|
-| `/lets:brainstorm` | Interactive ideation - backlog review, idea exploration, quick brainstorm, cleanup |
+| `/lets:brainstorm` | Interactive backlog ideation - backlog review, quick brainstorm, cleanup |
+| `/lets:explore` | Explore a topic from multiple expert angles - scout, web research, agent fan-out (`--workflow` = off-context) |
 | `/lets:plan` | Structured planning - explore codebase, design architecture, write plan (`--fast` = orchestrator-only, no subagents) |
 | `/lets:execute` | Execute plan from `/lets:plan` via native plan mode |
 | `/lets:team` | Parallel implementation with Agent Teams |
@@ -193,7 +194,8 @@ A LETS session runs a loop: start, work, commit, finish.
 │  /lets:review    Full multi-agent code review (~2-3 min)                  │
 │                                                                           │
 ├─ You plan, Claude builds ─────────────────────────────────────────────────┤
-│  /lets:brainstorm  Ideation: backlog review, explore ideas, brainstorm    │
+│  /lets:brainstorm  Ideation: backlog review, quick brainstorm, cleanup    │
+│  /lets:explore     Think through a topic - web-grounded, multi-expert     │
 │  /lets:plan        Design how to build it - codebase exploration, arch    │
 │  /lets:execute     Claude implements the plan with your approval gates    │
 │                                                                           │
@@ -213,11 +215,12 @@ A LETS session runs a loop: start, work, commit, finish.
 
 > **Think** → **Design** → **Build**
 
-**Brainstorm** (`/lets:brainstorm`) - 4 modes for different situations:
+**Brainstorm** (`/lets:brainstorm`) - 3 modes for working the backlog:
 - *Review backlog* - agents analyze your task list, find patterns, suggest priorities
-- *Explore ideas* - deep dive into a specific area with codebase analysis
 - *Quick brainstorm* - fast ideation on a topic
 - *Cleanup* - find stale tasks, broken dependencies, forgotten work
+
+**Explore** (`/lets:explore`) - think through a specific topic or idea from multiple expert angles. A scout gathers project context, a web-research pass pulls current community standards, then parallel domain agents surface insights, open questions, and approaches. `--workflow` runs the fan-out off-context.
 
 **Plan** (`/lets:plan`) - codebase exploration with dynamically-scaled explorer agents, then architecture design with expert evaluation. Small project? One explorer. Large monorepo? Up to 10, each mapping a different area. Want a quick talk-through instead? `/lets:plan --fast` skips the subagent phases and plans collaboratively in-session.
 

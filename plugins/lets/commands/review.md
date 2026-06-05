@@ -1,6 +1,6 @@
 ---
 description: Full code review with dynamic agent selection (up to 12 specialized agents). Analyzes changes first, selects relevant experts. Also reviews implementation plans.
-argument-hint: "[PR-url-or-number|--local|--staged|--last-commit|--branch|--plan|--file <path>] [--json]"
+argument-hint: "[PR-url-or-number|--local|--staged|--last-commit|--branch|--plan|--file <path>] [--json] [--workflow]"
 ---
 
 # Full Code Review
@@ -24,6 +24,7 @@ Comprehensive code review with dynamic agent selection based on change types. Up
 /lets:review --plan              # Review latest plan in .lets/plans/
 /lets:review --plan <path>       # Review specific plan file
 /lets:review --file <path>       # Review an existing file (full content, not diff)
+/lets:review --workflow          # Run via Dynamic Workflow (off-context fan-out); combinable with any code mode + --json
 ```
 
 ## Step 1: Determine Review Mode
@@ -70,6 +71,43 @@ If `--json` is present alongside any mode:
 - File: `.lets/reviews/{date}-{mode}.json` (e.g., `2026-02-26-PR-42.json`, `2026-02-26-local-review.json`, `2026-02-26-branch-review.json`)
 - Skip markdown report generation (Step 8)
 - Skip GitHub PR comment posting (Step 9) - JSON mode implies the caller handles output
+
+### Workflow execution flag
+
+If `--workflow` is present alongside any **code** mode (`--local` / `--staged` / `--last-commit` / `--branch` / `<PR>` / `--file`):
+- Run the agent fan-out + aggregation inside a Dynamic Workflow instead of launching agents via the Task tool (Step 5/6).
+- Combinable with `--json` (the workflow returns the aggregate; Claude still writes the JSON file in Step 8.5).
+- NOT supported with `--plan` (the plan-review path is a separate follow-up) - if both are present, tell the user `--workflow` does not apply to plan review yet and run the standard plan-review path.
+
+### Choosing the execution path (interactive)
+
+When `--workflow` was NOT explicitly passed, decide the execution path as follows - **for code modes only** (never for `--plan`):
+
+- If the `Workflow` tool is **not** available this session -> silently use the standard Task-based path. Do NOT show the option (no clutter for users without Dynamic Workflows).
+- If the `Workflow` tool **is** available -> ask the user which path via `AskUserQuestion`:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "How should I run this review?",
+    header: "Run mode",
+    options: [
+      { label: "Standard (Recommended)", description: "Agents via Task tool - full per-agent reports visible inline" },
+      { label: "Workflow", description: "Dynamic Workflow - off-context fan-out, only the aggregate returns" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Handle response:**
+- **Standard** -> standard path (Step 5 as written).
+- **Workflow** -> treat as if `--workflow` was set: go to `## Workflow Mode (--workflow)` after agent selection.
+- **Other** (free text) -> if it names a path, honor it; otherwise default to Standard.
+
+For the **bare no-argument invocation**, combine this with the Step 1 "What are we reviewing?" question in a single `AskUserQuestion` call (two questions) so the user answers target + run mode at once - but only include the run-mode question when the `Workflow` tool is available.
+
+An explicit `--workflow` flag always wins over this prompt (no question asked).
 
 ## Step 2: Get Changes
 
@@ -261,6 +299,8 @@ Skipped for file mode:
 
 ## Step 5: Launch Selected Agents (Parallel)
 
+**If `--workflow` was parsed:** skip this step and Step 6 - go to the `## Workflow Mode (--workflow)` section below, then resume at Step 6.5. The rest of Step 5 is the standard Task-based path.
+
 **CRITICAL:** Launch ALL selected agents in a SINGLE message with multiple Task tool calls.
 
 For each selected agent, use the Task tool with:
@@ -302,7 +342,65 @@ CODE:
 
 ```
 
+## Workflow Mode (--workflow)
+
+Runs when `--workflow` was parsed in Step 1 (code modes only). Replaces Step 5 (Task launch) and Step 6 (aggregation): both happen inside the Dynamic Workflow so the per-agent reports never enter this conversation - only the aggregated object returns.
+
+### W1: Preflight
+
+If the `Workflow` tool is NOT available this session, STOP the workflow path and tell the user:
+
+> `--workflow` needs Claude Code >= 2.1.154 on a paid plan (Dynamic Workflows is a research preview). Re-run without `--workflow` to use the standard agent flow.
+
+Do NOT silently fall back - the user opted in explicitly; surface the gap and let them choose.
+
+### W2: Build args
+
+Use the agents SELECTED in Step 4 (do not re-select). **Exclude `lets:actor`** from workflow mode - the skeleton does not inject the `PERSONALITY:` block, so an actor selection would lose its identity. If the user explicitly selected actor, tell them actor is not supported with `--workflow` yet and run the standard Task-based path instead.
+
+Construct the `args` object:
+
+```
+{
+  agents: [ { name: "compliance" }, { name: "security" }, ... ],  // selected agent short-names (no "lets:" prefix)
+  mode: "PR-42" | "local-review" | "branch-review" | "file",
+  projectRoot: "{LETS_PROJECT_ROOT from LETS Config}",
+  claudeMd: "{CLAUDE.md content gathered in Step 3}",
+  changedFiles: "{changed-file list with stats, or single path for --file}",
+  code: "{full diff, or full file content for --file}",
+  smallDiff: true | false,        // true when diff < 50 lines -> NIT findings are kept
+  systemicCheck: true | false      // false for --file mode (no diff baseline)
+}
+```
+
+Pass `args` as a real JSON value to the Workflow tool - NOT a JSON-encoded string. (The runtime may still deliver `args` to the script as a JSON string, so the skeleton defensively parses it at the top - see the first line of the script body.)
+
+### W3: Invoke the workflow
+
+Call:
+
+```
+Workflow({ scriptPath: "${CLAUDE_PLUGIN_ROOT}/skills/review-workflow/review.workflow.js", args: <W2 args> })
+```
+
+The skeleton is a committed asset in the `review-workflow` skill (`skills/review-workflow/review.workflow.js`) - NOT reproduced inline. `${CLAUDE_PLUGIN_ROOT}` is substituted at command-load time, so this markdown already carries the literal absolute path. The script is static; all per-review data travels in `args`. See `skills/review-workflow/SKILL.md` for the `args` contract and the stage flow (fan-out -> dedupe -> verify -> aggregate).
+
+The skeleton's stages: **(1) Review** - fan out `lets:<name>` agents (structured `FINDING_SCHEMA`); **(2) Reduce** - NIT-filter (unless small diff), split systemic, dedupe keep-highest-tier, sort; **(3) Verify** - per BLOCKER/SUGGESTION, fan out `lets:skeptic` (2, or 3 for BLOCKER) with the asymmetric drop rule (Step 6.6); **(4) Aggregate** - verdict over the verified set, summary, `counts` incl. `refuted`. It returns `{ verdict, findings, systemic, summary, counts }`.
+
+**The workflow runs in the BACKGROUND.** The tool returns immediately with a task ID / `runId` - NOT the aggregate. Do not try to read findings from the tool's immediate return. The fan-out continues in the background and a `<task-notification>` arrives when it completes; the orchestrator is re-invoked at that point. Optionally tell the user "Review fan-out running in the background - {N} agents" so the wait is visible (they can watch via `/workflows`).
+
+### W4: Rejoin the standard flow (on workflow completion)
+
+When the workflow's completion notification arrives, the orchestrator resumes with the workflow's returned aggregate object as the result - **this** is the only thing that enters context (the per-agent review reports AND the skeptic verdicts stayed in script variables). The findings are already verified (the script ran Step 6.6 as its Stage 3) and `counts.refuted` says how many were dropped/downgraded. If the workflow failed or returned nothing, surface the error and offer the standard `/lets:review` (Task-based) flow; do not silently drop the review. With the aggregate in hand:
+- **Step 6.5** - grep-verify each `systemic[]` entry. If an agent was wrong (pattern only in this file), reclassify it into `findings` at its original tier and recompute the verdict from the new counts. Otherwise trust the script's `verdict`.
+- **Step 6.6** - already done in-workflow (Stage 3); do NOT re-run skeptics. Surface `counts.refuted` as `refuted_count`; if `counts.verify_failed` > 0, warn that that many findings couldn't be verified (kept unverified).
+- **Step 8** - save the markdown report (render from the returned object).
+- **Step 8.5** - if `--json`, write `.lets/reviews/{date}-{mode}.json`. The workflow's `findings` and `verdict` map 1:1 onto the Step 8.5 shape - keep those field names exactly (`/lets:github-pr` reads only those two). The rest of the Step 8.5 wrapper is NOT in the return object and Claude must supply it: add top-level `date`, `mode`, and `findings_count`; and transform each `systemic[]` entry from the finding shape (`{title, file, line, tier, ...}`) into the Step 8.5 systemic shape `{title, count, description}` (use `systemic_count` as `count`). Do not write the raw return object verbatim.
+- **Step 9 / Step 10** - output/post and link to task exactly as the standard flow.
+
 ## Step 6: Filter & Aggregate Results
+
+**Workflow mode:** the script already filtered, deduped, separated systemic, sorted, and computed the verdict. Skip this step - the aggregate is in the Workflow return value. Continue at Step 6.5. The `skills/review-workflow/review.workflow.js` script mirrors the filter/dedupe rules below; **keep them in sync** (see the Keep-in-sync note under Step 7).
 
 Wait for all agents, then:
 
@@ -326,15 +424,39 @@ grep -r "delete(" --include="*.php" -l | head -10
 
 Systemic findings go into a separate section in the final report (see Step 9).
 
+## Step 6.6: Verify Findings (Adversarial)
+
+Cut false positives before reporting: each finding gets a refutation pass from the `lets:skeptic` agent. This is core review methodology - it runs in BOTH execution modes; the only difference is WHERE the skeptics run.
+
+**Workflow mode:** this step already ran inside the workflow (its Stage 3) - the returned aggregate is already verified. Skip to Step 7.
+
+**Scope:** verify `[BLOCKER]` and `[SUGGESTION]` findings only (skip `[NIT]`).
+
+**Per finding:** launch `lets:skeptic` (via the Task tool in standard mode) N times - **N=2**, or **N=3** for a `[BLOCKER]`. Each skeptic gets the single finding + the code and returns `{real, confidence, reason}`.
+
+**Asymmetric drop rule (do NOT suppress real bugs):**
+- `[SUGGESTION]` -> drop on a simple majority `real=false`.
+- `[BLOCKER]` -> drop ONLY on near-unanimous high-confidence refutation (all skeptics `real=false`, or a majority at `high` confidence); **downgrade** to `[SUGGESTION]` on a simple majority `real=false`; otherwise **keep** the `[BLOCKER]` (a confirmed or split BLOCKER stays a BLOCKER). Never silently drop a `[BLOCKER]` on a weak/low-confidence refute.
+
+Survivors keep their (possibly downgraded) tier.
+
+**Standard-mode cap** (bounds the in-context blow-up; workflow mode needs no cap - it verifies off-context): always verify `[BLOCKER]`s; verify at most the top-K=5 `[SUGGESTION]`s; if total findings > 10, verify inline (you act as the skeptic, re-checking each against the code) instead of spawning per-finding agents. If the cap truncates verification, say so in the output - no silent caps.
+
+**Record `refuted_count`** (how many findings the verify pass dropped or downgraded) and surface it in Step 9 + Step 8.5. If any finding could NOT be verified (skeptics errored - `verify_failed` > 0), say so in the output: those findings are kept unverified, not silently treated as clean.
+
+**Keep in sync:** the `skills/review-workflow/review.workflow.js` script implements this same rule in JS (its `decide()`, the Verify stage). Any change here MUST be mirrored there.
+
 ## Step 7: Determine Verdict
 
-**Note:** Systemic findings do NOT count toward the verdict - they're informational.
+**Note:** Systemic findings do NOT count toward the verdict - they're informational. The verdict is computed over the **verified** finding set (after Step 6.6 - refuted findings are already dropped/downgraded).
 
 | Condition | Verdict |
 |-----------|---------|
 | 0 [BLOCKER]s, 0-2 [SUGGESTION]s | APPROVED |
 | 0 [BLOCKER]s, 3+ [SUGGESTION]s | APPROVED WITH SUGGESTIONS |
 | 1+ [BLOCKER]s | CHANGES REQUESTED |
+
+> **Keep in sync (--workflow):** the `skills/review-workflow/review.workflow.js` script reimplements this table in JS (its `computeVerdict()`: `const verdict = blockers > 0 ? ... : suggestions >= 3 ? ...`). Any change to these thresholds MUST be mirrored there, and vice versa - otherwise the two paths return different verdicts for the same diff. (No unit test pins this - the workflow runtime blocks clean testing; the keep-in-sync discipline + the live smoke test are the guards.)
 
 ## Step 8: Save Review (BEFORE output)
 
@@ -369,6 +491,8 @@ Write to `.lets/reviews/{date}-{mode}.json`:
   "mode": "PR-42",
   "verdict": "CHANGES REQUESTED",
   "findings_count": 5,
+  "refuted_count": 2,
+  "verify_failed": 0,
   "findings": [
     {
       "id": 1,
@@ -399,6 +523,8 @@ Write to `.lets/reviews/{date}-{mode}.json`:
 
 `mode` values: `PR-{number}` | `local-review` | `branch-review` | (plan modes are handled by the Plan Review section, not this path).
 
+`refuted_count` is additive (consumers that don't know it ignore it, e.g. `/lets:github-pr` reads only `findings` + `verdict`): the number of findings the Step 6.6 verify pass dropped or downgraded. Omit or `0` when no verification ran.
+
 After saving, inform user: "Review saved to: {path}"
 Then STOP - skip Step 9 (Output) and Step 10 (Link to task).
 The calling command handles output and task linking.
@@ -414,6 +540,8 @@ gh pr comment <PR> --body "$(cat <<'EOF'
 ### Code Review
 
 **Verdict:** {APPROVED | APPROVED WITH SUGGESTIONS | CHANGES REQUESTED}
+
+{If `refuted_count` > 0, add a line: `_Adversarial verify dropped/downgraded {refuted_count} finding(s)._`}
 
 Found {N} issues:
 
