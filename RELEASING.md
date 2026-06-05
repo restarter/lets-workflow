@@ -151,6 +151,16 @@ If `goreleaser check` reports schema errors, fix `.goreleaser.yml` before taggin
 
 **`verify-versions` finds drift on main** (shouldn't happen if PR-time check passed): treat as a bug — investigate which file is out of sync, fix on a hotfix branch.
 
+## Rationale
+
+**Why two phases** — bump is reviewable (can revert), tag is reproducible (same tag → same binaries). Mixing them means tag commits to changes that haven't been reviewed.
+
+**Why bash for orchestration** — bump-version.sh + verify-versions.sh are file-edits + gates, natural for bash + jq + awk. No Go binary involvement; CI doesn't need `setup-go` for verify.
+
+**Why goreleaser** — single declarative config builds 5 platforms in parallel, handles archives + checksums + GH Release creation + prerelease detection (semver suffix `-rc.1` etc.). Battle-tested in beads and similar Go CLIs.
+
+**Prereleases skip CHANGELOG mutation** — rc/beta/alpha tags exist as validation snapshots; the full release entry is reserved for the stable tag. release.yml synthesizes prerelease notes from `[Unreleased]`. PREV_TAG (used to compute compare-link bottom of CHANGELOG) filters prereleases so stable releases compare against the previous **stable** tag.
+
 ## Out of scope (future)
 
 - Mac code signing / notarization (Gatekeeper warning workaround: `xattr -cr /usr/local/bin/lets`)

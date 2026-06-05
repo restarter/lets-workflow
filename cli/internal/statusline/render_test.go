@@ -91,6 +91,61 @@ func TestRenderLines_VersionInHeader(t *testing.T) {
 	}
 }
 
+// TestRenderLines_ByteIdentityGolden locks the EXACT bytes of the frozen
+// 2-line compact output. This is the byte-lock that the Contains-based tests
+// above cannot enforce: any reordering, recoloring, or whitespace change in
+// renderLines fails here. The version segment is the only environment-variant
+// piece (dev vs tagged), so it is composed from version.Version/IsDev() rather
+// than hard-coded — everything else is a literal byte sequence.
+func TestRenderLines_ByteIdentityGolden(t *testing.T) {
+	var in Input
+	in.Model.DisplayName = "Opus 4.7"
+	in.ContextWindow.UsedPercentage = 35.5
+	in.ContextWindow.ContextWindowSize = 200000
+	in.ContextWindow.CurrentUsage.InputTokens = 70000
+	u := usage{fiveHour: 85, fiveHourOK: true, sevenDay: 30, sevenDayOK: true}
+
+	var buf bytes.Buffer
+	if err := renderLines(&buf, in, "feature/test", "fallback-folder", u); err != nil {
+		t.Fatalf("renderLines: %v", err)
+	}
+
+	verDisplay := version.Version
+	if !version.IsDev() {
+		verDisplay = "v" + verDisplay
+	}
+
+	// Golden captured from current behavior. Pieces correspond 1:1 to the
+	// Fprintf sequence in renderLines (render.go). \x1b == ESC.
+	const (
+		esc      = "\x1b"
+		reset    = esc + "[0m"
+		boldGold = esc + "[1;38;2;255;215;0m"
+		sepGold  = esc + "[38;2;153;122;0m"
+		branch   = esc + "[38;2;232;160;144m"
+		boldOrng = esc + "[1;38;2;255;175;50m"
+		tan      = esc + "[38;2;190;176;140m"
+		tanDim   = esc + "[2;38;2;190;176;140m"
+		gray     = esc + "[90m"
+		green    = esc + "[38;2;130;200;130m"
+		red      = esc + "[38;2;255;100;100m"
+		leaf     = "\xf0\x9f\x8c\xb1" // 🌱
+	)
+	sep := sepGold + " \xc2\xbb " + reset // " » "
+	dot := gray + " \xc2\xb7 " + reset    // " · "
+
+	want := leaf + " " + boldGold + "LETS Workflow " + verDisplay + reset + sep +
+		branch + "feature/test" + reset + "\n" +
+		boldOrng + "Opus 4.7" + reset + sep +
+		tan + "window 36%" + reset + " " + tanDim + "(70k/200k)" + reset + dot +
+		red + "5h 85%" + reset + dot +
+		green + "7d 30%" + reset
+
+	if got := buf.String(); got != want {
+		t.Errorf("byte-identity mismatch.\n got: %q\nwant: %q", got, want)
+	}
+}
+
 func TestUsageColor(t *testing.T) {
 	tests := []struct {
 		pct  int
@@ -107,5 +162,96 @@ func TestUsageColor(t *testing.T) {
 		if got := usageColor(tt.pct); got != tt.want {
 			t.Errorf("usageColor(%d): got %q, want %q", tt.pct, got, tt.want)
 		}
+	}
+}
+
+// TestRender_Dispatch guards the rich-vs-compact seam in Render: the DEFAULT
+// (compact=false) emits the boxed rich output; --compact (compact=true) emits
+// the legacy 2-line output (no box).
+func TestRender_Dispatch(t *testing.T) {
+	const payload = `{"workspace":{"current_dir":"/tmp"},"model":{"display_name":"Opus"},"context_window":{"used_percentage":10,"context_window_size":1000000}}`
+
+	var compact bytes.Buffer
+	if err := Render(strings.NewReader(payload), &compact, false, true, true, true, true); err != nil { // compact=true
+		t.Fatalf("compact Render: %v", err)
+	}
+	if strings.Contains(compact.String(), "┌") {
+		t.Errorf("--compact output should not be boxed:\n%s", compact.String())
+	}
+
+	var rich bytes.Buffer
+	if err := Render(strings.NewReader(payload), &rich, false, false, true, true, true); err != nil { // default = rich
+		t.Fatalf("rich Render: %v", err)
+	}
+	if !strings.Contains(rich.String(), "┌") {
+		t.Errorf("default output should be boxed (contain ┌):\n%s", rich.String())
+	}
+}
+
+// TestRender_NoTip: showTip=false drops the bottom tip row from the box.
+// (Asserts on line count, not glyph: the tip glyph is plain text and could also
+// appear inside a tip's wording.)
+func TestRender_NoTip(t *testing.T) {
+	const payload = `{"workspace":{"current_dir":"/tmp"},"model":{"display_name":"Opus"},"context_window":{"used_percentage":10,"context_window_size":1000000}}`
+	var on, off bytes.Buffer
+	if err := Render(strings.NewReader(payload), &on, false, false, true, true, true); err != nil {
+		t.Fatalf("tip-on: %v", err)
+	}
+	if err := Render(strings.NewReader(payload), &off, false, false, false, true, true); err != nil {
+		t.Fatalf("tip-off: %v", err)
+	}
+	onLines := len(splitNonEmptyLines(on.String()))
+	offLines := len(splitNonEmptyLines(off.String()))
+	if onLines <= offLines {
+		t.Errorf("showTip=true should render more rows than showTip=false: on=%d off=%d\non:\n%s\noff:\n%s",
+			onLines, offLines, on.String(), off.String())
+	}
+}
+
+// TestEnvOff pins the LETS_STATUSLINE_* falsey-value parsing (the env override
+// path for --no-tip/--no-dir/--no-task). All three keys share envOff, so testing
+// one key across the value matrix covers the parsing for all.
+func TestEnvOff(t *testing.T) {
+	for _, v := range []string{"off", "0", "false", "no", "OFF", "False", " no "} {
+		t.Setenv("LETS_STATUSLINE_TIP", v)
+		if !envOff("LETS_STATUSLINE_TIP") {
+			t.Errorf("envOff(%q) = false, want true", v)
+		}
+	}
+	for _, v := range []string{"", "on", "1", "true", "yes", "garbage"} {
+		t.Setenv("LETS_STATUSLINE_TIP", v)
+		if envOff("LETS_STATUSLINE_TIP") {
+			t.Errorf("envOff(%q) = true, want false", v)
+		}
+	}
+}
+
+// TestRender_EnvTipOff drives Render through the env override path end-to-end:
+// LETS_STATUSLINE_TIP=off must drop the tip row even with showTip=true.
+func TestRender_EnvTipOff(t *testing.T) {
+	payload := `{"model":{"display_name":"Opus"},"context_window":{"used_percentage":5}}`
+	var on, off bytes.Buffer
+	if err := Render(strings.NewReader(payload), &on, false, false, true, true, true); err != nil {
+		t.Fatalf("on: %v", err)
+	}
+	t.Setenv("LETS_STATUSLINE_TIP", "off")
+	if err := Render(strings.NewReader(payload), &off, false, false, true, true, true); err != nil {
+		t.Fatalf("off: %v", err)
+	}
+	if onN, offN := len(splitNonEmptyLines(on.String())), len(splitNonEmptyLines(off.String())); offN >= onN {
+		t.Errorf("LETS_STATUSLINE_TIP=off should drop the tip line: on=%d off=%d", onN, offN)
+	}
+}
+
+// TestRender_ScrubsEscapes: an injected CSI in a payload field must not survive
+// into the output as a raw escape sequence (our own coloring is SGR ...m only).
+func TestRender_ScrubsEscapes(t *testing.T) {
+	payload := `{"model":{"display_name":"Opus\u001b[2JX"},"context_window":{"used_percentage":5}}`
+	var buf bytes.Buffer
+	if err := Render(strings.NewReader(payload), &buf, false, false, true, true, true); err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if strings.Contains(buf.String(), "\x1b[2J") {
+		t.Errorf("injected ESC[2J survived into output:\n%q", buf.String())
 	}
 }

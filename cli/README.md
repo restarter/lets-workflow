@@ -218,3 +218,41 @@ Same shape conventions as `lets init` (single JSON object, valid even on error, 
 - **Rollback contract.** On `create` failure after `git worktree add` has run, `rollback` is populated with `{attempted, succeeded, residual: [...]}`. Residual entries name what couldn't be cleaned up (path, `branch:<name>`, `main_repo_on_branch:<actual> (expected <prev>)`) so the caller surfaces concrete cleanup instructions instead of hand-waving.
 - **Stream split for shell composition.** `--print-cd` writes the absolute worktree path to **stdout** (one line, no newline-padding) while keeping `--json` envelope on **stderr** — gh-style. Lets shell wrappers compose `cd "$(lets worktree create foo --print-cd)" && claude` without parsing JSON. Without `--print-cd`, `--json` envelope goes to stdout as usual.
 - **`next_steps.absolute_path`.** Load-bearing field that `commands/worktree.md` reads to tell the user where to `cd`. Renaming it without a `SchemaVersion` bump silently breaks the markdown skill — pinned by `TestResult_SchemaContract.create_success`.
+
+## lets statusline
+
+Internal subcommand. Renders the Claude Code statusline; the project's `.claude/settings.json` invokes `lets statusline` directly (no flag) on every render. `lets init` points `statusLine.command` at it via value-match against `"lets statusline"`, leaving foreign user-customized commands alone. The legacy bash shim (`plugins/lets/scripts/lets/statusline.sh`, and the per-project `.lets/statusline.sh`) was retired in `lets-8ilsl`; `MigrateStatuslineSh` deletes a byte-equal legacy shim (matched against the frozen `internal/initcmd/embedded_statusline_shim.sh` snapshot) and calls `SetStatusLine`.
+
+**Rich box is the default.** `internal/statusline/rich.go` renders a closed box (`┌─┐ │ ├─┤ └─┘`) wrapping identity / budget / task / rotating-tip lines. Flags:
+
+- `--compact` — fall back to the legacy 2-line `renderLines` (for terminals where the box misbehaves).
+- `--light` — light palette (default is dark).
+- `--no-tip` (or env `LETS_STATUSLINE_TIP=off`/`0`/`false`) — hide the bottom tip line.
+- `--no-dir` (or env `LETS_STATUSLINE_DIR=off`/`0`/`false`) — hide the Full-tier location pill.
+- `--no-task` (or env `LETS_STATUSLINE_TASK=off`/`0`/`false`) — hide the task line AND skip its background `bd` refresh.
+- `--rich` — hidden accepted no-op (rich is already the default).
+
+**Width.** Two `COLUMNS`-driven tiers: **Full** (≥ `bpWide`=72) and **Compact** (< 72; fails open to Full when `COLUMNS` is absent). Below `bpFill`=90 the box fills the window (more tip room); at/above it hugs the widest line. Always capped at `fullMaxLine`=120 with a `boxRightMargin`=4 right gutter (CC's render area is a few cells narrower than the `COLUMNS` it passes, plus ambiguous-width glyphs). Sized **cell-accurately** — `cellWidth`/`fitCell` size each glyph; `wideRunes` maps any 2-cell glyph but is **currently empty**, since every emitted glyph is 1-cell text. **If a 2-cell glyph is ever added, register it in `wideRunes` or the border drifts.** Rows are `richRow{plain | prefix+mid+suffix}`: the task title / tip live in a flex `mid` that clips first, keeping the id + notes/hint suffix in frame. The **Full-tier location pill** shows the project/worktree root folder name (git top-level basename via `detectProjectRoot`, stable across `cd` into subdirs like `cli/`), or the literal word `worktree` inside a worktree (the dir name already equals the branch). **Compact** (< 72) drops the pill, PR, and the model's `(… context)` paren and shortens `window`→`w`, but keeps model name + effort (high-signal); a meaningless `.`/empty folder or branch is suppressed rather than rendered as a stray `⎇ .`. Universal 1-cell text glyphs (no Nerd Font, no emoji), a static `⚘` brand mark (the 🌱→🪴→🌿→🌳→🌴 growth ladder is implemented but parked behind it), color-graded effort, no progress bars (token counts + paren reset deltas).
+
+**Task line (off the render hot path).** Reads `.lets/cache/task-status`, self-refreshed by a detached `lets statusline --fetch-task-only` subprocess (`bd show`, 90s TTL, id-only placeholder debounces the spawn) — no bd/network on the render path.
+
+**Payload robustness.** `flexISO` decodes a numeric `resets_at`; `workspace.git_worktree` is intentionally not decoded (CC sends a string) — either would otherwise blank the bar. Escape-injection defense: `stripControl` folds C0/ESC/DEL/C1 control bytes to spaces in **every** externally-sourced field — folder/branch/worktree name, `model.display_name`, `pr.review_state`, `effort` — in `Render` before the renderer adds its own ANSI; `sanitizeField` is `stripControl` plus the `|`-fold/trim for the pipe-delimited bd-title cache line.
+
+## lets hook
+
+Two cobra subcommands wired to Claude Code hooks: `lets hook session-start` (SessionStart) and `lets hook precompact` (PreCompact). Both take `--rules=${CLAUDE_PLUGIN_ROOT}/rules/lets-rules.md` and currently share output via `sessionstart.Run()` — the subcommands stay distinct for future divergence (e.g. context snapshotting before compaction). Project root is detected via `git rev-parse --show-toplevel` with an `os.Getwd()` fallback.
+
+Output (≈2KB, well under Claude Code's 10K hook cap — `lets-q9bx7`):
+
+- Optional `## LETS Notice` — a drift check (`frontmatter.ReadVersion` on the plugin vs `.claude/rules/lets-rules.md`). The canonical messages in `internal/drift/drift.go::Message` tell the user to run `/lets:update` for `outdated`/`unknown`/`ahead`, and `/lets:init` only when the rules file is `missing`. `sessionstart.go::driftCheck` appends a one-line "surface this to the user" instruction to the block (hook-only, NOT part of `drift.Message`; `commands/start.md` carries the same rule so a large slash command can't crowd the notice out).
+- `## LETS Config` — the whitelisted `LETS_*` values + an `### About these values` explainer embedded from `internal/hook/sessionstart/local_config_explainer.md`.
+
+The workflow rules themselves do NOT travel through the hook — they live in `.claude/rules/lets-rules.md` (the uncapped project-instructions channel), copied there by `lets init` and frontmatter-version-tracked. **Dual-hook rationale:** SessionStart on a `compact` source re-injects rules into the post-compaction context; PreCompact ensures rules are in the pre-compaction context the auto-summary is generated from — together they prevent workflow drift after compaction in long sessions.
+
+## JSON envelope conventions
+
+Every `lets <sub> --json` emits a single JSON object on stdout, valid even on `ok=false` (partial-completion contract — `steps[]` carries work done before the error; `error` carries `kind`/`message`/`remediation`). The cobra layer sets `SilenceUsage` + `SilenceErrors`; the human-readable error duplicates `result.Error` to stderr.
+
+**`SchemaVersion` is per-package, not shared.** `initcmd`, `updatecmd`, and `worktreecmd` each declare their own `const SchemaVersion = 1`, so a breaking change in one doesn't force a coordinated bump in the others. Field additions are minor (consumers ignore unknown fields); each package's `TestResult_SchemaContract` test fails on key drift, forcing a conscious bump decision.
+
+**New `--json` subcommand packages should copy `worktreecmd`'s pattern** — a shared `Envelope` core + per-subcommand result wrappers — rather than inventing a new shape. Per-subcommand contracts: the `### ... --json contract` subsections above (`lets init`, `lets update`, `lets worktree`).

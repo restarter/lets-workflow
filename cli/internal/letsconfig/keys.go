@@ -7,8 +7,8 @@
 //   - cli/internal/hook/sessionstart/sessionstart.go (whitelist for hook env injection)
 //   - Future: /lets:doctor (validation + display)
 //
-// Adding a new config key (full recipe — replaces the legacy 8-step CLAUDE.md
-// recipe). Required edits:
+// Adding a new config key (full recipe; CONTRIBUTING.md carries the same steps
+// in prose under "### Adding a new config key"). Required edits:
 //  1. Append a Key{Name, Comment, Default} entry to Keys below
 //  2. Add field to Prefs struct in cli/internal/initcmd/render.go AND add
 //     ONE entry to Prefs.AsValues() map (one-line addition right below)

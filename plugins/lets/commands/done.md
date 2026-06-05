@@ -467,7 +467,7 @@ AskUserQuestion(
     question: "Task done. What's next?",
     header: "Next step",
     options: [
-      { label: "Next task", description: "Pick another task to work on (stays on {LETS_MERGE_BRANCH})" },
+      { label: "Next task", description: "Pick and claim another task via take-task skill" },
       { label: "End session", description: "Run /lets:end - save context and wrap up" }
     ],
     multiSelect: false
@@ -476,7 +476,7 @@ AskUserQuestion(
 ```
 
 **Handle response:**
-- **Next task** -> show `bd ready`, pick new task
+- **Next task** -> show `bd ready --limit 5`, ask user to pick. When picked: invoke `Skill(skill: "lets:take-task", args: "<task-id>")` for status update + branch setup. Do NOT inline take-task logic.
 - **End session** -> invoke `Skill(skill: "lets:end")`
 
 ### After PR ($LETS_PR_FLOW == github), NOT in worktree:
@@ -499,7 +499,7 @@ AskUserQuestion(
     options: [
       { label: "Merge & close", description: "Merge PR #{number}, close task, switch to {LETS_MERGE_BRANCH}" },
       { label: "Stay on branch", description: "Stay on feature branch - for PR fixes or follow-up work" },
-      { label: "Next task", description: "Switch to {LETS_MERGE_BRANCH}, pick another task" },
+      { label: "Next task", description: "Switch to {LETS_MERGE_BRANCH}, then claim another task via take-task" },
       { label: "End session", description: "Switch to {LETS_MERGE_BRANCH}, run /lets:end" }
     ],
     multiSelect: false
@@ -514,7 +514,7 @@ AskUserQuestion(
   3. `git checkout {LETS_MERGE_BRANCH} && git pull`
   4. If merge fails (conflicts, checks not passed) -> inform user, fall back to "Stay on branch"
 - **Stay on branch** -> stay on current branch, no checkout. User continues working freely.
-- **Next task** -> `git checkout {LETS_MERGE_BRANCH}`, then show `bd ready`, pick new task
+- **Next task** -> `git checkout {LETS_MERGE_BRANCH}`, then show `bd ready --limit 5`. When user picks: invoke `Skill(skill: "lets:take-task", args: "<task-id>")` for status update + branch setup.
 - **End session** -> `git checkout {LETS_MERGE_BRANCH}`, then invoke `Skill(skill: "lets:end")`
 
 ### After PR ($LETS_PR_FLOW == github), IN worktree:
@@ -573,7 +573,7 @@ AskUserQuestion(
     question: "Task done. What's next?",
     header: "Next step",
     options: [
-      { label: "Next task", description: "Pick another task to work on" },
+      { label: "Next task", description: "Pick and claim another task via take-task skill" },
       { label: "End session", description: "Run /lets:end - save context and wrap up" }
     ],
     multiSelect: false
@@ -582,7 +582,7 @@ AskUserQuestion(
 ```
 
 **Handle response:**
-- **Next task** -> show `bd ready`, pick new task
+- **Next task** -> show `bd ready --limit 5`, ask user to pick. When picked: invoke `Skill(skill: "lets:take-task", args: "<task-id>")` for status update + branch setup.
 - **End session** -> invoke `Skill(skill: "lets:end")`
 
 ### After local merge ($LETS_PR_FLOW != github), IN worktree:

@@ -65,9 +65,15 @@ fi
 
 Report: branch, uncommitted changes, recent commits. **If the repo has no commits yet** (the `else` branch above fires), that's fine — say so in plain text; offer `git commit --allow-empty -m "chore: initial setup"` if the user wants an anchor for `git log` to work later. **Don't** raise `/lets:init` here (it's a separate concern) and **don't** treat the missing HEAD as a fatal error.
 
-## Step 3: Task Status
+## Step 3: Task Pickers
 
-Run `/lets:status overview` to show compact task overview.
+Show what's claimed and what's available — minimal data the user needs for Step 5 selection. Full project dashboard (label-groups progress, priority distribution, dependency graph) lives in explicit `/lets:status overview` or `/lets:status full` — not invoked at session start.
+
+```bash
+bd list --status=in_progress
+```
+
+Then delegate to `/lets:status ready` to list available tasks grouped by epic.
 
 ## Step 4: Present Summary
 
@@ -80,8 +86,11 @@ Branch: {branch}
 Changes: {clean / X uncommitted files}
 Recent: {last 3 commits}
 
-## Tasks
-{output from /lets:status}
+## In Progress
+{output from `bd list --status=in_progress`, or "(none)"}
+
+## Ready Tasks
+{output from `/lets:status ready` — already formatted with epic grouping}
 ```
 
 ## Step 5: Task Selection (MANDATORY)
