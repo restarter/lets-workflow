@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-06-05
+
 ### Added
 - **`/lets:explore` — topic-exploration command + `--workflow` (lets-odo4o).** Extracted from `/lets:brainstorm` into its own command: a scout gathers project context, an always-on Web Research stage pulls CURRENT community standards via WebSearch/WebFetch, then parallel domain agents surface insights, open questions, and approaches grounded in that brief. `--workflow` runs the fan-out off-context via a Dynamic Workflow (web research → ideate → semantic cluster); `--no-web` skips the web stage; an off-project guard handles topics unrelated to the repo. The cluster stage semantically merges convergent ideas across agents (real multi-agent attribution, title-only fallback). `/lets:brainstorm` is now backlog-only (3 modes).
 - **`/lets:review --workflow` + adversarial finding-verification (lets-odo4o).** Opt-in off-context Dynamic Workflow variant; every `[BLOCKER]`/`[SUGGESTION]` is refuted by `lets:skeptic` agents before being reported (asymmetric drop rule). Verification runs in both standard and `--workflow` modes — `--workflow` is a pure off-context performance lever.
@@ -10,6 +12,9 @@
 - **`/lets:note --pre-compact` — snapshot the session before compaction (lets-lwut3).** A new `--pre-compact` (alias `--resume`) mode on `/lets:note` writes a single recovery-grade `## RESUME` comment to the active task — where things live (branch@sha, key `file:line`, external sources + recovery commands), state (committed/uncommitted, frozen SHAs), decisions already made, and the explicit next step — so a future session or another agent can fully reconstruct the working context after `/compact` summarizes the conversation. Falls back to a `.lets/sessions/` file when there is no active task.
 - **Statusline tips now surface the new features (lets-h63lo).** The rotating bottom-line hints in `lets statusline` gained coverage for `--workflow` (off-context fan-out + skeptic finding-verification on `/lets:review` / `/lets:opinion` / `/lets:explore`), `/lets:explore` and its `--no-web`, the `--no-task` / `--no-dir` / `--no-tip` trim flags, and `/lets:note --pre-compact`.
 - **`/lets:end --pre-compact` + shared `pre-compact-note` skill (lets-jvbft).** `/lets:end` gains a `--pre-compact` (alias `--resume`) mode: a pre-compaction snapshot that writes the recovery-grade `## RESUME` comment to the active task plus a session-summary file, then returns WITHOUT ending the session (no push, no task-status prompt) so you can `/compact` and keep working in the same window. The resume-snapshot step is extracted into a shared internal `pre-compact-note` skill that `/lets:note --pre-compact` now delegates to as well — single source of truth, no template drift.
+
+### Fixed
+- **Commit skill stages context-aware (lets-vdbhz).** `/lets:commit` no longer runs a blanket `git add -A`, which could sweep in unrelated changes, untracked cruft, or secrets (`.env`, keys) and clobber a curated staged set. Step 5 now respects an already-staged set as-is, otherwise stages the reviewed files by name — consistent with `.claude/rules/git.md`.
 
 ## [0.5.5] - 2026-05-27
 
@@ -419,7 +424,8 @@ Initial release with expert agents team.
 - SessionStart hook injecting workflow rules
 - Plugin structure: commands, agents, hooks
 
-[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.5.5...HEAD
+[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/restarter/lets-workflow/compare/v0.5.5...v0.6.0
 [0.5.5]: https://github.com/restarter/lets-workflow/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/restarter/lets-workflow/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/restarter/lets-workflow/compare/v0.5.2...v0.5.3
