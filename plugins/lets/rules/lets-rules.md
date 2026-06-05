@@ -422,7 +422,7 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:status` | Utility | Task overview and project status |
 | `/lets:worktree` | Utility | Create/manage interactive worktrees for parallel work |
 | `/lets:team` | Utility | Parallel implementation with Agent Teams (run, status, stop) |
-| `/lets:note` | Utility | Add note to active task |
+| `/lets:note` | Utility | Add note to active task (`--pre-compact` = resume snapshot before /compact) |
 | `/lets:init`    | Setup | Per-project initialization. Re-run for self-heal (drift fix) or to change config |
 | `/lets:update`  | Setup | Sync project with the current release - `.lets/.env` + rules self-heal, plus version status for the `lets` binary and the plugin |
 

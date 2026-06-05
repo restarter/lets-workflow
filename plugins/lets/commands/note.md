@@ -1,5 +1,5 @@
 ---
-description: Add a note to the active task - progress, decisions, context
+description: Add a note to the active task - progress, decisions, context. --pre-compact writes a resume-grade session snapshot before /compact.
 ---
 
 # Task Note
@@ -14,6 +14,20 @@ Add a note to the active beads task. For mid-work documentation - progress updat
 Use `/lets:note` when you want to add extra context that doesn't fit those flows.
 
 > **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
+
+## Usage
+
+```
+/lets:note                  # interactive - pick a note type, add to the active task
+/lets:note <free text>      # use the text directly as the note (infer type)
+/lets:note --pre-compact    # RESUME snapshot of the whole session before /compact
+```
+
+## Step 0: Argument Parsing
+
+**If `--pre-compact` (alias `--resume`) is passed** -> run **Pre-Compact Resume Mode** (below) INSTEAD of Steps 3-4: no type prompt, produce ONE recovery-grade snapshot. Still run Step 1 (detect-task), Step 6 (verify), and the Output box.
+
+**Otherwise** -> normal flow (Steps 1-6).
 
 ## When to Use
 
@@ -121,6 +135,54 @@ bd comments add <task-id> "[scope-change] <what changed and why>"
 ```bash
 bd show <task-id>
 ```
+
+## Pre-Compact Resume Mode (`--pre-compact`)
+
+Run this right before `/compact` (or when a long session is about to be auto-summarized). Goal: ONE recovery-grade comment on the active task so a future you / another agent can fully reconstruct the working context after compaction — what is decided, where everything lives, and the exact next step. (Same shape as the resume note a review round produces.)
+
+**Skip Step 3** (no type prompt). Gather the snapshot from the session + git, then write it as a single comment.
+
+```bash
+git branch --show-current
+git log --oneline -5
+git status --short          # uncommitted / untracked
+```
+
+Write the snapshot to the active task (English; one continuous line per paragraph - no hard wrap):
+
+```bash
+bd comments add <task-id> "## RESUME {YYYY-MM-DD} - {short label}
+
+### Where things live
+- repo / branch: {branch} @ {short-sha}; key paths touched: {file:line, ...}
+- external sources: {PR #, links, other-project paths, index / recovery commands}
+
+### State
+- committed/merged: {...}; uncommitted/untracked: {git status}; frozen artifacts + SHAs: {...}
+
+### Decided (do NOT re-litigate)
+- {decision -> reasoning}
+- verified vs code: {claim -> file:line}
+
+### Remaining + NEXT STEP
+- {open items}
+- NEXT: {the single concrete next action + how to resume it}
+
+### Compaction
+- snapshot taken before /compact; resume with: bd show <task-id> + bd comments <task-id>"
+```
+
+**No active task (fallback) - never drop the snapshot.** If Step 1 found none, write the same RESUME block to a session file and tell the user where it landed:
+
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+mkdir -p "$LETS_PROJECT_ROOT/.lets/sessions"
+BRANCH_SLUG=$(git branch --show-current | tr '/' '-')
+# Write the RESUME block (above) via the Write tool to:
+#   $LETS_PROJECT_ROOT/.lets/sessions/<YYYY-MM-DD-HHMM>-precompact-${BRANCH_SLUG}.md
+```
+
+Then run Step 6 (verify) and show the Output box.
 
 ## Output
 
