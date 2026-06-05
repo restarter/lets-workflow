@@ -102,7 +102,7 @@ Then, inside the Claude Code session:
 | Command | Description |
 |---------|-------------|
 | `/lets:start` | Start session - restore context, show tasks, create feature branch |
-| `/lets:end` | End session - save progress, sync tasks, create summary |
+| `/lets:end` | End session - save progress, sync tasks, create summary (`--pre-compact` snapshots before /compact without ending) |
 | `/lets:commit` | Commit with review and conventional commit format |
 | `/lets:done` | Finish task - create PR (GitHub mode) or merge locally |
 | `/lets:status` | Task overview and project status |
