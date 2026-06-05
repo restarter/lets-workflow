@@ -217,6 +217,8 @@ After all agents respond (standard path) or the workflow returns (Workflow Mode)
 3. Separate: Insights / Questions / Approaches
 4. If web ran, append a **Community Standards (sources)** list - live links from Step 3.5 (Workflow Mode: `web.sources` from the returned aggregate; standard path: the brief's sources). Skip when `--no-web` / web unavailable.
 
+> **Keep in sync (--workflow):** the off-context clustering + web handling live in `skills/explore-workflow/explore.workflow.js` - `buildThemes` (semantic merge -> impact-sort with `agents[]`), `clusterIdeas` (title-only fallback), and `formatWebBrief` (the untrusted-web fence, mirrored in Step 3.5/Step 4). Any change to the dedupe/merge/impact-sort or the web-fence here MUST be mirrored there, and vice versa. (No unit test pins this - the runtime blocks clean import; the keep-in-sync discipline + a live smoke test + the on-demand stubbed-hook harness in `SKILL.md` are the guards.)
+
 ```
 ## Explore Results: {topic}
 
@@ -293,7 +295,6 @@ Use the agents SELECTED in Step 3 (do not re-select). **Exclude `lets:actor`** -
 
 ```
 {
-  mode: "explore_idea",
   topic: "{topic}",
   profile: "{scout's Topic Context Profile from Step 2}",
   agents: [ { name: "architect" }, ... ],   // short names, no "lets:" prefix

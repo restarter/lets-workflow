@@ -7,10 +7,8 @@ export const meta = {
 
 // ── ARGS (defensive parse - the runtime may deliver args as a JSON string) ──
 const input = typeof args === 'string' ? JSON.parse(args) : (args || {})
-const { mode, topic, profile, agents, projectRoot, claudeMd, web: webEnabled } = input
+const { topic, profile, agents, projectRoot, claudeMd, web: webEnabled } = input
 // webEnabled: undefined/true => run the web-research stage (default), false => skip it (--no-web).
-// mode is 'explore_idea' here; the asset is written mode-ready so a future brainstorm Review-backlog
-// conversion can reuse it with mode 'review_backlog' (only the ideate prompt branches).
 
 // ── SCHEMAS ──
 const IDEA_SCHEMA = {
@@ -22,9 +20,7 @@ const IDEA_SCHEMA = {
         type: 'object', additionalProperties: false,
         properties: {
           title: { type: 'string' },
-          // category covers both modes (explore: insight/question/approach; backlog: gap/quick_win) so the
-          // asset is reusable; the explore prompt only ever emits the first three.
-          category: { type: 'string', enum: ['insight', 'question', 'approach', 'gap', 'quick_win'] },
+          category: { type: 'string', enum: ['insight', 'question', 'approach'] },
           impact: { type: 'string', enum: ['high', 'medium'] },
           description: { type: 'string' },
         },
@@ -66,7 +62,7 @@ const CLUSTER_SCHEMA = {
         type: 'object', additionalProperties: false,
         properties: {
           title: { type: 'string' },
-          category: { type: 'string', enum: ['insight', 'question', 'approach', 'gap', 'quick_win'] },
+          category: { type: 'string', enum: ['insight', 'question', 'approach'] },
           impact: { type: 'string', enum: ['high', 'medium'] },
           description: { type: 'string' },
           members: { type: 'array', items: { type: 'integer' } }, // indices into the raw idea pool

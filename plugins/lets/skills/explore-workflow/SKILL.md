@@ -28,7 +28,6 @@ Workflow({ scriptPath: "${CLAUDE_PLUGIN_ROOT}/skills/explore-workflow/explore.wo
 
 | key | type | meaning |
 |---|---|---|
-| `mode` | string | `explore_idea` (the asset is mode-ready; a future brainstorm Review-backlog conversion can reuse it) |
 | `topic` | string | the topic being explored |
 | `profile` | string | the scout's Topic Context Profile (in-context Step 2 output, ~500 words) |
 | `agents` | `[{name}]` | selected agent short-names (no `lets:` prefix; exclude `actor`) |
