@@ -1,21 +1,19 @@
 ---
-description: Interactive ideation - review backlog, explore ideas, quick brainstorm, cleanup
+description: Interactive backlog ideation - review backlog, quick brainstorm, cleanup (topic exploration moved to /lets:explore)
 argument-hint: "[topic or epic name]"
 ---
 
 # Brainstorm
 
-Interactive ideation with 4 modes. Heavy modes launch explorer + parallel agents for multi-perspective insights. Light modes work instantly.
+Interactive backlog ideation with 3 modes. The Heavy mode (Review backlog) launches an explorer + parallel agents for multi-perspective insights. Light modes work instantly.
 
-**This command helps with WHAT to build. For HOW to build it, use `/lets:plan`.**
+**To explore a specific topic/idea in depth, use `/lets:explore`. This command helps with the BACKLOG (what's tracked); for HOW to build something, use `/lets:plan`.**
 
 > **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
 
 ## Step 0: Choose Mode
 
-If argument provided AND it's clearly an idea/topic (not an epic name), go directly to Explore idea mode.
-
-Otherwise ask:
+If the argument is a specific idea/topic to explore in depth, point the user to `/lets:explore <topic>` (topic exploration lives there now). Otherwise use any argument as optional backlog context and ask:
 
 ```
 AskUserQuestion(
@@ -24,7 +22,6 @@ AskUserQuestion(
     header: "Brainstorm",
     options: [
       { label: "Review backlog", description: "Agents analyze project state, generate ideas and surface gaps (~2-3 min)" },
-      { label: "Explore idea", description: "Agents research a topic from different angles (~2-3 min)" },
       { label: "Quick brainstorm", description: "Fast context scan, direct conversation - no agents" },
       { label: "Cleanup", description: "Triage stale tasks - close, merge, reprioritize" }
     ],
@@ -35,23 +32,22 @@ AskUserQuestion(
 
 **Handle response:**
 - **Review backlog** -> set mode variables (Step R0), then Heavy Mode Flow
-- **Explore idea** -> set mode variables (Step E0), then Heavy Mode Flow
 - **Quick brainstorm** -> Step Q1
 - **Cleanup** -> Step C1
-- **Other** (free text) -> treat as topic for Explore idea mode
+- **Other** (free text) -> a specific topic to explore -> suggest `/lets:explore <topic>`
 
 ---
 
 ## Heavy Mode Flow
 
-Shared flow for Review backlog and Explore idea modes. Each mode sets variables before entering this flow.
+The flow for Review backlog mode. Step R0 sets its variables before entering this flow.
 
-**Mode variables** (set by calling mode before entering flow):
-- `{MODE_NAME}`: "Review backlog" or "Explore idea"
-- `{EXPLORER_PROMPT}`: mode-specific explorer prompt (see Step R0 / Step E0)
-- `{AGENT_PROMPT_TEMPLATE}`: mode-specific prompt for brainstorm agents
-- `{FORCED_AGENT}`: agent always included (pragmatist for backlog, architect for explore)
-- `{DIALOG_QUESTION}`: mode-specific dialog question text
+**Mode variables** (set by Step R0 before entering flow):
+- `{MODE_NAME}`: "Review backlog"
+- `{EXPLORER_PROMPT}`: the explorer prompt (see Step R0)
+- `{AGENT_PROMPT_TEMPLATE}`: the prompt for brainstorm agents (see Step R0)
+- `{FORCED_AGENT}`: agent always included (pragmatist)
+- `{DIALOG_QUESTION}`: the dialog question text
 
 ### Phase 1: Explorer - Gather Context
 
@@ -103,7 +99,7 @@ Scan the profile for signals and match to agents:
 | Many tasks, mixed priorities, scope questions | pragmatist |
 
 **Rules:**
-1. Always include `{FORCED_AGENT}` (pragmatist for backlog, architect for explore)
+1. Always include `{FORCED_AGENT}` (pragmatist for Review backlog)
 2. Select agents matching signals found in profile
 3. More signals = more agents. No hard cap - include every agent that has a clear signal
 4. If only 1-2 signals matched, add architect + pragmatist for broader perspective
@@ -173,7 +169,7 @@ Task(
 )
 ```
 
-The prompt template is set by the calling mode (Step R0 or Step E0). Both templates share this structure:
+The prompt template is set by Step R0. It has this structure:
 
 - ultrathink prefix
 - PROJECT_ROOT
@@ -386,131 +382,6 @@ Then enter Heavy Mode Flow (Phase 1).
 
 ---
 
-## Explore Idea Mode
-
-### Step E0: Capture Topic & Set Mode Variables
-
-If argument provided: use it as topic.
-If not: ask "What idea or topic do you want to explore?"
-
-Wait for answer before proceeding.
-
-```
-MODE_NAME = "explore: {topic}"
-FORCED_AGENT = architect
-DIALOG_QUESTION = "What resonates?"
-```
-
-**EXPLORER_PROMPT:**
-
-```
-"ultrathink
-
-BRAINSTORM SCOUT MODE. In this mode, your mapping role extends to surfacing signals and gaps - not just structure. Gather project context relevant to a specific topic.
-
-PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
-
-TOPIC: {user's topic}
-
-AVAILABLE CONTEXT SOURCES (read what's relevant to this topic):
-
-1. RELATED TASKS
-   Run: bd search {topic keywords}
-   Run: bd list --status=open -n 30
-   Purpose: find tasks related to this topic
-   Note: if bd search returns no results, fall back to bd list and scan titles manually
-
-2. TASK DETAILS (for related tasks found above)
-   Run: bd show <task-id>
-   Run: bd comments <task-id>
-   Purpose: understand existing thinking on this topic
-
-3. RELATED CODE
-   Grep for: {topic keywords} across source files
-   Glob for: files in areas related to the topic
-   Read: key files that relate to the idea
-   Purpose: understand what exists already
-
-4. PROJECT CONTEXT
-   Read: CLAUDE.md
-   Purpose: understand where this topic fits in the project
-
-5. SESSION HISTORY
-   Read: .lets/sessions/*.md (scan for topic mentions)
-   Purpose: has this been discussed before?
-
-BUDGET: Focus on sources 1-3. Source 4 is always worth reading.
-Source 5 only if sources 1-2 are sparse.
-
-Keep output concise - max ~500 words. This profile will be passed to multiple agents.
-
-OUTPUT FORMAT - Topic Context Profile:
-
-## Topic Context Profile: {topic}
-
-### What Exists Already
-{code, tasks, or prior work related to this topic}
-
-### Related Tasks
-{list of tasks touching this area, with status}
-
-### Prior Discussions
-{anything from task comments or sessions about this topic}
-
-### Codebase Touchpoints
-{files and modules this topic would affect}"
-```
-
-**AGENT_PROMPT_TEMPLATE:**
-
-```
-"ultrathink
-
-PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
-
-MODE: brainstorm
-
-Explore a specific topic from your area of expertise.
-
-You are NOT reviewing code or evaluating a decision. You are thinking through
-an idea and generating insights, questions, and angles from your domain.
-
-TOPIC: {user's topic}
-
-PROJECT RULES (from CLAUDE.md):
-{CLAUDE.md summary, first 100 lines - architecture decisions and structure}
-
-TOPIC CONTEXT PROFILE:
-{explorer output from Phase 1}
-
-INSTRUCTIONS:
-- Think about this topic through YOUR expertise lens
-- Read relevant code if needed to ground your thinking
-- Generate 2-4 insights: non-obvious angles, risks, opportunities
-- Surface questions the user should answer before proceeding
-- Suggest approaches or patterns from your domain that apply
-- If this topic has been partially explored before (see context), build on it
-- Be specific to THIS project, not generic advice
-
-OUTPUT FORMAT:
-
-## {Your Domain} Perspective on: {topic}
-
-### Insights
-1. **{insight}**
-   {2-3 sentences: why this matters, how it connects}
-
-### Questions to Consider
-- {question from your domain perspective}
-
-### Suggested Approach
-{concrete recommendation for how to approach this topic from your domain}"
-```
-
-Then enter Heavy Mode Flow (Phase 1).
-
----
-
 ## Quick Brainstorm Mode
 
 No agents. Command gathers context directly and enters conversation.
@@ -625,7 +496,7 @@ Analyze loaded data and group:
 ```
 
 If no issues found in a category, skip it.
-If backlog is clean, say so and suggest Review backlog or Explore idea instead.
+If backlog is clean, say so and suggest Review backlog or `/lets:explore` instead.
 
 ### Step C3: Interactive Triage
 
@@ -681,7 +552,7 @@ bd comments add <task-id> "Cleanup: closed {N}, reprioritized {M}, labeled {L}, 
 
 ## Output
 
-### After Review Backlog / Explore Idea modes:
+### After Review Backlog mode:
 
 ```
 ┌─ LETS ─────────────────────────┐
@@ -713,7 +584,7 @@ bd comments add <task-id> "Cleanup: closed {N}, reprioritized {M}, labeled {L}, 
 
 - All task mutations (create, close, update) require user approval
 - No agents in Quick brainstorm and Cleanup modes
-- Explorer + agents only in Review backlog and Explore idea modes
+- Explorer + agents only in Review backlog mode
 - All agents launched in a SINGLE message (parallel)
 - If explorer fails or returns thin profile (<5 tasks), degrade to Quick mode
 - Explorer profile max ~500 words (passed to multiple agents)
