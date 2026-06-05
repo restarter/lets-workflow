@@ -56,7 +56,7 @@ const CHALLENGE_SCHEMA = {
 
 // Aggregate per option; leading = the option the most experts RECOMMEND. Returns ranked + consensus signals.
 function tally(opinions, options) {
-  const totals = new Map(options.map(o => [o.id, { id: o.id, total: 0, count: 0, recs: 0 }]))
+  const totals = new Map((options || []).map(o => [o.id, { id: o.id, total: 0, count: 0, recs: 0 }]))
   for (const op of opinions) {
     for (const s of (op.scores || [])) {
       const t = totals.get(s.option)
@@ -123,7 +123,7 @@ function decideRecommendation(t, votes, optionIds, challengeFailed) {
 
 // ── PROMPTS (built from args) ──
 function optionsBlock() {
-  return options.map(o => `- ${o.id}: ${o.text}`).join('\n')
+  return (options || []).map(o => `- ${o.id}: ${o.text}`).join('\n')
 }
 
 function opinePrompt() {
@@ -165,7 +165,7 @@ Return {strongest_counter, severity, would_change_pick, better_option}. would_ch
 
 // ── ORCHESTRATION (multi-stage off-context chain) ──
 phase('Opine')
-const rawOpinions = await parallel(experts.map(e => () =>
+const rawOpinions = await parallel((experts || []).map(e => () =>
   agent(opinePrompt(), { agentType: `lets:${e.name}`, label: `opine:${e.name}`, schema: OPINION_SCHEMA })
     .then(r => (r ? { ...r, expert: e.name } : null))
 ))
@@ -180,7 +180,7 @@ let challengeRan = false
 if (weakConsensus(t)) {
   challengeRan = true
   const leadingText = (options.find(o => o.id === t.leading) || {}).text || ''
-  const rawVotes = await parallel(experts.map(e => () =>
+  const rawVotes = await parallel((experts || []).map(e => () =>
     agent(challengePrompt(t.leading, leadingText), { agentType: `lets:${e.name}`, label: `challenge:${e.name}`, schema: CHALLENGE_SCHEMA })
       .then(r => (r ? { ...r, expert: e.name } : null))
   ))

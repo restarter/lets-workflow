@@ -127,21 +127,27 @@ Return {real, confidence, reason}. real=true only if the issue genuinely holds a
 
 // ── ORCHESTRATION (multi-stage off-context chain) ──
 phase('Review')
-const raw = await parallel(agents.map(a => () =>
+const raw = await parallel((agents || []).map(a => () =>
   agent(reviewPrompt(), { agentType: `lets:${a.name}`, label: `review:${a.name}`, schema: FINDING_SCHEMA })
     .then(r => (r && r.findings ? r.findings : []).map(f => ({ ...f, agent: a.name })))
 ))
 
-// Reduce: NIT-filter (unless small diff) -> split systemic -> dedupe (keep highest tier) -> sort.
-let pool = raw.filter(Boolean).flat()
-pool = pool.filter(f => f.tier !== 'NIT' || smallDiff)
+// Reduce: split systemic FIRST (own section, reported regardless of tier), THEN NIT-filter the regular
+// findings, THEN dedupe. Systemic MUST come out before the NIT filter - the systemic instruction tells
+// agents to downgrade tier-by-one, so a SUGGESTION-systemic arrives as NIT and the filter would drop it
+// before the split could capture it. KEEP IN SYNC with review.md Step 6 (systemic -> own section, any tier).
+const pool = raw.filter(Boolean).flat()
 const systemic = pool.filter(f => f.systemic)
-const regular = pool.filter(f => !f.systemic)
+const regular = pool.filter(f => !f.systemic && (f.tier !== 'NIT' || smallDiff))
+// Dedupe by file::title, keep highest tier, and MERGE the attributions of every agent who raised it
+// (agents[]) so the summary reflects convergence, not just the single survivor's agent.
 const byKey = new Map()
 for (const f of regular) {
   const key = `${f.file || ''}::${String(f.title).toLowerCase().trim()}`
   const prev = byKey.get(key)
-  if (!prev || TIER_RANK[f.tier] < TIER_RANK[prev.tier]) byKey.set(key, f)
+  if (!prev) { byKey.set(key, { ...f, agents: [f.agent] }); continue }
+  if (!prev.agents.includes(f.agent)) prev.agents.push(f.agent)
+  if (TIER_RANK[f.tier] < TIER_RANK[prev.tier]) byKey.set(key, { ...f, agents: prev.agents })
 }
 const deduped = [...byKey.values()].sort((x, y) => TIER_RANK[x.tier] - TIER_RANK[y.tier])
 
@@ -172,8 +178,8 @@ const finalFindings = [...kept, ...passthrough].sort((x, y) => TIER_RANK[x.tier]
 const { verdict, blockers, suggestions } = computeVerdict(finalFindings)
 
 const summary = {}
-for (const a of agents) {
-  const c = finalFindings.filter(f => f.agent === a.name).length
+for (const a of (agents || [])) {
+  const c = finalFindings.filter(f => (f.agents ? f.agents.includes(a.name) : f.agent === a.name)).length
   summary[a.name] = c === 0 ? 'pass' : `${c} issue${c > 1 ? 's' : ''}`
 }
 

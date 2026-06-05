@@ -436,7 +436,7 @@ Cut false positives before reporting: each finding gets a refutation pass from t
 
 **Asymmetric drop rule (do NOT suppress real bugs):**
 - `[SUGGESTION]` -> drop on a simple majority `real=false`.
-- `[BLOCKER]` -> drop ONLY on near-unanimous high-confidence refutation (all skeptics `real=false`, or a majority at `high` confidence); otherwise **downgrade** to `[SUGGESTION]`. Never silently drop a `[BLOCKER]` on a weak/low-confidence refute.
+- `[BLOCKER]` -> drop ONLY on near-unanimous high-confidence refutation (all skeptics `real=false`, or a majority at `high` confidence); **downgrade** to `[SUGGESTION]` on a simple majority `real=false`; otherwise **keep** the `[BLOCKER]` (a confirmed or split BLOCKER stays a BLOCKER). Never silently drop a `[BLOCKER]` on a weak/low-confidence refute.
 
 Survivors keep their (possibly downgraded) tier.
 
