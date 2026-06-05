@@ -138,51 +138,11 @@ bd show <task-id>
 
 ## Pre-Compact Resume Mode (`--pre-compact`)
 
-Run this right before `/compact` (or when a long session is about to be auto-summarized). Goal: ONE recovery-grade comment on the active task so a future you / another agent can fully reconstruct the working context after compaction — what is decided, where everything lives, and the exact next step. (Same shape as the resume note a review round produces.)
+Run this right before `/compact` (or when a long session is about to be auto-summarized). **Skip Step 3** (no type prompt) — delegate to the internal **pre-compact-note** skill, which writes the recovery-grade `## RESUME` snapshot to the active task. Single source of truth, shared with `/lets:end --pre-compact`, so the template never drifts:
 
-**Skip Step 3** (no type prompt). Gather the snapshot from the session + git, then write it as a single comment.
+`Skill(skill: "lets:pre-compact-note")`
 
-```bash
-git branch --show-current
-git log --oneline -5
-git status --short          # uncommitted / untracked
-```
-
-Write the snapshot to the active task (English; one continuous line per paragraph - no hard wrap):
-
-```bash
-bd comments add <task-id> "## RESUME {YYYY-MM-DD} - {short label}
-
-### Where things live
-- repo / branch: {branch} @ {short-sha}; key paths touched: {file:line, ...}
-- external sources: {PR #, links, other-project paths, index / recovery commands}
-
-### State
-- committed/merged: {...}; uncommitted/untracked: {git status}; frozen artifacts + SHAs: {...}
-
-### Decided (do NOT re-litigate)
-- {decision -> reasoning}
-- verified vs code: {claim -> file:line}
-
-### Remaining + NEXT STEP
-- {open items}
-- NEXT: {the single concrete next action + how to resume it}
-
-### Compaction
-- snapshot taken before /compact; resume with: bd show <task-id> + bd comments <task-id>"
-```
-
-**No active task (fallback) - never drop the snapshot.** If Step 1 found none, write the same RESUME block to a session file and tell the user where it landed:
-
-```bash
-LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-mkdir -p "$LETS_PROJECT_ROOT/.lets/sessions"
-BRANCH_SLUG=$(git branch --show-current | tr '/' '-')
-# Write the RESUME block (above) via the Write tool to:
-#   $LETS_PROJECT_ROOT/.lets/sessions/<YYYY-MM-DD-HHMM>-precompact-${BRANCH_SLUG}.md
-```
-
-Then run Step 6 (verify) and show the Output box.
+The skill gathers session + git state, writes the snapshot to the active task (the one from Step 1), and falls back to a `.lets/sessions/` file when there is no active task. Then run Step 6 (verify) and show the Output box.
 
 ## Output
 

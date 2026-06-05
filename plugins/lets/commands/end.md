@@ -1,6 +1,6 @@
 ---
-description: End work session - save progress, sync beads, create summary
-argument-hint: "[--fast]"
+description: End work session - save progress, sync beads, create summary. --pre-compact snapshots context before /compact WITHOUT ending the session.
+argument-hint: "[--fast | --pre-compact]"
 ---
 
 # Session End
@@ -10,6 +10,42 @@ End a work session properly. Save context for next session.
 **This is NOT task completion.** Use `/lets:done` to finish a task. `/lets:end` ends a SESSION.
 
 > **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
+
+## Pre-Compact Mode
+
+If `--pre-compact` (alias `--resume`) is provided, this is a **pre-compaction snapshot, NOT a session end**: save context so you can `/compact` and keep working in the same session. Do NOT run Steps 1-7, do NOT push, do NOT prompt about task status or finishing. Just snapshot and return.
+
+### Pre-Compact Close
+
+1. Write the recovery-grade `## RESUME` snapshot to the active task via the shared skill (same single source of truth as `/lets:note --pre-compact`):
+
+   `Skill(skill: "lets:pre-compact-note")`
+
+   The skill detects the active task, writes the snapshot, and falls back to a `.lets/sessions/` file when there is no active task.
+
+2. Also write the session summary file (session-level context for the next bootstrap) — same template as Step 5, but with a `-precompact-` slug to mark it as a mid-session snapshot:
+
+   ```bash
+   LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+   BRANCH=$(git branch --show-current); BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
+   mkdir -p "$LETS_PROJECT_ROOT/.lets/sessions"
+   SUMMARY_FILE="$LETS_PROJECT_ROOT/.lets/sessions/$(date +%Y-%m-%d-%H%M)-precompact-${BRANCH_SLUG}.md"
+   ```
+   Write the Step 5 summary template to `$SUMMARY_FILE`.
+
+3. Output the Pre-Compact Close block and STOP — no AskUserQuestion, no push, no `git checkout`. The session continues.
+
+### Pre-Compact Close Output
+
+```
+## Pre-Compact Snapshot
+
+Resume comment -> {task-id}  (or {session-file path} if no active task)
+Session summary -> .lets/sessions/{dated}-precompact-{branch}.md
+Branch: {branch}
+
+Safe to /compact now — same window continues. Resume context: bd show {task-id} + bd comments {task-id}
+```
 
 ## Fast Mode
 
