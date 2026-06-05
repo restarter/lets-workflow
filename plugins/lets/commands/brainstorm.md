@@ -31,23 +31,16 @@ AskUserQuestion(
 ```
 
 **Handle response:**
-- **Review backlog** -> set mode variables (Step R0), then Heavy Mode Flow
+- **Review backlog** -> Review Backlog Mode (below)
 - **Quick brainstorm** -> Step Q1
 - **Cleanup** -> Step C1
 - **Other** (free text) -> a specific topic to explore -> suggest `/lets:explore <topic>`
 
 ---
 
-## Heavy Mode Flow
+## Review Backlog Mode
 
-The flow for Review backlog mode. Step R0 sets its variables before entering this flow.
-
-**Mode variables** (set by Step R0 before entering flow):
-- `{MODE_NAME}`: "Review backlog"
-- `{EXPLORER_PROMPT}`: the explorer prompt (see Step R0)
-- `{AGENT_PROMPT_TEMPLATE}`: the prompt for brainstorm agents (see Step R0)
-- `{FORCED_AGENT}`: agent always included (pragmatist)
-- `{DIALOG_QUESTION}`: the dialog question text
+The one heavy mode: explorer scouts the project, parallel domain agents ideate over the backlog, results aggregate. (Quick brainstorm and Cleanup below are the light, no-agent modes.)
 
 ### Phase 1: Explorer - Gather Context
 
@@ -56,7 +49,70 @@ Launch explorer to build a context profile.
 ```
 Task(
   subagent_type="lets:explorer",
-  prompt="{EXPLORER_PROMPT}"
+  prompt="ultrathink
+
+BRAINSTORM SCOUT MODE. In this mode, your mapping role extends to surfacing signals and gaps - not just structure. Gather project context for a brainstorm session.
+
+PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
+
+GOAL: Build a Project State Profile for brainstorming. We need to understand what the project is, what work has been done, what's planned, and where gaps exist.
+
+AVAILABLE CONTEXT SOURCES (read what's relevant, skip what's not):
+
+1. BACKLOG STATE
+   Run: bd stats
+   Run: bd list --status=open -n 50
+   Run: bd list --status=in_progress
+   Run: bd list --status=done -n 20
+   Purpose: understand task distribution, priorities, what's active
+
+2. TASK DETAILS (selective - pick 5-10 most interesting tasks)
+   Run: bd show <task-id>
+   Run: bd comments <task-id>
+   Purpose: understand context, decisions, blockers on key tasks
+
+3. RECENT SESSION SUMMARIES
+   Read: .lets/sessions/*.md (most recent 3-5 files by name)
+   Purpose: what was worked on recently, what momentum exists
+
+4. CODEBASE SIGNALS
+   Grep for: TODO, FIXME, HACK, XXX across source files
+   Read: CLAUDE.md (project structure and architecture)
+   Purpose: understand technical debt signals and project shape
+
+5. RECENT GIT ACTIVITY
+   Run: git log --oneline -20
+   Run: git log --oneline --since='2 weeks ago' --format='%s'
+   Purpose: what areas are actively changing
+
+BUDGET: Be efficient. Read backlog first (sources 1-2), then decide which of sources 3-5 add value. If backlog is rich (50+ tasks with comments), you can skip session summaries. If backlog is sparse, lean more on git and codebase signals.
+
+Keep output concise - max ~500 words. This profile will be passed to multiple agents.
+
+OUTPUT FORMAT - Project State Profile:
+
+## Project State Profile
+
+### Project Shape
+{what this project is, tech stack, size - from CLAUDE.md}
+
+### Backlog Summary
+- Open: {N} tasks
+- In progress: {N}
+- Done recently: {N}
+- By area/label: {breakdown if labels exist}
+
+### Active Momentum
+{what's being worked on now, what sessions focused on recently}
+
+### Hot Areas
+{parts of codebase with most recent activity - files, modules}
+
+### Gaps & Signals
+- Missing coverage: {areas with no tasks but active code}
+- Stale tasks: {tasks open for a long time with no activity}
+- TODOs in code: {count and themes}
+- Recurring themes: {patterns across tasks/comments/sessions}"
 )
 ```
 
@@ -99,7 +155,7 @@ Scan the profile for signals and match to agents:
 | Many tasks, mixed priorities, scope questions | pragmatist |
 
 **Rules:**
-1. Always include `{FORCED_AGENT}` (pragmatist for Review backlog)
+1. Always include pragmatist (the forced agent for backlog review)
 2. Select agents matching signals found in profile
 3. More signals = more agents. No hard cap - include every agent that has a clear signal
 4. If only 1-2 signals matched, add architect + pragmatist for broader perspective
@@ -165,18 +221,47 @@ For each selected agent:
 ```
 Task(
   subagent_type="lets:{agent-name}",
-  prompt="{AGENT_PROMPT_TEMPLATE}"
+  prompt="ultrathink
+
+PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
+
+MODE: brainstorm (review backlog)
+
+Review the project's BACKLOG of tasks from your area of expertise. Surface gaps in WHAT'S BEING TRACKED: missing themes, priority imbalances, areas with no tasks but clear need from your domain.
+
+You are NOT reviewing code, counting duplications, finding stale files, or hunting bugs in source. The PROJECT STATE PROFILE below is your primary source. Use bd commands (bd show, bd comments) for task details. Code reads are allowed only as evidence for a backlog observation ("this critical area has no tasks tracking it"), never as primary investigation.
+
+PROJECT RULES (from CLAUDE.md):
+{CLAUDE.md summary, first 100 lines - architecture decisions and structure}
+
+PROJECT STATE PROFILE:
+{explorer output from Phase 1}
+
+INSTRUCTIONS:
+- Anchor on the BACKLOG STATE from the profile above (open/in-progress tasks, recent closures, gaps)
+- Generate 3-7 backlog-level insights from your domain lens: what tasks SHOULD exist but don't? what existing tasks need re-prioritization, scope changes, or to be split/closed?
+- Each insight must be backlog-actionable: not "improve testing" but "backlog has 0 tasks tracking auth flow regressions despite 4 recent auth changes, propose creating one"
+- Prioritize by impact (high/medium)
+- Connect to existing tasks: "task X could be extended to cover Y", "task A and B overlap, suggest merging"
+- If you reference code, frame as backlog evidence ("Pattern X exists in 5 files but no task tracks consolidation"), never as code review
+- Be opinionated: rank and recommend, don't just list
+
+OUTPUT FORMAT:
+
+## {Your Domain} Backlog Review
+
+### Missing from Backlog
+1. **{theme or task that should exist}** [Impact: high/medium]
+   {why this gap matters from your domain}
+   {suggested bd create command or task brief}
+
+### Existing Tasks Needing Adjustment
+- **{task-id}** ({title}): {what to change: bump priority, expand scope, split, deprioritize, close as obsolete, with reason}
+
+### Backlog Themes ({domain} lens)
+{1-2 observations about distribution, gaps, drift from project goals: what the backlog reveals about project priorities}"
 )
 ```
-
-The prompt template is set by Step R0. It has this structure:
-
-- ultrathink prefix
-- PROJECT_ROOT
-- `MODE: brainstorm`
-- Context profile from explorer (keep concise - pass summary, not raw data)
-- Instructions specific to the mode
-- Output format
 
 Agents define their own brainstorm focus in their `## Modes` section - no mandatory context table needed.
 
@@ -216,7 +301,7 @@ After all agents respond:
 ```
 AskUserQuestion(
   questions=[{
-    question: "{DIALOG_QUESTION}",
+    question: "What catches your eye?",
     header: "Brainstorm",
     options: [
       { label: "Explore an idea", description: "Dig deeper into a specific idea or insight" },
@@ -241,144 +326,13 @@ Dialog continues until user signals done.
 If active task:
 
 ```bash
-bd comments add <task-id> "Brainstorm ({MODE_NAME}): {N} ideas from {M} agents.
+bd comments add <task-id> "Brainstorm (review backlog): {N} ideas from {M} agents.
 Top ideas: {top 2-3 titles}
 Tasks created: {list or 'none'}"
 ```
 
 If exploration produced a clear task idea but none created, ask:
 "Want me to create a task for this?" (plain text, not in LETS box).
-
----
-
-## Review Backlog Mode
-
-### Step R0: Set Mode Variables
-
-```
-MODE_NAME = "review backlog"
-FORCED_AGENT = pragmatist
-DIALOG_QUESTION = "What catches your eye?"
-```
-
-**EXPLORER_PROMPT:**
-
-```
-"ultrathink
-
-BRAINSTORM SCOUT MODE. In this mode, your mapping role extends to surfacing signals and gaps - not just structure. Gather project context for a brainstorm session.
-
-PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
-
-GOAL: Build a Project State Profile for brainstorming. We need to understand
-what the project is, what work has been done, what's planned, and where gaps exist.
-
-AVAILABLE CONTEXT SOURCES (read what's relevant, skip what's not):
-
-1. BACKLOG STATE
-   Run: bd stats
-   Run: bd list --status=open -n 50
-   Run: bd list --status=in_progress
-   Run: bd list --status=done -n 20
-   Purpose: understand task distribution, priorities, what's active
-
-2. TASK DETAILS (selective - pick 5-10 most interesting tasks)
-   Run: bd show <task-id>
-   Run: bd comments <task-id>
-   Purpose: understand context, decisions, blockers on key tasks
-
-3. RECENT SESSION SUMMARIES
-   Read: .lets/sessions/*.md (most recent 3-5 files by name)
-   Purpose: what was worked on recently, what momentum exists
-
-4. CODEBASE SIGNALS
-   Grep for: TODO, FIXME, HACK, XXX across source files
-   Read: CLAUDE.md (project structure and architecture)
-   Purpose: understand technical debt signals and project shape
-
-5. RECENT GIT ACTIVITY
-   Run: git log --oneline -20
-   Run: git log --oneline --since='2 weeks ago' --format='%s'
-   Purpose: what areas are actively changing
-
-BUDGET: Be efficient. Read backlog first (sources 1-2), then decide which
-of sources 3-5 add value. If backlog is rich (50+ tasks with comments),
-you can skip session summaries. If backlog is sparse, lean more on git
-and codebase signals.
-
-Keep output concise - max ~500 words. This profile will be passed to multiple agents.
-
-OUTPUT FORMAT - Project State Profile:
-
-## Project State Profile
-
-### Project Shape
-{what this project is, tech stack, size - from CLAUDE.md}
-
-### Backlog Summary
-- Open: {N} tasks
-- In progress: {N}
-- Done recently: {N}
-- By area/label: {breakdown if labels exist}
-
-### Active Momentum
-{what's being worked on now, what sessions focused on recently}
-
-### Hot Areas
-{parts of codebase with most recent activity - files, modules}
-
-### Gaps & Signals
-- Missing coverage: {areas with no tasks but active code}
-- Stale tasks: {tasks open for a long time with no activity}
-- TODOs in code: {count and themes}
-- Recurring themes: {patterns across tasks/comments/sessions}"
-```
-
-**AGENT_PROMPT_TEMPLATE:**
-
-```
-"ultrathink
-
-PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
-
-MODE: brainstorm (review backlog)
-
-Review the project's BACKLOG of tasks from your area of expertise. Surface gaps in WHAT'S BEING TRACKED: missing themes, priority imbalances, areas with no tasks but clear need from your domain.
-
-You are NOT reviewing code, counting duplications, finding stale files, or hunting bugs in source. The PROJECT STATE PROFILE below is your primary source. Use bd commands (bd show, bd comments) for task details. Code reads are allowed only as evidence for a backlog observation ("this critical area has no tasks tracking it"), never as primary investigation.
-
-PROJECT RULES (from CLAUDE.md):
-{CLAUDE.md summary, first 100 lines - architecture decisions and structure}
-
-PROJECT STATE PROFILE:
-{explorer output from Phase 1}
-
-INSTRUCTIONS:
-- Anchor on the BACKLOG STATE from the profile above (open/in-progress tasks, recent closures, gaps)
-- Generate 3-7 backlog-level insights from your domain lens: what tasks SHOULD exist but don't? what existing tasks need re-prioritization, scope changes, or to be split/closed?
-- Each insight must be backlog-actionable: not "improve testing" but "backlog has 0 tasks tracking auth flow regressions despite 4 recent auth changes, propose creating one"
-- Prioritize by impact (high/medium)
-- Connect to existing tasks: "task X could be extended to cover Y", "task A and B overlap, suggest merging"
-- If you reference code, frame as backlog evidence ("Pattern X exists in 5 files but no task tracks consolidation"), never as code review
-- Be opinionated: rank and recommend, don't just list
-
-OUTPUT FORMAT:
-
-## {Your Domain} Backlog Review
-
-### Missing from Backlog
-1. **{theme or task that should exist}** [Impact: high/medium]
-   {why this gap matters from your domain}
-   {suggested bd create command or task brief}
-
-### Existing Tasks Needing Adjustment
-- **{task-id}** ({title}): {what to change: bump priority, expand scope, split, deprioritize, close as obsolete, with reason}
-
-### Backlog Themes ({domain} lens)
-{1-2 observations about distribution, gaps, drift from project goals: what the backlog reveals about project priorities}"
-```
-
-Then enter Heavy Mode Flow (Phase 1).
 
 ---
 

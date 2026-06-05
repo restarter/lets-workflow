@@ -147,7 +147,8 @@ function formatWebBrief(w) {
 
 // ── PROMPTS (built from args) ──
 function ideatePrompt(webBrief) {
-  // explore_idea ideation prompt (mirrors brainstorm.md Explore-idea AGENT_PROMPT_TEMPLATE, schema-ified).
+  // explore_idea ideation prompt (schema-ified mirror of explore.md Step 4's ideator prompt; originally
+  // extracted from brainstorm's now-removed explore-idea mode).
   return `ultrathink
 
 PROJECT_ROOT: ${projectRoot}. Do NOT read or search files outside this directory.
