@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **`/lets:plan-workflow` — autonomous planning Dynamic Workflow, PREVIEW (lets-y3aic).** A standalone preview command that runs whole-command planning off-context: you give a goal + a rubric up front, and the workflow explores, proposes approaches, architects each, judges them against your rubric, evaluates the winner, and writes a plan — you approve at the end (steer-by-rubric, not gate-each-step). Shipped standalone to dogfood across projects before it folds into native `/lets:plan --workflow` (lets-jsw00); experimental, expect rough edges. The interactive native `/lets:plan` is untouched.
+
 ## [0.6.0] - 2026-06-05
 
 ### Added
