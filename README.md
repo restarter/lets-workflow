@@ -106,7 +106,7 @@ Then, inside the Claude Code session:
 | `/lets:commit` | Commit with review and conventional commit format |
 | `/lets:done` | Finish task - create PR (GitHub mode) or merge locally |
 | `/lets:status` | Task overview and project status |
-| `/lets:note` | Add note to active task |
+| `/lets:note` | Add note to active task (`--pre-compact` snapshots the session before /compact) |
 
 ### Planning & Execution
 
