@@ -494,6 +494,15 @@ var tips = []string{
 	"/lets:review --file <path> audits an existing file's quality.",
 	"bd search <keywords> before creating a task — avoid duplicates.",
 	"Pushed your branch? /lets:done already opened the PR for you.",
+	"Big review? /lets:review --workflow fans the experts out off your context window.",
+	"/lets:review --workflow has skeptic agents refute each finding before you see it.",
+	"Torn between options? /lets:opinion --workflow adds an adversarial challenge round.",
+	"/lets:explore --workflow runs web-research -> ideate -> cluster as a background fan-out.",
+	"--workflow (review/opinion/explore) moves the heavy fan-out off-context — same result, lighter window.",
+	"Scoping a new area? /lets:explore scouts the codebase + current community standards.",
+	"/lets:explore --no-web keeps it local — skip the web-research stage.",
+	"Statusline too busy? --no-task / --no-dir / --no-tip trim it (env LETS_STATUSLINE_*=off too).",
+	"About to /compact a long session? /lets:note --pre-compact snapshots it to the task first.",
 }
 
 // tipOfMoment cycles tips sequentially, advancing one step every tipPeriod
