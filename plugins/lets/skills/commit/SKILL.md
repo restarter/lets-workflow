@@ -69,11 +69,27 @@ Handle response:
 - **Cancel** -> stop, show LETS box with `/lets:check`
 - **Other** (free text) -> treat as edited commit message, proceed to Step 5
 
-### Step 5: Commit
+### Step 5: Stage (context-aware) & Commit
+
+**NEVER `git add -A` or `git add .`** — they sweep in unrelated changes, untracked cruft, or secrets (`.env`, keys), and clobber a curated staged set. Stage only the reviewed files (see `.claude/rules/git.md`).
+
+Already-staged set wins — if the orchestrator curated files (here or in Step 3), commit exactly those:
 
 ```bash
-git add -A
-git status  # Verify staging
+git diff --staged --quiet && echo "NOTHING_STAGED" || echo "STAGED_OK"
+```
+
+- **`STAGED_OK`** (files already staged) → do NOT run `git add`; commit the existing staged set as-is.
+- **`NOTHING_STAGED`** → stage the specific files reviewed in Step 3 **by name** (never `-A` / `.`):
+
+  ```bash
+  git add <reviewed-file-1> <reviewed-file-2>   # named files only
+  ```
+
+Then commit:
+
+```bash
+git status  # Verify the staged set is exactly what you intend
 git commit -m "<type>($TASK_ID): <description>
 
 Task: $TASK_ID"
