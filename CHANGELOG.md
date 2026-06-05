@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-06-05
+
 ### Added
 - **`/lets:explore` — topic-exploration command + `--workflow` (lets-odo4o).** Extracted from `/lets:brainstorm` into its own command: a scout gathers project context, an always-on Web Research stage pulls CURRENT community standards via WebSearch/WebFetch, then parallel domain agents surface insights, open questions, and approaches grounded in that brief. `--workflow` runs the fan-out off-context via a Dynamic Workflow (web research → ideate → semantic cluster); `--no-web` skips the web stage; an off-project guard handles topics unrelated to the repo. The cluster stage semantically merges convergent ideas across agents (real multi-agent attribution, title-only fallback). `/lets:brainstorm` is now backlog-only (3 modes).
 - **`/lets:review --workflow` + adversarial finding-verification (lets-odo4o).** Opt-in off-context Dynamic Workflow variant; every `[BLOCKER]`/`[SUGGESTION]` is refuted by `lets:skeptic` agents before being reported (asymmetric drop rule). Verification runs in both standard and `--workflow` modes — `--workflow` is a pure off-context performance lever.
@@ -422,7 +424,8 @@ Initial release with expert agents team.
 - SessionStart hook injecting workflow rules
 - Plugin structure: commands, agents, hooks
 
-[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.5.5...HEAD
+[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/restarter/lets-workflow/compare/v0.5.5...v0.6.0
 [0.5.5]: https://github.com/restarter/lets-workflow/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/restarter/lets-workflow/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/restarter/lets-workflow/compare/v0.5.2...v0.5.3
