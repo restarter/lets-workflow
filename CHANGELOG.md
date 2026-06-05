@@ -11,6 +11,9 @@
 - **Statusline tips now surface the new features (lets-h63lo).** The rotating bottom-line hints in `lets statusline` gained coverage for `--workflow` (off-context fan-out + skeptic finding-verification on `/lets:review` / `/lets:opinion` / `/lets:explore`), `/lets:explore` and its `--no-web`, the `--no-task` / `--no-dir` / `--no-tip` trim flags, and `/lets:note --pre-compact`.
 - **`/lets:end --pre-compact` + shared `pre-compact-note` skill (lets-jvbft).** `/lets:end` gains a `--pre-compact` (alias `--resume`) mode: a pre-compaction snapshot that writes the recovery-grade `## RESUME` comment to the active task plus a session-summary file, then returns WITHOUT ending the session (no push, no task-status prompt) so you can `/compact` and keep working in the same window. The resume-snapshot step is extracted into a shared internal `pre-compact-note` skill that `/lets:note --pre-compact` now delegates to as well — single source of truth, no template drift.
 
+### Fixed
+- **Commit skill stages context-aware (lets-vdbhz).** `/lets:commit` no longer runs a blanket `git add -A`, which could sweep in unrelated changes, untracked cruft, or secrets (`.env`, keys) and clobber a curated staged set. Step 5 now respects an already-staged set as-is, otherwise stages the reviewed files by name — consistent with `.claude/rules/git.md`.
+
 ## [0.5.5] - 2026-05-27
 
 ### Added
