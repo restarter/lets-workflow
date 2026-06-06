@@ -42,6 +42,8 @@ AskUserQuestion(
 
 Create an interactive worktree. The Go subcommand owns the guard, name validation, `.gitignore` ensure, `git worktree add`, symlinks (`.lets/`, `.beads/.env`), verify, and rollback. The skill drives the user choices.
 
+Optional launcher override on the argument: `--cmux` / `--no-cmux` force the launcher for this run (otherwise `$LETS_LAUNCHER` decides — see Step C3.5).
+
 ### Step C1: Get Name
 
 If name not provided via argument, use **AskUserQuestion**:
@@ -92,14 +94,37 @@ AskUserQuestion(
 )
 ```
 
-**Stay on current branch:** Show the new-terminal command for the worktree.
+**Stay on current branch:** open the worktree elsewhere via the launcher (Step C3.5).
 **Switch to worktree:** Stay in worktree dir, then suggest `/lets:start`.
+
+### Step C3.5: Launcher (Stay-on-current-branch only)
+
+Decide how to open the worktree. Resolve in this order:
+
+1. Explicit override on the command argument: `--cmux` forces cmux, `--no-cmux` forces terminal.
+2. Else `$LETS_LAUNCHER` from injected LETS Config (`terminal` default | `cmux`).
+
+**terminal** (default / `--no-cmux`): print the new-terminal command (Step C4 "terminal" block) — unchanged behavior.
+
+**cmux** (`$LETS_LAUNCHER=cmux` or `--cmux`): derive a short readable workspace **slug** from the task title — lowercase, dash-separated, 2-4 distinctive words, <~30 chars — the SAME rule as the `/rename` slug in `/lets:start` Step 7 (e.g. **Integrate cmux as parallel-worktree launcher** → `cmux-launcher`). Then:
+
+```bash
+lets cmux open "{worktree.path}" --name "{slug}" --command "claude '/lets:start {task-id}'" --json
+```
+
+**Taskless worktree** (custom name, no beads task): drop the `/lets:start {task-id}` argument — use `--command "claude"` and derive `{slug}` from the worktree name. Only emit `/lets:start {task-id}` when a task id is actually known.
+
+Parse the `launch` block:
+- `launched=true` → "Opened cmux workspace **{workspace_name}**" (Step C4 "cmux" block).
+- `launched=false` → render `fallback_command` with a one-line note naming `reason` (cmux not found / not macOS / cmux error) — same as the terminal block but prefixed with the reason.
+
+> **Keep in sync:** the slug rule duplicates `/lets:start` Step 7; the launched/fallback contract mirrors `cmuxcmd.Open` (`cli/internal/cmuxcmd/open.go`). The Go layer never hard-fails — always render whatever `launch` reports.
 
 ### Step C4: Output
 
 Use the JSON envelope's `worktree` block (`path`, `branch`, `branch_mode`, `lets_symlinked`, `beads_symlinked`).
 
-**If staying on current branch:**
+**If staying on current branch (terminal launcher):**
 
 ```
 Worktree created: {worktree.path}
@@ -117,6 +142,22 @@ cd {worktree.path} && claude
 │  List?      /lets:worktree list │
 └─────────────────────────────────┘
 ```
+
+**If staying on current branch (cmux launcher, `launched=true`):**
+
+```
+Worktree created: {worktree.path}
+Branch: {worktree.branch} ({worktree.branch_mode})
+Symlinks: lets={worktree.lets_symlinked} beads={worktree.beads_symlinked}
+
+Opened cmux workspace {launch.workspace_name} → it's running `claude '/lets:start {task-id}'`.
+
+┌─ LETS ──────────────────────────┐
+│  List?  /lets:worktree list     │
+└─────────────────────────────────┘
+```
+
+On `launched=false` (cmux absent / not macOS / cmux error), fall back to the terminal block above, prefixed with a one-line `{launch.reason}` note and the `{launch.fallback_command}`.
 
 Recommended scripted idiom (e.g. tmux composition):
 
