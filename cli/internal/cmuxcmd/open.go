@@ -1,0 +1,98 @@
+//go:build unix
+
+package cmuxcmd
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"os/exec"
+	"runtime"
+	"strings"
+)
+
+// OpenOptions configures the open flow.
+type OpenOptions struct {
+	Path    string // directory to open (the worktree path); required, must exist
+	Name    string // workspace label (a short readable slug); optional
+	Command string // command cmux runs in the workspace, e.g. claude '/lets:start <id>'
+	Focus   bool   // focus the new workspace
+}
+
+// Overridable in tests.
+var (
+	lookCmux    = func() (string, bool) { p, err := exec.LookPath("cmux"); return p, err == nil }
+	runtimeGOOS = runtime.GOOS
+)
+
+// Open opens opts.Path in a cmux workspace. Never hard-fails on cmux
+// unavailability: returns OK=true with Launch.Launched=false + FallbackCommand
+// when cmux is absent, the host is not macOS, or cmux itself errors. Only a
+// missing/invalid Path is a hard error (ExitPathInvalid).
+func Open(ctx context.Context, opts OpenOptions) (*OpenResult, error) {
+	result := &OpenResult{Envelope: Envelope{SchemaVersion: SchemaVersion, Subcommand: "open", Steps: []Step{}}}
+	addStep := func(status, msg string) { result.Steps = append(result.Steps, Step{Status: status, Message: msg}) }
+	fallbackCmd := fmt.Sprintf("cd %s && claude", shellQuote(opts.Path))
+
+	// Hard error: missing/invalid path.
+	if opts.Path == "" {
+		e := &Error{Code: ExitPathInvalid, Kind: "path_missing", Message: "--path is required"}
+		result.OK = false
+		result.Error = &ErrorInfo{Kind: e.Kind, Message: e.Message}
+		return result, e
+	}
+	if fi, err := os.Stat(opts.Path); err != nil || !fi.IsDir() {
+		e := &Error{Code: ExitPathInvalid, Kind: "path_invalid", Message: fmt.Sprintf("not a directory: %s", opts.Path)}
+		result.OK = false
+		result.Error = &ErrorInfo{Kind: e.Kind, Message: e.Message}
+		return result, e
+	}
+
+	// Graceful fallback: not macOS.
+	if runtimeGOOS != "darwin" {
+		result.OK = true
+		result.Launch = &LaunchInfo{Launched: false, Path: opts.Path, Reason: "not_macos", FallbackCommand: fallbackCmd}
+		addStep(StepSkip, "cmux launcher is macOS-only; falling back to manual terminal")
+		return result, nil
+	}
+
+	// Graceful fallback: cmux not installed.
+	bin, ok := lookCmux()
+	if !ok {
+		result.OK = true
+		result.Launch = &LaunchInfo{Launched: false, Path: opts.Path, Reason: "cmux_not_found", FallbackCommand: fallbackCmd}
+		addStep(StepSkip, "cmux not found on PATH; falling back to manual terminal")
+		return result, nil
+	}
+
+	// Canonical form: cmux workspace create --cwd <path> [--name] [--command] [--focus].
+	args := []string{"workspace", "create", "--cwd", opts.Path}
+	if opts.Name != "" {
+		args = append(args, "--name", opts.Name)
+	}
+	if opts.Command != "" {
+		args = append(args, "--command", opts.Command)
+	}
+	if opts.Focus { // only when explicitly requested; `workspace create` --focus support is unverified - off by default
+		args = append(args, "--focus", "true")
+	}
+	cmd := exec.CommandContext(ctx, bin, args...)
+	cmd.Env = append(os.Environ(), "CMUX_QUIET=1")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		// cmux present but errored: still optional - fall back, surface reason.
+		result.OK = true
+		result.Launch = &LaunchInfo{Launched: false, Path: opts.Path, Reason: "cmux_error", FallbackCommand: fallbackCmd}
+		addStep(StepWarn, fmt.Sprintf("cmux workspace create failed: %s; falling back to manual terminal", strings.TrimSpace(string(out))))
+		return result, nil
+	}
+
+	result.OK = true
+	result.Launch = &LaunchInfo{Launched: true, WorkspaceName: opts.Name, Path: opts.Path, Command: opts.Command}
+	addStep(StepOK, "cmux workspace created")
+	return result, nil
+}
+
+// shellQuote single-quotes a path for the fallback command string.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
