@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-06-06
+
 ### Added
 - **cmux as an optional macOS worktree launcher (lets-3jutw).** A new `LETS_LAUNCHER` config key (`terminal` default | `cmux`, asked by `/lets:init`) lets `/lets:worktree create` open the new worktree session inside a [cmux](https://github.com/manaflow-ai/cmux) workspace running `claude '/lets:start <id>'` — one command instead of opening a second terminal — with a readable workspace slug derived from the task title. Backed by a `lets cmux` Go subcommand (`open` + `rename`, `//go:build unix`, Windows stub) that wraps `cmux workspace create/list/rename`. **Strictly optional and never hard-fails:** it detects cmux on PATH + macOS and silently falls back to the `cd … && claude` terminal flow when absent, so non-macOS / no-cmux setups are unchanged. `open` carries a duplicate-session guard (refuses a second workspace for a worktree that already has one — `--force` overrides), and `lets cmux rename` lets a session relabel its own tab to disambiguate concurrent sessions. Override per-run with `/lets:worktree create <name> --cmux` / `--no-cmux`.
 - **`/lets:backlog` — backlog review + cleanup command (lets-9r4at).** Extracted from `/lets:brainstorm`: a two-mode command (`/lets:backlog review` | `/lets:backlog cleanup`, or a menu when called bare). *Review* launches an explorer scout + parallel domain agents that ideate over the backlog and aggregate multi-perspective insights (the former brainstorm Heavy mode, moved verbatim); *Cleanup* is fast interactive triage of stale/duplicate/orphan/unassigned tasks (no agents). Continues the decomposition started when `/lets:explore` was split out for topic ideation.
@@ -444,7 +446,8 @@ Initial release with expert agents team.
 - SessionStart hook injecting workflow rules
 - Plugin structure: commands, agents, hooks
 
-[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/restarter/lets-workflow/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/restarter/lets-workflow/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/restarter/lets-workflow/compare/v0.5.5...v0.6.0
 [0.5.5]: https://github.com/restarter/lets-workflow/compare/v0.5.4...v0.5.5
