@@ -17,12 +17,21 @@ type OpenOptions struct {
 	Name    string // workspace label (a short readable slug); optional
 	Command string // command cmux runs in the workspace, e.g. claude '/lets:start <id>'
 	Focus   bool   // focus the new workspace
+	Force   bool   // open even if a workspace already targets Path (skip the duplicate-session guard)
 }
 
 // Overridable in tests.
 var (
 	lookCmux    = func() (string, bool) { p, err := exec.LookPath("cmux"); return p, err == nil }
 	runtimeGOOS = runtime.GOOS
+
+	// createWorkspaceRaw runs `cmux workspace create ...`. Returns combined
+	// output so a failure message can be surfaced in the fallback.
+	createWorkspaceRaw = func(ctx context.Context, bin string, args []string) ([]byte, error) {
+		cmd := exec.CommandContext(ctx, bin, args...)
+		cmd.Env = append(os.Environ(), "CMUX_QUIET=1")
+		return cmd.CombinedOutput()
+	}
 )
 
 // Open opens opts.Path in a cmux workspace. Never hard-fails on cmux
@@ -65,6 +74,28 @@ func Open(ctx context.Context, opts OpenOptions) (*OpenResult, error) {
 		return result, nil
 	}
 
+	// Duplicate-session guard: one live session per worktree. If a workspace
+	// already targets this path, refuse to spawn a second (unless --force) - this
+	// is the cmux-launcher slice of the spawner-concurrency class. A list failure
+	// is non-fatal: fall through and create (best-effort guard).
+	if !opts.Force {
+		if ws, lerr := listWorkspaces(ctx, bin); lerr == nil {
+			if existing := findByDir(ws, opts.Path); existing != nil {
+				result.OK = true
+				result.Launch = &LaunchInfo{
+					Launched:        false,
+					Path:            opts.Path,
+					Reason:          "already_open",
+					ExistingRef:     existing.Ref,
+					ExistingTitle:   existing.Title,
+					FallbackCommand: fallbackCmd,
+				}
+				addStep(StepWarn, fmt.Sprintf("a cmux workspace (%s %q) already targets %s; not opening a duplicate (use --force to override)", existing.Ref, existing.Title, opts.Path))
+				return result, nil
+			}
+		}
+	}
+
 	// Canonical form: cmux workspace create --cwd <path> [--name] [--command] [--focus].
 	args := []string{"workspace", "create", "--cwd", opts.Path}
 	if opts.Name != "" {
@@ -76,9 +107,7 @@ func Open(ctx context.Context, opts OpenOptions) (*OpenResult, error) {
 	if opts.Focus { // only when explicitly requested; `workspace create` --focus support is unverified - off by default
 		args = append(args, "--focus", "true")
 	}
-	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Env = append(os.Environ(), "CMUX_QUIET=1")
-	if out, err := cmd.CombinedOutput(); err != nil {
+	if out, err := createWorkspaceRaw(ctx, bin, args); err != nil {
 		// cmux present but errored: still optional - fall back, surface reason.
 		result.OK = true
 		result.Launch = &LaunchInfo{Launched: false, Path: opts.Path, Reason: "cmux_error", FallbackCommand: fallbackCmd}

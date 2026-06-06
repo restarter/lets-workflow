@@ -20,13 +20,14 @@ func NewCmuxCmd() *cobra.Command {
 		SilenceErrors: true,
 	}
 	root.AddCommand(newCmuxOpenCmd())
+	root.AddCommand(newCmuxRenameCmd())
 	return root
 }
 
 func newCmuxOpenCmd() *cobra.Command {
 	var (
-		name, command         string
-		focus, jsonOut, quiet bool
+		name, command                string
+		focus, force, jsonOut, quiet bool
 	)
 	cmd := &cobra.Command{
 		Use:           "open <path>",
@@ -40,6 +41,7 @@ func newCmuxOpenCmd() *cobra.Command {
 				Name:    name,
 				Command: command,
 				Focus:   focus,
+				Force:   force,
 			})
 			jsonBytes, _ := json.MarshalIndent(res, "", "  ")
 			if jsonOut {
@@ -53,6 +55,41 @@ func newCmuxOpenCmd() *cobra.Command {
 	cmd.Flags().StringVar(&name, "name", "", "Workspace label (short readable slug)")
 	cmd.Flags().StringVar(&command, "command", "", "Command to run in the workspace (e.g. claude '/lets:start <id>')")
 	cmd.Flags().BoolVar(&focus, "focus", false, "Focus the new workspace (OFF by default - `cmux workspace create` may not accept --focus; verify before enabling)")
+	cmd.Flags().BoolVar(&force, "force", false, "Open even if a cmux workspace already targets this path (skip the duplicate-session guard)")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
+	cmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Suppress human-readable output")
+	return cmd
+}
+
+func newCmuxRenameCmd() *cobra.Command {
+	var (
+		title, ref, cwd string
+		jsonOut, quiet  bool
+	)
+	cmd := &cobra.Command{
+		Use:           "rename --title <new> [--ref <ref> | --cwd <path>]",
+		Short:         "Rename a cmux workspace tab label (resolves the active workspace, or by --cwd / --ref)",
+		Args:          cobra.NoArgs,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			res, runErr := cmuxcmd.Rename(cmd.Context(), cmuxcmd.RenameOptions{
+				Title: title,
+				Ref:   ref,
+				Cwd:   cwd,
+			})
+			jsonBytes, _ := json.MarshalIndent(res, "", "  ")
+			if jsonOut {
+				fmt.Fprintln(cmd.OutOrStdout(), string(jsonBytes))
+			} else if !quiet {
+				cmuxcmd.RenderRename(cmd.OutOrStdout(), res)
+			}
+			return runErr
+		},
+	}
+	cmd.Flags().StringVar(&title, "title", "", "New workspace title (required)")
+	cmd.Flags().StringVar(&ref, "ref", "", "Explicit workspace ref/uuid/index (else resolve by --cwd or the active workspace)")
+	cmd.Flags().StringVar(&cwd, "cwd", "", "Resolve the workspace by current_directory (else use the active workspace)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
 	cmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Suppress human-readable output")
 	return cmd

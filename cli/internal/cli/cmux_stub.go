@@ -21,12 +21,17 @@ func NewCmuxCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(&cobra.Command{
-		Use:           "open <path>",
-		Short:         "Open in cmux (not supported on this platform)",
-		SilenceUsage:  true,
-		SilenceErrors: true,
-		RunE:          func(_ *cobra.Command, _ []string) error { return errCmuxUnsupported },
-	})
+	for _, use := range []struct{ name, short string }{
+		{"open <path>", "Open in cmux (not supported on this platform)"},
+		{"rename", "Rename a cmux workspace (not supported on this platform)"},
+	} {
+		root.AddCommand(&cobra.Command{
+			Use:           use.name,
+			Short:         use.short,
+			SilenceUsage:  true,
+			SilenceErrors: true,
+			RunE:          func(_ *cobra.Command, _ []string) error { return errCmuxUnsupported },
+		})
+	}
 	return root
 }

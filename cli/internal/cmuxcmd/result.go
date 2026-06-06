@@ -23,8 +23,9 @@ type ErrorInfo struct {
 }
 
 // LaunchInfo is the outcome of an open attempt. Launched=false is NOT an
-// error - it means cmux was unavailable (or errored) and the caller should
-// render FallbackCommand. Reason: not_macos | cmux_not_found | cmux_error.
+// error - it means cmux was unavailable/errored OR a workspace already targets
+// this path; the caller renders FallbackCommand (or points at the existing
+// workspace). Reason: not_macos | cmux_not_found | cmux_error | already_open.
 type LaunchInfo struct {
 	Launched        bool   `json:"launched"`
 	WorkspaceName   string `json:"workspace_name,omitempty"`
@@ -32,6 +33,20 @@ type LaunchInfo struct {
 	Command         string `json:"command,omitempty"`
 	Reason          string `json:"reason,omitempty"`
 	FallbackCommand string `json:"fallback_command,omitempty"`
+	// Set when Reason == "already_open": the workspace already bound to Path.
+	ExistingRef   string `json:"existing_ref,omitempty"`
+	ExistingTitle string `json:"existing_title,omitempty"`
+}
+
+// RenameInfo is the outcome of a rename attempt. Renamed=false is NOT an error
+// when Reason is set (not_macos | cmux_not_found | workspace_not_found |
+// cmux_error) - cmux is optional, so the caller degrades quietly.
+type RenameInfo struct {
+	Renamed  bool   `json:"renamed"`
+	Ref      string `json:"ref,omitempty"`
+	Title    string `json:"title,omitempty"`
+	OldTitle string `json:"old_title,omitempty"`
+	Reason   string `json:"reason,omitempty"`
 }
 
 // Envelope is the common shape across all cmux subcommand results.
@@ -59,4 +74,10 @@ func NewErrorEnvelope(subcommand, kind, message string) Envelope {
 type OpenResult struct {
 	Envelope
 	Launch *LaunchInfo `json:"launch,omitempty"`
+}
+
+// RenameResult is the rename-subcommand envelope.
+type RenameResult struct {
+	Envelope
+	Rename *RenameInfo `json:"rename,omitempty"`
 }
