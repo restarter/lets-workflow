@@ -22,7 +22,7 @@ Claude Code is powerful, but without structure it drifts - forgets context betwe
 **You don't just chat with AI. You run a process** — `/lets:*` commands and 14 expert agents cover the whole development cycle, every change is reviewed by the right specialists, and every decision is made deliberately, with you in the loop.
 
 - **A complete workflow, not a chat box.** One loop from start to ship — restore context and pick a task, plan the work, build it, review it, open a PR, close the task. The plugin keeps Claude on the rails the whole way; nothing falls through the cracks.
-- **Plan before you build.** Brainstorm ideas (4 modes), design the architecture with real codebase exploration and expert review, then execute step by step behind approval gates. Choices are made on purpose, not improvised.
+- **Plan before you build.** Brainstorm and explore ideas, review and clean up the backlog, design the architecture with real codebase exploration and expert review, then execute step by step behind approval gates. Choices are made on purpose, not improvised.
 - **Every change reviewed by the right experts.** 14 specialized agents select themselves based on what changed - security for auth code, database for migrations, architect for structure. Findings come tiered by severity, so you act on what matters. Plus an *actor* agent — point it at a senior iOS dev's profile, a UX designer's, anyone — and get their take.
 - **You decide, always.** Commit, push, PR, merge - every state-changing step waits for your "go". The AI proposes and explains its reasoning; it never silently switches approach. Transparency by design.
 - **Context that survives.** Tasks, decisions, and discovery notes live in [beads](https://github.com/steveyegge/beads) and outlast conversation compaction and new sessions - pick up exactly where you left off.
@@ -112,7 +112,8 @@ Then, inside the Claude Code session:
 
 | Command | Description |
 |---------|-------------|
-| `/lets:brainstorm` | Interactive backlog ideation - backlog review, quick brainstorm, cleanup |
+| `/lets:brainstorm` | Quick interactive ideation on a topic - fast context scan, no agents |
+| `/lets:backlog` | Backlog review (multi-agent) + interactive cleanup triage (Review `--workflow` = off-context) |
 | `/lets:explore` | Explore a topic from multiple expert angles - scout, web research, agent fan-out (`--workflow` = off-context) |
 | `/lets:plan` | Structured planning - explore codebase, design architecture, write plan (`--fast` = orchestrator-only, no subagents) |
 | `/lets:execute` | Execute plan from `/lets:plan` via native plan mode |
@@ -140,7 +141,7 @@ Then, inside the Claude Code session:
 
 → Full docs: [docs/agents.md](docs/agents.md)
 
-LETS ships **14 specialized agents**. You never pick them by hand — the commands that use agents (`/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:brainstorm`, `/lets:team`) look at what you're doing and bring in only the ones that fit.
+LETS ships **14 specialized agents**. You never pick them by hand — the commands that use agents (`/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:backlog`, `/lets:team`) look at what you're doing and bring in only the ones that fit.
 
 | Agent | Expertise |
 |-------|-----------|
@@ -194,7 +195,8 @@ A LETS session runs a loop: start, work, commit, finish.
 │  /lets:review    Full multi-agent code review (~2-3 min)                  │
 │                                                                           │
 ├─ You plan, Claude builds ─────────────────────────────────────────────────┤
-│  /lets:brainstorm  Ideation: backlog review, quick brainstorm, cleanup    │
+│  /lets:brainstorm  Quick ideation on a topic - fast, no agents            │
+│  /lets:backlog     Backlog review (multi-agent) + cleanup triage          │
 │  /lets:explore     Think through a topic - web-grounded, multi-expert     │
 │  /lets:plan        Design how to build it - codebase exploration, arch    │
 │  /lets:execute     Claude implements the plan with your approval gates    │
@@ -215,10 +217,9 @@ A LETS session runs a loop: start, work, commit, finish.
 
 > **Think** → **Design** → **Build**
 
-**Brainstorm** (`/lets:brainstorm`) - 3 modes for working the backlog:
-- *Review backlog* - agents analyze your task list, find patterns, suggest priorities
-- *Quick brainstorm* - fast ideation on a topic
-- *Cleanup* - find stale tasks, broken dependencies, forgotten work
+**Brainstorm** (`/lets:brainstorm`) - fast interactive ideation on a topic: a quick context scan (no agents), then a direct conversation. For a specific topic deep-dive, use `/lets:explore`.
+
+**Backlog** (`/lets:backlog`) - manage the task backlog in two modes: *Review backlog* (agents analyze your task list, find patterns, suggest priorities) and *Cleanup* (find stale tasks, broken dependencies, forgotten work). `/lets:backlog review` and `/lets:backlog cleanup` skip the menu. `/lets:backlog review --workflow` runs the Review fan-out off-context.
 
 **Explore** (`/lets:explore`) - think through a specific topic or idea from multiple expert angles. A scout gathers project context, a web-research pass pulls current community standards, then parallel domain agents surface insights, open questions, and approaches. `--workflow` runs the fan-out off-context.
 
@@ -370,7 +371,7 @@ The README is the tour; **[docs/](docs/)** is the manual.
 | [code-review.md](docs/code-review.md) | Three levels of review — `/lets:check`, `/lets:review`, and `/lets:github-pr` (analyze, post inline, follow up, approve). Dynamic agent selection. |
 | [agents.md](docs/agents.md) | The 14 expert agents, what triggers each, tiered scoring, agent modes, and the actor agent. |
 | [parallel-work.md](docs/parallel-work.md) | Working on several tasks at once — `/lets:team` (autonomous agents) and `/lets:worktree` (parallel terminals). |
-| [tasks.md](docs/tasks.md) | Task tracking with beads — the task lifecycle, taking and creating tasks, notes, `/lets:brainstorm`, beads memory, shared backlogs for teams. |
+| [tasks.md](docs/tasks.md) | Task tracking with beads — the task lifecycle, taking and creating tasks, notes, `/lets:brainstorm`, `/lets:backlog`, beads memory, shared backlogs for teams. |
 | [commands.md](docs/commands.md) | Full reference for every `/lets:*` command. |
 | [configuration.md](docs/configuration.md) | `.lets/.env` settings, the `.lets/` file layout, `lets init` vs `bd init` setup order, and dependencies. |
 

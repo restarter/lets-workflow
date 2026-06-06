@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added
+- **`/lets:backlog` — backlog review + cleanup command (lets-9r4at).** Extracted from `/lets:brainstorm`: a two-mode command (`/lets:backlog review` | `/lets:backlog cleanup`, or a menu when called bare). *Review* launches an explorer scout + parallel domain agents that ideate over the backlog and aggregate multi-perspective insights (the former brainstorm Heavy mode, moved verbatim); *Cleanup* is fast interactive triage of stale/duplicate/orphan/unassigned tasks (no agents). Continues the decomposition started when `/lets:explore` was split out for topic ideation.
+- **`/lets:backlog review --workflow` — off-context Review fan-out (lets-9r4at).** Opt-in Dynamic Workflow variant of Review mode via the committed `backlog-workflow` asset: the explorer scout (Phase 1) and agent selection (Phase 2) stay in-context while the parallel domain-agent fan-out (Phase 3) + the semantic aggregate/cluster (Phase 4) run off-context — only the clustered, impact-sorted result returns. Unlike `/lets:explore --workflow` there is no Web Research stage: backlog review ideates over the project's own state profile, so omitting web keeps the `--workflow` path equivalent to the standard Task path (a pure performance lever, same findings). The interactive dialog + task capture stay in-context.
+
+### Changed
+- **`/lets:brainstorm` is now Quick-only ideation (lets-9r4at).** Slimmed to a single fast flow — a quick context scan (no agents) then a direct conversation — after Review-backlog and Cleanup moved to the new `/lets:backlog`. The "specific topic → `/lets:explore`" handoff is preserved (new Step Q0); the Step 0 mode menu is gone.
+
 ### Fixed
 - **Plan filenames are date-prefixed + plan lookups are slug-scoped (lets-fe788).** `/lets:plan` now saves plans as `.lets/plans/YYYY-MM-DD-HHMM-<slug>.md` (same convention as `.lets/sessions/`), so a second plan on the same branch no longer overwrites the first — plan history is preserved. The three readers — `/lets:execute`, `/lets:review --plan`, `/lets:check --plan` — resolve the latest plan slug-scoped (`ls -t .lets/plans/*<slug>*.md | head -1`) instead of a global latest, fixing cross-worktree shadowing where the symlink-shared `.lets/plans/` made `ls -t *.md` grab another worktree session's plan. Each reader has an empty-slug guard (prevents the glob collapsing back to global latest), a task-id fallback, and `/lets:review --plan` now calls detect-task in plan mode so the fallback resolves. Legacy bare-name plans still resolve (wildcard matches both formats).
 
