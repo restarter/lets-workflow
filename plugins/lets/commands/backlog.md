@@ -270,7 +270,7 @@ Review the project's BACKLOG of tasks from your area of expertise. Surface gaps 
 You are NOT reviewing code, counting duplications, finding stale files, or hunting bugs in source. The PROJECT STATE PROFILE below is your primary source. Use bd commands (bd show, bd comments) for task details. Code reads are allowed only as evidence for a backlog observation ("this critical area has no tasks tracking it"), never as primary investigation.
 
 PROJECT RULES (from CLAUDE.md):
-{CLAUDE.md summary, first 100 lines - architecture decisions and structure}
+{CLAUDE.md content, first 100 lines - architecture decisions and structure}
 
 PROJECT STATE PROFILE:
 {explorer output from Phase 1}
@@ -422,7 +422,7 @@ Analyze loaded data and group:
 ```
 
 If no issues found in a category, skip it.
-If backlog is clean, say so and suggest Review backlog or `/lets:explore` instead.
+If backlog is clean, say so and suggest `/lets:backlog review` or `/lets:explore` instead.
 
 ### Step C3: Interactive Triage
 
@@ -497,7 +497,7 @@ Use the agents SELECTED in Phase 2 (do not re-select). **Exclude `lets:actor`** 
   profile: "{explorer Project State Profile from Phase 1}",
   agents: [ { name: "pragmatist" }, { name: "architect" }, ... ],   // short names, no "lets:" prefix
   projectRoot: "{LETS_PROJECT_ROOT from LETS Config}",
-  claudeMd: "{CLAUDE.md content, first ~100 lines}"
+  claudeMd: "{CLAUDE.md content, first 100 lines}"
 }
 ```
 

@@ -1,6 +1,6 @@
 ---
 description: Quick interactive ideation on a topic - fast context scan, no agents (for backlog review/cleanup use /lets:backlog)
-argument-hint: "[topic or epic name]"
+argument-hint: "[topic]"
 ---
 
 # Brainstorm
