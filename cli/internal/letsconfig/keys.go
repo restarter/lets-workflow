@@ -12,7 +12,10 @@
 //  1. Append a Key{Name, Comment, Default} entry to Keys below
 //  2. Add field to Prefs struct in cli/internal/initcmd/render.go AND add
 //     ONE entry to Prefs.AsValues() map (one-line addition right below)
-//  3. Bump frontmatter version in plugins/lets/rules/lets-rules.md
+//  3. Regenerate env goldens (go test ./internal/initcmd -run Golden -update)
+//     and bump any hardcoded key-count assertions. Do NOT bump the
+//     lets-rules.md frontmatter version per change - that happens once per
+//     release at ceremony time (see CLAUDE.md "Release Flow").
 //
 // If the key is exposed via the /lets:init slash command (most are):
 //  4. Add a --<key> cobra flag in cli/internal/cli/init.go (raw flag value
@@ -84,6 +87,11 @@ var Keys = []Key{
 		Name:    "LETS_TRACKER",
 		Comment: "Task tracker (currently 'beads'; schema reserved for Linear/Jira)",
 		Default: "beads",
+	},
+	{
+		Name:    "LETS_LAUNCHER",
+		Comment: "Worktree launcher: terminal (print the cd command) | cmux (open in a cmux workspace, macOS only)",
+		Default: "terminal",
 	},
 }
 

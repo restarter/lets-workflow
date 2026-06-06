@@ -17,6 +17,7 @@ type Prefs struct {
 	MergeBranch string // e.g. "main", "develop"
 	PRFlow      string // "local" | "github" | "bitbucket"
 	Tracker     string // "beads" (canonical default; reserved for Linear/Jira)
+	Launcher    string // "terminal" (default) | "cmux"
 	SkipBeads   bool
 }
 
@@ -32,6 +33,7 @@ func (p Prefs) AsValues() map[string]string {
 		"LETS_MERGE_BRANCH": p.MergeBranch,
 		"LETS_PR_FLOW":      p.PRFlow,
 		"LETS_TRACKER":      p.Tracker,
+		"LETS_LAUNCHER":     p.Launcher,
 	}
 }
 

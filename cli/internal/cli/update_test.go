@@ -95,7 +95,7 @@ func TestUpdate_JSONEnvelope_Offline(t *testing.T) {
 	if jerr := json.Unmarshal([]byte(out), &r); jerr != nil {
 		t.Fatalf("not valid JSON: %v\n%s", jerr, out)
 	}
-	if r.SchemaVersion != 1 || !r.OK || len(r.Artifacts) != 4 {
+	if r.SchemaVersion != 2 || !r.OK || len(r.Artifacts) != 4 {
 		t.Fatalf("envelope = %+v\n%s", r, out)
 	}
 	byName := map[string]string{}

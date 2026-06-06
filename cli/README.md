@@ -176,7 +176,7 @@ lets update --plugin-root "${CLAUDE_PLUGIN_ROOT}" [--json] [--offline] [--refres
 
 Flags:
 - `--plugin-root` — plugin install dir (or `$CLAUDE_PLUGIN_ROOT`). Required, validated via the `.claude-plugin/plugin.json` marker.
-- `--json` — emit a machine-readable JSON object (`schema_version=1`); `/lets:update` consumes this.
+- `--json` — emit a machine-readable JSON object (`schema_version=2`); `/lets:update` consumes this.
 - `--offline` — skip the GitHub latest-release check; `binary`/`plugin` come back `unknown`.
 - `--refresh-cache` — bypass the cached latest-release lookup and hit GitHub now.
 
@@ -184,12 +184,14 @@ What it checks (in order; never crashes for a network failure):
 
 | Artifact | Check | Action |
 |---|---|---|
-| `.lets/.env` | `LETS_ENV_VERSION` vs `version.Version` | `RegenerateEnv` with a near-empty `Prefs` (only the default tracker; user values are read from the existing `.env` regardless), so it just refreshes the header. Skip when in sync. Skipped entirely on a `dev` binary (avoids stamping `LETS_ENV_VERSION=dev`). `not-initialized` if `.env` is absent → "Run /lets:init". |
-| `.claude/rules/lets-rules.md` | `drift.Check` against plugin source | Re-copy from the plugin (atomic write) on any detected drift (incl. `ahead`); `unknown` if the plugin's own frontmatter is unparseable; `up-to-date` otherwise. |
+| `.lets/.env` | `LETS_ENV_VERSION` vs `version.Version` | `RegenerateEnv` with a near-empty `Prefs` (only the default tracker; user values are read from the existing `.env` regardless), so it just refreshes the header. `in-sync` (tracks the binary) when already current, `updated` after a header refresh. Skipped entirely on a `dev` binary (avoids stamping `LETS_ENV_VERSION=dev`). `not-initialized` if `.env` is absent → "Run /lets:init". |
+| `.claude/rules/lets-rules.md` | `drift.Check` against plugin source | Re-copy from the plugin (atomic write) on any detected drift (incl. `ahead`); `unknown` if the plugin's own frontmatter is unparseable; `in-sync` (tracks the plugin) otherwise. An `updated` row carries a past-tense detail ("was missing" / "was outdated (v…)"), never the pre-install imperative. |
 | `lets` binary | `version.Version` vs latest GitHub release | Report only (can't self-replace) — `outdated` → prints the install one-liner (`curl -fsSL …/main/scripts/install.sh \| bash`). `dev` build → no comparison. |
 | Claude Code plugin | `<pluginRoot>/.claude-plugin/plugin.json::version` vs latest release | Report only — `outdated` → prints the plugin-update hint (`/plugin marketplace update lets-workflow` + `/reload-plugins`, or enable auto-update). |
 
 Latest-release lookup hits `https://api.github.com/repos/restarter/lets-workflow/releases/latest` (5s timeout), cached 1h at `<project>/.lets/cache/update-check.json`; on a network failure it falls back to a stale cache entry if one exists, else reports `unknown`. The result also carries `consistent` (binary == plugin == installed-rules frontmatter version, ignoring `dev`) to flag a partial upgrade.
+
+Two reference frames (the lets-kaw72 fix, `schema_version=2`): `.env`/`rules` report `in-sync` relative to their *local* source (the binary and the plugin respectively), distinct from `up-to-date` (== latest release) used for `binary`/`plugin`. So two `in-sync` rows at different versions is expected, not a contradiction; `annotateInSyncBehind` appends "itself behind latest v…" to an in-sync row whose upstream is itself `outdated`. `Summary.UpToDate` (JSON `up_to_date`) is the combined in-sync bucket (`in-sync` + `up-to-date`).
 
 Refuses: from a worktree (`--git-dir != --git-common-dir`) — `.claude/` isn't shared into worktrees.
 
@@ -218,6 +220,23 @@ Same shape conventions as `lets init` (single JSON object, valid even on error, 
 - **Rollback contract.** On `create` failure after `git worktree add` has run, `rollback` is populated with `{attempted, succeeded, residual: [...]}`. Residual entries name what couldn't be cleaned up (path, `branch:<name>`, `main_repo_on_branch:<actual> (expected <prev>)`) so the caller surfaces concrete cleanup instructions instead of hand-waving.
 - **Stream split for shell composition.** `--print-cd` writes the absolute worktree path to **stdout** (one line, no newline-padding) while keeping `--json` envelope on **stderr** — gh-style. Lets shell wrappers compose `cd "$(lets worktree create foo --print-cd)" && claude` without parsing JSON. Without `--print-cd`, `--json` envelope goes to stdout as usual.
 - **`next_steps.absolute_path`.** Load-bearing field that `commands/worktree.md` reads to tell the user where to `cd`. Renaming it without a `SchemaVersion` bump silently breaks the markdown skill — pinned by `TestResult_SchemaContract.create_success`.
+
+## lets cmux
+
+Optional, macOS-only worktree launcher. Internal subcommand wired by `commands/worktree.md` (Step C3.5): after `lets worktree create`, when `LETS_LAUNCHER=cmux` (or `--cmux`), the skill shells `lets cmux open` to open the worktree in a cmux workspace (manaflow-ai/cmux) running `claude '/lets:start <id>'`. Cobra factory `internal/cli/cmux.go` (`//go:build unix`) + `internal/cmuxcmd/` package; Windows ships a stub at `internal/cli/cmux_stub.go` returning a clear "macOS-only" error.
+
+```bash
+lets cmux open <path> [--name <slug>] [--command <cmd>] [--force] [--json] [--quiet]
+lets cmux rename --title <new> [--ref <ref> | --cwd <path>] [--json] [--quiet]
+```
+
+- **Canonical cmux form.** Runs `cmux workspace create --cwd <path> [--name] [--command]` with `CMUX_QUIET=1` (silences cmux's deprecation/notice output). The legacy `new-workspace` alias is avoided. No `--focus`: `cmux workspace create` does not accept it (verified via `--help`).
+- **External cmux schema (pinned).** `open`'s guard and `rename`'s resolution parse `cmux workspace list --json` for fields `ref` / `title` / `selected` / `current_directory` — an external contract (manaflow-ai/cmux), verified against **cmux 0.64.x**. If cmux renames a field, `json.Unmarshal` leaves it zero-valued and the guard/resolution degrade SILENTLY (look like "no matching workspace"). Re-verify on cmux upgrades; a live smoke test is the only true guard given the build-tag blocks importable unit tests.
+- **Duplicate-session guard (`open`).** Before creating, `open` lists workspaces (`cmux workspace list --json`) and refuses to spawn a second one whose `current_directory` already matches `<path>` — returns `ok=true`, `launch.launched=false`, `reason=already_open`, plus `existing_ref`/`existing_title`. `--force` overrides. This enforces "one live session per worktree" at the launcher level (the in-scope slice of the spawner-concurrency class; the deeper git-index/session-id mutex lives in the external session spawner, not here). A list failure is non-fatal — it falls through and creates.
+- **`rename`.** Relabels a cmux workspace tab (`cmux workspace rename <ref> --title`). Resolution: explicit `--ref`, else `--cwd` match against `current_directory`, else the active (`selected`) workspace. Side-effect-free (no git/files). Never hard-fails on cmux absence (`reason`: `not_macos` | `cmux_not_found` | `workspace_not_found` | `cmux_error`); only a missing `--title` is a hard error (`ExitUsage`). **Invoked on-demand** (by an agent or by hand — e.g. a session relabels its own tab after claiming a task) so it can stamp identity into the tab and disambiguate concurrent sessions; it is **not** auto-wired into a `/lets:*` command yet.
+- **Strictly optional, never hard-fails.** Detects cmux via `exec.LookPath("cmux")` + `runtime.GOOS=="darwin"`. On non-macOS, cmux-not-found, or a cmux exec error, returns `ok=true` with `launch.launched=false`, a `reason` (`not_macos` | `cmux_not_found` | `cmux_error`), and a `fallback_command` (`cd <path> && claude`). The only hard error is a missing/invalid `--path` (`ExitPathInvalid=10`).
+- **JSON envelope.** `internal/cmuxcmd/result.go` — `Envelope` (`schema_version`, `ok`, `subcommand`, `steps[]`, optional `error`) + a `launch` block (`launched`, `workspace_name`, `path`, `command`, `reason`, `fallback_command`). `TestResult_SchemaContract` pins `SchemaVersion`. Exit codes in `internal/cmuxcmd/exit.go`; `main.go`'s generic `exitCoder` interface routes `*cmuxcmd.Error` to its code.
+- **Future home for cmux integration.** Notifications (`cmux notify` into LETS events) will land here as `lets cmux notify` rather than spreading cmux calls across command markdown.
 
 ## lets statusline
 

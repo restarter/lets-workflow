@@ -19,7 +19,8 @@ See **[tasks.md](tasks.md)** for the task lifecycle.
 
 | Command | What it does |
 |---------|--------------|
-| `/lets:brainstorm` | Interactive ideation — review the backlog, explore an idea, quick brainstorm, or cleanup. |
+| `/lets:brainstorm` | Quick interactive ideation on a topic — fast context scan, no agents. |
+| `/lets:backlog` | Backlog management — multi-agent backlog review, or interactive cleanup triage. `review` / `cleanup` skip the menu. |
 | `/lets:plan` | Structured planning — codebase exploration with scaled explorer agents, then architecture design with expert evaluation, then a written plan in `.lets/plans/`. `--fast` skips the subagent phases and plans in-conversation. |
 | `/lets:execute` | Execute the plan from `/lets:plan` in native plan mode, with your approval at each step. |
 | `/lets:team` | Parallel implementation with Agent Teams — `run` (pick tasks, spawn teammates), `status`, `stop`. |
@@ -34,6 +35,7 @@ See **[plan-execute.md](plan-execute.md)** and **[parallel-work.md](parallel-wor
 | `/lets:check` | Quick inline sanity check (~30s) — 6 perspectives, no subagents. Targets: working tree, staged, last commit, full branch (`--branch`, three-dot vs `$LETS_MERGE_BRANCH`), a PR, `--file <path>`, `--plan`. |
 | `/lets:review` | Full code review (~2-3 min) — dynamic agent selection. Same targets as `/lets:check`; `--local` for local changes, `--branch` for the whole branch (PR-equivalent), `<PR>` for a PR, `--plan` for a plan. |
 | `/lets:github-pr` | GitHub PR review lifecycle — `<PR>` to analyze and discuss, then post inline; `--follow-up` to check fixes; `--approve` to approve; `--respond <PR>` for the PR author. |
+| `/lets:review-round` | Work through a RECEIVED review round — triage each comment (accept/reject/defer/done), record decisions to the task, keep the artifact frozen, then apply all edits in one final pass. The inverse of `/lets:review`. |
 | `/lets:opinion` | Technical decision analyzed by expert agents in parallel, with a recommendation. Dynamic agent count. |
 | `/lets:ask` | Quick consultation with a single expert agent — like pinging a colleague. |
 

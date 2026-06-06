@@ -717,13 +717,16 @@ if [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ]; then
 else
   SLUG="${BRANCH#feature/}"   # e.g., 0nf.10-improve-brainstorm
 fi
+STAMP=$(date +%Y-%m-%d-%H%M)   # same convention as .lets/sessions/ - keeps plan history, no overwrite
 mkdir -p "$LETS_PROJECT_ROOT/.lets/plans"
+PLAN_FILE="$LETS_PROJECT_ROOT/.lets/plans/${STAMP}-${SLUG}.md"
+echo "$PLAN_FILE"   # capture the exact dated path - this is where you Write the plan
 ```
 
-Write plan to: `.lets/plans/{branch-slug}.md`
+Write plan to: `$PLAN_FILE` (i.e. `.lets/plans/${STAMP}-${SLUG}.md`)
 
-Example: branch `feature/0nf.10-improve-brainstorm` -> `.lets/plans/0nf.10-improve-brainstorm.md`
-Trunk-mode example: branch `main`, task `lets-abc` -> `.lets/plans/lets-abc.md`
+Example: branch `feature/0nf.10-improve-brainstorm` -> `.lets/plans/2026-06-06-1846-0nf.10-improve-brainstorm.md`
+Trunk-mode example: branch `main`, task `lets-abc` -> `.lets/plans/2026-06-06-1846-lets-abc.md`
 
 ### Record in Beads
 
@@ -734,7 +737,7 @@ bd comments add <task-id> "## Plan: {feature name}
 Approach: {chosen option name}
 Tasks: {N} implementation tasks
 Key files: {top 3-5 files}
-Plan: .lets/plans/${SLUG}.md"
+Plan: .lets/plans/${STAMP}-${SLUG}.md"
 ```
 
 ### Show Output
@@ -742,7 +745,7 @@ Plan: .lets/plans/${SLUG}.md"
 ```
 ## Plan Ready: **{task title}** (`{task-id}`)
 
-Saved: `.lets/plans/{branch-slug}.md`
+Saved: `.lets/plans/${STAMP}-${SLUG}.md`
 Built: {full flow (explorer + architect + expert agents) | fast mode (orchestrator-only - no subagents)}
 
 ### Approach

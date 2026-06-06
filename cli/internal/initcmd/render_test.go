@@ -18,9 +18,9 @@ func TestRenderEnv_Golden(t *testing.T) {
 		prefs  Prefs
 		golden string
 	}{
-		{"default", Prefs{Language: "English", MergeBranch: "main", PRFlow: "local", Tracker: "beads"}, "testdata/golden_env_default.txt"},
-		{"ukrainian", Prefs{Language: "Ukrainian", MergeBranch: "main", PRFlow: "local", Tracker: "beads"}, "testdata/golden_env_ukrainian.txt"},
-		{"github", Prefs{Language: "English", MergeBranch: "main", PRFlow: "github", Tracker: "beads"}, "testdata/golden_env_github.txt"},
+		{"default", Prefs{Language: "English", MergeBranch: "main", PRFlow: "local", Tracker: "beads", Launcher: "terminal"}, "testdata/golden_env_default.txt"},
+		{"ukrainian", Prefs{Language: "Ukrainian", MergeBranch: "main", PRFlow: "local", Tracker: "beads", Launcher: "terminal"}, "testdata/golden_env_ukrainian.txt"},
+		{"github", Prefs{Language: "English", MergeBranch: "main", PRFlow: "github", Tracker: "beads", Launcher: "terminal"}, "testdata/golden_env_github.txt"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -50,7 +50,7 @@ func TestRenderEnv_Golden(t *testing.T) {
 // bugs independently of golden contents. Runs without -update.
 func TestRenderEnv_NonEmptyValues(t *testing.T) {
 	prefs := Prefs{
-		Language: "English", MergeBranch: "main", PRFlow: "local", Tracker: "beads",
+		Language: "English", MergeBranch: "main", PRFlow: "local", Tracker: "beads", Launcher: "terminal",
 	}
 	got := string(renderEnv(prefs))
 	for _, expected := range []string{
@@ -58,12 +58,13 @@ func TestRenderEnv_NonEmptyValues(t *testing.T) {
 		"LETS_MERGE_BRANCH=main",
 		"LETS_PR_FLOW=local",
 		"LETS_TRACKER=beads",
+		"LETS_LAUNCHER=terminal",
 	} {
 		if !strings.Contains(got, expected) {
 			t.Errorf("renderEnv missing %q in output:\n%s", expected, got)
 		}
 	}
-	for _, k := range []string{"LETS_LANGUAGE=", "LETS_MERGE_BRANCH=", "LETS_PR_FLOW=", "LETS_TRACKER="} {
+	for _, k := range []string{"LETS_LANGUAGE=", "LETS_MERGE_BRANCH=", "LETS_PR_FLOW=", "LETS_TRACKER=", "LETS_LAUNCHER="} {
 		if strings.Contains(got, k+"\n") {
 			t.Errorf("renderEnv has empty value for %s", k)
 		}

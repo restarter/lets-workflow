@@ -53,13 +53,13 @@ A few beads conventions LETS follows:
 
 `/lets:status` gives a compact overview: what's ready, what's in progress, what's blocked, recent activity. It's also what `/lets:start` runs to show you the task list.
 
-## `/lets:brainstorm` — working the backlog
+## `/lets:brainstorm` and `/lets:backlog` — ideation and backlog work
 
-`/lets:brainstorm` is interactive ideation, in four modes:
+`/lets:brainstorm` is quick interactive ideation on a topic — a fast context scan and a direct conversation, no agents. For a specific topic deep-dive, use `/lets:explore`.
+
+`/lets:backlog` manages the task backlog in two modes:
 
 - **Review backlog** — agents go through your task list, find patterns, suggest priorities.
-- **Explore ideas** — a deep dive into a specific area, with codebase analysis.
-- **Quick brainstorm** — fast ideation on a topic.
 - **Cleanup** — find stale tasks, broken dependencies, forgotten work.
 
 ## Memory — knowledge that outlives a session
@@ -74,4 +74,4 @@ For more than one developer, beads can point at a shared database via a [Dolt](h
 
 - **[workflow.md](workflow.md)** — the session/task loop
 - **[configuration.md](configuration.md)** — `lets init` vs `bd init` setup order
-- **[commands.md](commands.md)** — `/lets:start`, `/lets:status`, `/lets:note`, `/lets:brainstorm`
+- **[commands.md](commands.md)** — `/lets:start`, `/lets:status`, `/lets:note`, `/lets:brainstorm`, `/lets:backlog`

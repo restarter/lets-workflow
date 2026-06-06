@@ -64,6 +64,7 @@ func TestDefaults_HardcodedContract(t *testing.T) {
 		"LETS_MERGE_BRANCH": "main",
 		"LETS_PR_FLOW":      "local",
 		"LETS_TRACKER":      "beads",
+		"LETS_LAUNCHER":     "terminal",
 	}
 	got := letsconfig.Defaults()
 	if !reflect.DeepEqual(got, want) {

@@ -609,17 +609,37 @@ bd comments add <task-id> "Code review ({PR #X | local}): {verdict}. {N} issues 
 
 ### P1: Load Plan
 
+Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detect-task")`. Plan mode skips the code-review detect-task call below, so resolve the id here; the orchestrator substitutes it for `{task-id}`.
+
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-
-# If path provided: use it
-# If no path: derive from branch name
 BRANCH=$(git branch --show-current)
-SLUG=${BRANCH#feature/}
-cat "$LETS_PROJECT_ROOT/.lets/plans/${SLUG}.md" 2>/dev/null
 
-# Fallback: glob match by task-id
-ls "$LETS_PROJECT_ROOT/.lets/plans/"*{task-id}* 2>/dev/null
+# If a path was provided to --plan, use it directly and skip this derivation.
+
+# Derive slug: trunk-mode uses task-id; otherwise the branch slug.
+# {task-id} is substituted by the orchestrator from the detect-task result above.
+if [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ]; then
+  SLUG="{task-id}"
+else
+  SLUG="${BRANCH#feature/}"
+fi
+
+# Guard: empty slug would collapse the glob to *.md -> global latest -> another worktree's plan
+# (the bug this task fixes). Bail to the no-plan message instead.
+if [ -z "$SLUG" ]; then
+  PLAN=""
+else
+  # Latest plan for this slug - date-prefixed or legacy bare name. Slug-scoped (shared .lets
+  # across worktrees via symlink, so global latest would grab another branch's plan - lets-fe788).
+  PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
+  # Fallback: glob match by task-id (catches trunk-mode plans + naming drift)
+  if [ -z "$PLAN" ] && [ -n "{task-id}" ]; then
+    PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"{task-id}"*.md 2>/dev/null | head -1)
+  fi
+fi
+
+[ -n "$PLAN" ] && cat "$PLAN"
 ```
 
 If no plan files found, inform user and exit:

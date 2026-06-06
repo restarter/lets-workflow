@@ -17,3 +17,6 @@ LETS_PR_FLOW=github
 
 # Task tracker (currently 'beads'; schema reserved for Linear/Jira)
 LETS_TRACKER=beads
+
+# Worktree launcher: terminal (print the cd command) | cmux (open in a cmux workspace, macOS only)
+LETS_LAUNCHER=terminal

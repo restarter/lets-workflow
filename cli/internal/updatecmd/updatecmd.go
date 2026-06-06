@@ -66,7 +66,7 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 		}
 		switch action.Kind {
 		case initcmd.EnvSkip:
-			result.Add(Artifact{Name: ".env", Status: StatusUpToDate, CurrentVersion: action.PrevVersion})
+			result.Add(Artifact{Name: ".env", Status: StatusInSync, CurrentVersion: action.PrevVersion, Detail: "tracks the lets binary"})
 		case initcmd.EnvRegenerated:
 			a := Artifact{Name: ".env", Status: StatusUpdated, CurrentVersion: action.NewVersion}
 			if len(action.ChangedKeys) > 0 {
@@ -103,9 +103,9 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 				return result, fmt.Errorf("write rules: %w", err)
 			}
 			drPost := drift.Check(rulesSrc, rulesDst)
-			result.Add(Artifact{Name: "rules", Status: StatusUpdated, CurrentVersion: drPost.InstalledVersion, Detail: drift.Message(dr)})
+			result.Add(Artifact{Name: "rules", Status: StatusUpdated, CurrentVersion: drPost.InstalledVersion, Detail: rulesUpdatedDetail(dr)})
 		default:
-			result.Add(Artifact{Name: "rules", Status: StatusUpToDate, CurrentVersion: dr.InstalledVersion})
+			result.Add(Artifact{Name: "rules", Status: StatusInSync, CurrentVersion: dr.InstalledVersion, Detail: "tracks the plugin"})
 		}
 	}
 
@@ -116,10 +116,64 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 	pluginVer := ReadPluginVersion(pluginRoot)
 	result.Add(versionArtifact("plugin", pluginVer, latest, latestErr, offline, pluginUpdateAction))
 
+	// Cross-reference: when an in-sync artifact's local source (the binary for
+	// .env, the plugin for rules) is itself behind the latest release, say so on
+	// the row. Runs after all four artifacts exist so per-artifact computation
+	// stays independent (lets-kaw72).
+	annotateInSyncBehind(&result)
+
 	// --- internal consistency (binary == plugin == installed-rules frontmatter) ---
 	result.Consistent = consistentVersions(version.Version, pluginVer, frontmatter.ReadVersion(rulesDst))
 
 	return result, nil
+}
+
+// rulesUpdatedDetail renders a past-tense summary of what the rules file was
+// before `lets update` re-copied it. The row is already `updated`, so it must
+// NOT carry the pre-install imperative message ("Run /lets:init") - that
+// contradicts the status (lets-kaw72). Mirrors the .env "was v…" style.
+func rulesUpdatedDetail(pre drift.Result) string {
+	switch pre.State {
+	case drift.StateMissing:
+		return "was missing"
+	case drift.StateOutdated:
+		return fmt.Sprintf("was outdated (v%s)", pre.InstalledVersion)
+	case drift.StateAhead:
+		return fmt.Sprintf("was ahead (v%s)", pre.InstalledVersion)
+	case drift.StateUnknown:
+		return "was unparseable"
+	default:
+		return ""
+	}
+}
+
+// annotateInSyncBehind appends "(itself behind latest v…)" to an in-sync row
+// whose tracked upstream is itself outdated, so two in-sync rows at different
+// versions read as explained rather than contradictory.
+func annotateInSyncBehind(r *Result) {
+	upstreamOf := map[string]string{".env": "binary", "rules": "plugin"}
+	latestBehind := map[string]string{} // outdated upstream name -> its latest version
+	for _, a := range r.Artifacts {
+		if (a.Name == "binary" || a.Name == "plugin") && a.Status == StatusOutdated {
+			latestBehind[a.Name] = a.LatestVersion
+		}
+	}
+	for i := range r.Artifacts {
+		a := &r.Artifacts[i]
+		if a.Status != StatusInSync {
+			continue
+		}
+		lv, ok := latestBehind[upstreamOf[a.Name]]
+		if !ok {
+			continue
+		}
+		hint := fmt.Sprintf("itself behind latest v%s", lv)
+		if a.Detail == "" {
+			a.Detail = hint
+		} else {
+			a.Detail += " (" + hint + ")"
+		}
+	}
 }
 
 // versionArtifact builds an Artifact for a version-only artifact (binary, plugin).
