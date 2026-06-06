@@ -209,7 +209,7 @@ AskUserQuestion(
 Show selection before launching (no user gate - brainstorm = momentum):
 
 ```
-## Brainstorm Panel
+## Backlog Review Panel
 
 Based on project context, selected {N} experts:
 1. {agent} - {signal that triggered selection}
@@ -283,7 +283,7 @@ After all agents respond:
 3. Separate: Top Ideas / Gaps / Quick Wins
 
 ```
-## Brainstorm Results
+## Backlog Review Results
 
 {N} ideas from {M} experts.
 
