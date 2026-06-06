@@ -74,7 +74,7 @@ var paletteLight = palette{
 	label:  "\033[38;2;107;113;133m",
 	dim:    "\033[38;2;154;159;176m",
 	sep:    "\033[38;2;213;209;198m",
-	pillBg: "\033[48;2;246;243;237m",
+	pillBg: "\033[48;2;238;234;225m",
 }
 
 // Glyphs — universal Unicode/emoji set that renders on macOS and Linux without

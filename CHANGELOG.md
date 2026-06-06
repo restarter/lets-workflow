@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- **Light-theme statusline pill nudged back to a visible label (lets-nl0ks).** The light-palette pill background shipped in 0.6.2 (`246,243,237`) blended too far into a white terminal — the location/worktree label all but disappeared. Moved it back toward visible (`246,243,237` → `238,234,225` / `#EEEAE1`) so the pill reads as a small but present label, without returning to the heavy `230,226,216` block. Dark palette unchanged.
+
 ## [0.6.2] - 2026-06-06
 
 ### Added
