@@ -1,6 +1,6 @@
 ---
 name: lets-rules
-version: 0.5.5
+version: 0.6.1
 ---
 
 <!-- DO NOT EDIT - managed by lets init / lets install. To add custom rules, create a sibling *.md file in this directory (e.g. .claude/rules/team-conventions.md). Files prefixed `lets-` are owned by the LETS plugin and overwritten on update. -->
@@ -171,7 +171,7 @@ AUTO MODE (autonomous execution: `/loop`, `/lets:execute` auto-flow, `/lets:team
 
 ## Agent Rules
 
-- When launching expert agents for `/lets:review`, `/lets:github-pr`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:brainstorm` - use ONLY `lets:*` agents (`lets:architect`, `lets:security`, etc.)
+- When launching expert agents for `/lets:review`, `/lets:github-pr`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:brainstorm`, `/lets:explore` - use ONLY `lets:*` agents (`lets:architect`, `lets:security`, etc.)
 - `lets:actor` is a special meta-agent: requires explicit user request + personality source (URL or file path). Never auto-select. Use `actor-fetch-personality` skill to fetch personality before dispatch.
 - Never use `general-purpose` or other non-lets subagent types for expert work
 
@@ -407,21 +407,23 @@ This applies when: presenting implementation approaches, choosing between soluti
 | Skill | Category | When |
 |-------|----------|------|
 | `/lets:start` | Session | Beginning of session |
-| `/lets:end` | Session | End of session |
+| `/lets:end` | Session | End of session (`--pre-compact` = snapshot before /compact, session continues) |
 | `/lets:done` | Task | Task is complete |
 | `/lets:commit` | Code | Ready to commit (also auto-triggers on "commit", "закоміть") |
 | `/lets:check` | Code | Quick sanity check (~30s) - inline 6-lens; same targets as `/lets:review` (local/staged/last-commit/branch/PR/`--file`/`--plan`/`--json`), no subagents |
 | `/lets:review` | Code | Full deep review (~2-3 min) |
 | `/lets:github-pr` | Code | GitHub PR review lifecycle (review, respond, follow-up, approve) |
-| `/lets:opinion` | Expert | Technical decision (dynamic agent count) |
+| `/lets:opinion` | Expert | Technical decision (dynamic agent count; `--workflow` = off-context fan-out + adversarial challenge) |
 | `/lets:ask` | Expert | Quick expert consultation (1 agent) |
-| `/lets:brainstorm` | Planning | Interactive ideation - review backlog, explore ideas, quick brainstorm, cleanup |
+| `/lets:brainstorm` | Planning | Interactive backlog ideation - review backlog, quick brainstorm, cleanup |
+| `/lets:explore` | Planning | Explore a topic from multiple expert angles (`--workflow` = off-context ideate fan-out) |
 | `/lets:plan` | Planning | Structured planning with agents - architecture + implementation plan (`--fast` = orchestrator-only, skips explorer/architect/expert subagents) |
+| `/lets:plan-workflow` | Planning | **PREVIEW** - autonomous planning via a Dynamic Workflow (goal + rubric up front, off-context, approve at end); folds into native `/lets:plan` later (lets-jsw00) |
 | `/lets:execute` | Planning | Execute plan from /lets:plan via native plan mode |
 | `/lets:status` | Utility | Task overview and project status |
 | `/lets:worktree` | Utility | Create/manage interactive worktrees for parallel work |
 | `/lets:team` | Utility | Parallel implementation with Agent Teams (run, status, stop) |
-| `/lets:note` | Utility | Add note to active task |
+| `/lets:note` | Utility | Add note to active task (`--pre-compact` = resume snapshot before /compact) |
 | `/lets:init`    | Setup | Per-project initialization. Re-run for self-heal (drift fix) or to change config |
 | `/lets:update`  | Setup | Sync project with the current release - `.lets/.env` + rules self-heal, plus version status for the `lets` binary and the plugin |
 

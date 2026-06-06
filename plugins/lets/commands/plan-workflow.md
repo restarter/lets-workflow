@@ -64,7 +64,8 @@ Aggregate: `{ plan_markdown, delivered_approach, diverged_from_winner, divergenc
   ```bash
   LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
   mkdir -p "$LETS_PROJECT_ROOT/.lets/plans"
-  # write to .lets/plans/$(date +%Y-%m-%d-%H%M)-<slug>.md
+  # Same naming contract as /lets:plan (lets-fe788): STAMP=$(date +%Y-%m-%d-%H%M);
+  # write to .lets/plans/${STAMP}-<slug>.md  (slug = task-id-based descriptor for this run).
   ```
 - Show the **decision log** (winner + judge votes/totals + rationale), the approach list, the eval findings, and the plan summary.
 - User approves -> suggest `/lets:execute`. Wants changes -> adjust the rubric and re-run (`Workflow` `resumeFromRunId` caches completed stages while you iterate the script).

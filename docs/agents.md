@@ -1,6 +1,6 @@
 # Expert agents
 
-LETS ships 14 specialized agents. You don't pick them — the commands that use agents (`/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:brainstorm`, `/lets:team`) analyze the situation and select only the ones that fit.
+LETS ships 14 specialized agents. You don't pick them — the commands that use agents (`/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:backlog`, `/lets:team`) analyze the situation and select only the ones that fit.
 
 | Agent | Expertise | Example trigger |
 |-------|-----------|-----------------|

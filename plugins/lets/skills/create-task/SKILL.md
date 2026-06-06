@@ -153,5 +153,5 @@ When creating multiple tasks (e.g., during brainstorm or planning):
 ## Integration
 
 User-facing skill. Auto-triggers on "create task", "new task", "bd create".
-Commands that create tasks (`/lets:start`, `/lets:brainstorm`, `/lets:plan`) trigger this skill implicitly via description match.
+Commands that create tasks (`/lets:start`, `/lets:brainstorm`, `/lets:backlog`, `/lets:plan`) trigger this skill implicitly via description match.
 See: `grep -r "bd create" commands/` for commands that create tasks.

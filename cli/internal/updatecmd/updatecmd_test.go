@@ -83,19 +83,83 @@ func find(t *testing.T, r Result, name string) Artifact {
 	return Artifact{}
 }
 
-func TestRun_AllUpToDate(t *testing.T) {
+func TestRun_AllInSync(t *testing.T) {
 	pr, plug := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0")
 	r, err := Run(context.Background(), Options{LatestFn: stubLatest("0.6.0")}, pr, plug)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{".env", "rules", "binary", "plugin"} {
+	// .env/rules track local sources -> in-sync; binary/plugin track the release -> up-to-date.
+	for _, name := range []string{".env", "rules"} {
+		if got := find(t, r, name).Status; got != StatusInSync {
+			t.Errorf("%s status = %s, want in-sync", name, got)
+		}
+	}
+	for _, name := range []string{"binary", "plugin"} {
 		if got := find(t, r, name).Status; got != StatusUpToDate {
 			t.Errorf("%s status = %s, want up-to-date", name, got)
 		}
 	}
 	if !r.Consistent || r.Summary.ActionNeeded != 0 {
 		t.Errorf("Consistent=%v ActionNeeded=%d, want true/0", r.Consistent, r.Summary.ActionNeeded)
+	}
+	// All four fold into the "in sync" bucket.
+	if r.Summary.UpToDate != 4 {
+		t.Errorf("Summary.UpToDate = %d, want 4", r.Summary.UpToDate)
+	}
+	// No in-sync row should carry a "behind latest" hint when nothing is outdated.
+	for _, name := range []string{".env", "rules"} {
+		if strings.Contains(find(t, r, name).Detail, "behind") {
+			t.Errorf("%s Detail = %q, should not mention 'behind' when upstream is current", name, find(t, r, name).Detail)
+		}
+	}
+}
+
+// lets-kaw72: a partial upgrade (binary 0.5.2, plugin 0.5.3, both behind latest
+// 0.5.4) must not produce two bare "up-to-date" rows at different versions. The
+// in-sync rows declare what they track AND flag the behind-latest upstream.
+func TestRun_PartialUpgrade_InSyncRowsExplained(t *testing.T) {
+	pr, plug := scaffold(t, "0.5.2", "0.5.3", "0.5.3", "0.5.2") // env tracks binary 0.5.2; rules tracks plugin 0.5.3
+	r, err := Run(context.Background(), Options{LatestFn: stubLatest("0.5.4")}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := find(t, r, ".env")
+	if env.Status != StatusInSync || !strings.Contains(env.Detail, "lets binary") || !strings.Contains(env.Detail, "behind latest v0.5.4") {
+		t.Fatalf(".env = %+v, want in-sync tracking the binary + behind-latest hint", env)
+	}
+	rules := find(t, r, "rules")
+	if rules.Status != StatusInSync || !strings.Contains(rules.Detail, "plugin") || !strings.Contains(rules.Detail, "behind latest v0.5.4") {
+		t.Fatalf("rules = %+v, want in-sync tracking the plugin + behind-latest hint", rules)
+	}
+	if find(t, r, "binary").Status != StatusOutdated || find(t, r, "plugin").Status != StatusOutdated {
+		t.Fatalf("binary/plugin want outdated; got %s/%s", find(t, r, "binary").Status, find(t, r, "plugin").Status)
+	}
+	if r.Consistent {
+		t.Errorf("Consistent = true, want false (binary 0.5.2 != plugin 0.5.3)")
+	}
+}
+
+// lets-kaw72: when binary == plugin == rules == env but all are behind latest,
+// consistent is true (no internal mismatch) yet binary/plugin read outdated. The
+// in-sync rows must still flag the behind-latest upstream so the table coheres.
+func TestRun_UniformlyBehindLatest(t *testing.T) {
+	pr, plug := scaffold(t, "0.5.2", "0.5.2", "0.5.2", "0.5.2")
+	r, err := Run(context.Background(), Options{LatestFn: stubLatest("0.5.4")}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !r.Consistent {
+		t.Errorf("Consistent = false, want true (everything at 0.5.2)")
+	}
+	for _, name := range []string{".env", "rules"} {
+		a := find(t, r, name)
+		if a.Status != StatusInSync || !strings.Contains(a.Detail, "behind latest v0.5.4") {
+			t.Errorf("%s = %+v, want in-sync with behind-latest hint", name, a)
+		}
+	}
+	if r.Summary.ActionNeeded != 2 {
+		t.Errorf("ActionNeeded = %d, want 2 (binary + plugin)", r.Summary.ActionNeeded)
 	}
 }
 
@@ -124,6 +188,14 @@ func TestRun_RulesOutdatedGetsRewritten(t *testing.T) {
 	if a.Status != StatusUpdated || a.CurrentVersion != "0.6.0" {
 		t.Fatalf("rules = %+v, want updated/0.6.0", a)
 	}
+	// lets-kaw72: the `updated` row must carry a past-tense detail, never the
+	// pre-install imperative ("Run /lets:init / /lets:update").
+	if !strings.Contains(a.Detail, "was outdated (v0.5.0)") {
+		t.Errorf("rules Detail = %q, want past-tense 'was outdated (v0.5.0)'", a.Detail)
+	}
+	if strings.Contains(a.Detail, "/lets:") {
+		t.Errorf("rules Detail = %q, must not contain an imperative slash-command on an 'updated' row", a.Detail)
+	}
 	got, _ := os.ReadFile(filepath.Join(pr, ".claude", "rules", "lets-rules.md"))
 	if !strings.Contains(string(got), "version: 0.6.0") {
 		t.Fatalf("installed rules not rewritten to 0.6.0:\n%s", got)
@@ -136,8 +208,13 @@ func TestRun_RulesMissingGetsInstalled(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if find(t, r, "rules").Status != StatusUpdated {
-		t.Fatalf("rules status = %s, want updated", find(t, r, "rules").Status)
+	a := find(t, r, "rules")
+	if a.Status != StatusUpdated {
+		t.Fatalf("rules status = %s, want updated", a.Status)
+	}
+	// lets-kaw72: detail says what it was, not "not installed, run /lets:init".
+	if a.Detail != "was missing" {
+		t.Errorf("rules Detail = %q, want %q", a.Detail, "was missing")
 	}
 	if _, err := os.Stat(filepath.Join(pr, ".claude", "rules", "lets-rules.md")); err != nil {
 		t.Fatalf("rules file not created: %v", err)
@@ -364,6 +441,33 @@ func TestPrintReport_UnknownVersionShowsQuestionMark(t *testing.T) {
 	PrintReport(&b, r)
 	if strings.Contains(b.String(), "v?") {
 		t.Fatalf("should render '?' not 'v?' for an unknown version:\n%s", b.String())
+	}
+}
+
+// lets-kaw72: the rendered text table for a partial upgrade must read coherently
+// - in-sync rows naming what they track + the behind-latest hint, plus the
+// inconsistency warning - never two bare "up-to-date" rows at different versions.
+func TestPrintReport_PartialUpgradeReadable(t *testing.T) {
+	r := NewResult("/p", "/plug")
+	r.OK = true
+	r.Consistent = false
+	r.Add(Artifact{Name: ".env", Status: StatusInSync, CurrentVersion: "0.5.2", Detail: "tracks the lets binary (itself behind latest v0.5.4)"})
+	r.Add(Artifact{Name: "rules", Status: StatusInSync, CurrentVersion: "0.5.3", Detail: "tracks the plugin (itself behind latest v0.5.4)"})
+	r.Add(Artifact{Name: "binary", Status: StatusOutdated, CurrentVersion: "0.5.2", LatestVersion: "0.5.4", Action: "update binary"})
+	r.Add(Artifact{Name: "plugin", Status: StatusOutdated, CurrentVersion: "0.5.3", LatestVersion: "0.5.4", Action: "update plugin"})
+	var b bytes.Buffer
+	PrintReport(&b, r)
+	out := b.String()
+	for _, want := range []string{
+		"in-sync", "tracks the lets binary", "itself behind latest v0.5.4",
+		"inconsistent", "2 of 4 artifacts need your action",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("report missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "up-to-date") {
+		t.Errorf("partial-upgrade report should not show bare 'up-to-date' rows:\n%s", out)
 	}
 }
 
