@@ -44,18 +44,30 @@ AskUserQuestion(
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 BRANCH=$(git branch --show-current)
 
-# Trunk-mode: primary lookup is task-id (plan.md saves as <task-id>.md when HEAD == merge-branch)
+# Derive slug: trunk-mode uses task-id (plan.md saves <date>-<task-id>.md on the merge-branch);
+# otherwise the branch slug (covers feature/* and worktree-* branches).
+# ${TASK_ID} is substituted by the orchestrator from the Step 1 detect-task result.
 if [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ]; then
-  cat "$LETS_PROJECT_ROOT/.lets/plans/${TASK_ID}.md" 2>/dev/null
+  SLUG="${TASK_ID}"
+else
+  SLUG="${BRANCH#feature/}"
 fi
 
-# Standard lookup (also covers feature/* + worktrees)
-SLUG=${BRANCH#feature/}
-cat "$LETS_PROJECT_ROOT/.lets/plans/${SLUG}.md" 2>/dev/null
-cat "$LETS_PROJECT_ROOT/.lets/plans/${BRANCH}.md" 2>/dev/null
+# Guard: an empty slug (detached HEAD, or unresolved task-id in trunk-mode) would collapse the
+# glob to *.md -> global latest -> another worktree's plan (the exact bug this task fixes).
+if [ -z "$SLUG" ]; then
+  echo "Could not derive a plan slug (detached HEAD or unresolved task-id). Pass a path or run /lets:start."
+else
+  # Latest plan for this slug - matches date-prefixed (YYYY-MM-DD-HHMM-<slug>.md) AND legacy bare
+  # <slug>.md. Slug-scoped, NOT global latest: .lets/plans is shared across worktrees via symlink.
+  PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
+  # Fallback: match by task-id (catches trunk-mode plans + naming drift, e.g. plan-workflow output)
+  if [ -z "$PLAN" ] && [ -n "${TASK_ID}" ]; then
+    PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${TASK_ID}"*.md 2>/dev/null | head -1)
+  fi
+fi
 
-# Wildcard fallback: match by task-id (catches trunk-mode plans + naming drift)
-ls "$LETS_PROJECT_ROOT/.lets/plans/"*${TASK_ID}* 2>/dev/null
+[ -n "$PLAN" ] && cat "$PLAN"
 ```
 
 If no plan found:
@@ -70,8 +82,12 @@ If argument is `--status`:
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 BRANCH=$(git branch --show-current)
-# Show plan info
-echo "Plan: .lets/plans/${SLUG}.md"
+# Show plan info (re-resolve: each bash block is a fresh shell). Same guarded lookup as Step 2.
+SLUG=${BRANCH#feature/}; [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ] && SLUG="${TASK_ID}"
+PLAN=""
+[ -n "$SLUG" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
+[ -z "$PLAN" ] && [ -n "${TASK_ID}" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${TASK_ID}"*.md 2>/dev/null | head -1)
+echo "Plan: ${PLAN:-(none found)}"
 bd show <task-id>
 # Show commits since session start
 BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
@@ -84,7 +100,7 @@ fi
 ```
 ## Execution Status: **{task title}** (`{task-id}`)
 
-Plan: .lets/plans/{slug}.md
+Plan: {resolved plan path}
 Commits this session: {N}
 
 {commit list}
@@ -173,9 +189,15 @@ The plan file provides the roadmap; explicit user approval provides the gates.
 After implementation is complete (all plan tasks done):
 
 ```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+BRANCH=$(git branch --show-current)
+SLUG=${BRANCH#feature/}; [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ] && SLUG="${TASK_ID}"
+PLAN=""; [ -n "$SLUG" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
+BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
+START_REF=$(cat "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}" 2>/dev/null)
 bd comments add <task-id> "## Plan execution complete $(date +%Y-%m-%d)
 
-Plan: .lets/plans/${SLUG}.md
+Plan: ${PLAN:-(none found)}
 Commits: $(git log --oneline ${START_REF}..HEAD | wc -l | tr -d ' ')
 
 $(git log --oneline ${START_REF}..HEAD)"
