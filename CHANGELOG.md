@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- **Statusline tips + `/lets:start --main` discoverability (lets-1f6z8).** The rotating statusline tips now cover the commands shipped in 0.6.2 — `/lets:backlog`, `/lets:review-round`, `/lets:start --main`, `/lets:explore`, and the `LETS_LAUNCHER=cmux` worktree launcher — and the stale "/lets:brainstorm reviews the backlog" tip was corrected (brainstorm is Quick-only now). `--main` was added to the `/lets:start` `argument-hint` so Claude Code's command autocomplete surfaces the project-assistant mode, and `LETS_LAUNCHER` was added to the two CLAUDE.md prose key-lists that had omitted it (the canonical config-keys table already listed it).
+
 ### Fixed
 - **Light-theme statusline pill nudged back to a visible label (lets-nl0ks).** The light-palette pill background shipped in 0.6.2 (`246,243,237`) blended too far into a white terminal — the location/worktree label all but disappeared. Moved it back toward visible (`246,243,237` → `238,234,225` / `#EEEAE1`) so the pill reads as a small but present label, without returning to the heavy `230,226,216` block. Dark palette unchanged.
 

@@ -142,7 +142,7 @@ This includes hook debug logs, temp files, and any runtime artifacts.
 **WARNING:** Always use `.lets/` (with dot prefix), never `lets/`. The dot is easy to miss in manual paths.
 
 ```
-.lets/.env               # Per-project settings (LETS_LANGUAGE, LETS_MERGE_BRANCH, LETS_PR_FLOW, LETS_TRACKER)
+.lets/.env               # Per-project settings (LETS_LANGUAGE, LETS_MERGE_BRANCH, LETS_PR_FLOW, LETS_TRACKER, LETS_LAUNCHER)
 .lets/.env.example       # Reference defaults — generated each `lets init` from canonical letsconfig.Keys defaults via renderEnvExample(). Not used by the hook; it's a user-facing template
 .lets/.env.bak           # Single backup written by `RegenerateEnv` before mutation. Plugin-owned: user-created files at this path are silently overwritten — copy elsewhere for permanent backup
 .lets/sessions/          # Session summaries, session-start-ref
@@ -196,7 +196,7 @@ LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 mkdir -p "$LETS_PROJECT_ROOT/.lets/sessions"
 ```
 
-`LETS_PROJECT_ROOT` is the **only** key computable in-shell (via `git rev-parse`). Other `LETS_*` keys (`LETS_MERGE_BRANCH`, `LETS_PR_FLOW`, `LETS_LANGUAGE`, `LETS_TRACKER`) have no shell-side derivation - inside bash snippets, use the `{LETS_FOO}` template form so the orchestrator substitutes the literal value before running. Trying to use `$LETS_FOO` in a bash block (without local assignment) yields empty string - silently wrong commands.
+`LETS_PROJECT_ROOT` is the **only** key computable in-shell (via `git rev-parse`). Other `LETS_*` keys (`LETS_MERGE_BRANCH`, `LETS_PR_FLOW`, `LETS_LANGUAGE`, `LETS_TRACKER`, `LETS_LAUNCHER`) have no shell-side derivation - inside bash snippets, use the `{LETS_FOO}` template form so the orchestrator substitutes the literal value before running. Trying to use `$LETS_FOO` in a bash block (without local assignment) yields empty string - silently wrong commands.
 
 ### User config file
 
