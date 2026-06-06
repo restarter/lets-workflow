@@ -61,7 +61,7 @@ PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*.md 2>/dev/null | head -1)
 # Or specific path: /lets:check --plan path/to/plan.md
 ```
 
-If no plan found: "No plans found in `.lets/plans/`. Run `/lets:brainstorm` first."
+If no plan found: "No plans found in `.lets/plans/`. Run `/lets:plan` first."
 
 Read the plan and review with 5 lenses (same confidence filter):
 

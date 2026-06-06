@@ -10,7 +10,7 @@ Reference docs for the LETS Workflow plugin. If you haven't set it up yet, start
 | [code-review.md](code-review.md) | Three levels of review — `/lets:check` (30s sanity check), `/lets:review` (full multi-agent), `/lets:github-pr` (PR lifecycle: analyze, post inline, follow up, approve). Dynamic agent selection. |
 | [agents.md](agents.md) | The 14 expert agents, what triggers each, tiered scoring, agent modes, and the actor agent (load any personality from a URL or file). |
 | [parallel-work.md](parallel-work.md) | Working on several tasks at once — `/lets:team` (autonomous agents, one task each, isolated worktrees) and `/lets:worktree` (you, in parallel terminals). |
-| [tasks.md](tasks.md) | Task tracking with beads — why it's there, the task lifecycle, taking and creating tasks, notes, `/lets:brainstorm`, beads memory, and shared backlogs for teams. |
+| [tasks.md](tasks.md) | Task tracking with beads — why it's there, the task lifecycle, taking and creating tasks, notes, `/lets:brainstorm`, `/lets:backlog`, beads memory, and shared backlogs for teams. |
 | [commands.md](commands.md) | Full reference for every `/lets:*` command — flags, when to use which. |
 | [configuration.md](configuration.md) | `.lets/.env` settings, the `.lets/` file layout, `lets init` vs `bd init` setup order, and dependencies. |
 | [statusline.md](statusline.md) | The bottom-bar box — what each line shows, width tiers, worktree behavior, and the `--light` / `--no-tip` / `--no-dir` / `--no-task` / `--compact` flags. |
