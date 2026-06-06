@@ -219,6 +219,19 @@ Same shape conventions as `lets init` (single JSON object, valid even on error, 
 - **Stream split for shell composition.** `--print-cd` writes the absolute worktree path to **stdout** (one line, no newline-padding) while keeping `--json` envelope on **stderr** — gh-style. Lets shell wrappers compose `cd "$(lets worktree create foo --print-cd)" && claude` without parsing JSON. Without `--print-cd`, `--json` envelope goes to stdout as usual.
 - **`next_steps.absolute_path`.** Load-bearing field that `commands/worktree.md` reads to tell the user where to `cd`. Renaming it without a `SchemaVersion` bump silently breaks the markdown skill — pinned by `TestResult_SchemaContract.create_success`.
 
+## lets cmux
+
+Optional, macOS-only worktree launcher. Internal subcommand wired by `commands/worktree.md` (Step C3.5): after `lets worktree create`, when `LETS_LAUNCHER=cmux` (or `--cmux`), the skill shells `lets cmux open` to open the worktree in a cmux workspace (manaflow-ai/cmux) running `claude '/lets:start <id>'`. Cobra factory `internal/cli/cmux.go` (`//go:build unix`) + `internal/cmuxcmd/` package; Windows ships a stub at `internal/cli/cmux_stub.go` returning a clear "macOS-only" error.
+
+```bash
+lets cmux open <path> [--name <slug>] [--command <cmd>] [--focus] [--json] [--quiet]
+```
+
+- **Canonical cmux form.** Runs `cmux workspace create --cwd <path> [--name] [--command]` with `CMUX_QUIET=1` (silences cmux's deprecation/notice output). The legacy `new-workspace` alias is avoided. `--focus` is **OFF by default** — `cmux workspace create` does not accept `--focus` (verified); the flag exists for forward-compat only.
+- **Strictly optional, never hard-fails.** Detects cmux via `exec.LookPath("cmux")` + `runtime.GOOS=="darwin"`. On non-macOS, cmux-not-found, or a cmux exec error, returns `ok=true` with `launch.launched=false`, a `reason` (`not_macos` | `cmux_not_found` | `cmux_error`), and a `fallback_command` (`cd <path> && claude`). The only hard error is a missing/invalid `--path` (`ExitPathInvalid=10`).
+- **JSON envelope.** `internal/cmuxcmd/result.go` — `Envelope` (`schema_version`, `ok`, `subcommand`, `steps[]`, optional `error`) + a `launch` block (`launched`, `workspace_name`, `path`, `command`, `reason`, `fallback_command`). `TestResult_SchemaContract` pins `SchemaVersion`. Exit codes in `internal/cmuxcmd/exit.go`; `main.go`'s generic `exitCoder` interface routes `*cmuxcmd.Error` to its code.
+- **Future home for cmux integration.** Notifications (`cmux notify` into LETS events) will land here as `lets cmux notify` rather than spreading cmux calls across command markdown.
+
 ## lets statusline
 
 Internal subcommand. Renders the Claude Code statusline; the project's `.claude/settings.json` invokes `lets statusline` directly (no flag) on every render. `lets init` points `statusLine.command` at it via value-match against `"lets statusline"`, leaving foreign user-customized commands alone. The legacy bash shim (`plugins/lets/scripts/lets/statusline.sh`, and the per-project `.lets/statusline.sh`) was retired in `lets-8ilsl`; `MigrateStatuslineSh` deletes a byte-equal legacy shim (matched against the frozen `internal/initcmd/embedded_statusline_shim.sh` snapshot) and calls `SetStatusLine`.

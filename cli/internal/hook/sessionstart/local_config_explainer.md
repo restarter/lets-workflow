@@ -7,6 +7,7 @@ These keys are injected by the SessionStart hook into the orchestrator's context
 - **`LETS_MERGE_BRANCH`** — target branch for merges, PR base, diff comparisons. Use this instead of hardcoded `main` for `git log`, `git diff`, `git merge`, `git checkout -b`. Fallback: `git symbolic-ref refs/remotes/origin/HEAD --short 2>/dev/null || echo main`.
 - **`LETS_PR_FLOW`** — PR/merge workflow. Values: `github` (PR via gh CLI), `bitbucket` (planned, bb-api wrapper exists), `local` (no PR, local merge). Used by `/lets:done`. Requires matching CLI tools when not `local`.
 - **`LETS_TRACKER`** — task tracker integration. Currently `beads` is the only supported value. **Schema reserved** — no command currently branches on this; all task ops still call `bd` regardless.
+- **`LETS_LAUNCHER`** — how `/lets:worktree create` opens a new worktree session. Values: `terminal` (default — print a `cd … && claude` command), `cmux` (open in a cmux workspace via `lets cmux`, macOS only). A preference, not a guarantee: `cmux` silently falls back to `terminal` when cmux is absent or off-macOS.
 
 `LETS_PROJECT_ROOT` is always injected by the hook. Other settings come from `.lets/.env` (created by `/lets:init`).
 
