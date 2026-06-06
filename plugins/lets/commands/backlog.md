@@ -1,6 +1,6 @@
 ---
 description: Backlog review and cleanup - multi-agent backlog review or interactive triage cleanup
-argument-hint: "[review|cleanup]"
+argument-hint: "[review|cleanup] [--workflow]"
 ---
 
 # Backlog
@@ -17,9 +17,12 @@ Backlog management in two modes. Review (heavy) launches an explorer + parallel 
 /lets:backlog            # Ask which mode, then go
 /lets:backlog review     # Multi-agent backlog review (skip menu)
 /lets:backlog cleanup    # Interactive triage cleanup (skip menu)
+/lets:backlog review --workflow  # Run the Review fan-out + aggregate off-context via a Dynamic Workflow
 ```
 
 ## Step 0: Choose Mode
+
+**Parse the argument first:** strip a `--workflow` token (sets workflow mode - Review only) if present; the remaining token is the mode keyword. `--workflow` passed with `cleanup` is ignored with a one-line note (Cleanup has no agents).
 
 If an argument is provided, parse it: `review` -> Review Backlog Mode; `cleanup` -> Cleanup Mode.
 
@@ -48,6 +51,30 @@ AskUserQuestion(
 ## Review Backlog Mode
 
 The one heavy mode: explorer scouts the project, parallel domain agents ideate over the backlog, results aggregate.
+
+### Execution path (standard vs workflow)
+
+The scout (Phase 1) and agent selection (Phase 2) ALWAYS run in-context. Only Phases 3-4 (fan-out + aggregate) can move off-context via a Dynamic Workflow - `--workflow` is a transparent perf lever, same findings.
+
+- If `--workflow` was parsed -> use the workflow path (go to `## Workflow Mode` after Phase 2). An explicit `--workflow` always wins.
+- Else if the `Workflow` tool is **not** available this session -> silently use the standard Task-based path. Do NOT show the option.
+- Else (tool available, no explicit flag) -> ask via `AskUserQuestion`:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "How should I run the backlog review?",
+    header: "Run mode",
+    options: [
+      { label: "Standard (Recommended)", description: "Agents via Task tool - full per-agent backlog ideas visible inline" },
+      { label: "Workflow", description: "Dynamic Workflow - off-context fan-out, only the clustered ideas return" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Handle response:** Standard -> standard path (Phase 3 below); Workflow -> treat as if `--workflow` was set (go to `## Workflow Mode` after Phase 2); Other -> honor a named path else default to Standard.
 
 ### Phase 1: Explorer - Gather Context
 
@@ -221,6 +248,8 @@ Based on project context, selected {N} experts:
 Launching...
 ```
 
+**If the workflow path was chosen** (`--workflow` or the interactive pick): do NOT run Phase 3 here - go to `## Workflow Mode` below. It builds args from the Phase 1 profile + the Phase 2 agents, invokes the asset, and resumes at Phase 4 with the returned aggregate. Otherwise continue with Phase 3 (standard Task fan-out).
+
 ### Phase 3: Launch Brainstorm Agents (Parallel)
 
 CRITICAL: Launch ALL selected agents in a SINGLE message with multiple Task tool calls.
@@ -275,6 +304,8 @@ OUTPUT FORMAT:
 Agents define their own brainstorm focus in their `## Modes` section - no mandatory context table needed.
 
 ### Phase 4: Aggregate & Present
+
+> **Keep in sync (--workflow):** the off-context clustering lives in `skills/backlog-workflow/backlog.workflow.js` - `buildThemes` (semantic merge -> impact-sort with `agents[]`) and `clusterIdeas` (title-only fallback). Any change to the dedupe/merge/impact-sort here MUST be mirrored there, and vice versa. (No unit test pins this - the runtime blocks clean import; keep-in-sync discipline + a live smoke test are the guards.)
 
 After all agents respond:
 
@@ -445,6 +476,47 @@ bd comments add <task-id> "Cleanup: closed {N}, reprioritized {M}, labeled {L}, 
 
 ---
 
+## Workflow Mode (--workflow)
+
+Runs when the workflow path was chosen (Review mode only). Replaces Phase 3 (Task launch) + Phase 4's in-context aggregation: the ideate fan-out + cluster happen inside the Dynamic Workflow so per-agent backlog ideas never enter this conversation - only the clustered result returns. Phases 1, 2, 5, 6 are unchanged and stay in-context.
+
+### W1: Preflight
+
+If the `Workflow` tool is NOT available this session, STOP and tell the user:
+
+> `--workflow` needs Claude Code >= 2.1.154 on a paid plan (Dynamic Workflows is a research preview). Re-run without `--workflow` to use the standard agent flow.
+
+Do NOT silently fall back.
+
+### W2: Build args
+
+Use the agents SELECTED in Phase 2 (do not re-select). **Exclude `lets:actor`** - the skeleton does not inject the `PERSONALITY:` block; if actor was selected, drop it and run with the rest (tell the user), or run the standard path if actor was the only non-default expert.
+
+```
+{
+  profile: "{explorer Project State Profile from Phase 1}",
+  agents: [ { name: "pragmatist" }, { name: "architect" }, ... ],   // short names, no "lets:" prefix
+  projectRoot: "{LETS_PROJECT_ROOT from LETS Config}",
+  claudeMd: "{CLAUDE.md content, first ~100 lines}"
+}
+```
+
+Pass `args` as a real JSON value (the skeleton defensively parses a JSON string too).
+
+### W3: Invoke the workflow
+
+```
+Workflow({ scriptPath: "${CLAUDE_PLUGIN_ROOT}/skills/backlog-workflow/backlog.workflow.js", args: <W2 args> })
+```
+
+The skeleton is a committed asset (`skills/backlog-workflow/backlog.workflow.js`) - NOT reproduced inline. See `skills/backlog-workflow/SKILL.md` for the `args` contract and stage flow (ideate -> cluster). **Runs in the BACKGROUND** - the tool returns a `runId`, not the result; a `<task-notification>` arrives on completion and the orchestrator resumes. Optionally tell the user "Backlog review running in the background - {N} agents".
+
+### W4: Rejoin (on completion)
+
+The returned aggregate `{ ideas, counts }` is the only thing that enters context (per-agent idea dumps stayed off-context). `ideas` are already **semantically clustered** (themes merge ideas that make the same point across agents) + impact-sorted; each carries `agents[]` attribution - **`agents[]` length > 1 means multiple agents converged on that theme: lead with those as the high-signal findings and note the agent count**. `counts.clustering` reports which path ran (`semantic` = cluster agent; `fallback_title` = title-only fallback after a cluster-agent error; `trivial` = <=1 idea). Render Phase 4 from `ideas[]` exactly as the standard path does - the schema carries `category` (`missing`/`adjust`/`theme`) + `impact` only, so Phase 4's "Gaps Identified" and "Quick Wins" buckets are derived by judgment at render time (`category:missing` -> Gaps candidates; low-effort high-value items -> Quick Wins), same as the standard path derives them from the agents' markdown. Then continue Phase 5 (dialog) + Phase 6 (capture). If `counts.agents_responded === 0` (all ideators errored), surface that and offer a re-run; do not render a fabricated result. If the workflow failed or returned nothing, offer the standard Task-based path.
+
+---
+
 ## Output
 
 ### After Review Backlog mode:
@@ -473,4 +545,5 @@ bd comments add <task-id> "Cleanup: closed {N}, reprioritized {M}, labeled {L}, 
 - All agents launched in a SINGLE message (parallel)
 - If explorer fails or returns thin profile (<5 tasks), surface and point to /lets:brainstorm for quick ideation
 - Explorer profile max ~500 words (passed to multiple agents)
+- `--workflow` (Review mode only) runs Phases 3-4 off-context in a Dynamic Workflow - a transparent perf lever, same findings as the standard path; Cleanup ignores `--workflow`
 - Respond in user's language
