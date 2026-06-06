@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- **Plan filenames are date-prefixed + plan lookups are slug-scoped (lets-fe788).** `/lets:plan` now saves plans as `.lets/plans/YYYY-MM-DD-HHMM-<slug>.md` (same convention as `.lets/sessions/`), so a second plan on the same branch no longer overwrites the first — plan history is preserved. The three readers — `/lets:execute`, `/lets:review --plan`, `/lets:check --plan` — resolve the latest plan slug-scoped (`ls -t .lets/plans/*<slug>*.md | head -1`) instead of a global latest, fixing cross-worktree shadowing where the symlink-shared `.lets/plans/` made `ls -t *.md` grab another worktree session's plan. Each reader has an empty-slug guard (prevents the glob collapsing back to global latest), a task-id fallback, and `/lets:review --plan` now calls detect-task in plan mode so the fallback resolves. Legacy bare-name plans still resolve (wildcard matches both formats).
+
 ## [0.6.1] - 2026-06-05
 
 ### Added
