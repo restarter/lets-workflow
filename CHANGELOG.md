@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **cmux as an optional macOS worktree launcher (lets-3jutw).** A new `LETS_LAUNCHER` config key (`terminal` default | `cmux`, asked by `/lets:init`) lets `/lets:worktree create` open the new worktree session inside a [cmux](https://github.com/manaflow-ai/cmux) workspace running `claude '/lets:start <id>'` — one command instead of opening a second terminal — with a readable workspace slug derived from the task title. Backed by a `lets cmux` Go subcommand (`open` + `rename`, `//go:build unix`, Windows stub) that wraps `cmux workspace create/list/rename`. **Strictly optional and never hard-fails:** it detects cmux on PATH + macOS and silently falls back to the `cd … && claude` terminal flow when absent, so non-macOS / no-cmux setups are unchanged. `open` carries a duplicate-session guard (refuses a second workspace for a worktree that already has one — `--force` overrides), and `lets cmux rename` lets a session relabel its own tab to disambiguate concurrent sessions. Override per-run with `/lets:worktree create <name> --cmux` / `--no-cmux`.
+
 ## [0.6.1] - 2026-06-05
 
 ### Added

@@ -13,7 +13,7 @@ Thin dispatcher for interactive parallel worktrees. All filesystem/git work live
 ## Step 1: Determine Subcommand
 
 **If argument provided** (e.g., `/lets:worktree create auth-feature`), parse it:
-- `create <name>` -> go to Create
+- `create <name>` -> go to Create. **First strip any `--cmux` / `--no-cmux` token** out of the argument and carry it as the launcher override for Step C3.5; bind the remainder as `<name>` (so `create auth --cmux` => name `auth`, not `auth --cmux`).
 - `list` -> go to List
 - `remove <name>` -> go to Remove
 - `info` -> go to Info
@@ -106,7 +106,7 @@ Decide how to open the worktree. Resolve in this order:
 
 **terminal** (default / `--no-cmux`): print the new-terminal command (Step C4 "terminal" block) — unchanged behavior.
 
-**cmux** (`$LETS_LAUNCHER=cmux` or `--cmux`): derive a short readable workspace **slug** from the task title — lowercase, dash-separated, 2-4 distinctive words, <~30 chars — the SAME rule as the `/rename` slug in `/lets:start` Step 7 (e.g. **Integrate cmux as parallel-worktree launcher** → `cmux-launcher`). Then:
+**cmux** (`$LETS_LAUNCHER=cmux` or `--cmux`): derive the workspace **slug** from the task title **per the `/rename` slug rule in `/lets:start` Step 7** — that spec is the single source of truth; don't re-paraphrase it here (e.g. **Integrate cmux as parallel-worktree launcher** → `cmux-launcher`). Then:
 
 ```bash
 lets cmux open "{worktree.path}" --name "{slug}" --command "claude '/lets:start {task-id}'" --json
@@ -119,7 +119,7 @@ Parse the `launch` block:
 - `launched=false`, `reason=already_open` → a cmux workspace (**{existing_ref} {existing_title}**) already targets this worktree. Don't spawn a duplicate (one live session per worktree) — tell the user to switch to it, or re-run with `--force` to override.
 - `launched=false`, other `reason` (cmux not found / not macOS / cmux error) → render `fallback_command` with a one-line note naming `reason` — same as the terminal block but prefixed with the reason.
 
-> **Keep in sync:** the slug rule duplicates `/lets:start` Step 7; the launched/fallback contract mirrors `cmuxcmd.Open` (`cli/internal/cmuxcmd/open.go`). The Go layer never hard-fails — always render whatever `launch` reports.
+> **Keep in sync:** the slug rule is sourced from `/lets:start` Step 7 by pointer (not copied — one authoritative definition); the launched/fallback contract mirrors `cmuxcmd.Open` (`cli/internal/cmuxcmd/open.go`). The Go layer never hard-fails — always render whatever `launch` reports.
 
 ### Step C4: Output
 
