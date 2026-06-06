@@ -85,6 +85,11 @@ var Keys = []Key{
 		Comment: "Task tracker (currently 'beads'; schema reserved for Linear/Jira)",
 		Default: "beads",
 	},
+	{
+		Name:    "LETS_LAUNCHER",
+		Comment: "Worktree launcher: terminal (print the cd command) | cmux (open in a cmux workspace, macOS only)",
+		Default: "terminal",
+	},
 }
 
 // Defaults returns a map[Name]Default for fast lookup. Used by renderEnvExample,

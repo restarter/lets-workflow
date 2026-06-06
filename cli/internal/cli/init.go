@@ -25,6 +25,7 @@ func NewInitCmd() *cobra.Command {
 		flagLanguage    string
 		flagMergeBranch string
 		flagPRFlow      string
+		flagLauncher    string
 		flagGithub      bool
 		flagSkipBeads   bool
 		flagPluginRoot  string
@@ -110,11 +111,20 @@ out with --plugin-root=${CLAUDE_PLUGIN_ROOT} plus the chosen flags.`,
 			// Tracker has no CLI flag yet; always filled from canonical defaults.
 			// RegenerateEnv's mergePrefs preserves user-customized LETS_TRACKER
 			// in existing .env over this default.
+			// Launcher has a CLI flag but, like Tracker, always carries a value:
+			// empty flag -> canonical default ("terminal"), so it never trips
+			// fresh-init's "missing required flag" gate. RegenerateEnv's mergePrefs
+			// preserves a user-customized LETS_LAUNCHER in an existing .env.
+			launcher := flagLauncher
+			if launcher == "" {
+				launcher = letsconfig.Defaults()["LETS_LAUNCHER"]
+			}
 			prefs := initcmd.Prefs{
 				Language:    flagLanguage,
 				MergeBranch: flagMergeBranch,
 				PRFlow:      flagPRFlow,
 				Tracker:     letsconfig.Defaults()["LETS_TRACKER"],
+				Launcher:    launcher,
 				SkipBeads:   flagSkipBeads,
 			}
 
@@ -125,6 +135,7 @@ out with --plugin-root=${CLAUDE_PLUGIN_ROOT} plus the chosen flags.`,
 	cmd.Flags().StringVar(&flagLanguage, "language", "", "Response language (English/Ukrainian/Italian/etc)")
 	cmd.Flags().StringVar(&flagMergeBranch, "merge-branch", "", "Target branch for merges (default: main)")
 	cmd.Flags().StringVar(&flagPRFlow, "pr-flow", "", "PR flow: local | github | bitbucket")
+	cmd.Flags().StringVar(&flagLauncher, "launcher", "", "Worktree launcher: terminal | cmux (default terminal)")
 	cmd.Flags().BoolVar(&flagGithub, "github", false, "(deprecated) alias for --pr-flow=github")
 	cmd.Flags().BoolVar(&flagSkipBeads, "skip-beads", false, "Skip beads initialization")
 	cmd.Flags().StringVar(&flagPluginRoot, "plugin-root", "", "Plugin install dir (else $CLAUDE_PLUGIN_ROOT, required)")
