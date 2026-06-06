@@ -109,7 +109,7 @@ Don't exceed ~4 lines in a box. If a command genuinely has only one sensible nex
 
 - [ ] Has LETS box in output section
 - [ ] LETS box shortcuts follow the guidance above (most-likely next step + lighter alternative where one exists + escape hatch); all boxes in the file are the same width
-- [ ] Updates Skill Quick Reference in `plugins/lets/rules/lets-rules.md` (and bump frontmatter `version`)
+- [ ] Updates Skill Quick Reference in `plugins/lets/rules/lets-rules.md` (do NOT bump frontmatter `version` per change — once per release at ceremony, see the version-coherence rule above)
 - [ ] Updates `/lets:install` Essential Skills / Planning Skills tables
 - [ ] Follows session flow (start -> work -> commit -> done -> end)
 - [ ] Description is clear and actionable
@@ -124,7 +124,7 @@ Required edits:
 
 1. Append `Key{Name, Comment, Default}` entry to `letsconfig.Keys`. Name MUST start with `LETS_`.
 2. Add field to `Prefs` struct in `cli/internal/initcmd/render.go` AND add ONE entry to `Prefs.AsValues()` map (one-line addition right below the field).
-3. Bump frontmatter `version` in `plugins/lets/rules/lets-rules.md` so SessionStart drift check fires for installed users on next session.
+3. Regenerate the env goldens (`go test ./internal/initcmd -run Golden -update`) and bump any hardcoded key-count assertions (`keys_test.go`, sessionstart tests, the "N canonical keys" prose in `CLAUDE.md` / `cli/README.md`). Do **NOT** bump the `lets-rules.md` frontmatter `version` per change — it's bumped once per release at ceremony time (see the version-coherence rule above); the SessionStart drift check picks the new key up on the next release.
 
 If the key is exposed via the `/lets:init` slash command (most are):
 
