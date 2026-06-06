@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **`/lets:start --main` — no-task project-assistant / PM mode (lets-jzimq).** A new `--main` (alias `--assistant`) entry-mode for `/lets:start` that skips the mandatory task-selection gate and enters a persistent project-assistant / PM stance: it stays on `$LETS_MERGE_BRANCH` in read + triage mode (backlog grooming via `/lets:backlog`, strategy, task creation, note capture) and routes you to the right `/lets:*` command when concrete work starts. Code edits still require claiming a task — the merge-branch boundary is unchanged, so on edit-intent the session hands off to `take-task` / `create-task` instead of refusing. The persona is hardcoded inline for v1 (persona registry / custom source / `--as` review persona are a deferred follow-up). Rules carve-outs name the mode in Task Selection, Boundaries, and Session Flow.
+
 ## [0.6.1] - 2026-06-05
 
 ### Added
