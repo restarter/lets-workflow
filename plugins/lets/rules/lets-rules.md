@@ -32,6 +32,8 @@ If a `## LETS Notice` block appears in the injected context (sibling H2 of `## L
 - **Never edit files on the merge-branch.** Every task gets its own `feature/<task-id>-<slug>` branch (or `worktree-<name>` in worktrees). Before any code edit - verify you're on a feature/worktree branch. If on `$LETS_MERGE_BRANCH`: create/switch to feature branch FIRST, then edit.
 
   **Exception — trunk-mode.** If `detect-task` returns an active task AND HEAD == `$LETS_MERGE_BRANCH`, trunk-mode is active (user opted in via the `take-task` picker option "Stay on current branch"). In trunk-mode: editing the merge-branch is allowed; `/lets:done` pushes + closes the task without creating a PR (same-source-target is not a valid PR); `/lets:plan` and `/lets:execute` derive plan filenames from task-id instead of branch slug. If HEAD == `$LETS_MERGE_BRANCH` AND `detect-task` returns None, the default rule applies — refuse edits, instruct user to run `/lets:start <id>` first.
+
+  **Main / assistant mode.** When the session was entered via `/lets:start --main` (alias `--assistant`), HEAD == `$LETS_MERGE_BRANCH` with no active task is the **intended** state (read + triage), not an error — do not refuse the session or demand a task. The refuse-edits rule still governs *code edits*: on edit-intent, route the user to `take-task` / `create-task` (graceful hand-off) instead of only refusing.
 - **Never edit installed `lets-*` rules files** in `.claude/rules/`. They are plugin-managed copies refreshed by `/lets:init`. Edit the canonical source `plugins/lets/rules/lets-*.md` in the plugin instead — direct edits to installed copies bypass drift detection and silently desync from source.
 
 ## Slash Command Discipline
@@ -280,6 +282,8 @@ $LETS_PR_FLOW=github  /lets:start -> Work -> /lets:check -> /lets:commit -> /let
 
 Trunk-mode (any $LETS_PR_FLOW): /lets:start (pick "Stay on current branch") -> Work -> /lets:check -> /lets:commit -> /lets:done (push + close, no PR) -> /lets:end
 
+Main mode (no task):  /lets:start --main -> triage / groom / route (no edits) -> /lets:start <id> when coding starts -> /lets:end
+
 Worktree:  /lets:worktree create -> `cd .worktrees/<name>/ && claude` -> /lets:start -> Work -> /lets:done -> /lets:end -> /lets:worktree remove (main repo)
 
 Team:      /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /lets:done
@@ -313,6 +317,8 @@ When conversation starts or user wants to begin working -> suggest `/lets:start`
 ### Task Selection (MANDATORY)
 
 Never work without a tracked task. User must pick existing task or create new one via beads.
+
+**Exception — main / assistant mode.** `/lets:start --main` (alias `--assistant`) enters a deliberate **no-task** session stance (project-assistant / PM): read + triage only on `$LETS_MERGE_BRANCH`. The task gate does NOT apply at session start — do not nag for a task or refuse triage / backlog grooming / task creation / notes. Code edits still require claiming a task first (the merge-branch boundary in `## Boundaries` is unchanged); on edit-intent, offer `take-task` / `create-task` rather than a bare refusal.
 
 ### Task Size Assessment
 
