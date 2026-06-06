@@ -56,12 +56,20 @@ If `--plan` flag detected, switch to plan review mode. Skip all code review step
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-# Find latest plan
-PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*.md 2>/dev/null | head -1)
-# Or specific path: /lets:check --plan path/to/plan.md
+BRANCH=$(git branch --show-current)
+SLUG="${BRANCH#feature/}"
+PLAN=""
+# Guard: empty slug (detached HEAD) would collapse the glob to *.md -> global latest -> another
+# worktree's plan (the bug this fixes). Skip to the explicit-path hint instead.
+if [ -n "$SLUG" ]; then
+  # Latest plan for THIS branch/slug - matches date-prefixed (YYYY-MM-DD-HHMM-<slug>.md) and legacy
+  # bare <slug>.md. Slug-scoped, NOT global `ls -t`: .lets/plans is shared across worktrees via symlink.
+  PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
+fi
+# Explicit path wins: /lets:check --plan path/to/plan.md
 ```
 
-If no plan found: "No plans found in `.lets/plans/`. Run `/lets:brainstorm` first."
+If no plan found: "No plan found for this branch in `.lets/plans/`. Run `/lets:plan` first, or pass a path: `/lets:check --plan <path>`." (Trunk-mode on `{LETS_MERGE_BRANCH}`: the slug is the branch name and won't match a `<task-id>` plan - use the explicit path or `/lets:review --plan`.)
 
 Read the plan and review with 5 lenses (same confidence filter):
 
