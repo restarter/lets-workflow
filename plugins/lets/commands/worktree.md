@@ -116,7 +116,8 @@ lets cmux open "{worktree.path}" --name "{slug}" --command "claude '/lets:start 
 
 Parse the `launch` block:
 - `launched=true` → "Opened cmux workspace **{workspace_name}**" (Step C4 "cmux" block).
-- `launched=false` → render `fallback_command` with a one-line note naming `reason` (cmux not found / not macOS / cmux error) — same as the terminal block but prefixed with the reason.
+- `launched=false`, `reason=already_open` → a cmux workspace (**{existing_ref} {existing_title}**) already targets this worktree. Don't spawn a duplicate (one live session per worktree) — tell the user to switch to it, or re-run with `--force` to override.
+- `launched=false`, other `reason` (cmux not found / not macOS / cmux error) → render `fallback_command` with a one-line note naming `reason` — same as the terminal block but prefixed with the reason.
 
 > **Keep in sync:** the slug rule duplicates `/lets:start` Step 7; the launched/fallback contract mirrors `cmuxcmd.Open` (`cli/internal/cmuxcmd/open.go`). The Go layer never hard-fails — always render whatever `launch` reports.
 
