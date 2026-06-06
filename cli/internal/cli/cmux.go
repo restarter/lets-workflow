@@ -26,8 +26,8 @@ func NewCmuxCmd() *cobra.Command {
 
 func newCmuxOpenCmd() *cobra.Command {
 	var (
-		name, command                string
-		focus, force, jsonOut, quiet bool
+		name, command         string
+		force, jsonOut, quiet bool
 	)
 	cmd := &cobra.Command{
 		Use:           "open <path>",
@@ -40,13 +40,14 @@ func newCmuxOpenCmd() *cobra.Command {
 				Path:    args[0],
 				Name:    name,
 				Command: command,
-				Focus:   focus,
 				Force:   force,
 			})
 			jsonBytes, _ := json.MarshalIndent(res, "", "  ")
 			if jsonOut {
 				fmt.Fprintln(cmd.OutOrStdout(), string(jsonBytes))
-			} else if !quiet {
+			} else if !quiet && res.OK {
+				// On a hard error main.go prints the typed error to stderr;
+				// skip the renderer to avoid a duplicate line (mirrors worktree.go info).
 				cmuxcmd.RenderOpen(cmd.OutOrStdout(), res)
 			}
 			return runErr
@@ -54,7 +55,6 @@ func newCmuxOpenCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&name, "name", "", "Workspace label (short readable slug)")
 	cmd.Flags().StringVar(&command, "command", "", "Command to run in the workspace (e.g. claude '/lets:start <id>')")
-	cmd.Flags().BoolVar(&focus, "focus", false, "Focus the new workspace (OFF by default - `cmux workspace create` may not accept --focus; verify before enabling)")
 	cmd.Flags().BoolVar(&force, "force", false, "Open even if a cmux workspace already targets this path (skip the duplicate-session guard)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
 	cmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Suppress human-readable output")
@@ -81,7 +81,9 @@ func newCmuxRenameCmd() *cobra.Command {
 			jsonBytes, _ := json.MarshalIndent(res, "", "  ")
 			if jsonOut {
 				fmt.Fprintln(cmd.OutOrStdout(), string(jsonBytes))
-			} else if !quiet {
+			} else if !quiet && res.OK {
+				// Skip the renderer on hard error (main.go prints to stderr) to
+				// avoid a duplicate line (mirrors worktree.go info).
 				cmuxcmd.RenderRename(cmd.OutOrStdout(), res)
 			}
 			return runErr

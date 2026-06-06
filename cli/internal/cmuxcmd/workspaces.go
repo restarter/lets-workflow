@@ -66,12 +66,21 @@ func findSelected(ws []workspaceEntry) *workspaceEntry {
 	return nil
 }
 
+// cleanPath normalizes a path for comparison: Abs, then EvalSymlinks so a
+// symlinked path (macOS /var->/private/var, /tmp, a symlinked .worktrees entry)
+// matches cmux's resolved current_directory. Falls back to Clean when the path
+// doesn't exist locally (cmux may report a path we can't stat). Mirrors
+// worktreecmd.sameDir's resolve closure - without symlink resolution the
+// duplicate-session guard fails open on macOS and findByDir misses.
 func cleanPath(p string) string {
 	if p == "" {
 		return ""
 	}
 	if abs, err := filepath.Abs(p); err == nil {
-		return filepath.Clean(abs)
+		p = abs
+	}
+	if real, err := filepath.EvalSymlinks(p); err == nil {
+		return real
 	}
 	return filepath.Clean(p)
 }

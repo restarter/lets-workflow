@@ -16,7 +16,6 @@ type OpenOptions struct {
 	Path    string // directory to open (the worktree path); required, must exist
 	Name    string // workspace label (a short readable slug); optional
 	Command string // command cmux runs in the workspace, e.g. claude '/lets:start <id>'
-	Focus   bool   // focus the new workspace
 	Force   bool   // open even if a workspace already targets Path (skip the duplicate-session guard)
 }
 
@@ -96,16 +95,16 @@ func Open(ctx context.Context, opts OpenOptions) (*OpenResult, error) {
 		}
 	}
 
-	// Canonical form: cmux workspace create --cwd <path> [--name] [--command] [--focus].
+	// Canonical form: cmux workspace create --cwd <path> [--name] [--command].
+	// No --focus: verified that `cmux workspace create` does not accept it
+	// (`cmux workspace create --help`), so passing it would only force the
+	// cmux_error fallback. Re-add when/if cmux supports it.
 	args := []string{"workspace", "create", "--cwd", opts.Path}
 	if opts.Name != "" {
 		args = append(args, "--name", opts.Name)
 	}
 	if opts.Command != "" {
 		args = append(args, "--command", opts.Command)
-	}
-	if opts.Focus { // only when explicitly requested; `workspace create` --focus support is unverified - off by default
-		args = append(args, "--focus", "true")
 	}
 	if out, err := createWorkspaceRaw(ctx, bin, args); err != nil {
 		// cmux present but errored: still optional - fall back, surface reason.
