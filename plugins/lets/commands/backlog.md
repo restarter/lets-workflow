@@ -174,7 +174,7 @@ Scan the profile for signals and match to agents:
 ```
 AskUserQuestion(
   questions=[{
-    question: "Planning {N} brainstorm agents. That's a lot - confirm?",
+    question: "Planning {N} review agents. That's a lot - confirm?",
     header: "Confirm",
     options: [
       { label: "Launch all", description: "{N} agents, broad coverage" },
@@ -206,7 +206,7 @@ AskUserQuestion(
 
 **Actor note:** If actor is selected, invoke `Skill(skill: "lets:actor-fetch-personality", args: "<personality-source-from-user>")` to fetch the personality. Pass the returned `PERSONALITY:` block in the actor's Task prompt only.
 
-Show selection before launching (no user gate - brainstorm = momentum):
+Show selection before launching (no user gate - review = momentum):
 
 ```
 ## Backlog Review Panel

@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+- **`/lets:backlog` — backlog review + cleanup command (lets-9r4at).** Extracted from `/lets:brainstorm`: a two-mode command (`/lets:backlog review` | `/lets:backlog cleanup`, or a menu when called bare). *Review* launches an explorer scout + parallel domain agents that ideate over the backlog and aggregate multi-perspective insights (the former brainstorm Heavy mode, moved verbatim); *Cleanup* is fast interactive triage of stale/duplicate/orphan/unassigned tasks (no agents). Continues the decomposition started when `/lets:explore` was split out for topic ideation.
+
+### Changed
+- **`/lets:brainstorm` is now Quick-only ideation (lets-9r4at).** Slimmed to a single fast flow — a quick context scan (no agents) then a direct conversation — after Review-backlog and Cleanup moved to the new `/lets:backlog`. The "specific topic → `/lets:explore`" handoff is preserved (new Step Q0); the Step 0 mode menu is gone.
+
 ## [0.6.1] - 2026-06-05
 
 ### Added
