@@ -113,7 +113,7 @@ Then, inside the Claude Code session:
 | Command | Description |
 |---------|-------------|
 | `/lets:brainstorm` | Quick interactive ideation on a topic - fast context scan, no agents |
-| `/lets:backlog` | Backlog review (multi-agent) + interactive cleanup triage |
+| `/lets:backlog` | Backlog review (multi-agent) + interactive cleanup triage (Review `--workflow` = off-context) |
 | `/lets:explore` | Explore a topic from multiple expert angles - scout, web research, agent fan-out (`--workflow` = off-context) |
 | `/lets:plan` | Structured planning - explore codebase, design architecture, write plan (`--fast` = orchestrator-only, no subagents) |
 | `/lets:execute` | Execute plan from `/lets:plan` via native plan mode |
@@ -219,7 +219,7 @@ A LETS session runs a loop: start, work, commit, finish.
 
 **Brainstorm** (`/lets:brainstorm`) - fast interactive ideation on a topic: a quick context scan (no agents), then a direct conversation. For a specific topic deep-dive, use `/lets:explore`.
 
-**Backlog** (`/lets:backlog`) - manage the task backlog in two modes: *Review backlog* (agents analyze your task list, find patterns, suggest priorities) and *Cleanup* (find stale tasks, broken dependencies, forgotten work). `/lets:backlog review` and `/lets:backlog cleanup` skip the menu.
+**Backlog** (`/lets:backlog`) - manage the task backlog in two modes: *Review backlog* (agents analyze your task list, find patterns, suggest priorities) and *Cleanup* (find stale tasks, broken dependencies, forgotten work). `/lets:backlog review` and `/lets:backlog cleanup` skip the menu. `/lets:backlog review --workflow` runs the Review fan-out off-context.
 
 **Explore** (`/lets:explore`) - think through a specific topic or idea from multiple expert angles. A scout gathers project context, a web-research pass pulls current community standards, then parallel domain agents surface insights, open questions, and approaches. `--workflow` runs the fan-out off-context.
 
