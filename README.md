@@ -126,6 +126,7 @@ Then, inside the Claude Code session:
 | `/lets:check` | Quick inline sanity check (~30s, 6-perspective review) |
 | `/lets:review` | Full code review with dynamic agent selection (~2-3 min) |
 | `/lets:github-pr` | GitHub PR review lifecycle - analyze, discuss, post inline, follow-up, approve |
+| `/lets:review-round` | Work through a received review round - triage comments, record decisions, one final edit-pass |
 | `/lets:opinion` | Technical decision analysis (dynamic expert agents in parallel) |
 | `/lets:ask` | Quick expert consultation (single agent) |
 
