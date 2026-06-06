@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **`/lets:review-round` — work through a RECEIVED review round (lets-lqdtz).** The inverse of `/lets:review`: instead of generating findings, it consumes a multi-comment review round on a spec/doc/PR. Triage each comment (accept/reject/defer/done), record decisions to the beads task as you go, keep the artifact FROZEN during triage, then apply all accepted edits in ONE final pass — cascading reframes change earlier items, so a half-edited artifact mid-round is inconsistent. Verifies falsifiable reviewer claims against the real code, surfaces premise-level reframes before nits, and for GitHub PRs hands the per-comment summary to `/lets:github-pr --respond`.
+
 ## [0.6.1] - 2026-06-05
 
 ### Added
