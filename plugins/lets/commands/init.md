@@ -153,6 +153,22 @@ AskUserQuestion(
 
 Bind to `$BRANCH`. "Other" free-text → use as-is.
 
+### 2c-ter. Worktree launcher
+
+AskUserQuestion(
+  questions=[{
+    question: "How should LETS open new worktree sessions?",
+    header: "Launcher",
+    options: [
+      { label: "Terminal (Recommended)", description: "Print a cd command to run in a new terminal. Works everywhere." },
+      { label: "cmux", description: "Open in a cmux workspace automatically (macOS + cmux only; falls back to terminal when absent)" }
+    ],
+    multiSelect: false
+  }]
+)
+
+Bind label (lowercased, first word) to `$LAUNCHER`: "Terminal"→"terminal", "cmux"→"cmux". `cmux` needs no extra setup — it degrades to the terminal flow on non-macOS or when cmux isn't installed (the `lets cmux` launcher handles the fallback).
+
 ### 2c-bis. Beads init prompt (only if BEADS_ABSENT from Step 1)
 
 If `BEADS_ABSENT`:
@@ -183,6 +199,7 @@ lets init --json \
   --language="$LANG" \
   --merge-branch="$BRANCH" \
   --pr-flow="$FLOW" \
+  --launcher="$LAUNCHER" \
   $SKIP_BEADS_FLAG
 ```
 
@@ -277,7 +294,7 @@ AskUserQuestion(
 
 If "Keep current" picked, substitute `$LANG = $CURRENT_LANG`. Else use selected label. "Other" free-text (auto-added by tool) → use the **ENGLISH name** of the language (Chinese, Polish, German, Russian, Japanese, ...). If the user types a native-script name (`Русский`, `Українська`, `日本語`, `中文`, `Deutsch`, ...), **normalise it to the English name** before binding — same rule as Step 2a; every value in `.lets/.env` is in English.
 
-Repeat for MergeBranch (`$BRANCH`) and PRFlow (`$FLOW`).
+Repeat for MergeBranch (`$BRANCH`), PRFlow (`$FLOW`), and Launcher (`$LAUNCHER` — "Keep current" shows `$LETS_LAUNCHER` from LETS Config, plus options terminal / cmux).
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
@@ -285,7 +302,8 @@ lets init --json \
   --plugin-root="${CLAUDE_PLUGIN_ROOT}" \
   --language="$LANG" \
   --merge-branch="$BRANCH" \
-  --pr-flow="$FLOW"
+  --pr-flow="$FLOW" \
+  --launcher="$LAUNCHER"
 ```
 
 Passing the prefs flags triggers `env_action.kind=regenerated` (binary detects values differ from existing .env, regenerates while preserving foreign keys + user-customized `LETS_TRACKER`).
