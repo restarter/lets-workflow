@@ -8,13 +8,19 @@ package updatecmd
 // SchemaVersion identifies the JSON output contract for `lets update --json`.
 // Bump on field removal or semantic change of an existing field; additions are
 // minor (consumers ignore unknown fields). Mirrors initcmd.SchemaVersion.
-const SchemaVersion = 1
+//
+// v2 (lets-kaw72): `.env`/`rules` now report `in-sync` (matches their local
+// source: the binary for `.env`, the plugin for `rules`) instead of `up-to-date`
+// (reserved for binary/plugin == latest release). This stops two `up-to-date`
+// rows at different versions from reading as self-contradictory.
+const SchemaVersion = 2
 
 // ArtifactStatus categorizes the state of one drift-able artifact.
 type ArtifactStatus string
 
 const (
-	StatusUpToDate       ArtifactStatus = "up-to-date"      // matches the expected version
+	StatusUpToDate       ArtifactStatus = "up-to-date"      // matches the latest release (binary / plugin)
+	StatusInSync         ArtifactStatus = "in-sync"         // matches its local source: the binary (.env) or the plugin (rules) - not necessarily the latest release
 	StatusUpdated        ArtifactStatus = "updated"         // we just synced it (.env header / rules file)
 	StatusOutdated       ArtifactStatus = "outdated"        // behind latest - user action needed
 	StatusAhead          ArtifactStatus = "ahead"           // newer than latest stable (prerelease / dev checkout)
@@ -35,7 +41,7 @@ type Artifact struct {
 
 // Summary aggregates artifact counts for at-a-glance consumption.
 type Summary struct {
-	UpToDate     int `json:"up_to_date"`
+	UpToDate     int `json:"up_to_date"` // "in sync" bucket: up-to-date + in-sync
 	Updated      int `json:"updated"`
 	ActionNeeded int `json:"action_needed"` // outdated + not-initialized
 	Unknown      int `json:"unknown"`       // unknown + ahead + dev
@@ -72,7 +78,7 @@ func NewResult(projectRoot, pluginRoot string) Result {
 func (r *Result) Add(a Artifact) {
 	r.Artifacts = append(r.Artifacts, a)
 	switch a.Status {
-	case StatusUpToDate:
+	case StatusUpToDate, StatusInSync:
 		r.Summary.UpToDate++
 	case StatusUpdated:
 		r.Summary.Updated++

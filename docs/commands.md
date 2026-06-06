@@ -19,7 +19,8 @@ See **[tasks.md](tasks.md)** for the task lifecycle.
 
 | Command | What it does |
 |---------|--------------|
-| `/lets:brainstorm` | Interactive ideation — review the backlog, explore an idea, quick brainstorm, or cleanup. |
+| `/lets:brainstorm` | Quick interactive ideation on a topic — fast context scan, no agents. |
+| `/lets:backlog` | Backlog management — multi-agent backlog review, or interactive cleanup triage. `review` / `cleanup` skip the menu. |
 | `/lets:plan` | Structured planning — codebase exploration with scaled explorer agents, then architecture design with expert evaluation, then a written plan in `.lets/plans/`. `--fast` skips the subagent phases and plans in-conversation. |
 | `/lets:execute` | Execute the plan from `/lets:plan` in native plan mode, with your approval at each step. |
 | `/lets:team` | Parallel implementation with Agent Teams — `run` (pick tasks, spawn teammates), `status`, `stop`. |

@@ -42,7 +42,8 @@ Parse JSON.
 1. **Artifact table** - one line per `artifacts[]` entry:
    `<name>  v<current_version>  <status>  (latest v<latest_version>)  - <detail>`
    Omit `(latest …)` / `- <detail>` when those fields are empty; print `?` for an empty `current_version` (`dev` prints as-is, not `vdev`).
-2. **Summary line:** `<summary.up_to_date> up-to-date · <summary.updated> updated · <summary.action_needed> need action · <summary.unknown> unknown`.
+   Status vocabulary: `.env`/`rules` report `in-sync` - they track a *local* source (the `lets` binary for `.env`, the plugin for `rules`), not the latest release. `binary`/`plugin` report `up-to-date`/`outdated` against the *latest release*. So `.env` and `rules` can sit at different versions and both be `in-sync` - expected, not a contradiction; their `detail` names what they track and flags "itself behind latest v…" when that source is itself stale.
+2. **Summary line:** `<summary.up_to_date> in sync · <summary.updated> updated · <summary.action_needed> need action · <summary.unknown> unknown` (`summary.up_to_date` is the combined in-sync bucket: `in-sync` + `up-to-date`).
 3. **What you need to do** - build ONE numbered list of everything left for the user. Skip the whole section if there's nothing (no `action` strings, no rules update). Order: binary → plugin → restart. Everything here runs from inside Claude Code.
    - For each `artifacts[]` entry with a non-empty `action` (i.e. `binary` / `plugin`), add a step.
      - **`binary`:** present the `curl …` command from the action **prefixed with `! `** so the user can run it right in the Claude Code prompt — `! curl -fsSL https://raw.githubusercontent.com/restarter/lets-workflow/main/scripts/install.sh | bash` — the leading `!` makes Claude Code run it as a shell command in this session, no terminal needed. Add: "(or run the same command **without** the `!` in a terminal.)"

@@ -88,7 +88,8 @@ Team:     /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /le
 | `/lets:team` | Utility | Parallel implementation with Agent Teams |
 | `/lets:status` | Utility | Task overview anytime |
 | `/lets:note` | Utility | Add note to active task |
-| `/lets:brainstorm` | Planning | Interactive backlog ideation - review backlog, quick brainstorm, cleanup |
+| `/lets:brainstorm` | Planning | Quick interactive ideation on a topic - fast context scan, no agents |
+| `/lets:backlog` | Planning | Backlog review (multi-agent) + interactive cleanup triage |
 | `/lets:explore` | Planning | Explore a topic from multiple expert angles - scout, web research, fan out agents (`--workflow` = off-context) |
 
 ### Auto-triggered Skills
@@ -111,7 +112,7 @@ These fire automatically when you describe the action in conversation - no slash
 **Rule of thumb:** Can you write a 1-sentence requirement?
 - YES, small task -> work directly
 - YES, medium/large -> `/lets:plan` then `/lets:execute`
-- NO -> `/lets:brainstorm` to explore and clarify, then `/lets:plan`
+- NO -> `/lets:explore` to think it through, then `/lets:plan`
 
 ### Key Rules
 

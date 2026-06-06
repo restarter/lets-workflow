@@ -21,6 +21,16 @@ func TestResult_AddCounters(t *testing.T) {
 	}
 }
 
+func TestResult_InSyncCountsAsUpToDate(t *testing.T) {
+	r := NewResult("/p", "/plug")
+	r.Add(Artifact{Name: ".env", Status: StatusInSync})
+	r.Add(Artifact{Name: "binary", Status: StatusUpToDate})
+	// Both fold into the "in sync" bucket (Summary.UpToDate).
+	if r.Summary.UpToDate != 2 {
+		t.Fatalf("UpToDate = %d, want 2 (in-sync + up-to-date)", r.Summary.UpToDate)
+	}
+}
+
 func TestResult_AddCounters_NotInitializedCountsAsAction(t *testing.T) {
 	r := NewResult("/p", "/plug")
 	r.Add(Artifact{Name: ".env", Status: StatusNotInitialized})
@@ -38,7 +48,7 @@ func TestResult_AddCounters_NotInitializedCountsAsAction(t *testing.T) {
 // renaming/removing a field must touch this test on purpose (mirrors
 // initcmd.TestResult_SchemaContract).
 func TestResult_SchemaContract(t *testing.T) {
-	if SchemaVersion != 1 {
+	if SchemaVersion != 2 {
 		t.Fatalf("SchemaVersion changed to %d - update consumers (commands/update.md) and this test", SchemaVersion)
 	}
 	r := NewResult("/p", "/plug")

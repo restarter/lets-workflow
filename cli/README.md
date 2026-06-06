@@ -176,7 +176,7 @@ lets update --plugin-root "${CLAUDE_PLUGIN_ROOT}" [--json] [--offline] [--refres
 
 Flags:
 - `--plugin-root` — plugin install dir (or `$CLAUDE_PLUGIN_ROOT`). Required, validated via the `.claude-plugin/plugin.json` marker.
-- `--json` — emit a machine-readable JSON object (`schema_version=1`); `/lets:update` consumes this.
+- `--json` — emit a machine-readable JSON object (`schema_version=2`); `/lets:update` consumes this.
 - `--offline` — skip the GitHub latest-release check; `binary`/`plugin` come back `unknown`.
 - `--refresh-cache` — bypass the cached latest-release lookup and hit GitHub now.
 
@@ -184,12 +184,14 @@ What it checks (in order; never crashes for a network failure):
 
 | Artifact | Check | Action |
 |---|---|---|
-| `.lets/.env` | `LETS_ENV_VERSION` vs `version.Version` | `RegenerateEnv` with a near-empty `Prefs` (only the default tracker; user values are read from the existing `.env` regardless), so it just refreshes the header. Skip when in sync. Skipped entirely on a `dev` binary (avoids stamping `LETS_ENV_VERSION=dev`). `not-initialized` if `.env` is absent → "Run /lets:init". |
-| `.claude/rules/lets-rules.md` | `drift.Check` against plugin source | Re-copy from the plugin (atomic write) on any detected drift (incl. `ahead`); `unknown` if the plugin's own frontmatter is unparseable; `up-to-date` otherwise. |
+| `.lets/.env` | `LETS_ENV_VERSION` vs `version.Version` | `RegenerateEnv` with a near-empty `Prefs` (only the default tracker; user values are read from the existing `.env` regardless), so it just refreshes the header. `in-sync` (tracks the binary) when already current, `updated` after a header refresh. Skipped entirely on a `dev` binary (avoids stamping `LETS_ENV_VERSION=dev`). `not-initialized` if `.env` is absent → "Run /lets:init". |
+| `.claude/rules/lets-rules.md` | `drift.Check` against plugin source | Re-copy from the plugin (atomic write) on any detected drift (incl. `ahead`); `unknown` if the plugin's own frontmatter is unparseable; `in-sync` (tracks the plugin) otherwise. An `updated` row carries a past-tense detail ("was missing" / "was outdated (v…)"), never the pre-install imperative. |
 | `lets` binary | `version.Version` vs latest GitHub release | Report only (can't self-replace) — `outdated` → prints the install one-liner (`curl -fsSL …/main/scripts/install.sh \| bash`). `dev` build → no comparison. |
 | Claude Code plugin | `<pluginRoot>/.claude-plugin/plugin.json::version` vs latest release | Report only — `outdated` → prints the plugin-update hint (`/plugin marketplace update lets-workflow` + `/reload-plugins`, or enable auto-update). |
 
 Latest-release lookup hits `https://api.github.com/repos/restarter/lets-workflow/releases/latest` (5s timeout), cached 1h at `<project>/.lets/cache/update-check.json`; on a network failure it falls back to a stale cache entry if one exists, else reports `unknown`. The result also carries `consistent` (binary == plugin == installed-rules frontmatter version, ignoring `dev`) to flag a partial upgrade.
+
+Two reference frames (the lets-kaw72 fix, `schema_version=2`): `.env`/`rules` report `in-sync` relative to their *local* source (the binary and the plugin respectively), distinct from `up-to-date` (== latest release) used for `binary`/`plugin`. So two `in-sync` rows at different versions is expected, not a contradiction; `annotateInSyncBehind` appends "itself behind latest v…" to an in-sync row whose upstream is itself `outdated`. `Summary.UpToDate` (JSON `up_to_date`) is the combined in-sync bucket (`in-sync` + `up-to-date`).
 
 Refuses: from a worktree (`--git-dir != --git-common-dir`) — `.claude/` isn't shared into worktrees.
 
