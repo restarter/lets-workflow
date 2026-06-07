@@ -1,13 +1,16 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 
 	"github.com/spf13/cobra"
 
+	"github.com/restarter/lets-workflow/cli/internal/initcmd"
 	"github.com/restarter/lets-workflow/cli/internal/statusline"
+	"github.com/restarter/lets-workflow/cli/internal/statuslinecmd"
 )
 
 // interactiveTTY reports whether r is an interactive terminal (a character
@@ -121,5 +124,72 @@ stdin or stdout interaction in those modes.`,
 	cmd.Flags().BoolVar(&rich, "rich", false,
 		"Accepted no-op: the rich statusline is the default")
 	_ = cmd.Flags().MarkHidden("rich") // accepted for back-compat, hidden from help, no warning
+	cmd.AddCommand(newStatuslineConfigCmd())
 	return cmd
+}
+
+// newStatuslineConfigCmd builds `lets statusline config`: persist the appearance
+// render flags to .claude/settings.local.json (personal, gitignored) so a choice
+// sticks across sessions. The bare `lets statusline` render path is unchanged.
+func newStatuslineConfigCmd() *cobra.Command {
+	var (
+		light, compact, noTip, noDir, noTask bool
+		show, jsonOut, force                 bool
+	)
+	cmd := &cobra.Command{
+		Use:   "config",
+		Short: "Persist statusline appearance to .claude/settings.local.json",
+		Long: `Persist the statusline appearance flags (--light/--compact/--no-tip/
+--no-dir/--no-task) to .claude/settings.local.json (personal, gitignored) so
+the choice survives across sessions. Writes only the statusLine key, preserving
+other local settings. Restart Claude Code to apply.
+
+  --show    print the current persisted appearance, no write
+  --force   overwrite an existing non-LETS (foreign) statusLine command
+  --json    emit a JSON envelope instead of human-readable output
+
+The flag set is absolute: the persisted appearance is exactly the flags passed
+(no flags + no --show is rejected, to avoid an accidental reset).`,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			root := initcmd.DetectProjectRoot()
+			if root == "" {
+				e := statuslinecmd.ErrNotInRepo()
+				return emitStatuslineConfig(cmd, jsonOut, statuslinecmd.NewErrorResult("", e), e)
+			}
+			if show {
+				res, err := statuslinecmd.Show(root)
+				return emitStatuslineConfig(cmd, jsonOut, res, err)
+			}
+			want := statuslinecmd.Flags{Light: light, Compact: compact, NoTip: noTip, NoDir: noDir, NoTask: noTask}
+			if !want.Any() {
+				e := statuslinecmd.ErrUsage("specify at least one appearance flag (--light/--compact/--no-tip/--no-dir/--no-task) or --show")
+				return emitStatuslineConfig(cmd, jsonOut, statuslinecmd.NewErrorResult(root, e), e)
+			}
+			res, err := statuslinecmd.Apply(root, want, force)
+			return emitStatuslineConfig(cmd, jsonOut, res, err)
+		},
+	}
+	cmd.Flags().BoolVar(&light, "light", false, "Use the light-terminal palette")
+	cmd.Flags().BoolVar(&compact, "compact", false, "Render the legacy 2-line statusline")
+	cmd.Flags().BoolVar(&noTip, "no-tip", false, "Hide the bottom tip line")
+	cmd.Flags().BoolVar(&noDir, "no-dir", false, "Hide the location pill")
+	cmd.Flags().BoolVar(&noTask, "no-task", false, "Hide the task line")
+	cmd.Flags().BoolVar(&show, "show", false, "Show the current persisted appearance (no write)")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit a JSON envelope instead of human-readable output")
+	cmd.Flags().BoolVar(&force, "force", false, "Overwrite a foreign (non-LETS) statusLine command")
+	return cmd
+}
+
+// emitStatuslineConfig writes the config result (JSON envelope or human prose)
+// and returns err so main.go maps a typed *statuslinecmd.Error to its exit code.
+func emitStatuslineConfig(cmd *cobra.Command, jsonOut bool, res statuslinecmd.Result, err error) error {
+	if jsonOut {
+		b, _ := json.MarshalIndent(res, "", "  ")
+		fmt.Fprintln(cmd.OutOrStdout(), string(b))
+	} else {
+		statuslinecmd.RenderHuman(cmd.OutOrStdout(), res)
+	}
+	return err
 }
