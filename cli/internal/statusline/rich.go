@@ -89,7 +89,7 @@ const (
 	glyphTip    = "*"
 	glyphPR     = "⇄"
 	glyphArrow  = "←"
-	glyphFolder = "☰" // location-pill mark (U+2630, text, 1 cell — takes palette color)
+	glyphFolder = "»" // location-pill mark (U+00BB, 1 cell, font-portable; U+2630 ☰ font-substituted to 2 cells in cmux/Ghostty → border drift, lets-6md86)
 	glyphPlant  = "⚘" // static brand mark (text, 1 cell) — growth ladder parked below
 )
 
@@ -211,16 +211,29 @@ var ansiSGRRe = regexp.MustCompile("\x1b\\[[0-9;]*m")
 func stripANSI(s string) string { return ansiSGRRe.ReplaceAllString(s, "") }
 func visibleWidth(s string) int { return len([]rune(stripANSI(s))) }
 
-// wideRunes are the glyphs this renderer emits that occupy 2 terminal cells
-// (emoji). Everything else is treated as 1 cell. Keep this in sync with the
-// glyph set + growthLadder, or the box's right border will drift by a cell on
-// lines containing a missing entry. CAVEAT: ☑ (U+2611) and → (U+2192) are
-// East-Asian *Ambiguous* width — 1 cell on most terminals (incl. the default
-// macOS set) but 2 in some CJK/legacy configs; on those the right border can
-// drift. Perfect alignment across all terminals isn't achievable with a static
-// map; verify on your terminal (or swap those glyphs) if the border looks off.
+// wideRunes are the glyphs this renderer emits that occupy 2 terminal cells.
+// Everything else is treated as 1 cell. Keep this in sync with the glyph set +
+// growthLadder, or the box's right border will drift by a cell on lines
+// containing a missing entry.
+//
+// Two distinct drift causes, neither fixable by a static width map alone:
+//   - East-Asian *Ambiguous* width (☑ U+2611, → U+2192, · U+00B7): 1 cell on
+//     most terminals (incl. the default macOS set) but 2 in some CJK/legacy
+//     configs.
+//   - Font substitution: a glyph absent from the monospace face falls back to
+//     another font that draws it 2 cells wide. This is why ☰ (U+2630) was
+//     dropped from the location pill for » (U+00BB) — lets-6md86: cmux/Ghostty
+//     substituted ☰ to 2 cells while cellWidth counted 1, drifting the border.
+//
+// To check a glyph's real on-terminal width, print it between rulers:
+//
+//	printf '%s\n' 'ref |X|' 'glyph |<G>|'   # closing | drifts right if 2-cell
+//
+// Prefer glyphs present in standard monospace fonts (Latin-1 punctuation, etc.)
+// over decorative symbols. Perfect alignment across all terminals isn't
+// achievable with a static map; verify on your terminal if the border looks off.
 var wideRunes = map[rune]bool{
-	// All emitted glyphs are currently 1-cell text — brand ⚘, folder ☰, notes ¶,
+	// All emitted glyphs are currently 1-cell text — brand ⚘, folder », notes ¶,
 	// model ✦, task ✓, tip *, branch ⎇, PR ⇄, arrow ←. No emoji, so this map is
 	// empty and the border never drifts. Parked emoji that would belong here if
 	// the growth ladder is restored:
