@@ -2,11 +2,48 @@ package cli_test
 
 import (
 	"bytes"
+	"os"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/restarter/lets-workflow/cli/internal/cli"
 )
+
+// TestInteractiveTTY covers the stdin guard that prevents `lets statusline`
+// from hanging when run by hand (lets-7frjs).
+func TestInteractiveTTY(t *testing.T) {
+	// A non-*os.File reader — exactly what the render tests use — must never be
+	// treated as interactive, so it falls through to Render.
+	if cli.InteractiveTTY(strings.NewReader("{}")) {
+		t.Error("strings.Reader should not be interactive")
+	}
+
+	// A regular file is not a character device → not interactive.
+	f, err := os.CreateTemp(t.TempDir(), "stdin-*")
+	if err != nil {
+		t.Fatalf("temp file: %v", err)
+	}
+	defer func() { _ = f.Close() }()
+	if cli.InteractiveTTY(f) {
+		t.Error("regular file should not be interactive")
+	}
+
+	// A character device (os.DevNull is one on unix) exercises the positive
+	// branch. Faking a real TTY needs a PTY, so /dev/null stands in for the
+	// ModeCharDevice check. Windows NUL doesn't reliably report the bit — skip.
+	if runtime.GOOS == "windows" {
+		t.Skip("char-device probe is unix-only")
+	}
+	dn, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatalf("open %s: %v", os.DevNull, err)
+	}
+	defer func() { _ = dn.Close() }()
+	if !cli.InteractiveTTY(dn) {
+		t.Errorf("%s is a character device and should hit the interactive branch", os.DevNull)
+	}
+}
 
 // TestStatusline_E2E pipes minimal JSON in and verifies basic structure of
 // the rendered output. Project root detection runs via git rev-parse - the

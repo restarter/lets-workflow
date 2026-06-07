@@ -2,11 +2,31 @@ package cli
 
 import (
 	"fmt"
+	"io"
+	"os"
 
 	"github.com/spf13/cobra"
 
 	"github.com/restarter/lets-workflow/cli/internal/statusline"
 )
+
+// interactiveTTY reports whether r is an interactive terminal (a character
+// device) rather than a pipe or file. statusline.Render blocks reading the
+// Claude Code JSON context from stdin; on a TTY nothing arrives and nothing
+// closes the stream, so a direct `lets statusline` run would hang forever.
+// Type-asserting to *os.File means test readers (strings.Reader) never trip
+// the guard, so the render tests are unaffected.
+func interactiveTTY(r io.Reader) bool {
+	f, ok := r.(*os.File)
+	if !ok {
+		return false
+	}
+	fi, err := f.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
+}
 
 // NewStatuslineCmd builds `lets statusline` and `lets statusline --fetch-usage-only`.
 //
@@ -65,6 +85,16 @@ stdin or stdout interaction in those modes.`,
 			}
 			if fetchTaskOnly {
 				return statusline.RunFetchTaskOnly(cacheDir, taskID)
+			}
+			// Interactive guard (after the fetch-only branches, which don't touch
+			// stdin): a direct `lets statusline` in a terminal would block on the
+			// stdin read forever. Print a one-shot wiring hint to stderr and exit 0
+			// so Claude Code never treats this as a crashed bar.
+			if interactiveTTY(cmd.InOrStdin()) {
+				fmt.Fprintln(cmd.ErrOrStderr(), "lets statusline expects Claude Code's JSON context on stdin; run by hand it just waits for input.")
+				fmt.Fprintln(cmd.ErrOrStderr(), "  Preview:  echo '{}' | lets statusline [--light] [--compact] [--no-tip]")
+				fmt.Fprintln(cmd.ErrOrStderr(), "  Install:  lets init   (wires \"lets statusline\" into .claude/settings.json)")
+				return nil
 			}
 			_ = rich // accepted for back-compat; rich is the default
 			return statusline.Render(cmd.InOrStdin(), cmd.OutOrStdout(), light, compact, !noTip, !noDir, !noTask)
