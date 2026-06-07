@@ -430,6 +430,7 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:execute` | Planning | Execute plan from /lets:plan via native plan mode |
 | `/lets:status` | Utility | Task overview and project status |
 | `/lets:worktree` | Utility | Create/manage interactive worktrees for parallel work |
+| `/lets:statusline` | Utility | Manage & persist statusline appearance - light/dark, compact, hidden rows (writes personal `.claude/settings.local.json`) *(ships next release)* |
 | `/lets:team` | Utility | Parallel implementation with Agent Teams (run, status, stop) |
 | `/lets:note` | Utility | Add note to active task (`--pre-compact` = resume snapshot before /compact) |
 | `/lets:init`    | Setup | Per-project initialization. Re-run for self-heal (drift fix) or to change config |

@@ -630,6 +630,26 @@ func TestRenderRich_WorktreePill(t *testing.T) {
 	}
 }
 
+// TestRenderRich_LocationGlyph pins the location-pill marker to the
+// font-portable » (U+00BB) and guards against the 2-cell ☰ (U+2630) that
+// font-substituted to 2 cells in cmux/Ghostty and drifted the border (lets-6md86).
+func TestRenderRich_LocationGlyph(t *testing.T) {
+	dir := t.TempDir()
+	in := richTestInput()
+	var buf bytes.Buffer
+	// Full tier, non-worktree branch → location pill shows the folder name + marker.
+	if err := renderRich(&buf, in, "feature/lets-6md86-x", "myproj", usage{}, 160, dir, false, true, true, true); err != nil {
+		t.Fatalf("renderRich: %v", err)
+	}
+	out := stripANSI(buf.String())
+	if strings.Contains(out, "☰") {
+		t.Errorf("location pill must not use the font-substituting ☰ (U+2630):\n%s", out)
+	}
+	if !strings.Contains(out, "»") {
+		t.Errorf("location pill should use the » (U+00BB) marker:\n%s", out)
+	}
+}
+
 // TestInWorktree pins both OR'd signals (Worktree.Name set, or a worktree- branch).
 func TestInWorktree(t *testing.T) {
 	cases := []struct {

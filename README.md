@@ -119,6 +119,7 @@ Then, inside the Claude Code session:
 | `/lets:execute` | Execute plan from `/lets:plan` via native plan mode |
 | `/lets:team` | Parallel implementation with Agent Teams |
 | `/lets:worktree` | Create/manage worktrees for parallel sessions |
+| `/lets:statusline` | Manage & persist statusline appearance - light/dark, compact, hidden rows *(ships next release)* |
 
 ### Review & Analysis
 
@@ -340,6 +341,8 @@ Flags (set in `settings.json`'s `command`):
 | `--no-dir` *(or env `LETS_STATUSLINE_DIR=off`)* | Hide the location pill |
 | `--no-task` *(or env `LETS_STATUSLINE_TASK=off`)* | Hide the task line (also skips the background `bd` refresh) |
 | `--compact` | Legacy 2-line bar (fallback if the box misbehaves) |
+
+To make a choice stick without hand-editing settings, run `/lets:statusline` (interactive) or `lets statusline config --light …` — it persists the flags to your personal, gitignored `.claude/settings.local.json` (not the shared `settings.json`, so it won't force your palette on collaborators). Restart Claude Code to apply. *(ships next release)*
 
 ```json
 {
