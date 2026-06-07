@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **cmux session identity + autonomous launch (lets-nddb8).** `lets cmux open` gains `--description`, and `/lets:worktree create` now stamps each cmux workspace with `<task-id> · <title>` (the canonical beads id + full title, shown in cmux's `workspace list` / tooltip) so parallel sessions self-identify. A new `--auto` override launches the worktree session in `claude --permission-mode auto` (autonomous — still gates push / PR / `bd close` / external per AUTO MODE rules; never `bypassPermissions`), uniform across the terminal and cmux launchers. cmux notifications stay deferred (cmux surfaces them natively).
+
 ### Changed
 - **Statusline tips + `/lets:start --main` discoverability (lets-1f6z8).** The rotating statusline tips now cover the commands shipped in 0.6.2 — `/lets:backlog`, `/lets:review-round`, `/lets:start --main`, `/lets:explore`, and the `LETS_LAUNCHER=cmux` worktree launcher — and the stale "/lets:brainstorm reviews the backlog" tip was corrected (brainstorm is Quick-only now). `--main` was added to the `/lets:start` `argument-hint` so Claude Code's command autocomplete surfaces the project-assistant mode, and `LETS_LAUNCHER` was added to the two CLAUDE.md prose key-lists that had omitted it (the canonical config-keys table already listed it).
 
