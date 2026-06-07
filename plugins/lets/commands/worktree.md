@@ -13,7 +13,7 @@ Thin dispatcher for interactive parallel worktrees. All filesystem/git work live
 ## Step 1: Determine Subcommand
 
 **If argument provided** (e.g., `/lets:worktree create auth-feature`), parse it:
-- `create <name>` -> go to Create. **First strip any `--cmux` / `--no-cmux` token** out of the argument and carry it as the launcher override for Step C3.5; bind the remainder as `<name>` (so `create auth --cmux` => name `auth`, not `auth --cmux`).
+- `create <name>` -> go to Create. **First strip any `--cmux` / `--no-cmux` / `--auto` token** out of the argument and carry them as overrides for Step C3.5 (`--cmux`/`--no-cmux` = launcher; `--auto` = autonomous permission mode); bind the remainder as `<name>` (so `create auth --cmux --auto` => name `auth`, not `auth --cmux --auto`).
 - `list` -> go to List
 - `remove <name>` -> go to Remove
 - `info` -> go to Info
@@ -43,6 +43,8 @@ AskUserQuestion(
 Create an interactive worktree. The Go subcommand owns the guard, name validation, `.gitignore` ensure, `git worktree add`, symlinks (`.lets/`, `.beads/.env`), verify, and rollback. The skill drives the user choices.
 
 Optional launcher override on the argument: `--cmux` / `--no-cmux` force the launcher for this run (otherwise `$LETS_LAUNCHER` decides — see Step C3.5).
+
+Optional `--auto`: launch the session in `claude --permission-mode auto` (autonomous — auto-approves low-risk work, still gates push / PR / `bd close` / external per LETS AUTO MODE rules). Maps ONLY to `--permission-mode auto`, **never** `bypassPermissions`. Applies to the launcher paths in Step C3.5 / C4 (see Step C3.5).
 
 ### Step C1: Get Name
 
@@ -106,20 +108,24 @@ Decide how to open the worktree. Resolve in this order:
 
 **terminal** (default / `--no-cmux`): print the new-terminal command (Step C4 "terminal" block) — unchanged behavior.
 
-**cmux** (`$LETS_LAUNCHER=cmux` or `--cmux`): derive the workspace **slug** from the task title **per the `/rename` slug rule in `/lets:start` Step 7** — that spec is the single source of truth; don't re-paraphrase it here (e.g. **Integrate cmux as parallel-worktree launcher** → `cmux-launcher`). Then:
+**cmux** (`$LETS_LAUNCHER=cmux` or `--cmux`): derive the workspace **slug** from the task title **per the `/rename` slug rule in `/lets:start` Step 7** — that spec is the single source of truth; don't re-paraphrase it here (e.g. **Integrate cmux as parallel-worktree launcher** → `cmux-launcher`). Also stamp the workspace **description** with `{task-id} · {task-title}` (the FULL task title — the description/tooltip has no width budget like the `--name` slug does), so each running session self-identifies which task it belongs to. Then:
 
 ```bash
-lets cmux open "{worktree.path}" --name "{slug}" --command "claude '/lets:start {task-id}'" --json
+lets cmux open "{worktree.path}" --name "{slug}" --description "{task-id} · {task-title}" --command "claude '/lets:start {task-id}'" --json
 ```
 
-**Taskless worktree** (custom name, no beads task): drop the `/lets:start {task-id}` argument — use `--command "claude"` and derive `{slug}` from the worktree name. Only emit `/lets:start {task-id}` when a task id is actually known.
+**`--auto`:** when the `--auto` override was passed, the launched `claude` gains `--permission-mode auto` — the `--command` becomes `claude --permission-mode auto '/lets:start {task-id}'`. Maps ONLY to `--permission-mode auto`, never `bypassPermissions`.
+
+**Taskless worktree** (custom name, no beads task): drop the `/lets:start {task-id}` argument — use `--command "claude"` and derive `{slug}` from the worktree name; **also drop `--description`** (no task id to stamp — the `--name` slug is identity enough). Only emit `/lets:start {task-id}` and `--description` when a task id is actually known. (`--auto` still applies: `--command "claude --permission-mode auto"`.)
 
 Parse the `launch` block:
 - `launched=true` → "Opened cmux workspace **{workspace_name}**" (Step C4 "cmux" block).
 - `launched=false`, `reason=already_open` → a cmux workspace (**{existing_ref} {existing_title}**) already targets this worktree. Don't spawn a duplicate (one live session per worktree) — tell the user to switch to it, or re-run with `--force` to override.
 - `launched=false`, other `reason` (cmux not found / not macOS / cmux error) → render `fallback_command` with a one-line note naming `reason` — same as the terminal block but prefixed with the reason.
 
-> **Keep in sync:** the slug rule is sourced from `/lets:start` Step 7 by pointer (not copied — one authoritative definition); the launched/fallback contract mirrors `cmuxcmd.Open` (`cli/internal/cmuxcmd/open.go`). The Go layer never hard-fails — always render whatever `launch` reports.
+> **Keep in sync:** the slug rule is sourced from `/lets:start` Step 7 by pointer (not copied — one authoritative definition); the description-stamp + launched/fallback contract mirrors `cmuxcmd.Open` (`cli/internal/cmuxcmd/open.go`). The Go layer never hard-fails — always render whatever `launch` reports.
+
+**`--auto` scope (where it does NOT apply):** `--auto` only affects the **stay-on-current-branch launcher paths** (this Step C3.5 cmux call + the Step C4 terminal block) — the paths that emit a `claude` launch command. If the user picked **"Switch to worktree"** (Step C3 option 2), there is no launch command (the session continues in-place and only suggests `/lets:start`); when `--auto` was passed with that choice, surface one line — "`--auto` applies only when opening the worktree in a separate session — re-launch with `claude --permission-mode auto` if you want autonomous mode here." Do NOT silently drop it.
 
 ### Step C4: Output
 
@@ -143,6 +149,8 @@ cd {worktree.path} && claude
 │  List?      /lets:worktree list │
 └─────────────────────────────────┘
 ```
+
+(When `--auto` was passed, the printed command is `cd {worktree.path} && claude --permission-mode auto` instead — unchanged when `--auto` is absent.)
 
 **If staying on current branch (cmux launcher, `launched=true`):**
 

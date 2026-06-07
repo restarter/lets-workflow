@@ -26,8 +26,8 @@ func NewCmuxCmd() *cobra.Command {
 
 func newCmuxOpenCmd() *cobra.Command {
 	var (
-		name, command         string
-		force, jsonOut, quiet bool
+		name, description, command string
+		force, jsonOut, quiet      bool
 	)
 	cmd := &cobra.Command{
 		Use:           "open <path>",
@@ -37,10 +37,11 @@ func newCmuxOpenCmd() *cobra.Command {
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			res, runErr := cmuxcmd.Open(cmd.Context(), cmuxcmd.OpenOptions{
-				Path:    args[0],
-				Name:    name,
-				Command: command,
-				Force:   force,
+				Path:        args[0],
+				Name:        name,
+				Description: description,
+				Command:     command,
+				Force:       force,
 			})
 			jsonBytes, _ := json.MarshalIndent(res, "", "  ")
 			if jsonOut {
@@ -54,6 +55,7 @@ func newCmuxOpenCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&name, "name", "", "Workspace label (short readable slug)")
+	cmd.Flags().StringVar(&description, "description", "", "Workspace description (e.g. \"<task-id> · <title>\")")
 	cmd.Flags().StringVar(&command, "command", "", "Command to run in the workspace (e.g. claude '/lets:start <id>')")
 	cmd.Flags().BoolVar(&force, "force", false, "Open even if a cmux workspace already targets this path (skip the duplicate-session guard)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")

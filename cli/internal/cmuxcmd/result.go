@@ -29,6 +29,7 @@ type ErrorInfo struct {
 type LaunchInfo struct {
 	Launched        bool   `json:"launched"`
 	WorkspaceName   string `json:"workspace_name,omitempty"`
+	Description     string `json:"description,omitempty"`
 	Path            string `json:"path"`
 	Command         string `json:"command,omitempty"`
 	Reason          string `json:"reason,omitempty"`
