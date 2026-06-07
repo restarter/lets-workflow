@@ -134,7 +134,7 @@ stdin or stdout interaction in those modes.`,
 func newStatuslineConfigCmd() *cobra.Command {
 	var (
 		light, compact, noTip, noDir, noTask bool
-		show, jsonOut, force                 bool
+		show, jsonOut, force, reset          bool
 	)
 	cmd := &cobra.Command{
 		Use:   "config",
@@ -145,11 +145,13 @@ the choice survives across sessions. Writes only the statusLine key, preserving
 other local settings. Restart Claude Code to apply.
 
   --show    print the current persisted appearance, no write
+  --reset   persist defaults (bare rich statusline, no appearance flags)
   --force   overwrite an existing non-LETS (foreign) statusLine command
   --json    emit a JSON envelope instead of human-readable output
 
-The flag set is absolute: the persisted appearance is exactly the flags passed
-(no flags + no --show is rejected, to avoid an accidental reset).`,
+The flag set is absolute: the persisted appearance is exactly the flags passed.
+Zero flags with neither --reset nor --show is rejected, to avoid an accidental
+reset; use --reset to deliberately return to defaults.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -162,9 +164,13 @@ The flag set is absolute: the persisted appearance is exactly the flags passed
 				res, err := statuslinecmd.Show(root)
 				return emitStatuslineConfig(cmd, jsonOut, res, err)
 			}
+			// --reset persists explicit defaults (bare `lets statusline`), the one
+			// legitimate zero-flag write; it takes precedence over any appearance flags.
 			want := statuslinecmd.Flags{Light: light, Compact: compact, NoTip: noTip, NoDir: noDir, NoTask: noTask}
-			if !want.Any() {
-				e := statuslinecmd.ErrUsage("specify at least one appearance flag (--light/--compact/--no-tip/--no-dir/--no-task) or --show")
+			if reset {
+				want = statuslinecmd.Flags{}
+			} else if !want.Any() {
+				e := statuslinecmd.ErrUsage("specify at least one appearance flag (--light/--compact/--no-tip/--no-dir/--no-task), --reset, or --show")
 				return emitStatuslineConfig(cmd, jsonOut, statuslinecmd.NewErrorResult(root, e), e)
 			}
 			res, err := statuslinecmd.Apply(root, want, force)
@@ -177,6 +183,7 @@ The flag set is absolute: the persisted appearance is exactly the flags passed
 	cmd.Flags().BoolVar(&noDir, "no-dir", false, "Hide the location pill")
 	cmd.Flags().BoolVar(&noTask, "no-task", false, "Hide the task line")
 	cmd.Flags().BoolVar(&show, "show", false, "Show the current persisted appearance (no write)")
+	cmd.Flags().BoolVar(&reset, "reset", false, "Persist defaults (bare rich statusline, no appearance flags)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit a JSON envelope instead of human-readable output")
 	cmd.Flags().BoolVar(&force, "force", false, "Overwrite a foreign (non-LETS) statusLine command")
 	return cmd

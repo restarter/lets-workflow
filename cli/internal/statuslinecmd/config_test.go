@@ -68,6 +68,25 @@ func TestApply_PreservesOtherKeys(t *testing.T) {
 	}
 }
 
+func TestApply_ResetWritesDefaults(t *testing.T) {
+	root := t.TempDir()
+	// Start with a non-default appearance, then "reset" via an empty flag set
+	// (what `lets statusline config --reset` passes to Apply).
+	if _, err := Apply(root, Flags{Light: true, Compact: true}, false); err != nil {
+		t.Fatalf("seed Apply: %v", err)
+	}
+	res, err := Apply(root, Flags{}, false)
+	if err != nil {
+		t.Fatalf("reset Apply: %v", err)
+	}
+	if res.Command != "lets statusline" {
+		t.Errorf("reset command = %q, want %q", res.Command, "lets statusline")
+	}
+	if got := statusLineCommand(t, readRawSettings(t, root)); got != "lets statusline" {
+		t.Errorf("persisted reset command = %q, want %q", got, "lets statusline")
+	}
+}
+
 func TestShow_RoundTrip(t *testing.T) {
 	root := t.TempDir()
 	want := Flags{Light: true, NoDir: true, NoTask: true}
