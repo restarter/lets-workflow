@@ -13,10 +13,11 @@ import (
 
 // OpenOptions configures the open flow.
 type OpenOptions struct {
-	Path    string // directory to open (the worktree path); required, must exist
-	Name    string // workspace label (a short readable slug); optional
-	Command string // command cmux runs in the workspace, e.g. claude '/lets:start <id>'
-	Force   bool   // open even if a workspace already targets Path (skip the duplicate-session guard)
+	Path        string // directory to open (the worktree path); required, must exist
+	Name        string // workspace label (a short readable slug); optional
+	Description string // workspace description (e.g. "<task-id> · <title>"); optional
+	Command     string // command cmux runs in the workspace, e.g. claude '/lets:start <id>'
+	Force       bool   // open even if a workspace already targets Path (skip the duplicate-session guard)
 }
 
 // Overridable in tests.
@@ -95,13 +96,17 @@ func Open(ctx context.Context, opts OpenOptions) (*OpenResult, error) {
 		}
 	}
 
-	// Canonical form: cmux workspace create --cwd <path> [--name] [--command].
+	// Canonical form: cmux workspace create --cwd <path> [--name] [--description] [--command].
+	// `--description` is accepted (cmux: "create ... same flags as new-workspace").
 	// No --focus: verified that `cmux workspace create` does not accept it
 	// (`cmux workspace create --help`), so passing it would only force the
 	// cmux_error fallback. Re-add when/if cmux supports it.
 	args := []string{"workspace", "create", "--cwd", opts.Path}
 	if opts.Name != "" {
 		args = append(args, "--name", opts.Name)
+	}
+	if opts.Description != "" {
+		args = append(args, "--description", opts.Description)
 	}
 	if opts.Command != "" {
 		args = append(args, "--command", opts.Command)
@@ -115,7 +120,7 @@ func Open(ctx context.Context, opts OpenOptions) (*OpenResult, error) {
 	}
 
 	result.OK = true
-	result.Launch = &LaunchInfo{Launched: true, WorkspaceName: opts.Name, Path: opts.Path, Command: opts.Command}
+	result.Launch = &LaunchInfo{Launched: true, WorkspaceName: opts.Name, Description: opts.Description, Path: opts.Path, Command: opts.Command}
 	addStep(StepOK, "cmux workspace created")
 	return result, nil
 }
