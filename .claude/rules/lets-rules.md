@@ -1,6 +1,6 @@
 ---
 name: lets-rules
-version: 0.6.1
+version: 0.6.3
 ---
 
 <!-- DO NOT EDIT - managed by lets init / lets install. To add custom rules, create a sibling *.md file in this directory (e.g. .claude/rules/team-conventions.md). Files prefixed `lets-` are owned by the LETS plugin and overwritten on update. -->
@@ -32,6 +32,8 @@ If a `## LETS Notice` block appears in the injected context (sibling H2 of `## L
 - **Never edit files on the merge-branch.** Every task gets its own `feature/<task-id>-<slug>` branch (or `worktree-<name>` in worktrees). Before any code edit - verify you're on a feature/worktree branch. If on `$LETS_MERGE_BRANCH`: create/switch to feature branch FIRST, then edit.
 
   **Exception — trunk-mode.** If `detect-task` returns an active task AND HEAD == `$LETS_MERGE_BRANCH`, trunk-mode is active (user opted in via the `take-task` picker option "Stay on current branch"). In trunk-mode: editing the merge-branch is allowed; `/lets:done` pushes + closes the task without creating a PR (same-source-target is not a valid PR); `/lets:plan` and `/lets:execute` derive plan filenames from task-id instead of branch slug. If HEAD == `$LETS_MERGE_BRANCH` AND `detect-task` returns None, the default rule applies — refuse edits, instruct user to run `/lets:start <id>` first.
+
+  **Main / assistant mode.** When the session was entered via `/lets:start --main` (alias `--assistant`), HEAD == `$LETS_MERGE_BRANCH` with no active task is the **intended** state (read + triage), not an error — do not refuse the session or demand a task. The refuse-edits rule still governs *code edits*: on edit-intent, route the user to `take-task` / `create-task` (graceful hand-off) instead of only refusing.
 - **Never edit installed `lets-*` rules files** in `.claude/rules/`. They are plugin-managed copies refreshed by `/lets:init`. Edit the canonical source `plugins/lets/rules/lets-*.md` in the plugin instead — direct edits to installed copies bypass drift detection and silently desync from source.
 
 ## Slash Command Discipline
@@ -140,10 +142,10 @@ Stay alert to recurring themes across a session — repeated topics, related ide
 
 ## AUTO MODE
 
-AUTO MODE (autonomous execution: `/loop`, `/lets:execute` auto-flow, `/lets:team` parallel runs, scheduled agents, or system-reminder "Auto mode active") does NOT override approval gates for state-changing or shared-state operations. "Execute immediately" means low-risk read/edit work, not destructive or externally-visible actions.
+AUTO MODE (autonomous execution: `/loop`, `/lets:execute --auto`, `/lets:team` parallel runs, scheduled agents, or system-reminder "Auto mode active") does NOT override approval gates for state-changing or shared-state operations. "Execute immediately" means low-risk read/edit work, not destructive or externally-visible actions.
 
 **Always requires explicit user approval (even in AUTO MODE):**
-- bd state changes: `bd close`, `bd update --status`, `bd dolt push`. Read-only ops (search, show, ready, list) are free.
+- bd state changes: `bd close`, `bd update --status`, `bd dolt push`. Read-only ops (search, show, ready, list) are free. **Carve-out (spawn entry claim):** the ONE exception is the spawn-time `take-task` claim (`bd update --status=in_progress`) that *starts* an autonomous spawned session (e.g. `/lets:plan-workflow <id>` / `/lets:execute --auto <id>` launched into a fresh worktree) — that entry claim is the authorized first action and proceeds without a gate. Every *later* bd state change stays gated.
 - Git push / PR ops: `git push`, `gh pr create`, `gh pr merge`, `gh pr review approve`.
 - Destructive ops: `rm`, `git reset --hard`, `git push --force`, `git branch -D`, worktree removal.
 - External-facing actions: Slack / email / posting to external services.
@@ -153,6 +155,7 @@ AUTO MODE (autonomous execution: `/loop`, `/lets:execute` auto-flow, `/lets:team
 - Same tool / command fails 3+ times in a row → stop iterating, find root cause.
 - Detected fabrication (referring to nonexistent files / tasks / commits) → stop, verify with read/grep.
 - Scope drift outside the claimed task → ask whether to expand scope or create follow-up.
+- Autonomous run (`--auto`) on `$LETS_MERGE_BRANCH` → REFUSE + halt. `--auto` never auto-enables trunk-mode: editing the merge-branch is a deliberate human opt-in (the take-task picker), not something an unattended session may self-authorize. Surface "needs a feature branch" and stop.
 
 **Soft stops** (pause and ask):
 - Decision point with 2+ viable approaches → use `AskUserQuestion`, don't pick autonomously.
@@ -171,7 +174,7 @@ AUTO MODE (autonomous execution: `/loop`, `/lets:execute` auto-flow, `/lets:team
 
 ## Agent Rules
 
-- When launching expert agents for `/lets:review`, `/lets:github-pr`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:brainstorm`, `/lets:explore` - use ONLY `lets:*` agents (`lets:architect`, `lets:security`, etc.)
+- When launching expert agents for `/lets:review`, `/lets:github-pr`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:backlog`, `/lets:explore` - use ONLY `lets:*` agents (`lets:architect`, `lets:security`, etc.)
 - `lets:actor` is a special meta-agent: requires explicit user request + personality source (URL or file path). Never auto-select. Use `actor-fetch-personality` skill to fetch personality before dispatch.
 - Never use `general-purpose` or other non-lets subagent types for expert work
 
@@ -280,9 +283,13 @@ $LETS_PR_FLOW=github  /lets:start -> Work -> /lets:check -> /lets:commit -> /let
 
 Trunk-mode (any $LETS_PR_FLOW): /lets:start (pick "Stay on current branch") -> Work -> /lets:check -> /lets:commit -> /lets:done (push + close, no PR) -> /lets:end
 
+Main mode (no task):  /lets:start --main -> triage / groom / route (no edits) -> /lets:start <id> when coding starts -> /lets:end
+
 Worktree:  /lets:worktree create -> `cd .worktrees/<name>/ && claude` -> /lets:start -> Work -> /lets:done -> /lets:end -> /lets:worktree remove (main repo)
 
 Team:      /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /lets:done
+
+Auto-pipeline:  /lets:worktree create <id> --flow plan-workflow --auto -> [GATE1 clarify] -> auto-plan (plan-workflow) -> [GATE2 approve] -> /lets:execute --auto -> stop at push/PR -> /lets:done
 
 PR review:  /lets:github-pr <PR> -> discuss -> post -> /lets:github-pr --follow-up -> /lets:github-pr --approve
 PR respond: /lets:github-pr --respond <PR> -> triage -> fix -> reply
@@ -305,6 +312,7 @@ Two separate lifecycles:
 - Full PR lifecycle -> `/lets:github-pr <PR>` -> discuss -> post inline -> follow-up -> approve
 - Existing file quality -> `/lets:review --file <path>`
 - Quick plan check -> `/lets:check --plan`
+- Autonomous task (spawn + plan + execute, you gate twice) -> `/lets:worktree create <id> --flow plan-workflow --auto` (PREVIEW; see docs/autonomous.md)
 
 ### Session Start
 
@@ -314,15 +322,19 @@ When conversation starts or user wants to begin working -> suggest `/lets:start`
 
 Never work without a tracked task. User must pick existing task or create new one via beads.
 
+**Exception — main / assistant mode.** `/lets:start --main` (alias `--assistant`) enters a deliberate **no-task** session stance (project-assistant / PM): read + triage only on `$LETS_MERGE_BRANCH`. The task gate does NOT apply at session start — do not nag for a task or refuse triage / backlog grooming / task creation / notes. Code edits still require claiming a task first (the merge-branch boundary in `## Boundaries` is unchanged); on edit-intent, offer `take-task` / `create-task` rather than a bare refusal.
+
 ### Task Size Assessment
 
 | Size | Action |
 |------|--------|
 | Quick/Small (< 2 hrs) | Work directly |
-| Medium (2-8 hrs) | Suggest `/lets:plan` then `/lets:execute` |
+| Medium (2-8 hrs) | Suggest a plan - `/lets:plan` (full), `/lets:plan --fast` (talk-through), or `/lets:plan-workflow` (PREVIEW, autonomous) - then `/lets:execute` |
 | Large (> 8 hrs) | Require `/lets:plan` + break into subtasks |
 
 After `/lets:plan` produces a plan, use `/lets:execute` to implement it step by step.
+
+At session start, Medium/Large tasks get a plan-family picker - `/lets:plan` (full) · `/lets:plan --fast` (talk-through) · `/lets:plan-workflow` (PREVIEW, autonomous). Quick/Small skip it.
 
 ### Mid-Session Task Switch
 
@@ -413,15 +425,18 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:check` | Code | Quick sanity check (~30s) - inline 6-lens; same targets as `/lets:review` (local/staged/last-commit/branch/PR/`--file`/`--plan`/`--json`), no subagents |
 | `/lets:review` | Code | Full deep review (~2-3 min) |
 | `/lets:github-pr` | Code | GitHub PR review lifecycle (review, respond, follow-up, approve) |
+| `/lets:review-round` | Code | Work through a RECEIVED review round - triage N comments, decisions->task, artifact FROZEN, one final edit-pass (inverse of `/lets:review`) |
 | `/lets:opinion` | Expert | Technical decision (dynamic agent count; `--workflow` = off-context fan-out + adversarial challenge) |
 | `/lets:ask` | Expert | Quick expert consultation (1 agent) |
-| `/lets:brainstorm` | Planning | Interactive backlog ideation - review backlog, quick brainstorm, cleanup |
+| `/lets:brainstorm` | Planning | Quick interactive ideation on a topic - fast context scan, no agents |
+| `/lets:backlog` | Planning | Backlog review (multi-agent) + interactive cleanup triage |
 | `/lets:explore` | Planning | Explore a topic from multiple expert angles (`--workflow` = off-context ideate fan-out) |
 | `/lets:plan` | Planning | Structured planning with agents - architecture + implementation plan (`--fast` = orchestrator-only, skips explorer/architect/expert subagents) |
 | `/lets:plan-workflow` | Planning | **PREVIEW** - autonomous planning via a Dynamic Workflow (goal + rubric up front, off-context, approve at end); folds into native `/lets:plan` later (lets-jsw00) |
 | `/lets:execute` | Planning | Execute plan from /lets:plan via native plan mode |
 | `/lets:status` | Utility | Task overview and project status |
 | `/lets:worktree` | Utility | Create/manage interactive worktrees for parallel work |
+| `/lets:statusline` | Utility | Manage & persist statusline appearance - light/dark, compact, hidden rows (writes personal `.claude/settings.local.json`) *(ships next release)* |
 | `/lets:team` | Utility | Parallel implementation with Agent Teams (run, status, stop) |
 | `/lets:note` | Utility | Add note to active task (`--pre-compact` = resume snapshot before /compact) |
 | `/lets:init`    | Setup | Per-project initialization. Re-run for self-heal (drift fix) or to change config |
