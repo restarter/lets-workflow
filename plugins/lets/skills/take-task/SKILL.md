@@ -146,10 +146,10 @@ When triggered standalone (not via `/lets:start`):
 Task claimed: **{task title}** (`{task-id}`)
 Branch: {branch-name}
 
-┌─ LETS ────────────────────────┐
-│  Plan?    /lets:plan          │
-│  Check?   /lets:check         │
-└───────────────────────────────┘
+┌─ LETS ───────────────────────────────────────────┐
+│  Plan?    /lets:plan · --fast · plan-workflow     │
+│  Check?   /lets:check                             │
+└───────────────────────────────────────────────────┘
 ```
 
 When invoked by `/lets:start` OR `/lets:done` (via `Skill` tool) - skip this output, the calling command has its own. Per CLAUDE.md "Internal invocation = no box".

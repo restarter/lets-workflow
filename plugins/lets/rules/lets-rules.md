@@ -289,6 +289,8 @@ Worktree:  /lets:worktree create -> `cd .worktrees/<name>/ && claude` -> /lets:s
 
 Team:      /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /lets:done
 
+Auto-pipeline:  /lets:worktree create <id> --flow plan-workflow --auto -> [GATE1 clarify] -> auto-plan (plan-workflow) -> [GATE2 approve] -> /lets:execute --auto -> stop at push/PR -> /lets:done
+
 PR review:  /lets:github-pr <PR> -> discuss -> post -> /lets:github-pr --follow-up -> /lets:github-pr --approve
 PR respond: /lets:github-pr --respond <PR> -> triage -> fix -> reply
 ```
@@ -310,6 +312,7 @@ Two separate lifecycles:
 - Full PR lifecycle -> `/lets:github-pr <PR>` -> discuss -> post inline -> follow-up -> approve
 - Existing file quality -> `/lets:review --file <path>`
 - Quick plan check -> `/lets:check --plan`
+- Autonomous task (spawn + plan + execute, you gate twice) -> `/lets:worktree create <id> --flow plan-workflow --auto` (PREVIEW; see docs/autonomous.md)
 
 ### Session Start
 
@@ -326,10 +329,12 @@ Never work without a tracked task. User must pick existing task or create new on
 | Size | Action |
 |------|--------|
 | Quick/Small (< 2 hrs) | Work directly |
-| Medium (2-8 hrs) | Suggest `/lets:plan` then `/lets:execute` |
+| Medium (2-8 hrs) | Suggest a plan - `/lets:plan` (full), `/lets:plan --fast` (talk-through), or `/lets:plan-workflow` (PREVIEW, autonomous) - then `/lets:execute` |
 | Large (> 8 hrs) | Require `/lets:plan` + break into subtasks |
 
 After `/lets:plan` produces a plan, use `/lets:execute` to implement it step by step.
+
+At session start, Medium/Large tasks get a plan-family picker - `/lets:plan` (full) · `/lets:plan --fast` (talk-through) · `/lets:plan-workflow` (PREVIEW, autonomous). Quick/Small skip it.
 
 ### Mid-Session Task Switch
 
