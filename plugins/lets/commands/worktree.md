@@ -13,7 +13,7 @@ Thin dispatcher for interactive parallel worktrees. All filesystem/git work live
 ## Step 1: Determine Subcommand
 
 **If argument provided** (e.g., `/lets:worktree create auth-feature`), parse it:
-- `create <name>` -> go to Create. **First strip any `--cmux` / `--no-cmux` / `--auto` / `--flow <value>` token** out of the argument and carry them as overrides for Step C3.5 (`--cmux`/`--no-cmux` = launcher; `--auto` = autonomous permission mode; `--flow plan|plan-workflow` = which command the launch lands in); bind the remainder as `<name>` (so `create auth --flow plan-workflow --auto` => name `auth`, not the flags).
+- `create <name>` -> go to Create. **First strip any `--cmux` / `--no-cmux` / `--auto` / `--flow <value>` / `--branch <ref>` token** out of the argument and carry them as overrides (`--cmux`/`--no-cmux` = launcher; `--auto` = autonomous permission mode; `--flow plan|plan-workflow` = which command the launch lands in — all for Step C3.5; `--branch <ref>` decouples the attached/created branch from the dir name — Step C2). Bind the remainder as `<name>` (so `create auth --flow plan-workflow --auto` => name `auth`, not the flags; `create pwa-46696 --branch feature/pwa-46696` => name `pwa-46696`, branch `feature/pwa-46696`).
 - `list` -> go to List
 - `remove <name>` -> go to Remove
 - `info` -> go to Info
@@ -70,15 +70,19 @@ AskUserQuestion(
 
 **Custom:** Use provided text. Slugify: lowercase, spaces to hyphens, remove special chars, max 50 chars (the Go validator allows up to 64; the skill pre-truncates to 50 to leave headroom for `worktree-` prefixes and tmux pane labels). `lets worktree create` will reject invalid names with exit 2.
 
+**Slash branch (git-flow / Bitbucket refs).** The dir NAME must not contain `/` (it's a directory + the validator forbids it). If the user names a branch ref that contains `/` (e.g. `feature/pwa-46696`, `bugfix/x`) — or passed `--branch <ref>` on the argument — **decouple the two**: derive a slash-free dir name (replace `/` with `-`, e.g. `feature/pwa-46696` -> `feature-pwa-46696`, or just the trailing segment `pwa-46696`) and pass the original ref via `--branch` in Step C2. The Go subcommand attaches to (or creates) that ref verbatim while the worktree dir keeps the sanitized name (lets-x5ucf).
+
 ### Step C2: Create
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 cd "$LETS_PROJECT_ROOT"
 lets worktree create "$NAME" --json
+# Slash branch ref decoupled from dir name (see Step C1 "Slash branch"):
+#   lets worktree create "$DIR_NAME" --branch "$BRANCH_REF" --json
 ```
 
-The Go subcommand auto-detects attach vs new-branch: if `refs/heads/<NAME>` exists, attaches to it; otherwise creates `worktree-<NAME>` from `LETS_MERGE_BRANCH`. Pass `--attach` or `--new-branch` to force a mode. Pass `--switch-main-if-needed` to auto-switch main when attaching its current branch (refuses on dirty/mid-rebase tree). Pass `--no-symlink-lets` or `--no-symlink-beads` to skip a specific symlink.
+The Go subcommand auto-detects attach vs new-branch: if `refs/heads/<NAME>` exists, attaches to it; otherwise creates `worktree-<NAME>` from `LETS_MERGE_BRANCH`. Pass `--attach` or `--new-branch` to force a mode. **Pass `--branch <ref>`** to attach/create a branch whose ref differs from the dir `<NAME>` — required for git-flow refs containing `/` (e.g. `feature/x`), since the dir name can't hold a slash; the ref is used verbatim (no `worktree-` prefix) while the dir keeps `<NAME>`. Pass `--switch-main-if-needed` to auto-switch main when attaching its current branch (refuses on dirty/mid-rebase tree). Pass `--no-symlink-lets` or `--no-symlink-beads` to skip a specific symlink.
 
 Parse the JSON. On `ok=false`, surface `error.message` and `error.remediation` to the user; if `rollback.residual` is non-empty, list the paths so the user can clean up.
 
@@ -380,7 +384,8 @@ The new worktree gets the LETS-managed `.lets/` symlink and (if the main has `.b
 - **Interactive worktrees only.** Agent worktrees (`isolation: worktree`) use native Claude Code behavior.
 - **Location:** `.worktrees/` at project root (NOT `.claude/worktrees/` — that's for agents).
 - **`.gitignore` invariants:** `lets worktree create` calls `initcmd.EnsureGitignore` (race-safe via flock + integrity check). Both `.worktrees/` and `.lets` (no slash — matches dir AND symlink) are appended if absent.
-- **Branch lifecycle:** worktrees attach to existing branches by default; new branches are prefixed `worktree-<name>`. Refuses to attach the branch currently checked out in main (override with `--switch-main-if-needed` + clean tree).
+- **Worktree-effective ignores (`info/exclude`, lets-x5ucf):** the tracked `.gitignore` lives on a branch — a fresh worktree checks out its branch's committed copy, which can lack the LETS entry (or carry only a dir-only `/.lets/` that misses the `.lets` symlink), so `.lets` / `.beads/.env` would show as untracked inside the worktree. `create` therefore also writes the narrow entries `.lets` and `.beads/.env` to the shared `.git/info/exclude` (common git dir → effective in main + every worktree, untracked, never pushed). Only the actually-symlinked paths are added, and the patterns are narrow so other untracked `.beads/` content still surfaces in `git status`.
+- **Branch lifecycle:** worktrees attach to existing branches by default; new branches are prefixed `worktree-<name>`. Refuses to attach the branch currently checked out in main (override with `--switch-main-if-needed` + clean tree). **`--branch <ref>` decouples the branch from the dir name** — the dir keeps the slash-free `<name>` while the ref (which may contain `/`, e.g. `feature/x`) is attached/created verbatim with no `worktree-` prefix (lets-x5ucf).
 - **Never force-remove without user approval.** `--force` and `--force-branch` always pass through an AskUserQuestion gate.
 - **Each worktree = separate terminal = separate Claude Code session.**
 - **Credential threat model:** `.beads/.env` symlink means the same credential is shared across all worktrees. Don't store cross-context secrets there; the file is `chmod 0o600` on disk and main `.beads/` is `chmod 0o700` (hardened by Create).

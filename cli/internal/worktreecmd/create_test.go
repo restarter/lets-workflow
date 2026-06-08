@@ -74,6 +74,116 @@ func TestCreate_AttachExistingBranch(t *testing.T) {
 	}
 }
 
+// lets-x5ucf: attach a branch whose ref contains '/' while the worktree dir
+// name stays slash-free. End-to-end: dir == .worktrees/<name>, branch == ref.
+func TestCreate_ExplicitBranch_AttachSlashRef(t *testing.T) {
+	repo := initRepo(t)
+	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runIn(t, repo, "git", "branch", "feature/pwa-46696")
+	res, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{
+		Name: "pwa-46696", Branch: "feature/pwa-46696", Mode: worktreecmd.BranchAuto,
+	})
+	if err != nil || !res.OK {
+		t.Fatalf("Create: err=%v ok=%v", err, res.OK)
+	}
+	if res.Worktree.Name != "pwa-46696" {
+		t.Errorf("dir name=%q, want pwa-46696", res.Worktree.Name)
+	}
+	if res.Worktree.Branch != "feature/pwa-46696" || res.Worktree.BranchMode != "attached" {
+		t.Errorf("got branch=%q mode=%q, want feature/pwa-46696 attached", res.Worktree.Branch, res.Worktree.BranchMode)
+	}
+	// Dir lives at the sanitized name, not the slash ref.
+	if _, err := os.Stat(filepath.Join(repo, ".worktrees", "pwa-46696")); err != nil {
+		t.Errorf(".worktrees/pwa-46696 missing: %v", err)
+	}
+	// Worktree HEAD tracks the attached branch.
+	hwt, _ := exec.Command("git", "-C", res.Worktree.Path, "rev-parse", "HEAD").Output()
+	hm, _ := exec.Command("git", "-C", repo, "rev-parse", "refs/heads/feature/pwa-46696").Output()
+	if string(hwt) != string(hm) {
+		t.Errorf("HEADs differ: worktree=%s main=%s", hwt, hm)
+	}
+}
+
+// lets-x5ucf: create a NEW slash-bearing branch off base, verbatim (no
+// worktree- prefix), with a slash-free dir name.
+func TestCreate_ExplicitBranch_CreatesVerbatim(t *testing.T) {
+	repo := initRepo(t)
+	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	res, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{
+		Name: "pwa-46696", Branch: "feature/pwa-46696", Mode: worktreecmd.BranchNewBranch,
+	})
+	if err != nil || !res.OK {
+		t.Fatalf("Create: err=%v ok=%v", err, res.OK)
+	}
+	if res.Worktree.Branch != "feature/pwa-46696" || res.Worktree.BranchMode != "created" {
+		t.Errorf("got branch=%q mode=%q, want feature/pwa-46696 created", res.Worktree.Branch, res.Worktree.BranchMode)
+	}
+	out, _ := exec.Command("git", "-C", repo, "branch", "--list", "feature/pwa-46696").Output()
+	if !strings.Contains(string(out), "feature/pwa-46696") {
+		t.Errorf("branch feature/pwa-46696 not created: %q", out)
+	}
+}
+
+// lets-x5ucf: LETS-managed symlinks must be ignored INSIDE the worktree via the
+// shared info/exclude, so they don't surface as untracked noise (the branch's
+// committed .gitignore the worktree checks out can lack the entry / carry only a
+// dir-only `/.lets/`). Also asserts idempotency: a second create must not append
+// a duplicate `.lets` line to the shared file.
+func TestCreate_WorktreeExcludesSymlinks(t *testing.T) {
+	repo := initRepo(t)
+	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(repo, ".beads"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, ".beads", ".env"), []byte("X=1"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	res, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{
+		Name: "foo", Mode: worktreecmd.BranchAuto,
+	})
+	if err != nil || !res.OK {
+		t.Fatalf("Create: err=%v ok=%v", err, res.OK)
+	}
+	exclPath := filepath.Join(repo, ".git", "info", "exclude")
+	excl, err := os.ReadFile(exclPath)
+	if err != nil {
+		t.Fatalf("read info/exclude: %v", err)
+	}
+	for _, want := range []string{".lets", ".beads/.env"} {
+		if !strings.Contains(string(excl), want) {
+			t.Errorf("info/exclude missing %q; got:\n%s", want, excl)
+		}
+	}
+	// The worktree no longer reports .lets as untracked.
+	out, _ := exec.Command("git", "-C", res.Worktree.Path, "status", "--porcelain").Output()
+	if strings.Contains(string(out), ".lets") {
+		t.Errorf("worktree still shows .lets as untracked:\n%s", out)
+	}
+
+	// Idempotency: a second worktree must not duplicate the `.lets` exclude line.
+	if _, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{
+		Name: "foo2", Mode: worktreecmd.BranchAuto,
+	}); err != nil {
+		t.Fatalf("second Create: %v", err)
+	}
+	excl2, _ := os.ReadFile(exclPath)
+	n := 0
+	for _, line := range strings.Split(string(excl2), "\n") {
+		if strings.TrimSpace(line) == ".lets" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("expected exactly one `.lets` line in info/exclude, got %d:\n%s", n, excl2)
+	}
+}
+
 func TestCreate_NoBeadsDir(t *testing.T) {
 	repo := initRepo(t)
 	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
