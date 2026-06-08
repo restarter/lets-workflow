@@ -39,6 +39,12 @@ If branch parse finds no ID:
 bd list --status=in_progress --format=ids 2>/dev/null | head -1
 ```
 
+### Explicit task-id argument (resolve-and-claim)
+
+When the **calling command was invoked with an explicit `<task-id>` argument** (e.g. a session spawned into a fresh worktree with `/lets:plan-workflow <id>`, where the branch is `worktree-<name>` and carries no id): treat that id as **authoritative** - do NOT parse the branch, skip Steps 1-2. The caller then ensures the task is claimed: if `bd show <id>` is not `in_progress`, invoke `Skill(skill: "lets:take-task", args: "<id>")` (in a worktree `take-task` claims + saves the per-branch session-ref without creating a branch). This is what makes an id-accepting command spawn-able into a fresh worktree.
+
+**AUTO MODE carve-out (entry claim only).** This spawn-time claim runs `bd update --status=in_progress` - a bd state change AUTO MODE normally gates. But the claim that *starts* an autonomous spawned session is the authorized **entry action** and is exempt (an unattended session cannot ask, and the claim IS the entry). The exemption covers ONLY this entry claim - every later `bd` state change (`bd close`, status flips, `bd dolt push`) stays gated per AUTO MODE.
+
 ### Step 3: Multiple Tasks
 
 If fallback returns multiple tasks - behavior depends on the caller:

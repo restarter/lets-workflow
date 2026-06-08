@@ -16,6 +16,8 @@ Load an implementation plan and execute it using Claude Code's native plan mode.
 Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detect-task")`.
 If not on a feature/worktree branch and no in-progress task found - ask user which task to execute.
 
+If invoked with an explicit `<task-id>` argument and it is not already the active/in-progress task (e.g. a spawned `execute --auto <id>` in a fresh worktree), resolve-and-claim it per the **detect-task** *explicit task-id argument* convention before resolving the plan - don't re-paraphrase the logic; that section is the single source of truth (incl. the AUTO-MODE entry-claim carve-out).
+
 **If on `$LETS_MERGE_BRANCH`** — `/lets:execute` usually expects a feature branch. Soft-gate before proceeding:
 
 ```

@@ -11,9 +11,13 @@ Autonomous whole-command planning: you give a GOAL + a RUBRIC up front; the work
 
 > **IMPORTANT:** Deferred tools (e.g. `AskUserQuestion`) must be loaded and called as specified.
 
+## Step 0: Resolve & claim (spawn entry)
+
+If the argument is an explicit beads **task id** (matches `<prefix>-<alphanum>[.N]`) rather than a free-text goal - as the autonomous pipeline launches it (`/lets:plan-workflow <id>` into a fresh worktree) - resolve-and-claim per the **detect-task** convention: treat the id as authoritative and, if `bd show <id>` is not `in_progress`, `Skill(skill: "lets:take-task", args: "<id>")` to claim it (the spawn-time entry claim is AUTO-MODE-exempt - see `detect-task/SKILL.md`). Then derive the GOAL from the task title + description for Step 1. A free-text goal argument skips this step (no claim).
+
 ## Step 1: Goal + Rubric
 
-Parse the goal from the argument (or ask "What are we planning?").
+Parse the goal from the argument (or, for a spawn-claimed task, from its title + description; else ask "What are we planning?").
 
 Gather the **RUBRIC** - the steering criteria that REPLACE the interactive picks of native `/lets:plan`. Ask the user (free text, or a short list):
 - What does "good" look like here? (priority order: simplicity / performance / consistency / minimal-blast-radius / ...)

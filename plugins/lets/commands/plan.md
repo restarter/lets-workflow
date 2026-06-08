@@ -33,6 +33,8 @@ Wait for answer before proceeding.
 
 Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detect-task")`.
 
+If Step 1 captured an explicit `<task-id>` argument (e.g. an interactive `--flow plan` launch into a fresh worktree), resolve-and-claim it per the **detect-task** *explicit task-id argument* convention - pointer only, don't re-paraphrase.
+
 If task found:
 ```bash
 bd show <task-id>
