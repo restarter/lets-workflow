@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-06-08
+
 ### Added
 - **Autonomous task pipeline + `lets cmux notify` (lets-m8ecy).** A near-autonomous spawn → plan → execute pipeline: `/lets:worktree create <id> --flow plan-workflow --auto` opens a worktree that claims the task (resolve-and-claim convention, AUTO-MODE-exempt entry claim) and lands in autonomous planning (`plan-workflow`, falling back to interactive `--flow plan` when the PREVIEW workflow is unavailable); the human answers a bounded up-front clarify gate and approves the plan file; `/lets:execute --auto` then runs the approved plan without per-step gates (hard-stops preserved — push / PR / `bd close` / external stay gated, and `--auto` REFUSES on the merge-branch rather than auto-entering trunk-mode). cmux notifications fire at the human gates via a new `lets cmux notify` subcommand (macOS-only, never hard-fails; the non-unix stub emits a parseable `ok=true` envelope), marker-gated by a per-task `.lets/cache/pipeline-state-<id>` file so only autonomous runs notify and parallel worktrees don't collide. `--flow` only swaps the launch `--command` (launcher-agnostic — terminal / cmux / tmux inherit). The statusline phase-row that renders the marker is a deferred follow-up.
 - **`/lets:statusline` + `lets statusline config` — persist statusline appearance (lets-vpwvs).** The render flags (`--light`/`--compact`/`--no-tip`/`--no-dir`/`--no-task`) were render-only — running them just drew once, the choice never stuck without hand-editing settings. New `lets statusline config` persists the chosen appearance to your personal, gitignored `.claude/settings.local.json` (not the tracked `settings.json`, so `--light` is never forced onto collaborators); it rewrites only the `statusLine` key (preserving other local keys), refuses to clobber a foreign command without `--force`, and supports `--show` (read current), `--reset` (back to defaults), and `--json`. A zero-flag write with neither `--reset` nor `--show` is rejected to avoid an accidental reset. `/lets:statusline` is the interactive front door (AskUserQuestion → `lets statusline config … --json`). Restart Claude Code to apply (the statusLine command is read on session start). Backed by a new `statuslinecmd` Go package (own JSON envelope + typed exit codes, mirroring `worktreecmd`).
@@ -462,7 +464,8 @@ Initial release with expert agents team.
 - SessionStart hook injecting workflow rules
 - Plugin structure: commands, agents, hooks
 
-[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.6.3...HEAD
+[0.6.3]: https://github.com/restarter/lets-workflow/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/restarter/lets-workflow/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/restarter/lets-workflow/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/restarter/lets-workflow/compare/v0.5.5...v0.6.0
