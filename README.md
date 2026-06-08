@@ -377,6 +377,7 @@ The README is the tour; **[docs/](docs/)** is the manual.
 | [code-review.md](docs/code-review.md) | Three levels of review — `/lets:check`, `/lets:review`, and `/lets:github-pr` (analyze, post inline, follow up, approve). Dynamic agent selection. |
 | [agents.md](docs/agents.md) | The 14 expert agents, what triggers each, tiered scoring, agent modes, and the actor agent. |
 | [parallel-work.md](docs/parallel-work.md) | Working on several tasks at once — `/lets:team` (autonomous agents) and `/lets:worktree` (parallel terminals). |
+| [autonomous.md](docs/autonomous.md) | Hands-off flows — Dynamic Workflows (`--workflow`) and the autonomous task pipeline (spawn → plan → execute, two gates). |
 | [tasks.md](docs/tasks.md) | Task tracking with beads — the task lifecycle, taking and creating tasks, notes, `/lets:brainstorm`, `/lets:backlog`, beads memory, shared backlogs for teams. |
 | [commands.md](docs/commands.md) | Full reference for every `/lets:*` command. |
 | [configuration.md](docs/configuration.md) | `.lets/.env` settings, the `.lets/` file layout, `lets init` vs `bd init` setup order, and dependencies. |

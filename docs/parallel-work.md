@@ -45,4 +45,5 @@ Worktrees live in `.worktrees/` at the project root (gitignored).
 
 - **[plan-execute.md](plan-execute.md)** — `/lets:team` runs this flow per task
 - **[workflow.md](workflow.md)** — where parallel work fits the overall loop
+- **[autonomous.md](autonomous.md)** — the autonomous pipeline that automates this with `--flow plan-workflow --auto`
 - **[commands.md](commands.md)** — `/lets:team` and `/lets:worktree` subcommands

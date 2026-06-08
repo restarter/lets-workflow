@@ -57,6 +57,8 @@ See **[plan-execute.md](plan-execute.md)** for the full flow.
 
 See **[parallel-work.md](parallel-work.md)**.
 
+For the hands-off version — autonomous spawn → plan → execute, and off-context `--workflow` runs — see **[autonomous.md](autonomous.md)**.
+
 ## How LETS keeps Claude on track
 
 **SessionStart + PreCompact hooks.** On every Claude Code conversation, `lets hook session-start` (and `lets hook precompact`) runs and emits a small `## LETS Config` block — plus a notice if your rules file is out of date. The workflow rules themselves live in `<project>/.claude/rules/lets-rules.md` (copied there by `/lets:init`, re-synced by `/lets:update` when a new release ships), which Claude Code loads as project instructions. SessionStart fires on new, resumed, cleared, and compacted sessions; PreCompact makes sure the rules survive when a long session gets compacted. This is what makes Claude follow the workflow without you having to remind it.

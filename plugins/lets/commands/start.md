@@ -145,6 +145,26 @@ Once task is selected, assess complexity:
 | Medium (2-8 hrs) | Suggest `/lets:plan` then `/lets:execute` |
 | Large (> 8 hrs) | Require `/lets:plan` + break into subtasks |
 
+**For Medium/Large tasks, offer the plan-family picker** (skip for Quick/Small - just start working):
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "How do you want to approach this task?",
+    header: "Plan",
+    options: [
+      { label: "Full plan (Recommended)", description: "/lets:plan - explorer + architect + expert agents, thorough" },
+      { label: "Fast plan", description: "/lets:plan --fast - orchestrator-only, talk it through together" },
+      { label: "Autonomous plan", description: "/lets:plan-workflow - PREVIEW, needs Claude Code >= 2.1.154 + paid plan + released plugin; off-context autonomous planning" },
+      { label: "Work directly", description: "Small enough - skip planning, start now" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+If the user picks a `/lets:*` option, auto-invoke it via the `Skill` tool per the AskUserQuestion follow-through rule (Rule 7). "Work directly" -> proceed to Step 9.
+
 ## Step 9: Ready to Work
 
 After task is selected and branch is ready, show reminders and welcome box.
