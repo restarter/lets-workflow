@@ -13,7 +13,7 @@ Thin dispatcher for interactive parallel worktrees. All filesystem/git work live
 ## Step 1: Determine Subcommand
 
 **If argument provided** (e.g., `/lets:worktree create auth-feature`), parse it:
-- `create <name>` -> go to Create. **First strip any `--cmux` / `--no-cmux` / `--auto` token** out of the argument and carry them as overrides for Step C3.5 (`--cmux`/`--no-cmux` = launcher; `--auto` = autonomous permission mode). **Also strip `--branch <ref>`** (decouples the attached/created branch from the dir name — Step C2) and carry it through. Bind the remainder as `<name>` (so `create auth --cmux --auto` => name `auth`; `create pwa-46696 --branch feature/pwa-46696` => name `pwa-46696`, branch `feature/pwa-46696`).
+- `create <name>` -> go to Create. **First strip any `--cmux` / `--no-cmux` / `--auto` / `--flow <value>` / `--branch <ref>` token** out of the argument and carry them as overrides (`--cmux`/`--no-cmux` = launcher; `--auto` = autonomous permission mode; `--flow plan|plan-workflow` = which command the launch lands in — all for Step C3.5; `--branch <ref>` decouples the attached/created branch from the dir name — Step C2). Bind the remainder as `<name>` (so `create auth --flow plan-workflow --auto` => name `auth`, not the flags; `create pwa-46696 --branch feature/pwa-46696` => name `pwa-46696`, branch `feature/pwa-46696`).
 - `list` -> go to List
 - `remove <name>` -> go to Remove
 - `info` -> go to Info
@@ -45,6 +45,8 @@ Create an interactive worktree. The Go subcommand owns the guard, name validatio
 Optional launcher override on the argument: `--cmux` / `--no-cmux` force the launcher for this run (otherwise `$LETS_LAUNCHER` decides — see Step C3.5).
 
 Optional `--auto`: launch the session in `claude --permission-mode auto` (autonomous — auto-approves low-risk work, still gates push / PR / `bd close` / external per LETS AUTO MODE rules). Maps ONLY to `--permission-mode auto`, **never** `bypassPermissions`. Applies to the launcher paths in Step C3.5 / C4 (see Step C3.5).
+
+Optional `--flow plan|plan-workflow`: which `/lets:*` command the spawned session lands in. `--flow` ONLY swaps the launch `--command` string — all other steering stays in the bd task (the launch stays uniform/reproducible). Default (no `--flow`) → `/lets:start <id>` (today's behavior). `--flow plan` → `/lets:plan <id>` (interactive planning in the worktree; the human drives). `--flow plan-workflow` → `/lets:plan-workflow <id>` (autonomous planning). Because only the command string changes, `--flow` is **launcher-agnostic** — the cmux (C3.5) and terminal (C4) paths both inherit it (so does the future tmux launcher). Composes orthogonally with `--auto`. Requires a known task id; on a **taskless** worktree, ignore `--flow` with a one-line note (and `taskless + --flow + --auto` collapses to the existing taskless `--auto` path, `claude --permission-mode auto`). **plan-workflow is PREVIEW** (needs Claude Code ≥ 2.1.154 / paid / Dynamic Workflows) — the launch string can't probe that, so the launched `/lets:plan-workflow` is responsible: if the Workflow tool is unavailable it prints the standard PREVIEW-unavailable message and the operator re-runs `--flow plan`.
 
 ### Step C1: Get Name
 
@@ -120,6 +122,8 @@ lets cmux open "{worktree.path}" --name "{slug}" --description "{task-id} · {ta
 
 **`--auto`:** when the `--auto` override was passed, the launched `claude` gains `--permission-mode auto` — the `--command` becomes `claude --permission-mode auto '/lets:start {task-id}'`. Maps ONLY to `--permission-mode auto`, never `bypassPermissions`.
 
+**`--flow`:** when a `--flow` override was passed, the `/lets:start {task-id}` inside the `--command` is replaced by the flow's command — `--flow plan` → `'/lets:plan {task-id}'`, `--flow plan-workflow` → `'/lets:plan-workflow {task-id}'` — composing with `--auto` (e.g. `--command "claude --permission-mode auto '/lets:plan-workflow {task-id}'"`). Only the command string changes; the `lets cmux open` flags are otherwise identical. Requires a task id (a taskless worktree has no `{task-id}` to plan — ignore `--flow` and keep `--command "claude"`).
+
 **Taskless worktree** (custom name, no beads task): drop the `/lets:start {task-id}` argument — use `--command "claude"` and derive `{slug}` from the worktree name; **also drop `--description`** (no task id to stamp — the `--name` slug is identity enough). Only emit `/lets:start {task-id}` and `--description` when a task id is actually known. (`--auto` still applies: `--command "claude --permission-mode auto"`.)
 
 Parse the `launch` block:
@@ -154,7 +158,7 @@ cd {worktree.path} && claude
 └─────────────────────────────────┘
 ```
 
-(When `--auto` was passed, the printed command is `cd {worktree.path} && claude --permission-mode auto` instead — unchanged when `--auto` is absent.)
+(When `--auto` was passed, the printed command is `cd {worktree.path} && claude --permission-mode auto` instead — unchanged when `--auto` is absent. When `--flow` was passed, the launched command carries the flow's slash command — e.g. `cd {worktree.path} && claude --permission-mode auto '/lets:plan-workflow {task-id}'` — same string the cmux path uses, since `--flow` only swaps the command.)
 
 **If staying on current branch (cmux launcher, `launched=true`):**
 

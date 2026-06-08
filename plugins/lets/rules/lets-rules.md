@@ -142,10 +142,10 @@ Stay alert to recurring themes across a session — repeated topics, related ide
 
 ## AUTO MODE
 
-AUTO MODE (autonomous execution: `/loop`, `/lets:execute` auto-flow, `/lets:team` parallel runs, scheduled agents, or system-reminder "Auto mode active") does NOT override approval gates for state-changing or shared-state operations. "Execute immediately" means low-risk read/edit work, not destructive or externally-visible actions.
+AUTO MODE (autonomous execution: `/loop`, `/lets:execute --auto`, `/lets:team` parallel runs, scheduled agents, or system-reminder "Auto mode active") does NOT override approval gates for state-changing or shared-state operations. "Execute immediately" means low-risk read/edit work, not destructive or externally-visible actions.
 
 **Always requires explicit user approval (even in AUTO MODE):**
-- bd state changes: `bd close`, `bd update --status`, `bd dolt push`. Read-only ops (search, show, ready, list) are free.
+- bd state changes: `bd close`, `bd update --status`, `bd dolt push`. Read-only ops (search, show, ready, list) are free. **Carve-out (spawn entry claim):** the ONE exception is the spawn-time `take-task` claim (`bd update --status=in_progress`) that *starts* an autonomous spawned session (e.g. `/lets:plan-workflow <id>` / `/lets:execute --auto <id>` launched into a fresh worktree) — that entry claim is the authorized first action and proceeds without a gate. Every *later* bd state change stays gated.
 - Git push / PR ops: `git push`, `gh pr create`, `gh pr merge`, `gh pr review approve`.
 - Destructive ops: `rm`, `git reset --hard`, `git push --force`, `git branch -D`, worktree removal.
 - External-facing actions: Slack / email / posting to external services.
@@ -155,6 +155,7 @@ AUTO MODE (autonomous execution: `/loop`, `/lets:execute` auto-flow, `/lets:team
 - Same tool / command fails 3+ times in a row → stop iterating, find root cause.
 - Detected fabrication (referring to nonexistent files / tasks / commits) → stop, verify with read/grep.
 - Scope drift outside the claimed task → ask whether to expand scope or create follow-up.
+- Autonomous run (`--auto`) on `$LETS_MERGE_BRANCH` → REFUSE + halt. `--auto` never auto-enables trunk-mode: editing the merge-branch is a deliberate human opt-in (the take-task picker), not something an unattended session may self-authorize. Surface "needs a feature branch" and stop.
 
 **Soft stops** (pause and ask):
 - Decision point with 2+ viable approaches → use `AskUserQuestion`, don't pick autonomously.

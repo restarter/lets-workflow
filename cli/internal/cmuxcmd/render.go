@@ -48,3 +48,22 @@ func RenderRename(w io.Writer, res *RenameResult) {
 	}
 	fmt.Fprintf(w, "cmux workspace not renamed (%s)\n", res.Rename.Reason)
 }
+
+// RenderNotify writes a human-readable summary of a NotifyResult. Notified=true
+// means the notification was ENQUEUED in cmux, not confirmed seen by a human.
+func RenderNotify(w io.Writer, res *NotifyResult) {
+	if !res.OK {
+		if res.Error != nil {
+			fmt.Fprintf(w, "Error: %s: %s\n", res.Error.Kind, res.Error.Message)
+		}
+		return
+	}
+	if res.Notify == nil {
+		return
+	}
+	if res.Notify.Notified {
+		fmt.Fprintf(w, "Enqueued cmux notification to %s: %q\n", res.Notify.Ref, res.Notify.Title)
+		return
+	}
+	fmt.Fprintf(w, "cmux notification not sent (%s)\n", res.Notify.Reason)
+}

@@ -50,6 +50,17 @@ type RenameInfo struct {
 	Reason   string `json:"reason,omitempty"`
 }
 
+// NotifyInfo is the outcome of a notify attempt. Notified=true means cmux
+// ENQUEUED the notification (not confirmed seen by a human). Notified=false is
+// NOT an error when Reason is set (not_macos | cmux_not_found |
+// workspace_not_found | cmux_error) - cmux is optional, so the caller degrades.
+type NotifyInfo struct {
+	Notified bool   `json:"notified"`
+	Ref      string `json:"ref,omitempty"`
+	Title    string `json:"title,omitempty"`
+	Reason   string `json:"reason,omitempty"`
+}
+
 // Envelope is the common shape across all cmux subcommand results.
 type Envelope struct {
 	SchemaVersion int        `json:"schema_version"`
@@ -81,4 +92,10 @@ type OpenResult struct {
 type RenameResult struct {
 	Envelope
 	Rename *RenameInfo `json:"rename,omitempty"`
+}
+
+// NotifyResult is the notify-subcommand envelope.
+type NotifyResult struct {
+	Envelope
+	Notify *NotifyInfo `json:"notify,omitempty"`
 }
