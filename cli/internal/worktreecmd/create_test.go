@@ -128,6 +128,62 @@ func TestCreate_ExplicitBranch_CreatesVerbatim(t *testing.T) {
 	}
 }
 
+// lets-x5ucf: LETS-managed symlinks must be ignored INSIDE the worktree via the
+// shared info/exclude, so they don't surface as untracked noise (the branch's
+// committed .gitignore the worktree checks out can lack the entry / carry only a
+// dir-only `/.lets/`). Also asserts idempotency: a second create must not append
+// a duplicate `.lets` line to the shared file.
+func TestCreate_WorktreeExcludesSymlinks(t *testing.T) {
+	repo := initRepo(t)
+	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(repo, ".beads"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, ".beads", ".env"), []byte("X=1"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	res, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{
+		Name: "foo", Mode: worktreecmd.BranchAuto,
+	})
+	if err != nil || !res.OK {
+		t.Fatalf("Create: err=%v ok=%v", err, res.OK)
+	}
+	exclPath := filepath.Join(repo, ".git", "info", "exclude")
+	excl, err := os.ReadFile(exclPath)
+	if err != nil {
+		t.Fatalf("read info/exclude: %v", err)
+	}
+	for _, want := range []string{".lets", ".beads/.env"} {
+		if !strings.Contains(string(excl), want) {
+			t.Errorf("info/exclude missing %q; got:\n%s", want, excl)
+		}
+	}
+	// The worktree no longer reports .lets as untracked.
+	out, _ := exec.Command("git", "-C", res.Worktree.Path, "status", "--porcelain").Output()
+	if strings.Contains(string(out), ".lets") {
+		t.Errorf("worktree still shows .lets as untracked:\n%s", out)
+	}
+
+	// Idempotency: a second worktree must not duplicate the `.lets` exclude line.
+	if _, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{
+		Name: "foo2", Mode: worktreecmd.BranchAuto,
+	}); err != nil {
+		t.Fatalf("second Create: %v", err)
+	}
+	excl2, _ := os.ReadFile(exclPath)
+	n := 0
+	for _, line := range strings.Split(string(excl2), "\n") {
+		if strings.TrimSpace(line) == ".lets" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("expected exactly one `.lets` line in info/exclude, got %d:\n%s", n, excl2)
+	}
+}
+
 func TestCreate_NoBeadsDir(t *testing.T) {
 	repo := initRepo(t)
 	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {

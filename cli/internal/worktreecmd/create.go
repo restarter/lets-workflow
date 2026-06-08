@@ -285,6 +285,27 @@ func Create(ctx context.Context, projectRoot string, opts CreateOptions) (*Creat
 		addStep(StepSkip, ".beads/.env symlink disabled by flag")
 	}
 
+	// Step 9.5: ensure the LETS-managed symlinks are ignored INSIDE the worktree
+	// via the shared info/exclude (lets-x5ucf). EnsureGitignore (Step 6) only
+	// touches the main repo's working .gitignore; the worktree checks out its
+	// branch's committed copy, which can lack the entry (or carry a dir-only
+	// `/.lets/` that misses the `.lets` symlink) — leaving `.lets`/`.beads/.env`
+	// as untracked noise. Only ignore what we actually symlinked; best-effort.
+	var excludes []string
+	if letsSymlinked {
+		excludes = append(excludes, ".lets")
+	}
+	if beadsSymlinked {
+		excludes = append(excludes, ".beads/.env")
+	}
+	if len(excludes) > 0 {
+		if err := ensureWorktreeExcludes(ctx, projectRoot, excludes); err != nil {
+			addStep(StepWarn, fmt.Sprintf("could not update .git/info/exclude (%s): %v — symlinks may show as untracked in the worktree", strings.Join(excludes, ", "), err))
+		} else {
+			addStep(StepOK, "info/exclude ensured ("+strings.Join(excludes, ", ")+")")
+		}
+	}
+
 	// Step 10: verify.
 	if err := VerifyCreate(ctx, projectRoot, wtPath, plan); err != nil {
 		return rollback(ctx, result, projectRoot, wtPath, plan, prevMainBranch, "verify failed", err)
@@ -295,9 +316,14 @@ func Create(ctx context.Context, projectRoot string, opts CreateOptions) (*Creat
 	result.OK = true
 	result.Worktree.LetsSymlinked = letsSymlinked
 	result.Worktree.BeadsSymlinked = beadsSymlinked
-	// Tracked-.lets/ opt-in warning.
-	if cmd := exec.CommandContext(ctx, "git", "-C", projectRoot, "check-ignore", "-q", ".lets/"); cmd.Run() != nil {
-		addStep(StepWarn, ".lets/ is NOT gitignored — tracked-`.lets/` opt-in not supported yet; symlink may show as untracked in worktree")
+	// .lets ignore sanity: after Step 9.5 the symlink should be ignored in every
+	// worktree. If it still isn't (exclude write failed, or a genuinely tracked
+	// .lets), warn — it would surface as untracked. Check `.lets` (no slash) so a
+	// symlink is matched, unlike the old dir-only `.lets/` probe.
+	if letsSymlinked {
+		if cmd := exec.CommandContext(ctx, "git", "-C", projectRoot, "check-ignore", "-q", ".lets"); cmd.Run() != nil {
+			addStep(StepWarn, ".lets is NOT ignored by git — the worktree symlink may show as untracked; add `.lets` to .git/info/exclude or .gitignore")
+		}
 	}
 	// Auto-switch UX: success-path notification. Main repo is now on a different
 	// branch than user started on; surface explicit restore command.
@@ -386,6 +412,60 @@ func resolveBaseFromEnv(projectRoot string) string {
 func currentBranch(ctx context.Context, repo string) (string, error) {
 	out, err := exec.CommandContext(ctx, "git", "-C", repo, "branch", "--show-current").Output()
 	return strings.TrimSpace(string(out)), err
+}
+
+// ensureWorktreeExcludes appends any missing entries to the repo's shared git
+// exclude file (the common dir's info/exclude). Why not the tracked .gitignore:
+// EnsureGitignore writes the main repo's WORKING .gitignore, but a fresh worktree
+// checks out its branch's COMMITTED .gitignore — which may lack the LETS entries
+// (or carry only a directory-form `/.lets/` that can't match the `.lets` symlink),
+// leaving `.lets` / `.beads/.env` showing as untracked inside the worktree
+// (lets-x5ucf, child-repo scenario). info/exclude lives in the common git dir,
+// so it is shared across main + every worktree, is untracked, and is never pushed
+// to collaborators — the right layer to ignore LETS-managed symlinks regardless of
+// the committed .gitignore. Best-effort: the caller surfaces failures as a StepWarn,
+// never blocks create. Entries are narrow (`.lets`, `.beads/.env`) so untracked
+// non-LETS content under `.beads/` still surfaces in `git status`.
+func ensureWorktreeExcludes(ctx context.Context, projectRoot string, entries []string) error {
+	out, err := exec.CommandContext(ctx, "git", "-C", projectRoot, "rev-parse", "--git-path", "info/exclude").Output()
+	if err != nil {
+		return fmt.Errorf("resolve info/exclude path: %w", err)
+	}
+	p := strings.TrimSpace(string(out))
+	if p == "" {
+		return fmt.Errorf("empty info/exclude path")
+	}
+	if !filepath.IsAbs(p) {
+		p = filepath.Join(projectRoot, p)
+	}
+	data, err := os.ReadFile(p)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	existing := map[string]bool{}
+	for _, line := range strings.Split(string(data), "\n") {
+		existing[strings.TrimSpace(line)] = true
+	}
+	var toAppend []string
+	for _, e := range entries {
+		if !existing[e] {
+			toAppend = append(toAppend, e)
+		}
+	}
+	if len(toAppend) == 0 {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		return err
+	}
+	buf := append([]byte{}, data...)
+	if len(buf) > 0 && buf[len(buf)-1] != '\n' {
+		buf = append(buf, '\n')
+	}
+	for _, e := range toAppend {
+		buf = append(buf, []byte(e+"\n")...)
+	}
+	return initcmd.AtomicWriteBytes(p, buf, 0o644)
 }
 
 // ensureCleanTree refuses if main repo has uncommitted changes OR is mid-operation
