@@ -21,6 +21,7 @@ func NewCmuxCmd() *cobra.Command {
 	}
 	root.AddCommand(newCmuxOpenCmd())
 	root.AddCommand(newCmuxRenameCmd())
+	root.AddCommand(newCmuxNotifyCmd())
 	return root
 }
 
@@ -92,6 +93,46 @@ func newCmuxRenameCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&title, "title", "", "New workspace title (required)")
+	cmd.Flags().StringVar(&ref, "ref", "", "Explicit workspace ref/uuid/index (else resolve by --cwd or the active workspace)")
+	cmd.Flags().StringVar(&cwd, "cwd", "", "Resolve the workspace by current_directory (else use the active workspace)")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
+	cmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Suppress human-readable output")
+	return cmd
+}
+
+func newCmuxNotifyCmd() *cobra.Command {
+	var (
+		title, subtitle, body, ref, cwd string
+		jsonOut, quiet                  bool
+	)
+	cmd := &cobra.Command{
+		Use:           "notify --title <text> [--body <text>] [--ref <ref> | --cwd <path>]",
+		Short:         "Send a notification to a cmux workspace (resolves the active workspace, or by --cwd / --ref)",
+		Args:          cobra.NoArgs,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			res, runErr := cmuxcmd.Notify(cmd.Context(), cmuxcmd.NotifyOptions{
+				Title:    title,
+				Subtitle: subtitle,
+				Body:     body,
+				Ref:      ref,
+				Cwd:      cwd,
+			})
+			jsonBytes, _ := json.MarshalIndent(res, "", "  ")
+			if jsonOut {
+				fmt.Fprintln(cmd.OutOrStdout(), string(jsonBytes))
+			} else if !quiet && res.OK {
+				// Skip the renderer on hard error (main.go prints to stderr) to
+				// avoid a duplicate line (mirrors worktree.go info).
+				cmuxcmd.RenderNotify(cmd.OutOrStdout(), res)
+			}
+			return runErr
+		},
+	}
+	cmd.Flags().StringVar(&title, "title", "", "Notification title (required)")
+	cmd.Flags().StringVar(&subtitle, "subtitle", "", "Notification subtitle")
+	cmd.Flags().StringVar(&body, "body", "", "Notification body")
 	cmd.Flags().StringVar(&ref, "ref", "", "Explicit workspace ref/uuid/index (else resolve by --cwd or the active workspace)")
 	cmd.Flags().StringVar(&cwd, "cwd", "", "Resolve the workspace by current_directory (else use the active workspace)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
