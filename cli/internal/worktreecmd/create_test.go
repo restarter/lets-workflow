@@ -74,6 +74,60 @@ func TestCreate_AttachExistingBranch(t *testing.T) {
 	}
 }
 
+// lets-x5ucf: attach a branch whose ref contains '/' while the worktree dir
+// name stays slash-free. End-to-end: dir == .worktrees/<name>, branch == ref.
+func TestCreate_ExplicitBranch_AttachSlashRef(t *testing.T) {
+	repo := initRepo(t)
+	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runIn(t, repo, "git", "branch", "feature/pwa-46696")
+	res, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{
+		Name: "pwa-46696", Branch: "feature/pwa-46696", Mode: worktreecmd.BranchAuto,
+	})
+	if err != nil || !res.OK {
+		t.Fatalf("Create: err=%v ok=%v", err, res.OK)
+	}
+	if res.Worktree.Name != "pwa-46696" {
+		t.Errorf("dir name=%q, want pwa-46696", res.Worktree.Name)
+	}
+	if res.Worktree.Branch != "feature/pwa-46696" || res.Worktree.BranchMode != "attached" {
+		t.Errorf("got branch=%q mode=%q, want feature/pwa-46696 attached", res.Worktree.Branch, res.Worktree.BranchMode)
+	}
+	// Dir lives at the sanitized name, not the slash ref.
+	if _, err := os.Stat(filepath.Join(repo, ".worktrees", "pwa-46696")); err != nil {
+		t.Errorf(".worktrees/pwa-46696 missing: %v", err)
+	}
+	// Worktree HEAD tracks the attached branch.
+	hwt, _ := exec.Command("git", "-C", res.Worktree.Path, "rev-parse", "HEAD").Output()
+	hm, _ := exec.Command("git", "-C", repo, "rev-parse", "refs/heads/feature/pwa-46696").Output()
+	if string(hwt) != string(hm) {
+		t.Errorf("HEADs differ: worktree=%s main=%s", hwt, hm)
+	}
+}
+
+// lets-x5ucf: create a NEW slash-bearing branch off base, verbatim (no
+// worktree- prefix), with a slash-free dir name.
+func TestCreate_ExplicitBranch_CreatesVerbatim(t *testing.T) {
+	repo := initRepo(t)
+	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	res, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{
+		Name: "pwa-46696", Branch: "feature/pwa-46696", Mode: worktreecmd.BranchNewBranch,
+	})
+	if err != nil || !res.OK {
+		t.Fatalf("Create: err=%v ok=%v", err, res.OK)
+	}
+	if res.Worktree.Branch != "feature/pwa-46696" || res.Worktree.BranchMode != "created" {
+		t.Errorf("got branch=%q mode=%q, want feature/pwa-46696 created", res.Worktree.Branch, res.Worktree.BranchMode)
+	}
+	out, _ := exec.Command("git", "-C", repo, "branch", "--list", "feature/pwa-46696").Output()
+	if !strings.Contains(string(out), "feature/pwa-46696") {
+		t.Errorf("branch feature/pwa-46696 not created: %q", out)
+	}
+}
+
 func TestCreate_NoBeadsDir(t *testing.T) {
 	repo := initRepo(t)
 	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {

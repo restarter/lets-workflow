@@ -62,7 +62,7 @@ func newWorktreeCreateCmd() *cobra.Command {
 		attach, newBranch, noSymLets, noSymBeads bool
 		printCD, switchMain, jsonOut, quiet      bool
 		verbose                                  bool
-		base                                     string
+		base, branch                             string
 	)
 	cmd := &cobra.Command{
 		Use:   "create <name>",
@@ -100,6 +100,7 @@ func newWorktreeCreateCmd() *cobra.Command {
 			}
 			res, runErr := worktreecmd.Create(cmd.Context(), projectRoot, worktreecmd.CreateOptions{
 				Name:               args[0],
+				Branch:             branch,
 				Mode:               mode,
 				Base:               base,
 				NoSymlinkLets:      noSymLets,
@@ -131,6 +132,7 @@ func newWorktreeCreateCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&attach, "attach", false, "Force attach to an existing branch")
 	cmd.Flags().BoolVar(&newBranch, "new-branch", false, "Force create new branch (refuse if exists)")
 	cmd.Flags().StringVar(&base, "base", "", "Base ref for new branch (default: LETS_MERGE_BRANCH or main)")
+	cmd.Flags().StringVar(&branch, "branch", "", "Branch ref to attach/create, decoupled from <name> (allows '/', e.g. feature/x)")
 	cmd.Flags().BoolVar(&noSymLets, "no-symlink-lets", false, "Skip .lets/ symlink")
 	cmd.Flags().BoolVar(&noSymBeads, "no-symlink-beads", false, "Skip .beads/.env symlink")
 	cmd.Flags().BoolVar(&printCD, "print-cd", false, "Print worktree path to stdout (pair with --json or --verbose to also emit stderr); for $(...) substitution")

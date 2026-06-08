@@ -19,6 +19,7 @@ import (
 // CreateOptions configures the create flow.
 type CreateOptions struct {
 	Name               string
+	Branch             string // explicit branch ref (--branch); may contain '/'. Empty = derive from Name.
 	Mode               BranchMode
 	Base               string
 	NoSymlinkLets      bool
@@ -112,8 +113,9 @@ func Create(ctx context.Context, projectRoot string, opts CreateOptions) (*Creat
 	}
 	addStep(StepOK, "base ref: "+base)
 
-	// Step 4: resolve branch (attach vs create).
-	plan, err := ResolveBranch(ctx, projectRoot, opts.Name, opts.Mode, base)
+	// Step 4: resolve branch (attach vs create). opts.Branch, when set, decouples
+	// the attached/created ref from the worktree dir name (lets-x5ucf).
+	plan, err := ResolveBranch(ctx, projectRoot, opts.Name, opts.Branch, opts.Mode, base)
 	if err != nil {
 		var e *Error
 		if errors.As(err, &e) {
