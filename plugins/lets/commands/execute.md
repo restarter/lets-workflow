@@ -19,6 +19,19 @@ Load an implementation plan and execute it using Claude Code's native plan mode.
 
 Parse `--auto` from the argument (it composes with a plan path; it is mutually exclusive with `--status`).
 
+## Pipeline-state marker (under `--auto`)
+
+A spawned autonomous session records its phase in a **per-task** marker file so N parallel worktrees don't clobber each other and the gate-notify (Step 6) can tell autonomous from interactive runs. **Per-task filename** (NOT a shared `pipeline-state` — `.lets/` is a symlink shared across worktrees): `.lets/cache/pipeline-state-<task-id>`, single line `<task-id>|<phase>|<iso>`, phase ∈ `planning | gate-clarify | gate-approve | executing | blocked | done`. Write helper (run at each transition; only under `--auto` — interactive execute writes no marker, so it triggers no notify):
+
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel); mkdir -p "$LETS_PROJECT_ROOT/.lets/cache"
+printf '%s|%s|%s\n' "{TASK_ID}" "{PHASE}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$LETS_PROJECT_ROOT/.lets/cache/pipeline-state-{TASK_ID}"
+```
+
+`execute --auto` writes `executing` when implementation starts (Step 5), `blocked` on a hard-stop (with the notify), `done` on completion (Step 6). **Keep in sync:** the same contract + helper live in `plan-workflow.md` (which writes `planning`/`gate-clarify`/`gate-approve`).
+
+**Execute-blocked notify.** On a hard-stop under `--auto` (3×-fail / fabrication / a gated op reached / `$LETS_MERGE_BRANCH` refused), after writing the `blocked` marker, fire the **marker-gated gate-notification** so an unattended session surfaces instead of stalling. Use the authoritative snippet documented in `plan-workflow.md` "## Gate notifications" (don't re-paraphrase): `lets cmux notify --cwd "$LETS_PROJECT_ROOT" --title "Execute blocked — needs you" --body "<reason>" --json 2>/dev/null || true`, guarded by the `pipeline-state-{TASK_ID}` marker existing. Best-effort — the run also halts visibly in-band.
+
 ## Step 1: Active Task Detection
 
 Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detect-task")`.
@@ -188,7 +201,7 @@ Call `EnterPlanMode`.
 
 **After user approves**, Claude implements step by step. Use `/lets:commit` at natural commit points as indicated in the plan.
 
-**Under `--auto`:** the plan-mode approval IS the gate — implement straight through without a per-step "review before moving on" pause, and `/lets:commit` at each plan commit point WITHOUT re-asking (one approval covers the run). Hard-stops still halt (push/PR/`bd close`/external gated; 3×-fail; fabrication; `$LETS_MERGE_BRANCH` refused per Step 1) — on any halt, write the `blocked` marker + fire the execute-blocked notify.
+**Under `--auto`:** write the `executing` pipeline-state marker, then — the plan-mode approval IS the gate — implement straight through without a per-step "review before moving on" pause, and `/lets:commit` at each plan commit point WITHOUT re-asking (one approval covers the run). Hard-stops still halt (push/PR/`bd close`/external gated; 3×-fail; fabrication; `$LETS_MERGE_BRANCH` refused per Step 1) — on any halt, write the `blocked` marker + fire the execute-blocked notify.
 
 **Progress tracking:** After completing each plan task, append `[DONE]` to its `### Task N:` heading in the plan file. This makes resume self-documenting - on re-entry, skip tasks already marked `[DONE]`.
 
@@ -202,7 +215,7 @@ The plan file provides the roadmap; explicit user approval provides the gates.
 
 ## Step 6: Record Completion
 
-After implementation is complete (all plan tasks done):
+After implementation is complete (all plan tasks done). **Under `--auto`:** write the `done` pipeline-state marker (the Pipeline-state marker helper, phase `done`) so the statusline / a watcher sees the run finished.
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
