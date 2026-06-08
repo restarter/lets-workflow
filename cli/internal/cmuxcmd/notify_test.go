@@ -4,9 +4,41 @@ package cmuxcmd
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 )
+
+// TestNotify_NotMacOS_JSONShape_PinsStub pins the not_macos envelope shape that
+// internal/cli/cmux_stub.go (non-unix build) hand-builds as a map literal -
+// because the cmuxcmd types aren't compiled on non-unix, the two can silently
+// drift. If this fails, update newCmuxNotifyStub in cmux_stub.go to match.
+func TestNotify_NotMacOS_JSONShape_PinsStub(t *testing.T) {
+	// The stub hardcodes "schema_version": 1. Force a bump to surface there too.
+	if SchemaVersion != 1 {
+		t.Fatalf("SchemaVersion changed to %d - update cmux_stub.go's hardcoded schema_version:1", SchemaVersion)
+	}
+	defer func(g string) { runtimeGOOS = g }(runtimeGOOS)
+	runtimeGOOS = "linux"
+	res, _ := Notify(context.Background(), NotifyOptions{Title: "x"})
+	b, _ := json.Marshal(res)
+	var got map[string]any
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	for _, k := range []string{"schema_version", "ok", "subcommand", "steps", "notify"} {
+		if _, ok := got[k]; !ok {
+			t.Fatalf("missing top-level key %q (stub must mirror): %s", k, b)
+		}
+	}
+	if got["ok"] != true || got["subcommand"] != "notify" {
+		t.Fatalf("ok/subcommand mismatch (stub mirrors ok:true,subcommand:notify): %s", b)
+	}
+	n, ok := got["notify"].(map[string]any)
+	if !ok || n["notified"] != false || n["reason"] != "not_macos" {
+		t.Fatalf("notify block mismatch (stub mirrors notified:false,reason:not_macos): %s", b)
+	}
+}
 
 func TestNotify_TitleMissing_HardError(t *testing.T) {
 	res, err := Notify(context.Background(), NotifyOptions{Title: ""})
