@@ -1,6 +1,6 @@
 ---
 description: Execute implementation plan from /lets:plan - load plan and enter native plan mode
-argument-hint: "[--status]"
+argument-hint: "[--status] [--auto]"
 ---
 
 # Execute Plan
@@ -11,6 +11,14 @@ Load an implementation plan and execute it using Claude Code's native plan mode.
 
 > **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
 
+## --auto mode
+
+`/lets:execute --auto` runs the approved plan **autonomously**: skip the per-step "review before moving on" gate and `/lets:commit` at each plan commit point WITHOUT re-asking (matches the established "autonomous commits during execute after plan approval" preference). `--auto` is execution-speed for an *already-approved* plan — it does NOT bypass the hard-stops.
+
+**`--auto` = run under AUTO MODE** (see `.claude/rules/lets-rules.md` `## AUTO MODE`) — do NOT restate the contract here. What still applies under `--auto`: push / PR / `bd close` / external stay gated; a 3×-fail halts; fabrication halts; and **`--auto` on `$LETS_MERGE_BRANCH` REFUSES** (Step 1) rather than auto-entering trunk-mode. When a hard-stop is hit, write the `blocked` marker and fire the execute-blocked notify (Step 6 / the gate-notification block) so an unattended session surfaces instead of stalling.
+
+Parse `--auto` from the argument (it composes with a plan path; it is mutually exclusive with `--status`).
+
 ## Step 1: Active Task Detection
 
 Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detect-task")`.
@@ -18,7 +26,11 @@ If not on a feature/worktree branch and no in-progress task found - ask user whi
 
 If invoked with an explicit `<task-id>` argument and it is not already the active/in-progress task (e.g. a spawned `execute --auto <id>` in a fresh worktree), resolve-and-claim it per the **detect-task** *explicit task-id argument* convention before resolving the plan - don't re-paraphrase the logic; that section is the single source of truth (incl. the AUTO-MODE entry-claim carve-out).
 
-**If on `$LETS_MERGE_BRANCH`** — `/lets:execute` usually expects a feature branch. Soft-gate before proceeding:
+**If on `$LETS_MERGE_BRANCH`** — `/lets:execute` usually expects a feature branch.
+
+**Under `--auto`: REFUSE, do NOT show the soft-gate.** Autonomous editing of the merge-branch must never be auto-authorized — trunk-mode is a deliberate human opt-in (via the take-task picker), and an unattended session cannot answer an `AskUserQuestion`. Write the `blocked` marker, fire the execute-blocked notify ("Execute blocked — needs a feature branch"), and stop. A human re-runs on a feature branch, or opts into trunk-mode interactively (without `--auto`). `--auto` speeds an *authorized* path; it is not authorization to start editing `$LETS_MERGE_BRANCH`.
+
+Without `--auto`, soft-gate before proceeding:
 
 ```
 AskUserQuestion(
@@ -175,6 +187,8 @@ Call `EnterPlanMode`.
 5. Calls `ExitPlanMode` when ready for user approval
 
 **After user approves**, Claude implements step by step. Use `/lets:commit` at natural commit points as indicated in the plan.
+
+**Under `--auto`:** the plan-mode approval IS the gate — implement straight through without a per-step "review before moving on" pause, and `/lets:commit` at each plan commit point WITHOUT re-asking (one approval covers the run). Hard-stops still halt (push/PR/`bd close`/external gated; 3×-fail; fabrication; `$LETS_MERGE_BRANCH` refused per Step 1) — on any halt, write the `blocked` marker + fire the execute-blocked notify.
 
 **Progress tracking:** After completing each plan task, append `[DONE]` to its `### Task N:` heading in the plan file. This makes resume self-documenting - on re-entry, skip tasks already marked `[DONE]`.
 
