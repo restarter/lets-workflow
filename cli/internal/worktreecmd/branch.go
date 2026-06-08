@@ -28,15 +28,38 @@ const (
 )
 
 // ResolveBranch decides whether `lets worktree create <name>` should attach
-// to an existing branch named <name> or create a new branch worktree-<name>
-// off of <base>. Auto mode chooses based on whether refs/heads/<name> exists.
-func ResolveBranch(ctx context.Context, projectRoot, name string, mode BranchMode, base string) (BranchPlan, error) {
-	exists, err := branchExists(ctx, projectRoot, name)
+// to an existing branch or create a new one off of <base>, and which ref name
+// to use. Auto mode chooses based on whether the resolved ref already exists.
+//
+// branch decouples the worktree directory NAME from the branch REF (lets-x5ucf):
+//   - branch == "" → historical behavior: attach to refs/heads/<name>, or create
+//     worktree-<name>. The dir-name validator forbids '/', so this path can never
+//     reach a slash-bearing ref.
+//   - branch != "" → the explicit ref OVERRIDES the name-derived branch entirely:
+//     attach to (or create) refs/heads/<branch> verbatim — no "worktree-" prefix —
+//     while the worktree dir keeps the sanitized <name>. This is the only path to a
+//     git-flow ref like feature/x, since <branch> is validated by the ref grammar
+//     (slashes allowed) instead of the stricter dir-name allowlist.
+func ResolveBranch(ctx context.Context, projectRoot, name, branch string, mode BranchMode, base string) (BranchPlan, error) {
+	// ref is what we look up / attach to; newBranch is what we create when not
+	// attaching. With an explicit --branch both collapse to <branch>; otherwise
+	// ref is <name> and newBranch is the historical worktree-<name> form.
+	ref := name
+	newBranch := "worktree-" + name
+	if branch != "" {
+		if err := validateBranchRef(ctx, branch); err != nil {
+			return BranchPlan{}, err
+		}
+		ref = branch
+		newBranch = branch
+	}
+
+	exists, err := branchExists(ctx, projectRoot, ref)
 	if err != nil {
 		return BranchPlan{}, &Error{
 			Code:    ExitGitFailed,
 			Kind:    "git_show_ref_failed",
-			Message: fmt.Sprintf("could not check if branch %q exists", name),
+			Message: fmt.Sprintf("could not check if branch %q exists", ref),
 			Cause:   err,
 		}
 	}
@@ -47,34 +70,34 @@ func ResolveBranch(ctx context.Context, projectRoot, name string, mode BranchMod
 			return BranchPlan{}, &Error{
 				Code:        ExitBranchConflict,
 				Kind:        "branch_missing",
-				Message:     fmt.Sprintf("--attach requested but branch %q does not exist", name),
-				Remediation: "drop --attach to create a new worktree-" + name + " branch, or create the branch first",
+				Message:     fmt.Sprintf("--attach requested but branch %q does not exist", ref),
+				Remediation: "drop --attach to create a new " + newBranch + " branch, or create the branch first",
 			}
 		}
-		return BranchPlan{Mode: "attached", Branch: name}, nil
+		return BranchPlan{Mode: "attached", Branch: ref}, nil
 
 	case BranchNewBranch:
 		if exists {
 			return BranchPlan{}, &Error{
 				Code:        ExitBranchConflict,
 				Kind:        "branch_exists",
-				Message:     fmt.Sprintf("--new-branch requested but branch %q already exists", name),
+				Message:     fmt.Sprintf("--new-branch requested but branch %q already exists", ref),
 				Remediation: "drop --new-branch to attach, or pick a different name",
 			}
 		}
 		if err := validateBaseRef(ctx, projectRoot, base); err != nil {
 			return BranchPlan{}, err
 		}
-		return BranchPlan{Mode: "created", Branch: "worktree-" + name, Base: base}, nil
+		return BranchPlan{Mode: "created", Branch: newBranch, Base: base}, nil
 
 	case BranchAuto:
 		if exists {
-			return BranchPlan{Mode: "attached", Branch: name}, nil
+			return BranchPlan{Mode: "attached", Branch: ref}, nil
 		}
 		if err := validateBaseRef(ctx, projectRoot, base); err != nil {
 			return BranchPlan{}, err
 		}
-		return BranchPlan{Mode: "created", Branch: "worktree-" + name, Base: base}, nil
+		return BranchPlan{Mode: "created", Branch: newBranch, Base: base}, nil
 	}
 	return BranchPlan{}, &Error{Code: ExitUsage, Kind: "bad_branch_mode"}
 }
@@ -139,6 +162,36 @@ func ValidateName(ctx context.Context, name string) error {
 			Kind:    "git_invalid_ref",
 			Message: fmt.Sprintf("git rejects branch name %q as invalid ref", "worktree-"+name),
 			Cause:   err,
+		}
+	}
+	return nil
+}
+
+// validateBranchRef validates an explicit --branch ref. Unlike the worktree
+// dir NAME (ValidateName), a branch ref MAY contain '/' so git-flow names like
+// feature/x are accepted (lets-x5ucf). We reject a leading '-' ourselves (so
+// the ref can never be mistaken for a flag when handed to `git worktree add`),
+// then defer to `git check-ref-format` for the full ref grammar — it rejects
+// '..', control chars, space, ~^:?*[\, a trailing '/' or '.lock', and '@{'.
+func validateBranchRef(ctx context.Context, branch string) error {
+	if strings.TrimSpace(branch) == "" {
+		return &Error{Code: ExitUsage, Kind: "empty_branch", Message: "--branch value is empty"}
+	}
+	if strings.HasPrefix(branch, "-") {
+		return &Error{
+			Code:        ExitUsage,
+			Kind:        "invalid_branch",
+			Message:     fmt.Sprintf("branch ref %q cannot start with '-'", branch),
+			Remediation: "pick a branch name that does not start with a dash",
+		}
+	}
+	if err := exec.CommandContext(ctx, "git", "check-ref-format", "--branch", branch).Run(); err != nil {
+		return &Error{
+			Code:        ExitUsage,
+			Kind:        "invalid_branch",
+			Message:     fmt.Sprintf("git rejects branch ref %q as invalid", branch),
+			Remediation: "use a valid git branch name (slashes allowed, e.g. feature/x; no spaces, '..', ~^:?*[ or trailing '/')",
+			Cause:       err,
 		}
 	}
 	return nil
