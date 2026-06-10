@@ -12,6 +12,7 @@
 //
 // This package owns no I/O policy: callers supply the (plugin) rules file
 // path - used for drift comparison vs the installed rules - the project root,
+// the user home dir (user-scope rules + ~/.lets/.env defaults; lets-wug9k),
 // and the output writer. Detection helpers (DetectProjectRoot) are exposed
 // for cobra wiring.
 package sessionstart
@@ -34,23 +35,29 @@ import (
 var localConfigExplainer string
 
 // Run writes the SessionStart hook output to w:
-//  1. Optional ## LETS Notice block (drift check: rules missing or outdated)
+//  1. Optional ## LETS Notice block (scope-aware drift check, see driftCheck)
 //  2. Blank line
-//  3. ## LETS Config block (LETS_PROJECT_ROOT + .env whitelisted keys)
+//  3. ## LETS Config block (LETS_PROJECT_ROOT + whitelisted keys from the
+//     merged project-over-user env, see mergedEnv)
 //  4. Blank line
 //  5. ### About these values explainer (embedded from local_config_explainer.md)
 //
 // rulesPath is the plugin's rules/lets-rules.md (for version compare against
-// the installed copy at <projectRoot>/.claude/rules/lets-rules.md).
+// the installed copies).
+//
+// homeDir is the user's home directory for user-scope lookups
+// (~/.claude/rules/lets-rules.md drift check, ~/.lets/.env config defaults);
+// empty string = "no user scope" (resolution failed or tests opting out) and
+// degrades to the project-only behavior.
 //
 // projectRoot empty -> emit nothing (matches bash behavior when git rev-parse
-// returns nothing).
-func Run(w io.Writer, rulesPath, projectRoot string) error {
+// returns nothing). User scope alone does not create output in non-git dirs.
+func Run(w io.Writer, rulesPath, projectRoot, homeDir string) error {
 	if projectRoot == "" {
 		return nil
 	}
 
-	if notice := driftCheck(rulesPath, projectRoot); notice != "" {
+	if notice := driftCheck(rulesPath, projectRoot, homeDir); notice != "" {
 		if _, err := fmt.Fprintln(w, notice); err != nil {
 			return err
 		}
@@ -59,7 +66,7 @@ func Run(w io.Writer, rulesPath, projectRoot string) error {
 		}
 	}
 
-	env, _ := readEnvFile(filepath.Join(projectRoot, ".lets", ".env"))
+	env := mergedEnv(projectRoot, homeDir)
 
 	if _, err := fmt.Fprintln(w, "## LETS Config"); err != nil {
 		return err
@@ -86,21 +93,98 @@ func Run(w io.Writer, rulesPath, projectRoot string) error {
 	return nil
 }
 
-// driftCheck returns a "## LETS Notice" block when the installed rules differ
-// from the plugin's. Empty string means no notice (versions match or plugin
-// unreadable). Wraps drift.Check + drift.Message — single source of truth for
+// driftCheck returns a "## LETS Notice" block when rules drift requires user
+// action, considering BOTH installed scopes:
+//
+//   - project rules present (any non-missing state) -> existing single-scope
+//     behavior verbatim: project drift wins, global state is irrelevant
+//     (project copy overrides the global one in Claude Code's loading order).
+//   - project rules MISSING + global present and current -> no notice (the
+//     user-scope install covers this project; nagging /lets:init here is the
+//     exact noise lets-wug9k removes).
+//   - project rules MISSING + global present but drifted -> user-scope notice
+//     (MessageUser wording names the global path + remediation).
+//   - both missing -> the existing /lets:init nag (unchanged).
+//
+// homeDir == "" (no user scope / resolution failed) preserves pre-user-scope
+// behavior exactly.
+//
+// Wraps drift.Check + drift.Message/MessageUser — single source of truth for
 // drift wording shared with `lets init --json` output. The trailing
 // surface-this line is hook-only (it tells the orchestrator to relay the
 // notice even when a big slash command like /lets:start is running); it is NOT
 // part of drift.Message, so `lets init --json` output stays clean.
-func driftCheck(pluginRulesPath, projectRoot string) string {
+func driftCheck(pluginRulesPath, projectRoot, homeDir string) string {
 	installedPath := filepath.Join(projectRoot, ".claude", "rules", "lets-rules.md")
 	r := drift.Check(pluginRulesPath, installedPath)
-	msg := drift.Message(r)
+
+	msg := ""
+	if r.State == drift.StateMissing && homeDir != "" {
+		userPath := filepath.Join(homeDir, ".claude", "rules", "lets-rules.md")
+		ur := drift.Check(pluginRulesPath, userPath)
+		switch {
+		case ur.State == drift.StateMissing:
+			msg = drift.Message(r) // both missing: existing nag
+		case ur.Detected():
+			msg = drift.MessageUser(ur) // global present but drifted
+		default:
+			// global equal (or plugin unreadable): covered, stay quiet
+		}
+	} else {
+		msg = drift.Message(r)
+	}
+
 	if msg == "" {
 		return ""
 	}
 	return "## LETS Notice\n\n" + msg + "\n\n→ Surface this to the user at the start of your next response (one line), then continue - do not skip it."
+}
+
+// mergedEnv overlays the project .lets/.env over the user-level ~/.lets/.env
+// (project wins; only non-empty project values mask - an explicitly emptied
+// project key falls through to the user default rather than deleting it).
+// Whitelist filtering stays at emit time in Run, so foreign keys in either
+// file are consistently dropped from injection.
+//
+// LETS_MERGE_BRANCH git-fallback: when neither file supplies it, derive from
+// the repo's origin default branch (single git spawn, 1s timeout), else the
+// literal "main" - matching the model-side fallback in the explainer. Only
+// fires when the key is absent, so initialized projects (whose .env always
+// carries the key - RegenerateEnv restores hand-deleted keys) pay no extra
+// git call. Uninitialized repos DO pay one spawn per hook fire (SessionStart
+// AND PreCompact), bounded by the 1s timeout.
+func mergedEnv(projectRoot, homeDir string) map[string]string {
+	merged := map[string]string{}
+	if homeDir != "" {
+		userEnv, _ := readEnvFile(filepath.Join(homeDir, ".lets", ".env"))
+		for k, v := range userEnv {
+			if v != "" {
+				merged[k] = v
+			}
+		}
+	}
+	projEnv, _ := readEnvFile(filepath.Join(projectRoot, ".lets", ".env"))
+	for k, v := range projEnv {
+		if v != "" {
+			merged[k] = v
+		}
+	}
+	if merged["LETS_MERGE_BRANCH"] == "" {
+		if b := gitutil.DefaultBranch(projectRoot, time.Second); b != "" {
+			// Branch names are attacker-influenced in cloned repos, and this is
+			// the ONE .env-class value that does not pass through envfile.Parse -
+			// apply the same length cap before injection. Newlines/spaces are
+			// impossible in ref names (git rejects them); bloat is the residual
+			// vector.
+			if len(b) > envfile.MaxValueLen {
+				b = b[:envfile.MaxValueLen]
+			}
+			merged["LETS_MERGE_BRANCH"] = b
+		} else {
+			merged["LETS_MERGE_BRANCH"] = "main"
+		}
+	}
+	return merged
 }
 
 // DetectProjectRoot returns the git toplevel for the current working
