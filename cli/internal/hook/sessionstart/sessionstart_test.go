@@ -273,17 +273,17 @@ func TestRun_EmptyEnvValues_Skipped(t *testing.T) {
 // combinations are deliberately NOT enumerated (redundant by construction).
 func TestRun_UserScopeNoticeMatrix(t *testing.T) {
 	const (
-		gAbsent    = ""            // no global rules file
-		gEqual     = "0.4.0"       // matches plugin
-		gOutdated  = "0.3.0"       // behind plugin
-		gAhead     = "9.9.9"       // ahead of plugin
-		gMalformed = "MALFORMED"   // file present, no parseable frontmatter
+		gAbsent    = ""          // no global rules file
+		gEqual     = "0.4.0"     // matches plugin
+		gOutdated  = "0.3.0"     // behind plugin
+		gAhead     = "9.9.9"     // ahead of plugin
+		gMalformed = "MALFORMED" // file present, no parseable frontmatter
 	)
 	tests := []struct {
-		name        string
-		projectVer  string // "" = no project rules file
-		globalVer   string
-		wantNotice  string // substring that MUST appear; "" = NO notice at all
+		name       string
+		projectVer string // "" = no project rules file
+		globalVer  string
+		wantNotice string // substring that MUST appear; "" = NO notice at all
 	}{
 		{"both_missing_keeps_nag", "", gAbsent,
 			"Workflow rules not installed in `.claude/rules/lets-rules.md`. Run `/lets:init` to install."},

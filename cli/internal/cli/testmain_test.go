@@ -17,8 +17,8 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
-	os.Setenv("HOME", home)
+	_ = os.Setenv("HOME", home)
 	code := m.Run()
-	os.RemoveAll(home)
+	_ = os.RemoveAll(home)
 	os.Exit(code)
 }
