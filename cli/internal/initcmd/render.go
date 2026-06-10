@@ -19,6 +19,7 @@ type Prefs struct {
 	Tracker     string // "beads" (canonical default; reserved for Linear/Jira)
 	Launcher    string // "terminal" (default) | "cmux"
 	SkipBeads   bool
+	SkipRules   bool // report rules drift but never write (global rules cover this project)
 }
 
 // AsValues returns the canonical Key.Name → Prefs field mapping.

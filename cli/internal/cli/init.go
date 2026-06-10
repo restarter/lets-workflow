@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -28,6 +29,8 @@ func NewInitCmd() *cobra.Command {
 		flagLauncher    string
 		flagGithub      bool
 		flagSkipBeads   bool
+		flagSkipRules   bool
+		flagUser        bool
 		flagPluginRoot  string
 		flagJSON        bool
 	)
@@ -38,6 +41,12 @@ func NewInitCmd() *cobra.Command {
 		Long: `Sets up .lets/ structure, configures .claude/settings.json (statusLine
 provenance markers), copies plugin rules to .claude/rules/lets-rules.md, and
 runs bd init.
+
+With --user: user-scope install instead - copies plugin rules to
+~/.claude/rules/lets-rules.md (global, all projects) and writes user-level
+defaults (LETS_LANGUAGE, LETS_LAUNCHER) to ~/.lets/.env. No project changes,
+works from any directory. A customized/newer global rules file is never
+overwritten (re-run reports it instead).
 
 Migrates existing projects (legacy .lets/statusline.sh, bash-wrapped
 settings.json statusLine, .lets/config.yaml -> .lets/.env).
@@ -79,6 +88,34 @@ out with --plugin-root=${CLAUDE_PLUGIN_ROOT} plus the chosen flags.`,
 				}
 				initcmd.PrintSteps(cmd.OutOrStdout(), result.Steps)
 				return err
+			}
+
+			// --user: user-scope install (global rules + ~/.lets/.env). Works
+			// from ANY directory - no git project, no worktree guard (those are
+			// project-scope concerns).
+			if flagUser {
+				if flagMergeBranch != "" || flagPRFlow != "" || flagGithub || flagSkipBeads || flagSkipRules {
+					fmt.Fprintln(cmd.ErrOrStderr(), "warning: --merge-branch/--pr-flow/--github/--skip-beads/--skip-rules are project-scope flags - ignored with --user")
+				}
+				home, herr := os.UserHomeDir()
+				if herr != nil {
+					return emit(initcmd.NewResult("", ""), fmt.Errorf("cannot resolve home directory: %w", herr))
+				}
+				pluginRoot, perr := initcmd.DetectPluginRoot(flagPluginRoot)
+				if perr != nil {
+					return emit(initcmd.NewResult(home, ""), fmt.Errorf("%w\n\nRun /lets:init from inside Claude Code, or pass --plugin-root=<path-to-plugins/lets>", perr))
+				}
+				// Language/Launcher pass through raw: empty means "preserve
+				// existing ~/.lets/.env value or canonical default" (handled
+				// inside RegenerateUserEnv) - do NOT apply the project path's
+				// default-fill below.
+				result, runErr := initcmd.RunUser(initcmd.UserOptions{
+					Language:   flagLanguage,
+					Launcher:   flagLauncher,
+					HomeDir:    home,
+					PluginRoot: pluginRoot,
+				})
+				return emit(result, runErr)
 			}
 
 			projectRoot := initcmd.DetectProjectRoot()
@@ -126,6 +163,7 @@ out with --plugin-root=${CLAUDE_PLUGIN_ROOT} plus the chosen flags.`,
 				Tracker:     letsconfig.Defaults()["LETS_TRACKER"],
 				Launcher:    launcher,
 				SkipBeads:   flagSkipBeads,
+				SkipRules:   flagSkipRules,
 			}
 
 			result, runErr := initcmd.Run(ctx, prefs, projectRoot, pluginRoot)
@@ -138,6 +176,8 @@ out with --plugin-root=${CLAUDE_PLUGIN_ROOT} plus the chosen flags.`,
 	cmd.Flags().StringVar(&flagLauncher, "launcher", "", "Worktree launcher: terminal | cmux (default terminal)")
 	cmd.Flags().BoolVar(&flagGithub, "github", false, "(deprecated) alias for --pr-flow=github")
 	cmd.Flags().BoolVar(&flagSkipBeads, "skip-beads", false, "Skip beads initialization")
+	cmd.Flags().BoolVar(&flagSkipRules, "skip-rules", false, "Project init: skip the .claude/rules copy (global rules cover this project)")
+	cmd.Flags().BoolVar(&flagUser, "user", false, "User-scope install: global rules to ~/.claude/rules + defaults to ~/.lets/.env (no project changes)")
 	cmd.Flags().StringVar(&flagPluginRoot, "plugin-root", "", "Plugin install dir (else $CLAUDE_PLUGIN_ROOT, required)")
 	cmd.Flags().BoolVar(&flagJSON, "json", false, "Output machine-readable JSON to stdout (single object, schema_version=1)")
 	return cmd

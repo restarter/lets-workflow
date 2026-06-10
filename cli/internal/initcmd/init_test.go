@@ -178,3 +178,56 @@ version: 0.4.0
 	}
 	return root
 }
+
+// Regression pin (lets-wug9k): PROJECT-scope init keeps today's reset-on-ahead
+// semantics. The user-scope path (RunUser) deliberately diverges (no-clobber);
+// this guards against a future "harmonization" accidentally aligning the two.
+func TestRun_ProjectRulesAhead_StillOverwrites(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	tmp := t.TempDir()
+	gitInit(t, tmp)
+	pluginRoot := setupFakePluginRoot(t)
+	writeRulesFile(t, filepath.Join(tmp, ".claude", "rules", "lets-rules.md"), "9.9.9")
+
+	prefs := Prefs{Language: "English", MergeBranch: "main", PRFlow: "local", Tracker: "beads", SkipBeads: true}
+	if _, err := Run(context.Background(), prefs, tmp, pluginRoot); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(filepath.Join(tmp, ".claude", "rules", "lets-rules.md"))
+	if !strings.Contains(string(data), "version: 0.4.0") {
+		t.Errorf("project ahead rules must be reset to plugin version:\n%s", data)
+	}
+}
+
+// --skip-rules: drift is still computed (truthful report) but nothing written.
+func TestRun_SkipRules_ReportsButNeverWrites(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	tmp := t.TempDir()
+	gitInit(t, tmp)
+	pluginRoot := setupFakePluginRoot(t)
+
+	prefs := Prefs{Language: "English", MergeBranch: "main", PRFlow: "local", Tracker: "beads", SkipBeads: true, SkipRules: true}
+	result, err := Run(context.Background(), prefs, tmp, pluginRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(tmp, ".claude", "rules", "lets-rules.md")); err == nil {
+		t.Error("--skip-rules must not write the project rules copy")
+	}
+	if !result.Drift.Detected || result.Drift.State != drift.StateMissing {
+		t.Errorf("drift report must stay truthful (missing), got %+v", result.Drift)
+	}
+	found := false
+	for _, s := range result.Steps {
+		if s.Status == StepSkip && strings.Contains(s.Message, "global rules cover this project") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("missing skip-rules step: %+v", result.Steps)
+	}
+}

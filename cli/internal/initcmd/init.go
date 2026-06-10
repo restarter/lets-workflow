@@ -184,7 +184,13 @@ func Run(ctx context.Context, prefs Prefs, projectRoot, pluginRoot string) (Resu
 			PluginVersion:    dr.PluginVersion,
 			Message:          drift.Message(dr),
 		}
-		if dr.Detected() {
+		if dr.Detected() && prefs.SkipRules {
+			// Global rules at ~/.claude/rules cover this project (Claude Code
+			// loads user-level rules everywhere; project copy only overrides).
+			// Drift report above stays truthful about the project copy's state;
+			// this step says why nothing was written.
+			result.Add(Step{Status: StepSkip, Message: ".claude/rules/lets-rules.md (skipped - global rules cover this project; re-run without --skip-rules to install for the team)"})
+		} else if dr.Detected() {
 			if err := os.MkdirAll(filepath.Dir(rulesDst), 0o755); err != nil {
 				return result, err
 			}
