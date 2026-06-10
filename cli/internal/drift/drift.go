@@ -88,3 +88,30 @@ func Message(r Result) string {
 	}
 	return ""
 }
+
+// MessageUser returns the canonical drift message for the USER-SCOPE installed
+// copy at ~/.claude/rules/lets-rules.md. Same single-source-of-truth contract
+// as Message; wording names the global path explicitly so a user with a synced
+// project copy but drifted global copy knows which file the notice targets.
+//
+// StateMissing points at `lets init --user` (the global installer; /lets:init
+// offers it when the plugin is user-scoped). The drifted states point at
+// /lets:update (its user-rules artifact re-syncs the global copy) with
+// `lets init --user` as the project-independent alternative.
+//
+// StateAhead deliberately does NOT promise a reset: a newer/customized global
+// file is the documented opt-out mechanism and is never overwritten silently
+// (unlike the project copy).
+func MessageUser(r Result) string {
+	switch r.State {
+	case StateMissing:
+		return "Global workflow rules not installed in `~/.claude/rules/lets-rules.md`. Run `lets init --user` (offered by `/lets:init`) to install."
+	case StateUnknown:
+		return "Global workflow rules version unknown - `~/.claude/rules/lets-rules.md` may be outdated. Run `/lets:update` (or `lets init --user`) to refresh."
+	case StateOutdated:
+		return fmt.Sprintf("Global workflow rules outdated (installed v%s < plugin v%s in `~/.claude/rules/lets-rules.md`). Run `/lets:update` (or `lets init --user`) to update.", r.InstalledVersion, r.PluginVersion)
+	case StateAhead:
+		return fmt.Sprintf("Global workflow rules AHEAD of plugin (installed v%s > plugin v%s in `~/.claude/rules/lets-rules.md`). If customized deliberately, ignore this; otherwise upgrade the lets binary + plugin.", r.InstalledVersion, r.PluginVersion)
+	}
+	return ""
+}
