@@ -27,13 +27,19 @@ const (
 // wrapper sets it to a closure over FetchLatest; tests pass a stub.
 type Options struct {
 	LatestFn func(context.Context) (LatestInfo, error)
+	// HomeDir is the user's home for the optional user-rules artifact
+	// (~/.claude/rules/lets-rules.md). Empty = skip the artifact entirely
+	// (resolution failed, or tests opting out via the zero value).
+	HomeDir string
 }
 
-// Run checks the four drift-able artifacts, auto-syncing .env (header refresh
-// when LETS_ENV_VERSION is stale) and the rules file (re-copy when drift is
-// detected), and reporting version status for the lets binary and the Claude
-// Code plugin (which it cannot self-update). Returns a fully populated Result;
-// error is reserved for hard failures (write errors).
+// Run checks the four core drift-able artifacts plus the optional user-scope
+// rules copy: auto-syncs .env (header refresh when LETS_ENV_VERSION is stale),
+// the project rules file (re-copy when drift is detected) and the user-level
+// ~/.claude/rules/lets-rules.md when it exists (omitted otherwise), and
+// reports version status for the lets binary and the Claude Code plugin
+// (which it cannot self-update). Returns a fully populated Result; error is
+// reserved for hard failures (write errors).
 //
 // Run does NOT prompt for config, touch settings.json, or run beads - that's
 // `lets init`'s job. `lets update` only syncs version-pinned artifacts.
@@ -83,6 +89,8 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 	}
 
 	// --- Artifact 2: .claude/rules/lets-rules.md ---
+	// lets-ew17g: when defer-on-plugin-outdated lands, apply it to BOTH this
+	// block and Artifact 5 (user-rules) uniformly.
 	rulesSrc := filepath.Join(pluginRoot, "rules", "lets-rules.md")
 	rulesDst := filepath.Join(projectRoot, ".claude", "rules", "lets-rules.md")
 	if rulesData, readErr := os.ReadFile(rulesSrc); readErr != nil {
@@ -116,6 +124,48 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 	pluginVer := ReadPluginVersion(pluginRoot)
 	result.Add(versionArtifact("plugin", pluginVer, latest, latestErr, offline, pluginUpdateAction))
 
+	// --- Artifact 5: ~/.claude/rules/lets-rules.md (user scope, optional) ---
+	// Row appears ONLY when the file exists: absence means "user-scope install
+	// not in use" - the normal state for project-scope users, not a status
+	// worth a row (and keeps project-only output identical to the 4-artifact
+	// era). update never bootstraps user scope; that's `lets init --user`.
+	//
+	// ahead = no-clobber (unlike the project rules artifact): a global file
+	// newer than the plugin is a user customization (the only per-project
+	// opt-out, GH anthropics/claude-code#8395) or a newer release's copy -
+	// never silently reset.
+	//
+	// lets-ew17g: when defer-on-plugin-outdated lands, apply it to BOTH this
+	// block and Artifact 2 uniformly.
+	if opts.HomeDir != "" {
+		userRulesDst := filepath.Join(opts.HomeDir, ".claude", "rules", "lets-rules.md")
+		if _, statErr := os.Stat(userRulesDst); statErr == nil {
+			if rulesData, readErr := os.ReadFile(rulesSrc); readErr != nil {
+				result.Add(Artifact{Name: "user-rules", Status: StatusUnknown, Detail: fmt.Sprintf("plugin rules unreadable: %s", rulesSrc)})
+			} else {
+				dr := drift.Check(rulesSrc, userRulesDst)
+				switch {
+				// StatePluginUnreadable = the SOURCE (plugin payload) has no
+				// parseable version. An INSTALLED global file with broken
+				// frontmatter is StateUnknown instead -> Detected() -> rewritten
+				// below (lets-* files are plugin-owned by convention).
+				case dr.State == drift.StatePluginUnreadable:
+					result.Add(Artifact{Name: "user-rules", Status: StatusUnknown, Detail: "plugin rules version unparseable (no `version:` frontmatter)"})
+				case dr.State == drift.StateAhead:
+					result.Add(Artifact{Name: "user-rules", Status: StatusAhead, CurrentVersion: dr.InstalledVersion, Detail: "global rules newer than the plugin - customized or newer release; not overwritten"})
+				case dr.Detected():
+					if err := initcmd.AtomicWriteBytes(userRulesDst, rulesData, 0o644); err != nil {
+						return result, fmt.Errorf("write user rules: %w", err)
+					}
+					drPost := drift.Check(rulesSrc, userRulesDst)
+					result.Add(Artifact{Name: "user-rules", Status: StatusUpdated, CurrentVersion: drPost.InstalledVersion, Detail: rulesUpdatedDetail(dr)})
+				default:
+					result.Add(Artifact{Name: "user-rules", Status: StatusInSync, CurrentVersion: dr.InstalledVersion, Detail: "tracks the plugin"})
+				}
+			}
+		}
+	}
+
 	// Cross-reference: when an in-sync artifact's local source (the binary for
 	// .env, the plugin for rules) is itself behind the latest release, say so on
 	// the row. Runs after all four artifacts exist so per-artifact computation
@@ -123,6 +173,11 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 	annotateInSyncBehind(&result)
 
 	// --- internal consistency (binary == plugin == installed-rules frontmatter) ---
+	// user-rules is DELIBERATELY excluded: after a sync it always equals the
+	// plugin (zero signal), and the one divergent case - `ahead` - is a
+	// deliberate customization that must not permanently trip the
+	// "inconsistent install" warning (it would contradict the artifact row's
+	// own "customized, not an error" detail).
 	result.Consistent = consistentVersions(version.Version, pluginVer, frontmatter.ReadVersion(rulesDst))
 
 	return result, nil
@@ -151,7 +206,7 @@ func rulesUpdatedDetail(pre drift.Result) string {
 // whose tracked upstream is itself outdated, so two in-sync rows at different
 // versions read as explained rather than contradictory.
 func annotateInSyncBehind(r *Result) {
-	upstreamOf := map[string]string{".env": "binary", "rules": "plugin"}
+	upstreamOf := map[string]string{".env": "binary", "rules": "plugin", "user-rules": "plugin"}
 	latestBehind := map[string]string{} // outdated upstream name -> its latest version
 	for _, a := range r.Artifacts {
 		if (a.Name == "binary" || a.Name == "plugin") && a.Status == StatusOutdated {
@@ -263,7 +318,7 @@ func PrintReport(w io.Writer, r Result) {
 		if a.CurrentVersion != "" {
 			ver = version.Format(a.CurrentVersion)
 		}
-		line := fmt.Sprintf("%-8s %-9s %s", a.Name, ver, a.Status)
+		line := fmt.Sprintf("%-10s %-9s %s", a.Name, ver, a.Status)
 		if a.LatestVersion != "" {
 			line += fmt.Sprintf(" (latest %s)", version.Format(a.LatestVersion))
 		}

@@ -481,3 +481,180 @@ func TestPrintReport_InconsistentWarning(t *testing.T) {
 		t.Fatalf("missing inconsistency warning:\n%s", b.String())
 	}
 }
+
+// --- user-rules artifact (lets-wug9k) ---
+
+// userHome creates a fake home; rulesVer != "" writes
+// ~/.claude/rules/lets-rules.md at that version ("MALFORMED" = no frontmatter).
+func userHome(t *testing.T, rulesVer string) string {
+	t.Helper()
+	home := t.TempDir()
+	switch rulesVer {
+	case "":
+	case "MALFORMED":
+		p := filepath.Join(home, ".claude", "rules", "lets-rules.md")
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("# no frontmatter\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	default:
+		rulesFile(t, filepath.Join(home, ".claude", "rules", "lets-rules.md"), rulesVer)
+	}
+	return home
+}
+
+// findMaybe returns the artifact by name or nil (find() fatals on absence).
+func findMaybe(r Result, name string) *Artifact {
+	for i := range r.Artifacts {
+		if r.Artifacts[i].Name == name {
+			return &r.Artifacts[i]
+		}
+	}
+	return nil
+}
+
+func TestRun_UserRulesAbsent_NoArtifact(t *testing.T) {
+	projectRoot, pluginRoot := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0")
+	home := userHome(t, "")
+	r, err := Run(context.Background(), Options{HomeDir: home}, projectRoot, pluginRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Artifacts) != 4 {
+		t.Fatalf("expected 4 artifacts when user scope absent, got %d", len(r.Artifacts))
+	}
+	if findMaybe(r, "user-rules") != nil {
+		t.Error("user-rules row must be omitted when the file is absent")
+	}
+	// Negative assertion - the actual bug-catcher: update never bootstraps
+	// user scope (that's `lets init --user`'s job).
+	if _, err := os.Stat(filepath.Join(home, ".claude", "rules")); err == nil {
+		t.Error("update must NOT create ~/.claude/rules")
+	}
+}
+
+func TestRun_UserRulesInSync(t *testing.T) {
+	projectRoot, pluginRoot := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0")
+	home := userHome(t, "0.6.0")
+	r, err := Run(context.Background(), Options{HomeDir: home}, projectRoot, pluginRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Artifacts) != 5 {
+		t.Fatalf("expected 5 artifacts, got %d", len(r.Artifacts))
+	}
+	a := find(t, r, "user-rules")
+	if a.Status != StatusInSync || a.Detail != "tracks the plugin" {
+		t.Errorf("user-rules: %+v", a)
+	}
+}
+
+func TestRun_UserRulesOutdated_Rewritten(t *testing.T) {
+	projectRoot, pluginRoot := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0")
+	home := userHome(t, "0.5.0")
+	r, err := Run(context.Background(), Options{HomeDir: home}, projectRoot, pluginRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := find(t, r, "user-rules")
+	if a.Status != StatusUpdated || a.CurrentVersion != "0.6.0" {
+		t.Errorf("user-rules: %+v", a)
+	}
+	if !strings.Contains(a.Detail, "was outdated (v0.5.0)") {
+		t.Errorf("detail: %q", a.Detail)
+	}
+}
+
+func TestRun_UserRulesAhead_NotClobbered(t *testing.T) {
+	projectRoot, pluginRoot := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0")
+	home := userHome(t, "9.9.9")
+	userPath := filepath.Join(home, ".claude", "rules", "lets-rules.md")
+	before, _ := os.ReadFile(userPath)
+	r, err := Run(context.Background(), Options{HomeDir: home}, projectRoot, pluginRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, _ := os.ReadFile(userPath)
+	if string(before) != string(after) {
+		t.Error("ahead global rules were clobbered by update")
+	}
+	a := find(t, r, "user-rules")
+	if a.Status != StatusAhead {
+		t.Errorf("status: got %s want ahead", a.Status)
+	}
+	if !strings.Contains(a.Detail, "not overwritten") {
+		t.Errorf("detail: %q", a.Detail)
+	}
+	// Pins the DELIBERATE exclusion of user-rules from the consistency set:
+	// a customized global copy is not a "partial upgrade".
+	if !r.Consistent {
+		t.Error("ahead user-rules must NOT trip the consistency warning")
+	}
+}
+
+func TestRun_UserRulesMalformed_Rewritten(t *testing.T) {
+	projectRoot, pluginRoot := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0")
+	home := userHome(t, "MALFORMED")
+	r, err := Run(context.Background(), Options{HomeDir: home}, projectRoot, pluginRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := find(t, r, "user-rules")
+	if a.Status != StatusUpdated || a.Detail != "was unparseable" {
+		t.Errorf("user-rules: %+v", a)
+	}
+}
+
+// A broken plugin payload must not crash or clobber the global copy.
+func TestRun_UserRulesPluginUnreadable_NoClobber(t *testing.T) {
+	projectRoot := t.TempDir()
+	pluginRoot := t.TempDir() // no rules/lets-rules.md inside
+	setVersion(t, "0.6.0")
+	writePluginJSON(t, pluginRoot, `{"name":"lets","version":"0.6.0"}`)
+	home := userHome(t, "0.6.0")
+	before, _ := os.ReadFile(filepath.Join(home, ".claude", "rules", "lets-rules.md"))
+
+	r, err := Run(context.Background(), Options{HomeDir: home}, projectRoot, pluginRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := find(t, r, "user-rules")
+	if a.Status != StatusUnknown || !strings.Contains(a.Detail, "plugin rules unreadable") {
+		t.Errorf("user-rules: %+v", a)
+	}
+	after, _ := os.ReadFile(filepath.Join(home, ".claude", "rules", "lets-rules.md"))
+	if string(before) != string(after) {
+		t.Error("global rules touched despite unreadable plugin payload")
+	}
+}
+
+// in-sync user-rules whose upstream (plugin) is behind latest gets the
+// annotateInSyncBehind hint, same as project rules.
+func TestRun_UserRulesInSync_AnnotatedWhenPluginOutdated(t *testing.T) {
+	projectRoot, pluginRoot := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0")
+	home := userHome(t, "0.6.0")
+	r, err := Run(context.Background(), Options{HomeDir: home, LatestFn: stubLatest("0.7.0")}, projectRoot, pluginRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := find(t, r, "user-rules")
+	if !strings.Contains(a.Detail, "itself behind latest v0.7.0") {
+		t.Errorf("missing behind-latest hint: %q", a.Detail)
+	}
+}
+
+func TestPrintReport_UserRulesRow(t *testing.T) {
+	projectRoot, pluginRoot := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0")
+	home := userHome(t, "0.6.0")
+	r, err := Run(context.Background(), Options{HomeDir: home}, projectRoot, pluginRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	PrintReport(&buf, r)
+	if !strings.Contains(buf.String(), "user-rules") {
+		t.Errorf("report missing user-rules row:\n%s", buf.String())
+	}
+}
