@@ -258,3 +258,104 @@ func contains(slice []string, s string) bool {
 	}
 	return false
 }
+
+// --- RegenerateUserEnv (lets-wug9k) ---
+
+func TestRegenerateUserEnv_FreshCreate(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".lets", ".env")
+	action, err := RegenerateUserEnv(path, map[string]string{"LETS_LANGUAGE": "Ukrainian"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if action.Kind != EnvCreated {
+		t.Fatalf("Kind: got %q want %q", action.Kind, EnvCreated)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(data)
+	for _, want := range []string{
+		letsconfig.VersionKeyName + "=" + version.Version,
+		"LETS_LANGUAGE=Ukrainian",
+		"LETS_LAUNCHER=terminal",
+	} {
+		if !bytes.Contains(data, []byte(want)) {
+			t.Errorf("missing %q in:\n%s", want, body)
+		}
+	}
+	// Per-project keys must NOT be managed lines in the user env.
+	for _, reject := range []string{"LETS_MERGE_BRANCH=", "LETS_PR_FLOW=", "LETS_TRACKER="} {
+		if bytes.Contains(data, []byte(reject)) {
+			t.Errorf("unexpected per-project key %q in user env:\n%s", reject, body)
+		}
+	}
+}
+
+func TestRegenerateUserEnv_SkipWhenInSync(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".lets", ".env")
+	if _, err := RegenerateUserEnv(path, map[string]string{"LETS_LANGUAGE": "Ukrainian"}); err != nil {
+		t.Fatal(err)
+	}
+	action, err := RegenerateUserEnv(path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if action.Kind != EnvSkip {
+		t.Fatalf("re-run Kind: got %q want %q (changed: %v)", action.Kind, EnvSkip, action.ChangedKeys)
+	}
+}
+
+func TestRegenerateUserEnv_CustomizedValueSurvives(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".lets", ".env")
+	if _, err := RegenerateUserEnv(path, map[string]string{"LETS_LANGUAGE": "Ukrainian"}); err != nil {
+		t.Fatal(err)
+	}
+	// Re-run with no flags: existing value wins over canonical default.
+	if _, err := RegenerateUserEnv(path, nil); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(path)
+	if !bytes.Contains(data, []byte("LETS_LANGUAGE=Ukrainian")) {
+		t.Errorf("customized LETS_LANGUAGE lost on re-run:\n%s", data)
+	}
+}
+
+func TestRegenerateUserEnv_FlagOverridesExisting(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".lets", ".env")
+	if _, err := RegenerateUserEnv(path, map[string]string{"LETS_LANGUAGE": "English"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RegenerateUserEnv(path, map[string]string{"LETS_LANGUAGE": "Ukrainian"}); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(path)
+	if !bytes.Contains(data, []byte("LETS_LANGUAGE=Ukrainian")) {
+		t.Errorf("flag should override existing value:\n%s", data)
+	}
+}
+
+// A hand-added per-project LETS_* key in ~/.lets/.env is NOT canonical at user
+// level - it must survive as a foreign line (power-user escape hatch; the hook
+// whitelist still injects it).
+func TestRegenerateUserEnv_HandAddedProjectKeyPreserved(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".lets", ".env")
+	if _, err := RegenerateUserEnv(path, nil); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(path)
+	data = append(data, []byte("LETS_MERGE_BRANCH=develop\nFOREIGN_KEY=x\n")...)
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Force a regen via a value change.
+	if _, err := RegenerateUserEnv(path, map[string]string{"LETS_LANGUAGE": "Ukrainian"}); err != nil {
+		t.Fatal(err)
+	}
+	out, _ := os.ReadFile(path)
+	for _, want := range []string{"LETS_MERGE_BRANCH=develop", "FOREIGN_KEY=x", "# User-added keys"} {
+		if !bytes.Contains(out, []byte(want)) {
+			t.Errorf("foreign line %q lost across regen:\n%s", want, out)
+		}
+	}
+}

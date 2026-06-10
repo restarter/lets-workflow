@@ -58,20 +58,39 @@ const ExampleHeader = `# LETS plugin config — REFERENCE ONLY
 # tokens/passwords elsewhere (gh auth, OS keychain, .beads/.env).
 `
 
+// UserHeader is the file-level comment block for the user-level ~/.lets/.env
+// written by `lets init --user`. Same NOT-FOR-SECRETS contract as Header;
+// names the precedence so a user editing the file knows project values win.
+const UserHeader = `# LETS user-level config (machine-global defaults)
+# Per-project .lets/.env values OVERRIDE these. NOT FOR SECRETS - injected
+# into model context in EVERY project you open (subject to whitelist filter
+# in lets hook session-start). Put tokens/passwords elsewhere (gh auth, OS
+# keychain, .beads/.env).
+`
+
 // Key describes a single LETS_* config key.
 type Key struct {
 	Name    string // e.g. "LETS_LANGUAGE"
 	Comment string // single-line, rendered as "# {comment}\n" ABOVE the key=value
 	Default string // canonical default for .env.example and Prefs fallback
+	// UserLevel marks keys that make sense as machine-global defaults in
+	// ~/.lets/.env (written by `lets init --user`). Per-project keys
+	// (MERGE_BRANCH, PR_FLOW, TRACKER) stay false: a global value would be
+	// wrong in any repo that deviates, and the hook has better fallbacks
+	// (git-derived default branch). A user can still hand-add any LETS_* key
+	// to ~/.lets/.env - RegenerateUserEnv preserves it as a foreign line and
+	// the hook injects it (whitelist applies at emit).
+	UserLevel bool
 }
 
 // Keys is the canonical, ordered list. Single source of truth for the 4 LETS_*
 // config keys. Adding a new key: see package doc above.
 var Keys = []Key{
 	{
-		Name:    "LETS_LANGUAGE",
-		Comment: "Default response language — write the English name, like every value here (English, Ukrainian, Russian, Japanese, ...)",
-		Default: "English",
+		Name:      "LETS_LANGUAGE",
+		Comment:   "Default response language — write the English name, like every value here (English, Ukrainian, Russian, Japanese, ...)",
+		Default:   "English",
+		UserLevel: true,
 	},
 	{
 		Name:    "LETS_MERGE_BRANCH",
@@ -89,10 +108,23 @@ var Keys = []Key{
 		Default: "beads",
 	},
 	{
-		Name:    "LETS_LAUNCHER",
-		Comment: "Worktree launcher: terminal (print the cd command) | cmux (open in a cmux workspace, macOS only)",
-		Default: "terminal",
+		Name:      "LETS_LAUNCHER",
+		Comment:   "Worktree launcher: terminal (print the cd command) | cmux (open in a cmux workspace, macOS only)",
+		Default:   "terminal",
+		UserLevel: true,
 	},
+}
+
+// UserKeys returns the subset of Keys that `lets init --user` manages in
+// ~/.lets/.env. Fresh slice each call (same contract as Defaults).
+func UserKeys() []Key {
+	var out []Key
+	for _, k := range Keys {
+		if k.UserLevel {
+			out = append(out, k)
+		}
+	}
+	return out
 }
 
 // Defaults returns a map[Name]Default for fast lookup. Used by renderEnvExample,
