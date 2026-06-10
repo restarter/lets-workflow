@@ -62,9 +62,28 @@ Once `lets` is on `$PATH`, install the plugin from Claude Code's marketplace. **
 /plugin install lets
 ```
 
-This is a one-time setup per machine. When Claude Code asks who to install for, pick **"Install for all collaborators on this repository"** (project scope — committed to `.claude/settings.json`, so teammates inherit it) or **"Install for you, in this repo only"** (local scope); avoid the **everywhere** / user-scope option, where the SessionStart/PreCompact hooks fire in *every* project you open. Tip: in `/plugin` → **Marketplaces** → `lets-workflow`, **Enable auto-update** so the plugin stays current on its own.
+This is a one-time setup per machine. When Claude Code asks who to install for, pick **"Install for all collaborators on this repository"** (project scope — committed to `.claude/settings.json`, so teammates inherit it), **"Install for you, in this repo only"** (local scope), or **"Install for yourself everywhere"** (user scope — see [User-scope install](#user-scope-install-global-rules) below). Tip: in `/plugin` → **Marketplaces** → `lets-workflow`, **Enable auto-update** so the plugin stays current on its own.
 
 > Verify the plugin loaded: `/lets:` commands should now autocomplete in Claude Code. (The `🌱 LETS Workflow vX.Y.Z » <branch>` statusline appears once you've run `/lets:init` in a project — see step 3.)
+
+### User-scope install (global rules)
+
+*(ships next release)* With the plugin installed at **user scope** ("install for yourself everywhere"), one extra step makes LETS work in every project without per-project init: run `/lets:init` in any project — when it detects the user-scope install it offers `lets init --user`, which writes two files:
+
+- `~/.claude/rules/lets-rules.md` — the workflow rules, loaded by Claude Code in **every** project (frontmatter-version-tracked, synced by `/lets:update`'s `user-rules` artifact).
+- `~/.lets/.env` — your personal defaults: `LETS_LANGUAGE` and `LETS_LAUNCHER`. Per-project keys (merge branch, PR flow) deliberately stay out — those belong in each project's `.lets/.env`.
+
+**How it behaves:**
+
+- In a project that never ran `/lets:init`, the SessionStart hook stays quiet (no "run /lets:init" nag) and injects a minimal config: the project root, your user-level defaults, and `LETS_MERGE_BRANCH` derived from the repo's origin default branch (literal `main` when the repo has no `origin/HEAD` — e.g. a fresh `git init` without a remote).
+- **Precedence:** project `.lets/.env` values override `~/.lets/.env`; a project's `.claude/rules/lets-rules.md` overrides the global rules copy (Claude Code's own loading order). Running `/lets:init` in a project still gives you the full per-project setup — it just skips the project rules copy by default when the global copy already covers you (one prompt; pick "Copy to project" for a git-tracked team copy).
+- **Refreshing:** `/lets:update` (run from any initialized project) drift-checks and re-syncs the global rules alongside everything else. Re-running `lets init --user` works from anywhere. A global rules file you've customized (version *ahead* of the plugin) is **never overwritten** — both commands report it and leave it alone.
+- **NOT FOR SECRETS:** `~/.lets/.env` is injected into model context in *every* project you open (whitelist-filtered to `LETS_*` keys, but world-readable on disk). Tokens and passwords go elsewhere (gh auth, OS keychain).
+
+**Known limitations:**
+
+- There is no per-project opt-out of user-global rules ([Claude Code #8395](https://github.com/anthropics/claude-code/issues/8395), closed not-planned). A project that must not see LETS rules needs an overriding project-level rules file — or remove the global copy (see Uninstall).
+- A project with a git-tracked `.claude/rules/lets-rules.md` **plus** your global copy loads both (project wins on conflict). Harmless but redundant; remove one if the duplication bothers you.
 
 ---
 
@@ -208,6 +227,13 @@ rm /usr/local/bin/lets       # or ~/.local/bin/lets, depending on where it lande
 ```
 
 The plugin (in Claude Code) and per-project `.lets/` directories are independent — uninstall them separately if needed.
+
+User-scope cleanup (if you ran `lets init --user`): removing the two files fully reverses it —
+
+```bash
+rm ~/.claude/rules/lets-rules.md   # global workflow rules
+rm -r ~/.lets                      # user-level defaults (+ .env.bak)
+```
 
 ---
 

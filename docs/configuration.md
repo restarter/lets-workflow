@@ -32,6 +32,26 @@ The first line of the file is `LETS_ENV_VERSION` — that's metadata (which `let
 
 > **Migrating from `config.yaml`:** if a project still has `.lets/config.yaml` from an older version, `/lets:init` migrates it to `.lets/.env`. The yaml file is left in place for reference but no longer read.
 
+## `~/.lets/.env` — user-level defaults
+
+*(ships next release)* `lets init --user` (offered by `/lets:init` when the plugin is installed at user scope) writes a machine-global defaults file with the two genuinely personal keys:
+
+| Key | Why it's user-level |
+|-----|---------------------|
+| `LETS_LANGUAGE` | You speak the same language in every project. |
+| `LETS_LAUNCHER` | Terminal-vs-cmux is a machine preference, not a project property. |
+
+Per-project keys (`LETS_MERGE_BRANCH`, `LETS_PR_FLOW`, `LETS_TRACKER`) are deliberately not managed here — a global `main` would be wrong in every `master`/`develop` repo. You *can* hand-add them: they're preserved under the `# User-added keys` separator and the hook injects them like any whitelisted key.
+
+**Value resolution** (per key, first match wins):
+
+1. project `.lets/.env`
+2. user `~/.lets/.env`
+3. `LETS_MERGE_BRANCH` only: the repo's origin default branch (derived by the hook), else `main`
+4. built-in default
+
+The same **not-for-secrets** warning applies — with a bigger blast radius: this file is injected in *every* project you open.
+
 ## File layout
 
 Everything LETS generates lives under `.lets/` (gitignored):
@@ -51,10 +71,12 @@ Interactive worktrees live in `.worktrees/` at the project root (also gitignored
 The workflow rules are the exception — they live outside `.lets/` because they're part of Claude Code's project-instructions channel:
 
 ```
-.claude/rules/lets-rules.md   Workflow rules — copied from the plugin by /lets:init, re-synced by /lets:update
+.claude/rules/lets-rules.md     Workflow rules — copied from the plugin by /lets:init, re-synced by /lets:update
+~/.claude/rules/lets-rules.md   Global rules (user-scope install) — written by `lets init --user`, re-synced by /lets:update
+~/.lets/.env                    User-level defaults (language, launcher) — see above
 ```
 
-Don't edit `.claude/rules/lets-rules.md` by hand — it's a managed copy, and `/lets:init` / `/lets:update` will rewrite it on the next sync. (If you're customizing the plugin itself, edit `plugins/lets/rules/lets-rules.md` instead — see [`CONTRIBUTING.md`](../CONTRIBUTING.md).)
+Don't edit either `lets-rules.md` copy by hand — they're managed copies, rewritten on the next sync (the one exception: a global copy you've deliberately set *ahead* of the plugin version is reported but never overwritten). If you're customizing the plugin itself, edit `plugins/lets/rules/lets-rules.md` instead — see [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 ## Setup order: `lets init`, then `bd init`
 

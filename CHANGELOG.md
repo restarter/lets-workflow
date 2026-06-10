@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **First-class user-scope install (lets-wug9k).** `lets init --user` (offered by `/lets:init` when the plugin is installed at user scope) installs global workflow rules to `~/.claude/rules/lets-rules.md` and user-level defaults (`LETS_LANGUAGE`, `LETS_LAUNCHER`) to `~/.lets/.env` — one install covers every project on the machine. The SessionStart/PreCompact hook is scope-aware: no more "run /lets:init" nag in projects covered by global rules, project `.lets/.env` overlays user defaults (project wins per key), and `LETS_MERGE_BRANCH` falls back to the repo's origin default branch when unset anywhere. `/lets:update` gains an optional `user-rules` artifact (row omitted when the file is absent) that re-syncs the global copy — never overwriting a customized/newer (ahead) one, the documented per-project opt-out. Project `/lets:init` now offers `--skip-rules` when global rules already cover the project. README + installation docs drop the "avoid user-scope" warning; precedence and the no-per-project-opt-out limitation (Claude Code #8395) are documented.
+
 ## [0.6.3] - 2026-06-08
 
 ### Added

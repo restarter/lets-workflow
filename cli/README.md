@@ -150,6 +150,23 @@ What it does (idempotent, linear):
 
 Refuses: from a worktree (`--git-dir != --git-common-dir`), in `$HOME`, or in filesystem root `/`.
 
+- `--skip-rules` — skip step 8 (the project rules copy) while still computing + reporting drift. Set by `/lets:init` when global rules at `~/.claude/rules/lets-rules.md` already cover the project and the user declined a project-local copy.
+
+### `lets init --user` (user-scope install)
+
+```bash
+lets init --user --plugin-root "${CLAUDE_PLUGIN_ROOT}" [--language Ukrainian] [--launcher cmux] [--json]
+```
+
+User-scope alternative (`internal/initcmd/init_user.go::RunUser`): installs the global rules + user-level defaults ONCE per machine instead of per project. Works from **any** directory — no git repo, no worktree guard (those are project-scope concerns). Project-scope flags (`--merge-branch`, `--pr-flow`, `--skip-beads`, `--skip-rules`, `--github`) are warned about and ignored.
+
+What it does (idempotent; a deliberate SUBSET of project init — no git, no `.gitignore`, no migrations, no `settings.json` statusline, no beads, no `.env.example`):
+
+1. Copies plugin rules → `~/.claude/rules/lets-rules.md` via `drift.Check` (install / upgrade / skip). **`ahead` = no-clobber:** a global copy NEWER than the plugin (user customization — the only per-project opt-out Claude Code offers, GH anthropics/claude-code#8395 — or a newer release's copy) is reported with a warn step and left untouched. `unknown` (unparseable frontmatter) IS overwritten — `lets-*` files are plugin-owned by convention.
+2. Writes/regenerates `~/.lets/.env` via `RegenerateUserEnv` — manages only the user-level keys (`LETS_LANGUAGE`, `LETS_LAUNCHER`; `letsconfig.UserKeys()`). Empty flag = preserve existing value, else canonical default. Hand-added `LETS_*` keys survive as foreign lines (the hook whitelist still injects them). Single `~/.lets/.env.bak` per regen (best-effort, machine-shared).
+
+JSON envelope: same `initcmd.Result` shape (`schema_version=1`); `project_root` carries the **home dir** (the scope root for a `--user` run). Guard: refuses an empty, relative, or filesystem-root home (`guardHomeDir`; root-refusal is best-effort on Windows — drive roots not special-cased). Platform-neutral otherwise: `os.UserHomeDir()` + `filepath.Join` give `%USERPROFILE%\.claude\rules` on Windows (compile-checked only; no behavioral CI). Security note: `~/.claude/rules` is created via `MkdirAll` and is not symlink-hardened; `AtomicWriteBytes`'s rename REPLACES a symlink at the target rather than writing through it — same trust model as the project-scope writer.
+
 ### `lets init --json` contract
 
 - **stdout:** Always a single JSON object terminated by newline. Valid JSON even on Run() failure (`ok: false`, `error: "..."`). `steps` array contains work completed before the error (partial-completion contract).
@@ -168,7 +185,7 @@ Goldens lock the exact byte output of `renderEnv`. After legitimate changes (new
 
 ## `lets update`
 
-Internal subcommand. Invoked by the `/lets:update` slash command (`commands/update.md`) with `--plugin-root=${CLAUDE_PLUGIN_ROOT}`. Syncs the four drift-able LETS artifacts; never prompts, never touches `settings.json` or beads — that's `lets init`'s job (init = setup; update = sync). Lives in `internal/cli/update.go` (cobra factory) + `internal/updatecmd/` (orchestration, GitHub latest-release lookup, plugin-version reader).
+Internal subcommand. Invoked by the `/lets:update` slash command (`commands/update.md`) with `--plugin-root=${CLAUDE_PLUGIN_ROOT}`. Syncs the drift-able LETS artifacts (four core + the optional user-scope rules copy); never prompts, never touches `settings.json` or beads — that's `lets init`'s job (init = setup; update = sync). Lives in `internal/cli/update.go` (cobra factory) + `internal/updatecmd/` (orchestration, GitHub latest-release lookup, plugin-version reader).
 
 ```bash
 lets update --plugin-root "${CLAUDE_PLUGIN_ROOT}" [--json] [--offline] [--refresh-cache]
@@ -188,6 +205,7 @@ What it checks (in order; never crashes for a network failure):
 | `.claude/rules/lets-rules.md` | `drift.Check` against plugin source | Re-copy from the plugin (atomic write) on any detected drift (incl. `ahead`); `unknown` if the plugin's own frontmatter is unparseable; `in-sync` (tracks the plugin) otherwise. An `updated` row carries a past-tense detail ("was missing" / "was outdated (v…)"), never the pre-install imperative. |
 | `lets` binary | `version.Version` vs latest GitHub release | Report only (can't self-replace) — `outdated` → prints the install one-liner (`curl -fsSL …/main/scripts/install.sh \| bash`). `dev` build → no comparison. |
 | Claude Code plugin | `<pluginRoot>/.claude-plugin/plugin.json::version` vs latest release | Report only — `outdated` → prints the plugin-update hint (`/plugin marketplace update lets-workflow` + `/reload-plugins`, or enable auto-update). |
+| `~/.claude/rules/lets-rules.md` (`user-rules`) | `drift.Check` against plugin source — **row omitted entirely when the file is absent** (user-scope install not in use; update never bootstraps it — that's `lets init --user`) | Same sync as project rules EXCEPT `ahead`: a newer/customized global copy gets `status=ahead` ("not overwritten") and is left alone — it's the documented opt-out mechanism. Deliberately EXCLUDED from the `consistent` check (an ahead copy is a customization, not a partial upgrade). `annotateInSyncBehind` applies (upstream = plugin). |
 
 Latest-release lookup hits `https://api.github.com/repos/restarter/lets-workflow/releases/latest` (5s timeout), cached 1h at `<project>/.lets/cache/update-check.json`; on a network failure it falls back to a stale cache entry if one exists, else reports `unknown`. The result also carries `consistent` (binary == plugin == installed-rules frontmatter version, ignoring `dev`) to flag a partial upgrade.
 
@@ -280,10 +298,10 @@ Two cobra subcommands wired to Claude Code hooks: `lets hook session-start` (Ses
 
 Output (≈2KB, well under Claude Code's 10K hook cap — `lets-q9bx7`):
 
-- Optional `## LETS Notice` — a drift check (`frontmatter.ReadVersion` on the plugin vs `.claude/rules/lets-rules.md`). The canonical messages in `internal/drift/drift.go::Message` tell the user to run `/lets:update` for `outdated`/`unknown`/`ahead`, and `/lets:init` only when the rules file is `missing`. `sessionstart.go::driftCheck` appends a one-line "surface this to the user" instruction to the block (hook-only, NOT part of `drift.Message`; `commands/start.md` carries the same rule so a large slash command can't crowd the notice out).
-- `## LETS Config` — the whitelisted `LETS_*` values + an `### About these values` explainer embedded from `internal/hook/sessionstart/local_config_explainer.md`.
+- Optional `## LETS Notice` — a SCOPE-AWARE drift check (`sessionstart.go::driftCheck`). Decision table: project rules present (any state) → single-scope behavior, `drift.Message` wording (`/lets:update` for `outdated`/`unknown`/`ahead`, `/lets:init` for `missing`); project rules missing + global `~/.claude/rules/lets-rules.md` present and current → **no notice** (the user-scope install covers the project — the lets-wug9k nag fix); project missing + global drifted → `drift.MessageUser` wording (names the global path; `/lets:update` or `lets init --user`); both missing → the classic `/lets:init` nag. A one-line "surface this to the user" instruction is appended (hook-only, NOT part of `drift.Message`; `commands/start.md` carries the same rule so a large slash command can't crowd the notice out).
+- `## LETS Config` — the whitelisted `LETS_*` values from the MERGED env (`~/.lets/.env` overlaid by project `.lets/.env`; project wins per key, only non-empty values mask) + an `### About these values` explainer embedded from `internal/hook/sessionstart/local_config_explainer.md`. `LETS_MERGE_BRANCH` falls back to the repo's origin default branch (`gitutil.DefaultBranch`, 1s timeout, value capped at `envfile.MaxValueLen`), else literal `main`, when neither file supplies it — initialized projects always carry the key, so the extra git spawn only fires in uninitialized repos (per hook fire: SessionStart AND PreCompact).
 
-The workflow rules themselves do NOT travel through the hook — they live in `.claude/rules/lets-rules.md` (the uncapped project-instructions channel), copied there by `lets init` and frontmatter-version-tracked. **Dual-hook rationale:** SessionStart on a `compact` source re-injects rules into the post-compaction context; PreCompact ensures rules are in the pre-compaction context the auto-summary is generated from — together they prevent workflow drift after compaction in long sessions.
+The workflow rules themselves do NOT travel through the hook — they live in `.claude/rules/lets-rules.md` (the uncapped project-instructions channel; user-scope installs add the global `~/.claude/rules/lets-rules.md` floor), copied there by `lets init` / `lets init --user` and frontmatter-version-tracked. **Dual-hook rationale:** SessionStart on a `compact` source re-injects rules into the post-compaction context; PreCompact ensures rules are in the pre-compaction context the auto-summary is generated from — together they prevent workflow drift after compaction in long sessions.
 
 ## JSON envelope conventions
 
