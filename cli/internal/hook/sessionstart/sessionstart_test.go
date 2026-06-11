@@ -528,3 +528,75 @@ func TestRun_NonWhitelistedKeys_Ignored(t *testing.T) {
 		t.Errorf("whitelisted key missing: %s", got)
 	}
 }
+
+// --- LETS_RULES_SCOPE guard (lets-wug9k) ---
+
+func TestRun_RulesScopeGuard(t *testing.T) {
+	plugin := func(t *testing.T) string {
+		p := filepath.Join(t.TempDir(), "plugin-rules.md")
+		writeFile(t, p, "---\nversion: 0.4.0\n---\n")
+		return p
+	}
+
+	t.Run("user_scope_both_missing_points_at_init_user", func(t *testing.T) {
+		pluginRules := plugin(t)
+		project := t.TempDir()
+		home := t.TempDir()
+		// scope=user in the project .env; no project copy, no global copy.
+		writeFile(t, filepath.Join(project, ".lets", ".env"), "LETS_RULES_SCOPE=user\n")
+
+		var buf bytes.Buffer
+		if err := sessionstart.Run(&buf, pluginRules, project, home); err != nil {
+			t.Fatal(err)
+		}
+		out := buf.String()
+		if !strings.Contains(out, "Run `lets init --user` to restore it") {
+			t.Errorf("expected the global-missing guard, got:\n%s", out)
+		}
+		if strings.Contains(out, "Run `/lets:init` to install") {
+			t.Errorf("must NOT show the classic project nag under scope=user:\n%s", out)
+		}
+		// Positive: the scope key is whitelisted and injected into the Config block.
+		if !strings.Contains(out, "LETS_RULES_SCOPE=user") {
+			t.Errorf("scope key must appear in the Config block:\n%s", out)
+		}
+		// Ordering: notice precedes the Config block.
+		ni, ci := strings.Index(out, "## LETS Notice"), strings.Index(out, "## LETS Config")
+		if ni < 0 || ci < 0 || ni >= ci {
+			t.Errorf("notice must precede config (notice=%d, config=%d):\n%s", ni, ci, out)
+		}
+	})
+
+	t.Run("user_scope_global_drifted_unchanged", func(t *testing.T) {
+		pluginRules := plugin(t)
+		project := t.TempDir()
+		home := t.TempDir()
+		writeFile(t, filepath.Join(project, ".lets", ".env"), "LETS_RULES_SCOPE=user\n")
+		writeFile(t, filepath.Join(home, ".claude", "rules", "lets-rules.md"), "---\nversion: 0.3.0\n---\n")
+
+		var buf bytes.Buffer
+		if err := sessionstart.Run(&buf, pluginRules, project, home); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(buf.String(), "Global workflow rules outdated") {
+			t.Errorf("drifted global rules notice unchanged under scope=user:\n%s", buf.String())
+		}
+	})
+
+	t.Run("user_scope_project_present_drifted_classic_project_notice", func(t *testing.T) {
+		pluginRules := plugin(t)
+		project := t.TempDir()
+		home := t.TempDir()
+		writeFile(t, filepath.Join(project, ".lets", ".env"), "LETS_RULES_SCOPE=user\n")
+		// project copy present but DRIFTED - project wins, classic project notice.
+		writeFile(t, filepath.Join(project, ".claude", "rules", "lets-rules.md"), "---\nversion: 0.3.0\n---\n")
+
+		var buf bytes.Buffer
+		if err := sessionstart.Run(&buf, pluginRules, project, home); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(buf.String(), "Workflow rules outdated (installed v0.3.0 < plugin v0.4.0)") {
+			t.Errorf("project copy present must yield the classic project notice (project wins):\n%s", buf.String())
+		}
+	})
+}

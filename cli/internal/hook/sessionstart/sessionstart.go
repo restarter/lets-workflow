@@ -57,7 +57,12 @@ func Run(w io.Writer, rulesPath, projectRoot, homeDir string) error {
 		return nil
 	}
 
-	if notice := driftCheck(rulesPath, projectRoot, homeDir); notice != "" {
+	// Compute the merged env BEFORE the notice so driftCheck can read the
+	// resolved LETS_RULES_SCOPE. Output order is unchanged - the notice is still
+	// emitted first, the Config block second.
+	env := mergedEnv(projectRoot, homeDir)
+
+	if notice := driftCheck(rulesPath, projectRoot, homeDir, env["LETS_RULES_SCOPE"]); notice != "" {
 		if _, err := fmt.Fprintln(w, notice); err != nil {
 			return err
 		}
@@ -65,8 +70,6 @@ func Run(w io.Writer, rulesPath, projectRoot, homeDir string) error {
 			return err
 		}
 	}
-
-	env := mergedEnv(projectRoot, homeDir)
 
 	if _, err := fmt.Fprintln(w, "## LETS Config"); err != nil {
 		return err
@@ -104,17 +107,21 @@ func Run(w io.Writer, rulesPath, projectRoot, homeDir string) error {
 //     exact noise lets-wug9k removes).
 //   - project rules MISSING + global present but drifted -> user-scope notice
 //     (MessageUser wording names the global path + remediation).
-//   - both missing -> the existing /lets:init nag (unchanged).
+//   - both missing + LETS_RULES_SCOPE=user -> the project deliberately relies
+//     on the global copy which is now gone; point at `lets init --user` (the
+//     generic /lets:init nag would install a project copy against the choice).
+//   - both missing (scope unset/project) -> the existing /lets:init nag.
 //
-// homeDir == "" (no user scope / resolution failed) preserves pre-user-scope
-// behavior exactly.
+// rulesScope comes from the MERGED env, so a hand-added LETS_RULES_SCOPE in
+// ~/.lets/.env also engages the guard (documented side effect). homeDir == ""
+// (no user scope / resolution failed) preserves pre-user-scope behavior exactly.
 //
 // Wraps drift.Check + drift.Message/MessageUser — single source of truth for
 // drift wording shared with `lets init --json` output. The trailing
 // surface-this line is hook-only (it tells the orchestrator to relay the
 // notice even when a big slash command like /lets:start is running); it is NOT
 // part of drift.Message, so `lets init --json` output stays clean.
-func driftCheck(pluginRulesPath, projectRoot, homeDir string) string {
+func driftCheck(pluginRulesPath, projectRoot, homeDir, rulesScope string) string {
 	installedPath := filepath.Join(projectRoot, ".claude", "rules", "lets-rules.md")
 	r := drift.Check(pluginRulesPath, installedPath)
 
@@ -123,8 +130,13 @@ func driftCheck(pluginRulesPath, projectRoot, homeDir string) string {
 		userPath := filepath.Join(homeDir, ".claude", "rules", "lets-rules.md")
 		ur := drift.Check(pluginRulesPath, userPath)
 		switch {
+		case ur.State == drift.StateMissing && rulesScope == "user":
+			// The project opted into the global copy (scope=user) but it's gone.
+			// Point at the global installer, not /lets:init (which would install
+			// a project copy against the persisted choice).
+			msg = "LETS_RULES_SCOPE=user but the global rules copy `~/.claude/rules/lets-rules.md` is missing. Run `lets init --user` to restore it (or set LETS_RULES_SCOPE=project and run `/lets:init`)."
 		case ur.State == drift.StateMissing:
-			msg = drift.Message(r) // both missing: existing nag
+			msg = drift.Message(r) // both missing, no scope opt-in: classic nag
 		case ur.Detected():
 			msg = drift.MessageUser(ur) // global present but drifted
 		default:
