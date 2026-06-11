@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- `/lets:plan-workflow --fast` (lets-tj5jd): the same autonomous off-context Dynamic Workflow planning chain on a minimal agent budget (~7 agents vs ~15-25) — 1 explorer over a merged area, 1 architect for the top rubric-ranked approach, 1 judge, 1 evaluator, 1 planner, plus the quick plan-check (+ refine only if needed); the heavy plan-review pass is skipped (`refinement_log.review_skipped = true`). Distinct from native `/lets:plan --fast` (orchestrator-only, no subagents, in-conversation): cheap workflow vs no workflow.
+- Fixed (lets-i85v9): plan-workflow architects no longer thrash on StructuredOutput validation when an approach creates no new files — `ARCH_SCHEMA` requires only `summary` (`files_create`/`files_modify` optional), and the architect prompt instructs `[]` over omission + terse strings against payload truncation.
+
 ## [0.6.3] - 2026-06-08
 
 ### Added
