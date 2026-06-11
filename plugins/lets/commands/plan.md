@@ -412,11 +412,11 @@ AskUserQuestion(
 
 ## Step 7: Expert Evaluation
 
-### --fast: orchestrator-only evaluation
+### --fast / Self-evaluation: orchestrator-only evaluation
 
-**If `--fast` is set:** skip the expert dispatch (Suggest Experts, Expert Selection checkpoint, Dispatch Experts). Instead, self-evaluate the chosen architecture from project context: name the real risks, the proportionality concerns (overengineering / underspec), and the trade-offs. Present them in the same `## Expert Evaluation` shape (a short list of findings + a Risks & Suggestions list), then add:
+**If `--fast` is set, OR the user picks "Self-evaluation" at the Expert Selection checkpoint below:** do an orchestrator-only evaluation - no expert subagents. (`--fast` skips the Suggest Experts / Expert Selection / Dispatch steps entirely; the gate option lands here as the chosen answer.) Self-evaluate the chosen architecture from project context: name the real risks, the proportionality concerns (overengineering / underspec), and the trade-offs. Present them in the same `## Expert Evaluation` shape (a short list of findings + a Risks & Suggestions list), then add:
 
-> *Fast mode skipped the expert agents. For a second opinion before executing, run `/lets:opinion` or `/lets:review --plan` after the plan is saved.*
+> *This evaluation skipped the expert agents. For a second opinion before executing, run `/lets:opinion` or `/lets:review --plan` after the plan is saved.*
 
 Then go to the **Checkpoint: Evaluation Results** below (same checkpoint, same options).
 
@@ -451,6 +451,7 @@ AskUserQuestion(
     options: [
       { label: "Full panel (Recommended)", description: "Pragmatist + N domain experts based on feature. Separate rate limit." },
       { label: "Pragmatist only", description: "Quick evaluation, just overengineering check" },
+      { label: "Self-evaluation", description: "No agents - orchestrator critiques its own architecture (risks, overengineering, trade-offs)" },
       { label: "Skip evaluation", description: "Architecture is solid, go straight to plan" }
     ],
     multiSelect: false
@@ -461,6 +462,7 @@ AskUserQuestion(
 **Handle response:**
 - **Full panel** -> dispatch recommended experts
 - **Pragmatist only** -> dispatch only pragmatist
+- **Self-evaluation** -> no subagents: run the orchestrator-only evaluation from "### --fast / Self-evaluation: orchestrator-only evaluation" above (same `## Expert Evaluation` shape + the second-opinion note), then go to **Checkpoint: Evaluation Results**. Unlike **Skip**, this still produces an evaluation - it just spends no agent budget.
 - **Skip evaluation** -> proceed directly to Step 9 (Plan Generation)
 - **Other** (free text) -> parse expert names from text, dispatch selected
 
