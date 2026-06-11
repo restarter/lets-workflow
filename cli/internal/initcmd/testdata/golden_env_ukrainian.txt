@@ -20,3 +20,6 @@ LETS_TRACKER=beads
 
 # Worktree launcher: terminal (print the cd command) | cmux (open in a cmux workspace, macOS only)
 LETS_LAUNCHER=terminal
+
+# Where this project's workflow rules come from: project (own .claude/rules copy) | user (rely on the ~/.claude/rules global copy)
+LETS_RULES_SCOPE=project

@@ -1,10 +1,10 @@
 ---
-description: Sync this project with the current LETS release - checks .env, rules, the lets binary, and the plugin
+description: Sync this project with the current LETS release - checks .env, rules, the lets binary, the plugin, and the user-level global rules when installed
 ---
 
 # Update LETS
 
-Sync the four drift-able LETS artifacts with the current release. Bridges to `lets update --json` (Go binary): auto-syncs `.lets/.env` (header refresh when `LETS_ENV_VERSION` is stale) and `.claude/rules/lets-rules.md` (re-copy when outdated/missing), and reports actionable version status for the `lets` binary and the Claude Code plugin (which it cannot self-update).
+Sync the drift-able LETS artifacts (four core + the optional user-scope global rules) with the current release. Bridges to `lets update --json` (Go binary): auto-syncs `.lets/.env` (header refresh when `LETS_ENV_VERSION` is stale), `.claude/rules/lets-rules.md` (re-copy when outdated/missing), and `~/.claude/rules/lets-rules.md` (user-scope global rules - the `user-rules` row appears only when that file exists), and reports actionable version status for the `lets` binary and the Claude Code plugin (which it cannot self-update).
 
 > **MANDATORY:** Execute every Step's bash block **literally as written**. Do not substitute output from earlier `ls`/`cat` in this conversation - `.env` and other dotfiles are invisible to plain `ls`. The `test -f` checks below ARE the contract.
 
@@ -42,13 +42,13 @@ Parse JSON.
 1. **Artifact table** - one line per `artifacts[]` entry:
    `<name>  v<current_version>  <status>  (latest v<latest_version>)  - <detail>`
    Omit `(latest …)` / `- <detail>` when those fields are empty; print `?` for an empty `current_version` (`dev` prints as-is, not `vdev`).
-   Status vocabulary: `.env`/`rules` report `in-sync` - they track a *local* source (the `lets` binary for `.env`, the plugin for `rules`), not the latest release. `binary`/`plugin` report `up-to-date`/`outdated` against the *latest release*. So `.env` and `rules` can sit at different versions and both be `in-sync` - expected, not a contradiction; their `detail` names what they track and flags "itself behind latest v…" when that source is itself stale.
+   Status vocabulary: `.env`/`rules` report `in-sync` - they track a *local* source (the `lets` binary for `.env`, the plugin for `rules`), not the latest release. `binary`/`plugin` report `up-to-date`/`outdated` against the *latest release*. So `.env` and `rules` can sit at different versions and both be `in-sync` - expected, not a contradiction; their `detail` names what they track and flags "itself behind latest v…" when that source is itself stale. `user-rules` (only present with a user-scope install) joins the `in-sync` frame: it tracks the *installed plugin*, same as `rules`. Its `ahead` status means the global file is newer than the plugin (customized or newer release) - deliberately NOT overwritten; relay the `detail` and do not treat it as an error. `rules` may also report `delegated` (`LETS_RULES_SCOPE=user`): the project deliberately has no own copy and lives on the global rules - a healthy state, not an error. Relay any `detail` hints verbatim (duplication / missing-global) - they are the user's action items, but NEVER offer to delete files yourself.
 2. **Summary line:** `<summary.up_to_date> in sync · <summary.updated> updated · <summary.action_needed> need action · <summary.unknown> unknown` (`summary.up_to_date` is the combined in-sync bucket: `in-sync` + `up-to-date`).
 3. **What you need to do** - build ONE numbered list of everything left for the user. Skip the whole section if there's nothing (no `action` strings, no rules update). Order: binary → plugin → restart. Everything here runs from inside Claude Code.
    - For each `artifacts[]` entry with a non-empty `action` (i.e. `binary` / `plugin`), add a step.
      - **`binary`:** present the `curl …` command from the action **prefixed with `! `** so the user can run it right in the Claude Code prompt — `! curl -fsSL https://raw.githubusercontent.com/restarter/lets-workflow/main/scripts/install.sh | bash` — the leading `!` makes Claude Code run it as a shell command in this session, no terminal needed. Add: "(or run the same command **without** the `!` in a terminal.)"
      - **`plugin`:** relay the `action` string verbatim — it's all slash commands in Claude Code (`/plugin marketplace update lets-workflow`, then `/reload-plugins`); no terminal, no `--scope` to figure out.
-   - If any `artifacts[]` entry has `status == "updated"` and `name == "rules"`, add a final step: "Restart Claude Code so the updated workflow rules take effect — `/exit`, then reopen it in this folder." (The rules file is already re-copied; the restart is only so the *current* session reloads it. If the plugin step above also needs a restart, one `/exit` + reopen covers both.)
+   - If any `artifacts[]` entry has `status == "updated"` and `name == "rules"` or `name == "user-rules"`, add a final step: "Restart Claude Code so the updated workflow rules take effect — `/exit`, then reopen it in this folder." (The rules file is already re-copied; the restart is only so the *current* session reloads it. One `/exit` + reopen covers project + global rules + the plugin step above.)
 4. If `consistent` is `false` → after the list (or, if there's no list, on its own), one line: "⚠️ Versions don't match (binary / plugin / rules) - a partial upgrade. Do the steps above to get everything onto the same release."
 5. If `ok == false` → show `error` only; NO LETS box, no table, no other sections.
 

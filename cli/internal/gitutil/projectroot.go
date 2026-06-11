@@ -105,3 +105,36 @@ func HasCommits(dir string, timeout time.Duration) bool {
 	out, err := cmd.Output()
 	return err == nil && len(strings.TrimSpace(string(out))) > 0
 }
+
+// DefaultBranch returns the remote's default branch name in dir (or cwd if
+// dir == ""), derived from `git symbolic-ref refs/remotes/origin/HEAD`.
+// origin/HEAD only exists after a clone (or `git remote set-head origin -a`);
+// for fresh `git init` repos or remotes without a set head this returns "".
+//
+// Returns "" on any failure (no remote, no origin/HEAD ref, not a repo,
+// timeout). Same silent-failure semantics as ProjectRoot/Branch - the caller
+// decides the fallback (the SessionStart hook falls back to "main", matching
+// the model-side fallback documented in local_config_explainer.md).
+func DefaultBranch(dir string, timeout time.Duration) string {
+	args := []string{"symbolic-ref", "--short", "refs/remotes/origin/HEAD"}
+	if dir != "" {
+		args = append([]string{"-C", dir}, args...)
+	}
+
+	var cmd *exec.Cmd
+	if timeout > 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		cmd = exec.CommandContext(ctx, "git", args...)
+	} else {
+		cmd = exec.Command("git", args...)
+	}
+
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	// --short on refs/remotes/origin/HEAD yields "origin/main" - strip the
+	// remote segment so callers get a bare branch name.
+	return strings.TrimPrefix(strings.TrimSpace(string(out)), "origin/")
+}

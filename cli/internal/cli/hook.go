@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -41,10 +42,13 @@ func NewHookCmd() *cobra.Command {
 
 // runHookSessionPipeline produces the SessionStart/PreCompact body via
 // sessionstart.Run, then hands it to renderHookOutput for size-guarded
-// emission. Shared by both hook subcommands.
+// emission. Shared by both hook subcommands. homeDir resolution failure
+// degrades to "" (no user scope) - the hook must never error out of a
+// Claude Code startup over a missing $HOME.
 func runHookSessionPipeline(cmd *cobra.Command, rulesPath string) error {
+	home, _ := os.UserHomeDir()
 	var buf bytes.Buffer
-	if err := sessionstart.Run(&buf, rulesPath, sessionstart.DetectProjectRoot()); err != nil {
+	if err := sessionstart.Run(&buf, rulesPath, sessionstart.DetectProjectRoot(), home); err != nil {
 		return err
 	}
 	return renderHookOutput(cmd, buf.Bytes())

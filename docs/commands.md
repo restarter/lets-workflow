@@ -46,8 +46,8 @@ See **[code-review.md](code-review.md)** and **[agents.md](agents.md)**.
 
 | Command | What it does |
 |---------|--------------|
-| `/lets:init` | Initialize LETS in the current project — creates `.lets/`, writes `.lets/.env` with defaults, copies the workflow rules to `.claude/rules/lets-rules.md`, wires up the statusline, and runs `bd init` if beads is installed. Re-run anytime to self-heal drift or change config. |
-| `/lets:update` | Sync the project with the current release — self-heal `.lets/.env` and the rules file, and report version status for the `lets` binary and the plugin. |
+| `/lets:init` | Initialize LETS in the current project — creates `.lets/`, writes `.lets/.env` with defaults, copies the workflow rules to `.claude/rules/lets-rules.md`, wires up the statusline, and runs `bd init` if beads is installed. Re-run anytime to self-heal drift or change config. With a user-scope plugin install it also offers `lets init --user` — global rules to `~/.claude/rules/` + personal defaults to `~/.lets/.env` *(ships next release)*. |
+| `/lets:update` | Sync the project with the current release — self-heal `.lets/.env` and the rules file (plus the user-level global rules when installed — never overwriting a customized copy), and report version status for the `lets` binary and the plugin. |
 
 See **[installation.md](installation.md)** and **[configuration.md](configuration.md)**.
 
