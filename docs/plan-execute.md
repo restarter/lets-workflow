@@ -16,6 +16,8 @@ For anything bigger than a quick fix, LETS splits the work in two: **`/lets:plan
 
 `/lets:plan --fast` skips the explorer and architect subagent phases and plans collaboratively in the conversation instead. Use it when you already know the codebase and just want a quick talk-through and a written plan.
 
+Not to be confused with `/lets:plan-workflow --fast` — THAT keeps the off-context workflow but runs it lean (~7 agents); this `/lets:plan --fast` runs no subagents at all.
+
 ## `/lets:execute` — build it
 
 `/lets:execute` loads the plan from `/lets:plan` and implements it in Claude Code's native plan mode. You approve each step before Claude proceeds — no step happens without your go-ahead. Use `/lets:commit` at natural commit points along the way.
