@@ -68,7 +68,10 @@ const ARCH_SCHEMA = {
     cons: { type: 'array', items: { type: 'string' } },
     risks: { type: 'array', items: { type: 'string' } },
   },
-  required: ['summary', 'files_create', 'files_modify'],
+  // lets-i85v9: only summary is hard-required. files_create/files_modify stay optional - the model
+  // omits "conditionally empty" required arrays (e.g. an approach that creates no files) and then
+  // thrashes on tool-layer validation (38 rejected StructuredOutput calls in the diagnosed run).
+  required: ['summary'],
 }
 
 // Built at the Judge phase once the REAL approach ids exist, so `winner`/`scores[].approach`
@@ -202,7 +205,7 @@ TRADEOFFS: ${a.tradeoffs || ''}
 CODEBASE MAP:
 ${JSON.stringify(map, null, 2)}
 
-Design THIS approach into a full architecture: components (exact file paths + responsibility), files to create, files to modify, data flow, pros, cons, risks. Follow existing patterns from the map. Be specific.`
+Design THIS approach into a full architecture: components (exact file paths + responsibility), files to create, files to modify, data flow, pros, cons, risks. Follow existing patterns from the map. Be specific. Return files_create: [] (empty array) when the approach creates no new files - NEVER omit the key. Keep every string terse (no prose padding) so the JSON payload stays compact and is never truncated.`
 }
 
 function judgePrompt(archs, ids) {
