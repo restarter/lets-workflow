@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **`/lets:plan` — Self-evaluation option at the architecture-eval gate (lets-4x5mg).** The Step 7 "Which experts should evaluate the architecture?" checkpoint gains a **Self-evaluation** choice between *Pragmatist only* and *Skip evaluation*: no expert subagents — the orchestrator critiques its own chosen architecture (risks / overengineering / trade-offs) in the same `## Expert Evaluation` shape, then proceeds to the Evaluation Results checkpoint. Unlike *Skip* it still produces an evaluation; unlike *Full panel* / *Pragmatist only* it spends no agent budget. Reuses the existing `--fast` self-eval block (now shared by both triggers), so it's a per-stage lean lever without committing the whole `--fast` flag.
+
 ## [0.6.3] - 2026-06-08
 
 ### Added
