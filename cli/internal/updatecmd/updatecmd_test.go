@@ -52,7 +52,9 @@ func scaffold(t *testing.T, envVer, rulesVer, pluginVer, binVer string) (project
 		if err := os.MkdirAll(envDir, 0o755); err != nil {
 			t.Fatal(err)
 		}
-		body := "# LETS plugin config\nLETS_ENV_VERSION=" + envVer + "\nLETS_LANGUAGE=English\nLETS_MERGE_BRANCH=main\nLETS_PR_FLOW=local\nLETS_TRACKER=beads\n"
+		// Full canonical key set so Artifact 1's RegenerateEnv reports in-sync
+		// (a missing key would diff → `updated`, not the `in-sync` these tests want).
+		body := "# LETS plugin config\nLETS_ENV_VERSION=" + envVer + "\nLETS_LANGUAGE=English\nLETS_MERGE_BRANCH=main\nLETS_PR_FLOW=local\nLETS_TRACKER=beads\nLETS_LAUNCHER=terminal\nLETS_RULES_SCOPE=project\n"
 		if err := os.WriteFile(filepath.Join(envDir, ".env"), []byte(body), 0o644); err != nil {
 			t.Fatal(err)
 		}

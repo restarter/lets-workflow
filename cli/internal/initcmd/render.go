@@ -18,8 +18,8 @@ type Prefs struct {
 	PRFlow      string // "local" | "github" | "bitbucket"
 	Tracker     string // "beads" (canonical default; reserved for Linear/Jira)
 	Launcher    string // "terminal" (default) | "cmux"
+	RulesScope  string // "project" (own .claude/rules copy) | "user" (rely on ~/.claude/rules) | "" = preserve-or-default
 	SkipBeads   bool
-	SkipRules   bool // report rules drift but never write (global rules cover this project)
 }
 
 // AsValues returns the canonical Key.Name → Prefs field mapping.
@@ -35,6 +35,7 @@ func (p Prefs) AsValues() map[string]string {
 		"LETS_PR_FLOW":      p.PRFlow,
 		"LETS_TRACKER":      p.Tracker,
 		"LETS_LAUNCHER":     p.Launcher,
+		"LETS_RULES_SCOPE":  p.RulesScope,
 	}
 }
 

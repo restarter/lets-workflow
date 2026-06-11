@@ -83,8 +83,8 @@ type Key struct {
 	UserLevel bool
 }
 
-// Keys is the canonical, ordered list. Single source of truth for the 4 LETS_*
-// config keys. Adding a new key: see package doc above.
+// Keys is the canonical, ordered list. Single source of truth for the
+// canonical LETS_* config keys. Adding a new key: see package doc above.
 var Keys = []Key{
 	{
 		Name:      "LETS_LANGUAGE",
@@ -112,6 +112,11 @@ var Keys = []Key{
 		Comment:   "Worktree launcher: terminal (print the cd command) | cmux (open in a cmux workspace, macOS only)",
 		Default:   "terminal",
 		UserLevel: true,
+	},
+	{
+		Name:    "LETS_RULES_SCOPE",
+		Comment: "Where this project's workflow rules come from: project (own .claude/rules copy) | user (rely on the ~/.claude/rules global copy)",
+		Default: "project",
 	},
 }
 

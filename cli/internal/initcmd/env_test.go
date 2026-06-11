@@ -136,6 +136,40 @@ func TestRegenerateEnv_PreservesUserTracker(t *testing.T) {
 	}
 }
 
+// Regression (lets-wug9k): a customized LETS_LAUNCHER must survive a regen that
+// passes only Prefs{Tracker} - the exact updatecmd-shaped call path that, before
+// the mergePrefs pick was added, silently blanked the launcher to empty.
+func TestRegenerateEnv_PreservesUserLauncher(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".env")
+	if err := os.WriteFile(path, []byte("LETS_LANGUAGE=English\nLETS_MERGE_BRANCH=main\nLETS_PR_FLOW=local\nLETS_TRACKER=beads\nLETS_LAUNCHER=cmux\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RegenerateEnv(path, Prefs{Tracker: "beads"}); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(path)
+	if !bytes.Contains(data, []byte("LETS_LAUNCHER=cmux")) {
+		t.Errorf("user-customized LETS_LAUNCHER overwritten:\n%s", data)
+	}
+}
+
+// A customized LETS_RULES_SCOPE=user must survive a Prefs{Tracker}-only regen
+// (the update path) - else the persisted choice would be lost and the boomerang
+// would return through update's own regen.
+func TestRegenerateEnv_PreservesUserRulesScope(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".env")
+	if err := os.WriteFile(path, []byte("LETS_LANGUAGE=English\nLETS_MERGE_BRANCH=main\nLETS_PR_FLOW=local\nLETS_TRACKER=beads\nLETS_LAUNCHER=terminal\nLETS_RULES_SCOPE=user\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RegenerateEnv(path, Prefs{Tracker: "beads"}); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(path)
+	if !bytes.Contains(data, []byte("LETS_RULES_SCOPE=user")) {
+		t.Errorf("persisted LETS_RULES_SCOPE=user overwritten:\n%s", data)
+	}
+}
+
 func TestRegenerateEnv_BackupCreated(t *testing.T) {
 	path := filepath.Join(t.TempDir(), ".env")
 	initial := "LETS_LANGUAGE=English\nLETS_MERGE_BRANCH=main\nLETS_PR_FLOW=local\nLETS_TRACKER=beads\n"

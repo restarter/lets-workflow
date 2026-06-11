@@ -65,6 +65,7 @@ func TestDefaults_HardcodedContract(t *testing.T) {
 		"LETS_PR_FLOW":      "local",
 		"LETS_TRACKER":      "beads",
 		"LETS_LAUNCHER":     "terminal",
+		"LETS_RULES_SCOPE":  "project",
 	}
 	got := letsconfig.Defaults()
 	if !reflect.DeepEqual(got, want) {

@@ -249,10 +249,18 @@ func mergePrefs(prefs Prefs, existing map[string]string) Prefs {
 			return defaults[key]
 		}
 	}
+	// Every canonical key MUST have a pick here - a missing key is silently
+	// clobbered on regen. That was the LETS_LAUNCHER gap (found 2026-06-11,
+	// lets-wug9k): without its pick, an update-triggered regen (which passes
+	// Prefs{Tracker} only) rendered LETS_LAUNCHER= empty, dropping a
+	// customized cmux. The cobra layer passes raw flag values (empty = not set)
+	// so pick's flag>existing>default precedence preserves user customization.
 	result := prefs
 	result.Language = pick(prefs.Language, "LETS_LANGUAGE")
 	result.MergeBranch = pick(prefs.MergeBranch, "LETS_MERGE_BRANCH")
 	result.PRFlow = pick(prefs.PRFlow, "LETS_PR_FLOW")
+	result.Launcher = pick(prefs.Launcher, "LETS_LAUNCHER")
+	result.RulesScope = pick(prefs.RulesScope, "LETS_RULES_SCOPE")
 	if existingTracker := existing["LETS_TRACKER"]; existingTracker != "" {
 		result.Tracker = existingTracker
 	}
@@ -278,10 +286,32 @@ func diffKeys(old map[string]string, new Prefs) []string {
 	if old["LETS_TRACKER"] != new.Tracker {
 		changed = append(changed, "LETS_TRACKER")
 	}
+	if old["LETS_LAUNCHER"] != new.Launcher {
+		changed = append(changed, "LETS_LAUNCHER")
+	}
+	if old["LETS_RULES_SCOPE"] != new.RulesScope {
+		changed = append(changed, "LETS_RULES_SCOPE")
+	}
 	if len(changed) == 0 {
 		return []string{}
 	}
 	return changed
+}
+
+// effectiveRulesScope reads the resolved LETS_RULES_SCOPE from the project
+// .env. Callers run AFTER RegenerateEnv (init Step 5 precedes Step 8), so the
+// file always carries the resolved value - no separate precedence logic.
+// Missing file, parse error, or ANY value other than "user" degrades to
+// "project": fail-safe - a typo ("usr", "banana") can never suppress the
+// project rules copy. Only the cobra flag validates strictly; .env hand-edits
+// degrade silently by design. update/hook compare == "user" - same contract.
+func effectiveRulesScope(envPath string) string {
+	if data, err := os.ReadFile(envPath); err == nil {
+		if vals, perr := envfile.Parse(bytes.NewReader(data)); perr == nil && vals["LETS_RULES_SCOPE"] == "user" {
+			return "user"
+		}
+	}
+	return "project"
 }
 
 // extractForeignKeys returns the substring of the original .env containing only

@@ -8,6 +8,7 @@ These keys are injected by the SessionStart hook into the orchestrator's context
 - **`LETS_PR_FLOW`** — PR/merge workflow. Values: `github` (PR via gh CLI), `bitbucket` (planned, bb-api wrapper exists), `local` (no PR, local merge). Used by `/lets:done`. Requires matching CLI tools when not `local`.
 - **`LETS_TRACKER`** — task tracker integration. Currently `beads` is the only supported value. **Schema reserved** — no command currently branches on this; all task ops still call `bd` regardless.
 - **`LETS_LAUNCHER`** — how `/lets:worktree create` opens a new worktree session. Values: `terminal` (default — print a `cd … && claude` command), `cmux` (open in a cmux workspace via `lets cmux`, macOS only). A preference, not a guarantee: `cmux` silently falls back to `terminal` when cmux is absent or off-macOS.
+- **`LETS_RULES_SCOPE`** — where this project's workflow rules come from: `project` (own `.claude/rules` copy — the default) | `user` (deliberately no project copy; rules come from the global `~/.claude/rules/lets-rules.md`). Informational for reasoning — never write either rules file directly.
 
 `LETS_PROJECT_ROOT` is always injected by the hook. Other settings resolve: project `.lets/.env` (created by `/lets:init`) > user-level `~/.lets/.env` (created by `lets init --user`) > built-in defaults. `LETS_MERGE_BRANCH` additionally falls back to the repo's origin default branch.
 
