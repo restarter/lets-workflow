@@ -28,7 +28,7 @@ const (
 	StatusUnknown        ArtifactStatus = "unknown"         // couldn't determine (offline, unreadable)
 	StatusNotInitialized ArtifactStatus = "not-initialized" // .env absent - project never `lets init`-ed
 	StatusDev            ArtifactStatus = "dev"             // running an untagged dev binary - no comparison
-	StatusDelegated      ArtifactStatus = "delegated"      // project rules deliberately absent (LETS_RULES_SCOPE=user) - rules come from ~/.claude/rules
+	StatusDelegated      ArtifactStatus = "delegated"       // project rules deliberately absent (LETS_RULES_SCOPE=user) - rules come from ~/.claude/rules
 )
 
 // allStatuses - keep adjacent to the Status* consts. A new status MUST be
