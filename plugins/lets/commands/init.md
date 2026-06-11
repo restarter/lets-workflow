@@ -209,19 +209,21 @@ If `BEADS_EXISTS` (re-init scenario where someone removed .lets/ but kept .beads
 
 ### 2d. Exec
 
-**Global-rules check (decides `$SKIP_RULES_FLAG`):**
+**Global-rules check (decides `$RULES_SCOPE_FLAG`):**
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+SCOPE=$(grep -E '^LETS_RULES_SCOPE=' "$LETS_PROJECT_ROOT/.lets/.env" 2>/dev/null | cut -d= -f2)
 GLOBAL="ABSENT"; test -f "$HOME/.claude/rules/lets-rules.md" && GLOBAL="PRESENT"
 PROJECT="ABSENT"; test -f "$LETS_PROJECT_ROOT/.claude/rules/lets-rules.md" && PROJECT="PRESENT"
-echo "GLOBAL=$GLOBAL PROJECT=$PROJECT"
+echo "SCOPE=${SCOPE:-unset} GLOBAL=$GLOBAL PROJECT=$PROJECT"
 ```
 
-- `GLOBAL=PRESENT` AND `PROJECT=ABSENT` → ask (AskUserQuestion, header `Rules scope`):
-  - "Rely on global (Recommended)" - description: "Your ~/.claude/rules copy covers this project; nothing committed to the repo" → set `$SKIP_RULES_FLAG="--skip-rules"`.
-  - "Copy to project" - description: "Git-trackable project copy - teammates without user-scope install get the rules" → set `$SKIP_RULES_FLAG=""`.
-- Any other combination → no question, `$SKIP_RULES_FLAG=""` (project copy present syncs as usual; no global rules = nothing to rely on).
+- `SCOPE` already `project`/`user` → no question, `$RULES_SCOPE_FLAG=""` (the persisted value rules; the binary reads it from `.env`).
+- `SCOPE=unset` AND `GLOBAL=PRESENT` AND `PROJECT=ABSENT` → ask (AskUserQuestion, header `Rules scope`):
+  - "Rely on global (Recommended)" - description: "Persisted choice - your ~/.claude/rules copy covers this project; /lets:update won't re-create a project copy" → set `$RULES_SCOPE_FLAG="--rules-scope=user"`.
+  - "Copy to project" - description: "Git-trackable team copy; right call for shared repos" → set `$RULES_SCOPE_FLAG="--rules-scope=project"`.
+- Any other combination → no question, `$RULES_SCOPE_FLAG=""` (project copy present syncs as usual; no global rules = nothing to rely on).
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
@@ -231,7 +233,7 @@ lets init --json \
   --merge-branch="$BRANCH" \
   --pr-flow="$FLOW" \
   --launcher="$LAUNCHER" \
-  $SKIP_BEADS_FLAG $SKIP_RULES_FLAG
+  $SKIP_BEADS_FLAG $RULES_SCOPE_FLAG
 ```
 
 Capture stdout (JSON object).
@@ -266,6 +268,7 @@ Read `.lets/.env` via Read tool. Extract:
 - `$CURRENT_LANG` from `LETS_LANGUAGE=...` line
 - `$CURRENT_BRANCH` from `LETS_MERGE_BRANCH=...` line
 - `$CURRENT_FLOW` from `LETS_PR_FLOW=...` line
+- `$CURRENT_RULES_SCOPE` from `LETS_RULES_SCOPE=...` line (absent → `project`)
 
 Show user a one-line summary: "Current: $CURRENT_LANG / $CURRENT_BRANCH / $CURRENT_FLOW".
 
@@ -291,13 +294,13 @@ Branch:
 
 ### 3c. Refresh exec
 
-Run the **Global-rules check** from Step 2d first (same bash block, same question rule — prompt fires only when `GLOBAL=PRESENT` AND `PROJECT=ABSENT`; on a typical re-run the project copy exists, so no question, no flag).
+Run the **Global-rules check** from Step 2d first (same bash block, same question rule — prompt fires only when `SCOPE=unset` AND `GLOBAL=PRESENT` AND `PROJECT=ABSENT`; on a typical re-run the scope is persisted or the project copy exists, so no question, no flag).
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 lets init --json \
   --plugin-root="${CLAUDE_PLUGIN_ROOT}" \
-  $SKIP_RULES_FLAG
+  $RULES_SCOPE_FLAG
 ```
 
 No prefs flags passed. The binary reads existing values from `.env` and:
@@ -330,7 +333,22 @@ If "Keep current" picked, substitute `$LANG = $CURRENT_LANG`. Else use selected 
 
 Repeat for MergeBranch (`$BRANCH`), PRFlow (`$FLOW`), and Launcher (`$LAUNCHER` — "Keep current" shows `$LETS_LAUNCHER` from LETS Config, plus options terminal / cmux).
 
-Run the **Global-rules check** from Step 2d first (same bash block, same question rule).
+**Rules scope** — only ask when `GLOBAL=PRESENT` (otherwise there's nothing to rely on; bind `$RULES_SCOPE_FLAG=""`):
+
+AskUserQuestion(
+  questions=[{
+    question: "Where should this project's rules come from?",
+    header: "Rules scope",
+    options: [
+      { label: "Keep current", description: "Currently: $CURRENT_RULES_SCOPE" },
+      { label: "Rely on global", description: "No project copy; rules from ~/.claude/rules (/lets:update won't re-create one)" },
+      { label: "Copy to project", description: "Git-trackable team copy" }
+    ],
+    multiSelect: false
+  }]
+)
+
+Bind: "Keep current" → `$RULES_SCOPE_FLAG="--rules-scope=$CURRENT_RULES_SCOPE"`; "Rely on global" → `--rules-scope=user`; "Copy to project" → `--rules-scope=project`.
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
@@ -340,7 +358,7 @@ lets init --json \
   --merge-branch="$BRANCH" \
   --pr-flow="$FLOW" \
   --launcher="$LAUNCHER" \
-  $SKIP_RULES_FLAG
+  $RULES_SCOPE_FLAG
 ```
 
 Passing the prefs flags triggers `env_action.kind=regenerated` (binary detects values differ from existing .env, regenerates while preserving foreign keys + user-customized `LETS_TRACKER`).
