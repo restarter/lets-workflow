@@ -12,9 +12,20 @@ export const meta = {
 // ── ARGS (defensive parse - the runtime may deliver args as a JSON string) ──
 const input = typeof args === 'string' ? JSON.parse(args) : (args || {})
 const { goal, rubric, taskContext, projectRoot, claudeMd } = input
-const FOCUS = (input.focusAreas && input.focusAreas.length) ? input.focusAreas : [{ name: 'general', hint: 'overall structure and integration points relevant to the goal' }]
-const JUDGES = (input.judges && input.judges.length) ? input.judges : [{ name: 'pragmatist' }, { name: 'backend' }, { name: 'security' }]
-const EXPERTS = (input.experts && input.experts.length) ? input.experts : [{ name: 'pragmatist' }]
+// FAST = lean off-context budget (~7 agents): collapse the upstream panels to 1 agent each and
+// skip the heavy Plan Review/Revise pass below (the quick Plan Check/Refine still runs).
+// Distinct from native /lets:plan --fast (orchestrator-only, NO subagents, in-context).
+// Default (no flag) = byte-identical to standard.
+const FAST = !!input.fast
+const FOCUS = (input.focusAreas && input.focusAreas.length)
+  ? (FAST ? [{ name: 'general', hint: input.focusAreas.map(f => `${f.name}: ${f.hint || ''}`).join('; ') || 'overall structure and integration points' }] : input.focusAreas)
+  : [{ name: 'general', hint: 'overall structure and integration points relevant to the goal' }]
+const JUDGES = (input.judges && input.judges.length)
+  ? (FAST ? [input.judges[0]] : input.judges)
+  : (FAST ? [{ name: 'pragmatist' }] : [{ name: 'pragmatist' }, { name: 'backend' }, { name: 'security' }])
+const EXPERTS = (input.experts && input.experts.length)
+  ? (FAST ? [input.experts[0]] : input.experts)
+  : [{ name: 'pragmatist' }]
 const PLAN_REVIEWERS = (input.planReviewers && input.planReviewers.length) ? input.planReviewers : [{ name: 'architect' }, { name: 'pragmatist' }]
 const PLAN_CHECKER = input.planChecker || { name: 'pragmatist' }
 
@@ -172,7 +183,7 @@ ${TASK_BLOCK}
 CODEBASE MAP (from explorers):
 ${JSON.stringify(map, null, 2)}
 
-Propose 2-4 CONCRETE, DISTINCT implementation approaches grounded in this codebase (not abstract labels). Give each a stable id (A, B, C, ...), a short name, a summary, the key tradeoff, and the files it would touch. Each approach must take a meaningfully different path.`
+Propose 2-4 CONCRETE, DISTINCT implementation approaches grounded in this codebase (not abstract labels). Give each a stable id (A, B, C, ...), a short name, a summary, the key tradeoff, and the files it would touch. Each approach must take a meaningfully different path.${FAST ? `\n\nORDER the approaches BEST-FIRST against the RUBRIC above (the strongest-fit approach as the FIRST array element). In fast mode ONLY the first approach is architected and judged, so its ordering is the actual selection - rank deliberately.` : ''}`
 }
 
 function archPrompt(a, map) {
@@ -315,7 +326,9 @@ if (approaches.length === 0) {
 }
 
 phase('Architect')
-const archRaw = await parallel(approaches.map(a => () =>
+// Fast: architect only the top approach (best-first per the fast approachesPrompt ordering) -> 1 architect, not N.
+const archInput = FAST ? approaches.slice(0, 1) : approaches
+const archRaw = await parallel(archInput.map(a => () =>
   agent(archPrompt(a, map), { agentType: 'lets:architect', label: `arch:${a.id}`, schema: ARCH_SCHEMA })
     .then(r => (r ? { ...r, approach: a.id, name: a.name } : null))))
 const archs = archRaw.filter(Boolean)
