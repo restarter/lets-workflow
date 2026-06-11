@@ -13,6 +13,7 @@ Reference docs for the LETS Workflow plugin. If you haven't set it up yet, start
 | [autonomous.md](autonomous.md) | The hands-off flows — Dynamic Workflows (`--workflow`, off-context multi-agent), and the autonomous task pipeline (`--flow plan-workflow --auto`: spawn → plan → execute with two gates). Degradation and prerequisites. |
 | [tasks.md](tasks.md) | Task tracking with beads — why it's there, the task lifecycle, taking and creating tasks, notes, `/lets:brainstorm`, `/lets:backlog`, beads memory, and shared backlogs for teams. |
 | [commands.md](commands.md) | Full reference for every `/lets:*` command — flags, when to use which. |
+| [commands/](commands/README.md) | Per-command deep dives — one page per command with the full flag story and design guarantees. Growing over time. |
 | [configuration.md](configuration.md) | `.lets/.env` settings, the `.lets/` file layout, `lets init` vs `bd init` setup order, and dependencies. |
 | [statusline.md](statusline.md) | The bottom-bar box — what each line shows, width tiers, worktree behavior, and the `--light` / `--no-tip` / `--no-dir` / `--no-task` / `--compact` flags. |
 

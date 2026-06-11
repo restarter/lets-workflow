@@ -7,7 +7,7 @@ argument-hint: "[topic] [--workflow]"
 
 Multi-perspective exploration of a topic or idea. A scout gathers project context, then parallel expert agents surface insights, questions, and approaches from their domains.
 
-**This command helps you THINK THROUGH an idea (WHAT/why). For HOW to build it, use `/lets:plan`. For backlog review / cleanup, use `/lets:backlog`.**
+**This command helps you THINK THROUGH an idea (WHAT/why). For HOW to build it, use `/lets:plan`. For backlog review / cleanup, use `/lets:backlog`. For a CITED answer to an external/technical question (a sourced synthesis, not project ideation), use `/lets:research`.**
 
 > **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
 

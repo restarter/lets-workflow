@@ -21,6 +21,7 @@ See **[tasks.md](tasks.md)** for the task lifecycle.
 |---------|--------------|
 | `/lets:brainstorm` | Quick interactive ideation on a topic — fast context scan, no agents. |
 | `/lets:backlog` | Backlog management — multi-agent backlog review, or interactive cleanup triage. `review` / `cleanup` skip the menu. |
+| `/lets:explore` | Explore a topic from multiple expert angles — scout context, web research, parallel domain agents surface insights/questions/approaches. `--workflow` runs the fan-out off-context. |
 | `/lets:plan` | Structured planning — codebase exploration with scaled explorer agents, then architecture design with expert evaluation, then a written plan in `.lets/plans/`. `--fast` skips the subagent phases and plans in-conversation. |
 | `/lets:plan-workflow` | PREVIEW — autonomous planning via a Dynamic Workflow (goal + rubric up front, off-context, approve at the end). |
 | `/lets:execute` | Execute the plan from `/lets:plan` in native plan mode, with your approval at each step. `--auto` runs an approved plan without per-step gates (push/PR/`bd close`/external still gated). |
@@ -39,6 +40,7 @@ See **[plan-execute.md](plan-execute.md)**, **[parallel-work.md](parallel-work.m
 | `/lets:review-round` | Work through a RECEIVED review round — triage each comment (accept/reject/defer/done), record decisions to the task, keep the artifact frozen, then apply all edits in one final pass. The inverse of `/lets:review`. |
 | `/lets:opinion` | Technical decision analyzed by expert agents in parallel, with a recommendation. Dynamic agent count. |
 | `/lets:ask` | Quick consultation with a single expert agent — like pinging a colleague. |
+| `/lets:research` | Answer an external/technical question with a CITED web synthesis — decompose, search + fetch sources, cross-check flags weak/contradicted claims, then a sourced answer + Sources list + as-of date. `--workflow` off-context; `--project` grounds against this repo. Deep dive: **[commands/research.md](commands/research.md)**. *(ships next release)* |
 
 See **[code-review.md](code-review.md)** and **[agents.md](agents.md)**.
 

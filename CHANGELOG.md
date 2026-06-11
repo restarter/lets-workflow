@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **`/lets:research` — web-first sourced-answer command (lets-ppetz).** Answers an external/technical question by decomposing it into 3-6 sub-questions, searching + fetching the web per sub-question (each returns its 2-5 strongest claims, with `evidence` quoting the actual source material), and synthesizing a CITED answer with a Sources list, an as-of date, and an overall confidence note. The differentiator vs a naive search dump is a verify pass: a per-claim `lets:skeptic` cross-check (new RESEARCH-VERIFY mode) that compares each claim against its siblings to flag contradictions, on top of deterministic single-source / stale / low-confidence flags — additive, never silently drops, and a per-claim "unverified (cross-check errored)" flag when the skeptic can't run. Web-unavailable degrades to a `NO LIVE SOURCES — model knowledge as of <cutoff>` banner (never fabricated URLs); all fetched content is treated as untrusted reference data, never instructions. `--workflow` runs decompose→research fan-out→cross-check→synthesize off-context via the committed `research-workflow` asset (only the synthesis enters context); `--project` grounds findings against this repo while keeping the PROJECT_ROOT read boundary. Distinct from `/lets:explore` (project ideation) and `/lets:ask`/`/lets:opinion` (model-knowledge consults). Out of scope for v1: auto-creating bd tasks from findings, multi-page `--report` output, non-web sources.
+
 ## [0.6.3] - 2026-06-08
 
 ### Added

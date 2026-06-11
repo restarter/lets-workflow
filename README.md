@@ -131,6 +131,7 @@ Then, inside the Claude Code session:
 | `/lets:review-round` | Work through a received review round - triage comments, record decisions, one final edit-pass |
 | `/lets:opinion` | Technical decision analysis (dynamic expert agents in parallel) |
 | `/lets:ask` | Quick expert consultation (single agent) |
+| `/lets:research` | Web-sourced cited answer to an external/technical question - cross-check flags weak/contradicted claims (`--workflow` off-context, `--project` repo-grounded) *(ships next release)* |
 
 ### Init & Update
 
@@ -143,7 +144,7 @@ Then, inside the Claude Code session:
 
 → Full docs: [docs/agents.md](docs/agents.md)
 
-LETS ships **14 specialized agents**. You never pick them by hand — the commands that use agents (`/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:backlog`, `/lets:team`) look at what you're doing and bring in only the ones that fit.
+LETS ships **14 specialized agents**. You never pick them by hand — the commands that use agents (`/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:backlog`, `/lets:explore`, `/lets:research`, `/lets:team`) look at what you're doing and bring in only the ones that fit.
 
 | Agent | Expertise |
 |-------|-----------|
@@ -195,6 +196,7 @@ A LETS session runs a loop: start, work, commit, finish.
 │  /lets:ask       Quick question to a single expert                        │
 │  /lets:check     Quick sanity check (6 perspectives, ~30s)                │
 │  /lets:review    Full multi-agent code review (~2-3 min)                  │
+│  /lets:research  Web-sourced cited answer to a question (ships next rel)  │
 │                                                                           │
 ├─ You plan, Claude builds ─────────────────────────────────────────────────┤
 │  /lets:brainstorm  Quick ideation on a topic - fast, no agents            │
@@ -228,6 +230,8 @@ A LETS session runs a loop: start, work, commit, finish.
 **Plan** (`/lets:plan`) - codebase exploration with dynamically-scaled explorer agents, then architecture design with expert evaluation. Small project? One explorer. Large monorepo? Up to 10, each mapping a different area. Want a quick talk-through instead? `/lets:plan --fast` skips the subagent phases and plans collaboratively in-session.
 
 **Execute** (`/lets:execute`) - implements the plan step by step in native plan mode. You approve each step before Claude proceeds. No surprises.
+
+**Research** (`/lets:research`) - unlike `/lets:explore` (project ideation) or `/lets:ask`/`/lets:opinion` (model-knowledge consults), this answers an external or technical question with a CITED synthesis: it searches the web, fetches the best sources, and a cross-check pass flags single-source, contradicted, or stale claims before presenting. The deliverable is a sourced answer with a Sources list and an as-of date. `--workflow` runs it off-context; `--project` grounds findings against this repo. *(ships next release)*
 
 ### Code review
 
