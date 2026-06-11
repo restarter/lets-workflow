@@ -155,3 +155,41 @@ func TestUpdate_RefusesInsideWorktree(t *testing.T) {
 		t.Fatalf("worktree refusal not surfaced:\n%s", out)
 	}
 }
+
+// With a populated fake home (user-scope install present), the envelope gains
+// the 5th user-rules artifact. The package-wide TestMain HOME sandbox keeps
+// the default case at 4 artifacts (sandboxed home has no rules) and protects
+// the developer's real ~/.claude/rules from test fixtures.
+func TestUpdate_JSONEnvelope_UserRulesArtifact(t *testing.T) {
+	home := t.TempDir()
+	writeTestFile(t, filepath.Join(home, ".claude", "rules", "lets-rules.md"),
+		"---\nversion: 0.4.0\n---\n# global rules\n")
+	t.Setenv("HOME", home)
+	chdirTo(t, gitInitRepo(t))
+
+	out, err := runRootUpdate(t, "--json", "--offline", "--plugin-root="+makeFakePluginRoot(t))
+	if err != nil {
+		t.Fatalf("Execute err = %v\noutput:\n%s", err, out)
+	}
+	var r struct {
+		OK        bool `json:"ok"`
+		Artifacts []struct {
+			Name   string `json:"name"`
+			Status string `json:"status"`
+		} `json:"artifacts"`
+	}
+	if jerr := json.Unmarshal([]byte(out), &r); jerr != nil {
+		t.Fatalf("not valid JSON: %v\n%s", jerr, out)
+	}
+	if !r.OK || len(r.Artifacts) != 5 {
+		t.Fatalf("expected ok envelope with 5 artifacts, got %+v\n%s", r, out)
+	}
+	byName := map[string]string{}
+	for _, a := range r.Artifacts {
+		byName[a.Name] = a.Status
+	}
+	// fake plugin is 0.4.0, global rules 0.4.0 -> in sync.
+	if byName["user-rules"] != "in-sync" {
+		t.Errorf("user-rules status = %q, want in-sync", byName["user-rules"])
+	}
+}

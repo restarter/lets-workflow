@@ -82,8 +82,9 @@ Team:     /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /le
 | `/lets:review-round` | Code | Work through a received review round - triage, decisions->task, one final edit-pass |
 | `/lets:opinion` | Expert | Technical decision needed |
 | `/lets:ask` | Expert | Quick question to one expert |
-| `/lets:init` | Setup | Initialize LETS in a new project; re-run for self-heal or config change |
-| `/lets:update` | Setup | Sync project with the current release - `.lets/.env` + rules self-heal, plus `lets` binary / plugin version status |
+| `/lets:research` | Expert | Web-sourced cited answer to an external/technical question (`--workflow` off-context) *(ships next release)* |
+| `/lets:init` | Setup | Initialize LETS in a new project; re-run for self-heal or config change. User-scope plugin install: offers `lets init --user` (global rules + `~/.lets/.env` defaults) |
+| `/lets:update` | Setup | Sync project with the current release - `.lets/.env` + rules self-heal (incl. the user-level global rules when installed), plus `lets` binary / plugin version status |
 | `/lets:worktree` | Utility | Create/manage worktrees for parallel sessions |
 | `/lets:team` | Utility | Parallel implementation with Agent Teams |
 | `/lets:status` | Utility | Task overview anytime |

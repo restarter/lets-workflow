@@ -34,7 +34,7 @@ If a `## LETS Notice` block appears in the injected context (sibling H2 of `## L
   **Exception — trunk-mode.** If `detect-task` returns an active task AND HEAD == `$LETS_MERGE_BRANCH`, trunk-mode is active (user opted in via the `take-task` picker option "Stay on current branch"). In trunk-mode: editing the merge-branch is allowed; `/lets:done` pushes + closes the task without creating a PR (same-source-target is not a valid PR); `/lets:plan` and `/lets:execute` derive plan filenames from task-id instead of branch slug. If HEAD == `$LETS_MERGE_BRANCH` AND `detect-task` returns None, the default rule applies — refuse edits, instruct user to run `/lets:start <id>` first.
 
   **Main / assistant mode.** When the session was entered via `/lets:start --main` (alias `--assistant`), HEAD == `$LETS_MERGE_BRANCH` with no active task is the **intended** state (read + triage), not an error — do not refuse the session or demand a task. The refuse-edits rule still governs *code edits*: on edit-intent, route the user to `take-task` / `create-task` (graceful hand-off) instead of only refusing.
-- **Never edit installed `lets-*` rules files** in `.claude/rules/`. They are plugin-managed copies refreshed by `/lets:init`. Edit the canonical source `plugins/lets/rules/lets-*.md` in the plugin instead — direct edits to installed copies bypass drift detection and silently desync from source.
+- **Never edit installed `lets-*` rules files** in `.claude/rules/` or `~/.claude/rules/`. They are plugin-managed copies refreshed by `/lets:init` / `/lets:update` (project) and `lets init --user` / `/lets:update` (global). Edit the canonical source `plugins/lets/rules/lets-*.md` in the plugin instead — direct edits to installed copies bypass drift detection and silently desync from source.
 
 ## Slash Command Discipline
 
@@ -174,7 +174,8 @@ AUTO MODE (autonomous execution: `/loop`, `/lets:execute --auto`, `/lets:team` p
 
 ## Agent Rules
 
-- When launching expert agents for `/lets:review`, `/lets:github-pr`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:backlog`, `/lets:explore` - use ONLY `lets:*` agents (`lets:architect`, `lets:security`, etc.)
+- When launching expert agents for `/lets:review`, `/lets:github-pr`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:backlog`, `/lets:explore`, `/lets:research` - use ONLY `lets:*` agents (`lets:architect`, `lets:security`, etc.)
+- **Carve-out for web data-gatherers:** `/lets:research`'s per-sub-question web fetchers are data gatherers using the default web-capable subagent (mirroring `/lets:explore`'s web subagent), NOT expert dispatch - `lets:*` agents have `tools: Read, Grep, Glob, Bash` and no web tools. The lets:*-only rule covers research's `lets:skeptic` cross-check, not its web fetch.
 - `lets:actor` is a special meta-agent: requires explicit user request + personality source (URL or file path). Never auto-select. Use `actor-fetch-personality` skill to fetch personality before dispatch.
 - Never use `general-purpose` or other non-lets subagent types for expert work
 
@@ -428,19 +429,20 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:review-round` | Code | Work through a RECEIVED review round - triage N comments, decisions->task, artifact FROZEN, one final edit-pass (inverse of `/lets:review`) |
 | `/lets:opinion` | Expert | Technical decision (dynamic agent count; `--workflow` = off-context fan-out + adversarial challenge) |
 | `/lets:ask` | Expert | Quick expert consultation (1 agent) |
+| `/lets:research` | Expert | Web-sourced CITED answer to an external/technical question; cross-check pass flags single-source/contradicted/stale claims (`--workflow` = off-context; `--project` = repo-grounded) *(ships next release)* |
 | `/lets:brainstorm` | Planning | Quick interactive ideation on a topic - fast context scan, no agents |
 | `/lets:backlog` | Planning | Backlog review (multi-agent) + interactive cleanup triage |
 | `/lets:explore` | Planning | Explore a topic from multiple expert angles (`--workflow` = off-context ideate fan-out) |
 | `/lets:plan` | Planning | Structured planning with agents - architecture + implementation plan (`--fast` = orchestrator-only, skips explorer/architect/expert subagents) |
-| `/lets:plan-workflow` | Planning | **PREVIEW** - autonomous planning via a Dynamic Workflow (goal + rubric up front, off-context, approve at end); folds into native `/lets:plan` later (lets-jsw00) |
+| `/lets:plan-workflow` | Planning | **PREVIEW** - autonomous planning via a Dynamic Workflow (goal + rubric up front, off-context, approve at end); folds into native `/lets:plan` later (lets-jsw00); `--fast` = lean budget (~7 agents, still off-context, heavy review pass skipped, quick plan-check kept) - distinct from `/lets:plan --fast` (orchestrator-only, no subagents) |
 | `/lets:execute` | Planning | Execute plan from /lets:plan via native plan mode |
 | `/lets:status` | Utility | Task overview and project status |
 | `/lets:worktree` | Utility | Create/manage interactive worktrees for parallel work |
 | `/lets:statusline` | Utility | Manage & persist statusline appearance - light/dark, compact, hidden rows (writes personal `.claude/settings.local.json`) *(ships next release)* |
 | `/lets:team` | Utility | Parallel implementation with Agent Teams (run, status, stop) |
 | `/lets:note` | Utility | Add note to active task (`--pre-compact` = resume snapshot before /compact) |
-| `/lets:init`    | Setup | Per-project initialization. Re-run for self-heal (drift fix) or to change config |
-| `/lets:update`  | Setup | Sync project with the current release - `.lets/.env` + rules self-heal, plus version status for the `lets` binary and the plugin |
+| `/lets:init`    | Setup | Per-project initialization. Re-run for self-heal (drift fix) or to change config; offers the user-scope global-rules install (`lets init --user`) when the plugin is user-scoped *(ships next release)* |
+| `/lets:update`  | Setup | Sync project with the current release - `.lets/.env` + rules self-heal, plus version status for the `lets` binary and the plugin, plus the user-level global rules when installed *(ships next release)* |
 
 ### Auto-triggered Skills
 

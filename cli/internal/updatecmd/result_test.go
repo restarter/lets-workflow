@@ -78,3 +78,18 @@ func TestResult_SchemaContract(t *testing.T) {
 		}
 	}
 }
+
+// Bucket-sum invariant: every status increments exactly one Summary bucket.
+// Ranges over allStatuses (result.go, adjacent to the consts) so a NEW status
+// added there automatically enters the invariant - an uncounted status would
+// desync Summary from len(Artifacts).
+func TestResult_AddBucketSum(t *testing.T) {
+	var r Result
+	for _, s := range allStatuses {
+		r.Add(Artifact{Name: "x", Status: s})
+	}
+	sum := r.Summary.UpToDate + r.Summary.Updated + r.Summary.ActionNeeded + r.Summary.Unknown
+	if sum != len(r.Artifacts) {
+		t.Fatalf("summary buckets sum %d != %d artifacts - a status is uncounted in Add()", sum, len(r.Artifacts))
+	}
+}

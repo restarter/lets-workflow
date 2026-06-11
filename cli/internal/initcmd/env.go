@@ -52,6 +52,11 @@ type EnvAction struct {
 // and preserved verbatim regardless of length.
 //
 // Reusable: lets-hdrdr.3 (/lets:update) imports this directly.
+//
+// KEEP IN SYNC with RegenerateUserEnv below: the read-parse-merge-skip-backup-
+// render-write orchestration deliberately lives twice (Prefs-based vs
+// map-based asymmetry; unify only if a third writer appears). Mirror
+// behavioral changes in both.
 func RegenerateEnv(path string, prefs Prefs) (EnvAction, error) {
 	action := EnvAction{Path: path, NewVersion: version.Version, ChangedKeys: []string{}}
 
@@ -119,6 +124,95 @@ func RegenerateEnv(path string, prefs Prefs) (EnvAction, error) {
 	return action, nil
 }
 
+// RegenerateUserEnv writes the user-level ~/.lets/.env at path, managing only
+// the UserKeys subset (LETS_LANGUAGE, LETS_LAUNCHER). Same contract as
+// RegenerateEnv: preserves existing values (flag > existing > default),
+// preserves foreign lines (including hand-added per-project LETS_* keys -
+// see extractForeignKeysSet), skips when in sync, backs up to <path>.bak
+// before mutating, atomic write. The .bak is best-effort and machine-shared
+// (every `lets init --user` re-run writes the same file) - matches the
+// project-level .bak semantics documented in CLAUDE.md.
+//
+// KEEP IN SYNC with RegenerateEnv above: the read-parse-merge-skip-backup-
+// render-write orchestration deliberately lives twice (Prefs-based vs
+// map-based asymmetry; unify only if a third writer appears). Mirror
+// behavioral changes in both.
+func RegenerateUserEnv(path string, flagValues map[string]string) (EnvAction, error) {
+	action := EnvAction{Path: path, NewVersion: version.Version, ChangedKeys: []string{}}
+
+	var existingValues map[string]string
+	var existingData []byte
+	var foreignBlock string
+	fileExists := false
+	if data, err := os.ReadFile(path); err == nil {
+		fileExists = true
+		existingData = data
+		parsed, perr := envfile.Parse(bytes.NewReader(data))
+		if perr != nil {
+			return action, fmt.Errorf("parse existing user .env: %w", perr)
+		}
+		existingValues = parsed
+		action.PrevVersion = existingValues[letsconfig.VersionKeyName]
+		canonical := map[string]bool{letsconfig.VersionKeyName: true}
+		for _, k := range letsconfig.UserKeys() {
+			canonical[k.Name] = true
+		}
+		foreignBlock = extractForeignKeysSet(data, canonical)
+	} else if !os.IsNotExist(err) {
+		return action, fmt.Errorf("read existing user .env: %w", err)
+	}
+
+	defaults := letsconfig.Defaults()
+	finalVals := map[string]string{}
+	for _, k := range letsconfig.UserKeys() {
+		switch {
+		case flagValues[k.Name] != "":
+			finalVals[k.Name] = flagValues[k.Name]
+		case existingValues[k.Name] != "":
+			finalVals[k.Name] = existingValues[k.Name]
+		default:
+			finalVals[k.Name] = defaults[k.Name]
+		}
+		if existingValues[k.Name] != finalVals[k.Name] {
+			action.ChangedKeys = append(action.ChangedKeys, k.Name)
+		}
+	}
+
+	// Skip path: file exists, version matches, no value changes → no-op
+	if fileExists && action.PrevVersion == version.Version && len(action.ChangedKeys) == 0 {
+		action.Kind = EnvSkip
+		return action, nil
+	}
+
+	// Backup before mutating (only when there was a prior file)
+	if fileExists {
+		bakPath := path + ".bak"
+		_ = os.WriteFile(bakPath, existingData, 0o600)
+		action.BackupPath = bakPath
+	}
+
+	body := renderUserEnv(finalVals)
+	if foreignBlock != "" {
+		body = append(body, []byte("\n# User-added keys (preserved across upgrades)\n")...)
+		body = append(body, []byte(foreignBlock)...)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		// best-effort; AtomicWriteBytes will retry/fail with concrete error
+		_ = err
+	}
+	if err := AtomicWriteBytes(path, body, 0o644); err != nil {
+		return action, fmt.Errorf("write user .env: %w", err)
+	}
+
+	if !fileExists {
+		action.Kind = EnvCreated
+	} else {
+		action.Kind = EnvRegenerated
+	}
+	return action, nil
+}
+
 // readEnvVersion returns the LETS_ENV_VERSION value from the .env at path,
 // or empty string if the file is missing/unreadable/lacks the marker.
 func readEnvVersion(path string) string {
@@ -155,10 +249,18 @@ func mergePrefs(prefs Prefs, existing map[string]string) Prefs {
 			return defaults[key]
 		}
 	}
+	// Every canonical key MUST have a pick here - a missing key is silently
+	// clobbered on regen. That was the LETS_LAUNCHER gap (found 2026-06-11,
+	// lets-wug9k): without its pick, an update-triggered regen (which passes
+	// Prefs{Tracker} only) rendered LETS_LAUNCHER= empty, dropping a
+	// customized cmux. The cobra layer passes raw flag values (empty = not set)
+	// so pick's flag>existing>default precedence preserves user customization.
 	result := prefs
 	result.Language = pick(prefs.Language, "LETS_LANGUAGE")
 	result.MergeBranch = pick(prefs.MergeBranch, "LETS_MERGE_BRANCH")
 	result.PRFlow = pick(prefs.PRFlow, "LETS_PR_FLOW")
+	result.Launcher = pick(prefs.Launcher, "LETS_LAUNCHER")
+	result.RulesScope = pick(prefs.RulesScope, "LETS_RULES_SCOPE")
 	if existingTracker := existing["LETS_TRACKER"]; existingTracker != "" {
 		result.Tracker = existingTracker
 	}
@@ -184,10 +286,32 @@ func diffKeys(old map[string]string, new Prefs) []string {
 	if old["LETS_TRACKER"] != new.Tracker {
 		changed = append(changed, "LETS_TRACKER")
 	}
+	if old["LETS_LAUNCHER"] != new.Launcher {
+		changed = append(changed, "LETS_LAUNCHER")
+	}
+	if old["LETS_RULES_SCOPE"] != new.RulesScope {
+		changed = append(changed, "LETS_RULES_SCOPE")
+	}
 	if len(changed) == 0 {
 		return []string{}
 	}
 	return changed
+}
+
+// effectiveRulesScope reads the resolved LETS_RULES_SCOPE from the project
+// .env. Callers run AFTER RegenerateEnv (init Step 5 precedes Step 8), so the
+// file always carries the resolved value - no separate precedence logic.
+// Missing file, parse error, or ANY value other than "user" degrades to
+// "project": fail-safe - a typo ("usr", "banana") can never suppress the
+// project rules copy. Only the cobra flag validates strictly; .env hand-edits
+// degrade silently by design. update/hook compare == "user" - same contract.
+func effectiveRulesScope(envPath string) string {
+	if data, err := os.ReadFile(envPath); err == nil {
+		if vals, perr := envfile.Parse(bytes.NewReader(data)); perr == nil && vals["LETS_RULES_SCOPE"] == "user" {
+			return "user"
+		}
+	}
+	return "project"
 }
 
 // extractForeignKeys returns the substring of the original .env containing only
@@ -201,6 +325,15 @@ func extractForeignKeys(data []byte) string {
 	for _, k := range letsconfig.Names() {
 		canonical[k] = true
 	}
+	return extractForeignKeysSet(data, canonical)
+}
+
+// extractForeignKeysSet is extractForeignKeys with a caller-supplied canonical
+// set. At project level the set is all LETS_* keys + the version marker; at
+// user level only the UserKeys + marker are canonical, so a hand-added
+// LETS_MERGE_BRANCH (etc.) is preserved verbatim as a foreign line - a
+// deliberate power-user escape hatch (the hook whitelist still injects it).
+func extractForeignKeysSet(data []byte, canonical map[string]bool) string {
 	var buf bytes.Buffer
 	for _, line := range bytes.Split(data, []byte("\n")) {
 		s := strings.TrimSpace(string(line))

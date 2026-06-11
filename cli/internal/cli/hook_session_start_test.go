@@ -3,6 +3,7 @@ package cli_test
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -83,6 +84,72 @@ func TestHookSessionStart_PreCompact_OutputParity(t *testing.T) {
 
 	if got1 != got2 {
 		t.Errorf("session-start vs precompact output diverged.\nsession-start:\n%s\nprecompact:\n%s", got1, got2)
+	}
+}
+
+// TestHookSessionStart_PreCompact_ParityOnUserScopePath pins parity on the
+// NEW user-scope branch deterministically (the unsandboxed parity test above
+// exercises whatever the host repo's state happens to be): fake home with
+// DRIFTED global rules + ~/.lets/.env, fresh git repo without project rules.
+// A parity bug specific to the user-scope path (e.g. one subcommand forgets
+// to pass homeDir) is exactly the divergence this fixture catches.
+func TestHookSessionStart_PreCompact_ParityOnUserScopePath(t *testing.T) {
+	home := t.TempDir()
+	writeTestFile(t, filepath.Join(home, ".claude", "rules", "lets-rules.md"),
+		"---\nversion: 0.3.0\n---\n")
+	writeTestFile(t, filepath.Join(home, ".lets", ".env"), "LETS_LANGUAGE=Ukrainian\n")
+	t.Setenv("HOME", home)
+
+	repo := t.TempDir()
+	gitArgs := [][]string{{"init", "-q", "-b", "main"}}
+	for _, args := range gitArgs {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = repo
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	chdirTo(t, repo)
+
+	rulesPath := filepath.Join(t.TempDir(), "rules.md")
+	writeTestFile(t, rulesPath, "---\nversion: 0.4.0\n---\n")
+
+	run := func(t *testing.T, sub string) string {
+		t.Helper()
+		root := cli.NewRootCmd()
+		root.SetArgs([]string{"hook", sub, "--rules=" + rulesPath})
+		var buf bytes.Buffer
+		root.SetOut(&buf)
+		root.SetErr(&buf)
+		if err := root.Execute(); err != nil {
+			t.Fatalf("execute %s: %v", sub, err)
+		}
+		return buf.String()
+	}
+
+	got1 := run(t, "session-start")
+	got2 := run(t, "precompact")
+	if got1 != got2 {
+		t.Errorf("session-start vs precompact diverged on the user-scope path.\nsession-start:\n%s\nprecompact:\n%s", got1, got2)
+	}
+	// Sanity: the fixture actually exercised the new branch.
+	if !strings.Contains(got1, "Global workflow rules outdated") {
+		t.Errorf("fixture did not hit the user-scope notice branch:\n%s", got1)
+	}
+	if !strings.Contains(got1, "LETS_LANGUAGE=Ukrainian") {
+		t.Errorf("user env overlay missing:\n%s", got1)
+	}
+}
+
+// writeTestFile mirrors the sessionstart package's writeFile helper for
+// cli_test fixtures (mkdir parents + write).
+func writeTestFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
 	}
 }
 

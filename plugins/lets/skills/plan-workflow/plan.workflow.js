@@ -12,9 +12,21 @@ export const meta = {
 // ── ARGS (defensive parse - the runtime may deliver args as a JSON string) ──
 const input = typeof args === 'string' ? JSON.parse(args) : (args || {})
 const { goal, rubric, taskContext, projectRoot, claudeMd } = input
-const FOCUS = (input.focusAreas && input.focusAreas.length) ? input.focusAreas : [{ name: 'general', hint: 'overall structure and integration points relevant to the goal' }]
-const JUDGES = (input.judges && input.judges.length) ? input.judges : [{ name: 'pragmatist' }, { name: 'backend' }, { name: 'security' }]
-const EXPERTS = (input.experts && input.experts.length) ? input.experts : [{ name: 'pragmatist' }]
+// FAST = lean off-context budget (~7 agents): collapse the upstream panels to 1 agent each and
+// skip the heavy Plan Review/Revise pass below (the quick Plan Check/Refine still runs).
+// Distinct from native /lets:plan --fast (orchestrator-only, NO subagents, in-context).
+// Default (no flag) = byte-identical to standard.
+const FAST = !!input.fast
+const MODE = FAST ? 'fast' : 'standard'  // single source for counts.mode on every return (don't duplicate the ternary)
+const FOCUS = (input.focusAreas && input.focusAreas.length)
+  ? (FAST ? [{ name: 'general', hint: input.focusAreas.map(f => `${f.name}: ${f.hint || ''}`).join('; ') || 'overall structure and integration points' }] : input.focusAreas)
+  : [{ name: 'general', hint: 'overall structure and integration points relevant to the goal' }]
+const JUDGES = (input.judges && input.judges.length)
+  ? (FAST ? [input.judges[0]] : input.judges)
+  : (FAST ? [{ name: 'pragmatist' }] : [{ name: 'pragmatist' }, { name: 'backend' }, { name: 'security' }])
+const EXPERTS = (input.experts && input.experts.length)
+  ? (FAST ? [input.experts[0]] : input.experts)
+  : [{ name: 'pragmatist' }]
 const PLAN_REVIEWERS = (input.planReviewers && input.planReviewers.length) ? input.planReviewers : [{ name: 'architect' }, { name: 'pragmatist' }]
 const PLAN_CHECKER = input.planChecker || { name: 'pragmatist' }
 
@@ -57,7 +69,10 @@ const ARCH_SCHEMA = {
     cons: { type: 'array', items: { type: 'string' } },
     risks: { type: 'array', items: { type: 'string' } },
   },
-  required: ['summary', 'files_create', 'files_modify'],
+  // lets-i85v9: only summary is hard-required. files_create/files_modify stay optional - the model
+  // omits "conditionally empty" required arrays (e.g. an approach that creates no files) and then
+  // thrashes on tool-layer validation (38 rejected StructuredOutput calls in the diagnosed run).
+  required: ['summary'],
 }
 
 // Built at the Judge phase once the REAL approach ids exist, so `winner`/`scores[].approach`
@@ -172,7 +187,7 @@ ${TASK_BLOCK}
 CODEBASE MAP (from explorers):
 ${JSON.stringify(map, null, 2)}
 
-Propose 2-4 CONCRETE, DISTINCT implementation approaches grounded in this codebase (not abstract labels). Give each a stable id (A, B, C, ...), a short name, a summary, the key tradeoff, and the files it would touch. Each approach must take a meaningfully different path.`
+Propose 2-4 CONCRETE, DISTINCT implementation approaches grounded in this codebase (not abstract labels). Give each a stable id (A, B, C, ...), a short name, a summary, the key tradeoff, and the files it would touch. Each approach must take a meaningfully different path.${FAST ? `\n\nORDER the approaches BEST-FIRST against the RUBRIC above (the strongest-fit approach as the FIRST array element). In fast mode ONLY the first approach is architected and judged, so its ordering is the actual selection - rank deliberately.` : ''}`
 }
 
 function archPrompt(a, map) {
@@ -191,7 +206,7 @@ TRADEOFFS: ${a.tradeoffs || ''}
 CODEBASE MAP:
 ${JSON.stringify(map, null, 2)}
 
-Design THIS approach into a full architecture: components (exact file paths + responsibility), files to create, files to modify, data flow, pros, cons, risks. Follow existing patterns from the map. Be specific.`
+Design THIS approach into a full architecture: components (exact file paths + responsibility), files to create, files to modify, data flow, pros, cons, risks. Follow existing patterns from the map. Be specific. Return files_create: [] (empty array) when the approach creates no new files - NEVER omit the key. Keep every string terse (no prose padding) so the JSON payload stays compact and is never truncated.`
 }
 
 function judgePrompt(archs, ids) {
@@ -304,23 +319,25 @@ const exploreRaw = await parallel(FOCUS.map(f => () =>
   agent(explorePrompt(f), { agentType: 'lets:explorer', label: `explore:${f.name}`, schema: EXPLORE_SCHEMA })))
 const map = exploreRaw.filter(Boolean)
 if (map.length === 0) {
-  return { error: 'exploration_failed', plan_markdown: null, decision_log: null, winner: null, approaches: [], eval_findings: [], counts: { explorers: 0 } }
+  return { error: 'exploration_failed', plan_markdown: null, decision_log: null, winner: null, approaches: [], eval_findings: [], counts: { mode: MODE, explorers: 0 } }
 }
 
 phase('Approaches')
 const approachesRes = await agent(approachesPrompt(map), { agentType: 'lets:architect', label: 'approaches', schema: APPROACHES_SCHEMA })
 const approaches = (approachesRes && approachesRes.approaches) ? approachesRes.approaches : []
 if (approaches.length === 0) {
-  return { error: 'no_approaches', plan_markdown: null, decision_log: null, winner: null, approaches: [], eval_findings: [], counts: { explorers: map.length, approaches: 0 } }
+  return { error: 'no_approaches', plan_markdown: null, decision_log: null, winner: null, approaches: [], eval_findings: [], counts: { mode: MODE, explorers: map.length, approaches: 0 } }
 }
 
 phase('Architect')
-const archRaw = await parallel(approaches.map(a => () =>
+// Fast: architect only the top approach (best-first per the fast approachesPrompt ordering) -> 1 architect, not N.
+const archInput = FAST ? approaches.slice(0, 1) : approaches
+const archRaw = await parallel(archInput.map(a => () =>
   agent(archPrompt(a, map), { agentType: 'lets:architect', label: `arch:${a.id}`, schema: ARCH_SCHEMA })
     .then(r => (r ? { ...r, approach: a.id, name: a.name } : null))))
 const archs = archRaw.filter(Boolean)
 if (archs.length === 0) {
-  return { error: 'architecture_failed', plan_markdown: null, decision_log: null, winner: null, approaches, eval_findings: [], counts: { explorers: map.length, approaches: approaches.length, architected: 0 } }
+  return { error: 'architecture_failed', plan_markdown: null, decision_log: null, winner: null, approaches, eval_findings: [], counts: { mode: MODE, explorers: map.length, approaches: approaches.length, architected: 0 } }
 }
 const archIds = archs.map(a => a.approach)
 
@@ -329,10 +346,16 @@ const JUDGE_SCHEMA = buildJudgeSchema(archIds)
 const judgeRaw = await parallel(JUDGES.map(j => () =>
   agent(judgePrompt(archs, archIds), { agentType: `lets:${j.name}`, label: `judge:${j.name}`, schema: JUDGE_SCHEMA })))
 const judgeResults = judgeRaw.filter(Boolean)
-const { winner, decision_log } = aggregateJudges(judgeResults, archIds)
+let { winner, decision_log } = aggregateJudges(judgeResults, archIds)
+if (winner == null && FAST && archIds.length === 1) {
+  // Fast single-candidate: the lone judge errored but there's only ONE architected approach,
+  // so there is no choice to fabricate. Proceed with it and mark the fallback observably.
+  winner = archIds[0]
+  decision_log = { votes: { [winner]: 0 }, totals: { [winner]: 0 }, rationales: [], judges: 0, forced: 'single-candidate' }
+}
 if (winner == null) {
-  // judges all errored -> do NOT silently pick; surface it (anti-silent-fail).
-  return { error: 'judge_failed', plan_markdown: null, decision_log, winner: null, approaches, eval_findings: [], counts: { explorers: map.length, approaches: approaches.length, architected: archs.length, judges: 0 } }
+  // judges all errored AND >1 candidate -> do NOT silently pick; surface it (anti-silent-fail).
+  return { error: 'judge_failed', plan_markdown: null, decision_log, winner: null, approaches, eval_findings: [], counts: { mode: MODE, explorers: map.length, approaches: approaches.length, architected: archs.length, judges: 0 } }
 }
 const winnerArch = archs.find(a => a.approach === winner)
 
@@ -346,9 +369,10 @@ const planRes = await agent(planPrompt(winnerArch, evalFindings), { agentType: '
 let planMd = planRes ? planRes.plan_markdown : null // null -> dispatcher surfaces "plan synthesis failed", never fabricates
 
 // Stage 7-8: review the WRITTEN plan (mirror /lets:review --plan) + revise. Never lose planMd on agent error.
+// Fast mode SKIPS this heavy pass only; the quick Plan Check/Refine below runs in BOTH modes.
 phase('Plan Review')
-let reviewFindings = [], reviewVerdict = null, reviewFailed = false, reviewFixed = false
-if (planMd) {
+let reviewFindings = [], reviewVerdict = null, reviewFailed = false, reviewFixed = false, reviewSkipped = false
+if (!FAST && planMd) {
   const prRaw = await parallel(PLAN_REVIEWERS.map(r => () =>
     agent(planReviewPrompt(planMd), { agentType: `lets:${r.name}`, label: `planreview:${r.name}`, schema: PLAN_REVIEW_SCHEMA })
       .then(x => (x ? { ...x, agent: r.name } : null))))
@@ -361,6 +385,8 @@ if (planMd) {
     const rev = await agent(revisePrompt(planMd, reviewFindings), { agentType: 'lets:architect', label: 'revise:review', schema: REVISE_SCHEMA })
     if (rev && rev.plan_markdown) { planMd = rev.plan_markdown; reviewFixed = true }
   }
+} else if (FAST && planMd) {
+  reviewSkipped = true  // deliberate fast-mode skip (NOT a silent skip / agent error)
 }
 
 // Stage 9-10: quick 5-lens check (mirror /lets:check --plan) + refine. Catches regressions the revise introduced.
@@ -384,12 +410,12 @@ return {
   divergence_reason: planRes ? (planRes.divergence_reason || null) : null,
   review_findings: reviewFindings,
   check_findings: checkFindings,
-  // Self-repair audit: did the plan get reviewed/checked and did fixes land? (never silently skip - flags say why)
-  refinement_log: { review_verdict: reviewVerdict, review_findings: reviewFindings.length, review_fixed: reviewFixed, review_failed: reviewFailed, check_verdict: checkVerdict, check_findings: checkFindings.length, check_fixed: checkFixed, check_failed: checkFailed },
+  // Self-repair audit: review pass skipped in fast (review_skipped says why); check pass runs in BOTH modes (real verdict).
+  refinement_log: { review_verdict: reviewVerdict, review_findings: reviewFindings.length, review_fixed: reviewFixed, review_failed: reviewFailed, review_skipped: reviewSkipped, check_verdict: checkVerdict, check_findings: checkFindings.length, check_fixed: checkFixed, check_failed: checkFailed },
   decision_log,
   winner,
   winner_name: winnerArch ? winnerArch.name : null,
   approaches: approaches.map(a => ({ id: a.id, name: a.name, summary: a.summary })),
   eval_findings: evalFindings,
-  counts: { explorers: map.length, approaches: approaches.length, architected: archs.length, judges: judgeResults.length, experts: evalRaw.filter(Boolean).length, eval_findings: evalFindings.length, review_findings: reviewFindings.length, check_findings: checkFindings.length },
+  counts: { mode: MODE, explorers: map.length, approaches: approaches.length, architected: archs.length, judges: judgeResults.length, experts: evalRaw.filter(Boolean).length, eval_findings: evalFindings.length, review_findings: reviewFindings.length, check_findings: checkFindings.length },
 }

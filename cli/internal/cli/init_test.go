@@ -21,10 +21,26 @@ func TestInit_Help(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := buf.String()
-	for _, want := range []string{"--language", "--merge-branch", "--pr-flow", "--plugin-root", "--skip-beads", "deprecated"} {
+	for _, want := range []string{"--language", "--merge-branch", "--pr-flow", "--plugin-root", "--skip-beads", "--rules-scope", "deprecated"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in help: %s", want, out)
 		}
+	}
+}
+
+// --rules-scope only accepts project|user; a bogus value fails with a JSON
+// error envelope (the cobra layer is the only strict validator - .env
+// hand-edits degrade to project silently by design).
+func TestInit_RulesScopeInvalid_ErrorEnvelope(t *testing.T) {
+	pluginRoot := makeFakePluginRoot(t)
+	result := runInitJSON(t, initGitRepo(t), "--json", "--plugin-root="+pluginRoot,
+		"--language=English", "--merge-branch=main", "--pr-flow=local", "--skip-beads",
+		"--rules-scope=bogus")
+	if result.OK {
+		t.Error("expected ok=false for invalid --rules-scope")
+	}
+	if !strings.Contains(result.Error, "rules-scope") {
+		t.Errorf("error should mention rules-scope: %q", result.Error)
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -28,6 +29,8 @@ func NewInitCmd() *cobra.Command {
 		flagLauncher    string
 		flagGithub      bool
 		flagSkipBeads   bool
+		flagRulesScope  string
+		flagUser        bool
 		flagPluginRoot  string
 		flagJSON        bool
 	)
@@ -38,6 +41,12 @@ func NewInitCmd() *cobra.Command {
 		Long: `Sets up .lets/ structure, configures .claude/settings.json (statusLine
 provenance markers), copies plugin rules to .claude/rules/lets-rules.md, and
 runs bd init.
+
+With --user: user-scope install instead - copies plugin rules to
+~/.claude/rules/lets-rules.md (global, all projects) and writes user-level
+defaults (LETS_LANGUAGE, LETS_LAUNCHER) to ~/.lets/.env. No project changes,
+works from any directory. A customized/newer global rules file is never
+overwritten (re-run reports it instead).
 
 Migrates existing projects (legacy .lets/statusline.sh, bash-wrapped
 settings.json statusLine, .lets/config.yaml -> .lets/.env).
@@ -81,6 +90,34 @@ out with --plugin-root=${CLAUDE_PLUGIN_ROOT} plus the chosen flags.`,
 				return err
 			}
 
+			// --user: user-scope install (global rules + ~/.lets/.env). Works
+			// from ANY directory - no git project, no worktree guard (those are
+			// project-scope concerns).
+			if flagUser {
+				if flagMergeBranch != "" || flagPRFlow != "" || flagGithub || flagSkipBeads || flagRulesScope != "" {
+					fmt.Fprintln(cmd.ErrOrStderr(), "warning: --merge-branch/--pr-flow/--github/--skip-beads/--rules-scope are project-scope flags - ignored with --user")
+				}
+				home, herr := os.UserHomeDir()
+				if herr != nil {
+					return emit(initcmd.NewResult("", ""), fmt.Errorf("cannot resolve home directory: %w", herr))
+				}
+				pluginRoot, perr := initcmd.DetectPluginRoot(flagPluginRoot)
+				if perr != nil {
+					return emit(initcmd.NewResult(home, ""), fmt.Errorf("%w\n\nRun /lets:init from inside Claude Code, or pass --plugin-root=<path-to-plugins/lets>", perr))
+				}
+				// Language/Launcher pass through raw: empty means "preserve
+				// existing ~/.lets/.env value or canonical default" (handled
+				// inside RegenerateUserEnv) - do NOT apply the project path's
+				// default-fill below.
+				result, runErr := initcmd.RunUser(initcmd.UserOptions{
+					Language:   flagLanguage,
+					Launcher:   flagLauncher,
+					HomeDir:    home,
+					PluginRoot: pluginRoot,
+				})
+				return emit(result, runErr)
+			}
+
 			projectRoot := initcmd.DetectProjectRoot()
 			if projectRoot == "" {
 				return emit(initcmd.NewResult("", ""), fmt.Errorf("not in a git repository - run `git init` first"))
@@ -103,28 +140,30 @@ out with --plugin-root=${CLAUDE_PLUGIN_ROOT} plus the chosen flags.`,
 				fmt.Fprintln(cmd.ErrOrStderr(), "warning: --github is deprecated, use --pr-flow=github")
 			}
 
+			if flagRulesScope != "" && flagRulesScope != "project" && flagRulesScope != "user" {
+				return emit(initcmd.NewResult(projectRoot, pluginRoot), fmt.Errorf("--rules-scope must be 'project' or 'user', got %q", flagRulesScope))
+			}
+
 			// Pass raw cobra flag values through to Prefs. Empty string means
 			// "user did not pass --<key>" — initcmd.Run gates fresh-creation on
-			// this (errors if .env doesn't exist and any prefs flag is empty).
-			// Existing-.env paths use empty as a signal to preserve current values.
+			// this (errors if .env doesn't exist and any of language/merge-branch/
+			// pr-flow is empty). Existing-.env paths use empty as a signal to
+			// preserve current values via RegenerateEnv's mergePrefs.
 			//
-			// Tracker has no CLI flag yet; always filled from canonical defaults.
-			// RegenerateEnv's mergePrefs preserves user-customized LETS_TRACKER
-			// in existing .env over this default.
-			// Launcher has a CLI flag but, like Tracker, always carries a value:
-			// empty flag -> canonical default ("terminal"), so it never trips
-			// fresh-init's "missing required flag" gate. RegenerateEnv's mergePrefs
-			// preserves a user-customized LETS_LAUNCHER in an existing .env.
-			launcher := flagLauncher
-			if launcher == "" {
-				launcher = letsconfig.Defaults()["LETS_LAUNCHER"]
-			}
+			// Tracker has no CLI flag; always filled from canonical defaults.
+			// mergePrefs preserves a user-customized LETS_TRACKER over this default.
+			// Launcher/RulesScope pass through RAW (no default-fill): mergePrefs's
+			// pick (flag > existing .env > default) both preserves a customized
+			// value on regen AND honors an explicit flag - the LETS_LAUNCHER
+			// preservation fix (lets-wug9k). They aren't in the fresh-init gate,
+			// so empty is safe (mergePrefs falls back to the canonical default).
 			prefs := initcmd.Prefs{
 				Language:    flagLanguage,
 				MergeBranch: flagMergeBranch,
 				PRFlow:      flagPRFlow,
 				Tracker:     letsconfig.Defaults()["LETS_TRACKER"],
-				Launcher:    launcher,
+				Launcher:    flagLauncher,
+				RulesScope:  flagRulesScope,
 				SkipBeads:   flagSkipBeads,
 			}
 
@@ -138,6 +177,8 @@ out with --plugin-root=${CLAUDE_PLUGIN_ROOT} plus the chosen flags.`,
 	cmd.Flags().StringVar(&flagLauncher, "launcher", "", "Worktree launcher: terminal | cmux (default terminal)")
 	cmd.Flags().BoolVar(&flagGithub, "github", false, "(deprecated) alias for --pr-flow=github")
 	cmd.Flags().BoolVar(&flagSkipBeads, "skip-beads", false, "Skip beads initialization")
+	cmd.Flags().StringVar(&flagRulesScope, "rules-scope", "", "Rules sourcing for this project: project (own copy) | user (rely on ~/.claude/rules)")
+	cmd.Flags().BoolVar(&flagUser, "user", false, "User-scope install: global rules to ~/.claude/rules + defaults to ~/.lets/.env (no project changes)")
 	cmd.Flags().StringVar(&flagPluginRoot, "plugin-root", "", "Plugin install dir (else $CLAUDE_PLUGIN_ROOT, required)")
 	cmd.Flags().BoolVar(&flagJSON, "json", false, "Output machine-readable JSON to stdout (single object, schema_version=1)")
 	return cmd
