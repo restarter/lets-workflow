@@ -39,7 +39,7 @@ Four stages. The first one stays in your conversation on purpose — it's where 
 
 1. **Decompose (in-context).** The question is broken into 3–6 sub-questions ("which models fit 10GB VRAM?", "RAM cost of Q4 vs Q8 quantization?", "community reports on this hardware?"). You see the angles before any searching starts. A narrow question skips this and goes straight to a single search.
 2. **Research fan-out.** One web-capable subagent per sub-question runs WebSearch, fetches the best 2–4 results, and returns structured findings — claim, evidence quoted from the source, source titles + URLs, confidence. Each subagent returns its 2–5 strongest, load-bearing claims (fewer if the evidence is thin — never padded to a count).
-3. **Cross-check — the difference from a naive search dump.** A `lets:skeptic` agent reviews every merged claim: does it rest on a single source? Do sources contradict each other? Does the quoted evidence actually support the claim, or was it stretched? Is it stale? The skeptic **flags, never deletes** — weak claims stay visible, marked.
+3. **Cross-check — the difference from a naive search dump.** Every merged claim is checked: single-source and low-confidence claims are flagged deterministically, and a `lets:skeptic` agent judges the rest for structural weakness — does the quoted evidence actually support the claim, or was it stretched (unsupported)? Does it conflict with a sibling claim (contradicted)? The skeptic **flags, never deletes** — weak claims stay visible, marked. (Recency is handled at fetch time — sources from the last ~18 months are favored and the answer is date-stamped — rather than as a per-claim flag.)
 4. **Synthesize.** Everything converges into: a direct answer → key points, each cited → a comparison table when it fits → caveats → a deduplicated Sources list → an `as of <date>` stamp → an overall confidence note.
 
 Weak spots are marked inline in the answer, not buried: `[single source]`, `[contradicted — vs Source B]`, `[unverified — cross-check errored]`.
@@ -60,7 +60,7 @@ With `--project`, the command first reads `CLAUDE.md` and greps the relevant par
 
 ## `--workflow` mode
 
-Same four stages, different placement: decompose still happens in your conversation (so you still see and steer the angles), then the fan-out, cross-check, and synthesis run inside a background Dynamic Workflow. Raw search results and per-claim verdicts never enter your context — only the final cited synthesis does. Worth it for broad questions with 5–6 sub-questions; for a narrow question the standard path is just as good. See [autonomous.md](../autonomous.md) for how Dynamic Workflows degrade when the `Workflow` tool isn't available (the command silently falls back to the standard path).
+Same four stages, different placement: decompose still happens in your conversation (so you still see and steer the angles), then the fan-out, cross-check, and synthesis run inside a background Dynamic Workflow. Raw search results and per-claim verdicts never enter your context — only the final cited synthesis does. Worth it for broad questions with 5–6 sub-questions; for a narrow question the standard path is just as good. If you pass `--workflow` explicitly on a client without Dynamic Workflows, the command stops and tells you to re-run without it (it won't silently downgrade an explicit request); without the flag, the run-mode picker simply omits the Workflow option. See [autonomous.md](../autonomous.md) for how Dynamic Workflows degrade in general.
 
 ## Out of scope
 
