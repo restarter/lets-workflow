@@ -85,9 +85,9 @@ Workflow({ scriptPath: "${CLAUDE_PLUGIN_ROOT}/skills/plan-workflow/plan.workflow
 }})
 ```
 
-When `--fast` was parsed in Step 1, add `fast: true` to `args`; omit the key entirely on default runs (matching the `explore.md` convention of omitting flag keys rather than passing them explicitly). The script's `!!input.fast` reads an absent key as `false`. (Note: explore's own `webEnabled` defaults the OTHER way - absent reads as on - so the reused convention is "omit on default", NOT "absent == false" as a universal rule; here `fast`'s default-off polarity makes omit==false correct.)
+When `--fast` was parsed in Step 1, add `fast: true` to `args`; omit the key entirely on default runs (the script's `!!input.fast` reads an absent key as `false`).
 
-Pass `args` as a real JSON value (the script defensively parses a JSON string too). Runs in the **BACKGROUND** - the tool returns a `runId`; resume on the `<task-notification>`. Tell the user the run started. Standard: "Autonomous planning running - {N} explorers, then approaches/architect/judge/evaluate/plan". Fast (`--fast`): "Autonomous LEAN planning running - 1 explorer over a merged area, then 1 architect for the top-ranked approach, 1 judge, 1 evaluator, 1 planner, then a quick plan-check (heavy review pass skipped) - ~7 agents vs ~15-25."
+Pass `args` as a real JSON value (the script defensively parses a JSON string too). Runs in the **BACKGROUND** - the tool returns a `runId`; resume on the `<task-notification>`. Tell the user the run started. Standard: "Autonomous planning running - {N} explorers, then approaches/architect/judge/evaluate/plan". Fast (`--fast`): "Autonomous LEAN planning running - 1 explorer over a merged area, 1 architect to propose approaches, 1 architect for the top-ranked approach, 1 judge, 1 evaluator, 1 planner, then a quick plan-check (heavy review pass skipped) - ~7 agents vs ~15-25."
 
 ## Step 4: On completion
 

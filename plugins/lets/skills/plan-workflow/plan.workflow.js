@@ -17,6 +17,7 @@ const { goal, rubric, taskContext, projectRoot, claudeMd } = input
 // Distinct from native /lets:plan --fast (orchestrator-only, NO subagents, in-context).
 // Default (no flag) = byte-identical to standard.
 const FAST = !!input.fast
+const MODE = FAST ? 'fast' : 'standard'  // single source for counts.mode on every return (don't duplicate the ternary)
 const FOCUS = (input.focusAreas && input.focusAreas.length)
   ? (FAST ? [{ name: 'general', hint: input.focusAreas.map(f => `${f.name}: ${f.hint || ''}`).join('; ') || 'overall structure and integration points' }] : input.focusAreas)
   : [{ name: 'general', hint: 'overall structure and integration points relevant to the goal' }]
@@ -318,14 +319,14 @@ const exploreRaw = await parallel(FOCUS.map(f => () =>
   agent(explorePrompt(f), { agentType: 'lets:explorer', label: `explore:${f.name}`, schema: EXPLORE_SCHEMA })))
 const map = exploreRaw.filter(Boolean)
 if (map.length === 0) {
-  return { error: 'exploration_failed', plan_markdown: null, decision_log: null, winner: null, approaches: [], eval_findings: [], counts: { mode: FAST ? 'fast' : 'standard', explorers: 0 } }
+  return { error: 'exploration_failed', plan_markdown: null, decision_log: null, winner: null, approaches: [], eval_findings: [], counts: { mode: MODE, explorers: 0 } }
 }
 
 phase('Approaches')
 const approachesRes = await agent(approachesPrompt(map), { agentType: 'lets:architect', label: 'approaches', schema: APPROACHES_SCHEMA })
 const approaches = (approachesRes && approachesRes.approaches) ? approachesRes.approaches : []
 if (approaches.length === 0) {
-  return { error: 'no_approaches', plan_markdown: null, decision_log: null, winner: null, approaches: [], eval_findings: [], counts: { mode: FAST ? 'fast' : 'standard', explorers: map.length, approaches: 0 } }
+  return { error: 'no_approaches', plan_markdown: null, decision_log: null, winner: null, approaches: [], eval_findings: [], counts: { mode: MODE, explorers: map.length, approaches: 0 } }
 }
 
 phase('Architect')
@@ -336,7 +337,7 @@ const archRaw = await parallel(archInput.map(a => () =>
     .then(r => (r ? { ...r, approach: a.id, name: a.name } : null))))
 const archs = archRaw.filter(Boolean)
 if (archs.length === 0) {
-  return { error: 'architecture_failed', plan_markdown: null, decision_log: null, winner: null, approaches, eval_findings: [], counts: { mode: FAST ? 'fast' : 'standard', explorers: map.length, approaches: approaches.length, architected: 0 } }
+  return { error: 'architecture_failed', plan_markdown: null, decision_log: null, winner: null, approaches, eval_findings: [], counts: { mode: MODE, explorers: map.length, approaches: approaches.length, architected: 0 } }
 }
 const archIds = archs.map(a => a.approach)
 
@@ -354,7 +355,7 @@ if (winner == null && FAST && archIds.length === 1) {
 }
 if (winner == null) {
   // judges all errored AND >1 candidate -> do NOT silently pick; surface it (anti-silent-fail).
-  return { error: 'judge_failed', plan_markdown: null, decision_log, winner: null, approaches, eval_findings: [], counts: { mode: FAST ? 'fast' : 'standard', explorers: map.length, approaches: approaches.length, architected: archs.length, judges: 0 } }
+  return { error: 'judge_failed', plan_markdown: null, decision_log, winner: null, approaches, eval_findings: [], counts: { mode: MODE, explorers: map.length, approaches: approaches.length, architected: archs.length, judges: 0 } }
 }
 const winnerArch = archs.find(a => a.approach === winner)
 
@@ -416,5 +417,5 @@ return {
   winner_name: winnerArch ? winnerArch.name : null,
   approaches: approaches.map(a => ({ id: a.id, name: a.name, summary: a.summary })),
   eval_findings: evalFindings,
-  counts: { mode: FAST ? 'fast' : 'standard', explorers: map.length, approaches: approaches.length, architected: archs.length, judges: judgeResults.length, experts: evalRaw.filter(Boolean).length, eval_findings: evalFindings.length, review_findings: reviewFindings.length, check_findings: checkFindings.length },
+  counts: { mode: MODE, explorers: map.length, approaches: approaches.length, architected: archs.length, judges: judgeResults.length, experts: evalRaw.filter(Boolean).length, eval_findings: evalFindings.length, review_findings: reviewFindings.length, check_findings: checkFindings.length },
 }
