@@ -49,7 +49,7 @@ Per-project keys (`LETS_MERGE_BRANCH`, `LETS_PR_FLOW`, `LETS_TRACKER`) are delib
 1. project `.lets/.env`
 2. user `~/.lets/.env`
 3. `LETS_MERGE_BRANCH` only: the repo's origin default branch (derived by the hook), else `main`
-4. built-in default
+4. built-in default — applied downstream by the LETS rules/commands, not injected by the hook (the hook skips keys absent from both `.env` files; only `LETS_MERGE_BRANCH` is hard-defaulted at injection time, per step 3)
 
 The same **not-for-secrets** warning applies — with a bigger blast radius: this file is injected in *every* project you open.
 

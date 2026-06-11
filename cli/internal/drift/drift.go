@@ -15,6 +15,11 @@ import (
 )
 
 // State enumerates the drift relationships between plugin and installed rules.
+//
+// Note: initcmd mints an out-of-enum value `initcmd.DriftStateDelegated`
+// ("delegated") carried in `initcmd.DriftReport.State` for the JSON channel
+// only (scope=user, project copy deliberately absent). drift-package functions
+// are never expected to receive it - it never comes from a drift.Check result.
 type State string
 
 const (

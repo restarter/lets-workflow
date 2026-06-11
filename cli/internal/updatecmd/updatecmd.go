@@ -187,29 +187,27 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 	// lets-ew17g: when defer-on-plugin-outdated lands, apply it to BOTH this
 	// block and Artifact 2 uniformly.
 	if globalPresent {
-		{
-			if rulesData, readErr := os.ReadFile(rulesSrc); readErr != nil {
-				result.Add(Artifact{Name: "user-rules", Status: StatusUnknown, Detail: fmt.Sprintf("plugin rules unreadable: %s", rulesSrc)})
-			} else {
-				dr := drift.Check(rulesSrc, userRulesDst)
-				switch {
-				// StatePluginUnreadable = the SOURCE (plugin payload) has no
-				// parseable version. An INSTALLED global file with broken
-				// frontmatter is StateUnknown instead -> Detected() -> rewritten
-				// below (lets-* files are plugin-owned by convention).
-				case dr.State == drift.StatePluginUnreadable:
-					result.Add(Artifact{Name: "user-rules", Status: StatusUnknown, Detail: "plugin rules version unparseable (no `version:` frontmatter)"})
-				case dr.State == drift.StateAhead:
-					result.Add(Artifact{Name: "user-rules", Status: StatusAhead, CurrentVersion: dr.InstalledVersion, Detail: "global rules newer than the plugin - customized or newer release; not overwritten"})
-				case dr.Detected():
-					if err := initcmd.AtomicWriteBytes(userRulesDst, rulesData, 0o644); err != nil {
-						return result, fmt.Errorf("write user rules: %w", err)
-					}
-					drPost := drift.Check(rulesSrc, userRulesDst)
-					result.Add(Artifact{Name: "user-rules", Status: StatusUpdated, CurrentVersion: drPost.InstalledVersion, Detail: rulesUpdatedDetail(dr)})
-				default:
-					result.Add(Artifact{Name: "user-rules", Status: StatusInSync, CurrentVersion: dr.InstalledVersion, Detail: "tracks the plugin"})
+		if rulesData, readErr := os.ReadFile(rulesSrc); readErr != nil {
+			result.Add(Artifact{Name: "user-rules", Status: StatusUnknown, Detail: fmt.Sprintf("plugin rules unreadable: %s", rulesSrc)})
+		} else {
+			dr := drift.Check(rulesSrc, userRulesDst)
+			switch {
+			// StatePluginUnreadable = the SOURCE (plugin payload) has no
+			// parseable version. An INSTALLED global file with broken
+			// frontmatter is StateUnknown instead -> Detected() -> rewritten
+			// below (lets-* files are plugin-owned by convention).
+			case dr.State == drift.StatePluginUnreadable:
+				result.Add(Artifact{Name: "user-rules", Status: StatusUnknown, Detail: "plugin rules version unparseable (no `version:` frontmatter)"})
+			case dr.State == drift.StateAhead:
+				result.Add(Artifact{Name: "user-rules", Status: StatusAhead, CurrentVersion: dr.InstalledVersion, Detail: "global rules newer than the plugin - customized or newer release; not overwritten"})
+			case dr.Detected():
+				if err := initcmd.AtomicWriteBytes(userRulesDst, rulesData, 0o644); err != nil {
+					return result, fmt.Errorf("write user rules: %w", err)
 				}
+				drPost := drift.Check(rulesSrc, userRulesDst)
+				result.Add(Artifact{Name: "user-rules", Status: StatusUpdated, CurrentVersion: drPost.InstalledVersion, Detail: rulesUpdatedDetail(dr)})
+			default:
+				result.Add(Artifact{Name: "user-rules", Status: StatusInSync, CurrentVersion: dr.InstalledVersion, Detail: "tracks the plugin"})
 			}
 		}
 	}

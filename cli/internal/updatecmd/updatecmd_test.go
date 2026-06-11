@@ -744,14 +744,12 @@ func TestRun_RulesScopeMatrix(t *testing.T) {
 // delegated - pins the merged read so hook and update agree.
 func TestRun_RulesScopeFromUserEnv(t *testing.T) {
 	projectRoot, pluginRoot, home := scopeFixture(t, "", "", "0.6.0")
+	// scopeFixture/userHome create ~/.claude/rules but not ~/.lets - make it first.
+	if err := os.MkdirAll(filepath.Join(home, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(home, ".lets", ".env"), []byte("LETS_RULES_SCOPE=user\n"), 0o644); err != nil {
-		// ensure ~/.lets exists
-		if mkErr := os.MkdirAll(filepath.Join(home, ".lets"), 0o755); mkErr != nil {
-			t.Fatal(mkErr)
-		}
-		if werr := os.WriteFile(filepath.Join(home, ".lets", ".env"), []byte("LETS_RULES_SCOPE=user\n"), 0o644); werr != nil {
-			t.Fatal(werr)
-		}
+		t.Fatal(err)
 	}
 	r, err := Run(context.Background(), Options{HomeDir: home}, projectRoot, pluginRoot)
 	if err != nil {
