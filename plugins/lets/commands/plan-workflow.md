@@ -1,6 +1,6 @@
 ---
 description: PREVIEW (experimental) - autonomous /lets:plan via a Dynamic Workflow. Shipped standalone to dogfood across projects and gather edits before folding the chain into native /lets:plan.
-argument-hint: "[goal]"
+argument-hint: "[goal] [--fast]"
 ---
 
 # Autonomous Plan (PREVIEW workflow)
@@ -41,7 +41,7 @@ fi
 
 ## Step 1: Goal + Rubric
 
-Parse the goal from the argument (or, for a spawn-claimed task, from its title + description; else ask "What are we planning?").
+Parse the goal from the argument (or, for a spawn-claimed task, from its title + description; else ask "What are we planning?"). Strip a `--fast` token anywhere in the argument if present (sets lean/fast mode for this run); the remainder is the goal OR the task id. The strip happens at INITIAL argument parsing - BEFORE Step 0's task-id pattern match - so `/lets:plan-workflow <task-id> --fast` (the natural autonomous-pipeline invocation) still resolve-and-claims: only the flag-stripped remainder is tested against `<prefix>-<alphanum>[.N]`. Mirror how native `/lets:plan` strips `--fast` - but note the two flags mean DIFFERENT things (see `## Fast mode` below).
 
 Gather the **RUBRIC** - the steering criteria that REPLACE the interactive picks of native `/lets:plan`. Ask the user (free text, or a short list):
 - What does "good" look like here? (priority order: simplicity / performance / consistency / minimal-blast-radius / ...)
@@ -78,13 +78,16 @@ Workflow({ scriptPath: "${CLAUDE_PLUGIN_ROOT}/skills/plan-workflow/plan.workflow
   focusAreas: [ { name, hint }, ... ],
   judges: [ { name } ],
   experts: [ { name } ],
+  fast: true,            // ONLY when --fast was parsed in Step 1 - omit the key entirely on default runs
   taskContext: "{task title + description, or empty}",
   projectRoot: "{LETS_PROJECT_ROOT}",
   claudeMd: "{CLAUDE.md content from Step 2}"
 }})
 ```
 
-Pass `args` as a real JSON value (the script defensively parses a JSON string too). Runs in the **BACKGROUND** - the tool returns a `runId`; resume on the `<task-notification>`. Tell the user "Autonomous planning running - {N} explorers, then approaches/architect/judge/evaluate/plan".
+When `--fast` was parsed in Step 1, add `fast: true` to `args`; omit the key entirely on default runs (matching the `explore.md` convention of omitting flag keys rather than passing them explicitly). The script's `!!input.fast` reads an absent key as `false`. (Note: explore's own `webEnabled` defaults the OTHER way - absent reads as on - so the reused convention is "omit on default", NOT "absent == false" as a universal rule; here `fast`'s default-off polarity makes omit==false correct.)
+
+Pass `args` as a real JSON value (the script defensively parses a JSON string too). Runs in the **BACKGROUND** - the tool returns a `runId`; resume on the `<task-notification>`. Tell the user the run started. Standard: "Autonomous planning running - {N} explorers, then approaches/architect/judge/evaluate/plan". Fast (`--fast`): "Autonomous LEAN planning running - 1 explorer over a merged area, then 1 architect for the top-ranked approach, 1 judge, 1 evaluator, 1 planner, then a quick plan-check (heavy review pass skipped) - ~7 agents vs ~15-25."
 
 ## Step 4: On completion
 
@@ -92,6 +95,7 @@ Aggregate: `{ plan_markdown, delivered_approach, diverged_from_winner, divergenc
 
 - **Anti-silent-fail:** if `error` is set, or `plan_markdown` is null, or `counts.explorers === 0` -> surface the failure plainly, do NOT fabricate a plan; offer a re-run (optionally with an adjusted rubric).
 - **Judge<->plan divergence:** if `diverged_from_winner` is true, say so PROMINENTLY - the judged `winner` was overridden by the Plan stage after the Evaluate findings (`divergence_reason`); the plan implements `delivered_approach`, not `winner`. Do not present `winner` as the delivered design.
+- **Fast-mode cost + caveat:** if `counts.mode === 'fast'` (the `mode` field lives inside `counts` on every return - error and success alike), state the agent-count delta (~7 vs ~15-25 standard) AND surface two trade-offs prominently: (1) the plan got the LIGHT check only - Plan Check ran (report its `check_verdict`), but the heavy Plan Review pass was skipped (`refinement_log.review_skipped === true`); weigh your approval accordingly. (2) Only the FIRST (rubric-best-ranked) approach was architected and judged - the others in `approaches[]` were proposed but NOT evaluated; do not present them as considered-and-rejected. If `decision_log.forced === 'single-candidate'`, note the judge errored and the lone candidate was taken by fallback.
 - Save `plan_markdown`:
   ```bash
   LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
@@ -102,6 +106,19 @@ Aggregate: `{ plan_markdown, delivered_approach, diverged_from_winner, divergenc
 - Spawn-claimed run: after the plan file is saved, write the `gate-approve` pipeline-state marker and fire the GATE 2 notify (see the gate-notification block) - the plan is ready for human approval.
 - Show the **decision log** (winner + judge votes/totals + rationale), the approach list, the eval findings, and the plan summary.
 - User approves -> suggest `/lets:execute`. Wants changes -> adjust the rubric and re-run (`Workflow` `resumeFromRunId` caches completed stages while you iterate the script).
+
+## Fast mode (`--fast`)
+
+`/lets:plan-workflow --fast` is the SAME autonomous off-context Dynamic Workflow chain, run on a minimal agent budget (~7 agents vs ~15-25): 1 explorer over a merged focus area, 1 architect for approaches, 1 architect for the top rubric-ranked approach, 1 judge, 1 evaluator, 1 planner, 1 plan-checker (+1 refiner only if the check finds issues). The heavy Plan Review -> Revise pass is skipped; the quick Plan Check -> Refine pass (the `/lets:check --plan` analog) runs in both modes.
+
+**Two different `--fast` levers - do NOT confuse them:**
+
+| Flag | What it does |
+|---|---|
+| native `/lets:plan --fast` | Orchestrator-only, NO subagents, IN-conversation talk-through. No workflow at all. |
+| `/lets:plan-workflow --fast` (this) | Still the off-context Dynamic Workflow chain, but lean (~1 agent/stage). Cheap workflow, not "no workflow". |
+
+**Trade-off:** fast drops panel redundancy and the deep review pass for budget - the plan still gets the quick 5-lens check, but not the 2-reviewer deep review. A single agent error at Explore or Judge aborts the run with a typed error instead of being absorbed by a panel (the standard 3-judge panel tolerates one judge erroring; fast has one judge). Exception: when there's exactly 1 architected approach and the judge errors, the run proceeds with that lone candidate and marks `decision_log.forced = 'single-candidate'` - no fabrication, fully logged. Recovery from a hard error is the re-run the dispatcher already offers. Observability: every return (success or typed-error) carries `counts.mode` (`'fast' | 'standard'`), so a failed fast run is still distinguishable from a failed standard run.
 
 ## Notes
 
