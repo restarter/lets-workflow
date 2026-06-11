@@ -28,6 +28,7 @@ const (
 	StatusUnknown        ArtifactStatus = "unknown"         // couldn't determine (offline, unreadable)
 	StatusNotInitialized ArtifactStatus = "not-initialized" // .env absent - project never `lets init`-ed
 	StatusDev            ArtifactStatus = "dev"             // running an untagged dev binary - no comparison
+	StatusDelegated      ArtifactStatus = "delegated"      // project rules deliberately absent (LETS_RULES_SCOPE=user) - rules come from ~/.claude/rules
 )
 
 // allStatuses - keep adjacent to the Status* consts. A new status MUST be
@@ -35,6 +36,7 @@ const (
 var allStatuses = []ArtifactStatus{
 	StatusUpToDate, StatusInSync, StatusUpdated, StatusOutdated,
 	StatusAhead, StatusUnknown, StatusNotInitialized, StatusDev,
+	StatusDelegated,
 }
 
 // Artifact is the outcome of checking one drift-able artifact.
@@ -86,7 +88,9 @@ func NewResult(projectRoot, pluginRoot string) Result {
 func (r *Result) Add(a Artifact) {
 	r.Artifacts = append(r.Artifacts, a)
 	switch a.Status {
-	case StatusUpToDate, StatusInSync:
+	case StatusUpToDate, StatusInSync, StatusDelegated:
+		// delegated is a healthy target state (scope=user, rules come from the
+		// global copy) - belongs in the "in sync" bucket, not action-needed.
 		r.Summary.UpToDate++
 	case StatusUpdated:
 		r.Summary.Updated++

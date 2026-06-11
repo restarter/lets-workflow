@@ -1,6 +1,7 @@
 package updatecmd
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"golang.org/x/mod/semver"
 
 	"github.com/restarter/lets-workflow/cli/internal/drift"
+	"github.com/restarter/lets-workflow/cli/internal/envfile"
 	"github.com/restarter/lets-workflow/cli/internal/frontmatter"
 	"github.com/restarter/lets-workflow/cli/internal/initcmd"
 	"github.com/restarter/lets-workflow/cli/internal/letsconfig"
@@ -88,6 +90,33 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 		}
 	}
 
+	// Rules scope + user-scope presence, resolved once (consumed by Artifact 2
+	// and Artifact 5). Mirror the hook's MERGED read - project value, else the
+	// user-level ~/.lets/.env value - so a hand-added scope in ~/.lets/.env
+	// can't make hook and update contradict each other (the boomerang would
+	// return through that side door). Anything other than "user" degrades to
+	// project semantics - same fail-safe contract as initcmd.effectiveRulesScope.
+	envScopeValue := func(path string) string {
+		if data, err := os.ReadFile(path); err == nil {
+			if vals, perr := envfile.Parse(bytes.NewReader(data)); perr == nil {
+				return vals["LETS_RULES_SCOPE"]
+			}
+		}
+		return ""
+	}
+	rulesScope := envScopeValue(filepath.Join(projectRoot, ".lets", ".env"))
+	if rulesScope == "" && opts.HomeDir != "" {
+		rulesScope = envScopeValue(filepath.Join(opts.HomeDir, ".lets", ".env"))
+	}
+	userRulesDst := ""
+	globalPresent := false
+	if opts.HomeDir != "" {
+		userRulesDst = filepath.Join(opts.HomeDir, ".claude", "rules", "lets-rules.md")
+		if _, err := os.Stat(userRulesDst); err == nil {
+			globalPresent = true
+		}
+	}
+
 	// --- Artifact 2: .claude/rules/lets-rules.md ---
 	// lets-ew17g: when defer-on-plugin-outdated lands, apply it to BOTH this
 	// block and Artifact 5 (user-rules) uniformly.
@@ -97,12 +126,32 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 		result.Add(Artifact{Name: "rules", Status: StatusUnknown, Detail: fmt.Sprintf("plugin rules unreadable: %s", rulesSrc)})
 	} else {
 		dr := drift.Check(rulesSrc, rulesDst)
+		// dupHint annotates the synced/in-sync paths when scope=user yet a
+		// project copy exists - the user said "rely on global" but both load
+		// (duplication). Report-only; never auto-delete (git rm is a team action).
+		dupHint := ""
+		if rulesScope == "user" {
+			if globalPresent {
+				dupHint = " (duplication: scope=user but a project copy exists - remove it or set LETS_RULES_SCOPE=project)"
+			} else {
+				dupHint = " (scope=user but only the project copy exists - run lets init --user or set scope=project)"
+			}
+		}
 		switch {
 		case dr.State == drift.StatePluginUnreadable:
 			// rulesSrc exists and is readable (the os.ReadFile above succeeded)
 			// but has no parseable `version:` frontmatter - "couldn't check",
 			// not "up to date".
 			result.Add(Artifact{Name: "rules", Status: StatusUnknown, Detail: "plugin rules version unparseable (no `version:` frontmatter)"})
+		case dr.State == drift.StateMissing && rulesScope == "user" && globalPresent:
+			// Delegated: the project copy is deliberately absent; rules come from
+			// the global ~/.claude/rules copy. Target state, not drift - never
+			// re-create it (that was the boomerang bug).
+			result.Add(Artifact{Name: "rules", Status: StatusDelegated, Detail: "scope=user - rules come from the global copy (~/.claude/rules)"})
+		case dr.State == drift.StateMissing && rulesScope == "user":
+			// scope=user but the global copy is missing too - nothing covers the
+			// project. Surface an actionable fix instead of silently re-copying.
+			result.Add(Artifact{Name: "rules", Status: StatusNotInitialized, Action: "Run `lets init --user` to restore the global rules (or set LETS_RULES_SCOPE=project)", Detail: "scope=user but no rules anywhere - global copy missing"})
 		case dr.Detected():
 			if err := os.MkdirAll(filepath.Dir(rulesDst), 0o755); err != nil {
 				return result, err
@@ -111,9 +160,9 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 				return result, fmt.Errorf("write rules: %w", err)
 			}
 			drPost := drift.Check(rulesSrc, rulesDst)
-			result.Add(Artifact{Name: "rules", Status: StatusUpdated, CurrentVersion: drPost.InstalledVersion, Detail: rulesUpdatedDetail(dr)})
+			result.Add(Artifact{Name: "rules", Status: StatusUpdated, CurrentVersion: drPost.InstalledVersion, Detail: rulesUpdatedDetail(dr) + dupHint})
 		default:
-			result.Add(Artifact{Name: "rules", Status: StatusInSync, CurrentVersion: dr.InstalledVersion, Detail: "tracks the plugin"})
+			result.Add(Artifact{Name: "rules", Status: StatusInSync, CurrentVersion: dr.InstalledVersion, Detail: "tracks the plugin" + dupHint})
 		}
 	}
 
@@ -137,9 +186,8 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 	//
 	// lets-ew17g: when defer-on-plugin-outdated lands, apply it to BOTH this
 	// block and Artifact 2 uniformly.
-	if opts.HomeDir != "" {
-		userRulesDst := filepath.Join(opts.HomeDir, ".claude", "rules", "lets-rules.md")
-		if _, statErr := os.Stat(userRulesDst); statErr == nil {
+	if globalPresent {
+		{
 			if rulesData, readErr := os.ReadFile(rulesSrc); readErr != nil {
 				result.Add(Artifact{Name: "user-rules", Status: StatusUnknown, Detail: fmt.Sprintf("plugin rules unreadable: %s", rulesSrc)})
 			} else {

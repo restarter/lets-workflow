@@ -660,3 +660,153 @@ func TestPrintReport_UserRulesRow(t *testing.T) {
 		t.Errorf("report missing user-rules row:\n%s", buf.String())
 	}
 }
+
+// --- LETS_RULES_SCOPE matrix (lets-wug9k) ---
+
+// scopeFixture builds a project (.env carrying `scope`, optional project rules
+// copy at projVer) + a fake home (optional global copy at globalVer). Plugin is
+// always 0.6.0; binary set to dev so the binary/plugin rows don't interfere.
+func scopeFixture(t *testing.T, scope, projVer, globalVer string) (projectRoot, pluginRoot, home string) {
+	t.Helper()
+	projectRoot = t.TempDir()
+	pluginRoot = t.TempDir()
+	setVersion(t, "dev")
+	writePluginJSON(t, pluginRoot, `{"name":"lets","version":"0.6.0"}`)
+	rulesFile(t, filepath.Join(pluginRoot, "rules", "lets-rules.md"), "0.6.0")
+
+	envDir := filepath.Join(projectRoot, ".lets")
+	if err := os.MkdirAll(envDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := "LETS_ENV_VERSION=dev\nLETS_LANGUAGE=English\nLETS_MERGE_BRANCH=main\nLETS_PR_FLOW=local\nLETS_TRACKER=beads\nLETS_LAUNCHER=terminal\n"
+	if scope != "" {
+		body += "LETS_RULES_SCOPE=" + scope + "\n"
+	}
+	if err := os.WriteFile(filepath.Join(envDir, ".env"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if projVer != "" {
+		rulesFile(t, filepath.Join(projectRoot, ".claude", "rules", "lets-rules.md"), projVer)
+	}
+	home = userHome(t, globalVer)
+	return projectRoot, pluginRoot, home
+}
+
+func TestRun_RulesScopeMatrix(t *testing.T) {
+	tests := []struct {
+		name        string
+		scope       string
+		projVer     string // "" = project copy absent
+		globalVer   string // "" = global absent
+		wantStatus  ArtifactStatus
+		wantDetail  string // substring; "" = no check
+		fileWritten bool   // must the project copy exist after?
+	}{
+		{"unset_present_regression", "", "0.6.0", "", StatusInSync, "tracks the plugin", true},
+		{"user_absent_global_present_delegated", "user", "", "0.6.0", StatusDelegated, "global copy", false},
+		{"user_absent_global_absent_notinit", "user", "", "", StatusNotInitialized, "no rules anywhere", false},
+		{"user_present_current_global_present_dup", "user", "0.6.0", "0.6.0", StatusInSync, "duplication", true},
+		{"user_present_outdated_global_present_dup", "user", "0.5.0", "0.6.0", StatusUpdated, "duplication", true},
+		{"user_present_current_global_absent_hint", "user", "0.6.0", "", StatusInSync, "only the project copy", true},
+		{"banana_absent_global_present_failsafe", "banana", "", "0.6.0", StatusUpdated, "", true},
+		{"project_present_current_global_present_nohint", "project", "0.6.0", "0.6.0", StatusInSync, "tracks the plugin", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			projectRoot, pluginRoot, home := scopeFixture(t, tt.scope, tt.projVer, tt.globalVer)
+			r, err := Run(context.Background(), Options{HomeDir: home}, projectRoot, pluginRoot)
+			if err != nil {
+				t.Fatal(err)
+			}
+			a := find(t, r, "rules")
+			if a.Status != tt.wantStatus {
+				t.Errorf("status: got %s want %s", a.Status, tt.wantStatus)
+			}
+			if tt.wantDetail != "" && !strings.Contains(a.Detail, tt.wantDetail) {
+				t.Errorf("detail: got %q want substring %q", a.Detail, tt.wantDetail)
+			}
+			_, statErr := os.Stat(filepath.Join(projectRoot, ".claude", "rules", "lets-rules.md"))
+			if tt.fileWritten && statErr != nil {
+				t.Errorf("project copy should exist: %v", statErr)
+			}
+			if !tt.fileWritten && statErr == nil {
+				t.Error("project copy should NOT exist (delegated must never re-create it)")
+			}
+			// project=project (and unset) must never carry a duplication hint.
+			if (tt.scope == "" || tt.scope == "project") && strings.Contains(a.Detail, "duplication") {
+				t.Errorf("scope=%q must have no duplication hint: %q", tt.scope, a.Detail)
+			}
+		})
+	}
+}
+
+// scope=user carried ONLY in ~/.lets/.env (not the project .env) still engages
+// delegated - pins the merged read so hook and update agree.
+func TestRun_RulesScopeFromUserEnv(t *testing.T) {
+	projectRoot, pluginRoot, home := scopeFixture(t, "", "", "0.6.0")
+	if err := os.WriteFile(filepath.Join(home, ".lets", ".env"), []byte("LETS_RULES_SCOPE=user\n"), 0o644); err != nil {
+		// ensure ~/.lets exists
+		if mkErr := os.MkdirAll(filepath.Join(home, ".lets"), 0o755); mkErr != nil {
+			t.Fatal(mkErr)
+		}
+		if werr := os.WriteFile(filepath.Join(home, ".lets", ".env"), []byte("LETS_RULES_SCOPE=user\n"), 0o644); werr != nil {
+			t.Fatal(werr)
+		}
+	}
+	r, err := Run(context.Background(), Options{HomeDir: home}, projectRoot, pluginRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a := find(t, r, "rules"); a.Status != StatusDelegated {
+		t.Errorf("scope from ~/.lets/.env must engage delegated, got %s", a.Status)
+	}
+}
+
+// Malformed project .env degrades to project semantics (no crash, copy synced).
+func TestRun_RulesScopeMalformedEnv(t *testing.T) {
+	projectRoot, pluginRoot, home := scopeFixture(t, "project", "0.6.0", "")
+	// Overwrite .env with garbage that envfile.Parse may choke on.
+	if err := os.WriteFile(filepath.Join(projectRoot, ".lets", ".env"), []byte("\x00not=valid\nbroken"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r, err := Run(context.Background(), Options{HomeDir: home}, projectRoot, pluginRoot)
+	if err != nil {
+		t.Fatalf("malformed .env must not crash: %v", err)
+	}
+	// rules row must exist and not be delegated.
+	if a := find(t, r, "rules"); a.Status == StatusDelegated {
+		t.Error("malformed .env must degrade to project, not delegated")
+	}
+}
+
+// The one-time migration: an initialized project at the current version whose
+// .env predates the 6th key reports `.env updated (1 key changed)` once.
+func TestRun_RulesScopeKeyMigration(t *testing.T) {
+	projectRoot := t.TempDir()
+	pluginRoot := t.TempDir()
+	setVersion(t, "0.6.0")
+	writePluginJSON(t, pluginRoot, `{"name":"lets","version":"0.6.0"}`)
+	rulesFile(t, filepath.Join(pluginRoot, "rules", "lets-rules.md"), "0.6.0")
+	rulesFile(t, filepath.Join(projectRoot, ".claude", "rules", "lets-rules.md"), "0.6.0")
+	envDir := filepath.Join(projectRoot, ".lets")
+	if err := os.MkdirAll(envDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// At-current version .env but WITHOUT LETS_RULES_SCOPE (a pre-6th-key file).
+	old := "LETS_ENV_VERSION=0.6.0\nLETS_LANGUAGE=English\nLETS_MERGE_BRANCH=main\nLETS_PR_FLOW=local\nLETS_TRACKER=beads\nLETS_LAUNCHER=terminal\n"
+	if err := os.WriteFile(filepath.Join(envDir, ".env"), []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r, err := Run(context.Background(), Options{}, projectRoot, pluginRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := find(t, r, ".env")
+	if a.Status != StatusUpdated || !strings.Contains(a.Detail, "1 key(s) changed") {
+		t.Errorf(".env migration: got %+v, want updated + 1 key changed", a)
+	}
+	data, _ := os.ReadFile(filepath.Join(envDir, ".env"))
+	if !strings.Contains(string(data), "LETS_RULES_SCOPE=project") {
+		t.Errorf("migration must add LETS_RULES_SCOPE=project:\n%s", data)
+	}
+}
