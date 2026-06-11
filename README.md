@@ -67,12 +67,11 @@ In Claude Code:
 /plugin install lets
 ```
 
-> **Install scope:** Claude Code will ask where to install — pick **one of these two**:
+> **Install scope:** Claude Code will ask where to install — all three options work:
 >
 > - **"Install for all collaborators on this repository"** *(project scope)* — recommended for shared repos; the choice lands in `.claude/settings.json`, so teammates inherit `lets` without re-installing.
 > - **"Install for you, in this repo only"** *(local scope)* — fine for a solo or throwaway project; not committed.
->
-> Don't pick the remaining option (install for yourself **everywhere** / user scope): there the SessionStart/PreCompact hooks fire in *every* project you open, including ones that never ran `/lets:init`. Smoother user-scope handling is planned for a future update.
+> - **"Install for yourself everywhere"** *(user scope)* — one install for all your projects *(ships next release)*. After installing, `/lets:init` in any project offers `lets init --user`: global workflow rules land in `~/.claude/rules/lets-rules.md` and your personal defaults (language, launcher) in `~/.lets/.env` — every project gets LETS without per-project setup. Project rules override global on conflict. Details, precedence, and the opt-out limitation: [docs/installation.md](docs/installation.md).
 
 **Stay current:** in `/plugin` → **Marketplaces** → `lets-workflow`, **Enable auto-update** — then the plugin updates itself on startup and you never think about it again. (To update by hand instead: `/plugin marketplace update lets-workflow`, then `/reload-plugins` — or just restart Claude Code.)
 

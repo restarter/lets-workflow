@@ -18,6 +18,7 @@ type Prefs struct {
 	PRFlow      string // "local" | "github" | "bitbucket"
 	Tracker     string // "beads" (canonical default; reserved for Linear/Jira)
 	Launcher    string // "terminal" (default) | "cmux"
+	RulesScope  string // "project" (own .claude/rules copy) | "user" (rely on ~/.claude/rules) | "" = preserve-or-default
 	SkipBeads   bool
 }
 
@@ -34,6 +35,7 @@ func (p Prefs) AsValues() map[string]string {
 		"LETS_PR_FLOW":      p.PRFlow,
 		"LETS_TRACKER":      p.Tracker,
 		"LETS_LAUNCHER":     p.Launcher,
+		"LETS_RULES_SCOPE":  p.RulesScope,
 	}
 }
 
@@ -63,6 +65,12 @@ func renderEnvExample() []byte {
 // (Prefs) and renderEnvExample (Defaults) get the same canonical marker for
 // free without each caller having to inject it.
 func renderTemplate(header string, values map[string]string) []byte {
+	return renderTemplateKeys(header, letsconfig.Keys, values)
+}
+
+// renderTemplateKeys is the key-list-parametric core shared by the project
+// renderers (all Keys) and renderUserEnv (the UserKeys subset).
+func renderTemplateKeys(header string, keys []letsconfig.Key, values map[string]string) []byte {
 	var buf bytes.Buffer
 	buf.WriteString(header)
 	// Version marker - first key, with its own comment block.
@@ -70,10 +78,15 @@ func renderTemplate(header string, values map[string]string) []byte {
 	// below emits its own blank-line separator before each key.
 	buf.WriteString("\n# Managed by lets - do not edit\n")
 	fmt.Fprintf(&buf, "%s=%s\n", letsconfig.VersionKeyName, version.Version)
-	for _, k := range letsconfig.Keys {
+	for _, k := range keys {
 		buf.WriteByte('\n')
 		fmt.Fprintf(&buf, "# %s\n", k.Comment)
 		fmt.Fprintf(&buf, "%s=%s\n", k.Name, values[k.Name])
 	}
 	return buf.Bytes()
+}
+
+// renderUserEnv produces the ~/.lets/.env body (user-level subset only).
+func renderUserEnv(values map[string]string) []byte {
+	return renderTemplateKeys(letsconfig.UserHeader, letsconfig.UserKeys(), values)
 }

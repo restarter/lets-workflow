@@ -23,7 +23,7 @@ See **[tasks.md](tasks.md)** for the task lifecycle.
 | `/lets:backlog` | Backlog management — multi-agent backlog review, or interactive cleanup triage. `review` / `cleanup` skip the menu. |
 | `/lets:explore` | Explore a topic from multiple expert angles — scout context, web research, parallel domain agents surface insights/questions/approaches. `--workflow` runs the fan-out off-context. |
 | `/lets:plan` | Structured planning — codebase exploration with scaled explorer agents, then architecture design with expert evaluation, then a written plan in `.lets/plans/`. `--fast` skips the subagent phases and plans in-conversation. |
-| `/lets:plan-workflow` | PREVIEW — autonomous planning via a Dynamic Workflow (goal + rubric up front, off-context, approve at the end). |
+| `/lets:plan-workflow` | PREVIEW — autonomous planning via a Dynamic Workflow (goal + rubric up front, off-context, approve at the end). `--fast` = lean budget (~7 agents, still off-context) — distinct from `/lets:plan --fast` (no subagents, in-conversation). |
 | `/lets:execute` | Execute the plan from `/lets:plan` in native plan mode, with your approval at each step. `--auto` runs an approved plan without per-step gates (push/PR/`bd close`/external still gated). |
 | `/lets:team` | Parallel implementation with Agent Teams — `run` (pick tasks, spawn teammates), `status`, `stop`. |
 | `/lets:worktree` | Create and manage worktrees for parallel sessions — `create <name>`, `list`, `remove <name>`. `create <id> --flow plan-workflow --auto` spawns the autonomous task pipeline. |
@@ -48,8 +48,8 @@ See **[code-review.md](code-review.md)** and **[agents.md](agents.md)**.
 
 | Command | What it does |
 |---------|--------------|
-| `/lets:init` | Initialize LETS in the current project — creates `.lets/`, writes `.lets/.env` with defaults, copies the workflow rules to `.claude/rules/lets-rules.md`, wires up the statusline, and runs `bd init` if beads is installed. Re-run anytime to self-heal drift or change config. |
-| `/lets:update` | Sync the project with the current release — self-heal `.lets/.env` and the rules file, and report version status for the `lets` binary and the plugin. |
+| `/lets:init` | Initialize LETS in the current project — creates `.lets/`, writes `.lets/.env` with defaults, copies the workflow rules to `.claude/rules/lets-rules.md`, wires up the statusline, and runs `bd init` if beads is installed. Re-run anytime to self-heal drift or change config. With a user-scope plugin install it also offers `lets init --user` — global rules to `~/.claude/rules/` + personal defaults to `~/.lets/.env` *(ships next release)*. |
+| `/lets:update` | Sync the project with the current release — self-heal `.lets/.env` and the rules file (plus the user-level global rules when installed — never overwriting a customized copy), and report version status for the `lets` binary and the plugin. |
 
 See **[installation.md](installation.md)** and **[configuration.md](configuration.md)**.
 

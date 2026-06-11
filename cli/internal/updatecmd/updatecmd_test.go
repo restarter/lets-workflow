@@ -52,7 +52,9 @@ func scaffold(t *testing.T, envVer, rulesVer, pluginVer, binVer string) (project
 		if err := os.MkdirAll(envDir, 0o755); err != nil {
 			t.Fatal(err)
 		}
-		body := "# LETS plugin config\nLETS_ENV_VERSION=" + envVer + "\nLETS_LANGUAGE=English\nLETS_MERGE_BRANCH=main\nLETS_PR_FLOW=local\nLETS_TRACKER=beads\n"
+		// Full canonical key set so Artifact 1's RegenerateEnv reports in-sync
+		// (a missing key would diff → `updated`, not the `in-sync` these tests want).
+		body := "# LETS plugin config\nLETS_ENV_VERSION=" + envVer + "\nLETS_LANGUAGE=English\nLETS_MERGE_BRANCH=main\nLETS_PR_FLOW=local\nLETS_TRACKER=beads\nLETS_LAUNCHER=terminal\nLETS_RULES_SCOPE=project\n"
 		if err := os.WriteFile(filepath.Join(envDir, ".env"), []byte(body), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -479,5 +481,330 @@ func TestPrintReport_InconsistentWarning(t *testing.T) {
 	PrintReport(&b, r)
 	if !strings.Contains(b.String(), "inconsistent") {
 		t.Fatalf("missing inconsistency warning:\n%s", b.String())
+	}
+}
+
+// --- user-rules artifact (lets-wug9k) ---
+
+// userHome creates a fake home; rulesVer != "" writes
+// ~/.claude/rules/lets-rules.md at that version ("MALFORMED" = no frontmatter).
+func userHome(t *testing.T, rulesVer string) string {
+	t.Helper()
+	home := t.TempDir()
+	switch rulesVer {
+	case "":
+	case "MALFORMED":
+		p := filepath.Join(home, ".claude", "rules", "lets-rules.md")
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("# no frontmatter\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	default:
+		rulesFile(t, filepath.Join(home, ".claude", "rules", "lets-rules.md"), rulesVer)
+	}
+	return home
+}
+
+// findMaybe returns the artifact by name or nil (find() fatals on absence).
+func findMaybe(r Result, name string) *Artifact {
+	for i := range r.Artifacts {
+		if r.Artifacts[i].Name == name {
+			return &r.Artifacts[i]
+		}
+	}
+	return nil
+}
+
+func TestRun_UserRulesAbsent_NoArtifact(t *testing.T) {
+	projectRoot, pluginRoot := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0")
+	home := userHome(t, "")
+	r, err := Run(context.Background(), Options{HomeDir: home}, projectRoot, pluginRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Artifacts) != 4 {
+		t.Fatalf("expected 4 artifacts when user scope absent, got %d", len(r.Artifacts))
+	}
+	if findMaybe(r, "user-rules") != nil {
+		t.Error("user-rules row must be omitted when the file is absent")
+	}
+	// Negative assertion - the actual bug-catcher: update never bootstraps
+	// user scope (that's `lets init --user`'s job).
+	if _, err := os.Stat(filepath.Join(home, ".claude", "rules")); err == nil {
+		t.Error("update must NOT create ~/.claude/rules")
+	}
+}
+
+func TestRun_UserRulesInSync(t *testing.T) {
+	projectRoot, pluginRoot := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0")
+	home := userHome(t, "0.6.0")
+	r, err := Run(context.Background(), Options{HomeDir: home}, projectRoot, pluginRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Artifacts) != 5 {
+		t.Fatalf("expected 5 artifacts, got %d", len(r.Artifacts))
+	}
+	a := find(t, r, "user-rules")
+	if a.Status != StatusInSync || a.Detail != "tracks the plugin" {
+		t.Errorf("user-rules: %+v", a)
+	}
+}
+
+func TestRun_UserRulesOutdated_Rewritten(t *testing.T) {
+	projectRoot, pluginRoot := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0")
+	home := userHome(t, "0.5.0")
+	r, err := Run(context.Background(), Options{HomeDir: home}, projectRoot, pluginRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := find(t, r, "user-rules")
+	if a.Status != StatusUpdated || a.CurrentVersion != "0.6.0" {
+		t.Errorf("user-rules: %+v", a)
+	}
+	if !strings.Contains(a.Detail, "was outdated (v0.5.0)") {
+		t.Errorf("detail: %q", a.Detail)
+	}
+}
+
+func TestRun_UserRulesAhead_NotClobbered(t *testing.T) {
+	projectRoot, pluginRoot := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0")
+	home := userHome(t, "9.9.9")
+	userPath := filepath.Join(home, ".claude", "rules", "lets-rules.md")
+	before, _ := os.ReadFile(userPath)
+	r, err := Run(context.Background(), Options{HomeDir: home}, projectRoot, pluginRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, _ := os.ReadFile(userPath)
+	if string(before) != string(after) {
+		t.Error("ahead global rules were clobbered by update")
+	}
+	a := find(t, r, "user-rules")
+	if a.Status != StatusAhead {
+		t.Errorf("status: got %s want ahead", a.Status)
+	}
+	if !strings.Contains(a.Detail, "not overwritten") {
+		t.Errorf("detail: %q", a.Detail)
+	}
+	// Pins the DELIBERATE exclusion of user-rules from the consistency set:
+	// a customized global copy is not a "partial upgrade".
+	if !r.Consistent {
+		t.Error("ahead user-rules must NOT trip the consistency warning")
+	}
+}
+
+func TestRun_UserRulesMalformed_Rewritten(t *testing.T) {
+	projectRoot, pluginRoot := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0")
+	home := userHome(t, "MALFORMED")
+	r, err := Run(context.Background(), Options{HomeDir: home}, projectRoot, pluginRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := find(t, r, "user-rules")
+	if a.Status != StatusUpdated || a.Detail != "was unparseable" {
+		t.Errorf("user-rules: %+v", a)
+	}
+}
+
+// A broken plugin payload must not crash or clobber the global copy.
+func TestRun_UserRulesPluginUnreadable_NoClobber(t *testing.T) {
+	projectRoot := t.TempDir()
+	pluginRoot := t.TempDir() // no rules/lets-rules.md inside
+	setVersion(t, "0.6.0")
+	writePluginJSON(t, pluginRoot, `{"name":"lets","version":"0.6.0"}`)
+	home := userHome(t, "0.6.0")
+	before, _ := os.ReadFile(filepath.Join(home, ".claude", "rules", "lets-rules.md"))
+
+	r, err := Run(context.Background(), Options{HomeDir: home}, projectRoot, pluginRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := find(t, r, "user-rules")
+	if a.Status != StatusUnknown || !strings.Contains(a.Detail, "plugin rules unreadable") {
+		t.Errorf("user-rules: %+v", a)
+	}
+	after, _ := os.ReadFile(filepath.Join(home, ".claude", "rules", "lets-rules.md"))
+	if string(before) != string(after) {
+		t.Error("global rules touched despite unreadable plugin payload")
+	}
+}
+
+// in-sync user-rules whose upstream (plugin) is behind latest gets the
+// annotateInSyncBehind hint, same as project rules.
+func TestRun_UserRulesInSync_AnnotatedWhenPluginOutdated(t *testing.T) {
+	projectRoot, pluginRoot := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0")
+	home := userHome(t, "0.6.0")
+	r, err := Run(context.Background(), Options{HomeDir: home, LatestFn: stubLatest("0.7.0")}, projectRoot, pluginRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := find(t, r, "user-rules")
+	if !strings.Contains(a.Detail, "itself behind latest v0.7.0") {
+		t.Errorf("missing behind-latest hint: %q", a.Detail)
+	}
+}
+
+func TestPrintReport_UserRulesRow(t *testing.T) {
+	projectRoot, pluginRoot := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0")
+	home := userHome(t, "0.6.0")
+	r, err := Run(context.Background(), Options{HomeDir: home}, projectRoot, pluginRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	PrintReport(&buf, r)
+	if !strings.Contains(buf.String(), "user-rules") {
+		t.Errorf("report missing user-rules row:\n%s", buf.String())
+	}
+}
+
+// --- LETS_RULES_SCOPE matrix (lets-wug9k) ---
+
+// scopeFixture builds a project (.env carrying `scope`, optional project rules
+// copy at projVer) + a fake home (optional global copy at globalVer). Plugin is
+// always 0.6.0; binary set to dev so the binary/plugin rows don't interfere.
+func scopeFixture(t *testing.T, scope, projVer, globalVer string) (projectRoot, pluginRoot, home string) {
+	t.Helper()
+	projectRoot = t.TempDir()
+	pluginRoot = t.TempDir()
+	setVersion(t, "dev")
+	writePluginJSON(t, pluginRoot, `{"name":"lets","version":"0.6.0"}`)
+	rulesFile(t, filepath.Join(pluginRoot, "rules", "lets-rules.md"), "0.6.0")
+
+	envDir := filepath.Join(projectRoot, ".lets")
+	if err := os.MkdirAll(envDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := "LETS_ENV_VERSION=dev\nLETS_LANGUAGE=English\nLETS_MERGE_BRANCH=main\nLETS_PR_FLOW=local\nLETS_TRACKER=beads\nLETS_LAUNCHER=terminal\n"
+	if scope != "" {
+		body += "LETS_RULES_SCOPE=" + scope + "\n"
+	}
+	if err := os.WriteFile(filepath.Join(envDir, ".env"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if projVer != "" {
+		rulesFile(t, filepath.Join(projectRoot, ".claude", "rules", "lets-rules.md"), projVer)
+	}
+	home = userHome(t, globalVer)
+	return projectRoot, pluginRoot, home
+}
+
+func TestRun_RulesScopeMatrix(t *testing.T) {
+	tests := []struct {
+		name        string
+		scope       string
+		projVer     string // "" = project copy absent
+		globalVer   string // "" = global absent
+		wantStatus  ArtifactStatus
+		wantDetail  string // substring; "" = no check
+		fileWritten bool   // must the project copy exist after?
+	}{
+		{"unset_present_regression", "", "0.6.0", "", StatusInSync, "tracks the plugin", true},
+		{"user_absent_global_present_delegated", "user", "", "0.6.0", StatusDelegated, "global copy", false},
+		{"user_absent_global_absent_notinit", "user", "", "", StatusNotInitialized, "no rules anywhere", false},
+		{"user_present_current_global_present_dup", "user", "0.6.0", "0.6.0", StatusInSync, "duplication", true},
+		{"user_present_outdated_global_present_dup", "user", "0.5.0", "0.6.0", StatusUpdated, "duplication", true},
+		{"user_present_current_global_absent_hint", "user", "0.6.0", "", StatusInSync, "only the project copy", true},
+		{"banana_absent_global_present_failsafe", "banana", "", "0.6.0", StatusUpdated, "", true},
+		{"project_present_current_global_present_nohint", "project", "0.6.0", "0.6.0", StatusInSync, "tracks the plugin", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			projectRoot, pluginRoot, home := scopeFixture(t, tt.scope, tt.projVer, tt.globalVer)
+			r, err := Run(context.Background(), Options{HomeDir: home}, projectRoot, pluginRoot)
+			if err != nil {
+				t.Fatal(err)
+			}
+			a := find(t, r, "rules")
+			if a.Status != tt.wantStatus {
+				t.Errorf("status: got %s want %s", a.Status, tt.wantStatus)
+			}
+			if tt.wantDetail != "" && !strings.Contains(a.Detail, tt.wantDetail) {
+				t.Errorf("detail: got %q want substring %q", a.Detail, tt.wantDetail)
+			}
+			_, statErr := os.Stat(filepath.Join(projectRoot, ".claude", "rules", "lets-rules.md"))
+			if tt.fileWritten && statErr != nil {
+				t.Errorf("project copy should exist: %v", statErr)
+			}
+			if !tt.fileWritten && statErr == nil {
+				t.Error("project copy should NOT exist (delegated must never re-create it)")
+			}
+			// project=project (and unset) must never carry a duplication hint.
+			if (tt.scope == "" || tt.scope == "project") && strings.Contains(a.Detail, "duplication") {
+				t.Errorf("scope=%q must have no duplication hint: %q", tt.scope, a.Detail)
+			}
+		})
+	}
+}
+
+// scope=user carried ONLY in ~/.lets/.env (not the project .env) still engages
+// delegated - pins the merged read so hook and update agree.
+func TestRun_RulesScopeFromUserEnv(t *testing.T) {
+	projectRoot, pluginRoot, home := scopeFixture(t, "", "", "0.6.0")
+	// scopeFixture/userHome create ~/.claude/rules but not ~/.lets - make it first.
+	if err := os.MkdirAll(filepath.Join(home, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".lets", ".env"), []byte("LETS_RULES_SCOPE=user\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r, err := Run(context.Background(), Options{HomeDir: home}, projectRoot, pluginRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a := find(t, r, "rules"); a.Status != StatusDelegated {
+		t.Errorf("scope from ~/.lets/.env must engage delegated, got %s", a.Status)
+	}
+}
+
+// Malformed project .env degrades to project semantics (no crash, copy synced).
+func TestRun_RulesScopeMalformedEnv(t *testing.T) {
+	projectRoot, pluginRoot, home := scopeFixture(t, "project", "0.6.0", "")
+	// Overwrite .env with garbage that envfile.Parse may choke on.
+	if err := os.WriteFile(filepath.Join(projectRoot, ".lets", ".env"), []byte("\x00not=valid\nbroken"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r, err := Run(context.Background(), Options{HomeDir: home}, projectRoot, pluginRoot)
+	if err != nil {
+		t.Fatalf("malformed .env must not crash: %v", err)
+	}
+	// rules row must exist and not be delegated.
+	if a := find(t, r, "rules"); a.Status == StatusDelegated {
+		t.Error("malformed .env must degrade to project, not delegated")
+	}
+}
+
+// The one-time migration: an initialized project at the current version whose
+// .env predates the 6th key reports `.env updated (1 key changed)` once.
+func TestRun_RulesScopeKeyMigration(t *testing.T) {
+	projectRoot := t.TempDir()
+	pluginRoot := t.TempDir()
+	setVersion(t, "0.6.0")
+	writePluginJSON(t, pluginRoot, `{"name":"lets","version":"0.6.0"}`)
+	rulesFile(t, filepath.Join(pluginRoot, "rules", "lets-rules.md"), "0.6.0")
+	rulesFile(t, filepath.Join(projectRoot, ".claude", "rules", "lets-rules.md"), "0.6.0")
+	envDir := filepath.Join(projectRoot, ".lets")
+	if err := os.MkdirAll(envDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// At-current version .env but WITHOUT LETS_RULES_SCOPE (a pre-6th-key file).
+	old := "LETS_ENV_VERSION=0.6.0\nLETS_LANGUAGE=English\nLETS_MERGE_BRANCH=main\nLETS_PR_FLOW=local\nLETS_TRACKER=beads\nLETS_LAUNCHER=terminal\n"
+	if err := os.WriteFile(filepath.Join(envDir, ".env"), []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r, err := Run(context.Background(), Options{}, projectRoot, pluginRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := find(t, r, ".env")
+	if a.Status != StatusUpdated || !strings.Contains(a.Detail, "1 key(s) changed") {
+		t.Errorf(".env migration: got %+v, want updated + 1 key changed", a)
+	}
+	data, _ := os.ReadFile(filepath.Join(envDir, ".env"))
+	if !strings.Contains(string(data), "LETS_RULES_SCOPE=project") {
+		t.Errorf("migration must add LETS_RULES_SCOPE=project:\n%s", data)
 	}
 }

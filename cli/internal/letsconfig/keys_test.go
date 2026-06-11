@@ -65,6 +65,7 @@ func TestDefaults_HardcodedContract(t *testing.T) {
 		"LETS_PR_FLOW":      "local",
 		"LETS_TRACKER":      "beads",
 		"LETS_LAUNCHER":     "terminal",
+		"LETS_RULES_SCOPE":  "project",
 	}
 	got := letsconfig.Defaults()
 	if !reflect.DeepEqual(got, want) {
@@ -80,6 +81,22 @@ func TestNames_MatchesKeys(t *testing.T) {
 	for i, name := range got {
 		if name != letsconfig.Keys[i].Name {
 			t.Errorf("Names[%d]: got %q want %q", i, name, letsconfig.Keys[i].Name)
+		}
+	}
+}
+
+// Pins the user-level subset managed by `lets init --user` in ~/.lets/.env.
+// Per-project keys (MERGE_BRANCH, PR_FLOW, TRACKER) must NOT appear here -
+// a machine-global value for them would be wrong in any repo that deviates.
+func TestUserKeys_ExactlyLanguageAndLauncher(t *testing.T) {
+	got := letsconfig.UserKeys()
+	want := []string{"LETS_LANGUAGE", "LETS_LAUNCHER"}
+	if len(got) != len(want) {
+		t.Fatalf("UserKeys len: got %d want %d (%v)", len(got), len(want), got)
+	}
+	for i, k := range got {
+		if k.Name != want[i] {
+			t.Errorf("UserKeys[%d]: got %q want %q", i, k.Name, want[i])
 		}
 	}
 }

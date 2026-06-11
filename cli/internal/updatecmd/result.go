@@ -1,8 +1,9 @@
 // Package updatecmd implements the `lets update` subcommand: it checks the
-// four drift-able LETS artifacts (.lets/.env, .claude/rules/lets-rules.md,
-// the lets binary, the Claude Code plugin), auto-syncs the two it safely can,
-// and reports actionable status for the two it cannot. Mirrors initcmd's
-// cobra-factory / Run() / Result-envelope structure.
+// four core drift-able LETS artifacts (.lets/.env, .claude/rules/lets-rules.md,
+// the lets binary, the Claude Code plugin) plus the optional user-scope rules
+// copy (~/.claude/rules/lets-rules.md - row omitted when absent), auto-syncs
+// what it safely can, and reports actionable status for what it cannot.
+// Mirrors initcmd's cobra-factory / Run() / Result-envelope structure.
 package updatecmd
 
 // SchemaVersion identifies the JSON output contract for `lets update --json`.
@@ -27,11 +28,20 @@ const (
 	StatusUnknown        ArtifactStatus = "unknown"         // couldn't determine (offline, unreadable)
 	StatusNotInitialized ArtifactStatus = "not-initialized" // .env absent - project never `lets init`-ed
 	StatusDev            ArtifactStatus = "dev"             // running an untagged dev binary - no comparison
+	StatusDelegated      ArtifactStatus = "delegated"       // project rules deliberately absent (LETS_RULES_SCOPE=user) - rules come from ~/.claude/rules
 )
+
+// allStatuses - keep adjacent to the Status* consts. A new status MUST be
+// appended here; the bucket-sum invariant test ranges over this list.
+var allStatuses = []ArtifactStatus{
+	StatusUpToDate, StatusInSync, StatusUpdated, StatusOutdated,
+	StatusAhead, StatusUnknown, StatusNotInitialized, StatusDev,
+	StatusDelegated,
+}
 
 // Artifact is the outcome of checking one drift-able artifact.
 type Artifact struct {
-	Name           string         `json:"name"` // ".env" | "rules" | "binary" | "plugin"
+	Name           string         `json:"name"` // ".env" | "rules" | "binary" | "plugin" | "user-rules" (only when ~/.claude/rules/lets-rules.md exists)
 	Status         ArtifactStatus `json:"status"`
 	CurrentVersion string         `json:"current_version,omitempty"`
 	LatestVersion  string         `json:"latest_version,omitempty"`
@@ -78,7 +88,9 @@ func NewResult(projectRoot, pluginRoot string) Result {
 func (r *Result) Add(a Artifact) {
 	r.Artifacts = append(r.Artifacts, a)
 	switch a.Status {
-	case StatusUpToDate, StatusInSync:
+	case StatusUpToDate, StatusInSync, StatusDelegated:
+		// delegated is a healthy target state (scope=user, rules come from the
+		// global copy) - belongs in the "in sync" bucket, not action-needed.
 		r.Summary.UpToDate++
 	case StatusUpdated:
 		r.Summary.Updated++

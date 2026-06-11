@@ -1,5 +1,5 @@
 ---
-description: Initialize LETS in current project - creates .lets/ structure, config, statusline, beads
+description: Initialize LETS in current project - creates .lets/ structure, config, statusline, beads; offers user-scope global-rules install when the plugin is user-scoped
 ---
 
 # Project Initialization
@@ -74,8 +74,25 @@ Branch on `$SCOPE`. When the plugin is found (`project` / `user` / `local`) surf
 
 Additionally:
 - `project` → just the auto-update tip. Best case.
-- `user` → the auto-update tip **plus** one more line:
-  > ℹ️ Plugin installed at **user scope** (only you). For team adoption, re-install at project scope: `/plugin uninstall lets` → `/plugin install lets` → pick "Install for all collaborators on this repository".
+- `user` → the auto-update tip **plus** the global-rules check:
+
+  ```bash
+  test -f "$HOME/.claude/rules/lets-rules.md" && echo "GLOBAL_RULES_PRESENT" || echo "GLOBAL_RULES_ABSENT"
+  ```
+
+  - `GLOBAL_RULES_PRESENT` → one line: "ℹ️ User-scope install detected — global rules active (`~/.claude/rules/lets-rules.md`); `/lets:update` keeps them current." Continue.
+  - `GLOBAL_RULES_ABSENT` → offer the install (AskUserQuestion, header `User scope`):
+    - "Install global rules (Recommended)" - description: "Writes ~/.claude/rules + ~/.lets/.env defaults; every project gets LETS rules without per-project init"
+    - "Project-only" - description: "Skip global install; this project gets its own rules copy below"
+
+    If installed → run, then render its `steps[]` like Step 2e renders project steps:
+
+    ```bash
+    lets init --user --json --plugin-root="${CLAUDE_PLUGIN_ROOT}" --language={LANGUAGE}
+    ```
+
+    (`{LANGUAGE}` is an orchestrator placeholder — substitute the English language name BEFORE running. If no language is bound yet (Step 2a hasn't run), ask Step 2a's language question first. NEVER leave a bash variable here: `$LANG` is the POSIX locale env var (`en_US.UTF-8`) and bash would expand it, silently poisoning `~/.lets/.env` in every future session. Add `--launcher={LAUNCHER}` only if the user customized the launcher this session.)
+  - One-line note stays for teams: "For team adoption, project scope is still preferable (`/plugin install` → 'all collaborators')."
 - `local` → just the auto-update tip. User picked the scope deliberately, so no scope-change notice.
 - `unknown` (empty / file missing / dev `--plugin-dir` mode) → no notice at all.
 
@@ -192,6 +209,22 @@ If `BEADS_EXISTS` (re-init scenario where someone removed .lets/ but kept .beads
 
 ### 2d. Exec
 
+**Global-rules check (decides `$RULES_SCOPE_FLAG`):**
+
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+SCOPE=$(grep -E '^LETS_RULES_SCOPE=' "$LETS_PROJECT_ROOT/.lets/.env" 2>/dev/null | cut -d= -f2)
+GLOBAL="ABSENT"; test -f "$HOME/.claude/rules/lets-rules.md" && GLOBAL="PRESENT"
+PROJECT="ABSENT"; test -f "$LETS_PROJECT_ROOT/.claude/rules/lets-rules.md" && PROJECT="PRESENT"
+echo "SCOPE=${SCOPE:-unset} GLOBAL=$GLOBAL PROJECT=$PROJECT"
+```
+
+- `SCOPE` already `project`/`user` → no question, `$RULES_SCOPE_FLAG=""` (the persisted value rules; the binary reads it from `.env`).
+- `SCOPE=unset` AND `GLOBAL=PRESENT` AND `PROJECT=ABSENT` → ask (AskUserQuestion, header `Rules scope`):
+  - "Rely on global (Recommended)" - description: "Persisted choice - your ~/.claude/rules copy covers this project; /lets:update won't re-create a project copy" → set `$RULES_SCOPE_FLAG="--rules-scope=user"`.
+  - "Copy to project" - description: "Git-trackable team copy; right call for shared repos" → set `$RULES_SCOPE_FLAG="--rules-scope=project"`.
+- Any other combination → no question, `$RULES_SCOPE_FLAG=""` (project copy present syncs as usual; no global rules = nothing to rely on).
+
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 lets init --json \
@@ -200,7 +233,7 @@ lets init --json \
   --merge-branch="$BRANCH" \
   --pr-flow="$FLOW" \
   --launcher="$LAUNCHER" \
-  $SKIP_BEADS_FLAG
+  $SKIP_BEADS_FLAG $RULES_SCOPE_FLAG
 ```
 
 Capture stdout (JSON object).
@@ -235,6 +268,7 @@ Read `.lets/.env` via Read tool. Extract:
 - `$CURRENT_LANG` from `LETS_LANGUAGE=...` line
 - `$CURRENT_BRANCH` from `LETS_MERGE_BRANCH=...` line
 - `$CURRENT_FLOW` from `LETS_PR_FLOW=...` line
+- `$CURRENT_RULES_SCOPE` from `LETS_RULES_SCOPE=...` line (absent → `project`)
 
 Show user a one-line summary: "Current: $CURRENT_LANG / $CURRENT_BRANCH / $CURRENT_FLOW".
 
@@ -260,10 +294,13 @@ Branch:
 
 ### 3c. Refresh exec
 
+Run the **Global-rules check** from Step 2d first (same bash block, same question rule — prompt fires only when `SCOPE=unset` AND `GLOBAL=PRESENT` AND `PROJECT=ABSENT`; on a typical re-run the scope is persisted or the project copy exists, so no question, no flag).
+
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 lets init --json \
-  --plugin-root="${CLAUDE_PLUGIN_ROOT}"
+  --plugin-root="${CLAUDE_PLUGIN_ROOT}" \
+  $RULES_SCOPE_FLAG
 ```
 
 No prefs flags passed. The binary reads existing values from `.env` and:
@@ -296,6 +333,23 @@ If "Keep current" picked, substitute `$LANG = $CURRENT_LANG`. Else use selected 
 
 Repeat for MergeBranch (`$BRANCH`), PRFlow (`$FLOW`), and Launcher (`$LAUNCHER` — "Keep current" shows `$LETS_LAUNCHER` from LETS Config, plus options terminal / cmux).
 
+**Rules scope** — only ask when `GLOBAL=PRESENT` (otherwise there's nothing to rely on; bind `$RULES_SCOPE_FLAG=""`):
+
+AskUserQuestion(
+  questions=[{
+    question: "Where should this project's rules come from?",
+    header: "Rules scope",
+    options: [
+      { label: "Keep current", description: "Currently: $CURRENT_RULES_SCOPE" },
+      { label: "Rely on global", description: "No project copy; rules from ~/.claude/rules (/lets:update won't re-create one)" },
+      { label: "Copy to project", description: "Git-trackable team copy" }
+    ],
+    multiSelect: false
+  }]
+)
+
+Bind: "Keep current" → `$RULES_SCOPE_FLAG="--rules-scope=$CURRENT_RULES_SCOPE"`; "Rely on global" → `--rules-scope=user`; "Copy to project" → `--rules-scope=project`.
+
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 lets init --json \
@@ -303,7 +357,8 @@ lets init --json \
   --language="$LANG" \
   --merge-branch="$BRANCH" \
   --pr-flow="$FLOW" \
-  --launcher="$LAUNCHER"
+  --launcher="$LAUNCHER" \
+  $RULES_SCOPE_FLAG
 ```
 
 Passing the prefs flags triggers `env_action.kind=regenerated` (binary detects values differ from existing .env, regenerates while preserving foreign keys + user-customized `LETS_TRACKER`).

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
@@ -31,12 +32,15 @@ func NewUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update",
 		Short: "Sync project with the current LETS release (internal - invoke via /lets:update)",
-		Long: `Checks the four drift-able LETS artifacts:
+		Long: `Checks the drift-able LETS artifacts (four core + optional user scope):
 
   .lets/.env                    regenerated if LETS_ENV_VERSION is stale (user values preserved)
   .claude/rules/lets-rules.md   re-copied from the plugin if outdated/missing
   lets binary                   version compared to the latest GitHub release (reports only)
   Claude Code plugin            version compared to the latest release (reports only)
+  ~/.claude/rules/lets-rules.md user-scope global rules - row appears only when the file
+                                exists; synced like project rules EXCEPT a newer/customized
+                                (ahead) copy is reported, never overwritten
 
 This is an internal subcommand. The supported entry point is the /lets:update
 slash command, which shells out with --plugin-root=${CLAUDE_PLUGIN_ROOT}.`,
@@ -84,7 +88,8 @@ slash command, which shells out with --plugin-root=${CLAUDE_PLUGIN_ROOT}.`,
 			if flagRefreshCache && flagOffline {
 				fmt.Fprintln(cmd.ErrOrStderr(), "warning: --refresh-cache has no effect with --offline")
 			}
-			opts := updatecmd.Options{}
+			home, _ := os.UserHomeDir() // "" on failure -> user-rules artifact skipped
+			opts := updatecmd.Options{HomeDir: home}
 			if !flagOffline {
 				cacheDir := filepath.Join(projectRoot, ".lets", "cache")
 				refresh := flagRefreshCache
