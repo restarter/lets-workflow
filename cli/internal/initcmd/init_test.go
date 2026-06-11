@@ -201,8 +201,23 @@ func TestRun_ProjectRulesAhead_StillOverwrites(t *testing.T) {
 	}
 }
 
-// --skip-rules: drift is still computed (truthful report) but nothing written.
-func TestRun_SkipRules_ReportsButNeverWrites(t *testing.T) {
+func baseScopePrefs(scope string) Prefs {
+	return Prefs{Language: "English", MergeBranch: "main", PRFlow: "local", Tracker: "beads", SkipBeads: true, RulesScope: scope}
+}
+
+func hasDelegatedSkip(steps []Step) bool {
+	for _, s := range steps {
+		if s.Status == StepSkip && strings.Contains(s.Message, "delegated - LETS_RULES_SCOPE=user") {
+			return true
+		}
+	}
+	return false
+}
+
+// scope=user: the project copy is DELIBERATELY not written, drift report is
+// neutralized to the delegated pseudo-state with an empty message (init.md
+// renders drift.message when detected - a nag here would contradict the choice).
+func TestRun_RulesScopeUser_DelegatesProjectCopy(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not available")
 	}
@@ -210,24 +225,88 @@ func TestRun_SkipRules_ReportsButNeverWrites(t *testing.T) {
 	gitInit(t, tmp)
 	pluginRoot := setupFakePluginRoot(t)
 
-	prefs := Prefs{Language: "English", MergeBranch: "main", PRFlow: "local", Tracker: "beads", SkipBeads: true, SkipRules: true}
-	result, err := Run(context.Background(), prefs, tmp, pluginRoot)
+	result, err := Run(context.Background(), baseScopePrefs("user"), tmp, pluginRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(tmp, ".claude", "rules", "lets-rules.md")); err == nil {
-		t.Error("--skip-rules must not write the project rules copy")
+		t.Error("scope=user must not write the project rules copy")
 	}
-	if !result.Drift.Detected || result.Drift.State != drift.StateMissing {
-		t.Errorf("drift report must stay truthful (missing), got %+v", result.Drift)
+	if result.Drift.Detected || result.Drift.State != DriftStateDelegated || result.Drift.Message != "" {
+		t.Errorf("drift must be neutralized to delegated with empty message, got %+v", result.Drift)
 	}
-	found := false
-	for _, s := range result.Steps {
-		if s.Status == StepSkip && strings.Contains(s.Message, "global rules cover this project") {
-			found = true
-		}
+	if !hasDelegatedSkip(result.Steps) {
+		t.Errorf("missing delegated skip step: %+v", result.Steps)
 	}
-	if !found {
-		t.Errorf("missing skip-rules step: %+v", result.Steps)
+	env, _ := os.ReadFile(filepath.Join(tmp, ".lets", ".env"))
+	if !strings.Contains(string(env), "LETS_RULES_SCOPE=user") {
+		t.Errorf(".env must persist LETS_RULES_SCOPE=user:\n%s", env)
+	}
+}
+
+// The motivating bug, CI-pinned: a flag-less re-run after scope=user must NOT
+// re-create the project copy. Exercises effectiveRulesScope's .env read (the
+// flag-set test never reaches that path).
+func TestRun_RulesScopePersists(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	tmp := t.TempDir()
+	gitInit(t, tmp)
+	pluginRoot := setupFakePluginRoot(t)
+
+	if _, err := Run(context.Background(), baseScopePrefs("user"), tmp, pluginRoot); err != nil {
+		t.Fatal(err)
+	}
+	// Flag-less re-run: RulesScope="" - the value must come from the persisted .env.
+	result, err := Run(context.Background(), baseScopePrefs(""), tmp, pluginRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(tmp, ".claude", "rules", "lets-rules.md")); err == nil {
+		t.Error("flag-less re-run must NOT re-create the project copy (persistence)")
+	}
+	if !hasDelegatedSkip(result.Steps) {
+		t.Errorf("re-run must stay delegated: %+v", result.Steps)
+	}
+}
+
+// scope=user but a project copy EXISTS (outdated): it's loaded and wins, so it
+// still syncs as today - delegated only suppresses the MISSING case.
+func TestRun_RulesScopeUser_ExistingCopyStillSyncs(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	tmp := t.TempDir()
+	gitInit(t, tmp)
+	pluginRoot := setupFakePluginRoot(t)
+	writeRulesFile(t, filepath.Join(tmp, ".claude", "rules", "lets-rules.md"), "0.3.0")
+
+	if _, err := Run(context.Background(), baseScopePrefs("user"), tmp, pluginRoot); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(filepath.Join(tmp, ".claude", "rules", "lets-rules.md"))
+	if !strings.Contains(string(data), "version: 0.4.0") {
+		t.Errorf("present project copy must still sync to plugin version:\n%s", data)
+	}
+}
+
+// Fail-safe: any .env scope value other than "user" degrades to project, so a
+// typo can never suppress the project rules copy.
+func TestRun_RulesScopeInvalidValue_TreatedAsProject(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	tmp := t.TempDir()
+	gitInit(t, tmp)
+	pluginRoot := setupFakePluginRoot(t)
+
+	// initcmd.Run does not validate the value (only the cobra flag does); a
+	// hand-edited/typo'd value reaches effectiveRulesScope verbatim.
+	if _, err := Run(context.Background(), baseScopePrefs("banana"), tmp, pluginRoot); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(tmp, ".claude", "rules", "lets-rules.md")); err != nil {
+		t.Errorf("invalid scope must behave as project (copy written): %v", err)
 	}
 }

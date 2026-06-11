@@ -27,6 +27,13 @@ const (
 	StepMigrate StepStatus = "migrate"
 )
 
+// DriftStateDelegated is an initcmd-local pseudo-state for the DriftReport
+// JSON: the project rules copy is DELIBERATELY absent (LETS_RULES_SCOPE=user,
+// rules come from the global ~/.claude/rules copy). NOT a drift.State const -
+// the drift package keeps pure file-compare semantics; consumers switching
+// exhaustively on canonical drift states hit their default for this value.
+const DriftStateDelegated = drift.State("delegated")
+
 // Step describes one apply step result for caller rendering.
 type Step struct {
 	Status  StepStatus `json:"status"`
@@ -184,12 +191,15 @@ func Run(ctx context.Context, prefs Prefs, projectRoot, pluginRoot string) (Resu
 			PluginVersion:    dr.PluginVersion,
 			Message:          drift.Message(dr),
 		}
-		if dr.Detected() && prefs.SkipRules {
-			// Global rules at ~/.claude/rules cover this project (Claude Code
-			// loads user-level rules everywhere; project copy only overrides).
-			// Drift report above stays truthful about the project copy's state;
-			// this step says why nothing was written.
-			result.Add(Step{Status: StepSkip, Message: ".claude/rules/lets-rules.md (skipped - global rules cover this project; re-run without --skip-rules to install for the team)"})
+		scope := effectiveRulesScope(filepath.Join(projectRoot, ".lets", ".env"))
+		if dr.State == drift.StateMissing && scope == "user" {
+			// Delegated: absence of the project copy IS the target state
+			// (LETS_RULES_SCOPE=user - rules come from ~/.claude/rules). Neutralize
+			// the drift report - init.md renders drift.message when detected, and
+			// "run /lets:init to install" would contradict the user's persisted
+			// choice. Message stays empty for the same reason.
+			result.Drift = DriftReport{Detected: false, State: DriftStateDelegated, PluginVersion: dr.PluginVersion}
+			result.Add(Step{Status: StepSkip, Message: ".claude/rules/lets-rules.md (delegated - LETS_RULES_SCOPE=user, rules come from ~/.claude/rules)"})
 		} else if dr.Detected() {
 			if err := os.MkdirAll(filepath.Dir(rulesDst), 0o755); err != nil {
 				return result, err
