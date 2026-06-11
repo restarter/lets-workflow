@@ -318,14 +318,14 @@ const exploreRaw = await parallel(FOCUS.map(f => () =>
   agent(explorePrompt(f), { agentType: 'lets:explorer', label: `explore:${f.name}`, schema: EXPLORE_SCHEMA })))
 const map = exploreRaw.filter(Boolean)
 if (map.length === 0) {
-  return { error: 'exploration_failed', plan_markdown: null, decision_log: null, winner: null, approaches: [], eval_findings: [], counts: { explorers: 0 } }
+  return { error: 'exploration_failed', plan_markdown: null, decision_log: null, winner: null, approaches: [], eval_findings: [], counts: { mode: FAST ? 'fast' : 'standard', explorers: 0 } }
 }
 
 phase('Approaches')
 const approachesRes = await agent(approachesPrompt(map), { agentType: 'lets:architect', label: 'approaches', schema: APPROACHES_SCHEMA })
 const approaches = (approachesRes && approachesRes.approaches) ? approachesRes.approaches : []
 if (approaches.length === 0) {
-  return { error: 'no_approaches', plan_markdown: null, decision_log: null, winner: null, approaches: [], eval_findings: [], counts: { explorers: map.length, approaches: 0 } }
+  return { error: 'no_approaches', plan_markdown: null, decision_log: null, winner: null, approaches: [], eval_findings: [], counts: { mode: FAST ? 'fast' : 'standard', explorers: map.length, approaches: 0 } }
 }
 
 phase('Architect')
@@ -336,7 +336,7 @@ const archRaw = await parallel(archInput.map(a => () =>
     .then(r => (r ? { ...r, approach: a.id, name: a.name } : null))))
 const archs = archRaw.filter(Boolean)
 if (archs.length === 0) {
-  return { error: 'architecture_failed', plan_markdown: null, decision_log: null, winner: null, approaches, eval_findings: [], counts: { explorers: map.length, approaches: approaches.length, architected: 0 } }
+  return { error: 'architecture_failed', plan_markdown: null, decision_log: null, winner: null, approaches, eval_findings: [], counts: { mode: FAST ? 'fast' : 'standard', explorers: map.length, approaches: approaches.length, architected: 0 } }
 }
 const archIds = archs.map(a => a.approach)
 
@@ -345,10 +345,16 @@ const JUDGE_SCHEMA = buildJudgeSchema(archIds)
 const judgeRaw = await parallel(JUDGES.map(j => () =>
   agent(judgePrompt(archs, archIds), { agentType: `lets:${j.name}`, label: `judge:${j.name}`, schema: JUDGE_SCHEMA })))
 const judgeResults = judgeRaw.filter(Boolean)
-const { winner, decision_log } = aggregateJudges(judgeResults, archIds)
+let { winner, decision_log } = aggregateJudges(judgeResults, archIds)
+if (winner == null && FAST && archIds.length === 1) {
+  // Fast single-candidate: the lone judge errored but there's only ONE architected approach,
+  // so there is no choice to fabricate. Proceed with it and mark the fallback observably.
+  winner = archIds[0]
+  decision_log = { votes: { [winner]: 0 }, totals: { [winner]: 0 }, rationales: [], judges: 0, forced: 'single-candidate' }
+}
 if (winner == null) {
-  // judges all errored -> do NOT silently pick; surface it (anti-silent-fail).
-  return { error: 'judge_failed', plan_markdown: null, decision_log, winner: null, approaches, eval_findings: [], counts: { explorers: map.length, approaches: approaches.length, architected: archs.length, judges: 0 } }
+  // judges all errored AND >1 candidate -> do NOT silently pick; surface it (anti-silent-fail).
+  return { error: 'judge_failed', plan_markdown: null, decision_log, winner: null, approaches, eval_findings: [], counts: { mode: FAST ? 'fast' : 'standard', explorers: map.length, approaches: approaches.length, architected: archs.length, judges: 0 } }
 }
 const winnerArch = archs.find(a => a.approach === winner)
 
@@ -362,9 +368,10 @@ const planRes = await agent(planPrompt(winnerArch, evalFindings), { agentType: '
 let planMd = planRes ? planRes.plan_markdown : null // null -> dispatcher surfaces "plan synthesis failed", never fabricates
 
 // Stage 7-8: review the WRITTEN plan (mirror /lets:review --plan) + revise. Never lose planMd on agent error.
+// Fast mode SKIPS this heavy pass only; the quick Plan Check/Refine below runs in BOTH modes.
 phase('Plan Review')
-let reviewFindings = [], reviewVerdict = null, reviewFailed = false, reviewFixed = false
-if (planMd) {
+let reviewFindings = [], reviewVerdict = null, reviewFailed = false, reviewFixed = false, reviewSkipped = false
+if (!FAST && planMd) {
   const prRaw = await parallel(PLAN_REVIEWERS.map(r => () =>
     agent(planReviewPrompt(planMd), { agentType: `lets:${r.name}`, label: `planreview:${r.name}`, schema: PLAN_REVIEW_SCHEMA })
       .then(x => (x ? { ...x, agent: r.name } : null))))
@@ -377,6 +384,8 @@ if (planMd) {
     const rev = await agent(revisePrompt(planMd, reviewFindings), { agentType: 'lets:architect', label: 'revise:review', schema: REVISE_SCHEMA })
     if (rev && rev.plan_markdown) { planMd = rev.plan_markdown; reviewFixed = true }
   }
+} else if (FAST && planMd) {
+  reviewSkipped = true  // deliberate fast-mode skip (NOT a silent skip / agent error)
 }
 
 // Stage 9-10: quick 5-lens check (mirror /lets:check --plan) + refine. Catches regressions the revise introduced.
@@ -400,12 +409,12 @@ return {
   divergence_reason: planRes ? (planRes.divergence_reason || null) : null,
   review_findings: reviewFindings,
   check_findings: checkFindings,
-  // Self-repair audit: did the plan get reviewed/checked and did fixes land? (never silently skip - flags say why)
-  refinement_log: { review_verdict: reviewVerdict, review_findings: reviewFindings.length, review_fixed: reviewFixed, review_failed: reviewFailed, check_verdict: checkVerdict, check_findings: checkFindings.length, check_fixed: checkFixed, check_failed: checkFailed },
+  // Self-repair audit: review pass skipped in fast (review_skipped says why); check pass runs in BOTH modes (real verdict).
+  refinement_log: { review_verdict: reviewVerdict, review_findings: reviewFindings.length, review_fixed: reviewFixed, review_failed: reviewFailed, review_skipped: reviewSkipped, check_verdict: checkVerdict, check_findings: checkFindings.length, check_fixed: checkFixed, check_failed: checkFailed },
   decision_log,
   winner,
   winner_name: winnerArch ? winnerArch.name : null,
   approaches: approaches.map(a => ({ id: a.id, name: a.name, summary: a.summary })),
   eval_findings: evalFindings,
-  counts: { explorers: map.length, approaches: approaches.length, architected: archs.length, judges: judgeResults.length, experts: evalRaw.filter(Boolean).length, eval_findings: evalFindings.length, review_findings: reviewFindings.length, check_findings: checkFindings.length },
+  counts: { mode: FAST ? 'fast' : 'standard', explorers: map.length, approaches: approaches.length, architected: archs.length, judges: judgeResults.length, experts: evalRaw.filter(Boolean).length, eval_findings: evalFindings.length, review_findings: reviewFindings.length, check_findings: checkFindings.length },
 }
