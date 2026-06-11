@@ -174,7 +174,8 @@ AUTO MODE (autonomous execution: `/loop`, `/lets:execute --auto`, `/lets:team` p
 
 ## Agent Rules
 
-- When launching expert agents for `/lets:review`, `/lets:github-pr`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:backlog`, `/lets:explore` - use ONLY `lets:*` agents (`lets:architect`, `lets:security`, etc.)
+- When launching expert agents for `/lets:review`, `/lets:github-pr`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:backlog`, `/lets:explore`, `/lets:research` - use ONLY `lets:*` agents (`lets:architect`, `lets:security`, etc.)
+- **Carve-out for web data-gatherers:** `/lets:research`'s per-sub-question web fetchers are data gatherers using the default web-capable subagent (mirroring `/lets:explore`'s web subagent), NOT expert dispatch - `lets:*` agents have `tools: Read, Grep, Glob, Bash` and no web tools. The lets:*-only rule covers research's `lets:skeptic` cross-check, not its web fetch.
 - `lets:actor` is a special meta-agent: requires explicit user request + personality source (URL or file path). Never auto-select. Use `actor-fetch-personality` skill to fetch personality before dispatch.
 - Never use `general-purpose` or other non-lets subagent types for expert work
 
@@ -428,6 +429,7 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:review-round` | Code | Work through a RECEIVED review round - triage N comments, decisions->task, artifact FROZEN, one final edit-pass (inverse of `/lets:review`) |
 | `/lets:opinion` | Expert | Technical decision (dynamic agent count; `--workflow` = off-context fan-out + adversarial challenge) |
 | `/lets:ask` | Expert | Quick expert consultation (1 agent) |
+| `/lets:research` | Expert | Web-sourced CITED answer to an external/technical question; cross-check pass flags single-source/contradicted/stale claims (`--workflow` = off-context; `--project` = repo-grounded) *(ships next release)* |
 | `/lets:brainstorm` | Planning | Quick interactive ideation on a topic - fast context scan, no agents |
 | `/lets:backlog` | Planning | Backlog review (multi-agent) + interactive cleanup triage |
 | `/lets:explore` | Planning | Explore a topic from multiple expert angles (`--workflow` = off-context ideate fan-out) |

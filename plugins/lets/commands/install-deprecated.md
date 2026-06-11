@@ -82,6 +82,7 @@ Team:     /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /le
 | `/lets:review-round` | Code | Work through a received review round - triage, decisions->task, one final edit-pass |
 | `/lets:opinion` | Expert | Technical decision needed |
 | `/lets:ask` | Expert | Quick question to one expert |
+| `/lets:research` | Expert | Web-sourced cited answer to an external/technical question (`--workflow` off-context) *(ships next release)* |
 | `/lets:init` | Setup | Initialize LETS in a new project; re-run for self-heal or config change |
 | `/lets:update` | Setup | Sync project with the current release - `.lets/.env` + rules self-heal, plus `lets` binary / plugin version status |
 | `/lets:worktree` | Utility | Create/manage worktrees for parallel sessions |
