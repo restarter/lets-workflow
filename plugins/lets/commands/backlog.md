@@ -1,13 +1,13 @@
 ---
-description: Backlog review and cleanup - multi-agent backlog review or interactive triage cleanup
-argument-hint: "[review|cleanup] [--workflow]"
+description: Backlog review and cleanup - multi-agent backlog review, quick no-agent pulse (--fast), or interactive triage cleanup
+argument-hint: "[review|cleanup] [--fast] [--workflow]"
 ---
 
 # Backlog
 
-Backlog management in two modes. Review (heavy) launches an explorer + parallel domain agents for multi-perspective backlog insights. Cleanup is fast interactive triage - no agents.
+Backlog management in three modes. Review (heavy) launches an explorer + parallel domain agents for multi-perspective backlog insights. `--fast` is a quick no-agent backlog pulse (orchestrator-only, the lightweight sibling of Review). Cleanup is fast interactive triage - no agents.
 
-**For quick ideation, use `/lets:brainstorm`. To explore a specific topic in depth, use `/lets:explore`. For HOW to build something, use `/lets:plan`.**
+**Quick no-agent backlog pulse: `/lets:backlog --fast`. For HOW to build something, use `/lets:plan`. For an open question or decision about the project, use `/lets:opinion`.**
 
 > **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
 
@@ -22,9 +22,12 @@ Backlog management in two modes. Review (heavy) launches an explorer + parallel 
 
 ## Step 0: Choose Mode
 
-**Parse the argument first:** strip a `--workflow` token (sets workflow mode - Review only) if present; the remaining token is the mode keyword. `--workflow` passed with `cleanup` is ignored with a one-line note (Cleanup has no agents).
+**Parse the argument first:** strip a `--fast` token (sets fast mode - no agents) and a `--workflow` token (sets workflow mode - Review only) if present; the remaining token is the mode keyword. Precedence/compat:
+- `--fast` selects the orchestrator-only **Fast mode** (a quick no-agent pulse) regardless of the `review`/no-arg keyword. `--fast` + `--workflow` -> `--fast` wins (orchestrator-only beats off-context fan-out); note it in one line.
+- `--fast` passed with `cleanup` is ignored with a one-line note (Cleanup is already no-agent triage).
+- `--workflow` passed with `cleanup` is ignored with a one-line note (Cleanup has no agents).
 
-If an argument is provided, parse it: `review` -> Review Backlog Mode; `cleanup` -> Cleanup Mode.
+If an argument is provided, parse it: `--fast` -> Fast mode (below); `review` -> Review Backlog Mode; `cleanup` -> Cleanup Mode.
 
 If no argument, use AskUserQuestion:
 
@@ -35,6 +38,7 @@ AskUserQuestion(
     header: "Backlog",
     options: [
       { label: "Review backlog", description: "Agents analyze project state, generate ideas and surface gaps (~2-3 min)" },
+      { label: "Quick pulse", description: "No agents - fast orchestrator-only scan and conversation" },
       { label: "Cleanup", description: "Triage stale tasks - close, merge, reprioritize" }
     ],
     multiSelect: false
@@ -44,7 +48,75 @@ AskUserQuestion(
 
 **Handle response:**
 - **Review backlog** -> Review Backlog Mode (below)
+- **Quick pulse** -> Fast mode (below)
 - **Cleanup** -> Cleanup Mode (below)
+
+---
+
+## Fast Mode (--fast)
+
+No agents. The orchestrator gathers backlog context directly and enters conversation - a quick pulse, the lightweight sibling of the agent-backed Review below (same house `--fast` convention as `/lets:plan --fast`: no flag = subagents, `--fast` = orchestrator-only).
+
+### Step F1: Gather Context
+
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+bd stats
+bd list --status=open -n 30
+bd list --status=in_progress
+git log --oneline -15
+```
+
+Also use the Grep tool (not bash grep) to scan for tech-debt signals:
+```
+Grep(pattern="TODO|FIXME|HACK|XXX", path="$LETS_PROJECT_ROOT", output_mode="content", head_limit=20)
+```
+
+If an area/epic argument was passed alongside `--fast`:
+- `bd search {argument}` (if no results, fall back to `bd list` and scan titles)
+- Grep/Glob for related code
+
+### Step F2: Open with Observations
+
+Based on gathered context, present 3-5 proactive observations:
+
+```
+## Backlog Pulse
+
+Based on what I see in the project:
+
+1. **{observation}** - {why it matters, 1-2 sentences}
+2. **{observation}** - {why it matters}
+3. **{observation}** - {why it matters}
+
+**Question:** {probing question that opens discussion}
+```
+
+Categories to draw observations from:
+- Gaps: areas with activity but no tasks
+- Stale work: tasks open long with no progress
+- Patterns: recurring themes across tasks/commits
+- Quick wins: small improvements with high impact
+- Risks: things that could break or become debt
+
+### Step F3: Interactive Dialog
+
+After each user response:
+1. **Acknowledge** - brief, no fluff
+2. **Build** - add insight or connection
+3. **Probe** - ask next question that goes deeper
+
+If the user wants the heavier multi-agent pass: "Want a deeper backlog review? `/lets:backlog review` launches expert agents."
+
+### Step F4: Capture & Exit
+
+If active task:
+
+```bash
+bd comments add <task-id> "Backlog pulse: {key takeaways, 2-3 items}"
+```
+
+If ideas emerged that deserve tasks, offer to create them (use the `create-task` skill, user approval per task).
 
 ---
 
@@ -150,15 +222,15 @@ OUTPUT FORMAT - Project State Profile:
 )
 ```
 
-<!-- Split seam: Review can no longer auto-jump into Quick (now in /lets:brainstorm). Degrade via pointer, do NOT inline-duplicate Q1-Q4 here. -->
+<!-- Split seam: the heavy Review path and the no-agent Quick pulse both live in THIS command now (Quick = Fast Mode above). Degrade via a pointer to --fast, do NOT inline-duplicate the F1-F4 body here. -->
 
 #### Explorer Failure Guard
 
 If explorer fails, times out, or returns no structured profile:
 
-> "Explorer couldn't gather context for multi-agent review. For quick ideation instead, run `/lets:brainstorm`."
+> "Explorer couldn't gather context for multi-agent review. For a quick no-agent pulse instead, run `/lets:backlog --fast`."
 
-Stop here (do NOT auto-jump - Quick ideation lives in /lets:brainstorm, a separate command).
+Stop here (do NOT auto-run agents - the no-agent pulse is `/lets:backlog --fast`, Fast Mode above).
 
 #### Thin Profile Guard
 
@@ -166,9 +238,9 @@ After explorer returns, check task count from profile's Backlog Summary section.
 
 If < 5 open tasks reported:
 
-> "Project has very few tasks - not enough context for multi-agent analysis. For quick ideation instead, run `/lets:brainstorm`."
+> "Project has very few tasks - not enough context for multi-agent analysis. For a quick no-agent pulse instead, run `/lets:backlog --fast`."
 
-Stop here (do NOT auto-jump - Quick ideation lives in /lets:brainstorm, a separate command).
+Stop here (do NOT auto-run agents - the no-agent pulse is `/lets:backlog --fast`, Fast Mode above).
 
 ### Phase 2: Select Brainstorm Agents
 
@@ -422,7 +494,7 @@ Analyze loaded data and group:
 ```
 
 If no issues found in a category, skip it.
-If backlog is clean, say so and suggest `/lets:backlog review` or `/lets:explore` instead.
+If backlog is clean, say so and suggest `/lets:backlog review` or `/lets:backlog --fast` instead.
 
 ### Step C3: Interactive Triage
 
@@ -532,7 +604,7 @@ The returned aggregate `{ ideas, counts }` is the only thing that enters context
 
 ```
 ┌─ LETS ─────────────────────────┐
-│  Ideas?  /lets:brainstorm      │
+│  Pulse?  /lets:backlog --fast  │
 │  Start?  /lets:start           │
 └────────────────────────────────┘
 ```
@@ -541,9 +613,10 @@ The returned aggregate `{ ideas, counts }` is the only thing that enters context
 
 - All task mutations (create, close, update) require user approval
 - No agents in Cleanup mode
+- `--fast` (Fast Mode) is orchestrator-only - a quick no-agent backlog pulse (house `--fast` convention); `--fast` wins over `--workflow`, and is ignored with `cleanup`
 - Explorer + agents only in Review Backlog mode
 - All agents launched in a SINGLE message (parallel)
-- If explorer fails or returns thin profile (<5 tasks), surface and point to /lets:brainstorm for quick ideation
+- If explorer fails or returns thin profile (<5 tasks), surface and point to `/lets:backlog --fast` for a quick no-agent pulse
 - Explorer profile max ~500 words (passed to multiple agents)
 - `--workflow` (Review mode only) runs Phases 3-4 off-context in a Dynamic Workflow - a transparent perf lever, same findings as the standard path; Cleanup ignores `--workflow`
 - Respond in user's language

@@ -15,12 +15,11 @@ Ask a question about the outside world, get back a concise answer where every no
 | You want | Use | Shape |
 |----------|-----|-------|
 | An answer to an external/technical question, with sources | `/lets:research` | question → sourced answer |
-| Ideas, angles, and questions about a topic in **your project** | `/lets:explore` | topic → ideation (web is only an input there) |
 | One expert's take, quick | `/lets:ask` | question → expert consult |
-| Several experts weighing a decision | `/lets:opinion` | decision → recommendation |
+| A judgment or ideas about something in **your project** (a decision or an open question) | `/lets:opinion` | decision / open question → project-grounded take (no web) |
 | A plan for **how to build** something | `/lets:plan` | task → implementation plan |
 
-Rule of thumb: if the answer should end with a Sources list, it's research. "Which vector DB has the best Go client in 2026?" is research; "how should we add a vector DB to this repo?" is explore or plan.
+Rule of thumb: if the answer should end with a Sources list, it's research. "Which vector DB has the best Go client in 2026?" is research; "how should we add a vector DB to this repo?" is opinion or plan.
 
 ## Usage
 

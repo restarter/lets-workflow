@@ -12,7 +12,7 @@ const { profile, agents, projectRoot, claudeMd } = input
 // ── SCHEMAS ──
 // Backlog idea: category is backlog-semantic (missing/adjust/theme). adjust ideas embed the
 // referenced task as **Title** (`task-id`) in description (Task References rule) - no separate field,
-// so the pure logic below stays identical to explore-workflow's.
+// so the pure logic below is category-agnostic.
 const IDEA_SCHEMA = {
   type: 'object', additionalProperties: false,
   properties: {
@@ -55,8 +55,8 @@ const CLUSTER_SCHEMA = {
   required: ['themes'],
 }
 
-// ── PURE LOGIC (cloned verbatim from explore.workflow.js - category-agnostic; KEEP IN SYNC with
-// backlog.md Phase 4 / Workflow Mode and with explore-workflow's copy) ──
+// ── PURE LOGIC (category-agnostic theme clustering; KEEP IN SYNC with
+// backlog.md Phase 4 / Workflow Mode) ──
 const IMPACT_RANK = { high: 0, medium: 1 }
 
 // Turn the cluster agent's themes (member = pool index) into impact-sorted ideas with deterministic

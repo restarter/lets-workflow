@@ -19,9 +19,7 @@ See **[tasks.md](tasks.md)** for the task lifecycle.
 
 | Command | What it does |
 |---------|--------------|
-| `/lets:brainstorm` | Quick interactive ideation on a topic — fast context scan, no agents. |
-| `/lets:backlog` | Backlog management — multi-agent backlog review, or interactive cleanup triage. `review` / `cleanup` skip the menu. |
-| `/lets:explore` | Explore a topic from multiple expert angles — scout context, web research, parallel domain agents surface insights/questions/approaches. `--workflow` runs the fan-out off-context. |
+| `/lets:backlog` | Backlog management — multi-agent review (`review`), a quick no-agent pulse (`--fast`), or interactive cleanup triage (`cleanup`). The keyword/flag skips the menu; `review --workflow` runs the fan-out off-context. |
 | `/lets:plan` | Structured planning — codebase exploration with scaled explorer agents, then architecture design with expert evaluation, then a written plan in `.lets/plans/`. `--fast` skips the subagent phases and plans in-conversation. |
 | `/lets:plan-workflow` | PREVIEW — autonomous planning via a Dynamic Workflow (goal + rubric up front, off-context, approve at the end). `--fast` = lean budget (~7 agents, still off-context) — distinct from `/lets:plan --fast` (no subagents, in-conversation). |
 | `/lets:execute` | Execute the plan from `/lets:plan` in native plan mode, with your approval at each step. `--auto` runs an approved plan without per-step gates (push/PR/`bd close`/external still gated). |
