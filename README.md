@@ -22,7 +22,7 @@ Claude Code is powerful, but without structure it drifts - forgets context betwe
 **You don't just chat with AI. You run a process** — `/lets:*` commands and 14 expert agents cover the whole development cycle, every change is reviewed by the right specialists, and every decision is made deliberately, with you in the loop.
 
 - **A complete workflow, not a chat box.** One loop from start to ship — restore context and pick a task, plan the work, build it, review it, open a PR, close the task. The plugin keeps Claude on the rails the whole way; nothing falls through the cracks.
-- **Plan before you build.** Brainstorm and explore ideas, review and clean up the backlog, design the architecture with real codebase exploration and expert review, then execute step by step behind approval gates. Choices are made on purpose, not improvised.
+- **Plan before you build.** Pulse and clean up the backlog, design the architecture with real codebase exploration and expert review, then execute step by step behind approval gates. Choices are made on purpose, not improvised.
 - **Every change reviewed by the right experts.** 14 specialized agents select themselves based on what changed - security for auth code, database for migrations, architect for structure. Findings come tiered by severity, so you act on what matters. Plus an *actor* agent — point it at a senior iOS dev's profile, a UX designer's, anyone — and get their take.
 - **You decide, always.** Commit, push, PR, merge - every state-changing step waits for your "go". The AI proposes and explains its reasoning; it never silently switches approach. Transparency by design.
 - **Context that survives.** Tasks, decisions, and discovery notes live in [beads](https://github.com/steveyegge/beads) and outlast conversation compaction and new sessions - pick up exactly where you left off.
@@ -111,9 +111,7 @@ Then, inside the Claude Code session:
 
 | Command | Description |
 |---------|-------------|
-| `/lets:brainstorm` | Quick interactive ideation on a topic - fast context scan, no agents |
-| `/lets:backlog` | Backlog review (multi-agent) + interactive cleanup triage (Review `--workflow` = off-context) |
-| `/lets:explore` | Explore a topic from multiple expert angles - scout, web research, agent fan-out (`--workflow` = off-context) |
+| `/lets:backlog` | Backlog review (multi-agent, `--workflow` = off-context) + `--fast` quick no-agent pulse + interactive cleanup triage |
 | `/lets:plan` | Structured planning - explore codebase, design architecture, write plan (`--fast` = orchestrator-only, no subagents) |
 | `/lets:execute` | Execute plan from `/lets:plan` via native plan mode |
 | `/lets:team` | Parallel implementation with Agent Teams |
@@ -143,7 +141,7 @@ Then, inside the Claude Code session:
 
 → Full docs: [docs/agents.md](docs/agents.md)
 
-LETS ships **14 specialized agents**. You never pick them by hand — the commands that use agents (`/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:backlog`, `/lets:explore`, `/lets:research`, `/lets:team`) look at what you're doing and bring in only the ones that fit.
+LETS ships **14 specialized agents**. You never pick them by hand — the commands that use agents (`/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:backlog`, `/lets:research`, `/lets:team`) look at what you're doing and bring in only the ones that fit.
 
 | Agent | Expertise |
 |-------|-----------|
@@ -198,9 +196,7 @@ A LETS session runs a loop: start, work, commit, finish.
 │  /lets:research  Web-sourced cited answer to a question (ships next rel)  │
 │                                                                           │
 ├─ You plan, Claude builds ─────────────────────────────────────────────────┤
-│  /lets:brainstorm  Quick ideation on a topic - fast, no agents            │
 │  /lets:backlog     Backlog review (multi-agent) + cleanup triage          │
-│  /lets:explore     Think through a topic - web-grounded, multi-expert     │
 │  /lets:plan        Design how to build it - codebase exploration, arch    │
 │  /lets:execute     Claude implements the plan with your approval gates    │
 │                                                                           │
@@ -220,17 +216,13 @@ A LETS session runs a loop: start, work, commit, finish.
 
 > **Think** → **Design** → **Build**
 
-**Brainstorm** (`/lets:brainstorm`) - fast interactive ideation on a topic: a quick context scan (no agents), then a direct conversation. For a specific topic deep-dive, use `/lets:explore`.
-
-**Backlog** (`/lets:backlog`) - manage the task backlog in two modes: *Review backlog* (agents analyze your task list, find patterns, suggest priorities) and *Cleanup* (find stale tasks, broken dependencies, forgotten work). `/lets:backlog review` and `/lets:backlog cleanup` skip the menu. `/lets:backlog review --workflow` runs the Review fan-out off-context.
-
-**Explore** (`/lets:explore`) - think through a specific topic or idea from multiple expert angles. A scout gathers project context, a web-research pass pulls current community standards, then parallel domain agents surface insights, open questions, and approaches. `--workflow` runs the fan-out off-context.
+**Backlog** (`/lets:backlog`) - manage the task backlog in three modes: *Review backlog* (agents analyze your task list, find patterns, suggest priorities), *`--fast`* (a quick no-agent pulse - fast context scan, then a direct conversation), and *Cleanup* (find stale tasks, broken dependencies, forgotten work). `/lets:backlog review`, `/lets:backlog --fast`, and `/lets:backlog cleanup` skip the menu. `/lets:backlog review --workflow` runs the Review fan-out off-context.
 
 **Plan** (`/lets:plan`) - codebase exploration with dynamically-scaled explorer agents, then architecture design with expert evaluation. Small project? One explorer. Large monorepo? Up to 10, each mapping a different area. Want a quick talk-through instead? `/lets:plan --fast` skips the subagent phases and plans collaboratively in-session.
 
 **Execute** (`/lets:execute`) - implements the plan step by step in native plan mode. You approve each step before Claude proceeds. No surprises.
 
-**Research** (`/lets:research`) - unlike `/lets:explore` (project ideation) or `/lets:ask`/`/lets:opinion` (model-knowledge consults), this answers an external or technical question with a CITED synthesis: it searches the web, fetches the best sources, and a cross-check pass flags single-source, contradicted, or stale claims before presenting. The deliverable is a sourced answer with a Sources list and an as-of date. `--workflow` runs it off-context; `--project` grounds findings against this repo. *(ships next release)*
+**Research** (`/lets:research`) - unlike `/lets:opinion` (project-grounded judgment, no web) or `/lets:ask` (a quick model-knowledge consult), this answers an external or technical question with a CITED synthesis: it searches the web, fetches the best sources, and a cross-check pass flags single-source, contradicted, or stale claims before presenting. The deliverable is a sourced answer with a Sources list and an as-of date. `--workflow` runs it off-context; `--project` grounds findings against this repo. *(ships next release)*
 
 ### Code review
 
@@ -381,7 +373,7 @@ The README is the tour; **[docs/](docs/)** is the manual.
 | [agents.md](docs/agents.md) | The 14 expert agents, what triggers each, tiered scoring, agent modes, and the actor agent. |
 | [parallel-work.md](docs/parallel-work.md) | Working on several tasks at once — `/lets:team` (autonomous agents) and `/lets:worktree` (parallel terminals). |
 | [autonomous.md](docs/autonomous.md) | Hands-off flows — Dynamic Workflows (`--workflow`) and the autonomous task pipeline (spawn → plan → execute, two gates). |
-| [tasks.md](docs/tasks.md) | Task tracking with beads — the task lifecycle, taking and creating tasks, notes, `/lets:brainstorm`, `/lets:backlog`, beads memory, shared backlogs for teams. |
+| [tasks.md](docs/tasks.md) | Task tracking with beads — the task lifecycle, taking and creating tasks, notes, `/lets:backlog`, beads memory, shared backlogs for teams. |
 | [commands.md](docs/commands.md) | Full reference for every `/lets:*` command. |
 | [configuration.md](docs/configuration.md) | `.lets/.env` settings, the `.lets/` file layout, `lets init` vs `bd init` setup order, and dependencies. |
 
