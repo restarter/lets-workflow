@@ -121,7 +121,7 @@ function collectSources(claims) {
 
 // ── PROMPTS (built from args) ──
 // ONE neutral no-agentType subagent per sub-question (the DEFAULT web-capable subagent - lets:* agents have
-// tools: Read, Grep, Glob, Bash and NO web tools, so they CANNOT do this). Mirrors explore's webResearchPrompt
+// tools: Read, Grep, Glob, Bash and NO web tools, so they CANNOT do this). Carries the web-subagent
 // self-report safeguard + the "return fewer, don't fabricate" cap.
 function researchPrompt(subQuestion) {
   // Project grounding is TRUSTED (it is THIS repo) - it is NOT fenced as untrusted. Only fetched web pages

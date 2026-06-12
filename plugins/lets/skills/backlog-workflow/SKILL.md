@@ -6,7 +6,7 @@ user-invocable: false
 
 # backlog-workflow (Dynamic Workflow asset)
 
-A Dynamic Workflow asset (see `CLAUDE.md` -> "Dynamic Workflow Assets"; `review-workflow` is the reference example, `explore-workflow` the closest sibling). `backlog.workflow.js` is executed by the `Workflow` tool, invoked from `/lets:backlog`'s Workflow Mode via:
+A Dynamic Workflow asset (see `CLAUDE.md` -> "Dynamic Workflow Assets"; `review-workflow` is the reference example). `backlog.workflow.js` is executed by the `Workflow` tool, invoked from `/lets:backlog`'s Workflow Mode via:
 
 ```
 Workflow({ scriptPath: "${CLAUDE_PLUGIN_ROOT}/skills/backlog-workflow/backlog.workflow.js", args })
@@ -16,7 +16,7 @@ Workflow({ scriptPath: "${CLAUDE_PLUGIN_ROOT}/skills/backlog-workflow/backlog.wo
 
 ## Why this is a transparent performance lever (not autonomous)
 
-`/lets:backlog review --workflow` produces the SAME result as the standard Task path - only the per-agent backlog-idea dumps stay off-context. The explorer scout (Phase 1) and the signal-driven agent selection (Phase 2) stay IN-CONTEXT in `backlog.md`; the ideate fan-out (Phase 3) and the aggregate/cluster (Phase 4) move into the workflow (off-context). The interactive dialog (Phase 5) + capture (Phase 6) stay in-context after the aggregate returns. There is **no Web Research stage** (unlike `explore-workflow`): the standard backlog Phase 3 ideates over the project's own profile + CLAUDE.md without web search, so adding web here would diverge the two paths - `--workflow` must stay a pure context-savings lever, same findings. The cluster is a SEMANTIC dedupe + impact-sort (an off-context merge), not a quality gate.
+`/lets:backlog review --workflow` produces the SAME result as the standard Task path - only the per-agent backlog-idea dumps stay off-context. The explorer scout (Phase 1) and the signal-driven agent selection (Phase 2) stay IN-CONTEXT in `backlog.md`; the ideate fan-out (Phase 3) and the aggregate/cluster (Phase 4) move into the workflow (off-context). The interactive dialog (Phase 5) + capture (Phase 6) stay in-context after the aggregate returns. There is **no Web Research stage**: the standard backlog Phase 3 ideates over the project's own profile + CLAUDE.md without web search, so adding web here would diverge the two paths - `--workflow` must stay a pure context-savings lever, same findings. The cluster is a SEMANTIC dedupe + impact-sort (an off-context merge), not a quality gate.
 
 ## What it does (off-context)
 
@@ -41,4 +41,4 @@ Workflow({ scriptPath: "${CLAUDE_PLUGIN_ROOT}/skills/backlog-workflow/backlog.wo
 - No filesystem - the script returns data; `/lets:backlog` renders + records.
 - No sibling `import` - all logic stays inline.
 - No `Date.now()` / `Math.random()` / `new Date()`.
-- Top-level `await`/`return` are used, so the file is NOT Node-importable - no committed unit test; the pure logic (`buildThemes`, `clusterIdeas`) is cloned from `explore-workflow` (category-agnostic) and kept in sync with `backlog.md` Phase 4 prose by discipline + a live smoke test.
+- Top-level `await`/`return` are used, so the file is NOT Node-importable - no committed unit test; the pure logic (`buildThemes`, `clusterIdeas`) is category-agnostic and kept in sync with `backlog.md` Phase 4 prose by discipline + a live smoke test.

@@ -719,7 +719,7 @@ if [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ]; then
   # Trunk-mode: branch name has no task scope, derive slug from task-id (from detect-task in Step 2)
   SLUG="{TASK_ID}"
 else
-  SLUG="${BRANCH#feature/}"   # e.g., 0nf.10-improve-brainstorm
+  SLUG="${BRANCH#feature/}"   # e.g., 0nf.10-improve-statusline
 fi
 STAMP=$(date +%Y-%m-%d-%H%M)   # same convention as .lets/sessions/ - keeps plan history, no overwrite
 mkdir -p "$LETS_PROJECT_ROOT/.lets/plans"
@@ -729,7 +729,7 @@ echo "$PLAN_FILE"   # capture the exact dated path - this is where you Write the
 
 Write plan to: `$PLAN_FILE` (i.e. `.lets/plans/${STAMP}-${SLUG}.md`)
 
-Example: branch `feature/0nf.10-improve-brainstorm` -> `.lets/plans/2026-06-06-1846-0nf.10-improve-brainstorm.md`
+Example: branch `feature/0nf.10-improve-statusline` -> `.lets/plans/2026-06-06-1846-0nf.10-improve-statusline.md`
 Trunk-mode example: branch `main`, task `lets-abc` -> `.lets/plans/2026-06-06-1846-lets-abc.md`
 
 ### Record in Beads
