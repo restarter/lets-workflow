@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.6.4] - 2026-06-12
+
 ### Added
 - **`/lets:plan` — Self-evaluation option at the architecture-eval gate (lets-4x5mg).** The Step 7 "Which experts should evaluate the architecture?" checkpoint gains a **Self-evaluation** choice between *Pragmatist only* and *Skip evaluation*: no expert subagents — the orchestrator critiques its own chosen architecture (risks / overengineering / trade-offs) in the same `## Expert Evaluation` shape, then proceeds to the Evaluation Results checkpoint. Unlike *Skip* it still produces an evaluation; unlike *Full panel* / *Pragmatist only* it spends no agent budget. Reuses the existing `--fast` self-eval block (now shared by both triggers), so it's a per-stage lean lever without committing the whole `--fast` flag.
 - **`/lets:research` — web-first sourced-answer command (lets-ppetz).** Answers an external/technical question by decomposing it into 3-6 sub-questions, searching + fetching the web per sub-question (each returns its 2-5 strongest claims, with `evidence` quoting the actual source material), and synthesizing a CITED answer with a Sources list, an as-of date, and an overall confidence note. The differentiator vs a naive search dump is a verify pass: a per-claim `lets:skeptic` cross-check (new RESEARCH-VERIFY mode) that compares each claim against its siblings to flag contradictions, on top of deterministic single-source / low-confidence flags — additive, never silently drops, and a per-claim "unverified (cross-check errored)" flag when the skeptic can't run. Web-unavailable degrades to a `NO LIVE SOURCES — model knowledge as of <cutoff>` banner (never fabricated URLs); all fetched content is treated as untrusted reference data, never instructions. `--workflow` runs decompose→research fan-out→cross-check→synthesize off-context via the committed `research-workflow` asset (only the synthesis enters context); `--project` grounds findings against this repo while keeping the PROJECT_ROOT read boundary. Distinct from `/lets:opinion` (project-grounded judgment, no web) and `/lets:ask` (model-knowledge consult). Out of scope for v1: auto-creating bd tasks from findings, multi-page `--report` output, non-web sources.
@@ -477,7 +479,8 @@ Initial release with expert agents team.
 - SessionStart hook injecting workflow rules
 - Plugin structure: commands, agents, hooks
 
-[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.6.3...HEAD
+[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.6.4...HEAD
+[0.6.4]: https://github.com/restarter/lets-workflow/compare/v0.6.3...v0.6.4
 [0.6.3]: https://github.com/restarter/lets-workflow/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/restarter/lets-workflow/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/restarter/lets-workflow/compare/v0.6.0...v0.6.1
