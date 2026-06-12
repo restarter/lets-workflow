@@ -205,7 +205,7 @@ Present a compact, triage-oriented summary: what's in progress, ready count, not
 
 ### Step M2: Set the stance
 
-Tell the user, in one short paragraph: you're in main / assistant mode - no active task, staying on `$LETS_MERGE_BRANCH`, here to triage / groom / decide / route. Name the tools available: `/lets:backlog` (review / cleanup), `/lets:brainstorm` (quick ideation), `/lets:explore` (topic deep-dive), `/lets:status`, `create-task`, `/lets:note`.
+Tell the user, in one short paragraph: you're in main / assistant mode - no active task, staying on `$LETS_MERGE_BRANCH`, here to triage / groom / decide / route. Name the tools available: `/lets:backlog` (review / cleanup / `--fast` pulse), `/lets:opinion` (think through a decision or topic), `/lets:research` (sourced external answer), `/lets:status`, `create-task`, `/lets:note`.
 
 Do **NOT** suggest `/rename` to a task slug (there is no task). Offer a generic slug like `/rename main` only if the user wants it.
 
@@ -216,8 +216,8 @@ Respond as the persona. Common moves and where they route:
 | User intent | Route to |
 |-------------|----------|
 | Review / clean up the backlog | `/lets:backlog` |
-| Quick ideation (no agents) | `/lets:brainstorm` |
-| Think through an idea / topic | `/lets:explore <topic>` |
+| Quick no-agent backlog pulse | `/lets:backlog --fast` |
+| Think through a decision / topic | `/lets:opinion <topic>` |
 | Project overview / dependency view | `/lets:status overview` or `/lets:status full` |
 | New task | `create-task` skill (user approves) |
 | Capture a decision / fact / gotcha | `/lets:note` |
@@ -245,7 +245,7 @@ No active task - project-assistant / PM stance on `{LETS_MERGE_BRANCH}`.
 
 ┌─ LETS - main ──────────────────┐
 │  Triage?      /lets:backlog    │
-│  Explore?     /lets:explore    │
+│  Decide?      /lets:opinion    │
 │  Status?      /lets:status     │
 │  Start work?  /lets:start <id> │
 └────────────────────────────────┘

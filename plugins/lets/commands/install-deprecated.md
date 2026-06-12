@@ -90,9 +90,7 @@ Team:     /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /le
 | `/lets:status` | Utility | Task overview anytime |
 | `/lets:note` | Utility | Add note to active task |
 | `/lets:statusline` | Utility | Manage & persist statusline appearance - light/dark, compact, hidden rows *(ships next release)* |
-| `/lets:brainstorm` | Planning | Quick interactive ideation on a topic - fast context scan, no agents |
-| `/lets:backlog` | Planning | Backlog review (multi-agent) + interactive cleanup triage |
-| `/lets:explore` | Planning | Explore a topic from multiple expert angles - scout, web research, fan out agents (`--workflow` = off-context) |
+| `/lets:backlog` | Planning | Backlog review (multi-agent) + `--fast` quick no-agent pulse + interactive cleanup triage |
 
 ### Auto-triggered Skills
 
@@ -114,7 +112,7 @@ These fire automatically when you describe the action in conversation - no slash
 **Rule of thumb:** Can you write a 1-sentence requirement?
 - YES, small task -> work directly
 - YES, medium/large -> `/lets:plan` then `/lets:execute`
-- NO -> `/lets:explore` to think it through, then `/lets:plan`
+- NO -> `/lets:opinion` to think it through, then `/lets:plan`
 
 ### Key Rules
 

@@ -1,11 +1,11 @@
 ---
 name: create-task
-description: This skill should be used when creating a beads task - "create task", "create issue", "bd create", "new task", "add task", "add issue". Ensures all required fields are provided, enforces English-only task content, and suggests epic labels. Triggers on any task creation in any context - commands, brainstorm, planning, or direct conversation.
+description: This skill should be used when creating a beads task - "create task", "create issue", "bd create", "new task", "add task", "add issue". Ensures all required fields are provided, enforces English-only task content, and suggests epic labels. Triggers on any task creation in any context - commands, planning, or direct conversation.
 ---
 
 # Create Task
 
-Standardized task creation that enforces required fields and suggests labels. Fires in any context where a beads task is being created - inside commands, during brainstorm, or in direct conversation.
+Standardized task creation that enforces required fields and suggests labels. Fires in any context where a beads task is being created - inside commands, during planning, or in direct conversation.
 
 > **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
 
@@ -136,7 +136,7 @@ Run `bd create` with all fields. Report the created task ID.
 
 ## Bulk Creation
 
-When creating multiple tasks (e.g., during brainstorm or planning):
+When creating multiple tasks (e.g., during planning):
 
 - Present all tasks as a table first for review
 - After approval, create in parallel using subagents or sequential `bd create` calls
@@ -153,5 +153,5 @@ When creating multiple tasks (e.g., during brainstorm or planning):
 ## Integration
 
 User-facing skill. Auto-triggers on "create task", "new task", "bd create".
-Commands that create tasks (`/lets:start`, `/lets:brainstorm`, `/lets:backlog`, `/lets:plan`) trigger this skill implicitly via description match.
+Commands that create tasks (`/lets:start`, `/lets:backlog`, `/lets:plan`) trigger this skill implicitly via description match.
 See: `grep -r "bd create" commands/` for commands that create tasks.
