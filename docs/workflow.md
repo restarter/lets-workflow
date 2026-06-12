@@ -41,8 +41,7 @@ For anything non-trivial — design first, then implement:
 
 | Command | What it does |
 |---------|--------------|
-| `/lets:brainstorm` | Quick ideation on a topic — fast context scan, no agents |
-| `/lets:backlog` | Backlog review (multi-agent) + cleanup triage |
+| `/lets:backlog` | Backlog review (multi-agent), `--fast` quick no-agent pulse, + cleanup triage |
 | `/lets:plan` | Design how to build it — codebase exploration, architecture, a written plan |
 | `/lets:execute` | Claude implements the plan, with your approval at each step |
 
