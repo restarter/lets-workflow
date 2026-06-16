@@ -188,14 +188,15 @@ You do **NOT** write or edit code in this mode. The moment the user wants to imp
 
 ### Step M1: Orient
 
-Steps 1-3 already ran (sessions, git, pickers). Main mode skips `take-task`, so save a session-start ref here (so `/lets:end` can still diff the session), then add a one-line backlog pulse:
+Steps 1-3 already ran (sessions, git, pickers). Main mode skips `take-task`, so save the **session boundary only** here (so `/lets:end` can still diff the session). Main mode has NO claimed task, so the `.task` file gets `session:` ONLY - never `task:`/`start:`, which would make `.task-main` look like a trunk claim and mis-fire trunk-mode. Then add a one-line backlog pulse:
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-BRANCH=$(git branch --show-current)
-BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
+BRANCH=$(git branch --show-current); BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
 mkdir -p "$LETS_PROJECT_ROOT/.lets/sessions"
-git rev-parse HEAD > "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}"
+TASK_FILE="$LETS_PROJECT_ROOT/.lets/sessions/.task-${BRANCH_SLUG}"
+tmp=$(mktemp "${TASK_FILE}.XXXX")
+printf 'session: %s %s\n' "$(git rev-parse HEAD)" "$CLAUDE_CODE_SESSION_ID" > "$tmp" && mv -f "$tmp" "$TASK_FILE"
 bd stats
 ```
 

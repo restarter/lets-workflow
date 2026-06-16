@@ -118,7 +118,8 @@ echo "Plan: ${PLAN:-(none found)}"
 bd show <task-id>
 # Show commits since session start
 BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
-START_REF=$(cat "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}" 2>/dev/null)
+START_REF=$(sed -n 's/^session: //p' "$LETS_PROJECT_ROOT/.lets/sessions/.task-${BRANCH_SLUG}" 2>/dev/null | head -1 | awk '{print $1}')
+[ -z "$START_REF" ] && START_REF=$(cat "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}" 2>/dev/null)  # back-compat: legacy session ref
 if [ -n "$START_REF" ]; then
   git log --oneline ${START_REF}..HEAD
 fi
@@ -255,7 +256,8 @@ BRANCH=$(git branch --show-current)
 SLUG=${BRANCH#feature/}; [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ] && SLUG="${TASK_ID}"
 PLAN=""; [ -n "$SLUG" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
 BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
-START_REF=$(cat "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}" 2>/dev/null)
+START_REF=$(sed -n 's/^session: //p' "$LETS_PROJECT_ROOT/.lets/sessions/.task-${BRANCH_SLUG}" 2>/dev/null | head -1 | awk '{print $1}')
+[ -z "$START_REF" ] && START_REF=$(cat "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}" 2>/dev/null)  # back-compat: legacy session ref
 bd comments add <task-id> "## Plan execution complete $(date +%Y-%m-%d)
 
 Plan: ${PLAN:-(none found)}

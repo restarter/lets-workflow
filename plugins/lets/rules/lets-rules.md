@@ -250,7 +250,7 @@ GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
 - Branch is `worktree-<name>` (new) OR an attached existing branch (auto-detected by `/lets:worktree create`) - use as-is, do NOT create a `feature/` branch
 - `.lets/` is a symlink to main repo's `.lets/` - config, sessions, plans all shared
 - `.beads/.env` is a symlink to main repo's `.beads/.env` so `bd` discovers the same database via git common-dir; no `.beads/redirect` file (legacy bd-worktree mechanism, removed in lets-rqep4)
-- Session refs are per-branch: `.session-start-ref-worktree-<name>` (parallel sessions don't collide)
+- Per-branch task-state file: `.task-worktree-<name>` (fields `task:`/`start:`/`session: <sha> <sid>`, keyed by branch-slug so parallel sessions don't collide). It's a validated cache: detect-task is file-first (file `task:` outranks the frozen branch name, so several tasks can share one worktree), `/lets:done` reads `start:`, `/lets:end` reads `session:` - each reader cross-checks against a live anchor (bd status on the merge-branch, git ancestry, the session-id) and degrades loudly. `/lets:start` rewrites it; the SessionStart hook refreshes `session:` on a new session
 - `$LETS_PROJECT_ROOT` is the worktree path (not main repo)
 - **Glob tool does NOT follow symlinks.** Always use Bash (`ls`, `cat`) to find/read files in `.lets/` and `.beads/` - never use Glob for symlinked paths
 
