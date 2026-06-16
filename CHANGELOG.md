@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- **`/lets:check --plan` finds trunk-mode plans (lets-u06sc).** In trunk-mode (on the merge-branch) the plan lookup used the branch slug (`main`), which never matched `plan.md`'s `<date>-<task-id>.md` save name — forcing a manual `--plan <path>` every time. It now calls detect-task in plan mode and derives the slug from the task-id (with a task-id fallback glob), mirroring `/lets:execute` and `/lets:review --plan` (which already did this).
+
 ## [0.6.4] - 2026-06-12
 
 ### Added
