@@ -208,6 +208,60 @@ If you intentionally want a fresh project against the same VPS, generate a new `
 5. Set env vars if not already in shell profile (see Client Setup)
 6. Run `bd list` to verify
 
+## Migrate an Existing Project (embedded → remote)
+
+When a project already has beads data in **embedded** mode and you want to move it onto the shared server (verified on a 10-issue project, zero loss):
+
+```bash
+cd /path/to/project
+
+# 1. Backup the whole .beads (safety net - keep until verified)
+cp -r .beads ".beads.bak-$(date +%Y%m%d-%H%M%S)"
+
+# 2. Refresh the JSONL export so it reflects the current embedded data
+bd export
+
+# 3. Point metadata.json at the remote DB (KEEP the existing project_id)
+#    .beads/metadata.json:
+#      "dolt_mode":     "embedded"  ->  "server"
+#      "dolt_database": "<old>"      ->  "<remote-db>"   e.g. pp_mngr
+#    The empty remote DB gets STAMPED with this project_id on first connect,
+#    so there is no identity mismatch.
+
+# 4. Create .beads/.env with the 4 connection vars (see Client Setup), chmod 600
+
+# 5. First connect - bd AUTO-IMPORTS issues.jsonl into the empty remote DB
+bd stats            # prints "auto-imported N issues from .../issues.jsonl"
+
+# 6. Verify
+bd stats            # count must equal the source
+bd dolt status      # must show "running (external)" + host / port / database
+```
+
+Keep `.beads.bak-*` and the old `embeddeddolt/` until you've confirmed the count, then delete them. A **fresh** project (no data) is the same minus the import: `bd init`, then steps 3-6 — the empty remote DB is stamped with the `bd init` project_id and there is nothing to import.
+
+## Sharing the Config via git (.gitignore)
+
+For teammates to onboard from a clone, `.beads/metadata.json` and `.beads/.env.example` **must be tracked**; `.beads/.env` (the secret) and the local Dolt data must **not**. If the repo's root `.gitignore` blanket-ignores `.beads/`, nothing inside it is committed — including `metadata.json` — so a fresh clone has no idea to use the remote.
+
+Use the re-include idiom (negations come **after** the exclude; a directory must be un-excluded before its files can be re-included):
+
+```gitignore
+!.beads/
+.beads/*
+!.beads/metadata.json
+!.beads/.env.example
+```
+
+Verify:
+
+```bash
+git check-ignore -v .beads/metadata.json   # must print nothing (tracked)
+git check-ignore -v .beads/.env            # must match a rule (ignored)
+```
+
+Commit `metadata.json` + `.env.example` + the `.gitignore` change; never commit `.env`.
+
 ## Backups
 
 Two layers:
