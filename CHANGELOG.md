@@ -5,6 +5,9 @@
 ### Added
 - **`/lets:execute` start-of-run mode picker (lets-hs4fj).** Bare `/lets:execute` now asks once how to run the approved plan: **Straight-through** (here, one approval then all tasks, auto-commit at plan points), **Step-by-step** (here, pause + review after each task, confirm each commit), **Auto** (`--auto` AUTO MODE, unattended; hard-stops + push/PR/close/external still gated; refuses on the merge-branch), or **Team** (parallel implementers in isolated worktrees via `/lets:team`, review at the end). Commit cadence is derived from the mode (not a separate question). Flag shortcuts pre-answer and skip the picker entirely: `--team`, `--step`/`--step-by-step`, `--straight`/`--straight-through`, `--auto`. A remembered `LETS_EXECUTE_MODE` default is a deferred follow-up.
 
+### Fixed
+- **`/lets:check --plan` finds trunk-mode plans (lets-u06sc).** In trunk-mode (on the merge-branch) the plan lookup used the branch slug (`main`), which never matched `plan.md`'s `<date>-<task-id>.md` save name — forcing a manual `--plan <path>` every time. It now calls detect-task in plan mode and derives the slug from the task-id (with a task-id fallback glob), mirroring `/lets:execute` and `/lets:review --plan` (which already did this).
+
 ## [0.6.4] - 2026-06-12
 
 ### Added
