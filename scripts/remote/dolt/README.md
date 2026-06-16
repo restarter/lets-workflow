@@ -46,31 +46,29 @@ Then restart: `ssh root@vps "cd /opt/dolt-remote && docker compose up -d"`
 
 ### Add SQL user
 
-Connect as root and create a user with per-database grants:
+Use `manage-users.sh` (runs on the VPS; talks to the server via a throwaway MySQL client on `dolt-net`, so the user is visible to the server - no host client, no IP-allowlist involvement):
 
 ```bash
-# Get root password
-ssh root@vps "grep ROOT_PASSWORD /opt/dolt-remote/.env"
+# Create a user scoped to specific databases (prints a generated password ONCE)
+ssh root@vps "bash -s -- --add-user alice --dbs lets,aff" < scripts/remote/dolt/manage-users.sh
 
-# Create user (from any machine that can connect)
-mysql -h <vps-ip> -u root -p<root-password> -e "
-  CREATE USER 'username'@'%' IDENTIFIED BY 'password';
-  GRANT ALL ON lets.* TO 'username'@'%';
-  GRANT ALL ON aff.* TO 'username'@'%';
-  FLUSH PRIVILEGES;
-"
+# Add more databases later (additive grant, password unchanged)
+ssh root@vps "bash -s -- --grant alice --dbs new_project" < scripts/remote/dolt/manage-users.sh
+
+# Set the EXACT database set (removes others) - DROP+CREATE, ROTATES the password
+ssh root@vps "bash -s -- --set-dbs alice --dbs lets" < scripts/remote/dolt/manage-users.sh
+
+# Inspect / remove
+ssh root@vps "bash -s -- --list-users"          < scripts/remote/dolt/manage-users.sh
+ssh root@vps "bash -s -- --list-grants alice"   < scripts/remote/dolt/manage-users.sh
+ssh root@vps "bash -s -- --remove-user alice"   < scripts/remote/dolt/manage-users.sh
 ```
 
-Grant access to specific databases only. Add more grants as needed:
+**Why the script (don't do it by hand):**
+- Users created via `docker exec dolt dolt sql` are **invisible to the SQL server**. The script connects *through* the server (MySQL protocol) over `dolt-net`, so grants take effect.
+- Dolt has **no `REVOKE`**: `--grant` is additive and keeps the password; **removing** a database from a user requires `--set-dbs` (DROP+CREATE), which **rotates** the password (printed once).
 
-```bash
-mysql -h <vps-ip> -u root -p<root-password> -e "
-  GRANT ALL ON new_project.* TO 'username'@'%';
-  FLUSH PRIVILEGES;
-"
-```
-
-**Important:** Create users through the MySQL protocol connection (not via `docker exec dolt dolt sql`). Users created through the CLI are not visible to the SQL server.
+Grant access to specific databases only - never `GRANT ALL ON *.*`. The IP allowlist is the network layer; per-database grants are the authorization layer.
 
 ### Add database
 
