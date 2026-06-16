@@ -31,6 +31,35 @@ Extract beads task ID from branch name. Formats:
 Beads ID pattern: `<prefix>-<alphanum>[.<number>]`
 Examples: `lets-abc`, `lets-abc.1`, `proj-xyz.42`
 
+### Step 1.5: Task-State File (fills the gap when the branch name carries no id)
+
+The `.task-<branch-slug>` file (written by `take-task`) records the CURRENT task - authoritative over the branch name, because a worktree branch is frozen at create time and may host several tasks in sequence (the branch name is only the worktree's home task). Read it after the explicit-arg short-circuit, before the branch-name parse. `{LETS_MERGE_BRANCH}` is from LETS Config:
+
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+BRANCH=$(git branch --show-current); BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
+TASK_FILE="$LETS_PROJECT_ROOT/.lets/sessions/.task-${BRANCH_SLUG}"
+FILE_TASK=$(sed -n 's/^task: //p' "$TASK_FILE" 2>/dev/null | head -1)
+if [ -n "$FILE_TASK" ]; then
+  if [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ] && command -v bd >/dev/null 2>&1; then
+    # merge-branch ONLY: distinguish a live trunk task from a stale .task-main / main-mode.
+    # Parse the FIRST "status" (the task's own top-level field). grep -o isolates each
+    # "status": "X" so head -1 takes the first object's status even on compact JSON - a greedy
+    # sed '.*"status".*' would grab the LAST (a nested dependency's) and mis-classify.
+    STATUS=$(bd show "$FILE_TASK" --json 2>/dev/null | grep -o '"status": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
+    [ "$STATUS" = "in_progress" ] && echo "$FILE_TASK"   # else fall through (stale: closed/abandoned/crash-after-close)
+  else
+    echo "$FILE_TASK"   # off the merge-branch (or no bd): trust the file directly
+  fi
+fi
+```
+
+If this yields an id, use it; otherwise fall through to the branch-name parse, then the bd fallback. (Verify the `bd show --json` status field against the installed bd; fall back to `bd show` text parse if needed.)
+
+**Precedence (full):** explicit task-id arg -> `.task-<slug>` `task:` (bd-liveness-validated ON THE MERGE-BRANCH) -> branch-name id -> `bd list --status=in_progress | head -1`. On id-carrying branches `take-task` writes branch + file together so they agree; the file fills the id-less gaps (trunk / custom worktree / attach) and, in a multi-task worktree, reflects the current (switched) task the frozen branch name can't.
+
+**bd-liveness scope (perf + bd-hang safety):** the `bd show` check runs ONLY on `{LETS_MERGE_BRANCH}`, where it is the sole signal separating a live trunk task from a stale `.task-main` / main-mode. Off the merge-branch it does NOT run - detect-task is on the hot path of 10+ commands and a per-call `bd show` would reintroduce the per-command bd cost and risk hanging (no portable `timeout` on macOS). Trusting the file off the merge-branch is safe: `feature/<id>` corroborates via the branch, and a just-closed `task:` in a worktree is low-severity (the next claim overwrites).
+
 ### Step 2: Fallback
 
 If branch parse finds no ID:

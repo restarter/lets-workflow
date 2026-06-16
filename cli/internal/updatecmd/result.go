@@ -14,6 +14,13 @@ package updatecmd
 // source: the binary for `.env`, the plugin for `rules`) instead of `up-to-date`
 // (reserved for binary/plugin == latest release). This stops two `up-to-date`
 // rows at different versions from reading as self-contradictory.
+//
+// v2 also carries (lets-rlue4, additive - NO bump): the top-level `next_action`
+// field (the single ordered next step) and the `deferred` artifact status (rules
+// sync held back while the plugin is behind). Both are additions - existing
+// consumers ignore unknown fields/values - so the contract version is unchanged.
+// `next_action` is always set by computeNextAction, so TestResult_SchemaContract
+// pins it as an expected top-level key.
 const SchemaVersion = 2
 
 // ArtifactStatus categorizes the state of one drift-able artifact.
@@ -29,6 +36,7 @@ const (
 	StatusNotInitialized ArtifactStatus = "not-initialized" // .env absent - project never `lets init`-ed
 	StatusDev            ArtifactStatus = "dev"             // running an untagged dev binary - no comparison
 	StatusDelegated      ArtifactStatus = "delegated"       // project rules deliberately absent (LETS_RULES_SCOPE=user) - rules come from ~/.claude/rules
+	StatusDeferred       ArtifactStatus = "deferred"        // rules sync held back: the plugin is behind, syncing now would write a stale lower version. Resolves once the plugin is updated.
 )
 
 // allStatuses - keep adjacent to the Status* consts. A new status MUST be
@@ -36,7 +44,7 @@ const (
 var allStatuses = []ArtifactStatus{
 	StatusUpToDate, StatusInSync, StatusUpdated, StatusOutdated,
 	StatusAhead, StatusUnknown, StatusNotInitialized, StatusDev,
-	StatusDelegated,
+	StatusDelegated, StatusDeferred,
 }
 
 // Artifact is the outcome of checking one drift-able artifact.
@@ -47,6 +55,22 @@ type Artifact struct {
 	LatestVersion  string         `json:"latest_version,omitempty"`
 	Action         string         `json:"action,omitempty"` // human instruction when Status needs user action
 	Detail         string         `json:"detail,omitempty"` // extra context (changed keys, cache age, error reason)
+}
+
+// NextAction is the single, ordered next step `lets update` recommends this run.
+// Exactly one is set per run (the idempotent loop: rerun -> next step -> ... ->
+// done). Order: init -> binary -> plugin -> reload -> done.
+//
+// SECURITY: Command is execution-bound - the /lets:update orchestrator runs it
+// via the Bash tool on user approval. It may ONLY ever be a compile-time const
+// (installScriptCmd); never interpolate dynamic data (versions go in Message),
+// and never derive it from a network response, file contents, env var, or
+// --plugin-root. A byte-equal test pins this.
+type NextAction struct {
+	Kind    string `json:"kind"`              // "init" | "binary" | "plugin" | "reload" | "done"
+	Message string `json:"message"`           // human one-liner
+	Command string `json:"command,omitempty"` // literal shell command (binary: the install.sh curl) - const-only
+	Version string `json:"version,omitempty"` // converged version (kind == "done")
 }
 
 // Summary aggregates artifact counts for at-a-glance consumption.
@@ -60,14 +84,15 @@ type Summary struct {
 // Result is the structured outcome of `lets update`. Always populated, even on
 // error (Artifacts carries whatever was checked before the failure).
 type Result struct {
-	SchemaVersion int        `json:"schema_version"`
-	OK            bool       `json:"ok"`
-	Error         string     `json:"error,omitempty"`
-	ProjectRoot   string     `json:"project_root"`
-	PluginRoot    string     `json:"plugin_root"`
-	Artifacts     []Artifact `json:"artifacts"`
-	Consistent    bool       `json:"consistent"` // binary == plugin == installed-rules frontmatter version (ignoring "dev"/"")
-	Summary       Summary    `json:"summary"`
+	SchemaVersion int         `json:"schema_version"`
+	OK            bool        `json:"ok"`
+	Error         string      `json:"error,omitempty"`
+	ProjectRoot   string      `json:"project_root"`
+	PluginRoot    string      `json:"plugin_root"`
+	Artifacts     []Artifact  `json:"artifacts"`
+	Consistent    bool        `json:"consistent"` // binary == plugin == installed-rules frontmatter version (ignoring "dev"/"")
+	Summary       Summary     `json:"summary"`
+	NextAction    *NextAction `json:"next_action,omitempty"` // the single ordered next step (nil only on a hard error before computeNextAction)
 }
 
 // NewResult initializes a Result with paths and a non-nil Artifacts slice
@@ -96,7 +121,10 @@ func (r *Result) Add(a Artifact) {
 		r.Summary.Updated++
 	case StatusOutdated, StatusNotInitialized:
 		r.Summary.ActionNeeded++
-	case StatusUnknown, StatusAhead, StatusDev:
+	case StatusUnknown, StatusAhead, StatusDev, StatusDeferred:
+		// deferred = blocked on the plugin step (the actionable step is counted
+		// once, on the plugin row); not an independent action - keep it out of
+		// ActionNeeded so next_action stays the single source of "do this".
 		r.Summary.Unknown++
 	}
 }

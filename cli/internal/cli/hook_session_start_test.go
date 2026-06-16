@@ -169,3 +169,89 @@ func TestHookSessionStart_RulesFlagRequired(t *testing.T) {
 		t.Errorf("error should mention rules flag, got: %v", err)
 	}
 }
+
+// TestHookSessionStart_SessionRefreshGating pins the safety-critical gating of
+// the proactive session-boundary refresh (lets-dsdmp, review B1): it MUST refresh
+// the .task file's session: line ONLY on source=startup with a non-empty
+// session_id, and leave the file byte-identical on resume/compact/malformed/empty
+// stdin. A regression here (flipped source check, dropped filter, mis-parse) would
+// silently move the boundary on every resume/compact and corrupt /lets:end's
+// session diff - this table makes that fail loudly. task:/start: are always
+// preserved.
+func TestHookSessionStart_SessionRefreshGating(t *testing.T) {
+	git := func(t *testing.T, dir string, args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+		cmd.Env = append(os.Environ(),
+			"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t",
+			"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+
+	cases := []struct {
+		name      string
+		stdin     string
+		refreshed bool
+	}{
+		{"startup refreshes", `{"session_id":"NEWSID","source":"startup"}`, true},
+		{"resume untouched", `{"session_id":"NEWSID","source":"resume"}`, false},
+		{"compact untouched", `{"session_id":"NEWSID","source":"compact"}`, false},
+		{"empty session_id no-op", `{"session_id":"","source":"startup"}`, false},
+		{"malformed stdin no-op", `not json at all`, false},
+		{"empty stdin no-op", ``, false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+			repo := t.TempDir()
+			git(t, repo, "init", "-q", "-b", "wt-test")
+			git(t, repo, "commit", "-q", "--allow-empty", "-m", "init")
+			out, err := exec.Command("git", "-C", repo, "rev-parse", "HEAD").Output()
+			if err != nil {
+				t.Fatalf("rev-parse: %v", err)
+			}
+			head := strings.TrimSpace(string(out))
+			chdirTo(t, repo)
+
+			taskFile := filepath.Join(repo, ".lets", "sessions", ".task-wt-test")
+			writeTestFile(t, taskFile, "task: lets-x\nstart: abc123\nsession: OLDSHA OLDSID\n")
+
+			rulesPath := filepath.Join(t.TempDir(), "rules.md")
+			writeTestFile(t, rulesPath, "---\nversion: 0.4.0\n---\n")
+
+			root := cli.NewRootCmd()
+			root.SetArgs([]string{"hook", "session-start", "--rules=" + rulesPath})
+			root.SetIn(strings.NewReader(tc.stdin))
+			var buf bytes.Buffer
+			root.SetOut(&buf)
+			root.SetErr(&buf)
+			if err := root.Execute(); err != nil {
+				t.Fatalf("execute: %v", err)
+			}
+
+			got, err := os.ReadFile(taskFile)
+			if err != nil {
+				t.Fatalf("read task file: %v", err)
+			}
+			s := string(got)
+			if !strings.Contains(s, "task: lets-x") || !strings.Contains(s, "start: abc123") {
+				t.Errorf("task:/start: not preserved:\n%s", s)
+			}
+			if tc.refreshed {
+				if !strings.Contains(s, "session: "+head+" NEWSID") {
+					t.Errorf("expected session refreshed to %q NEWSID, got:\n%s", head, s)
+				}
+				if strings.Contains(s, "OLDSID") {
+					t.Errorf("old sid still present after refresh:\n%s", s)
+				}
+			} else {
+				if !strings.Contains(s, "session: OLDSHA OLDSID") {
+					t.Errorf("expected session UNCHANGED, got:\n%s", s)
+				}
+			}
+		})
+	}
+}

@@ -1,10 +1,10 @@
 ---
-description: Sync this project with the current LETS release - checks .env, rules, the lets binary, the plugin, and the user-level global rules when installed
+description: Sync this project with the current LETS release - a self-driving one-step loop; self-heals .env + rules (rules deferred while the plugin is behind), installs the binary in-session on approval, and points at the single next action until everything is on the same version
 ---
 
 # Update LETS
 
-Sync the drift-able LETS artifacts (four core + the optional user-scope global rules) with the current release. Bridges to `lets update --json` (Go binary): auto-syncs `.lets/.env` (header refresh when `LETS_ENV_VERSION` is stale), `.claude/rules/lets-rules.md` (re-copy when outdated/missing), and `~/.claude/rules/lets-rules.md` (user-scope global rules - the `user-rules` row appears only when that file exists), and reports actionable version status for the `lets` binary and the Claude Code plugin (which it cannot self-update).
+Sync the drift-able LETS artifacts (four core + the optional user-scope global rules) with the current release. Bridges to `lets update --json` (Go binary): auto-syncs `.lets/.env` (header refresh when `LETS_ENV_VERSION` is stale), `.claude/rules/lets-rules.md` (re-copy when outdated/missing - but **deferred** when the plugin is behind, so rules never sync to a stale plugin), and `~/.claude/rules/lets-rules.md` (user-scope global rules - the `user-rules` row appears only when that file exists). It then computes a single ordered `next_action` (the self-driving loop): the binary step can be run in-session (approval-gated), the plugin step is a user-only Claude Code slash command, and a fully-synced machine prints `✓ Everything on vX.Y.Z`.
 
 > **MANDATORY:** Execute every Step's bash block **literally as written**. Do not substitute output from earlier `ls`/`cat` in this conversation - `.env` and other dotfiles are invisible to plain `ls`. The `test -f` checks below ARE the contract.
 
@@ -39,18 +39,63 @@ Capture stdout (single JSON object). On network trouble the binary degrades grac
 
 Parse JSON.
 
+`lets update` is a **self-driving loop**: each run advances ONE step and tells you the single next thing to do. Do that one thing, re-run `/lets:update`, repeat until it prints `✓ Everything on vX.Y.Z`.
+
 1. **Artifact table** - one line per `artifacts[]` entry:
    `<name>  v<current_version>  <status>  (latest v<latest_version>)  - <detail>`
    Omit `(latest …)` / `- <detail>` when those fields are empty; print `?` for an empty `current_version` (`dev` prints as-is, not `vdev`).
-   Status vocabulary: `.env`/`rules` report `in-sync` - they track a *local* source (the `lets` binary for `.env`, the plugin for `rules`), not the latest release. `binary`/`plugin` report `up-to-date`/`outdated` against the *latest release*. So `.env` and `rules` can sit at different versions and both be `in-sync` - expected, not a contradiction; their `detail` names what they track and flags "itself behind latest v…" when that source is itself stale. `user-rules` (only present with a user-scope install) joins the `in-sync` frame: it tracks the *installed plugin*, same as `rules`. Its `ahead` status means the global file is newer than the plugin (customized or newer release) - deliberately NOT overwritten; relay the `detail` and do not treat it as an error. `rules` may also report `delegated` (`LETS_RULES_SCOPE=user`): the project deliberately has no own copy and lives on the global rules - a healthy state, not an error. Relay any `detail` hints verbatim (duplication / missing-global) - they are the user's action items, but NEVER offer to delete files yourself.
-2. **Summary line:** `<summary.up_to_date> in sync · <summary.updated> updated · <summary.action_needed> need action · <summary.unknown> unknown` (`summary.up_to_date` is the combined in-sync bucket: `in-sync` + `up-to-date`).
-3. **What you need to do** - build ONE numbered list of everything left for the user. Skip the whole section if there's nothing (no `action` strings, no rules update). Order: binary → plugin → restart. Everything here runs from inside Claude Code.
-   - For each `artifacts[]` entry with a non-empty `action` (i.e. `binary` / `plugin`), add a step.
-     - **`binary`:** present the `curl …` command from the action **prefixed with `! `** so the user can run it right in the Claude Code prompt — `! curl -fsSL https://raw.githubusercontent.com/restarter/lets-workflow/main/scripts/install.sh | bash` — the leading `!` makes Claude Code run it as a shell command in this session, no terminal needed. Add: "(or run the same command **without** the `!` in a terminal.)"
-     - **`plugin`:** relay the `action` string verbatim — it's all slash commands in Claude Code (`/plugin marketplace update lets-workflow`, then `/reload-plugins`); no terminal, no `--scope` to figure out.
-   - If any `artifacts[]` entry has `status == "updated"` and `name == "rules"` or `name == "user-rules"`, add a final step: "Restart Claude Code so the updated workflow rules take effect — `/exit`, then reopen it in this folder." (The rules file is already re-copied; the restart is only so the *current* session reloads it. One `/exit` + reopen covers project + global rules + the plugin step above.)
-4. If `consistent` is `false` → after the list (or, if there's no list, on its own), one line: "⚠️ Versions don't match (binary / plugin / rules) - a partial upgrade. Do the steps above to get everything onto the same release."
-5. If `ok == false` → show `error` only; NO LETS box, no table, no other sections.
+   **When `next_action.kind == "done"`, SKIP the table entirely** - print only the `✓ Everything on v<next_action.version>` line (no status matrix on a fully-synced machine).
+   Status vocabulary: `.env`/`rules` report `in-sync` - they track a *local* source (the `lets` binary for `.env`, the plugin for `rules`), not the latest release. `binary`/`plugin` report `up-to-date`/`outdated` against the *latest release*. So `.env` and `rules` can sit at different versions and both be `in-sync` - expected, not a contradiction; their `detail` names what they track and flags "itself behind latest v…" when that source is itself stale. `rules`/`user-rules` may report `deferred` - the plugin is behind, so syncing the rules now would write a stale lower version; the row's `detail` explains it and `next_action` steers you to the plugin step. Not an error, not a contradiction. `user-rules` (only present with a user-scope install) joins the `in-sync` frame: it tracks the *installed plugin*, same as `rules`. Its `ahead` status means the global file is newer than the plugin (customized or newer release) - deliberately NOT overwritten; relay the `detail` and do not treat it as an error. `rules` may also report `delegated` (`LETS_RULES_SCOPE=user`): the project deliberately has no own copy and lives on the global rules - a healthy state, not an error. Relay any `detail` hints verbatim (duplication / missing-global) - they are the user's action items, but NEVER offer to delete files yourself.
+2. **Next action** - render `result.next_action` (exactly ONE; do NOT also list per-artifact `action` strings - that reintroduces the multi-step UX this loop replaces). Branch on `next_action.kind`:
+   - `done`: print `✓ Everything on v<next_action.version>` and STOP (table already skipped). If `version` is empty (couldn't verify the latest release): print `Nothing to do (couldn't verify the latest release - re-run with network).`
+   - `init`: relay `next_action.message` (points at `/lets:init`).
+   - `binary`: go to **Step 3.5** (self-driving install).
+   - `plugin`: relay `next_action.message` verbatim - all Claude Code slash commands (`/plugin marketplace update lets-workflow`, then `/reload-plugins`); no terminal.
+   - `reload`: relay `next_action.message` - one `/exit` + reopen covers project + global rules.
+3. If `consistent` is `false` AND `next_action.kind` is `reload` or `done`: one line "⚠️ Versions don't match (binary / plugin / rules) - a partial upgrade; re-run `/lets:update` to converge." **Suppress this line when `next_action.kind` is `binary` or `plugin`** - the single next action already explains the partial state (a deferred-rules run trips `consistent == false` by design).
+4. If `ok == false` → show `error` only; NO LETS box, no table, no other sections.
+
+## Step 3.5: Self-driving binary update (when `next_action.kind == "binary"`)
+
+The binary is outdated. Offer to update it in-session.
+
+**MANDATORY GATE:** running `next_action.command` (`curl … | bash`) is a system-changing external action - it ALWAYS requires the `AskUserQuestion` approval below, even in AUTO MODE (per the AUTO MODE rule: external / system-changing actions are always gated). The Bash call MUST be reachable ONLY via the "Run install.sh" option - no other branch may execute it.
+
+Before asking, show the verbatim command and its provenance so the user can verify the host before approving:
+- Command: render `next_action.command` literally (do NOT paraphrase or interpolate).
+- Source: official installer at `raw.githubusercontent.com/restarter/lets-workflow/main/scripts/install.sh` - served over HTTPS; it verifies the binary SHA256 before installing.
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "lets binary v{current} < v{latest}. Run the install script now?",
+    header: "Update binary",
+    options: [
+      { label: "Run install.sh (Recommended)", description: "Runs the curl install.sh | bash command in this session" },
+      { label: "Show command only", description: "Print it; I'll run it myself in a terminal" },
+      { label: "Skip", description: "Leave the binary; re-run /lets:update later" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+- **Run install.sh** → Bash-run `next_action.command` verbatim, then go to **Step 3.6**.
+- **Show command only** → print `next_action.command` (and note the `! `-prefixed form runs it in the Claude Code prompt). STOP.
+- **Skip** → acknowledge, STOP.
+
+## Step 3.6: Re-run after the binary update (bounded)
+
+The binary changed - re-run the bridge ONCE to advance one step:
+
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+lets update --json --plugin-root="${CLAUDE_PLUGIN_ROOT}"
+```
+
+**At most ONE install attempt per `/lets:update` invocation.** If the re-run STILL reports `next_action.kind == "binary"` (binary unchanged - failed install, or PATH shadowing where the shell resolves an older `lets` than the one just installed), do NOT loop back into Step 3.5 / another `curl | bash`. Report: "install ran but the binary is still outdated - likely PATH shadowing (an older `lets` earlier on `$PATH`); check `which -a lets`" and STOP.
+
+Otherwise re-render via Step 3 with the new output (the next action is now `plugin`, `reload`, or `done`). Only the binary step auto-executes; `plugin`/`reload` are user actions, so the loop naturally hands back.
 
 ## Step 4: Output
 
@@ -75,7 +120,7 @@ If `ok == false`: NO LETS box. Plain-text status only.
 ## Rules
 
 - Respond in user's language (`$LETS_LANGUAGE`)
-- Idempotent: re-running is safe; `.env`/rules only change when actually stale
+- Idempotent self-driving loop: each run advances one step and prints one `next_action`; re-run until `✓ Everything on vX.Y.Z`. Safe to re-run; `.env`/rules only change when actually stale.
 - The binary backs up `.env` to `.lets/.env.bak` automatically when it regenerates the header
-- `lets update` cannot replace the running binary or reinstall the plugin - it only tells you how
+- The Go binary cannot replace itself or reinstall the plugin. The `/lets:update` orchestrator CAN run the binary installer in-session (Step 3.5, approval-gated, one attempt per run); the plugin step stays a user-only Claude Code slash command.
 - On a dev build (`lets version` shows `dev`), `.env`'s `LETS_ENV_VERSION` flips to `dev` and the binary/plugin checks are best-effort - same as `/lets:init` on a dev build

@@ -198,6 +198,25 @@ func Remove(ctx context.Context, projectRoot string, opts RemoveOptions) (*Remov
 	_ = exec.CommandContext(ctx, "git", "-C", projectRoot, "worktree", "prune").Run()
 	addStep(StepOK, "git worktree remove + prune")
 
+	// Clean the per-branch task-state file (and the legacy session ref) now that the
+	// worktree is gone. Keyed by the RE-DERIVED branch, so attach-mode worktrees
+	// (branch != worktree-<name>) are cleaned too - the dir name alone would miss them.
+	if branch != "" {
+		slug := strings.ReplaceAll(branch, "/", "-")
+		sessionsDir := filepath.Join(projectRoot, ".lets", "sessions")
+		for _, name := range []string{".task-" + slug, ".session-start-ref-" + slug} {
+			_ = os.Remove(filepath.Join(sessionsDir, name))
+		}
+		// Sweep any stranded atomic-write temp siblings (.task-<slug>.XXXX left if a
+		// bash writer died between mktemp and mv).
+		if temps, _ := filepath.Glob(filepath.Join(sessionsDir, ".task-"+slug+".*")); temps != nil {
+			for _, m := range temps {
+				_ = os.Remove(m)
+			}
+		}
+		addStep(StepOK, "removed task-state file")
+	}
+
 	// Combined-mode: --delete-branch in same call also deletes the branch.
 	branchDeleted := false
 	if opts.DeleteBranch && branch != "" {

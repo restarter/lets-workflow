@@ -212,3 +212,60 @@ func TestRemove_MigrationFromLegacyState(t *testing.T) {
 		t.Errorf("legacy worktree removal failed: err=%v ok=%v", err, res.OK)
 	}
 }
+
+// Remove deletes the per-branch .task state file (keyed by the re-derived
+// branch) along with the legacy session ref - lets-dsdmp.
+func TestRemove_DeletesTaskStateFile(t *testing.T) {
+	repo := initRepo(t)
+	sessions := filepath.Join(repo, ".lets", "sessions")
+	if err := os.MkdirAll(sessions, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{Name: "foo", Mode: worktreecmd.BranchAuto}); err != nil {
+		t.Fatal(err)
+	}
+	// take-task would have written these for branch worktree-foo.
+	taskFile := filepath.Join(sessions, ".task-worktree-foo")
+	legacyFile := filepath.Join(sessions, ".session-start-ref-worktree-foo")
+	for _, f := range []string{taskFile, legacyFile} {
+		if err := os.WriteFile(f, []byte("task: lets-x\nstart: abc\nsession: s sid\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	res, err := worktreecmd.Remove(context.Background(), repo, worktreecmd.RemoveOptions{Name: "foo"})
+	if err != nil || !res.OK {
+		t.Fatalf("err=%v ok=%v", err, res.OK)
+	}
+	for _, f := range []string{taskFile, legacyFile} {
+		if _, err := os.Stat(f); !os.IsNotExist(err) {
+			t.Errorf("state file %s not cleaned up after remove: %v", filepath.Base(f), err)
+		}
+	}
+}
+
+// Attach-mode: the worktree dir name differs from the branch, so the state file
+// is keyed by the RE-DERIVED branch. Deriving the slug from the dir name would
+// miss it - this locks the re-derivation in remove.go (lets-dsdmp, review S4).
+func TestRemove_DeletesTaskStateFile_AttachMode(t *testing.T) {
+	repo := initRepo(t)
+	sessions := filepath.Join(repo, ".lets", "sessions")
+	if err := os.MkdirAll(sessions, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Existing branch attached to a worktree whose dir name ("myattach") != branch.
+	runIn(t, repo, "git", "branch", "feature/bar")
+	wtPath := filepath.Join(repo, ".worktrees", "myattach")
+	runIn(t, repo, "git", "worktree", "add", wtPath, "feature/bar")
+	// take-task keys by the attached branch (feature/bar -> feature-bar), NOT the dir.
+	taskFile := filepath.Join(sessions, ".task-feature-bar")
+	if err := os.WriteFile(taskFile, []byte("task: lets-x\nstart: abc\nsession: s sid\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := worktreecmd.Remove(context.Background(), repo, worktreecmd.RemoveOptions{Name: "myattach", Force: true})
+	if err != nil || !res.OK {
+		t.Fatalf("err=%v ok=%v", err, res.OK)
+	}
+	if _, err := os.Stat(taskFile); !os.IsNotExist(err) {
+		t.Errorf("attach-mode .task-feature-bar not cleaned (dir-name slug would miss it): %v", err)
+	}
+}
