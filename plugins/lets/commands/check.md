@@ -54,22 +54,40 @@ Parse the argument(s):
 
 If `--plan` flag detected, switch to plan review mode. Skip all code review steps below.
 
+If no path was passed to `--plan`, use the **detect-task** skill to find the active task: `Skill(skill: "lets:detect-task")` - the orchestrator substitutes its id for `{task-id}` below, so trunk-mode resolves the plan by task-id (not the branch name).
+
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 BRANCH=$(git branch --show-current)
-SLUG="${BRANCH#feature/}"
 PLAN=""
-# Guard: empty slug (detached HEAD) would collapse the glob to *.md -> global latest -> another
-# worktree's plan (the bug this fixes). Skip to the explicit-path hint instead.
-if [ -n "$SLUG" ]; then
-  # Latest plan for THIS branch/slug - matches date-prefixed (YYYY-MM-DD-HHMM-<slug>.md) and legacy
-  # bare <slug>.md. Slug-scoped, NOT global `ls -t`: .lets/plans is shared across worktrees via symlink.
-  PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
+
+# Explicit path wins: /lets:check --plan path/to/plan.md - use it directly and skip this derivation.
+
+# Derive slug: trunk-mode uses task-id (plan.md saves <date>-<task-id>.md on the merge-branch);
+# otherwise the branch slug (covers feature/* and worktree-* branches).
+# {task-id} is substituted by the orchestrator from the detect-task result above.
+if [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ]; then
+  SLUG="{task-id}"
+else
+  SLUG="${BRANCH#feature/}"
 fi
-# Explicit path wins: /lets:check --plan path/to/plan.md
+
+# Guard: empty slug (detached HEAD, or unresolved task-id in trunk-mode) would collapse the glob
+# to *.md -> global latest -> another worktree's plan (the bug this fixes).
+if [ -z "$SLUG" ]; then
+  PLAN=""
+else
+  # Latest plan for THIS slug - matches date-prefixed (YYYY-MM-DD-HHMM-<slug>.md) and legacy bare
+  # <slug>.md. Slug-scoped, NOT global `ls -t`: .lets/plans is shared across worktrees via symlink.
+  PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
+  # Fallback: glob match by task-id (catches trunk-mode plans + naming drift, e.g. plan-workflow output)
+  if [ -z "$PLAN" ] && [ -n "{task-id}" ]; then
+    PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"{task-id}"*.md 2>/dev/null | head -1)
+  fi
+fi
 ```
 
-If no plan found: "No plan found for this branch in `.lets/plans/`. Run `/lets:plan` first, or pass a path: `/lets:check --plan <path>`." (Trunk-mode on `{LETS_MERGE_BRANCH}`: the slug is the branch name and won't match a `<task-id>` plan - use the explicit path or `/lets:review --plan`.)
+If no plan found: "No plan found for this branch in `.lets/plans/`. Run `/lets:plan` first, or pass a path: `/lets:check --plan <path>`."
 
 Read the plan and review with 5 lenses (same confidence filter):
 
