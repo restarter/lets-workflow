@@ -1,6 +1,6 @@
 ---
 name: take-task
-description: This skill should be used when claiming a task to work on - "take task", "візьми таск", "працюю над", "work on task X", "pick task X", "switch to task X", "claim task". Sets task to in_progress, creates/switches branch, saves session start ref.
+description: This skill should be used when claiming a task to work on - "take task", "візьми таск", "працюю над", "work on task X", "pick task X", "switch to task X", "claim task". Sets task to in_progress, creates/switches branch, saves the per-branch task-state file.
 ---
 
 # Take Task
@@ -115,16 +115,39 @@ Handle response:
 - **Stay on current branch** -> skip `git checkout -b`; stay on the current branch (could be `$LETS_MERGE_BRANCH` or any pre-existing branch). Print one line:
   "Staying on `{current branch}`. No new branch created."
   If `HEAD == $LETS_MERGE_BRANCH`, append: " Trunk-mode: `/lets:done` will push + close (no PR — same-source-target)."
-  Continue to Step 5 (session-start-ref is saved as usual).
+  Continue to Step 5 (the `.task` state file is saved as usual).
 
-### Step 5: Save Session Start Reference
+### Step 5: Save Task State File
+
+Write the per-branch task-state file `.lets/sessions/.task-<branch-slug>` with three fields:
+`task:` (identity), `start:` (task boundary - preserved across resume of the same task, reset on a new/changed task or when the recorded SHA is no longer an ancestor of HEAD), and `session: <sha> <session-id>` (this session's boundary, always refreshed). Atomic (`tmp`+`mv`) so a crash never leaves a half-written file. `<task-id>` is the claimed id; `{LETS_MERGE_BRANCH}` is from LETS Config.
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-BRANCH=$(git branch --show-current)
-BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
+BRANCH=$(git branch --show-current); BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
 mkdir -p "$LETS_PROJECT_ROOT/.lets/sessions"
-git rev-parse HEAD > "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}"
+TASK_FILE="$LETS_PROJECT_ROOT/.lets/sessions/.task-${BRANCH_SLUG}"
+HEAD_SHA=$(git rev-parse HEAD)
+MERGE_BRANCH="{LETS_MERGE_BRANCH}"; CLAIMED_ID="<task-id>"; SID="$CLAUDE_CODE_SESSION_ID"
+
+PREV_TASK=""; PREV_START=""
+if [ -f "$TASK_FILE" ]; then
+  PREV_TASK=$(sed -n 's/^task: //p' "$TASK_FILE" | head -1)
+  PREV_START=$(sed -n 's/^start: //p' "$TASK_FILE" | head -1)
+fi
+# Preserve start: only when resuming the SAME task AND the recorded SHA is still an ancestor of HEAD.
+if [ "$PREV_TASK" = "$CLAIMED_ID" ] && [ -n "$PREV_START" ] && git merge-base --is-ancestor "$PREV_START" HEAD 2>/dev/null; then
+  START="$PREV_START"
+else
+  START="$HEAD_SHA"
+fi
+
+tmp=$(mktemp "${TASK_FILE}.XXXX")
+{
+  echo "task: $CLAIMED_ID"
+  echo "start: $START"
+  echo "session: $HEAD_SHA $SID"
+} > "$tmp" && mv -f "$tmp" "$TASK_FILE"
 ```
 
 ### Step 6: Context Recovery (existing branch)

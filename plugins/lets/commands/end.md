@@ -71,15 +71,10 @@ If `--fast` argument provided, skip to Fast Close below and do NOT run Steps 1-7
    Task: {task-id or "none"}
    Status: fast close
    ```
-4. Save session-start-ref:
-   ```bash
-   LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-   BRANCH=$(git branch --show-current)
-   BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
-   git rev-parse HEAD > "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}"
-   ```
-5. Worktree detection: check `GIT_DIR` as in Step 7. If in worktree and task in progress, add resume path. If task completed, add cleanup reminder.
-6. Output fast close block and stop - no AskUserQuestion, no bd sync
+4. Worktree detection: check `GIT_DIR` as in Step 7. If in worktree and task in progress, add resume path. If task completed, add cleanup reminder.
+5. Output fast close block and stop - no AskUserQuestion, no bd sync
+
+   (The session boundary is NOT written here - take-task owns it at the next `/lets:start`, and the SessionStart hook refreshes it. Writing it at session end was redundant and diverged from full mode.)
 
 ### Fast Close Output
 
@@ -134,15 +129,24 @@ AskUserQuestion(
 For each in-progress task, record this session's work:
 
 ```bash
-# Get this session's commits (per-branch ref supports parallel worktree sessions)
+# Get this session's commits (per-branch .task file supports parallel worktree sessions)
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-BRANCH=$(git branch --show-current)
-BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
-START_REF=$(cat "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}" 2>/dev/null)
-if [ -z "$START_REF" ]; then
-  # Fallback: try old single-ref format (backwards compatibility)
-  START_REF=$(cat "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref" 2>/dev/null)
+BRANCH=$(git branch --show-current); BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
+TASK_FILE="$LETS_PROJECT_ROOT/.lets/sessions/.task-${BRANCH_SLUG}"
+SESSION_LINE=$(sed -n 's/^session: //p' "$TASK_FILE" 2>/dev/null | head -1)
+START_REF=$(echo "$SESSION_LINE" | awk '{print $1}')
+STORED_SID=$(echo "$SESSION_LINE" | awk '{print $2}')
+# Session-id staleness: a sid different from the current session means no /lets:start ran this
+# session (no take-task / hook refresh), so the boundary is from a PRIOR session. Degrade loudly.
+if [ -n "$STORED_SID" ] && [ "$STORED_SID" != "$CLAUDE_CODE_SESSION_ID" ]; then
+  echo "NOTE: session boundary is from a previous session (no /lets:start this session) - the commit list below is best-effort from ${START_REF}." >&2
 fi
+# Back-compat: the legacy .session-start-ref IS a session boundary, so it may back-fill session:.
+[ -z "$START_REF" ] && START_REF=$(cat "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}" 2>/dev/null)
+[ -z "$START_REF" ] && START_REF=$(cat "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref" 2>/dev/null)  # oldest non-slug, deliberate one-release window
+# Defense-in-depth (N1): the boundary is a plugin-written SHA - blank anything non-hex before it
+# expands unquoted into the git range, so a hand-edited state file can't inject git option args.
+case "$START_REF" in *[!0-9a-f]*) START_REF="" ;; esac
 if [ -n "$START_REF" ]; then
   git log ${START_REF}..HEAD --oneline  # this session's commits
 else

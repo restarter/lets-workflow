@@ -31,10 +31,10 @@ If type is **epic** - do NOT close it automatically:
 Several steps below have a conditional branch for **trunk-mode** — when HEAD is `$LETS_MERGE_BRANCH` (user opted in via the `take-task` picker option "Stay on current branch"). The check is HEAD-based at runtime via `git branch --show-current` compared to `$LETS_MERGE_BRANCH` from LETS Config; no persistent flag.
 
 In trunk-mode the following gates fire:
-- Step 4 commit range: `session-start-ref..HEAD` (not `$LETS_MERGE_BRANCH..HEAD`, which is empty when HEAD IS the merge-branch)
+- Step 4 commit range: `start:..HEAD` (the task boundary from `.task-<slug>`, not `$LETS_MERGE_BRANCH..HEAD`, which is empty when HEAD IS the merge-branch)
 - Already-Merged Guard: **skip** (PR on same-source-target is not a valid PR, nothing to detect)
 - Step 6 confirm: trunk-mode wording (push + close, no PR)
-- Step 7 bd comment: commit range uses `session-start-ref..HEAD` (same reason as Step 4)
+- Step 7 bd comment: commit range uses `start:..HEAD` (same reason as Step 4)
 - Step 8 finish: upstream-aware push + `bd close` (no PR, no merge, no `git branch -d`)
 - Step 9 output: trunk-mode "Next" options (no "Merge & close", no "Switch to merge-branch")
 
@@ -143,26 +143,33 @@ Use `$LETS_MERGE_BRANCH` from LETS Config. Fallback: `git symbolic-ref refs/remo
 
 **Guard:** if `$LETS_MERGE_BRANCH` is unset or empty, STOP with error: "LETS_MERGE_BRANCH is not configured. Edit `.lets/.env` or run `/lets:init`. Refusing to proceed - empty value would cause `git checkout` no-op and merge into wrong branch." Do NOT use the fallback for merge/checkout operations - the fallback is for context only (showing the diff against a reasonable base). Merge target must be explicit.
 
-**If HEAD == `$LETS_MERGE_BRANCH` (trunk-mode):** use the session-start-ref as the lower bound, since `$LETS_MERGE_BRANCH..HEAD` is empty when HEAD IS the merge-branch.
+**Lower bound = the task's `start:` boundary** (from `.task-<slug>`), uniform across trunk and feature branches. On the merge-branch `{LETS_MERGE_BRANCH}..HEAD` is empty (HEAD IS the merge-branch), so the recorded `start:` is the only valid bound there; on a feature/worktree branch a missing `start:` falls back to the merge-base diff.
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-HEAD_BRANCH=$(git branch --show-current)
-BRANCH_SLUG=$(echo "$HEAD_BRANCH" | tr '/' '-')
-START_REF=$(cat "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}" 2>/dev/null)
-if [ -z "$START_REF" ]; then
-  echo "ERROR: no session-start-ref for branch $HEAD_BRANCH. Trunk-mode needs the session boundary. Recover manually: 'git rev-parse HEAD~N > .lets/sessions/.session-start-ref-${BRANCH_SLUG}' to set N commits back as the boundary, then re-run /lets:done. Or re-trigger via /lets:start (loses current done flow context)."
-  exit 1
+HEAD_BRANCH=$(git branch --show-current); BRANCH_SLUG=$(echo "$HEAD_BRANCH" | tr '/' '-')
+TASK_FILE="$LETS_PROJECT_ROOT/.lets/sessions/.task-${BRANCH_SLUG}"
+START=$(sed -n 's/^start: //p' "$TASK_FILE" 2>/dev/null | head -1)
+# Ancestry guard: a recorded start that isn't an ancestor of HEAD is stale (rebase/reset/wrong line).
+if [ -n "$START" ] && ! git merge-base --is-ancestor "$START" HEAD 2>/dev/null; then
+  echo "WARN: recorded task start ($START) is not an ancestor of HEAD - ignoring it." >&2
+  START=""
 fi
-git log ${START_REF}..HEAD --oneline
-git diff --stat ${START_REF}..HEAD
-```
-
-**Otherwise (HEAD is a feature branch):**
-
-```bash
-git log {LETS_MERGE_BRANCH}..HEAD --oneline
-git diff --stat {LETS_MERGE_BRANCH}..HEAD
+# Back-compat is ASYMMETRIC: the legacy .session-start-ref is a SESSION boundary, NOT a task
+# boundary, so it is NOT used as start: here (that conflation is the bug this path fixes).
+if [ -z "$START" ]; then
+  if [ "$HEAD_BRANCH" = "{LETS_MERGE_BRANCH}" ]; then
+    echo "ERROR: no task boundary recorded for this trunk task (started before upgrade, or rebased)." >&2
+    echo "{LETS_MERGE_BRANCH}..HEAD is empty on the merge-branch, so the task range can't be inferred. Set it, then re-run /lets:done:" >&2
+    echo "  printf 'task: %s\\nstart: %s\\nsession: %s %s\\n' '<task-id>' \"\$(git rev-parse HEAD~N)\" \"\$(git rev-parse HEAD)\" \"\$CLAUDE_CODE_SESSION_ID\" > \"$TASK_FILE\"" >&2
+    exit 1
+  fi
+  RANGE="{LETS_MERGE_BRANCH}..HEAD"   # feature/worktree: merge-base diff (correct, non-empty here)
+else
+  RANGE="${START}..HEAD"
+fi
+git log ${RANGE} --oneline
+git diff --stat ${RANGE}
 ```
 
 Show summary:
@@ -279,15 +286,15 @@ Next steps presented via AskUserQuestion (replaces LETS box).
 
 Add completion comment to the task. **MANDATORY:** the `Claude session: $CLAUDE_CODE_SESSION_ID` line MUST appear in the comment between `## Completed` and `### Commits` — don't drop it. `$CLAUDE_CODE_SESSION_ID` is the Bash subprocess env var Claude Code injects (see CLAUDE.md → "Claude Code session identity"); bash expands it inside the double-quoted argument at runtime, so `bd` receives the literal session UUID. No pre-assignment / template substitution needed.
 
-**Self-contained bash** — computes `RANGE` locally so the bd comment is correct regardless of whether Step 4's `START_REF` is still in scope (each Bash tool call is a fresh shell — no cross-Step env). Trunk-mode: range from `session-start-ref`. Otherwise: range from `$LETS_MERGE_BRANCH`. Git operations use bash `$(...)` substitution; only the narrative fields stay as orchestrator-filled `{...}` templates.
+**Self-contained bash** — computes `RANGE` locally so the bd comment is correct regardless of whether Step 4's `START` is still in scope (each Bash tool call is a fresh shell — no cross-Step env). Range from the task's `start:` boundary (uniform, with the same ancestry guard as Step 4); falls back to `$LETS_MERGE_BRANCH..HEAD` on a feature/worktree branch when no `start:` is recorded (on trunk Step 4 already aborted if it was empty). Git operations use bash `$(...)` substitution; only the narrative fields stay as orchestrator-filled `{...}` templates.
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-HEAD_BRANCH=$(git branch --show-current)
-if [ "$HEAD_BRANCH" = "{LETS_MERGE_BRANCH}" ]; then
-  BRANCH_SLUG=$(echo "$HEAD_BRANCH" | tr '/' '-')
-  START_REF=$(cat "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}" 2>/dev/null)
-  RANGE="${START_REF}..HEAD"
+HEAD_BRANCH=$(git branch --show-current); BRANCH_SLUG=$(echo "$HEAD_BRANCH" | tr '/' '-')
+START=$(sed -n 's/^start: //p' "$LETS_PROJECT_ROOT/.lets/sessions/.task-${BRANCH_SLUG}" 2>/dev/null | head -1)
+if [ -n "$START" ] && ! git merge-base --is-ancestor "$START" HEAD 2>/dev/null; then START=""; fi
+if [ -n "$START" ]; then
+  RANGE="${START}..HEAD"
 else
   RANGE="{LETS_MERGE_BRANCH}..HEAD"
 fi
@@ -346,6 +353,18 @@ else
 fi
 
 bd close <task-id> --reason="Trunk-mode: committed on {LETS_MERGE_BRANCH}, no PR"
+
+# Cleanup (B4): task closed, but the trunk branch lives on (it hosts more tasks). Drop the closed
+# task's task:/start:, KEEP session: so /lets:end still has a valid session boundary. Do NOT rm the
+# whole file — the next claim overwrites task:/start:, and a stray rm would strand /lets:end.
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+BRANCH_SLUG=$(echo "$(git branch --show-current)" | tr '/' '-')
+TASK_FILE="$LETS_PROJECT_ROOT/.lets/sessions/.task-${BRANCH_SLUG}"
+if [ -f "$TASK_FILE" ]; then
+  SID_LINE=$(sed -n 's/^session: //p' "$TASK_FILE" | head -1)
+  [ -z "$SID_LINE" ] && SID_LINE="$(git rev-parse HEAD) $CLAUDE_CODE_SESSION_ID"
+  tmp=$(mktemp "${TASK_FILE}.XXXX"); printf 'session: %s\n' "$SID_LINE" > "$tmp" && mv -f "$tmp" "$TASK_FILE"
+fi
 ```
 
 After this, skip the `### If $LETS_PR_FLOW == github (PR flow)` / `!= github` blocks below — they don't apply in trunk-mode.
