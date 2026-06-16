@@ -62,7 +62,9 @@ Once `lets` is on `$PATH`, install the plugin from Claude Code's marketplace. **
 /plugin install lets
 ```
 
-This is a one-time setup per machine. When Claude Code asks who to install for, pick **"Install for all collaborators on this repository"** (project scope — committed to `.claude/settings.json`, so teammates inherit it), **"Install for you, in this repo only"** (local scope), or **"Install for yourself everywhere"** (user scope — see [User-scope install](#user-scope-install-global-rules) below). Tip: in `/plugin` → **Marketplaces** → `lets-workflow`, **Enable auto-update** so the plugin stays current on its own.
+This is a one-time setup per machine. When Claude Code asks who to install for, pick **"Install for all collaborators on this repository"** (project scope — committed to `.claude/settings.json`, so teammates inherit it), **"Install for you, in this repo only"** (local scope), or **"Install for yourself everywhere"** (user scope — see [User-scope install](#user-scope-install-global-rules) below).
+
+> **Do this once — it removes the manual plugin update forever:** in `/plugin` → **Marketplaces** → `lets-workflow`, **Enable auto-update**. The plugin then tracks every LETS release on its own, so staying current later collapses to a single `/lets:update` loop (see [Updating](#updating) below) instead of a manual `/plugin marketplace update`. Claude Code has no setting the `lets` binary can flip — this UI toggle is the one step only you can do.
 
 > Verify the plugin loaded: `/lets:` commands should now autocomplete in Claude Code. (The `🌱 LETS Workflow vX.Y.Z » <branch>` statusline appears once you've run `/lets:init` in a project — see step 3.)
 
@@ -104,7 +106,17 @@ Then inside the Claude Code session:
 
 This creates `.lets/` (gitignored), populates `.lets/.env` with sensible defaults, copies the workflow rules to `.claude/rules/lets-rules.md`, wires up the statusline, and runs `bd init` if beads is installed. Re-run anytime to self-heal drift or change config.
 
-You're done — start working with `/lets:start`. Later, when a new release ships, run `/lets:update` to re-sync `.lets/.env` and the rules file (and see version status for the binary and the plugin).
+You're done — start working with `/lets:start`.
+
+### Updating
+
+With plugin auto-update enabled (above), staying current is a single self-driving loop, not an ordered checklist: run `/lets:update`, do the **one** thing it tells you, and re-run until it prints `✓ Everything on vX.Y.Z`.
+
+- Each run advances one step and shows exactly one next action (binary → plugin → reload → done).
+- If the binary is behind, `/lets:update` offers to run the installer in-session (approval-gated) — no terminal needed.
+- It never syncs the workflow rules to a plugin that's still behind (the row shows `deferred`); it tells you to update the plugin first, so you never get stranded mid-upgrade.
+
+> *The single self-driving loop above ships next release. On the current release `/lets:update` already self-heals `.lets/.env` + rules and reports the binary/plugin version status — you just run the update steps it lists.*
 
 ---
 

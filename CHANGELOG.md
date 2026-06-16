@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- **`/lets:update` — one-command, self-driving, no half-step (lets-rlue4).** `lets update` is now order-aware and self-driving instead of a static status dump. Order-aware: when the Claude Code plugin is behind (outdated vs latest, or locally older than the binary), the workflow-rules re-copy is **`deferred`** rather than synced to the stale plugin — killing the half-step where updating the binary first stamped rules at the OLD plugin's version (only a genuinely `outdated` installed copy defers; a *missing* one still installs, an *ahead* one keeps its reset). Self-driving: the Go binary computes a single ordered `next_action` (`init → binary → plugin → reload → done`) from the artifact statuses, and `/lets:update` renders exactly that one step and re-runs until `✓ Everything on vX.Y.Z` (no status matrix on a synced machine). When the binary is behind, `/lets:update` offers to run the official installer in-session (approval-gated even in AUTO MODE, one attempt per run, source + command shown; `next_action.command` is an execution-bound compile-time const, byte-equal-tested). `/lets:init` now leads with the one-time plugin auto-update recommendation that removes the manual plugin step. The `lets update --json` schema stays `2` (`next_action` + the `deferred` status are additive). Absorbs lets-ew17g.
+
 ## [0.6.4] - 2026-06-12
 
 ### Added

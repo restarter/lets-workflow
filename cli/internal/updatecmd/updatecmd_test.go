@@ -321,6 +321,215 @@ func TestRun_DevBinary_RichStamp(t *testing.T) {
 	}
 }
 
+// --- lets-rlue4: order-aware deferral + next_action ---
+
+func assertRulesFileVersion(t *testing.T, projectRoot, want string) {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(projectRoot, ".claude", "rules", "lets-rules.md"))
+	if err != nil {
+		t.Fatalf("read installed rules: %v", err)
+	}
+	if !strings.Contains(string(b), "version: "+want) {
+		t.Fatalf("installed rules = %q, want it to still carry version: %s", string(b), want)
+	}
+}
+
+func TestRun_RulesDeferred_BinaryWins(t *testing.T) {
+	// binary outdated (0.6.3 < 0.6.4) AND plugin behind (0.6.3 < 0.6.4); installed
+	// rules 0.6.2 would normally advance to the stale 0.6.3 - the half-step. Defer.
+	pr, plug := scaffold(t, "0.6.3", "0.6.2", "0.6.3", "0.6.3")
+	r, err := Run(context.Background(), Options{LatestFn: stubLatest("0.6.4")}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := find(t, r, "rules").Status; got != StatusDeferred {
+		t.Errorf("rules status = %s, want deferred", got)
+	}
+	assertRulesFileVersion(t, pr, "0.6.2") // NOT rewritten
+	if r.NextAction == nil || r.NextAction.Kind != "binary" {
+		t.Fatalf("next_action = %+v, want kind=binary", r.NextAction)
+	}
+}
+
+func TestRun_RulesDeferred_PluginNext(t *testing.T) {
+	// binary current (0.6.4 == latest), plugin behind (0.6.3); rules 0.6.2 -> deferred.
+	pr, plug := scaffold(t, "0.6.4", "0.6.2", "0.6.3", "0.6.4")
+	r, err := Run(context.Background(), Options{LatestFn: stubLatest("0.6.4")}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := find(t, r, "rules").Status; got != StatusDeferred {
+		t.Errorf("rules status = %s, want deferred", got)
+	}
+	assertRulesFileVersion(t, pr, "0.6.2")
+	if r.NextAction == nil || r.NextAction.Kind != "plugin" {
+		t.Fatalf("next_action = %+v, want kind=plugin", r.NextAction)
+	}
+}
+
+func TestRun_RulesUpdated_ReloadNext(t *testing.T) {
+	// Everything current; rules 0.6.3 -> rewritten to 0.6.4 -> reload.
+	pr, plug := scaffold(t, "0.6.4", "0.6.3", "0.6.4", "0.6.4")
+	r, err := Run(context.Background(), Options{LatestFn: stubLatest("0.6.4")}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := find(t, r, "rules").Status; got != StatusUpdated {
+		t.Errorf("rules status = %s, want updated", got)
+	}
+	assertRulesFileVersion(t, pr, "0.6.4")
+	if r.NextAction == nil || r.NextAction.Kind != "reload" {
+		t.Fatalf("next_action = %+v, want kind=reload", r.NextAction)
+	}
+}
+
+func TestRun_AllSynced_DoneNext(t *testing.T) {
+	pr, plug := scaffold(t, "0.6.4", "0.6.4", "0.6.4", "0.6.4")
+	r, err := Run(context.Background(), Options{LatestFn: stubLatest("0.6.4")}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.NextAction == nil || r.NextAction.Kind != "done" || r.NextAction.Version != "0.6.4" {
+		t.Fatalf("next_action = %+v, want done/0.6.4", r.NextAction)
+	}
+}
+
+func TestRun_OfflineLocalBehind_Defers(t *testing.T) {
+	// Offline: plugin/binary status unknown, but plugin 0.6.3 < binary 0.6.4
+	// locally -> defer via the local-compare leg; next action steers to plugin.
+	pr, plug := scaffold(t, "0.6.4", "0.6.2", "0.6.3", "0.6.4")
+	r, err := Run(context.Background(), Options{LatestFn: nil}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := find(t, r, "rules").Status; got != StatusDeferred {
+		t.Errorf("rules status = %s, want deferred (offline local-behind)", got)
+	}
+	assertRulesFileVersion(t, pr, "0.6.2")
+	if r.NextAction == nil || r.NextAction.Kind != "plugin" {
+		t.Fatalf("next_action = %+v, want kind=plugin", r.NextAction)
+	}
+}
+
+func TestRun_OfflineNoLocalBehind_NoDefer(t *testing.T) {
+	// Offline, plugin == binary (no local-behind): defer must NOT fire on
+	// uncertainty - rules sync normally.
+	pr, plug := scaffold(t, "0.6.3", "0.6.2", "0.6.3", "0.6.3")
+	r, err := Run(context.Background(), Options{LatestFn: nil}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := find(t, r, "rules").Status; got != StatusUpdated {
+		t.Errorf("rules status = %s, want updated (no defer when plugin==binary offline)", got)
+	}
+	assertRulesFileVersion(t, pr, "0.6.3")
+}
+
+func TestRun_DevBinary_PluginOutdated_Defers(t *testing.T) {
+	// A dev binary is excluded from the local compare, but a genuinely outdated
+	// plugin still defers (via the plugin-outdated leg); the dev binary neither
+	// triggers nor suppresses the defer.
+	pr, plug := scaffold(t, "0.6.3", "0.6.2", "0.6.3", "dev")
+	r, err := Run(context.Background(), Options{LatestFn: stubLatest("0.6.4")}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := find(t, r, "rules").Status; got != StatusDeferred {
+		t.Errorf("rules status = %s, want deferred (plugin outdated, dev binary)", got)
+	}
+	if r.NextAction == nil || r.NextAction.Kind != "plugin" {
+		t.Fatalf("next_action = %+v, want kind=plugin", r.NextAction)
+	}
+}
+
+func TestRun_RulesAhead_NotDeferred(t *testing.T) {
+	// Installed rules AHEAD of a behind-plugin: only StateOutdated defers, so the
+	// existing downgrade-on-ahead behavior is preserved (file reset to plugin).
+	pr, plug := scaffold(t, "0.6.4", "0.6.5", "0.6.3", "0.6.4")
+	r, err := Run(context.Background(), Options{LatestFn: stubLatest("0.6.4")}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := find(t, r, "rules").Status; got != StatusUpdated {
+		t.Errorf("rules status = %s, want updated (ahead is not deferred)", got)
+	}
+	assertRulesFileVersion(t, pr, "0.6.3") // downgraded to plugin, as before
+}
+
+func TestRun_UserRulesDeferred(t *testing.T) {
+	// user-rules block mirrors the project block: a behind plugin defers the
+	// global rules sync too, leaving the file untouched.
+	projectRoot, pluginRoot := scaffold(t, "0.6.4", "0.6.3", "0.6.3", "0.6.4")
+	home := userHome(t, "0.6.2")
+	userPath := filepath.Join(home, ".claude", "rules", "lets-rules.md")
+	before, _ := os.ReadFile(userPath)
+	r, err := Run(context.Background(), Options{HomeDir: home, LatestFn: stubLatest("0.6.4")}, projectRoot, pluginRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := find(t, r, "user-rules").Status; got != StatusDeferred {
+		t.Errorf("user-rules status = %s, want deferred", got)
+	}
+	after, _ := os.ReadFile(userPath)
+	if string(before) != string(after) {
+		t.Error("global rules written despite deferral")
+	}
+}
+
+func TestNextActionCommand_ConstOnly(t *testing.T) {
+	// SECURITY: next_action.Command must be byte-equal to the installScriptCmd
+	// const for any binary-outdated input - never interpolated with versions.
+	for _, bin := range []string{"0.5.0", "0.1.2", "0.6.3"} {
+		pr, plug := scaffold(t, bin, "0.6.4", "0.6.4", bin)
+		r, err := Run(context.Background(), Options{LatestFn: stubLatest("0.6.4")}, pr, plug)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if r.NextAction == nil || r.NextAction.Kind != "binary" {
+			t.Fatalf("binary %s: next_action = %+v, want kind=binary", bin, r.NextAction)
+		}
+		if r.NextAction.Command != installScriptCmd {
+			t.Fatalf("binary %s: Command = %q, want byte-equal installScriptCmd", bin, r.NextAction.Command)
+		}
+	}
+}
+
+func TestRun_OfflineDevBinary_DoneNoVersion(t *testing.T) {
+	// Offline + dev binary, everything else in sync: done with NO version (we
+	// never verified the latest release) and a hedged message, not "on the latest".
+	pr, plug := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "dev")
+	r, err := Run(context.Background(), Options{LatestFn: nil}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.NextAction == nil || r.NextAction.Kind != "done" {
+		t.Fatalf("next_action = %+v, want kind=done", r.NextAction)
+	}
+	if r.NextAction.Version != "" {
+		t.Errorf("done Version = %q, want empty (offline+dev, latest unverified)", r.NextAction.Version)
+	}
+	if !strings.Contains(r.NextAction.Message, "couldn't verify") {
+		t.Errorf("done Message = %q, want the hedged offline message", r.NextAction.Message)
+	}
+}
+
+func TestComputeNextAction_NotInitializedRulesRoutesToInit(t *testing.T) {
+	// A not-initialized rules row (scope=user, no global) must drive next_action,
+	// not fall through to `done` while sitting in ActionNeeded.
+	r := NewResult("/p", "/plug")
+	r.Add(Artifact{Name: ".env", Status: StatusInSync, CurrentVersion: "0.6.0"})
+	r.Add(Artifact{Name: "binary", Status: StatusUpToDate, CurrentVersion: "0.6.0", LatestVersion: "0.6.0"})
+	r.Add(Artifact{Name: "plugin", Status: StatusUpToDate, CurrentVersion: "0.6.0", LatestVersion: "0.6.0"})
+	r.Add(Artifact{Name: "rules", Status: StatusNotInitialized, Action: "Run `lets init --user` to restore the global rules"})
+	computeNextAction(&r, "0.6.0", LatestInfo{Version: "0.6.0"})
+	if r.NextAction == nil || r.NextAction.Kind != "init" {
+		t.Fatalf("next_action = %+v, want kind=init", r.NextAction)
+	}
+	if !strings.Contains(r.NextAction.Message, "lets init --user") {
+		t.Errorf("message = %q, want the rules row's Action carried through", r.NextAction.Message)
+	}
+}
+
 func TestRun_EnvHeaderRefreshed(t *testing.T) {
 	pr, plug := scaffold(t, "0.5.0", "0.6.0", "0.6.0", "0.6.0") // .env behind the (real) binary
 	r, err := Run(context.Background(), Options{LatestFn: stubLatest("0.6.0")}, pr, plug)
@@ -410,29 +619,52 @@ func TestRun_PluginVersionUnreadable(t *testing.T) {
 	}
 }
 
-func TestPrintReport_AllInSync(t *testing.T) {
+func TestPrintReport_DoneState(t *testing.T) {
 	r := NewResult("/p", "/plug")
 	r.OK = true
 	r.Add(Artifact{Name: ".env", Status: StatusUpToDate, CurrentVersion: "0.6.0"})
 	r.Add(Artifact{Name: "binary", Status: StatusUpToDate, CurrentVersion: "0.6.0", LatestVersion: "0.6.0"})
+	r.NextAction = &NextAction{Kind: "done", Version: "0.6.0"}
 	var b bytes.Buffer
 	PrintReport(&b, r)
 	out := b.String()
-	if !strings.Contains(out, "LETS Update Status") || !strings.Contains(out, "All 2 artifacts in sync.") {
+	if !strings.Contains(out, "LETS Update Status") || !strings.Contains(out, "Everything on v0.6.0.") {
 		t.Fatalf("unexpected report:\n%s", out)
 	}
 }
 
-func TestPrintReport_ActionsListed(t *testing.T) {
+func TestPrintReport_DoneStateNoVersion(t *testing.T) {
+	// Empty Version (offline / unverified) renders the hedged line, never a version.
+	r := NewResult("/p", "/plug")
+	r.OK = true
+	r.Add(Artifact{Name: "binary", Status: StatusDev, CurrentVersion: "dev"})
+	r.NextAction = &NextAction{Kind: "done", Version: ""}
+	var b bytes.Buffer
+	PrintReport(&b, r)
+	out := b.String()
+	if !strings.Contains(out, "couldn't verify the latest release") {
+		t.Fatalf("empty-Version done should hedge:\n%s", out)
+	}
+	if strings.Contains(out, "Everything on v") {
+		t.Errorf("must not claim a version when Version is empty:\n%s", out)
+	}
+}
+
+func TestPrintReport_SingleNextAction(t *testing.T) {
 	r := NewResult("/p", "/plug")
 	r.OK = true
 	r.Add(Artifact{Name: ".env", Status: StatusUpToDate, CurrentVersion: "0.6.0"})
 	r.Add(Artifact{Name: "binary", Status: StatusOutdated, CurrentVersion: "0.5.0", LatestVersion: "0.6.0", Action: "do the thing"})
+	r.NextAction = &NextAction{Kind: "binary", Message: "Update the lets binary (v0.5.0 -> v0.6.0).", Command: installScriptCmd}
 	var b bytes.Buffer
 	PrintReport(&b, r)
 	out := b.String()
-	if !strings.Contains(out, "1 of 2 artifacts need your action") || !strings.Contains(out, "binary: do the thing") {
-		t.Fatalf("PrintReport output missing action section:\n%s", out)
+	// One next action - NOT the old per-artifact "N of M need your action" list.
+	if !strings.Contains(out, "Next: Update the lets binary") || !strings.Contains(out, installScriptCmd) {
+		t.Fatalf("PrintReport missing single next action:\n%s", out)
+	}
+	if strings.Contains(out, "need your action") || strings.Contains(out, "binary: do the thing") {
+		t.Fatalf("PrintReport must not render the old per-artifact action list:\n%s", out)
 	}
 }
 
@@ -457,12 +689,14 @@ func TestPrintReport_PartialUpgradeReadable(t *testing.T) {
 	r.Add(Artifact{Name: "rules", Status: StatusInSync, CurrentVersion: "0.5.3", Detail: "tracks the plugin (itself behind latest v0.5.4)"})
 	r.Add(Artifact{Name: "binary", Status: StatusOutdated, CurrentVersion: "0.5.2", LatestVersion: "0.5.4", Action: "update binary"})
 	r.Add(Artifact{Name: "plugin", Status: StatusOutdated, CurrentVersion: "0.5.3", LatestVersion: "0.5.4", Action: "update plugin"})
+	r.NextAction = &NextAction{Kind: "binary", Message: "Update the lets binary (v0.5.2 -> v0.5.4).", Command: installScriptCmd}
 	var b bytes.Buffer
 	PrintReport(&b, r)
 	out := b.String()
+	// Table still reads coherently; the single next action replaces the old list.
 	for _, want := range []string{
 		"in-sync", "tracks the lets binary", "itself behind latest v0.5.4",
-		"inconsistent", "2 of 4 artifacts need your action",
+		"Next: Update the lets binary",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("report missing %q:\n%s", want, out)
@@ -471,16 +705,28 @@ func TestPrintReport_PartialUpgradeReadable(t *testing.T) {
 	if strings.Contains(out, "up-to-date") {
 		t.Errorf("partial-upgrade report should not show bare 'up-to-date' rows:\n%s", out)
 	}
+	// The inconsistent-install warning is suppressed when the single next action
+	// (binary/plugin) already explains the partial state.
+	if strings.Contains(out, "inconsistent") {
+		t.Errorf("inconsistent warning should be suppressed on a binary/plugin next action:\n%s", out)
+	}
 }
 
+// The inconsistent-install warning still shows on the reload/done tail (where a
+// version mismatch would otherwise be a surprise), only suppressed on binary/plugin.
 func TestPrintReport_InconsistentWarning(t *testing.T) {
 	r := NewResult("/p", "/plug")
 	r.Consistent = false
-	r.Add(Artifact{Name: "binary", Status: StatusOutdated, CurrentVersion: "0.5.0", Action: "x"})
+	r.Add(Artifact{Name: "rules", Status: StatusUpdated, CurrentVersion: "0.6.0"})
+	r.NextAction = &NextAction{Kind: "reload", Message: "Restart Claude Code so the updated rules load - /exit, then reopen."}
 	var b bytes.Buffer
 	PrintReport(&b, r)
-	if !strings.Contains(b.String(), "inconsistent") {
-		t.Fatalf("missing inconsistency warning:\n%s", b.String())
+	out := b.String()
+	if !strings.Contains(out, "inconsistent") {
+		t.Fatalf("missing inconsistency warning on reload tail:\n%s", out)
+	}
+	if !strings.Contains(out, "Next: Restart Claude Code") {
+		t.Fatalf("missing reload next action:\n%s", out)
 	}
 }
 
