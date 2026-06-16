@@ -2,8 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+- **`/lets:execute` start-of-run mode picker (lets-hs4fj).** Bare `/lets:execute` now asks once how to run the approved plan: **Straight-through** (here, one approval then all tasks, auto-commit at plan points), **Step-by-step** (here, pause + review after each task, confirm each commit), **Auto** (`--auto` AUTO MODE, unattended; hard-stops + push/PR/close/external still gated; refuses on the merge-branch), or **Team** (parallel implementers in isolated worktrees via `/lets:team`, review at the end). Commit cadence is derived from the mode (not a separate question). Flag shortcuts pre-answer and skip the picker entirely: `--team`, `--step`/`--step-by-step`, `--straight`/`--straight-through`, `--auto`. A remembered `LETS_EXECUTE_MODE` default is a deferred follow-up.
+
 ### Changed
 - **`/lets:update` — one-command, self-driving, no half-step (lets-rlue4).** `lets update` is now order-aware and self-driving instead of a static status dump. Order-aware: when the Claude Code plugin is behind (outdated vs latest, or locally older than the binary), the workflow-rules re-copy is **`deferred`** rather than synced to the stale plugin — killing the half-step where updating the binary first stamped rules at the OLD plugin's version (only a genuinely `outdated` installed copy defers; a *missing* one still installs, an *ahead* one keeps its reset). Self-driving: the Go binary computes a single ordered `next_action` (`init → binary → plugin → reload → done`) from the artifact statuses, and `/lets:update` renders exactly that one step and re-runs until `✓ Everything on vX.Y.Z` (no status matrix on a synced machine). When the binary is behind, `/lets:update` offers to run the official installer in-session (approval-gated even in AUTO MODE, one attempt per run, source + command shown; `next_action.command` is an execution-bound compile-time const, byte-equal-tested). `/lets:init` now leads with the one-time plugin auto-update recommendation that removes the manual plugin step. The `lets update --json` schema stays `2` (`next_action` + the `deferred` status are additive). Absorbs lets-ew17g.
+
+### Fixed
+- **`/lets:check --plan` finds trunk-mode plans (lets-u06sc).** In trunk-mode (on the merge-branch) the plan lookup used the branch slug (`main`), which never matched `plan.md`'s `<date>-<task-id>.md` save name — forcing a manual `--plan <path>` every time. It now calls detect-task in plan mode and derives the slug from the task-id (with a task-id fallback glob), mirroring `/lets:execute` and `/lets:review --plan` (which already did this).
 
 ## [0.6.4] - 2026-06-12
 
