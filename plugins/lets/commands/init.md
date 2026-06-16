@@ -69,12 +69,12 @@ fi
 echo "SCOPE=${SCOPE:-unknown}"
 ```
 
-Branch on `$SCOPE`. When the plugin is found (`project` / `user` / `local`) surface the **auto-update tip** (one short line):
-  > ℹ️ Tip — do this once: `/plugin` → **Marketplaces** → `lets-workflow` → **Enable auto-update**. The plugin then stays on the latest LETS release automatically — no manual updates.
+Branch on `$SCOPE`. When the plugin is found (`project` / `user` / `local`) **lead** with the **auto-update recommendation** - this is the single biggest update-UX win, so present it prominently (not as a footnote):
+  > ✅ **Do this once - it removes the manual plugin update forever:** `/plugin` → **Marketplaces** → `lets-workflow` → **Enable auto-update**. The plugin then tracks every LETS release on its own, so ongoing updates collapse to a single `/lets:update` loop (run it, do the one thing it says, re-run until `✓ Everything on vX.Y.Z`) - no `/plugin marketplace update` step to remember. (Claude Code has no setting the `lets` binary can flip - this is a one-time UI action only you can do.)
 
 Additionally:
-- `project` → just the auto-update tip. Best case.
-- `user` → the auto-update tip **plus** the global-rules check:
+- `project` → just the auto-update recommendation. Best case.
+- `user` → the auto-update recommendation **plus** the global-rules check:
 
   ```bash
   test -f "$HOME/.claude/rules/lets-rules.md" && echo "GLOBAL_RULES_PRESENT" || echo "GLOBAL_RULES_ABSENT"
@@ -93,7 +93,7 @@ Additionally:
 
     (`{LANGUAGE}` is an orchestrator placeholder — substitute the English language name BEFORE running. If no language is bound yet (Step 2a hasn't run), ask Step 2a's language question first. NEVER leave a bash variable here: `$LANG` is the POSIX locale env var (`en_US.UTF-8`) and bash would expand it, silently poisoning `~/.lets/.env` in every future session. Add `--launcher={LAUNCHER}` only if the user customized the launcher this session.)
   - One-line note stays for teams: "For team adoption, project scope is still preferable (`/plugin install` → 'all collaborators')."
-- `local` → just the auto-update tip. User picked the scope deliberately, so no scope-change notice.
+- `local` → just the auto-update recommendation. User picked the scope deliberately, so no scope-change notice.
 - `unknown` (empty / file missing / dev `--plugin-dir` mode) → no notice at all.
 
 These are informational, not blockers. Continue with Step 2/3 regardless.

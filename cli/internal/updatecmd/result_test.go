@@ -77,6 +77,31 @@ func TestResult_SchemaContract(t *testing.T) {
 			t.Errorf("missing artifact JSON key %q", k)
 		}
 	}
+
+	// next_action is a pointer with omitempty: absent when nil (e.g. a hard
+	// error before computeNextAction), present once set. Pin both - a value
+	// struct with omitempty would NOT omit, so this guards the pointer choice.
+	if _, ok := m["next_action"]; ok {
+		t.Errorf("next_action must be omitted when NextAction is nil, got %v", m["next_action"])
+	}
+	r.NextAction = &NextAction{Kind: "done", Message: "ok", Version: "0.6.0"}
+	b2, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m2 map[string]any
+	if err := json.Unmarshal(b2, &m2); err != nil {
+		t.Fatal(err)
+	}
+	na, ok := m2["next_action"].(map[string]any)
+	if !ok {
+		t.Fatalf("next_action missing or wrong shape: %#v", m2["next_action"])
+	}
+	for _, k := range []string{"kind", "message"} {
+		if _, ok := na[k]; !ok {
+			t.Errorf("missing next_action JSON key %q", k)
+		}
+	}
 }
 
 // Bucket-sum invariant: every status increments exactly one Summary bucket.

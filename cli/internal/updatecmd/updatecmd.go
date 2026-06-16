@@ -20,7 +20,12 @@ import (
 )
 
 const (
-	binaryUpdateAction = "Update the lets binary: `curl -fsSL https://raw.githubusercontent.com/restarter/lets-workflow/main/scripts/install.sh | bash`"
+	// installScriptCmd is the BARE installer command (no prose, no backticks).
+	// It is the single source for both binaryUpdateAction (prose) and
+	// next_action.Command (execution-bound). SECURITY: only ever a compile-time
+	// const - never fmt.Sprintf'd with a version or any dynamic/untrusted data.
+	installScriptCmd   = "curl -fsSL https://raw.githubusercontent.com/restarter/lets-workflow/main/scripts/install.sh | bash"
+	binaryUpdateAction = "Update the lets binary: `" + installScriptCmd + "`"
 	pluginUpdateAction = "Update the plugin: `/plugin marketplace update lets-workflow`, then `/reload-plugins` (or restart Claude Code: `/exit`, reopen) - all in Claude Code, no terminal. Do it once and skip this in future: enable auto-update in `/plugin` -> Marketplaces -> lets-workflow."
 )
 
@@ -90,7 +95,35 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 		}
 	}
 
-	// Rules scope + user-scope presence, resolved once (consumed by Artifact 2
+	// --- Artifact 2: lets binary --- (emitted before rules so the deferral gate
+	// below can read the plugin's status off the artifact list, not re-derive it)
+	result.Add(versionArtifact("binary", version.Version, latest, latestErr, offline, binaryUpdateAction))
+
+	// --- Artifact 3: Claude Code plugin ---
+	pluginVer := ReadPluginVersion(pluginRoot)
+	result.Add(versionArtifact("plugin", pluginVer, latest, latestErr, offline, pluginUpdateAction))
+
+	// Order-aware gate (lets-rlue4): the plugin is "behind" when it is outdated
+	// vs the latest release (read straight off the plugin artifact just added -
+	// no duplicated latest-compare, no latestErr divergence) OR behind the binary
+	// locally (offline-safe; versionArtifact never compares plugin-vs-binary).
+	// When behind, do NOT advance the rules file to the stale plugin's version -
+	// that's the half-step. Consumed by the rules + user-rules blocks below.
+	pluginBehind := false
+	for _, a := range result.Artifacts {
+		if a.Name == "plugin" && a.Status == StatusOutdated {
+			pluginBehind = true
+			break
+		}
+	}
+	if pluginVer != "" && !version.IsDevString(pluginVer) {
+		if bv := version.Version; bv != "" && !version.IsDevString(bv) &&
+			semver.Compare("v"+pluginVer, "v"+bv) < 0 {
+			pluginBehind = true
+		}
+	}
+
+	// Rules scope + user-scope presence, resolved once (consumed by Artifact 4
 	// and Artifact 5). Mirror the hook's MERGED read - project value, else the
 	// user-level ~/.lets/.env value - so a hand-added scope in ~/.lets/.env
 	// can't make hook and update contradict each other (the boomerang would
@@ -117,9 +150,7 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 		}
 	}
 
-	// --- Artifact 2: .claude/rules/lets-rules.md ---
-	// lets-ew17g: when defer-on-plugin-outdated lands, apply it to BOTH this
-	// block and Artifact 5 (user-rules) uniformly.
+	// --- Artifact 4: .claude/rules/lets-rules.md ---
 	rulesSrc := filepath.Join(pluginRoot, "rules", "lets-rules.md")
 	rulesDst := filepath.Join(projectRoot, ".claude", "rules", "lets-rules.md")
 	if rulesData, readErr := os.ReadFile(rulesSrc); readErr != nil {
@@ -152,6 +183,13 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 			// scope=user but the global copy is missing too - nothing covers the
 			// project. Surface an actionable fix instead of silently re-copying.
 			result.Add(Artifact{Name: "rules", Status: StatusNotInitialized, Action: "Run `lets init --user` to restore the global rules (or set LETS_RULES_SCOPE=project)", Detail: "scope=user but no rules anywhere - global copy missing"})
+		case dr.State == drift.StateOutdated && pluginBehind:
+			// Half-step guard (lets-rlue4): installed rules are behind the plugin,
+			// but the plugin itself is behind - writing now would advance to a
+			// stale lower version. Hold until the plugin is updated. ONLY
+			// StateOutdated defers: StateMissing must still write below (behind
+			// rules beat NO rules), StateAhead/StateUnknown keep their behavior.
+			result.Add(Artifact{Name: "rules", Status: StatusDeferred, Detail: fmt.Sprintf("plugin behind (plugin v%s); rules sync deferred until the plugin is updated", pluginVer)})
 		case dr.Detected():
 			if err := os.MkdirAll(filepath.Dir(rulesDst), 0o755); err != nil {
 				return result, err
@@ -166,13 +204,6 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 		}
 	}
 
-	// --- Artifact 3: lets binary ---
-	result.Add(versionArtifact("binary", version.Version, latest, latestErr, offline, binaryUpdateAction))
-
-	// --- Artifact 4: Claude Code plugin ---
-	pluginVer := ReadPluginVersion(pluginRoot)
-	result.Add(versionArtifact("plugin", pluginVer, latest, latestErr, offline, pluginUpdateAction))
-
 	// --- Artifact 5: ~/.claude/rules/lets-rules.md (user scope, optional) ---
 	// Row appears ONLY when the file exists: absence means "user-scope install
 	// not in use" - the normal state for project-scope users, not a status
@@ -183,9 +214,6 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 	// newer than the plugin is a user customization (the only per-project
 	// opt-out, GH anthropics/claude-code#8395) or a newer release's copy -
 	// never silently reset.
-	//
-	// lets-ew17g: when defer-on-plugin-outdated lands, apply it to BOTH this
-	// block and Artifact 2 uniformly.
 	if globalPresent {
 		if rulesData, readErr := os.ReadFile(rulesSrc); readErr != nil {
 			result.Add(Artifact{Name: "user-rules", Status: StatusUnknown, Detail: fmt.Sprintf("plugin rules unreadable: %s", rulesSrc)})
@@ -200,6 +228,10 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 				result.Add(Artifact{Name: "user-rules", Status: StatusUnknown, Detail: "plugin rules version unparseable (no `version:` frontmatter)"})
 			case dr.State == drift.StateAhead:
 				result.Add(Artifact{Name: "user-rules", Status: StatusAhead, CurrentVersion: dr.InstalledVersion, Detail: "global rules newer than the plugin - customized or newer release; not overwritten"})
+			case dr.State == drift.StateOutdated && pluginBehind:
+				// Half-step guard (lets-rlue4): mirrors the project-rules block -
+				// hold the global rules sync while the plugin is behind.
+				result.Add(Artifact{Name: "user-rules", Status: StatusDeferred, Detail: fmt.Sprintf("plugin behind (plugin v%s); global rules sync deferred until the plugin is updated", pluginVer)})
 			case dr.Detected():
 				if err := initcmd.AtomicWriteBytes(userRulesDst, rulesData, 0o644); err != nil {
 					return result, fmt.Errorf("write user rules: %w", err)
@@ -225,6 +257,10 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 	// "inconsistent install" warning (it would contradict the artifact row's
 	// own "customized, not an error" detail).
 	result.Consistent = consistentVersions(version.Version, pluginVer, frontmatter.ReadVersion(rulesDst))
+
+	// The single ordered next step (lets-rlue4) - derived purely from the
+	// artifact statuses computed above, so it can never diverge from the rows.
+	computeNextAction(&result, version.Version, latest)
 
 	return result, nil
 }
@@ -275,6 +311,84 @@ func annotateInSyncBehind(r *Result) {
 			a.Detail += " (" + hint + ")"
 		}
 	}
+}
+
+// computeNextAction sets result.NextAction to the single ordered step the user
+// should take this run. Order: init -> binary -> plugin -> reload -> done. The
+// loop is idempotent: do the one step, rerun `lets update`, repeat until done.
+// It reads only the already-computed artifact statuses (no re-deriving version
+// comparisons); binaryVer is used only for the `done` Version fallback.
+func computeNextAction(r *Result, binaryVer string, latest LatestInfo) {
+	status := func(name string) (ArtifactStatus, Artifact) {
+		for _, a := range r.Artifacts {
+			if a.Name == name {
+				return a.Status, a
+			}
+		}
+		return "", Artifact{}
+	}
+
+	// 1. Anything not initialized - the project `.env` (run /lets:init), or a
+	//    rules row under scope=user with no global copy (run lets init --user).
+	//    Scan ALL artifacts so a not-initialized rules row can't sit in
+	//    ActionNeeded while next_action says "done" (the single-source invariant).
+	for _, a := range r.Artifacts {
+		if a.Status == StatusNotInitialized {
+			msg := a.Action
+			if msg == "" {
+				msg = "This project isn't set up yet - run /lets:init."
+			}
+			r.NextAction = &NextAction{Kind: "init", Message: msg}
+			return
+		}
+	}
+	// 2. Binary behind latest - do this FIRST so rules later sync to the right
+	//    version (and so a fresh install doesn't chase an outdated plugin).
+	if s, a := status("binary"); s == StatusOutdated {
+		r.NextAction = &NextAction{
+			Kind:    "binary",
+			Message: fmt.Sprintf("Update the lets binary (v%s -> v%s).", a.CurrentVersion, a.LatestVersion),
+			Command: installScriptCmd,
+		}
+		return
+	}
+	// 3. Plugin behind - outdated vs latest, OR behind the binary (surfaced as a
+	//    deferred rules row, which is the only behind signal available offline).
+	pluginOutdated := func() bool { s, _ := status("plugin"); return s == StatusOutdated }
+	rulesDeferred := func() bool {
+		for _, a := range r.Artifacts {
+			if (a.Name == "rules" || a.Name == "user-rules") && a.Status == StatusDeferred {
+				return true
+			}
+		}
+		return false
+	}
+	if pluginOutdated() || rulesDeferred() {
+		r.NextAction = &NextAction{
+			Kind:    "plugin",
+			Message: "Update the Claude Code plugin: /plugin marketplace update lets-workflow, then /reload-plugins.",
+		}
+		return
+	}
+	// 4. Rules were just synced - reload so the running session picks them up.
+	for _, a := range r.Artifacts {
+		if (a.Name == "rules" || a.Name == "user-rules") && a.Status == StatusUpdated {
+			r.NextAction = &NextAction{Kind: "reload", Message: "Restart Claude Code so the updated rules load - /exit, then reopen."}
+			return
+		}
+	}
+	// 5. Nothing pending. Only claim "latest release" when we actually checked it
+	//    (latest.Version set = online); offline we report a known version without
+	//    asserting it's latest. Version falls back to the binary when offline.
+	ver := latest.Version
+	msg := "Everything is on the latest release."
+	if latest.Version == "" {
+		msg = "Nothing pending locally - couldn't verify the latest release."
+		if !version.IsDevString(binaryVer) {
+			ver = binaryVer
+		}
+	}
+	r.NextAction = &NextAction{Kind: "done", Message: msg, Version: ver}
 }
 
 // versionArtifact builds an Artifact for a version-only artifact (binary, plugin).
@@ -374,21 +488,28 @@ func PrintReport(w io.Writer, r Result) {
 		fmt.Fprintln(w, line)
 	}
 	fmt.Fprintln(w)
-	if !r.Consistent {
+	na := r.NextAction
+	// The inconsistent-install warning is redundant when the single next action
+	// already explains a partial state (a deferred-rules run trips !Consistent by
+	// design); show it only for the reload/done tail.
+	if !r.Consistent && (na == nil || (na.Kind != "binary" && na.Kind != "plugin")) {
 		fmt.Fprintln(w, "warning: local install is inconsistent (binary / plugin / rules versions differ) - likely a partial upgrade")
 	}
-	if r.Summary.ActionNeeded == 0 {
-		if r.Summary.Unknown > 0 {
-			fmt.Fprintf(w, "%d artifact(s) in sync, %d couldn't be checked; nothing needs your action.\n", r.Summary.UpToDate+r.Summary.Updated, r.Summary.Unknown)
-		} else {
-			fmt.Fprintf(w, "All %d artifacts in sync.\n", len(r.Artifacts))
-		}
+	if na == nil {
 		return
 	}
-	fmt.Fprintf(w, "%d of %d artifacts need your action:\n", r.Summary.ActionNeeded, len(r.Artifacts))
-	for _, a := range r.Artifacts {
-		if a.Action != "" {
-			fmt.Fprintf(w, "  - %s: %s\n", a.Name, a.Action)
+	// Single ordered next action (lets-rlue4) - one step per run, rerun until done.
+	switch na.Kind {
+	case "done":
+		if na.Version != "" {
+			fmt.Fprintf(w, "Everything on v%s.\n", na.Version)
+		} else {
+			fmt.Fprintln(w, "Nothing to do (couldn't verify the latest release - rerun with network).")
+		}
+	default:
+		fmt.Fprintf(w, "Next: %s\n", na.Message)
+		if na.Command != "" {
+			fmt.Fprintf(w, "  %s\n", na.Command)
 		}
 	}
 }
