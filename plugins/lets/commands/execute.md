@@ -1,6 +1,6 @@
 ---
 description: Execute implementation plan from /lets:plan - load plan and enter native plan mode
-argument-hint: "[--status] [--auto]"
+argument-hint: "[--status] [--team] [--step|--straight|--auto]"
 ---
 
 # Execute Plan
@@ -152,7 +152,7 @@ Quick check before entering plan mode:
 4. Check if `Create:` targets already exist (partial execution?)
 
 **If all OK:**
-Present plan summary (title, task count, key files), then proceed to Step 5.
+Present plan summary (title, task count, key files), then proceed to Step 4.5.
 
 **If drift detected** (files missing, already created, etc.), use AskUserQuestion:
 
@@ -172,9 +172,41 @@ AskUserQuestion(
 ```
 
 **Handle response:**
-- **Execute anyway** -> proceed to Step 5
+- **Execute anyway** -> proceed to Step 4.5
 - **Re-plan** -> invoke `Skill(skill: "lets:plan")`
 - **Cancel** -> stop, return to the user
+
+## Step 4.5: Choose Execution Mode
+
+How the approved plan runs is ONE up-front choice. **A mode flag pre-answers it - skip the picker entirely when any is present:** `--auto` (Here · auto), `--team` (Team), `--step` / `--step-by-step` (Here · step-by-step), `--straight` / `--straight-through` (Here · straight-through). `--auto` keeps all its AUTO MODE semantics (Step 1 refuses on `$LETS_MERGE_BRANCH`; hard-stops preserved). Default locus is **Here** (this session, native plan mode); **Team** is the only locus switch.
+
+**Bare `/lets:execute` (no mode flag) - ask exactly once:**
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "How should I execute this plan?",
+    header: "Run mode",
+    options: [
+      { label: "Straight-through (Recommended)", description: "Here, one approval, run all tasks, auto-commit at plan points" },
+      { label: "Step-by-step", description: "Here, pause for review after each task; confirm each commit" },
+      { label: "Auto", description: "Here, AUTO MODE - unattended; hard-stops + push/PR/close/external still gated" },
+      { label: "Team", description: "Parallel implementers in isolated worktrees; review at the end" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Commit cadence is DERIVED from the mode - never a separate question:** step-by-step -> confirm each commit; straight-through -> auto-commit at each plan commit point; auto -> auto-commit; team -> one commit per agent at the end.
+
+**Handle response (sets the mode that Step 5 obeys):**
+- **Straight-through** -> Step 5 (native plan mode); after the plan-mode approval, implement all tasks with NO per-task pause and `/lets:commit` at each plan commit point without re-asking.
+- **Step-by-step** -> Step 5 (native plan mode); after the plan-mode approval, implement one task, pause for user review before the next, and confirm each `/lets:commit`.
+- **Auto** -> proceed exactly as `--auto` (Step 5's `--auto` behavior + pipeline-state marker + execute-blocked notify). **Guard:** if on `$LETS_MERGE_BRANCH`, REFUSE Auto here too (same rule as Step 1's `--auto` refuse - AUTO MODE never edits the merge-branch); tell the user to pick step-by-step / straight-through or take a feature branch.
+- **Team** -> do NOT enter native plan mode. Hand off to the team flow: `Skill(skill: "lets:team", args: "run")` - it spawns parallel implementers in isolated worktrees from this plan. After it completes, the user reviews via `/lets:review --local`. Skip Steps 5-6.
+
+(A remembered default / `LETS_EXECUTE_MODE` to skip the picker on every run is a deferred follow-up - this ships the picker + flag shortcuts only.)
 
 ## Step 5: Enter Native Plan Mode
 
@@ -199,7 +231,7 @@ Call `EnterPlanMode`.
 4. Writes the execution strategy to the plan file (the file specified by plan mode)
 5. Calls `ExitPlanMode` when ready for user approval
 
-**After user approves**, Claude implements step by step. Use `/lets:commit` at natural commit points as indicated in the plan.
+**After user approves**, Claude implements per the **Step 4.5 mode**: *step-by-step* implements one task, pauses for review before the next, and confirms each commit; *straight-through* runs all tasks and `/lets:commit`s at each plan commit point without re-asking; *auto* is the `--auto` behavior below. Commit only at the plan's commit points.
 
 **Under `--auto`:** write the `executing` pipeline-state marker, then — the plan-mode approval IS the gate — implement straight through without a per-step "review before moving on" pause, and `/lets:commit` at each plan commit point WITHOUT re-asking (one approval covers the run). Hard-stops still halt (push/PR/`bd close`/external gated; 3×-fail; fabrication; `$LETS_MERGE_BRANCH` refused per Step 1) — on any halt, write the `blocked` marker + fire the execute-blocked notify.
 
