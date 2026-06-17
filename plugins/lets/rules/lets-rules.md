@@ -159,7 +159,7 @@ AUTO MODE (autonomous execution: `/loop`, `/lets:execute --auto`, `/lets:team` p
 
 **Soft stops** (pause and ask):
 - Decision point with 2+ viable approaches → use `AskUserQuestion`, don't pick autonomously.
-- New large scope late in long session → suggest finishing current + `/lets:end` first.
+- New large scope proposed mid-task → pause: suggest finishing or parking the current task first (branch-focus hygiene — not session length).
 - Implementation about to start without an approved plan → present the plan, wait. Don't begin editing.
 
 **Plan-visibility gate** (applies even in AUTO MODE):
@@ -459,12 +459,12 @@ These skills fire automatically when you describe the action in conversation:
 | Ending with uncommitted changes | Warn, suggest `/lets:commit` |
 | Task seems complete but no `/lets:done` | Suggest `/lets:done` |
 | Task in progress, no recent commits | Remind about `/lets:commit` |
-| Long session + new large scope being proposed | Suggest finishing current work + `/lets:end` before starting new scope |
+| New large scope proposed mid-task | Suggest finishing or parking the current task first (focus hygiene) before starting new scope |
 
 ## Context Window Management
 
 You don't have programmatic access to your own token count, and context window size varies per account (200k - 1M). Don't guess percentages.
 
 - If user asks how much context is used, tell them to run `/context` - don't speculate.
-- Late in a long session (many tool calls, file edits, hours of work), avoid starting a fundamentally new large scope. Suggest finishing current task and `/lets:end` for a fresh window first.
+- You cannot measure context pressure — so never infer "the session is long" from tool-call count, elapsed time, or files touched, and never proactively push `/lets:end` / a "fresh window" on that guess. Raise wrapping up only on a real signal: the user brings it up, compaction is imminent, or the user ran `/context` and it's high.
 - Trust user's judgement: if they want to continue despite a long session, continue.
