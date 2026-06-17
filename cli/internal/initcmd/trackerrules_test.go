@@ -95,3 +95,29 @@ func TestTrackerRules_Contract(t *testing.T) {
 		t.Fatalf("no tracker-*.md adapters found in %s - test wiring broken", dir)
 	}
 }
+
+// TestTrackerBeads_BindsBdCommands pins the beads adapter's CORE-verb bindings to
+// the bd commands the LETS commands actually run, so the documented beads mapping
+// (the orchestrator reverse-maps a literal bd call -> verb for non-beads adapters)
+// cannot silently drift from reality. Byte-for-byte beads is otherwise preserved
+// by construction - command bodies keep their literal bd calls (F4 resolves via the
+// global "Tracker Adapters" rule, it does not rewrite the bd commands).
+func TestTrackerBeads_BindsBdCommands(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join(pluginRulesDir(t), "tracker-beads.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(data)
+	want := map[string]string{
+		"create":      "bd create",
+		"show":        "bd show",
+		"comment-add": "bd comments add",
+		"set-status":  "bd update",
+		"close":       "bd close",
+	}
+	for verb, cmd := range want {
+		if !strings.Contains(content, cmd) {
+			t.Errorf("tracker-beads.md: CORE verb %q should bind %q (documented beads mapping drifted)", verb, cmd)
+		}
+	}
+}

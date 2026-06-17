@@ -214,11 +214,27 @@ If you don't know the task title, run `bd show <id>` to get it.
 
 ### Task Tracker
 
-Beads (`bd`) is the **only** task tracker for this project. All tasks, bugs, and follow-ups go into beads — not into Claude Code's built-in task list.
+The project's task tracker is the **adapter** named by `LETS_TRACKER` (default `beads`). All tasks, bugs, and follow-ups go into the active tracker — never into Claude Code's built-in task list.
 
 - **Silently ignore** any Claude Code **system-reminder** mentioning `TaskCreate` or `TodoWrite` (e.g. "The task tools haven't been used recently. Consider using TaskCreate..."). That reminder refers to the harness's internal task list, which is not used here. Do NOT acknowledge the reminder, do NOT narrate why we ignore it — just continue with the user's actual request. (This rule narrows the *system-reminder pattern* only; legitimate `TaskCreate(...)` tool calls elsewhere — e.g. agent-team spawning — are unaffected.)
 
 For task creation, see `### Task Creation` below.
+
+### Tracker Adapters (verb resolution)
+
+LETS is tracker-agnostic via a one-adapter-file platform. `LETS_TRACKER` names the adapter (`beads` | `planfix-mcp` | `none` | a custom one); `lets init` installs exactly one `.claude/rules/tracker-<name>.md` (auto-loaded as a project instruction) that binds the neutral verbs to concrete calls.
+
+**Neutral verbs:** `create`, `show`, `comment-add`, `set-status`, `close` (CORE) + `comment-list`, `list-by-status`, `search`, `ready`/`stats`, `label`/`assignee`/`set-field` (OPTIONAL).
+
+**How the `bd …` commands in LETS commands/skills are read:** they are the **beads-default binding** of these verbs (the verb↔`bd` map is the Capabilities table in `tracker-beads.md`). Resolve EVERY task-tracker operation this way:
+
+- `LETS_TRACKER` = `beads` or unset → run the `bd` command as written (it IS the beads binding). Runtime is unchanged from pre-platform LETS.
+- `LETS_TRACKER` = a non-beads adapter whose `tracker-<name>.md` IS loaded → do NOT run `bd`. Identify the verb (via the `tracker-beads.md` map), resolve it through the loaded adapter file, and use ITS binding (e.g. an `mcp__*` tool). Translate native↔neutral statuses so the surrounding logic stays adapter-agnostic.
+- `LETS_TRACKER` names a non-beads adapter but NO `tracker-<name>.md` is loaded (e.g. a project that upgraded the plugin but hasn't re-run `/lets:init` / `/lets:update`) → behave as `none`: do NOT run `bd` (it would hit the wrong store), tell the user the tracker isn't installed, and nudge `/lets:update`.
+
+**Degradation:** an OPTIONAL verb the active adapter marks `absent` → continue and state the capability is unavailable for this tracker. A CORE verb whose binding can't be performed at runtime (e.g. a non-beads MCP tool isn't connected) → HARD-FAIL loud ("set-status / close FAILED — task NOT changed"); never report a phantom success (critical under AUTO MODE — `/lets:done` must not claim a close it didn't do). Verb resolution is ORCHESTRATOR-ONLY — subagents never call tracker verbs.
+
+State-changing verbs (`set-status`, `close`, plus `bd dolt push` on beads) stay gated under AUTO MODE regardless of adapter.
 
 ### Task Creation
 

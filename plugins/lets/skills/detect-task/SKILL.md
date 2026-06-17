@@ -43,6 +43,9 @@ FILE_TASK=$(sed -n 's/^task: //p' "$TASK_FILE" 2>/dev/null | head -1)
 if [ -n "$FILE_TASK" ]; then
   if [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ] && command -v bd >/dev/null 2>&1; then
     # merge-branch ONLY: distinguish a live trunk task from a stale .task-main / main-mode.
+    # tracker: this bd call is the beads 'show' binding (status read). A non-beads adapter supplies
+    # the neutral status via its own show binding (see lets-rules "Tracker Adapters"); the `command -v
+    # bd` guard already falls through to trusting the .task file when bd is absent (none/planfix).
     # Parse the FIRST "status" (the task's own top-level field). grep -o isolates each
     # "status": "X" so head -1 takes the first object's status even on compact JSON - a greedy
     # sed '.*"status".*' would grab the LAST (a nested dependency's) and mis-classify.

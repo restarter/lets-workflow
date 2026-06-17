@@ -216,7 +216,7 @@ Resume comment -> {task-id}  (or {session-file path} if no active task)
 Session summary -> .lets/sessions/{dated}-precompact-{branch}.md
 Branch: {branch}
 
-Safe to /compact now - same window continues. Resume context: bd show {task-id} + bd comments {task-id}
+Safe to /compact now - same window continues. Resume context: the active tracker's show + comment-list for {task-id} (beads: bd show {task-id} + bd comments {task-id})
 ```
 
 Then STOP - no AskUserQuestion, no push, no `git checkout`. The session continues.
