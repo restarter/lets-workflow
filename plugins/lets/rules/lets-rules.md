@@ -420,7 +420,7 @@ This applies when: presenting implementation approaches, choosing between soluti
 | Skill | Category | When |
 |-------|----------|------|
 | `/lets:start` | Session | Beginning of session |
-| `/lets:end` | Session | End of session (`--pre-compact` = snapshot before /compact, session continues) |
+| `/lets:end` | Session | End of session - settlement pass (commit / push / progress / summary checks, auto-skips when tidy); `--pre-compact` also writes a resume snapshot and keeps the session going |
 | `/lets:done` | Task | Task is complete |
 | `/lets:commit` | Code | Ready to commit (also auto-triggers on "commit", "закоміть") |
 | `/lets:check` | Code | Quick sanity check (~30s) - inline 6-lens; same targets as `/lets:review` (local/staged/last-commit/branch/PR/`--file`/`--plan`/`--json`), no subagents |
