@@ -317,7 +317,7 @@ LETS_MERGE_BRANCH=main
 # PR flow: github | bitbucket | local
 LETS_PR_FLOW=github
 
-# Task tracker (currently beads supported)
+# Task tracker adapter: beads | planfix-mcp | none  (selects .claude/rules/tracker-<name>.md; see docs/trackers.md)
 LETS_TRACKER=beads
 ```
 
