@@ -186,6 +186,23 @@ AskUserQuestion(
 
 Bind label (lowercased, first word) to `$LAUNCHER`: "Terminal"→"terminal", "cmux"→"cmux". `cmux` needs no extra setup — it degrades to the terminal flow on non-macOS or when cmux isn't installed (the `lets cmux` launcher handles the fallback).
 
+### 2c-ter. Task tracker adapter
+
+AskUserQuestion(
+  questions=[{
+    question: "Which task tracker should this project use?",
+    header: "Tracker",
+    options: [
+      { label: "beads (Recommended)", description: "Cross-session beads (bd) task tracking — the default, fully supported" },
+      { label: "planfix-mcp", description: "Planfix via its MCP server (wire the server in .mcp.json; see docs/trackers.md)" },
+      { label: "none", description: "No task tracker — commands degrade to a no-tracker stance" }
+    ],
+    multiSelect: false
+  }]
+)
+
+Bind the label's first word to `$TRACKER`: "beads"→"beads", "planfix-mcp"→"planfix-mcp", "none"→"none". This applies to a FRESH init only (the binary reads the resolved value from `.env`; a re-init preserves the existing `LETS_TRACKER`). To change an existing project's tracker, edit `LETS_TRACKER` in `.lets/.env` then run `/lets:update`. **If `$TRACKER` != `beads`, set `$SKIP_BEADS_FLAG="--skip-beads"` and SKIP the Beads prompt (2c-bis) — beads is not the active tracker.**
+
 ### 2c-bis. Beads init prompt (only if BEADS_ABSENT from Step 1)
 
 If `BEADS_ABSENT`:
@@ -233,6 +250,7 @@ lets init --json \
   --merge-branch="$BRANCH" \
   --pr-flow="$FLOW" \
   --launcher="$LAUNCHER" \
+  --tracker="$TRACKER" \
   $SKIP_BEADS_FLAG $RULES_SCOPE_FLAG
 ```
 

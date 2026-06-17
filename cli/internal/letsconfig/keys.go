@@ -104,7 +104,7 @@ var Keys = []Key{
 	},
 	{
 		Name:    "LETS_TRACKER",
-		Comment: "Task tracker (currently 'beads'; schema reserved for Linear/Jira)",
+		Comment: "Task tracker adapter: beads | planfix-mcp | none (selects .claude/rules/tracker-<name>.md)",
 		Default: "beads",
 	},
 	{

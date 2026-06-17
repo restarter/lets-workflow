@@ -232,6 +232,62 @@ func Run(ctx context.Context, prefs Prefs, projectRoot, pluginRoot string) (Resu
 		}
 	}
 
+	// 8b. .claude/rules/tracker-<name>.md (conditional on the RESOLVED LETS_TRACKER)
+	//
+	// Read the resolved tracker from the just-written .lets/.env (Step 5) - NOT
+	// prefs.Tracker. The cobra layer fills prefs.Tracker from --tracker or the
+	// canonical default; mergePrefs (inside RegenerateEnv) reconciles an existing
+	// project's customized LETS_TRACKER and writes the winner to .env. So .env is
+	// the single source of the resolved value here, for both a fresh --tracker
+	// pick and a re-init that must preserve an existing non-beads adapter.
+	if tracker := resolvedTracker(envPath); tracker != "" {
+		rulesDir := filepath.Join(projectRoot, ".claude", "rules")
+		if !ValidTrackerName(tracker) {
+			// Never filepath.Join an unsanitized value - a hand-edited .env with
+			// LETS_TRACKER=../x must not escape .claude/rules/. Fail safe.
+			result.Add(Step{Status: StepWarn, Message: fmt.Sprintf("LETS_TRACKER %q is not a valid adapter name ([a-z0-9-]) - skipping tracker install", tracker)})
+		} else {
+			trackerSrc := filepath.Join(pluginRoot, "rules", "tracker-"+tracker+".md")
+			trackerData, terr := os.ReadFile(trackerSrc)
+			switch {
+			case os.IsNotExist(terr):
+				result.Add(Step{Status: StepWarn, Message: fmt.Sprintf("no adapter shipped for LETS_TRACKER=%q (expected tracker-%s.md) - check the value", tracker, tracker)})
+			case terr != nil:
+				return result, fmt.Errorf("read tracker rules %s: %w", trackerSrc, terr)
+			default:
+				trackerDst := filepath.Join(rulesDir, "tracker-"+tracker+".md")
+				// Drop a previously-installed, plugin-shipped tracker file that is no
+				// longer active (tracker switch). Whitelist-gated - user files safe.
+				for _, removed := range cleanupShippedTrackerFiles(rulesDir, tracker) {
+					result.Add(Step{Status: StepOK, Message: fmt.Sprintf(".claude/rules/%s removed (tracker switched to %q)", removed, tracker)})
+				}
+				dtr := drift.Check(trackerSrc, trackerDst)
+				if dtr.Detected() {
+					if err := os.MkdirAll(rulesDir, 0o755); err != nil {
+						return result, err
+					}
+					if err := AtomicWriteBytes(trackerDst, trackerData, 0o644); err != nil {
+						return result, fmt.Errorf("write tracker rules: %w", err)
+					}
+					switch dtr.State {
+					case drift.StateMissing:
+						result.Add(Step{Status: StepOK, Message: fmt.Sprintf(".claude/rules/tracker-%s.md installed (v%s)", tracker, dtr.PluginVersion)})
+					case drift.StateUnknown:
+						result.Add(Step{Status: StepOK, Message: fmt.Sprintf(".claude/rules/tracker-%s.md refreshed (was: unparseable, now v%s)", tracker, dtr.PluginVersion)})
+					default:
+						result.Add(Step{Status: StepOK, Message: fmt.Sprintf(".claude/rules/tracker-%s.md updated (v%s -> v%s)", tracker, dtr.InstalledVersion, dtr.PluginVersion)})
+					}
+				} else {
+					result.Add(Step{Status: StepSkip, Message: fmt.Sprintf(".claude/rules/tracker-%s.md (v%s up to date)", tracker, dtr.InstalledVersion)})
+				}
+				// Scaffold the optional board profile once (create-if-absent).
+				if msg := scaffoldBoardOnce(pluginRoot, rulesDir, tracker); msg != "" {
+					result.Add(Step{Status: StepOK, Message: msg})
+				}
+			}
+		}
+	}
+
 	// 9. beads
 	if !prefs.SkipBeads {
 		bdSteps := runBeadsInit(ctx, projectRoot)

@@ -12,6 +12,8 @@ dolt-server.*
 dolt-monitor.*
 .worktrees/
 .claude/worktrees/
+# MCP server config - may carry secrets (e.g. a Planfix API token in its env block); never commit
+.mcp.json
 .claude/scheduled_tasks*
 .beads/
 /docs-local/

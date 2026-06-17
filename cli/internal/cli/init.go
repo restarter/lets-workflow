@@ -27,6 +27,7 @@ func NewInitCmd() *cobra.Command {
 		flagMergeBranch string
 		flagPRFlow      string
 		flagLauncher    string
+		flagTracker     string
 		flagGithub      bool
 		flagSkipBeads   bool
 		flagRulesScope  string
@@ -150,18 +151,24 @@ out with --plugin-root=${CLAUDE_PLUGIN_ROOT} plus the chosen flags.`,
 			// pr-flow is empty). Existing-.env paths use empty as a signal to
 			// preserve current values via RegenerateEnv's mergePrefs.
 			//
-			// Tracker has no CLI flag; always filled from canonical defaults.
-			// mergePrefs preserves a user-customized LETS_TRACKER over this default.
+			// Tracker: --tracker fills prefs.Tracker for a FRESH project's pick;
+			// empty falls back to the canonical default. mergePrefs preserves an
+			// existing project's customized LETS_TRACKER over this value (existing
+			// .env wins), so a re-init without --tracker keeps the current adapter.
 			// Launcher/RulesScope pass through RAW (no default-fill): mergePrefs's
 			// pick (flag > existing .env > default) both preserves a customized
 			// value on regen AND honors an explicit flag - the LETS_LAUNCHER
 			// preservation fix (lets-wug9k). They aren't in the fresh-init gate,
 			// so empty is safe (mergePrefs falls back to the canonical default).
+			tracker := flagTracker
+			if tracker == "" {
+				tracker = letsconfig.Defaults()["LETS_TRACKER"]
+			}
 			prefs := initcmd.Prefs{
 				Language:    flagLanguage,
 				MergeBranch: flagMergeBranch,
 				PRFlow:      flagPRFlow,
-				Tracker:     letsconfig.Defaults()["LETS_TRACKER"],
+				Tracker:     tracker,
 				Launcher:    flagLauncher,
 				RulesScope:  flagRulesScope,
 				SkipBeads:   flagSkipBeads,
@@ -175,6 +182,7 @@ out with --plugin-root=${CLAUDE_PLUGIN_ROOT} plus the chosen flags.`,
 	cmd.Flags().StringVar(&flagMergeBranch, "merge-branch", "", "Target branch for merges (default: main)")
 	cmd.Flags().StringVar(&flagPRFlow, "pr-flow", "", "PR flow: local | github | bitbucket")
 	cmd.Flags().StringVar(&flagLauncher, "launcher", "", "Worktree launcher: terminal | cmux (default terminal)")
+	cmd.Flags().StringVar(&flagTracker, "tracker", "", "Task tracker adapter: beads | planfix-mcp | none (default beads; selects .claude/rules/tracker-<name>.md)")
 	cmd.Flags().BoolVar(&flagGithub, "github", false, "(deprecated) alias for --pr-flow=github")
 	cmd.Flags().BoolVar(&flagSkipBeads, "skip-beads", false, "Skip beads initialization")
 	cmd.Flags().StringVar(&flagRulesScope, "rules-scope", "", "Rules sourcing for this project: project (own copy) | user (rely on ~/.claude/rules)")
