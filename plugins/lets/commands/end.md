@@ -52,9 +52,17 @@ fi
 # expands unquoted into the git range, so a hand-edited state file can't inject git option args.
 case "$START_REF" in *[!0-9a-f]*) START_REF="" ;; esac
 
-# Commits this session (0 => S2/S3 skip; empty START_REF => unknown, see Step 1 no-boundary rule)
-if [ -n "$START_REF" ]; then SESSION_COMMITS=$(git rev-list --count ${START_REF}..HEAD); else SESSION_COMMITS=""; fi
-echo "START_REF=${START_REF:-<none>}  SESSION_COMMITS=${SESSION_COMMITS:-<unknown>}"
+# Commits this session (0 => S2/S3 skip; empty START_REF => unknown, see Step 1 no-boundary rule).
+# RANGE_DESC is the human-readable range line the Step 3 templates use - stays tidy when the
+# boundary is unknown (no empty "session: ..HEAD ( commits)").
+if [ -n "$START_REF" ]; then
+  SESSION_COMMITS=$(git rev-list --count ${START_REF}..HEAD)
+  RANGE_DESC="session: ${START_REF}..HEAD (${SESSION_COMMITS} commits)"
+else
+  SESSION_COMMITS=""
+  RANGE_DESC="boundary unknown (no /lets:start this session)"
+fi
+echo "START_REF=${START_REF:-<none>}  SESSION_COMMITS=${SESSION_COMMITS:-<unknown>}  RANGE_DESC=${RANGE_DESC}"
 
 # Unpushed (S5), upstream-aware (mirrors /lets:done Step 8)
 if git rev-parse --abbrev-ref @{u} >/dev/null 2>&1; then
@@ -114,7 +122,7 @@ bd comments add <task-id> "## Session progress $(date +%Y-%m-%d)
 Claude session: $CLAUDE_CODE_SESSION_ID
 
 ### Range
-session: {START_REF}..HEAD ({SESSION_COMMITS} commits)
+{RANGE_DESC}
 
 ### Done
 - {narrative of what was completed this session}
@@ -152,7 +160,7 @@ Write `$SUMMARY_FILE` with this template - **no `### Commits` list**, a `### Ran
 - Transcript: `$TRANSCRIPT_PATH`
 
 ### Range
-- session: {START_REF}..HEAD ({SESSION_COMMITS} commits) - regenerate with `git log {START_REF}..HEAD`
+- {RANGE_DESC}
 
 ### Done
 - {what was completed - narrative, not a commit dump}
