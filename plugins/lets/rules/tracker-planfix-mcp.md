@@ -62,21 +62,20 @@ Shape: `planfix_request POST task/list { filters:[...], fields:"id,name,status",
 
 **By status** (type 10): `{type:10, operator:"equal", value:[114,113,105]}` -> tasks in ANY of those statuses. [VERIFIED]
 
-**By assignee / executor** (исполнитель, type 2): `{type:2, operator:"equal", value:"user:13"}` -> tasks where user 13 is an assignee. [VERIFIED] Variants: `97` just-assignee, `71` assignee-employee, `69` assignee-contact, `33` without-assignees, `1` assigner, `39` participant. Ids are prefixed `user:N` / `group:N` / `contact:N`.
+**By assignee / executor** (исполнитель, type 2): `{type:2, operator:"equal", value:"user:<N>"}` -> tasks where user `<N>` is an assignee. [VERIFIED] Variants: `97` just-assignee, `71` assignee-employee, `69` assignee-contact, `33` without-assignees, `1` assigner, `39` participant. Ids are prefixed `user:N` / `group:N` / `contact:N`.
 
 **By super-task / parent** (надзадача):
 - `{type:73, operator:"equal", value:<parentId>}` -> DIRECT children only. [VERIFIED]
 - `{type:307, operator:"equal", value:<parentId>}` -> the WHOLE subtree under that parent. [VERIFIED] **Use 307 to list an epic's tasks** - it is the safe, paginated alternative to `get_child_tasks` (which dumps the whole tree unpaginated and blows the token limit).
 
-**By importance / Tier A/B/C/D/Z (CUSTOM field):** a custom field filters by the `type` that matches the field KIND, PLUS the `field` key = the field's numeric id:
-- single-select "List" -> `{type:106, field:<fieldId>, operator:"equal", value:"<exact option label>"}` (the value is the option LABEL, e.g. `"Tier A"` - NOT a short code like "A")
+**By a custom field (e.g. an importance / priority List field):** a custom field filters by the `type` that matches the field KIND, PLUS the `field` key = the field's numeric id:
+- single-select "List" -> `{type:106, field:<fieldId>, operator:"equal", value:"<exact option label>"}` (the value is the option LABEL string, e.g. `"High"` - NOT a short code)
 - "Set of values" (multi) -> `{type:111, field:<fieldId>, operator:"equal", value:<...>}` (docs say semicolon-separated values; NOT verified through this server - the `;`-string form failed for status/task-number, so test first)
 - "Directory entry" -> `{type:107, field:<TierFieldId>, value:<entryId>}`
 - short-text `101` · number `102` · date `103` · checkbox `105` · employee `109` · task `115` · project `117`
 - has / hasn't ANY value in a field -> `152` / `153` with `value:<fieldId>`.
-- **Tier A/B/C/D/Z = custom field `80652` "Важность задачи"** (type 8 List; `enumValues:["Tier A","Tier B","Tier C","Tier D","Tier Z"]`, rendered as Buttons). Filter by the LABEL: `{type:106, field:80652, operator:"equal", value:"Tier A"}` (likewise `"Tier B"` … `"Tier Z"`). [VERIFIED]
-  - **Discover custom fields:** `GET customfield/task` (add body `{fields:"id,name,type"}` for names+types) lists every task custom field id. Read a field's value on a task with `fields:"id,name,<fieldId>"` -> it returns under `customFieldData:[{field:{...,enumValues,...}, value, stringValue}]`. There is NO `GET customfield/<id>` detail endpoint (404) and NO plain `customFieldData` token - name the field id. Find tasks that HAVE a value with filter `{type:152, value:<fieldId>}`.
-  - Task custom fields on this board (id name type): 80652 Важность задачи(8 List) · 80672 Источник трафика(20) · 80658 Теги(20) · 80688 Теги разработка(20) · 80674 ID партнера(1) · 80676 Email партнера(2) · 80682 Описание партнера(2) · 80684 Потребности партнера(2) · 80662 Зависят задачи(17) · 80668 Личный Telegram(0) · 80670 Чат Telegram(0) · 80686 Работает с(20).
+- **Example - a single-select "List" field (e.g. an importance / priority field)** (type 8 List, `enumValues` = the option labels): filter by the LABEL: `{type:106, field:<fieldId>, operator:"equal", value:"<exact option label>"}` (the value is the option LABEL string, not a short code).
+  - **Discover YOUR board's custom fields:** `GET customfield/task` (add body `{fields:"id,name,type"}` for names+types) lists every task custom field id - this is YOUR account's field map; record the ones you filter on in `tracker-planfix-mcp.board.md`. Read a field's value on a task with `fields:"id,name,<fieldId>"` -> it returns under `customFieldData:[{field:{...,enumValues,...}, value, stringValue}]`. There is NO `GET customfield/<id>` detail endpoint (404) and NO plain `customFieldData` token - name the field id. Find tasks that HAVE a value with filter `{type:152, value:<fieldId>}`.
 
 **Data tags (теги данных)** are a SEPARATE structured-data mechanism (not custom fields). Discovery + filtering:
 - **Discover per-task** (no global "list all data tags" endpoint exists): `GET task/<id> {fields:"id,name,dataTags"}` - also works in `task/list` (returns `dataTags` per row) - yields `dataTags:[{dataTag:{id,name}, key}]`. Found on this board: dataTag **id 4 = "Планируемое время работы"** (the only one in use).
@@ -95,17 +94,17 @@ Custom fields are NOT returned by default and there is NO `customFieldData` shor
 
 **2. Field `type` = the KIND of field** (`https://planfix.com/help/REST_API:_Types_of_custom_fields`; this is a DIFFERENT numbering from filter types): 0 short-text · 1 number · 2 multi-line · 3 date · 4 time · 5 date+time · 6 period · 7 checkbox · **8 List** · 9 directory-entry · 10 contact · 11 employee · 12 counterparty · 13 group/empl/contact · 14 list-of-users · 15 set-of-directory · 16 task · 17 task-set · 20 set-of-values · 21 files · 22 project · 23 data-tag-summaries · 24 calculated · 25 location · 26 subtask-total · 27 AI-result · 28 date-with-frame · 29 totals.
 
-**3. Read a value on a task.** `GET task/<id> {fields:"id,name,<fieldId>"}` -> `customFieldData:[{ field:{id,name,type,enumValues,listValuesColors,...}, value, stringValue }]`. For a List/Set field, `enumValues` is the option array and `value`/`stringValue` is the chosen option LABEL (e.g. `"Tier A"`). Find tasks that HAVE any value: filter `{type:152, operator:"equal", value:<fieldId>}` (152 = has-value, 153 = hasn't).
+**3. Read a value on a task.** `GET task/<id> {fields:"id,name,<fieldId>"}` -> `customFieldData:[{ field:{id,name,type,enumValues,listValuesColors,...}, value, stringValue }]`. For a List/Set field, `enumValues` is the option array and `value`/`stringValue` is the chosen option LABEL (e.g. `"High"`). Find tasks that HAVE any value: filter `{type:152, operator:"equal", value:<fieldId>}` (152 = has-value, 153 = hasn't).
 
 **4. Filter tasks by a custom field** = the FILTER type matching the field KIND + the `field` key:
 - List(8) -> filter **106** · Set-of-values(20) -> **111** · Number(1) -> **102** · short-text(0) -> **101** · date(3) -> **103** · checkbox(7) -> **105** · directory(9) -> **107** · employee(11) -> **109** · task(16) -> **115** · project(22) -> **117**.
-- Example: `{type:106, field:80652, operator:"equal", value:"Tier A"}`.
+- Example: `{type:106, field:<fieldId>, operator:"equal", value:"<label>"}`.
 
-**This board's task custom fields** (`GET customfield/task`): 80652 Важность задачи(8 List = **Tier A/B/C/D/Z**) · 80672 Источник трафика(20) · 80658 Теги(20) · 80688 Теги разработка(20) · 80674 ID партнера(1) · 80676 Email партнера(2) · 80682 Описание партнера(2) · 80684 Потребности партнера(2) · 80662 Зависят задачи(17) · 80668 Личный Telegram(0) · 80670 Чат Telegram(0) · 80686 Работает с(20).
+**Discover YOUR board's task custom fields** with `GET customfield/task {fields:"id,name,type"}` (it returns your account's field map), and record the ones you filter on in `tracker-planfix-mcp.board.md`.
 
 ## create
 
-- **Use the passthrough:** `planfix_request POST task/ { name, description, project:{id:<board project>}, template:{id:<board template>} }` -> `{result:"success", id}`. The task lands in the template's initial status (Новые/110 on the playpay board).
+- **Use the passthrough:** `planfix_request POST task/ { name, description, project:{id:<board project>}, template:{id:<board template>} }` -> `{result:"success", id}`. The task lands in the template's initial status (the board defines which neutral status that is).
 - **Do NOT use the dedicated `planfix_create_task` tool** for a normal board task: it is CRM/lead-shaped - it pushes `name`/`project` into the description TEXT and sends `template.id=null` + a malformed `customFieldData:[{field:{id:null}}]`, so Planfix rejects it ("Error creating task").
 - `template:{id}` is MANDATORY: a templateless task is created off-process and CANNOT transition between board statuses afterward.
 
@@ -123,8 +122,8 @@ Custom fields are NOT returned by default and there is NO `customFieldData` shor
 ## show / custom fields / assignees
 
 - `planfix_request GET task/<id> { fields:"id,name,status,project,description,assignees,assigner" }`.
-- **Custom fields are NOT returned by a generic `customFieldData` key** - name the field id in `fields` (e.g. `fields:"id,name,80652"`). Full how-to + this board's field map (incl. **Tier = field 80652**) is in the "Custom fields - how to work with them" section above.
-- Assignee shape: `assignees:{ users:[{id:"user:13", name:"..."}], groups:[] }`, `assigner:{ id:"user:13", name:"..." }`. User ids are prefixed `user:N`.
+- **Custom fields are NOT returned by a generic `customFieldData` key** - name the field id in `fields` (e.g. `fields:"id,name,<fieldId>"`). Full how-to is in the "Custom fields - how to work with them" section above; record YOUR board's field ids in `tracker-planfix-mcp.board.md`.
+- Assignee shape: `assignees:{ users:[{id:"user:<N>", name:"..."}], groups:[] }`, `assigner:{ id:"user:<N>", name:"..." }`. User ids are prefixed `user:N`.
 
 ## get_child_tasks
 
