@@ -78,7 +78,7 @@ Shape: `planfix_request POST task/list { filters:[...], fields:"id,name,status",
   - **Discover YOUR board's custom fields:** `GET customfield/task` (add body `{fields:"id,name,type"}` for names+types) lists every task custom field id - this is YOUR account's field map; record the ones you filter on in `tracker-planfix-mcp.board.md`. Read a field's value on a task with `fields:"id,name,<fieldId>"` -> it returns under `customFieldData:[{field:{...,enumValues,...}, value, stringValue}]`. There is NO `GET customfield/<id>` detail endpoint (404) and NO plain `customFieldData` token - name the field id. Find tasks that HAVE a value with filter `{type:152, value:<fieldId>}`.
 
 **Data tags (теги данных)** are a SEPARATE structured-data mechanism (not custom fields). Discovery + filtering:
-- **Discover per-task** (no global "list all data tags" endpoint exists): `GET task/<id> {fields:"id,name,dataTags"}` - also works in `task/list` (returns `dataTags` per row) - yields `dataTags:[{dataTag:{id,name}, key}]`. Found on this board: dataTag **id 4 = "Планируемое время работы"** (the only one in use).
+- **Discover per-task** (no global "list all data tags" endpoint exists): `GET task/<id> {fields:"id,name,dataTags"}` - also works in `task/list` (returns `dataTags` per row) - yields `dataTags:[{dataTag:{id,name}, key}]` (record the ids your board uses in the board profile).
 - **Filter TASKS by a data-tag field value:** `{type:93, operator:"equal", value:<v>, subfilter:{dataTagId:<id>, filter:{type:<31xx>, field:<fieldId>}}}`.
 - **List ENTRIES of a known tag:** `POST datatag/<id>/entry/list` with inner filter types 3101-3123 and `fields` naming the field ids (see https://planfix.com/help/REST_API:_Complex_data_tag_filters).
 
@@ -112,7 +112,7 @@ Custom fields are NOT returned by default and there is NO `customFieldData` shor
 
 1. **Binding:** `planfix_request POST task/<id> { status:{id:<target>} }`.
 2. **`result:"success"` is NOT proof of change.** The response is `{"result":"success","failures":[{"field":"status","error":"field change failed"}]}` when the change is rejected - and `failures[]` is DOCUMENTED in the OpenAPI (HTTP 200 with field/error pairs). You MUST inspect `failures[]`; if it is non-empty for `status`, the status did NOT change.
-3. **No direct jumps - transitions are gated by the board process.** To reach a target neutral status you may need to WALK the allowed path hop-by-hop (e.g. open->in_progress as Новые->Бэклог->Проработка->Спринт->Работа), confirming empty `failures[]` after each hop. Read the board profile's "Transitions" graph.
+3. **No direct jumps - transitions are gated by the board process.** To reach a target neutral status you may need to WALK the board's allowed path hop-by-hop (the open->in_progress jump may have to route through one or more intermediate statuses), confirming empty `failures[]` after each hop. Read the board profile's "Transitions" graph.
 4. **Hard-fail loud** if a required hop fails and cannot be routed: surface "set-status / close FAILED - task NOT changed in Planfix, verify manually" and do NOT report success. Critical under AUTO MODE: `/lets:done` must never claim a close it did not perform.
 
 ## comment-add
@@ -132,6 +132,39 @@ Custom fields are NOT returned by default and there is NO `customFieldData` shor
 ## No status-enumeration endpoint
 
 `GET task/status/list` -> 404, and the OpenAPI exposes no status-list / status-set / process-list endpoint. The board status map MUST be filled BY HAND from Planfix status settings.
+
+## HTML markup (descriptions + comments)
+
+Task **descriptions** and **comments** render **HTML, not Markdown** - `**bold**` / `` `code` `` show literally. Working tags: `<b>`/`<strong>`, `<i>`/`<em>`, `<u>`, `<code>`, `<pre>` (code block), `<ul>`/`<ol>`+`<li>`, `<a href>`, `<p>`, `<br>`.
+- **Compact HTML - NO newline between block tags.** Planfix turns ANY newline between block-level tags (even a single `\n`, even indented) into a literal `<br>`. Write block HTML fully adjacent: `<p>First.</p><p><b>Heading</b></p><ul><li>a</li><li>b</li></ul>` (zero whitespace between tags). Newlines INSIDE flowing text are stripped (fine). For a deliberate gap use `<p>&nbsp;</p>`, never a blank line.
+- Planfix auto-links URL-like strings inside `<pre>` - break up full URLs to keep a code block literal.
+
+## Comment notifications
+
+- `planfix_create_comment { taskId, description, recipients?, silent? }`. **Omitting `recipients` notifies ONLY the assignee** (not author/participants). `silent:true` suppresses the notification (use on a shared/bot account to avoid pinging real users).
+- **`recipients` via this MCP server is unreliable** (empirically a silent no-op - read the comment back and it carries none). For a RELIABLE notification, embed an inline user-mention link in the description HTML: `<a class="user-mention user-mention-login-<slug>" href="/user/<id>"><Display Name></a>` - Planfix extracts the mention from `href="/user/<id>"` + the class, rendering the tag AND sending the notification. Discover a user's `<slug>` by reading an existing comment's HTML (`task/<id>/comments/list`). (The user-id/slug map + who-to-notify policy are project-specific -> board profile.)
+- Comment update/delete: `planfix_request POST task/<id>/comments/<commentId> { description }` · `planfix_request DELETE comment/<id>`.
+
+## Create from a template (recommended for multi-field boards)
+
+Many boards require an **Object** (a Planfix "digital twin" - a fixed set of fields/statuses/scenarios) and/or mandatory custom fields on every task. Rather than hand-assembling `object`/`project`/`customFieldData`, use the project's **task template** - it auto-fills project, object, mandatory fields and the initial status:
+- `planfix_request POST task/ { template:{id:<templateId>}, name, description }` (HTML). Do NOT also pass `object`/`project` - the template owns them. Returns `{result:"success", id}`.
+- List templates: `planfix_request GET task/templates?fields=id,name,project`. Record the template id(s) your board uses in the board profile.
+- Hand-assembled alternative (board uses an Object but no template): pass `object:{id:<objectId>}` + `project:{id:<projectId>}` + the mandatory `customFieldData`; verify it attached by reading back `task/<id>?fields=...,object` (absent `object` = wrong id).
+
+## Reading: pagination + checklists
+
+- Single task: `planfix_request GET task/<id>?fields=id,name,description,status,parent` (add `assignees,participants,<fieldId>` as needed).
+- **Checklists != subtasks.** Checklists are checkbox items (`{name,isDone}`) read SEPARATELY: `planfix_request POST task/<id>/checklist/list { fields:"id,name,isDone" }`. Subtasks are real tasks with a `parent`. Always read checklists when reviewing a task - they define the real scope.
+- Bulk list paginates: `task/list` with `pageSize` (MAX 100) + `offset`, repeat until a page returns fewer than `pageSize` rows.
+- Hierarchy: tasks nest via `parent` (Epic -> Task -> Subtask, unlimited).
+
+## MCP server health (Node-ABI gotcha)
+
+The popstas server bundles `better-sqlite3` (a native addon compiled against a specific Node ABI). **If the host Node major version changes (e.g. a `brew upgrade`), every tool call returns `NODE_MODULE_VERSION mismatch` even though the server shows "Connected"** (it starts, then fails on the first sqlite touch).
+- **"Connected" != working** - confirm with a real read (`planfix_request GET task/<id>`).
+- **Recovery:** `rm -rf ~/.npm/_npx/<hash>` (the npx cache; the `<hash>` is printed in the error path), then reconnect MCP (`/mcp`) or restart the session - the reconnect recompiles the addon against the current ABI. Pin Node to a versioned formula (e.g. `node@24`) to avoid surprise major bumps.
+- **Don't conflate two failure shapes:** `NODE_MODULE_VERSION mismatch` = broken channel (recover above); `{"success":false,"error":"Access denied for task by id - <N>"}` = a HEALTHY channel returning a Planfix authorization response (the token is granted per-project; a task outside the grant is denied). An Access-denied is NOT a reason to clear caches / reconnect.
 
 ## Degradation
 

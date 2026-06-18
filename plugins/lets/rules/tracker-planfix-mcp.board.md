@@ -56,6 +56,28 @@ Some Planfix statuses/fields are organizational, not lifecycle - never treat the
 - One person's tasks: add `{type:2,operator:"equal",value:"user:<N>"}`. Unassigned: `{type:33,value:1}`.
 - An epic's tasks: `task/list {filters:[{type:307,value:<epicId>}]}` (whole subtree) or `{type:73,value:<epicId>}` (direct children).
 
+## Notifications / team (fill in)
+Map your team's Planfix user ids so the adapter can mention/notify them (the adapter's "Comment notifications" section explains the unreliable-`recipients` -> user-mention-link mechanic). Replace with YOUR team:
+
+| role        | user id    | mention slug (from an existing comment's HTML) |
+|-------------|------------|------------------------------------------------|
+| `<role>`    | `user:<N>` | `<slug>`                                        |
+
+Policy - who to notify when: e.g. leads on architecture/blocker/spec-review posts; assignee-only for status/log entries.
+<!-- PRIVACY: this section holds real names + ids. Fine in a PRIVATE team repo; do NOT put it in a public/shared repo unless the team agrees. -->
+
+## Templates (if this account uses task templates)
+Record the template id per project so `create` can pass `template:{id}` (see the adapter's "Create from a template"):
+
+| project | project id     | template       | template id     |
+|---------|----------------|----------------|-----------------|
+| `<name>`| `<projectId>`  | `<templateName>` | `<templateId>` |
+
+Also note your board's **Object** id (`<objectId>`) if dev tasks must attach one.
+
+## Routing (if you use another tracker alongside Planfix)
+Define which work goes to Planfix vs the other store (e.g. dev/implementation -> Planfix; PM/specs/decisions -> beads) and how you cross-link them (e.g. a `| Planfix [<id>]` suffix in the other tracker's titles). Keep cross-references findable by people who only have Planfix access (no internal repo paths / other-tracker ids in a Planfix comment).
+
 ## Principles
 - Identity: a Planfix numeric task id is branch-safe -> `feature/<id>-<slug>` and detect-task.
 - Read checklists separately (`planfix_request POST task/<id>/checklist/list`) - they define real scope.
