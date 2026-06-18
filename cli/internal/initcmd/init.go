@@ -88,10 +88,12 @@ func Run(ctx context.Context, prefs Prefs, projectRoot, pluginRoot string) (Resu
 	}
 	result.Add(Step{Status: StepOK, Message: ".lets/ structure (5 dirs)"})
 
-	// 2. .gitignore — only LETS-owned paths. `bd init` writes its own .beads/
-	// entries (and its own auto-generated CLAUDE.md / AGENTS.md hook block);
-	// we don't speak for it.
-	if err := EnsureGitignore(projectRoot, []string{".lets/", ".worktrees/"}); err != nil {
+	// 2. .gitignore — LETS-owned paths + .mcp.json. A tracker adapter's MCP
+	// config (.mcp.json) can carry a secret token (e.g. PLANFIX_TOKEN for the
+	// planfix-mcp adapter), and the tracker docs promise `lets init` gitignores
+	// it - so we own that entry. `bd init` writes its own .beads/ entries (and
+	// its own auto-generated CLAUDE.md / AGENTS.md hook block); we don't speak for it.
+	if err := EnsureGitignore(projectRoot, []string{".lets/", ".worktrees/", ".mcp.json"}); err != nil {
 		return result, err
 	}
 	result.Add(Step{Status: StepOK, Message: ".gitignore entries"})

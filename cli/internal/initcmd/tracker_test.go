@@ -220,6 +220,28 @@ func TestRun_BoardScaffoldOnce(t *testing.T) {
 	}
 }
 
+// .mcp.json can carry a tracker adapter's secret token (e.g. PLANFIX_TOKEN for
+// planfix-mcp); lets init must gitignore it so a user project can't commit the
+// token - the tracker docs promise this. Regression for the branch review's B1.
+func TestRun_GitignoresMcpJson(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	tmp := t.TempDir()
+	gitInit(t, tmp)
+	pluginRoot := setupFakePluginRoot(t)
+	if _, err := Run(context.Background(), trackerPrefs("beads"), tmp, pluginRoot); err != nil {
+		t.Fatal(err)
+	}
+	gi, err := os.ReadFile(filepath.Join(tmp, ".gitignore"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(gi), ".mcp.json") {
+		t.Errorf(".gitignore must contain .mcp.json (secret-bearing MCP config); got:\n%s", gi)
+	}
+}
+
 func hasStepContaining(steps []Step, sub string) bool {
 	for _, s := range steps {
 		if strings.Contains(s.Message, sub) {

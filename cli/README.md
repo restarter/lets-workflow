@@ -139,7 +139,7 @@ Flags:
 What it does (idempotent, linear):
 
 1. Creates `.lets/` directory structure (`sessions/`, `reviews/`, `plans/`, `execution/`, `cache/`)
-2. Adds `.lets/`, `.beads/`, `.worktrees/` to `.gitignore`
+2. Adds `.lets/`, `.worktrees/`, and `.mcp.json` (a tracker adapter's MCP config can carry a secret token) to `.gitignore` via `EnsureGitignore` (`.beads/` is added separately by `bd init`)
 3. Migrates legacy `.lets/statusline.sh` (deletes the per-project shim if it matches the embedded snapshot — see `internal/initcmd/embedded_statusline_shim.sh`)
 4. Migrates legacy `.lets/config.yaml` → `.lets/.env` (preserves user values via allowlist regex). Yaml is deleted (not renamed); orphan yaml alongside an existing `.env` is also cleaned up.
 5. Writes/regenerates `.lets/.env` via `RegenerateEnv`. Always emits `LETS_ENV_VERSION` first key from `version.Version`. Skip path when version matches AND no value changes; regen path otherwise — preserves user values + foreign keys (latter under `# User-added keys` separator). Single `.env.bak` rotation per regen.
