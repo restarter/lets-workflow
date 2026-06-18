@@ -138,6 +138,7 @@ Custom fields are NOT returned by default and there is NO `customFieldData` shor
 Task **descriptions** and **comments** render **HTML, not Markdown** - `**bold**` / `` `code` `` show literally. Working tags: `<b>`/`<strong>`, `<i>`/`<em>`, `<u>`, `<code>`, `<pre>` (code block), `<ul>`/`<ol>`+`<li>`, `<a href>`, `<p>`, `<br>`.
 - **Compact HTML - NO newline between block tags.** Planfix turns ANY newline between block-level tags (even a single `\n`, even indented) into a literal `<br>`. Write block HTML fully adjacent: `<p>First.</p><p><b>Heading</b></p><ul><li>a</li><li>b</li></ul>` (zero whitespace between tags). Newlines INSIDE flowing text are stripped (fine). For a deliberate gap use `<p>&nbsp;</p>`, never a blank line.
 - Planfix auto-links URL-like strings inside `<pre>` - break up full URLs to keep a code block literal.
+- **Tighten long structured posts** (`<p>` has ~1em top+bottom margin, so a `<p>` heading directly above a `<ul>` double-spaces): fold a sub-heading INTO the first `<li>` (not `<p>heading</p><ul>...`), use `<br>` within one `<p>` for tightly-related lines, and `<p>&nbsp;</p>` for a deliberate gap. Short post (1-3 paragraphs) -> plain `<p>` is fine; long post (3+ sections with lists) -> apply these.
 
 ## Comment notifications
 
