@@ -29,3 +29,6 @@ issues.jsonl
 # bv (beads viewer) local config and caches
 .bv/
 .lets
+
+# Private filled-in tracker board instance (real account ids + team PII) - never commit to this public repo
+.claude/rules/tracker-planfix-mcp.board.md
