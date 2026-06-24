@@ -242,6 +242,43 @@ func TestRun_GitignoresMcpJson(t *testing.T) {
 	}
 }
 
+// An installed adapter file AHEAD of the plugin source resets to the plugin
+// version on init - parity with project rules (init.go gates on drift.Detected(),
+// which is TRUE for StateAhead) and DELIBERATELY unlike user-rules' no-clobber.
+// Guards a future "harmonization" that adds a StateAhead no-clobber case here.
+func TestRun_TrackerRulesAhead_StillOverwrites(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	tmp := t.TempDir()
+	gitInit(t, tmp)
+	pluginRoot := setupFakePluginRoot(t)
+	writeTrackerSource(t, pluginRoot, "beads", "0.6.4") // plugin source
+	writeProjectEnv(t, tmp, "beads")
+	rules := filepath.Join(tmp, ".claude", "rules")
+	if err := os.MkdirAll(rules, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// installed adapter AHEAD of the plugin source
+	if err := os.WriteFile(filepath.Join(rules, "tracker-beads.md"),
+		[]byte("---\nname: tracker-beads\nversion: 9.9.9\n---\n# stale ahead\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Run(context.Background(), trackerPrefs("beads"), tmp, pluginRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(filepath.Join(rules, "tracker-beads.md"))
+	if !strings.Contains(string(data), "version: 0.6.4") {
+		t.Errorf("ahead tracker file must reset to the plugin version (parity with project rules):\n%s", data)
+	}
+	// pin the message path too, not just the byte-overwrite
+	if !hasStepContaining(result.Steps, "tracker-beads.md updated") {
+		t.Errorf("expected a StepOK 'tracker-beads.md updated (v9.9.9 -> v0.6.4)'; steps:\n%v", result.Steps)
+	}
+}
+
 func hasStepContaining(steps []Step, sub string) bool {
 	for _, s := range steps {
 		if strings.Contains(s.Message, sub) {

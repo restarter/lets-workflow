@@ -121,3 +121,96 @@ func TestTrackerBeads_BindsBdCommands(t *testing.T) {
 		}
 	}
 }
+
+// tableRowCells returns the cells of the first table row whose verb (cell 0)
+// equals verb, or nil. Shares the row shape with tableVerbs.
+func tableRowCells(content, verb string) []string {
+	for _, line := range strings.Split(content, "\n") {
+		l := strings.TrimSpace(line)
+		if !strings.HasPrefix(l, "|") {
+			continue
+		}
+		cells := strings.Split(strings.Trim(l, "|"), "|")
+		if len(cells) < 4 {
+			continue
+		}
+		if strings.TrimSpace(cells[0]) == verb {
+			return cells
+		}
+	}
+	return nil
+}
+
+// TestTrackerRules_CoreSupported asserts every shipped adapter EXCEPT none marks
+// all 5 CORE verbs supported. The `supported` cell (column 2) normalizes via a
+// prefix match: planfix-mcp renders set-status/close as "yes¹" (a footnote for the
+// process-gated caveat), so a bare == "yes" would false-fail. `none` is the
+// sanctioned exception - it ships CORE rows supported=no (null adapter, no store).
+// Distinct from TestTrackerRules_Contract (which checks the CORE row EXISTS): this
+// checks the row's supported VALUE, catching a CORE verb shipped as a silent hole.
+func TestTrackerRules_CoreSupported(t *testing.T) {
+	dir := pluginRulesDir(t)
+	matches, err := filepath.Glob(filepath.Join(dir, "tracker-*.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range matches {
+		base := filepath.Base(path)
+		if strings.HasSuffix(base, ".board.md") || base == "tracker-TEMPLATE.md" || base == "tracker-none.md" {
+			continue
+		}
+		t.Run(base, func(t *testing.T) {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			content := string(data)
+			for _, v := range coreVerbs {
+				cells := tableRowCells(content, v)
+				if cells == nil {
+					t.Errorf("%s: no table row for CORE verb %q", base, v)
+					continue
+				}
+				if sup := strings.TrimSpace(cells[2]); !strings.HasPrefix(sup, "yes") {
+					t.Errorf("%s: CORE verb %q supported=%q, want yes (a non-none adapter must support every CORE verb)", base, v, sup)
+				}
+			}
+		})
+	}
+}
+
+// TestShippedTrackers_MatchOnDisk pins the shippedTrackers whitelist to the actual
+// tracker-*.md adapters on disk (excluding *.board.md + the TEMPLATE). Both
+// directions: a slice entry with no file = broken whitelist; an adapter file
+// missing from the slice = cleanupShippedTrackerFiles would never remove it on a
+// switch (the desync this guards). Catches a new adapter added without a whitelist
+// entry, or vice versa.
+func TestShippedTrackers_MatchOnDisk(t *testing.T) {
+	dir := pluginRulesDir(t)
+	matches, err := filepath.Glob(filepath.Join(dir, "tracker-*.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	onDisk := map[string]bool{}
+	for _, path := range matches {
+		base := filepath.Base(path)
+		if strings.HasSuffix(base, ".board.md") || base == "tracker-TEMPLATE.md" {
+			continue
+		}
+		onDisk[strings.TrimSuffix(strings.TrimPrefix(base, "tracker-"), ".md")] = true
+	}
+	inSlice := map[string]bool{}
+	for _, n := range shippedTrackers {
+		inSlice[n] = true
+	}
+	for n := range onDisk {
+		if !inSlice[n] {
+			t.Errorf("tracker-%s.md on disk but missing from shippedTrackers (a switch would never clean it up)", n)
+		}
+	}
+	for n := range inSlice {
+		if !onDisk[n] {
+			t.Errorf("shippedTrackers lists %q but no tracker-%s.md on disk (broken whitelist)", n, n)
+		}
+	}
+}
