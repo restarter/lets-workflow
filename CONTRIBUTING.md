@@ -150,7 +150,7 @@ A **tracker adapter** binds the neutral task-tracker verbs to one concrete trans
 4. **Degradation:** OPTIONAL absent → continue with a message; a CORE verb unresolvable at runtime → HARD-FAIL loud (never a phantom success, esp. under AUTO MODE).
 5. **Secrets:** never in `.lets/.env` (644, injected) or a `.board.md` (auto-loaded + git-shareable). A direct-API adapter reads its token from a gitignored chmod-0600 file (`.lets/trackers/<name>/.env`, written `0o600` + dir `0o700`); a transport that owns its own creds (an MCP server) keeps them there.
 6. Optionally ship a `tracker-<name>.board.md` template (project-specific status-id map / transitions / principles) - `lets init` scaffolds it once and NEVER overwrites it.
-7. The adapter contract test (`cli/internal/.../trackerrules_test.go`) auto-covers the new file (valid frontmatter + pinned header + 5 CORE rows + `## Degradation`). No allowed-values list to edit - `lets init` validates `LETS_TRACKER` against `^[a-z0-9][a-z0-9-]*$` and skips with a warning if `tracker-<name>.md` is absent.
+7. The adapter contract test (`cli/internal/.../trackerrules_test.go`) auto-covers the new file (valid frontmatter + pinned header + 5 CORE rows each marked `supported = yes` (the `none` null adapter excepted) + `## Degradation`). No allowed-values list to edit - `lets init` validates `LETS_TRACKER` against `^[a-z0-9][a-z0-9-]*$` and skips with a warning if `tracker-<name>.md` is absent.
 
 The "no adapter file loaded" fallback lives in the command bodies, NOT the adapter file (an unloaded file can't instruct): when `LETS_TRACKER` is `beads`/unset use the inline beads default; when it names a non-beads adapter with no file loaded, behave as `none` (no tracker ops, never `bd`) and nudge `/lets:update`.
 

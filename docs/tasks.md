@@ -1,6 +1,6 @@
 # Tasks
 
-LETS is task-driven: every session starts by picking a task, every commit links to it. Task tracking is handled by [beads](https://github.com/steveyegge/beads) (the `bd` CLI / Claude Code plugin), which LETS depends on. The reason for a tracker rather than an ad-hoc TODO list is persistence — task descriptions, decisions, and discovery notes survive conversation compaction and carry across sessions.
+LETS is task-driven: every session starts by picking a task, every commit links to it. Task tracking goes through a pluggable **tracker adapter** (`LETS_TRACKER`); the default adapter is [beads](https://github.com/steveyegge/beads) (the `bd` CLI / Claude Code plugin), which LETS depends on for the default — alternative adapters (`planfix-mcp`, `none`) are described in [trackers.md](trackers.md). The reason for a tracker rather than an ad-hoc TODO list is persistence — task descriptions, decisions, and discovery notes survive conversation compaction and carry across sessions.
 
 > beads is required. Install it with its own one-liner:
 > ```bash
