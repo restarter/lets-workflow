@@ -79,6 +79,7 @@ Report: branch, uncommitted changes, recent commits. **If the repo has no commit
 Show what's claimed and what's available — minimal data the user needs for Step 5 selection. Full project dashboard (label-groups progress, priority distribution, dependency graph) lives in explicit `/lets:status overview` or `/lets:status full` — not invoked at session start.
 
 ```bash
+# tracker: list-by-status binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd list --status=in_progress
 ```
 
@@ -197,6 +198,7 @@ mkdir -p "$LETS_PROJECT_ROOT/.lets/sessions"
 TASK_FILE="$LETS_PROJECT_ROOT/.lets/sessions/.task-${BRANCH_SLUG}"
 tmp=$(mktemp "${TASK_FILE}.XXXX")
 printf 'session: %s %s\n' "$(git rev-parse HEAD)" "$CLAUDE_CODE_SESSION_ID" > "$tmp" && mv -f "$tmp" "$TASK_FILE"
+# tracker: stats read view (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd stats
 ```
 

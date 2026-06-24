@@ -38,6 +38,7 @@ AskUserQuestion(
 Compact view. Used by `/lets:start`.
 
 ```bash
+# tracker: read views (stats/list-by-status/ready) - beads bindings; non-beads resolves each via the adapter (lets-rules "Tracker Adapters")
 bd stats
 bd label list-all
 # For each epic:* label:
@@ -88,6 +89,7 @@ Add to output after "### In Progress":
 ### View: ready
 
 ```bash
+# tracker: ready/list read views - beads bindings; non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd ready --limit 0
 bd label list-all
 ```
@@ -117,6 +119,7 @@ Output format:
 ### View: labels
 
 ```bash
+# tracker: list-by-status read view - beads binding; non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd label list-all
 # For each epic:* label:
 bd list --label <label> --json --all
@@ -143,6 +146,7 @@ Output format:
 ### View: blocked
 
 ```bash
+# tracker: blocked read view - beads binding; non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd blocked
 ```
 
@@ -171,6 +175,7 @@ If no blocked tasks: "No blocked tasks."
 Run all commands:
 
 ```bash
+# tracker: read views (stats/ready/list-by-status/blocked) - beads bindings; non-beads resolves each via the adapter (lets-rules "Tracker Adapters")
 bd stats
 bd ready --limit 0
 bd list --status=in_progress

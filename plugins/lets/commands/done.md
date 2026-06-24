@@ -88,6 +88,7 @@ Otherwise (no PR, or `gh` unavailable) continue to Step 3 - normal flow.
 **Before closing - verify ALL requirements from the task description are met.**
 
 ```bash
+# tracker: show binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd show <task-id>
 ```
 

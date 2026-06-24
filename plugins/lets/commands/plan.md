@@ -37,6 +37,7 @@ If Step 1 captured an explicit `<task-id>` argument (e.g. an interactive `--flow
 
 If task found:
 ```bash
+# tracker: show binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd show <task-id>
 ```
 

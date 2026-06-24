@@ -68,6 +68,7 @@ If this yields an id, use it; otherwise fall through to the branch-name parse, t
 If branch parse finds no ID:
 
 ```bash
+# tracker: list-by-status binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd list --status=in_progress --format=ids 2>/dev/null | head -1
 ```
 

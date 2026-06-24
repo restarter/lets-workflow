@@ -18,6 +18,7 @@ Multiple flows need "claim task + prepare branch": /lets:start, mid-session task
 ### Step 1: Resolve Task
 
 ```bash
+# tracker: show binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd show <task-id>
 ```
 
@@ -156,6 +157,7 @@ tmp=$(mktemp "${TASK_FILE}.XXXX")
 If the branch already existed (continuing a multi-session task):
 
 ```bash
+# tracker: show + comment-list bindings (beads); non-beads resolves each via the adapter (lets-rules "Tracker Adapters")
 bd show <task-id>
 bd comments <task-id>
 ```

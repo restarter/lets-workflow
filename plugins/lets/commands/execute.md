@@ -115,6 +115,7 @@ PLAN=""
 [ -n "$SLUG" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
 [ -z "$PLAN" ] && [ -n "${TASK_ID}" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${TASK_ID}"*.md 2>/dev/null | head -1)
 echo "Plan: ${PLAN:-(none found)}"
+# tracker: show binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd show <task-id>
 # Show commits since session start
 BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')

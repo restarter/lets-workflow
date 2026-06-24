@@ -44,6 +44,7 @@ If no active task or multiple tasks found - ask user which task to add a note to
 ## Step 2: Review Current State
 
 ```bash
+# tracker: show + comment-list bindings (beads); non-beads resolves each via the adapter (lets-rules "Tracker Adapters")
 bd show <task-id>
 bd comments <task-id>
 ```
@@ -135,6 +136,7 @@ bd comments add <task-id> "[scope-change] <what changed and why>"
 ## Step 6: Verify
 
 ```bash
+# tracker: show binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd show <task-id>
 ```
 

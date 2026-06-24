@@ -61,6 +61,7 @@ No agents. The orchestrator gathers backlog context directly and enters conversa
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+# tracker: read views (stats/list-by-status) - beads bindings; non-beads resolves each via the adapter (lets-rules "Tracker Adapters")
 bd stats
 bd list --status=open -n 30
 bd list --status=in_progress
@@ -459,6 +460,7 @@ No agents. Direct interactive triage of stale/messy backlog items.
 ### Step C1: Load Backlog
 
 ```bash
+# tracker: read views (stats/list-by-status) - beads bindings; non-beads resolves each via the adapter (lets-rules "Tracker Adapters")
 bd stats
 bd list --status=open -n 50
 bd list --status=done -n 20

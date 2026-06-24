@@ -68,6 +68,7 @@ Two input modes:
 **1. Interactive (default):** Show ready tasks and let user pick.
 
 ```bash
+# tracker: ready read view (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd ready -n 10
 ```
 
@@ -98,6 +99,7 @@ If fewer than 2 selected:
 
 For each selected task:
 ```bash
+# tracker: show binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd show <task-id>
 ```
 
@@ -112,6 +114,7 @@ LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 cat "$LETS_PROJECT_ROOT/CLAUDE.md" 2>/dev/null | head -200
 
 # For each task (read full description + all comments):
+# tracker: show + comment-list bindings (beads); non-beads resolves each via the adapter (lets-rules "Tracker Adapters")
 bd show <task-id>
 bd comments <task-id>
 
