@@ -117,6 +117,7 @@ AskUserQuestion(
 Records task-level context for multi-session work. **MANDATORY:** the `Claude session: $CLAUDE_CODE_SESSION_ID` line MUST appear between `## Session progress` and `### Range` - bash expands the env var at runtime, so `bd` gets the literal UUID. The commit LIST is intentionally dropped (git owns it); keep a range pointer. (Decision A: the range is `session:`-anchored, so a second `/lets:end` in one session may re-cover already-reported commits - acceptable by design.)
 
 ```bash
+# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd comments add <task-id> "## Session progress $(date +%Y-%m-%d)
 
 Claude session: $CLAUDE_CODE_SESSION_ID

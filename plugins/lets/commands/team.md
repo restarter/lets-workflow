@@ -403,6 +403,7 @@ Verify each teammate's commit is present. If a commit is missing (teammate was s
 
 For each completed task:
 ```bash
+# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd comments add <task-id> "## Team execution {YYYY-MM-DD}
 
 Teammate: {name}

@@ -113,6 +113,7 @@ If the user wants the heavier multi-agent pass: "Want a deeper backlog review? `
 If active task:
 
 ```bash
+# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd comments add <task-id> "Backlog pulse: {key takeaways, 2-3 items}"
 ```
 
@@ -328,6 +329,8 @@ CRITICAL: Launch ALL selected agents in a SINGLE message with multiple Task tool
 
 For each selected agent:
 
+<!-- tracker: the prompt's "Use bd commands" line is beads-only by design - backlog is in the deferred analytical-migration set; the subagent reading bd directly is NOT a violation of the "subagents never call tracker verbs" invariant (see lets-rules "Tracker Adapters" exception). -->
+
 ```
 Task(
   subagent_type="lets:{agent-name}",
@@ -438,6 +441,7 @@ Dialog continues until user signals done.
 If active task:
 
 ```bash
+# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd comments add <task-id> "Backlog review: {N} ideas from {M} agents.
 Top ideas: {top 2-3 titles}
 Tasks created: {list or 'none'}"
@@ -543,6 +547,7 @@ Continue until all groups processed or user says "enough".
 If active task:
 
 ```bash
+# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd comments add <task-id> "Cleanup: closed {N}, reprioritized {M}, labeled {L}, assigned {A}"
 ```
 

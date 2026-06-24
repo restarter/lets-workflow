@@ -598,6 +598,7 @@ If multiple tasks found via fallback, skip beads comment.
 If active task found:
 
 ```bash
+# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd comments add <task-id> "Code review ({PR #X | local}): {verdict}. {N} issues found."
 ```
 
@@ -875,6 +876,7 @@ Save to `.lets/reviews/{date}-plan-review.md`
 
 If active task found:
 ```bash
+# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd comments add <task-id> "Plan review: {verdict}. {N} issues found."
 ```
 

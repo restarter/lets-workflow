@@ -96,6 +96,7 @@ From the user's input, derive:
 Show the full `bd create` command before executing:
 
 ```
+# tracker: create binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd create \
   --title="Add retry logic to API client" \
   --type=feature \

@@ -299,6 +299,7 @@ else
   RANGE="{LETS_MERGE_BRANCH}..HEAD"
 fi
 
+# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd comments add <task-id> "## Completed $(date +%Y-%m-%d)
 
 Claude session: $CLAUDE_CODE_SESSION_ID
@@ -352,6 +353,7 @@ else
   git push -u origin {LETS_MERGE_BRANCH}
 fi
 
+# tracker: close binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd close <task-id> --reason="Trunk-mode: committed on {LETS_MERGE_BRANCH}, no PR"
 
 # Cleanup (B4): task closed, but the trunk branch lives on (it hosts more tasks). Drop the closed
@@ -422,6 +424,7 @@ EOF
 
 After PR created:
 ```bash
+# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd comments add <task-id> "PR #XX created: <PR URL>"
 ```
 
@@ -441,6 +444,7 @@ git branch -d <branch>
 
 After merge:
 ```bash
+# tracker: close binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd close <task-id> --reason="Merged locally. Commits: {list}"
 ```
 
@@ -465,6 +469,7 @@ git -C "$MAIN_ROOT" merge "$BRANCH"
 
 After merge:
 ```bash
+# tracker: close binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd close <task-id> --reason="Merged locally from worktree. Commits: {list}"
 ```
 

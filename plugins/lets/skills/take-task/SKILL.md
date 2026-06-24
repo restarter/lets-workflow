@@ -24,6 +24,7 @@ bd show <task-id>
 Verify task exists. Then claim it:
 
 ```bash
+# tracker: set-status binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd update <task-id> --status=in_progress
 ```
 

@@ -29,6 +29,7 @@ git status --short          # uncommitted / untracked
 English; one continuous line per paragraph - no hard wrap:
 
 ```bash
+# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd comments add <task-id> "## RESUME {YYYY-MM-DD} - {short label}
 
 ### Where things live

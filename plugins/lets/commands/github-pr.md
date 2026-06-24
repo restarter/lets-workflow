@@ -513,6 +513,7 @@ Save summary_comment_id from output (parse the URL or ID from gh output).
 Log to beads:
 
 ```bash
+# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd comments add {task_id} "PR review posted on #<PR>: {N} inline comments, {M} summary items. Verdict: {verdict}"
 # Skip if task_id is null
 ```
@@ -754,6 +755,7 @@ git checkout {previous_branch from state}
 4. Log to beads (using task_id from state):
 
 ```bash
+# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd comments add {task_id} "PR #{number}: {approved/merged/changes requested}"
 ```
 
@@ -1103,6 +1105,7 @@ After all replies posted:
 - Log to beads:
 
 ```bash
+# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd comments add {task_id} "Responded to PR #{number} review: {N} fixed, {M} agreed, {K} disagreed"
 # Skip if task_id is null
 ```

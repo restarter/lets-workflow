@@ -75,6 +75,7 @@ AskUserQuestion(
 ## Step 4: Add Note
 
 ```bash
+# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd comments add <task-id> "## {Note type} {YYYY-MM-DD}
 
 {content based on type}"
@@ -127,6 +128,7 @@ bd comments add <task-id> "## {Note type} {YYYY-MM-DD}
 If the task scope or understanding changed significantly, record it as a comment (never overwrite the description):
 
 ```bash
+# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd comments add <task-id> "[scope-change] <what changed and why>"
 ```
 

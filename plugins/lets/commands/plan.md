@@ -615,6 +615,7 @@ AskUserQuestion(
 After exploration ends, if active task exists:
 
 ```bash
+# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd comments add <task-id> "Exploration insights:
 - {key insight 1}
 - {key insight 2}
@@ -736,6 +737,7 @@ Trunk-mode example: branch `main`, task `lets-abc` -> `.lets/plans/2026-06-06-18
 
 If active task found:
 ```bash
+# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd comments add <task-id> "## Plan: {feature name}
 
 Approach: {chosen option name}

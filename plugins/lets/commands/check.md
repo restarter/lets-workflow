@@ -289,6 +289,7 @@ If multiple tasks found, skip beads comment.
 If active task found AND issues detected:
 
 ```bash
+# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
 bd comments add <task-id> "Quick check ({mode}): {verdict}. {N} issues found."
 ```
 
