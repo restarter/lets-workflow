@@ -20,6 +20,11 @@ type Prefs struct {
 	Launcher    string // "terminal" (default) | "cmux"
 	RulesScope  string // "project" (own .claude/rules copy) | "user" (rely on ~/.claude/rules) | "" = preserve-or-default
 	SkipBeads   bool
+	// TrackerExplicit records whether --tracker was passed on the command line
+	// (cobra Changed). Transient signal, NOT a config key (excluded from
+	// AsValues, like SkipBeads): Step 8b warns when an explicit --tracker is
+	// overridden by an existing .env value on re-init.
+	TrackerExplicit bool
 }
 
 // AsValues returns the canonical Key.Name → Prefs field mapping.

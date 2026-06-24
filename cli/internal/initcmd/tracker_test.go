@@ -279,6 +279,61 @@ func TestRun_TrackerRulesAhead_StillOverwrites(t *testing.T) {
 	}
 }
 
+// An explicit --tracker that loses to an existing .env value on re-init surfaces
+// a StepWarn AND does not change the resolved adapter (existing wins).
+func TestRun_TrackerFlagIgnoredOnReinit_Warns(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	tmp := t.TempDir()
+	gitInit(t, tmp)
+	pluginRoot := setupFakePluginRoot(t)
+	writeTrackerSource(t, pluginRoot, "beads", "0.6.4")
+	writeTrackerSource(t, pluginRoot, "none", "0.6.4")
+	writeProjectEnv(t, tmp, "beads") // existing adapter
+
+	prefs := Prefs{Language: "English", MergeBranch: "main", PRFlow: "local", Tracker: "none", TrackerExplicit: true, SkipBeads: true}
+	result, err := Run(context.Background(), prefs, tmp, pluginRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasStepContaining(result.Steps, "ignored") {
+		t.Errorf("expected a StepWarn that --tracker was ignored; steps:\n%v", result.Steps)
+	}
+	rules := filepath.Join(tmp, ".claude", "rules")
+	if !exists(t, filepath.Join(rules, "tracker-beads.md")) {
+		t.Error("existing tracker-beads.md must remain (existing .env wins)")
+	}
+	if exists(t, filepath.Join(rules, "tracker-none.md")) {
+		t.Error("tracker-none.md must NOT be installed - --tracker lost to the existing value")
+	}
+}
+
+// A matching --tracker (same as the existing adapter) must NOT emit a spurious
+// override warning - proves the warn is conditional, not unconditional.
+func TestRun_TrackerFlagMatching_NoWarn(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	tmp := t.TempDir()
+	gitInit(t, tmp)
+	pluginRoot := setupFakePluginRoot(t)
+	writeTrackerSource(t, pluginRoot, "beads", "0.6.4")
+	writeProjectEnv(t, tmp, "beads")
+
+	prefs := Prefs{Language: "English", MergeBranch: "main", PRFlow: "local", Tracker: "beads", TrackerExplicit: true, SkipBeads: true}
+	result, err := Run(context.Background(), prefs, tmp, pluginRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hasStepContaining(result.Steps, "ignored") {
+		t.Errorf("no override warn expected when --tracker matches the existing adapter; steps:\n%v", result.Steps)
+	}
+	if !exists(t, filepath.Join(tmp, ".claude", "rules", "tracker-beads.md")) {
+		t.Error("tracker-beads.md must be installed")
+	}
+}
+
 func hasStepContaining(steps []Step, sub string) bool {
 	for _, s := range steps {
 		if strings.Contains(s.Message, sub) {

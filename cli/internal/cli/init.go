@@ -172,6 +172,9 @@ out with --plugin-root=${CLAUDE_PLUGIN_ROOT} plus the chosen flags.`,
 				Launcher:    flagLauncher,
 				RulesScope:  flagRulesScope,
 				SkipBeads:   flagSkipBeads,
+				// Changed reflects the command line (the default-fill above mutates a
+				// local, not the flag), so this is true only on an explicit --tracker.
+				TrackerExplicit: cmd.Flags().Changed("tracker"),
 			}
 
 			result, runErr := initcmd.Run(ctx, prefs, projectRoot, pluginRoot)

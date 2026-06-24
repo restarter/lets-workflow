@@ -244,6 +244,12 @@ func Run(ctx context.Context, prefs Prefs, projectRoot, pluginRoot string) (Resu
 	// pick and a re-init that must preserve an existing non-beads adapter.
 	if tracker := resolvedTracker(envPath); tracker != "" {
 		rulesDir := filepath.Join(projectRoot, ".claude", "rules")
+		// An explicit --tracker that lost to an existing .env value on re-init:
+		// surface it (mergePrefs keeps the existing adapter; --tracker is a
+		// fresh-init pick). Only when the requested flag differs from the winner.
+		if prefs.TrackerExplicit && prefs.Tracker != "" && prefs.Tracker != tracker {
+			result.Add(Step{Status: StepWarn, Message: fmt.Sprintf("--tracker=%q ignored: existing project LETS_TRACKER=%q wins on re-init (edit .lets/.env to change it); --tracker applies to a fresh init only.", prefs.Tracker, tracker)})
+		}
 		if !ValidTrackerName(tracker) {
 			// Never filepath.Join an unsanitized value - a hand-edited .env with
 			// LETS_TRACKER=../x must not escape .claude/rules/. Fail safe.
