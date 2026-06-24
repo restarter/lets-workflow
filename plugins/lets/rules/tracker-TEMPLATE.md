@@ -50,4 +50,4 @@ Project-specific semantics (native status ids, transitions, principles, default 
 
 ## Secrets (only if this adapter calls an external API directly)
 
-The shipped adapters do not need this: beads uses `.beads/.env`, planfix-mcp's token is owned by the MCP server. A future direct-REST adapter that needs a token MUST read it from a gitignored, chmod-0600 file (e.g. `.lets/trackers/<name>/.env`), written with `AtomicWriteBytes(path, data, 0o600)` + `MkdirAll(dir, 0o700)` - NEVER from `.lets/.env` (mode 644, injected into model context).
+The shipped adapters do not need this (beads uses `.beads/.env`; planfix-mcp's token is owned by the MCP server). A future direct-REST adapter that needs a token MUST read it from a gitignored, user-private file (e.g. `.lets/trackers/<name>/.env`) - NEVER from `.lets/.env` (mode 644, injected into model context); add the file + 0600/0700 perms helper when the first such adapter lands.

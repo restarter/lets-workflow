@@ -10,7 +10,7 @@ version: 0.6.4
 No task tracker. Every verb is a no-op; the project runs without cross-session task state. This is the deliberate "no-beads" stance - commands degrade to a no-tracker mode rather than erroring.
 
 - Verb resolution is ORCHESTRATOR-ONLY (subagents never call tracker verbs).
-- Identity: the only task id is the git branch slug (no external store to resolve against).
+- Identity: there is no tracker-side id - the git branch (and the `.task` session file) is the only task reference. `detect-task` falls through to its branch-name / `.task` parse and never resolves an id against a store (no tracker `show`).
 
 ## Neutral statuses
 
