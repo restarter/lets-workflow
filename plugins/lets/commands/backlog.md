@@ -460,7 +460,7 @@ No agents. Direct interactive triage of stale/messy backlog items.
 ### Step C1: Load Backlog
 
 ```bash
-# tracker: read views (stats/list-by-status) - beads bindings; non-beads resolves each via the adapter (lets-rules "Tracker Adapters")
+# tracker: read views (stats/list-by-status/label) - beads bindings; non-beads resolves each via the adapter (lets-rules "Tracker Adapters")
 bd stats
 bd list --status=open -n 50
 bd list --status=done -n 20
