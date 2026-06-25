@@ -44,7 +44,7 @@ Required: `open`, `in_progress`, `closed`. Optional: `in_review`, `blocked`.
 
 ## Board profile (optional)
 
-Project-specific semantics (native status ids, transitions, principles, default project, server name, REST nuances) live in a sibling `tracker-TEMPLATE.board.md` - user-owned, scaffolded once by `lets init`, NEVER overwritten, auto-loaded as a project instruction. If present, honor its status map + transitions.
+Project-specific semantics (native status ids, transitions, principles, default project, server name, REST nuances) live in a sibling `tracker-TEMPLATE.board.md` - user-owned, scaffolded once by `lets init`, NEVER overwritten, auto-loaded as a project instruction. If present, honor its status map + transitions. Switching `LETS_TRACKER` does NOT remove a board file (only the managed adapter `.md` is cleaned up) - delete a stale `*.board.md` by hand so it stops loading into context.
 
 <!-- NEVER put a token/password/secret in a .board.md: it is auto-loaded into model context every session AND is git-shareable. Secrets belong only in the adapter's transport config (e.g. an MCP server's own env), never here and never in .lets/.env. -->
 

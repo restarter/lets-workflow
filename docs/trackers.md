@@ -27,6 +27,8 @@ LETS_TRACKER=planfix-mcp
 
 `lets init` then installs `.claude/rules/tracker-planfix-mcp.md`, scaffolds `.claude/rules/tracker-planfix-mcp.board.md` (once — see below), and removes any previously-installed shipped adapter file. An invalid name (or one with no shipped `tracker-<name>.md`) is skipped with a warning, never a crash.
 
+**Switching trackers leaves the previous adapter's `tracker-<name>.board.md` in place** — the board file is user-owned and is never auto-removed (only the managed `tracker-<name>.md` is cleaned up). Delete the stale board file by hand after a switch, otherwise its now-inactive board instructions keep loading into model context every session.
+
 ## Planfix (`planfix-mcp`) setup
 
 The Planfix adapter talks to the [Planfix MCP server](https://github.com/popstas/planfix-mcp-server), which must be connected in Claude Code. The plugin documents and scaffolds the wiring; it never holds the token.

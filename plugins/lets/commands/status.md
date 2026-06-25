@@ -89,7 +89,7 @@ Add to output after "### In Progress":
 ### View: ready
 
 ```bash
-# tracker: ready/list read views - beads bindings; non-beads resolves via the adapter (lets-rules "Tracker Adapters")
+# tracker: read views (ready/label) - beads bindings; non-beads resolves each via the adapter (lets-rules "Tracker Adapters")
 bd ready --limit 0
 bd label list-all
 ```
