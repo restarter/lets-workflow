@@ -278,9 +278,8 @@ Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detec
 If multiple tasks found, skip beads comment.
 If active task found:
 
-```bash
-# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
-bd comments add <task-id> "Decision: {topic}. Chose: {recommended option}. Reason: {1-sentence why}"
+```lets-tracker
+comment-add task=<task-id> body="Decision: {topic}. Chose: {recommended option}. Reason: {1-sentence why}"
 ```
 
 ## Rules
@@ -345,9 +344,8 @@ When user is satisfied, proceed to Output.
 
 If active task exists, record the discussion outcome:
 
-```bash
-# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
-bd comments add <task-id> "Decision discussion: {topic}. Explored: {what was discussed}. Conclusion: {final stance}"
+```lets-tracker
+comment-add task=<task-id> body="Decision discussion: {topic}. Explored: {what was discussed}. Conclusion: {final stance}"
 ```
 
 ## Output

@@ -44,9 +44,9 @@ Create an interactive worktree. The Go subcommand owns the guard, name validatio
 
 Optional launcher override on the argument: `--cmux` / `--no-cmux` force the launcher for this run (otherwise `$LETS_LAUNCHER` decides — see Step C3.5).
 
-Optional `--auto`: launch the session in `claude --permission-mode auto` (autonomous — auto-approves low-risk work, still gates push / PR / `bd close` / external per LETS AUTO MODE rules). Maps ONLY to `--permission-mode auto`, **never** `bypassPermissions`. Applies to the launcher paths in Step C3.5 / C4 (see Step C3.5).
+Optional `--auto`: launch the session in `claude --permission-mode auto` (autonomous — auto-approves low-risk work, still gates push / PR / close / external per LETS AUTO MODE rules). Maps ONLY to `--permission-mode auto`, **never** `bypassPermissions`. Applies to the launcher paths in Step C3.5 / C4 (see Step C3.5).
 
-Optional `--flow plan|plan-workflow`: which `/lets:*` command the spawned session lands in. `--flow` ONLY swaps the launch `--command` string — all other steering stays in the bd task (the launch stays uniform/reproducible). Default (no `--flow`) → `/lets:start <id>` (today's behavior). `--flow plan` → `/lets:plan <id>` (interactive planning in the worktree; the human drives). `--flow plan-workflow` → `/lets:plan-workflow <id>` (autonomous planning). Because only the command string changes, `--flow` is **launcher-agnostic** — the cmux (C3.5) and terminal (C4) paths both inherit it (so does the future tmux launcher). Composes orthogonally with `--auto`. Requires a known task id; on a **taskless** worktree, ignore `--flow` with a one-line note (and `taskless + --flow + --auto` collapses to the existing taskless `--auto` path, `claude --permission-mode auto`). **plan-workflow is PREVIEW** (needs Claude Code ≥ 2.1.154 / paid / Dynamic Workflows) — the launch string can't probe that, so the launched `/lets:plan-workflow` is responsible: if the Workflow tool is unavailable it prints the standard PREVIEW-unavailable message and the operator re-runs `--flow plan`.
+Optional `--flow plan|plan-workflow`: which `/lets:*` command the spawned session lands in. `--flow` ONLY swaps the launch `--command` string — all other steering stays in the tracker task (the launch stays uniform/reproducible). Default (no `--flow`) → `/lets:start <id>` (today's behavior). `--flow plan` → `/lets:plan <id>` (interactive planning in the worktree; the human drives). `--flow plan-workflow` → `/lets:plan-workflow <id>` (autonomous planning). Because only the command string changes, `--flow` is **launcher-agnostic** — the cmux (C3.5) and terminal (C4) paths both inherit it (so does the future tmux launcher). Composes orthogonally with `--auto`. Requires a known task id; on a **taskless** worktree, ignore `--flow` with a one-line note (and `taskless + --flow + --auto` collapses to the existing taskless `--auto` path, `claude --permission-mode auto`). **plan-workflow is PREVIEW** (needs Claude Code ≥ 2.1.154 / paid / Dynamic Workflows) — the launch string can't probe that, so the launched `/lets:plan-workflow` is responsible: if the Workflow tool is unavailable it prints the standard PREVIEW-unavailable message and the operator re-runs `--flow plan`.
 
 ### Step C1: Get Name
 
@@ -66,7 +66,7 @@ AskUserQuestion(
 )
 ```
 
-**From task:** Run `bd ready --limit 5` and let user pick a task or use the current in-progress task. Generate name as `<task-id>-<slugified-title>` (e.g., `lets-hpi.3-worktree-start`).
+**From task:** Show the tracker's `ready` view (top 5) and let user pick a task or use the current in-progress task. Generate name as `<task-id>-<slugified-title>` (e.g., `lets-hpi.3-worktree-start`).
 
 **Custom:** Use provided text. Slugify: lowercase, spaces to hyphens, remove special chars, max 50 chars (the Go validator allows up to 64; the skill pre-truncates to 50 to leave headroom for `worktree-` prefixes and tmux pane labels). `lets worktree create` will reject invalid names with exit 2.
 

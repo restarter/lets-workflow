@@ -36,15 +36,14 @@ Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detec
 If Step 1 captured an explicit `<task-id>` argument (e.g. an interactive `--flow plan` launch into a fresh worktree), resolve-and-claim it per the **detect-task** *explicit task-id argument* convention - pointer only, don't re-paraphrase.
 
 If task found:
-```bash
-# tracker: show binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
-bd show <task-id>
+```lets-tracker
+show task=<task-id>   # returns {id,title,status,url,description}
 ```
 
 Load: title, description, design notes, existing comments.
 
 If no task found, warn:
-> "No active task detected. Every session needs a task. Create one with `bd create` or pick from `bd ready`."
+> "No active task detected. Every session needs a task. Create one (the `create-task` skill) or pick from the tracker's `ready` view."
 
 Do not block - continue if user acknowledges.
 
@@ -615,9 +614,8 @@ AskUserQuestion(
 
 After exploration ends, if active task exists:
 
-```bash
-# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
-bd comments add <task-id> "Exploration insights:
+```lets-tracker
+comment-add task=<task-id> body="Exploration insights:
 - {key insight 1}
 - {key insight 2}
 - {decision or trade-off confirmed}"
@@ -737,14 +735,13 @@ Trunk-mode example: branch `main`, task `lets-abc` -> `.lets/plans/2026-06-06-18
 ### Record in Beads
 
 If active task found:
-```bash
-# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
-bd comments add <task-id> "## Plan: {feature name}
+```lets-tracker
+comment-add task=<task-id> body="## Plan: {feature name}
 
 Approach: {chosen option name}
 Tasks: {N} implementation tasks
 Key files: {top 3-5 files}
-Plan: .lets/plans/${STAMP}-${SLUG}.md"
+Plan: {saved plan path}"
 ```
 
 ### Show Output

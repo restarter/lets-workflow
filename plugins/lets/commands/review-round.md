@@ -54,24 +54,21 @@ Per comment decide exactly one:
 Do NOT touch spec/doc/PR files during triage. Append to the task. Templates:
 
 **Decision log (per theme/batch):**
-```bash
-# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
-bd comments add <task-id> "## Decisions {date} - {theme} ({round})
+```lets-tracker
+comment-add task=<task-id> body="## Decisions {date} - {theme} ({round})
 - [accept] {ref} -> {concrete change for final pass}
 - [reject] {ref} -> {reason / refuting evidence}
 - [defer]  {ref} -> trigger: {x}; recorded in {deferral table}
 - [done]   {ref} -> already at {location}"
 ```
 **Verification log:**
-```bash
-# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
-bd comments add <task-id> "## Verified vs code {date}
+```lets-tracker
+comment-add task=<task-id> body="## Verified vs code {date}
 - {claim} -> VALID/INVALID: {file:line / grep result}"
 ```
 **Resume note (rounds usually span sessions / a compact):**
-```bash
-# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
-bd comments add <task-id> "## RESUME {date} - {round}
+```lets-tracker
+comment-add task=<task-id> body="## RESUME {date} - {round}
 - where the review lives (paths + external sources) + index cmd
 - PROCESS: decisions->task, artifact FROZEN, batch edits at end
 - artifact FROZEN at {sha}; canonical path

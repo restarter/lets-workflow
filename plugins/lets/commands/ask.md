@@ -127,9 +127,8 @@ Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detec
 If multiple tasks found, skip beads comment.
 If active task found:
 
-```bash
-# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
-bd comments add <task-id> "Asked {agent-name}: {question summary}. Answer: {1-sentence key takeaway}"
+```lets-tracker
+comment-add task=<task-id> body="Asked {agent-name}: {question summary}. Answer: {1-sentence key takeaway}"
 ```
 
 Skip if the question is generic (not related to the active task).

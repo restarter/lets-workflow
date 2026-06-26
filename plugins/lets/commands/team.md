@@ -67,9 +67,8 @@ Two input modes:
 
 **1. Interactive (default):** Show ready tasks and let user pick.
 
-```bash
-# tracker: ready read view (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
-bd ready -n 10
+```lets-tracker
+ready limit=10
 ```
 
 Present as multiSelect AskUserQuestion - user picks tasks.
@@ -98,9 +97,8 @@ If fewer than 2 selected:
 ### Step R3: Validate Independence
 
 For each selected task:
-```bash
-# tracker: show binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
-bd show <task-id>
+```lets-tracker
+show task=<task-id>
 ```
 
 Check:
@@ -112,12 +110,16 @@ Check:
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 cat "$LETS_PROJECT_ROOT/CLAUDE.md" 2>/dev/null | head -200
+```
 
-# For each task (read full description + all comments):
-# tracker: show + comment-list bindings (beads); non-beads resolves each via the adapter (lets-rules "Tracker Adapters")
-bd show <task-id>
-bd comments <task-id>
+For each task, read full description + all comments via the tracker:
 
+```lets-tracker
+show task=<task-id>
+comment-list task=<task-id>
+```
+
+```bash
 # Stack detection
 ls package.json pyproject.toml Cargo.toml go.mod composer.json Gemfile 2>/dev/null
 ```
@@ -218,10 +220,10 @@ You are in an isolated worktree - your changes won't affect other teammates.
 **Task ID:** {task-id}
 **Title:** {task title}
 **Description:**
-{full task description from bd show}
+{full task description from the tracker's show}
 
 **Design Notes:**
-{design field from bd show, or "None"}
+{design field from the tracker's show, or "None"}
 
 **Previous Context:**
 {last 3 beads comments, or "No previous context"}
@@ -406,12 +408,18 @@ Verify each teammate's commit is present. If a commit is missing (teammate was s
 
 For each completed task:
 ```bash
-# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
-bd comments add <task-id> "## Team execution {YYYY-MM-DD}
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel); mkdir -p "$LETS_PROJECT_ROOT/.lets/cache"
+cat > "$LETS_PROJECT_ROOT/.lets/cache/team-exec-<task-id>.md" <<EOF
+## Team execution $(date +%Y-%m-%d)
 
 Teammate: {name}
 Commits:
-$(git log --oneline ${BASE_SHA}..HEAD --grep='Task: {task-id}')"
+$(git log --oneline ${BASE_SHA}..HEAD --grep='Task: {task-id}')
+EOF
+```
+
+```lets-tracker
+comment-add task=<task-id> body-file=.lets/cache/team-exec-<task-id>.md
 ```
 
 **10.4: Cleanup team**

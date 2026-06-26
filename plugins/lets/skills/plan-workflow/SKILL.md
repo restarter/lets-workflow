@@ -44,7 +44,7 @@ Stages 7-10 are a single-pass **self-repair loop**: the plan reviews + fixes its
 | `focusAreas` | `[{name, hint}]` | exploration areas (dispatcher-derived) |
 | `judges` | `[{name}]` | judge panel (exclude `architect`) |
 | `experts` | `[{name}]` | winner-evaluation panel |
-| `taskContext` | string | active bd task context (or empty) |
+| `taskContext` | string | active tracker task context (or empty) |
 | `projectRoot` | string | absolute root (agents must not read outside it) |
 | `claudeMd` | string | CLAUDE.md context |
 | `fast` | boolean (optional) | lean budget — 1 agent/stage; merges focus areas to 1 explorer, architects only the top-ranked approach, 1 judge, 1 expert; SKIPS the heavy Plan Review/Revise pass, KEEPS the quick Plan Check/Refine. Default `false`. Distinct from native `/lets:plan --fast` (orchestrator-only, no subagents). |

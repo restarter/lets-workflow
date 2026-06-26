@@ -288,9 +288,8 @@ Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detec
 If multiple tasks found, skip beads comment.
 If active task found AND issues detected:
 
-```bash
-# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
-bd comments add <task-id> "Quick check ({mode}): {verdict}. {N} issues found."
+```lets-tracker
+comment-add task=<task-id> body="Quick check ({mode}): {verdict}. {N} issues found."
 ```
 
 If clean (no issues) - skip, don't add noise to the task.

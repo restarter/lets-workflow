@@ -597,9 +597,8 @@ Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detec
 If multiple tasks found via fallback, skip beads comment.
 If active task found:
 
-```bash
-# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
-bd comments add <task-id> "Code review ({PR #X | local}): {verdict}. {N} issues found."
+```lets-tracker
+comment-add task=<task-id> body="Code review ({PR #X | local}): {verdict}. {N} issues found."
 ```
 
 ---
@@ -875,9 +874,8 @@ Saved to: .lets/reviews/{date}-plan-review.md
 Save to `.lets/reviews/{date}-plan-review.md`
 
 If active task found:
-```bash
-# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
-bd comments add <task-id> "Plan review: {verdict}. {N} issues found."
+```lets-tracker
+comment-add task=<task-id> body="Plan review: {verdict}. {N} issues found."
 ```
 
 ### Plan Review Output
