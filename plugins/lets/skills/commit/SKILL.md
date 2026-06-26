@@ -153,9 +153,8 @@ BAD: feat: Add user authentication system with JWT tokens and refresh logic and 
 
 If active task detected, compare what was committed against the task scope:
 
-```bash
-# tracker: show binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
-bd show <task-id>
+```lets-tracker
+show task=<task-id>   # returns {id,title,status,url,description}
 ```
 
 Brief assessment (2-3 lines max):

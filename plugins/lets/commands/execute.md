@@ -15,7 +15,7 @@ Load an implementation plan and execute it using Claude Code's native plan mode.
 
 `/lets:execute --auto` runs the approved plan **autonomously**: skip the per-step "review before moving on" gate and `/lets:commit` at each plan commit point WITHOUT re-asking (matches the established "autonomous commits during execute after plan approval" preference). `--auto` is execution-speed for an *already-approved* plan — it does NOT bypass the hard-stops.
 
-**`--auto` = run under AUTO MODE** (see `.claude/rules/lets-rules.md` `## AUTO MODE`) — do NOT restate the contract here. What still applies under `--auto`: push / PR / `bd close` / external stay gated; a 3×-fail halts; fabrication halts; and **`--auto` on `$LETS_MERGE_BRANCH` REFUSES** (Step 1) rather than auto-entering trunk-mode. When a hard-stop is hit, write the `blocked` marker and fire the execute-blocked notify (Step 6 / the gate-notification block) so an unattended session surfaces instead of stalling.
+**`--auto` = run under AUTO MODE** (see `.claude/rules/lets-rules.md` `## AUTO MODE`) — do NOT restate the contract here. What still applies under `--auto`: push / PR / close (tracker `close`) / external stay gated; a 3×-fail halts; fabrication halts; and **`--auto` on `$LETS_MERGE_BRANCH` REFUSES** (Step 1) rather than auto-entering trunk-mode. When a hard-stop is hit, write the `blocked` marker and fire the execute-blocked notify (Step 6 / the gate-notification block) so an unattended session surfaces instead of stalling.
 
 Parse `--auto` from the argument (it composes with a plan path; it is mutually exclusive with `--status`).
 
@@ -115,8 +115,13 @@ PLAN=""
 [ -n "$SLUG" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
 [ -z "$PLAN" ] && [ -n "${TASK_ID}" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${TASK_ID}"*.md 2>/dev/null | head -1)
 echo "Plan: ${PLAN:-(none found)}"
-# tracker: show binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
-bd show <task-id>
+```
+
+```lets-tracker
+show task=<task-id>
+```
+
+```bash
 # Show commits since session start
 BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
 START_REF=$(sed -n 's/^session: //p' "$LETS_PROJECT_ROOT/.lets/sessions/.task-${BRANCH_SLUG}" 2>/dev/null | head -1 | awk '{print $1}')
@@ -235,7 +240,7 @@ Call `EnterPlanMode`.
 
 **After user approves**, Claude implements per the **Step 4.5 mode**: *step-by-step* implements one task, pauses for review before the next, and confirms each commit; *straight-through* runs all tasks and `/lets:commit`s at each plan commit point without re-asking; *auto* is the `--auto` behavior below. Commit only at the plan's commit points.
 
-**Under `--auto`:** write the `executing` pipeline-state marker, then — the plan-mode approval IS the gate — implement straight through without a per-step "review before moving on" pause, and `/lets:commit` at each plan commit point WITHOUT re-asking (one approval covers the run). Hard-stops still halt (push/PR/`bd close`/external gated; 3×-fail; fabrication; `$LETS_MERGE_BRANCH` refused per Step 1) — on any halt, write the `blocked` marker + fire the execute-blocked notify.
+**Under `--auto`:** write the `executing` pipeline-state marker, then — the plan-mode approval IS the gate — implement straight through without a per-step "review before moving on" pause, and `/lets:commit` at each plan commit point WITHOUT re-asking (one approval covers the run). Hard-stops still halt (push/PR/close/external gated; 3×-fail; fabrication; `$LETS_MERGE_BRANCH` refused per Step 1) — on any halt, write the `blocked` marker + fire the execute-blocked notify.
 
 **Progress tracking:** After completing each plan task, append `[DONE]` to its `### Task N:` heading in the plan file. This makes resume self-documenting - on re-entry, skip tasks already marked `[DONE]`.
 
@@ -259,13 +264,19 @@ PLAN=""; [ -n "$SLUG" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLU
 BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
 START_REF=$(sed -n 's/^session: //p' "$LETS_PROJECT_ROOT/.lets/sessions/.task-${BRANCH_SLUG}" 2>/dev/null | head -1 | awk '{print $1}')
 [ -z "$START_REF" ] && START_REF=$(cat "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}" 2>/dev/null)  # back-compat: legacy session ref
-# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
-bd comments add <task-id> "## Plan execution complete $(date +%Y-%m-%d)
+mkdir -p "$LETS_PROJECT_ROOT/.lets/cache"
+cat > "$LETS_PROJECT_ROOT/.lets/cache/exec-complete-<task-id>.md" <<EOF
+## Plan execution complete $(date +%Y-%m-%d)
 
 Plan: ${PLAN:-(none found)}
 Commits: $(git log --oneline ${START_REF}..HEAD | wc -l | tr -d ' ')
 
-$(git log --oneline ${START_REF}..HEAD)"
+$(git log --oneline ${START_REF}..HEAD)
+EOF
+```
+
+```lets-tracker
+comment-add task=<task-id> body-file=.lets/cache/exec-complete-<task-id>.md
 ```
 
 ## Rules

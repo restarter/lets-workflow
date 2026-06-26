@@ -17,16 +17,14 @@ Multiple flows need "claim task + prepare branch": /lets:start, mid-session task
 
 ### Step 1: Resolve Task
 
-```bash
-# tracker: show binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
-bd show <task-id>
+```lets-tracker
+show task=<task-id>
 ```
 
-Verify task exists. Then claim it:
+Verify task exists. Then claim it (set-status is a state change - HARD-FAIL loud if the binding can't run; do NOT proceed to branch setup on a failed claim):
 
-```bash
-# tracker: set-status binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
-bd update <task-id> --status=in_progress
+```lets-tracker
+set-status task=<task-id> status=in_progress
 ```
 
 ### Step 2: Check Uncommitted Changes
@@ -73,7 +71,7 @@ GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
   - `worktree-<task-id>-<slug>` — new-branch mode (the LETS convention); auto-detect task ID
   - any other shape (e.g. `feature/foo`) — attached existing branch via `lets worktree create --attach`; no task ID in the name
 - Beads ID pattern (when applicable): `<prefix>-<alphanum>[.<number>]` (e.g. `lets-abc`, `lets-abc.1`)
-- If task ID found in branch name: confirm with user via `bd show`
+- If task ID found in branch name: confirm with user via the tracker's `show` verb
 - If branch shape is "attached" (no matching task ID): rely on the task-id passed as the skill argument — don't try to extract from the branch name
 - Present: "In worktree, using branch: {branch}"
 - Jump to Step 5
@@ -156,13 +154,12 @@ tmp=$(mktemp "${TASK_FILE}.XXXX")
 
 If the branch already existed (continuing a multi-session task):
 
-```bash
-# tracker: show + comment-list bindings (beads); non-beads resolves each via the adapter (lets-rules "Tracker Adapters")
-bd show <task-id>
-bd comments <task-id>
+```lets-tracker
+show task=<task-id>
+comment-list task=<task-id>
 ```
 
-Read the full description and ALL comments — they hold the multi-session context. Present: "Resuming **{task title}** (`{task-id}`). Last session: {summary from latest beads comment}"
+Read the full description and ALL comments — they hold the multi-session context. Present: "Resuming **{task title}** (`{task-id}`). Last session: {summary from the latest tracker comment}"
 
 ## Output
 
@@ -184,7 +181,7 @@ When invoked by `/lets:start` OR `/lets:done` (via `Skill` tool) - skip this out
 
 - Never create feature/ branch inside a worktree
 - Never work without saving session start ref
-- Never skip `bd update --status=in_progress`
+- Never skip the `set-status task=<id> status=in_progress` claim
 - Never auto-create a feature branch when user picked "Stay on current branch"
 
 ## Integration
