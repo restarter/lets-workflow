@@ -61,10 +61,15 @@ No agents. The orchestrator gathers backlog context directly and enters conversa
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-# tracker: read views (stats/list-by-status) - beads bindings; non-beads resolves each via the adapter (lets-rules "Tracker Adapters")
-bd stats
-bd list --status=open -n 30
-bd list --status=in_progress
+```
+
+```lets-tracker
+stats
+list-by-status status=open limit=30
+list-by-status status=in_progress
+```
+
+```bash
 git log --oneline -15
 ```
 
@@ -74,7 +79,7 @@ Grep(pattern="TODO|FIXME|HACK|XXX", path="$LETS_PROJECT_ROOT", output_mode="cont
 ```
 
 If an area/epic argument was passed alongside `--fast`:
-- `bd search {argument}` (if no results, fall back to `bd list` and scan titles)
+- the tracker's `search` verb on {argument} (if no results, fall back to `list-by-status` and scan titles)
 - Grep/Glob for related code
 
 ### Step F2: Open with Observations
@@ -113,9 +118,8 @@ If the user wants the heavier multi-agent pass: "Want a deeper backlog review? `
 
 If active task:
 
-```bash
-# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
-bd comments add <task-id> "Backlog pulse: {key takeaways, 2-3 items}"
+```lets-tracker
+comment-add task=<task-id> body="Backlog pulse: {key takeaways, 2-3 items}"
 ```
 
 If ideas emerged that deserve tasks, offer to create them (use the `create-task` skill, user approval per task).
@@ -330,7 +334,7 @@ CRITICAL: Launch ALL selected agents in a SINGLE message with multiple Task tool
 
 For each selected agent:
 
-<!-- tracker: the prompt's "Use bd commands" line is beads-only by design - backlog is in the deferred analytical-migration set; the subagent reading bd directly is NOT a violation of the "subagents never call tracker verbs" invariant (see lets-rules "Tracker Adapters" exception). -->
+<!-- tracker: the prompt's "Use bd commands" line is beads-only BY DESIGN - backlog's orchestrator path is neutralized (lets-tracker verbs), but the explorer/brainstorm SUBAGENTS read bd directly because they don't receive the adapter file. This is the documented Cat-C carve-out, NOT a violation of "subagents never call tracker verbs" (see lets-rules "Tracker Adapters"). On a non-beads project these subagent reads are unavailable. -->
 
 ```
 Task(
@@ -431,7 +435,7 @@ AskUserQuestion(
 
 **Handle response:**
 - **Explore an idea** -> ask which one, enter conversation loop (acknowledge, build, probe)
-- **Create tasks** -> ask which ideas, use `bd create` with user approval per task
+- **Create tasks** -> ask which ideas, use the `create-task` skill with user approval per task
 - **Done** -> Phase 6
 - **Free text** -> treat as exploring a specific idea
 
@@ -441,9 +445,8 @@ Dialog continues until user signals done.
 
 If active task:
 
-```bash
-# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
-bd comments add <task-id> "Backlog review: {N} ideas from {M} agents.
+```lets-tracker
+comment-add task=<task-id> body="Backlog review: {N} ideas from {M} agents.
 Top ideas: {top 2-3 titles}
 Tasks created: {list or 'none'}"
 ```
@@ -459,12 +462,11 @@ No agents. Direct interactive triage of stale/messy backlog items.
 
 ### Step C1: Load Backlog
 
-```bash
-# tracker: read views (stats/list-by-status/label) - beads bindings; non-beads resolves each via the adapter (lets-rules "Tracker Adapters")
-bd stats
-bd list --status=open -n 50
-bd list --status=done -n 20
-bd label list 2>/dev/null
+```lets-tracker
+stats
+list-by-status status=open limit=50
+list-by-status status=done limit=20
+label
 ```
 
 ### Step C2: Present Cleanup Targets
@@ -474,7 +476,7 @@ Analyze loaded data and group:
 ```
 ## Cleanup Targets
 
-### Stale Tasks (open with no recent activity - estimate from bd list output)
+### Stale Tasks (open with no recent activity - estimate from the tracker's list output)
 - **{title}** (`task-id`) - {status/priority info}
 ...
 
@@ -521,15 +523,15 @@ AskUserQuestion(
 )
 ```
 
-For closing:
-- `bd close <id>`
-- If closing as duplicate: `bd comments add <other-id> "Absorbed from {closed-id}: {title}"` then `bd close <id>`
+For closing (tracker `close` - a state change, HARD-FAIL loud if it can't run):
+- close the task
+- If closing as duplicate: `comment-add` on `<other-id>` ("Absorbed from {closed-id}: {title}") then `close <id>`
 
 For orphan tasks (no labels), suggest a label and ask:
-- `bd label add <id> epic:{name}` - assign to epic
+- tracker `label` - add `epic:{name}`
 
 For unassigned tasks, suggest an assignee based on task domain and ask:
-- `bd update <id> --assignee={name}` - assign to person
+- tracker `assignee` - assign `{name}`
 
 All mutations require user approval.
 Continue until all groups processed or user says "enough".
@@ -548,9 +550,8 @@ Continue until all groups processed or user says "enough".
 
 If active task:
 
-```bash
-# tracker: comment-add binding (beads); non-beads resolves via the adapter (lets-rules "Tracker Adapters")
-bd comments add <task-id> "Cleanup: closed {N}, reprioritized {M}, labeled {L}, assigned {A}"
+```lets-tracker
+comment-add task=<task-id> body="Cleanup: closed {N}, reprioritized {M}, labeled {L}, assigned {A}"
 ```
 
 ---

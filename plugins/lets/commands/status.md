@@ -37,15 +37,14 @@ AskUserQuestion(
 
 Compact view. Used by `/lets:start`.
 
-```bash
-# tracker: read views (stats/list-by-status/ready/label) - beads bindings; non-beads resolves each via the adapter (lets-rules "Tracker Adapters")
-bd stats
-bd label list-all
-# For each epic:* label:
-bd list --label <label> --json --all
-bd ready --limit 5
-bd list --status=in_progress
+```lets-tracker
+stats                              # project totals + per-epic:* label-group progress (beads-native dashboard)
+label                              # the epic:* label set
+ready limit=5
+list-by-status status=in_progress
 ```
+
+> Degrade: on a tracker that marks `stats`/`label` `absent` (e.g. `none`, or an MCP tracker without graph views), skip the Project-Health / Label-Group sections and tell the user those views are beads-native.
 
 Output format:
 
@@ -88,10 +87,9 @@ Add to output after "### In Progress":
 
 ### View: ready
 
-```bash
-# tracker: read views (ready/label) - beads bindings; non-beads resolves each via the adapter (lets-rules "Tracker Adapters")
-bd ready --limit 0
-bd label list-all
+```lets-tracker
+ready          # all ready tasks (no limit)
+label          # the epic:* label set
 ```
 
 Group ready tasks by `epic:*` label. Tasks without a label go under "Other".
@@ -118,11 +116,9 @@ Output format:
 
 ### View: labels
 
-```bash
-# tracker: label read view - beads binding; non-beads resolves via the adapter (lets-rules "Tracker Adapters")
-bd label list-all
-# For each epic:* label:
-bd list --label <label> --json --all
+```lets-tracker
+stats          # per-epic:* label-group progress (beads-native; on `stats`/`label` absent, render "label groups unavailable for tracker {name}")
+label          # the epic:* label set
 ```
 
 Output format:
@@ -145,9 +141,8 @@ Output format:
 
 ### View: blocked
 
-```bash
-# tracker: blocked read view - beads binding; non-beads resolves via the adapter (lets-rules "Tracker Adapters")
-bd blocked
+```lets-tracker
+blocked        # dependency graph (beads-native, via the stats/ready binding; on `absent`, render "dependency graph unavailable for tracker {name}")
 ```
 
 Show dependency graph as ASCII tree. Group by root blocker - the task that ultimately blocks others.
@@ -174,17 +169,16 @@ If no blocked tasks: "No blocked tasks."
 
 Run all commands:
 
-```bash
-# tracker: read views (stats/ready/list-by-status/blocked/label) - beads bindings; non-beads resolves each via the adapter (lets-rules "Tracker Adapters")
-bd stats
-bd ready --limit 0
-bd list --status=in_progress
-bd blocked
-bd label list-all
-# For each epic:* label: bd list --label <label> --json --all
-bd list --status=open --json | jq -r '.[].priority' | sort | uniq -c | sort -rn
-bd list --status=closed --limit 10
+```lets-tracker
+stats                                  # totals + per-epic:* label groups + priority histogram (beads-native dashboard)
+ready                                  # all ready tasks
+list-by-status status=in_progress
+blocked                                # dependency graph (beads-native)
+label                                  # the epic:* label set
+list-by-status status=closed limit=10  # recent activity
 ```
+
+> Degrade: a tracker that marks `stats`/`blocked`/`label` `absent` renders only the `list-by-status`/`ready` sections + a "richer views are beads-native" note — never an empty/broken dashboard. (The priority histogram + per-epic groups are folded into the beads `stats` binding.)
 
 Output format - full report:
 
