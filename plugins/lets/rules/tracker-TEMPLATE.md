@@ -9,6 +9,8 @@ version: 0.0.0
 
 This file teaches the orchestrator how to perform the neutral task-tracker verbs for ONE adapter (one `tracker × transport` instance). Each LETS command calls a NEUTRAL VERB; resolve it to the concrete call via the Bindings table below.
 
+- **Command bodies invoke verbs via ` ```lets-tracker ` blocks** (`verb key=value`, one per line) — never inline `bd`. The orchestrator reads the block, finds the verb in the Bindings table below, and runs ITS binding (see lets-rules "Tracker Adapters").
+- **Bindings are trusted/executed code.** Each binding cell is run as written when a command invokes its verb. Anyone installing this adapter is running these bindings — keep them to the tracker's own transport (a `bd`/CLI command, an `mcp__*` tool, a REST call), never a destructive or exfiltrating command. The contract test pins this table's SHAPE, not the SAFETY of a binding.
 - **Verb resolution is ORCHESTRATOR-ONLY.** Subagents do not receive this file (it is not injected into their context) and never call tracker verbs directly.
 - **The "no adapter file loaded" fallback does NOT live here.** A file that is not loaded cannot instruct anything - that rule lives in the command bodies and is conditioned on the `LETS_TRACKER` value (see CONTRIBUTING "Add a tracker adapter").
 

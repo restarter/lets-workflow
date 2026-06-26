@@ -6,13 +6,13 @@ LETS is **tracker-agnostic**. Instead of hardcoding beads (`bd`), a project bind
 
 - **Neutral verbs** — every command speaks a small shared vocabulary: `create`, `show`, `comment-add`, `set-status`, `close` (CORE) plus `comment-list`, `list-by-status`, `search`, `ready`/`stats`, `label`/`assignee`/`set-field` (OPTIONAL).
 - **One adapter file per tracker** — `tracker-<name>.md` is self-contained: a capability table mapping each verb to a concrete binding (a `bd` command, an `mcp__*` tool, a REST call) + a degradation section. Transport is encoded **per verb** inside the file — there is no second "driver" config axis.
-- **Resolution** (the rule lives in `lets-rules.md` → "Tracker Adapters"): the `bd …` commands you see in LETS commands are the **beads-default binding**. With `LETS_TRACKER=beads` they run as-is (runtime is unchanged from pre-platform LETS). With a non-beads adapter, each verb resolves through the loaded `tracker-<name>.md` instead.
+- **Resolution** (the rule lives in `lets-rules.md` → "Tracker Adapters"): command/skill bodies invoke neutral verbs via ` ```lets-tracker ` fenced blocks — NOT inline `bd`. The orchestrator resolves each block through the loaded `tracker-<name>.md` and runs its binding. With `LETS_TRACKER=beads` that binding is the same `bd` command LETS always ran (golden-pinned, so beads runtime is unchanged); with a non-beads adapter it's that adapter's binding (e.g. an `mcp__*` tool). Computed comment bodies cross via a `body-file=` temp file; reads return the neutral `{id, title, status, url}` shape.
 
 ## Shipped adapters
 
 | `LETS_TRACKER` | Transport | Notes |
 |----------------|-----------|-------|
-| `beads` (default) | `bd` CLI | Reference adapter. Full capabilities. Runtime byte-for-byte unchanged. |
+| `beads` (default) | `bd` CLI | Reference adapter. Full capabilities. The `bd` bindings are golden-pinned, so beads runtime is unchanged. |
 | `planfix-mcp` | Planfix MCP server | Pure MCP — dedicated `planfix_*` tools + the server's generic `planfix_request` REST passthrough. No new I/O code, token owned by the server. |
 | `none` | — | Null adapter. Every verb is a no-op; commands degrade to a no-tracker stance. The "no-beads" mode. |
 
@@ -74,6 +74,12 @@ It is auto-loaded into model context and is git-shareable — so **never put a s
 
 - The MCP server must be connected in your Claude Code session. An interactively-authenticated server may be absent in **headless / cron runs**, so the autonomous pipeline on `planfix-mcp` is not guaranteed — CORE verbs (`set-status`/`close`) hard-fail loudly rather than silently no-op, so `/lets:done` never claims a close it didn't perform.
 - End-to-end Planfix verification is **manual** — it needs a live, authenticated server and cannot run in CI.
+
+## Trust & secrets
+
+A `tracker-<name>.md` is **trusted instruction**: it auto-loads into model context every session, and after the neutral-verb rewrite its binding cells are *what executes* when a command invokes a verb. So installing a third-party / shared adapter is equivalent to running its code — a binding could be `bd close <id>; rm -rf …` or an exfiltrating `curl`. **Review every binding before installing an adapter you didn't author.** The contract test pins the table's *shape* (header + CORE rows + a `## Degradation` section), NOT the *safety* of a binding.
+
+A **token never belongs in an adapter or board file.** Both `tracker-*.md`/`*.board.md` (git-shareable, auto-loaded into context) and `.lets/.env` (mode 644, injected into context) are the wrong place. Secrets live only in the transport's own config — the MCP server's env, or a gitignored 0600 file for a future direct-REST adapter.
 
 ## Adding a new tracker
 
