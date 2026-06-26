@@ -732,7 +732,7 @@ Write plan to: `$PLAN_FILE` (i.e. `.lets/plans/${STAMP}-${SLUG}.md`)
 Example: branch `feature/0nf.10-improve-statusline` -> `.lets/plans/2026-06-06-1846-0nf.10-improve-statusline.md`
 Trunk-mode example: branch `main`, task `lets-abc` -> `.lets/plans/2026-06-06-1846-lets-abc.md`
 
-### Record in Beads
+### Record in the Tracker
 
 If active task found:
 ```lets-tracker

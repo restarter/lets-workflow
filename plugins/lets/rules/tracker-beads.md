@@ -21,9 +21,9 @@ The reference adapter. Binds the neutral verbs to the `bd` CLI - the historical,
 
 | verb | tier | supported | binding |
 |------|------|-----------|---------|
-| create         | CORE | yes | `bd create --title=... --type=... --priority=... --labels=... --description="..."` (via the create-task skill); returns the new id/url |
+| create         | CORE | yes | `bd create --title=... --type=... --priority=... --labels=... --description="..."` (via the create-task skill); a multi-line `description` arrives as `description-file=<path>` → `--description="$(cat <description-file>)"`. Returns the new id/url |
 | show           | CORE | yes | `bd show <id>` (text) or `bd show <id> --json` when a field is parsed; `--json` exposes `status` as a neutral name |
-| comment-add    | CORE | yes | `bd comments add <id> "$(cat <body-file>)"` (body arrives as `body-file=<path>`; empty body → HARD-FAIL, do not submit) |
+| comment-add    | CORE | yes | `bd comments add <id> "$(cat <body-file>)"` for `body-file=<path>`, or `bd comments add <id> "<body>"` for inline `body=`; empty body → HARD-FAIL, do not submit |
 | set-status     | CORE | yes | `bd update <id> --status=<open\|in_progress\|closed>` |
 | close          | CORE | yes | `bd close <id> [--reason="..."]` |
 | comment-list   | OPT  | yes | `bd comments <id>` |

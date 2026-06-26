@@ -510,7 +510,7 @@ Save summary_comment_id from output (parse the URL or ID from gh output).
 - Save review_id and summary_comment_id
 - Temp files (payload.json, summary.md, fallback.md) stay in PR folder for reference
 
-Log to beads:
+Log to the tracker:
 
 Skip if `task_id` is null.
 
@@ -752,7 +752,7 @@ git checkout {previous_branch from state}
 
 3. Delete PR folder: `rm -rf "$PR_DIR"`
 
-4. Log to beads (using task_id from state):
+4. Log to the tracker (using task_id from state):
 
 ```lets-tracker
 comment-add task={task_id} body="PR #{number}: {approved/merged/changes requested}"
@@ -1101,7 +1101,7 @@ Mark each as `reply_posted: true` and save `reply_posted_id` after successful po
 
 After all replies posted:
 - Set `replies_posted: true`
-- Log to beads:
+- Log to the tracker:
 
 Skip if `task_id` is null.
 

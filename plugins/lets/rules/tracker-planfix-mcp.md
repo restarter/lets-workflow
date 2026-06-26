@@ -26,9 +26,9 @@ Binds the neutral verbs to the Planfix MCP server (popstas/planfix-mcp-server). 
 
 | verb | tier | supported | binding |
 |------|------|-----------|---------|
-| create         | CORE | yes | `planfix_request POST task/ { name, description, project:{id}, template:{id} }` -> `{result:"success", id}`. NOT the dedicated `planfix_create_task` (broken for normal tasks). `template:{id}` MANDATORY. |
+| create         | CORE | yes | `planfix_request POST task/ { name, description, project:{id}, template:{id} }` -> `{result:"success", id}`. NOT the dedicated `planfix_create_task` (broken for normal tasks). `template:{id}` MANDATORY. `description=` inline or `description-file=<path>` (read the file first). |
 | show           | CORE | yes | `planfix_request GET task/<id> { fields:"id,name,status,project,description,assignees,assigner" }`; map status id -> neutral via board |
-| comment-add    | CORE | yes | `planfix_create_comment { taskId:<id>, description:<body>, silent:true }` (param is `description`, not `comment`) |
+| comment-add    | CORE | yes | `planfix_create_comment { taskId:<id>, description:<body>, silent:true }` (param is `description`, not `comment`). `body=` inline or `body-file=<path>` (read the file first); render markdown best-effort per the HTML note below |
 | set-status     | CORE | yes¹ | `planfix_request POST task/<id> { status:{id:<target>} }` - PROCESS-GATED + must inspect `failures[]` |
 | close          | CORE | yes¹ | set-status to the board `closed` id (same gated rules) |
 | comment-list   | OPT  | yes | `planfix_request POST task/<id>/comments/list { ... }` |

@@ -404,7 +404,7 @@ git log --oneline ${BASE_SHA}..HEAD
 
 Verify each teammate's commit is present. If a commit is missing (teammate was stopped mid-work), note it.
 
-**10.3: Record in beads**
+**10.3: Record in the tracker**
 
 For each completed task:
 ```bash

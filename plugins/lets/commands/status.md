@@ -142,7 +142,7 @@ Output format:
 ### View: blocked
 
 ```lets-tracker
-blocked        # dependency graph (beads-native, via the stats/ready binding; on `absent`, render "dependency graph unavailable for tracker {name}")
+stats view=blocked   # dependency-graph tree - the ready/stats binding's dep-graph view (beads-native); on `absent`, render "dependency graph unavailable for tracker {name}"
 ```
 
 Show dependency graph as ASCII tree. Group by root blocker - the task that ultimately blocks others.
@@ -173,7 +173,7 @@ Run all commands:
 stats                                  # totals + per-epic:* label groups + priority histogram (beads-native dashboard)
 ready                                  # all ready tasks
 list-by-status status=in_progress
-blocked                                # dependency graph (beads-native)
+stats view=blocked                     # dependency-graph tree (beads-native)
 label                                  # the epic:* label set
 list-by-status status=closed limit=10  # recent activity
 ```

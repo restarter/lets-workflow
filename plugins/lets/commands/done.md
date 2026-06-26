@@ -282,7 +282,7 @@ Next steps presented via AskUserQuestion (replaces LETS box).
 - **Finish** -> proceed to Step 7
 - **Keep working** -> stop, return to work
 
-## Step 7: Document in Beads
+## Step 7: Document in the Tracker
 
 Add completion comment to the task. **MANDATORY:** the `Claude session: $CLAUDE_CODE_SESSION_ID` line MUST appear in the comment between `## Completed` and `### Commits` — don't drop it. `$CLAUDE_CODE_SESSION_ID` is the Bash subprocess env var Claude Code injects (see CLAUDE.md → "Claude Code session identity"); bash expands it inside the heredoc at runtime (the body is written to a temp file, submitted via the `comment-add` verb's `body-file=`), so the tracker receives the literal session UUID. No pre-assignment / template substitution needed.
 

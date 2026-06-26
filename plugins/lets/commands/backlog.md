@@ -465,7 +465,7 @@ No agents. Direct interactive triage of stale/messy backlog items.
 ```lets-tracker
 stats
 list-by-status status=open limit=50
-list-by-status status=done limit=20
+list-by-status status=closed limit=20
 label
 ```
 

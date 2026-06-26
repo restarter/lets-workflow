@@ -238,7 +238,11 @@ A ` ```lets-tracker ` block is a neutral verb CALL, not shell. Resolve it: (1) i
 
 **Reads** (`show`, `list-by-status`) return the neutral shape `{id, title, status, url}` with `status` a neutral name (`open`/`in_progress`/`closed`); the body reads the returned field (annotated `# returns …`), never greps a tracker's native JSON.
 
-**Comment bodies are format-neutral / plain-text.** Rich markdown structure is a beads-only affordance; other adapters render best-effort. A computed body is written to a temp file by the preceding ` ```bash ` block and passed as `body-file=<path>` (no multi-line value crosses into the block); an empty body → HARD-FAIL, never submit an empty comment.
+**Comment / description bodies are format-neutral / plain-text.** Rich markdown structure is a beads-only affordance; other adapters render best-effort. A body crosses to a verb (`comment-add`'s `body`, `create`'s `description`) one of two ways:
+- **Inline** — `body="..."` / `description="..."` for a short OR purely orchestrator-templated value (a multi-line template with NO `$(...)` shell expansion is allowed inline).
+- **File** — `<field>-file=<path>` (`body-file=` for comments, `description-file=` for create/set-field) for a value that needs runtime shell substitution (`$(date)`, `$(git log)`, `$CLAUDE_CODE_SESSION_ID`): the preceding ` ```bash ` block writes it to a temp file so no computed multi-line value is re-typed across the model boundary. A `*-file=` path is **repo-root-relative** (binding execution runs with cwd = the project root, where `.lets/` lives); the binding reads the file (beads: `"$(cat <path>)"`).
+
+An empty body → HARD-FAIL, never submit an empty comment.
 
 **Degradation (two-pronged — do NOT flatten):**
 - An OPTIONAL verb the adapter marks `absent`, OR a CORE verb bound to a deliberate **no-op** (`none`) → continue and TELL the user; never report it as a recorded change (no phantom "done").
