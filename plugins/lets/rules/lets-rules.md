@@ -226,13 +226,27 @@ LETS is tracker-agnostic via a one-adapter-file platform. `LETS_TRACKER` names t
 
 **Neutral verbs:** `create`, `show`, `comment-add`, `set-status`, `close` (CORE) + `comment-list`, `list-by-status`, `search`, `ready`/`stats`, `label`/`assignee`/`set-field` (OPTIONAL).
 
-**How the `bd …` commands in LETS commands/skills are read:** they are the **beads-default binding** of these verbs (the verb↔`bd` map is the Capabilities table in `tracker-beads.md`). Resolve EVERY task-tracker operation this way:
+**The ` ```lets-tracker ` block.** Command/skill bodies invoke a tracker operation with a fenced block tagged `lets-tracker`, one `verb key=value` per line:
 
-- `LETS_TRACKER` = `beads` or unset → run the `bd` command as written (it IS the beads binding). Runtime is unchanged from pre-platform LETS.
-- `LETS_TRACKER` = a non-beads adapter whose `tracker-<name>.md` IS loaded → do NOT run `bd`. Identify the verb (via the `tracker-beads.md` map), resolve it through the loaded adapter file, and use ITS binding (e.g. an `mcp__*` tool). Translate native↔neutral statuses so the surrounding logic stays adapter-agnostic.
-- `LETS_TRACKER` names a non-beads adapter but NO `tracker-<name>.md` is loaded (e.g. a project that upgraded the plugin but hasn't re-run `/lets:init` / `/lets:update`) → behave as `none`: do NOT run `bd` (it would hit the wrong store), tell the user the tracker isn't installed, and nudge `/lets:update`.
+` ```lets-tracker ` / `close task=<id> reason="..."` / ` ``` `
 
-**Degradation:** an OPTIONAL verb the active adapter marks `absent` → continue and state the capability is unavailable for this tracker. A CORE verb whose binding can't be performed at runtime (e.g. a non-beads MCP tool isn't connected) → HARD-FAIL loud ("set-status / close FAILED — task NOT changed"); never report a phantom success (critical under AUTO MODE — `/lets:done` must not claim a close it didn't do). Verb resolution is ORCHESTRATOR-ONLY — subagents never call tracker verbs. (Known exception, until migrated: a few analytical commands — notably `/lets:backlog` — still instruct their review subagents to read task data via `bd` directly; those reads are beads-scoped by design and are NOT a violation. On a non-beads project those subagent reads are unavailable until the command is migrated to neutral verbs.)
+A ` ```lets-tracker ` block is a neutral verb CALL, not shell. Resolve it: (1) identify `<verb>` + args; (2) look the verb up in the loaded `tracker-<name>.md` capability table and run ITS `binding`; (3) NEVER execute the block body as a shell command. (For beads the binding IS a `bd` command — run that.)
+
+- `LETS_TRACKER` = `beads` or unset → resolve via `tracker-beads.md` (the binding is the same `bd …` LETS always ran; runtime identical, now table-driven + golden-pinned).
+- non-beads adapter whose `tracker-<name>.md` IS loaded → resolve via its file (e.g. an `mcp__*` tool). Translate native↔neutral statuses so surrounding logic stays adapter-agnostic.
+- non-beads named but NO `tracker-<name>.md` loaded (upgraded the plugin but hasn't re-run `/lets:init` / `/lets:update`) → behave as `none`: do NOT run `bd` (wrong store), tell the user the tracker isn't installed, nudge `/lets:update`.
+
+**Reads** (`show`, `list-by-status`) return the neutral shape `{id, title, status, url}` with `status` a neutral name (`open`/`in_progress`/`closed`); the body reads the returned field (annotated `# returns …`), never greps a tracker's native JSON.
+
+**Comment bodies are format-neutral / plain-text.** Rich markdown structure is a beads-only affordance; other adapters render best-effort. A computed body is written to a temp file by the preceding ` ```bash ` block and passed as `body-file=<path>` (no multi-line value crosses into the block); an empty body → HARD-FAIL, never submit an empty comment.
+
+**Degradation (two-pronged — do NOT flatten):**
+- An OPTIONAL verb the adapter marks `absent`, OR a CORE verb bound to a deliberate **no-op** (`none`) → continue and TELL the user; never report it as a recorded change (no phantom "done").
+- A binding that exists but FAILS at runtime (MCP tool not connected, `bd` not on PATH, planfix `failures[]` non-empty) → **HARD-FAIL loud** ("set-status / close FAILED — task NOT changed"); never report a phantom success. Critical under AUTO MODE — `/lets:done` must not claim a close it didn't do.
+
+**Resolution is ORCHESTRATOR-ONLY** — subagents never call tracker verbs (they don't receive the adapter file). Two documented beads-only carve-outs (NOT violations): (a) a few analytical commands — notably `/lets:backlog` — instruct their review subagents to read task data via `bd` directly (the subagent has no adapter; on a non-beads project those reads are unavailable until migrated); (b) the detect-task merge-branch liveness probe is a gated `bd show` (see detect-task) — both are allowlisted.
+
+**Trust:** a `tracker-<name>.md` is trusted instruction auto-loaded into model context; its binding cells EXECUTE as written. Installing a third-party / shared adapter is equivalent to running its code — review every binding before installing one you didn't author. The contract test pins table SHAPE, NOT binding SAFETY. A token belongs ONLY in the transport's own config (the MCP server env / a gitignored 0600 file) — NEVER in a loaded/shared `tracker-*.md`, `.board.md`, or `.lets/.env` (mode 644, injected into context).
 
 State-changing verbs (`set-status`, `close`, plus `bd dolt push` on beads) stay gated under AUTO MODE regardless of adapter.
 

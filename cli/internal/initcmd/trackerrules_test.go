@@ -96,28 +96,81 @@ func TestTrackerRules_Contract(t *testing.T) {
 	}
 }
 
-// TestTrackerBeads_BindsBdCommands pins the beads adapter's CORE-verb bindings to
-// the bd commands the LETS commands actually run, so the documented beads mapping
-// (the orchestrator reverse-maps a literal bd call -> verb for non-beads adapters)
-// cannot silently drift from reality. Byte-for-byte beads is otherwise preserved
-// by construction - command bodies keep their literal bd calls (F4 resolves via the
-// global "Tracker Adapters" rule, it does not rewrite the bd commands).
+// TestTrackerBeads_BindsBdCommands pins each beads verb to the bd invocation its
+// binding CELL resolves to. Command/skill bodies carry neutral ```lets-tracker
+// blocks (lets-rules "Tracker Adapters"); for beads every verb resolves through
+// THIS table, so a drifted binding cell silently changes what /lets:* actually
+// runs. The pin is the cell-scoped bd fragment INCLUDING the behavior-critical
+// flags (--reason, --status=, --json, --format=ids, --limit) - tight enough to
+// catch a dropped flag, unlike a bare command-name substring. Asserting against
+// cell 3 (the binding column) of the verb's own row, not anywhere in the file,
+// stops a fragment in one row from masking a regression in another.
 func TestTrackerBeads_BindsBdCommands(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join(pluginRulesDir(t), "tracker-beads.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	content := string(data)
+	// want[verb] = the bd fragment the verb's binding cell MUST contain. Each
+	// fragment sits before any escaped table pipe (\|) so cell-3 truncation on
+	// the set-status row is harmless.
 	want := map[string]string{
-		"create":      "bd create",
-		"show":        "bd show",
-		"comment-add": "bd comments add",
-		"set-status":  "bd update",
-		"close":       "bd close",
+		"create":         "bd create --title=",
+		"show":           "bd show <id>",
+		"comment-add":    `bd comments add <id> "$(cat <body-file>)"`,
+		"set-status":     "bd update <id> --status=",
+		"close":          "bd close <id> [--reason",
+		"comment-list":   "bd comments <id>",
+		"list-by-status": "bd list --status=<status>",
+		"search":         "bd search <query>",
+		"ready/stats":    "bd ready [--limit N]",
+		"label":          "bd label list-all",
+		"assignee":       "bd update <id> --assignee=",
+		"set-field":      "bd update <id> --description=",
 	}
-	for verb, cmd := range want {
-		if !strings.Contains(content, cmd) {
-			t.Errorf("tracker-beads.md: CORE verb %q should bind %q (documented beads mapping drifted)", verb, cmd)
+	for verb, frag := range want {
+		cells := tableRowCells(content, verb)
+		if cells == nil {
+			t.Errorf("tracker-beads.md: no binding row for verb %q", verb)
+			continue
+		}
+		if binding := cells[3]; !strings.Contains(binding, frag) {
+			t.Errorf("tracker-beads.md: verb %q binding %q must contain %q (a drifted binding changes what /lets:* runs)", verb, strings.TrimSpace(binding), frag)
+		}
+	}
+}
+
+// TestTrackerAdapters_VerbVocabInSync pins the canonical neutral-verb list against
+// BOTH the reference adapter (a table row) AND the lets-rules "Tracker Adapters"
+// verb list (a backticked mention), so the two can't diverge - a verb renamed in
+// the table but not the rule (or vice versa) fails here. The list itself is the
+// source of truth. One-directional containment (not strict set-equality) because
+// the rule prose groups `ready`/`stats` with slashes; command-body verb spelling
+// stays discipline-only (model-read markdown, not mechanically testable).
+func TestTrackerAdapters_VerbVocabInSync(t *testing.T) {
+	dir := pluginRulesDir(t)
+	beads, err := os.ReadFile(filepath.Join(dir, "tracker-beads.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules, err := os.ReadFile(filepath.Join(dir, "lets-rules.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	beadsVerbs := tableVerbs(string(beads))
+	rulesStr := string(rules)
+	for _, v := range []string{
+		"create", "show", "comment-add", "set-status", "close",
+		"comment-list", "list-by-status", "search", "ready/stats",
+		"label", "assignee", "set-field",
+	} {
+		if !beadsVerbs[v] {
+			t.Errorf("neutral verb %q has no row in tracker-beads.md", v)
+		}
+		for _, part := range strings.Split(v, "/") {
+			if !strings.Contains(rulesStr, "`"+part+"`") {
+				t.Errorf("neutral verb %q (part %q) not named in lets-rules \"Tracker Adapters\" verb list", v, part)
+			}
 		}
 	}
 }
