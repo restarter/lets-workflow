@@ -15,7 +15,7 @@ The reference adapter. Binds the neutral verbs to the `bd` CLI - the historical,
 
 ## Neutral statuses
 
-`open`, `in_progress`, `closed` (+ `blocked`, supported by beads). These ARE beads' native status names.
+`open`, `in_progress`, `closed` (+ `blocked`, supported by beads). These ARE beads' native status names. Note: `list-by-status status=blocked` filters the status FIELD (rarely set explicitly); for dependency-blocked tasks (open issues with unmet deps) use `stats view=blocked` (= `bd blocked`), NOT `status=blocked`.
 
 ## Capabilities + bindings
 
@@ -27,7 +27,7 @@ The reference adapter. Binds the neutral verbs to the `bd` CLI - the historical,
 | set-status     | CORE | yes | `bd update <id> --status=<open\|in_progress\|closed>` |
 | close          | CORE | yes | `bd close <id> [--reason="..."]` |
 | comment-list   | OPT  | yes | `bd comments <id>` |
-| list-by-status | OPT  | yes | `bd list --status=<status> [--json] [--format=ids]`; `--json` exposes `status`/`priority` for parsing |
+| list-by-status | OPT  | yes | `bd list --status=<status> [--json] [--limit N]`; `--json` exposes `status`/`priority` for parsing. For id-only output, parse `--json` — bd has no `--format=ids` (an unknown `--format` value yields empty output, not an error) |
 | search         | OPT  | yes | `bd search <query>` |
 | ready/stats    | OPT  | yes | `bd ready [--limit N]` / `bd stats` / `bd blocked` (dep-graph tree) / priority histogram (see Notes) |
 | label          | OPT  | yes | bare `label` (all project labels, e.g. the `epic:*` set) → `bd label list-all`; `label task=<id>` → `bd label list <id>` (one issue's labels); `label add task=<id> value=<l>` → `bd label add <id> <l>`. The bare verb is `list-all`, NOT `bd label list` (which requires an id and errors without one) |
