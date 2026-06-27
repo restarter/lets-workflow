@@ -30,7 +30,7 @@ The reference adapter. Binds the neutral verbs to the `bd` CLI - the historical,
 | list-by-status | OPT  | yes | `bd list --status=<status> [--json] [--format=ids]`; `--json` exposes `status`/`priority` for parsing |
 | search         | OPT  | yes | `bd search <query>` |
 | ready/stats    | OPT  | yes | `bd ready [--limit N]` / `bd stats` / `bd blocked` (dep-graph tree) / priority histogram (see Notes) |
-| label          | OPT  | yes | `bd label list-all` / `bd label list` / `bd label add <id> <label>` |
+| label          | OPT  | yes | bare `label` (all project labels, e.g. the `epic:*` set) → `bd label list-all`; `label task=<id>` → `bd label list <id>` (one issue's labels); `label add task=<id> value=<l>` → `bd label add <id> <l>`. The bare verb is `list-all`, NOT `bd label list` (which requires an id and errors without one) |
 | assignee       | OPT  | yes | `bd update <id> --assignee=<name>` |
 | set-field      | OPT  | yes | `bd update <id> --description="..."` (overwrite) |
 
