@@ -26,7 +26,7 @@ Binds the neutral verbs to the Planfix MCP server (popstas/planfix-mcp-server). 
 
 | verb | tier | supported | binding |
 |------|------|-----------|---------|
-| create         | CORE | yes | `planfix_request POST task/ { name, description, project:{id}, template:{id} }` -> `{result:"success", id}`. NOT the dedicated `planfix_create_task` (broken for normal tasks). `template:{id}` MANDATORY. `description=` inline or `description-file=<path>` (read the file first). |
+| create         | CORE | yes | `planfix_request POST task/ { name, description, project:{id}, template:{id} }` -> `{result:"success", id}`. NOT the dedicated `planfix_create_task` (broken for normal tasks). `template:{id}` MANDATORY. `name`<-neutral `title`; `description`<-`description=` inline or `description-file=<path>` (read the file first), rendered as **HTML not markdown** - convert (see "create" + the HTML note). The neutral `type`/`priority`/`labels` have NO binding here -> **DROPPED** (Planfix uses the object's mandatory fields + the board's Tier custom field; map priority->Tier in the board profile if wanted). |
 | show           | CORE | yes | `planfix_request GET task/<id> { fields:"id,name,status,project,description,assignees,assigner" }`; map status id -> neutral via board |
 | comment-add    | CORE | yes | `planfix_create_comment { taskId:<id>, description:<body>, silent:true }` (param is `description`, not `comment`). `body=` inline or `body-file=<path>` (read the file first); render markdown best-effort per the HTML note below |
 | set-status     | CORE | yes¹ | `planfix_request POST task/<id> { status:{id:<target>} }` - PROCESS-GATED + must inspect `failures[]` |
@@ -99,7 +99,9 @@ Custom fields are NOT returned by default and there is NO `customFieldData` shor
 
 - **Use the passthrough:** `planfix_request POST task/ { name, description, project:{id:<board project>}, template:{id:<board template>} }` -> `{result:"success", id}`. The task lands in the template's initial status (the board defines which neutral status that is).
 - **Do NOT use the dedicated `planfix_create_task` tool** for a normal board task: it is CRM/lead-shaped - it pushes `name`/`project` into the description TEXT and sends `template.id=null` + a malformed `customFieldData:[{field:{id:null}}]`, so Planfix rejects it ("Error creating task").
-- `template:{id}` is MANDATORY: a templateless task is created off-process and CANNOT transition between board statuses afterward.
+- `template:{id}` is MANDATORY: a templateless task is created off-process and CANNOT transition between board statuses afterward. (An `object:{id}` that doubles as a template - id == template id - satisfies this: the created task carries `template:{that id}` and IS on-process. Verified live 2026-06-28: a `{project, object:44611}` create lands with `template:44611` and transitions normally, and the object auto-defaults its mandatory custom fields, e.g. Важность -> "Tier Z".)
+- **`description` is HTML, not markdown** (same as comments - see "HTML markup"). The neutral `description-file=`/`description=` body is composed as markdown by the calling skill (`## heading`, `- bullet`), which Planfix shows **literally** - CONVERT it to compact HTML before sending.
+- **Neutral `type`/`priority`/`labels` are DROPPED** - the beads-shaped `create` verb carries them, but Planfix create takes only `name`+`description`(+object/template). Don't error; the object's mandatory fields + the board's Tier custom field stand in. Map `priority`->Tier explicitly in the board profile only if a project needs it.
 
 ## set-status / close - PROCESS-GATED transitions + failures[] (CRITICAL)
 
@@ -178,8 +180,7 @@ The MCP server must be connected in Claude Code (`.mcp.json` or MCP settings) - 
       "args": ["-y", "@popstas/planfix-mcp-server"],
       "env": {
         "PLANFIX_ACCOUNT": "yourco",
-        "PLANFIX_TOKEN": "${PLANFIX_TOKEN}",
-        "PLANFIX_BASE_URL": "https://yourco.planfix.com/rest"
+        "PLANFIX_TOKEN": "${PLANFIX_TOKEN}"
       }
     }
   }
@@ -187,6 +188,8 @@ The MCP server must be connected in Claude Code (`.mcp.json` or MCP settings) - 
 ```
 
 **NEVER commit a literal token.** `.mcp.json` is gitignored by `lets init`; use `${PLANFIX_TOKEN}` env-var expansion, never a literal. The token lives ONLY here / in the server's env - never in `.lets/.env` or a `.board.md`.
+
+**Do NOT set `PLANFIX_BASE_URL` for a normal `.com` account** - the server already defaults to `https://<PLANFIX_ACCOUNT>.planfix.com/rest/`. Override it ONLY for a regional host (e.g. `.ru`), and then it MUST end in a **trailing slash** (`/rest/`): the server concatenates `` `${PLANFIX_BASE_URL}${path}` `` literally (popstas `src/helpers.ts`), so a missing slash produces `…/resttask/list` -> a 404 HTML page, and EVERY call then fails with `Unexpected token '<', "<!DOCTYPE"... is not valid JSON`. That is a "Connected"-but-not-working server returning HTML instead of JSON - not a token error (verified live 2026-06-28, lets-5d48z). Regional example: `"PLANFIX_BASE_URL": "https://<account>.planfix.ru/rest/"`.
 
 ## Limitations (this server build)
 
