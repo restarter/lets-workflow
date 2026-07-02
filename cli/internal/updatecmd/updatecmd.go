@@ -265,7 +265,7 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 			trackerDst := filepath.Join(projectRoot, ".claude", "rules", "tracker-"+trackerName+".md")
 			rulesDir := filepath.Dir(trackerDst)
 			// The documented switch path is "edit LETS_TRACKER in .lets/.env, then
-			// /lets:update" (init.md 2c-ter, docs/trackers.md) - so update must apply
+			// /lets:update" (init.md 2c-quater, docs/trackers.md) - so update must apply
 			// the same switch semantics as init Step 8b: drop the deactivated shipped
 			// adapter (never two adapter files loaded at once) and scaffold the
 			// create-once board profile. Both are independent of the version-sync
