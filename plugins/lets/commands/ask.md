@@ -124,7 +124,7 @@ Show the agent's response:
 ## Step 6: Link Answer to Active Task
 
 Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detect-task")`.
-If multiple tasks found, skip beads comment.
+If multiple tasks found, skip the tracker comment.
 If active task found:
 
 ```lets-tracker

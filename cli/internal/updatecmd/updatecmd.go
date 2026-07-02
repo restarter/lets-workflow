@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"golang.org/x/mod/semver"
@@ -262,6 +263,27 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 		trackerSrc := filepath.Join(pluginRoot, "rules", "tracker-"+trackerName+".md")
 		if trackerData, readErr := os.ReadFile(trackerSrc); readErr == nil {
 			trackerDst := filepath.Join(projectRoot, ".claude", "rules", "tracker-"+trackerName+".md")
+			rulesDir := filepath.Dir(trackerDst)
+			// The documented switch path is "edit LETS_TRACKER in .lets/.env, then
+			// /lets:update" (init.md 2c-ter, docs/trackers.md) - so update must apply
+			// the same switch semantics as init Step 8b: drop the deactivated shipped
+			// adapter (never two adapter files loaded at once) and scaffold the
+			// create-once board profile. Both are independent of the version-sync
+			// deferral below: the switch is user intent read from .env, not a
+			// plugin-content sync. Notes land on the tracker-rules row's Detail.
+			var switchNotes []string
+			removed, removeFailed := initcmd.CleanupShippedTrackerFiles(rulesDir, trackerName)
+			for _, r := range removed {
+				switchNotes = append(switchNotes, r+" removed (tracker switched)")
+			}
+			for _, f := range removeFailed {
+				switchNotes = append(switchNotes, f+" is stale but could not be removed - two adapters loaded, remove it manually")
+			}
+			if msg, berr := initcmd.ScaffoldBoardOnce(pluginRoot, rulesDir, trackerName); berr != nil {
+				switchNotes = append(switchNotes, berr.Error())
+			} else if msg != "" {
+				switchNotes = append(switchNotes, fmt.Sprintf("tracker-%s.board.md scaffolded (user-owned)", trackerName))
+			}
 			dr := drift.Check(trackerSrc, trackerDst)
 			switch {
 			case dr.State == drift.StatePluginUnreadable:
@@ -279,6 +301,11 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 				result.Add(Artifact{Name: "tracker-rules", Status: StatusUpdated, CurrentVersion: drPost.InstalledVersion, Detail: rulesUpdatedDetail(dr) + fmt.Sprintf(" (tracker-%s.md)", trackerName)})
 			default:
 				result.Add(Artifact{Name: "tracker-rules", Status: StatusInSync, CurrentVersion: dr.InstalledVersion, Detail: fmt.Sprintf("tracks the plugin (tracker-%s.md)", trackerName)})
+			}
+			// Attach the switch notes to the tracker-rules row just added.
+			if len(switchNotes) > 0 {
+				last := &result.Artifacts[len(result.Artifacts)-1]
+				last.Detail = strings.TrimPrefix(last.Detail+"; "+strings.Join(switchNotes, "; "), "; ")
 			}
 		}
 		// source absent -> no row (init's Step 8b warns; update stays quiet about a

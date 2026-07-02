@@ -12,8 +12,43 @@ import (
 
 // pinnedCapsHeader is the contract header every adapter's capability table MUST
 // carry verbatim. The F4c golden test parses the same header; keep both in sync
-// with tracker-TEMPLATE.md's "Capability-table format (PINNED CONTRACT)".
+// with tracker-TEMPLATE.md's "## Capabilities + bindings" section (marked by the
+// PINNED CONTRACT html comment inside it).
 const pinnedCapsHeader = "| verb | tier | supported | binding |"
+
+// sectionSpan returns the slice of content from the first occurrence of heading
+// to the next heading of the same or higher level ("" if the heading is absent).
+// Scoping matchers to the section they claim to pin keeps the assertions
+// falsifiable - a whole-file Contains can be satisfied by an unrelated mention
+// elsewhere (the branch-review S9 finding: `label` had 5 backticked mentions
+// across lets-rules.md, so deleting it from the verb list still passed).
+func sectionSpan(content, heading string) string {
+	start := strings.Index(content, heading)
+	if start < 0 {
+		return ""
+	}
+	rest := content[start+len(heading):]
+	level := strings.Count(strings.Split(heading, " ")[0], "#")
+	for _, prefix := range []string{"\n## ", "\n### "} {
+		if strings.Count(prefix, "#") > level {
+			continue // deeper headings stay inside the span
+		}
+		if end := strings.Index(rest, prefix); end >= 0 {
+			rest = rest[:end]
+		}
+	}
+	return rest
+}
+
+// capsTable slices an adapter file to its "## Capabilities + bindings" section
+// so table matchers can't be satisfied by a 4-column table elsewhere (status
+// maps, board tables).
+func capsTable(content string) string {
+	if s := sectionSpan(content, "## Capabilities + bindings"); s != "" {
+		return s
+	}
+	return content // header assertion elsewhere reports the real problem
+}
 
 // coreVerbs every adapter MUST bind (have a row for).
 var coreVerbs = []string{"create", "show", "comment-add", "set-status", "close"}
@@ -80,7 +115,7 @@ func TestTrackerRules_Contract(t *testing.T) {
 			if !strings.Contains(content, pinnedCapsHeader) {
 				t.Errorf("%s: capability table header is not the pinned contract %q", base, pinnedCapsHeader)
 			}
-			verbs := tableVerbs(content)
+			verbs := tableVerbs(capsTable(content))
 			for _, v := range coreVerbs {
 				if !verbs[v] {
 					t.Errorf("%s: missing a binding row for CORE verb %q", base, v)
@@ -100,43 +135,54 @@ func TestTrackerRules_Contract(t *testing.T) {
 // binding CELL resolves to. Command/skill bodies carry neutral ```lets-tracker
 // blocks (lets-rules "Tracker Adapters"); for beads every verb resolves through
 // THIS table, so a drifted binding cell silently changes what /lets:* actually
-// runs. The pin is the cell-scoped bd fragment INCLUDING the behavior-critical
-// flags (--reason, --status=, --json, --format=ids, --limit) - tight enough to
-// catch a dropped flag, unlike a bare command-name substring. Asserting against
-// cell 3 (the binding column) of the verb's own row, not anywhere in the file,
-// stops a fragment in one row from masking a regression in another.
+// runs. Each verb pins one or more cell-scoped fragments covering the
+// behavior-critical spans (--reason, --status=, --json, the create field flags,
+// the body-file/description-file capture) - tight enough to catch a dropped
+// flag, unlike a bare command-name substring. Asserting against cell 3 (the
+// binding column) of the verb's own row within the Capabilities section, not
+// anywhere in the file, stops a fragment in one row from masking a regression
+// in another.
 func TestTrackerBeads_BindsBdCommands(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join(pluginRulesDir(t), "tracker-beads.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	content := string(data)
-	// want[verb] = the bd fragment the verb's binding cell MUST contain. Each
-	// fragment sits before any escaped table pipe (\|) so cell-3 truncation on
-	// the set-status row is harmless.
-	want := map[string]string{
-		"create":         "bd create --title=",
-		"show":           "bd show <id>",
-		"comment-add":    `bd comments add <id> "$(cat <body-file>)"`,
-		"set-status":     "bd update <id> --status=",
-		"close":          "bd close <id> [--reason",
-		"comment-list":   "bd comments <id>",
-		"list-by-status": "bd list --status=<status>",
-		"search":         "bd search <query>",
-		"ready/stats":    "bd ready [--limit N]",
-		"label":          "bd label list-all",
-		"assignee":       "bd update <id> --assignee=",
-		"set-field":      "bd update <id> --description=",
+	caps := capsTable(content)
+	// want[verb] = bd fragments the verb's binding cell MUST contain. Fragments
+	// sit before any escaped table pipe (\|) so cell-3 truncation on the
+	// set-status row is harmless.
+	want := map[string][]string{
+		"create":         {"bd create --title=", "--type=", "--priority=", "--labels=", `--description="$(cat <description-file>)"`},
+		"show":           {"bd show <id>", "bd show <id> --json"},
+		"comment-add":    {`bd comments add <id> "$(cat <body-file>)"`, `bd comments add <id> "<body>"`},
+		"set-status":     {"bd update <id> --status="},
+		"close":          {"bd close <id> [--reason"},
+		"comment-list":   {"bd comments <id>"},
+		"list-by-status": {"bd list --status=<status>", "[--json]"},
+		"search":         {"bd search <query>"},
+		"ready/stats":    {"bd ready [--limit N]", "--limit 0", "bd stats", "bd blocked"},
+		"label":          {"bd label list-all", "bd label list <id>", "bd label add <id> <l>"},
+		"assignee":       {"bd update <id> --assignee="},
+		"set-field":      {"bd update <id> --description="},
 	}
-	for verb, frag := range want {
-		cells := tableRowCells(content, verb)
+	for verb, frags := range want {
+		cells := tableRowCells(caps, verb)
 		if cells == nil {
 			t.Errorf("tracker-beads.md: no binding row for verb %q", verb)
 			continue
 		}
-		if binding := cells[3]; !strings.Contains(binding, frag) {
-			t.Errorf("tracker-beads.md: verb %q binding %q must contain %q (a drifted binding changes what /lets:* runs)", verb, strings.TrimSpace(binding), frag)
+		for _, frag := range frags {
+			if binding := cells[3]; !strings.Contains(binding, frag) {
+				t.Errorf("tracker-beads.md: verb %q binding %q must contain %q (a drifted binding changes what /lets:* runs)", verb, strings.TrimSpace(binding), frag)
+			}
 		}
+	}
+	// The label-group progress mechanism lives in ## Notes (too long for a cell):
+	// /lets:status overview/labels/full depend on it for the NN/MM bars - the B2
+	// branch-review regression (main's 3ad2a05 --all fix must not drift out again).
+	if !strings.Contains(content, "bd list --label <label> --json --all") {
+		t.Error(`tracker-beads.md: Notes must carry the label-group binding "bd list --label <label> --json --all" (/lets:status NN/MM bars have no other data source)`)
 	}
 }
 
@@ -157,8 +203,13 @@ func TestTrackerAdapters_VerbVocabInSync(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	beadsVerbs := tableVerbs(string(beads))
-	rulesStr := string(rules)
+	beadsVerbs := tableVerbs(capsTable(string(beads)))
+	// Scope to the "### Tracker Adapters" section - a whole-file Contains is
+	// satisfiable by unrelated backticked mentions (S9: `label` had 5).
+	rulesStr := sectionSpan(string(rules), "### Tracker Adapters")
+	if rulesStr == "" {
+		t.Fatal(`lets-rules.md: "### Tracker Adapters" section not found`)
+	}
 	for _, v := range []string{
 		"create", "show", "comment-add", "set-status", "close",
 		"comment-list", "list-by-status", "search", "ready/stats",
@@ -219,7 +270,7 @@ func TestTrackerRules_CoreSupported(t *testing.T) {
 			}
 			content := string(data)
 			for _, v := range coreVerbs {
-				cells := tableRowCells(content, v)
+				cells := tableRowCells(capsTable(content), v)
 				if cells == nil {
 					t.Errorf("%s: no table row for CORE verb %q", base, v)
 					continue

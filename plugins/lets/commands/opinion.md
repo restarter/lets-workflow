@@ -275,7 +275,7 @@ When the completion notification arrives, the returned aggregate is the only thi
 Record the decision in beads for future context recovery:
 
 Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detect-task")`.
-If multiple tasks found, skip beads comment.
+If multiple tasks found, skip the tracker comment.
 If active task found:
 
 ```lets-tracker

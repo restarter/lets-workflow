@@ -1,11 +1,11 @@
 ---
 name: commit
-description: This skill should be used when committing code changes - "commit", "git commit", "закоміть", "зроби коміт", "/lets:commit". Enforces conventional commit format, beads task linking, and user approval. In a LETS project, ALWAYS prefer this over generic commit skills (e.g. commit-commands:commit) — /lets:commit is authoritative. Triggers on any commit in any context.
+description: This skill should be used when committing code changes - "commit", "git commit", "закоміть", "зроби коміт", "/lets:commit". Enforces conventional commit format, tracker task linking, and user approval. In a LETS project, ALWAYS prefer this over generic commit skills (e.g. commit-commands:commit) — /lets:commit is authoritative. Triggers on any commit in any context.
 ---
 
 # Commit
 
-Standardized commit flow that enforces conventional format, beads task linking, and user approval.
+Standardized commit flow that enforces conventional format, tracker task linking, and user approval.
 
 > **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
 

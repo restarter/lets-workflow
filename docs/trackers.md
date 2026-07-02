@@ -1,5 +1,7 @@
 # Task Trackers
 
+> *(ships next release)* — the pluggable tracker platform below is merged but not yet in a tagged release; the current release supports beads only.
+
 LETS is **tracker-agnostic**. Instead of hardcoding beads (`bd`), a project binds whatever task store it wants through a single **adapter file**. One config key, `LETS_TRACKER`, names the adapter; `lets init` installs exactly one `.claude/rules/tracker-<name>.md` (auto-loaded, drift-tracked like `lets-rules.md`) that binds the neutral verbs to concrete calls.
 
 ## The model
@@ -45,8 +47,7 @@ The Planfix adapter talks to the [Planfix MCP server](https://github.com/popstas
       "args": ["-y", "@popstas/planfix-mcp-server"],
       "env": {
         "PLANFIX_ACCOUNT": "yourco",
-        "PLANFIX_TOKEN": "${PLANFIX_TOKEN}",
-        "PLANFIX_BASE_URL": "https://yourco.planfix.com/rest"
+        "PLANFIX_TOKEN": "${PLANFIX_TOKEN}"
       }
     }
   }
@@ -54,6 +55,8 @@ The Planfix adapter talks to the [Planfix MCP server](https://github.com/popstas
 ```
 
 **Never commit a literal token.** Use `${PLANFIX_TOKEN}` env-var expansion (resolved from your shell). The token lives only here / in the server's env — never in `.lets/.env` (world-readable, injected into model context) and never in a `.board.md`.
+
+**Don't set `PLANFIX_BASE_URL` for a normal `.com` account** — the server defaults to `https://<PLANFIX_ACCOUNT>.planfix.com/rest/` on its own. Override it only for a regional host (e.g. `.ru`), and then it **must end in a trailing slash** (`/rest/`): the server concatenates the URL literally, so a missing slash 404s every request (the server shows "Connected" but every call returns an HTML page instead of JSON).
 
 ### 2. Describe your board (`tracker-planfix-mcp.board.md`)
 

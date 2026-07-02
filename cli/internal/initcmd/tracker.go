@@ -45,13 +45,15 @@ func resolvedTracker(envPath string) string {
 	return vals["LETS_TRACKER"]
 }
 
-// cleanupShippedTrackerFiles removes any plugin-shipped tracker-<name>.md in
+// CleanupShippedTrackerFiles removes any plugin-shipped tracker-<name>.md in
 // rulesDir that is NOT the active adapter (keep), so switching LETS_TRACKER does
 // not leave two adapter files loaded at once. Whitelist-gated (see
 // shippedTrackers) - never removes user-authored files. Returns the basenames
-// removed, for step reporting.
-func cleanupShippedTrackerFiles(rulesDir, keep string) []string {
-	var removed []string
+// removed plus any that exist but could not be removed (permissions etc) - a
+// failed removal means a stale adapter is STILL loaded, so callers must surface
+// it, not swallow it. Exported so updatecmd's tracker-rules artifact applies the
+// same cleanup on the documented edit-.env-then-update switch path.
+func CleanupShippedTrackerFiles(rulesDir, keep string) (removed, failed []string) {
 	for _, name := range shippedTrackers {
 		if name == keep {
 			continue
@@ -62,28 +64,33 @@ func cleanupShippedTrackerFiles(rulesDir, keep string) []string {
 		}
 		if err := os.Remove(p); err == nil {
 			removed = append(removed, "tracker-"+name+".md")
+		} else {
+			failed = append(failed, "tracker-"+name+".md")
 		}
 	}
-	return removed
+	return removed, failed
 }
 
-// scaffoldBoardOnce copies the adapter's board-profile template into rulesDir if
+// ScaffoldBoardOnce copies the adapter's board-profile template into rulesDir if
 // (a) the plugin ships one for this adapter and (b) the project copy does not
 // already exist. Create-once: a board profile is user-owned and is NEVER
 // overwritten (it holds project-specific status-id maps / transitions). Returns
-// a step message when it wrote one, else "".
-func scaffoldBoardOnce(pluginRoot, rulesDir, tracker string) string {
+// a step message when it wrote one ("" for the two legitimate no-op cases), and
+// a non-nil error on a genuine write failure - the board carries the status-id
+// maps the adapter depends on, so a silent no-scaffold must not look like
+// "nothing to do". Exported for updatecmd (switch-via-update path).
+func ScaffoldBoardOnce(pluginRoot, rulesDir, tracker string) (string, error) {
 	boardSrc := filepath.Join(pluginRoot, "rules", "tracker-"+tracker+".board.md")
 	data, err := os.ReadFile(boardSrc)
 	if err != nil {
-		return "" // no board template shipped for this adapter
+		return "", nil // no board template shipped for this adapter
 	}
 	boardDst := filepath.Join(rulesDir, "tracker-"+tracker+".board.md")
 	if _, err := os.Stat(boardDst); err == nil {
-		return "" // already present - never overwrite user edits
+		return "", nil // already present - never overwrite user edits
 	}
 	if err := AtomicWriteBytes(boardDst, data, 0o644); err != nil {
-		return ""
+		return "", fmt.Errorf("scaffold tracker-%s.board.md: %w", tracker, err)
 	}
-	return fmt.Sprintf(".claude/rules/tracker-%s.board.md scaffolded (user-owned - edit freely)", tracker)
+	return fmt.Sprintf(".claude/rules/tracker-%s.board.md scaffolded (user-owned - edit freely)", tracker), nil
 }

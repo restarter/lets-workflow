@@ -88,7 +88,7 @@ Add to output after "### In Progress":
 ### View: ready
 
 ```lets-tracker
-ready          # all ready tasks (no limit)
+ready limit=0  # ALL ready tasks (0 = unlimited; a bare `ready` uses the tracker's default cap)
 label          # the epic:* label set
 ```
 
@@ -171,7 +171,7 @@ Run all commands:
 
 ```lets-tracker
 stats                                  # totals + per-epic:* label groups + priority histogram (beads-native dashboard)
-ready                                  # all ready tasks
+ready limit=0                          # ALL ready tasks (0 = unlimited)
 list-by-status status=in_progress
 stats view=blocked                     # dependency-graph tree (beads-native)
 label                                  # the epic:* label set

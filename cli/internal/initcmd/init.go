@@ -242,7 +242,8 @@ func Run(ctx context.Context, prefs Prefs, projectRoot, pluginRoot string) (Resu
 	// project's customized LETS_TRACKER and writes the winner to .env. So .env is
 	// the single source of the resolved value here, for both a fresh --tracker
 	// pick and a re-init that must preserve an existing non-beads adapter.
-	if tracker := resolvedTracker(envPath); tracker != "" {
+	activeTracker := resolvedTracker(envPath)
+	if tracker := activeTracker; tracker != "" {
 		rulesDir := filepath.Join(projectRoot, ".claude", "rules")
 		// An explicit --tracker that lost to an existing .env value on re-init:
 		// surface it (mergePrefs keeps the existing adapter; --tracker is a
@@ -266,8 +267,12 @@ func Run(ctx context.Context, prefs Prefs, projectRoot, pluginRoot string) (Resu
 				trackerDst := filepath.Join(rulesDir, "tracker-"+tracker+".md")
 				// Drop a previously-installed, plugin-shipped tracker file that is no
 				// longer active (tracker switch). Whitelist-gated - user files safe.
-				for _, removed := range cleanupShippedTrackerFiles(rulesDir, tracker) {
-					result.Add(Step{Status: StepOK, Message: fmt.Sprintf(".claude/rules/%s removed (tracker switched to %q)", removed, tracker)})
+				removed, removeFailed := CleanupShippedTrackerFiles(rulesDir, tracker)
+				for _, r := range removed {
+					result.Add(Step{Status: StepOK, Message: fmt.Sprintf(".claude/rules/%s removed (tracker switched to %q)", r, tracker)})
+				}
+				for _, f := range removeFailed {
+					result.Add(Step{Status: StepWarn, Message: fmt.Sprintf("could not remove stale .claude/rules/%s - two adapters are loaded; remove it manually", f)})
 				}
 				dtr := drift.Check(trackerSrc, trackerDst)
 				if dtr.Detected() {
@@ -289,21 +294,28 @@ func Run(ctx context.Context, prefs Prefs, projectRoot, pluginRoot string) (Resu
 					result.Add(Step{Status: StepSkip, Message: fmt.Sprintf(".claude/rules/tracker-%s.md (v%s up to date)", tracker, dtr.InstalledVersion)})
 				}
 				// Scaffold the optional board profile once (create-if-absent).
-				if msg := scaffoldBoardOnce(pluginRoot, rulesDir, tracker); msg != "" {
+				if msg, berr := ScaffoldBoardOnce(pluginRoot, rulesDir, tracker); berr != nil {
+					result.Add(Step{Status: StepWarn, Message: berr.Error()})
+				} else if msg != "" {
 					result.Add(Step{Status: StepOK, Message: msg})
 				}
 			}
 		}
 	}
 
-	// 9. beads
-	if !prefs.SkipBeads {
-		bdSteps := runBeadsInit(ctx, projectRoot)
-		for _, s := range bdSteps {
+	// 9. beads. A non-beads adapter implies the skip regardless of the flag -
+	// `bd init` on a planfix-mcp/none project would create a wrong-store .beads/
+	// workspace. Belt-and-suspenders with init.md's $SKIP_BEADS_FLAG (the markdown
+	// sets the flag as UX; the binary must be correct for direct-CLI callers too).
+	switch {
+	case prefs.SkipBeads:
+		result.Add(Step{Status: StepSkip, Message: "beads (--skip-beads)"})
+	case activeTracker != "" && activeTracker != "beads":
+		result.Add(Step{Status: StepSkip, Message: fmt.Sprintf("beads (LETS_TRACKER=%s - non-beads adapter, bd init skipped)", activeTracker)})
+	default:
+		for _, s := range runBeadsInit(ctx, projectRoot) {
 			result.Add(s)
 		}
-	} else {
-		result.Add(Step{Status: StepSkip, Message: "beads (--skip-beads)"})
 	}
 
 	return result, nil

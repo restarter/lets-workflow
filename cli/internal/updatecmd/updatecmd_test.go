@@ -1195,3 +1195,56 @@ func TestRun_RulesScopeKeyMigration(t *testing.T) {
 		t.Errorf("migration must add LETS_RULES_SCOPE=project:\n%s", data)
 	}
 }
+
+// B1 regression (branch review 2026-07-02): missing tracker adapter is INSTALLED
+// by update (StateMissing must not fall under the deferral guard) - the parity
+// twin of TestRun_RulesMissingGetsInstalled for Artifact 6.
+func TestRun_TrackerRulesMissing_Installed(t *testing.T) {
+	pr, plug := scaffoldWithTracker(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0", "beads", "", "0.6.0")
+	r, err := Run(context.Background(), Options{LatestFn: stubLatest("0.6.0")}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := find(t, r, "tracker-rules")
+	if a.Status != StatusUpdated || !strings.Contains(a.Detail, "was missing") {
+		t.Errorf("tracker-rules: %+v", a)
+	}
+	if _, err := os.Stat(filepath.Join(pr, ".claude", "rules", "tracker-beads.md")); err != nil {
+		t.Error("tracker-beads.md not installed by update")
+	}
+}
+
+// B1 regression (branch review 2026-07-02): the DOCUMENTED tracker-switch path is
+// "edit LETS_TRACKER in .lets/.env, then /lets:update" - update must remove the
+// deactivated shipped adapter, or two adapter files stay auto-loaded at once
+// (conflicting verb bindings; the state cleanupShippedTrackerFiles exists to
+// prevent). Previously cleanup ran only from init Step 8b.
+func TestRun_TrackerSwitch_StaleAdapterRemoved(t *testing.T) {
+	// Project starts on beads (installed adapter present), plugin ships both.
+	pr, plug := scaffoldWithTracker(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0", "beads", "0.6.0", "0.6.0")
+	trackerFile(t, filepath.Join(plug, "rules", "tracker-none.md"), "none", "0.6.0")
+	// The user switches to none by editing .env (the documented path).
+	env := "# LETS plugin config\nLETS_ENV_VERSION=0.6.0\nLETS_LANGUAGE=English\nLETS_MERGE_BRANCH=main\nLETS_PR_FLOW=local\nLETS_TRACKER=none\nLETS_LAUNCHER=terminal\nLETS_RULES_SCOPE=project\n"
+	if err := os.WriteFile(filepath.Join(pr, ".lets", ".env"), []byte(env), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	r, err := Run(context.Background(), Options{LatestFn: stubLatest("0.6.0")}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := find(t, r, "tracker-rules")
+	if a.Status != StatusUpdated {
+		t.Errorf("tracker-rules status = %s, want updated (new adapter was missing); %+v", a.Status, a)
+	}
+	if !strings.Contains(a.Detail, "tracker-beads.md removed (tracker switched)") {
+		t.Errorf("switch note missing from Detail: %q", a.Detail)
+	}
+	rules := filepath.Join(pr, ".claude", "rules")
+	if _, err := os.Stat(filepath.Join(rules, "tracker-beads.md")); !os.IsNotExist(err) {
+		t.Error("stale tracker-beads.md still installed after switch-via-update")
+	}
+	if _, err := os.Stat(filepath.Join(rules, "tracker-none.md")); err != nil {
+		t.Error("tracker-none.md not installed after switch-via-update")
+	}
+}

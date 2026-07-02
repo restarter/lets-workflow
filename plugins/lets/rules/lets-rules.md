@@ -34,7 +34,7 @@ If a `## LETS Notice` block appears in the injected context (sibling H2 of `## L
   **Exception — trunk-mode.** If `detect-task` returns an active task AND HEAD == `$LETS_MERGE_BRANCH`, trunk-mode is active (user opted in via the `take-task` picker option "Stay on current branch"). In trunk-mode: editing the merge-branch is allowed; `/lets:done` pushes + closes the task without creating a PR (same-source-target is not a valid PR); `/lets:plan` and `/lets:execute` derive plan filenames from task-id instead of branch slug. If HEAD == `$LETS_MERGE_BRANCH` AND `detect-task` returns None, the default rule applies — refuse edits, instruct user to run `/lets:start <id>` first.
 
   **Main / assistant mode.** When the session was entered via `/lets:start --main` (alias `--assistant`), HEAD == `$LETS_MERGE_BRANCH` with no active task is the **intended** state (read + triage), not an error — do not refuse the session or demand a task. The refuse-edits rule still governs *code edits*: on edit-intent, route the user to `take-task` / `create-task` (graceful hand-off) instead of only refusing.
-- **Never edit installed `lets-*` rules files** in `.claude/rules/` or `~/.claude/rules/`. They are plugin-managed copies refreshed by `/lets:init` / `/lets:update` (project) and `lets init --user` / `/lets:update` (global). Edit the canonical source `plugins/lets/rules/lets-*.md` in the plugin instead — direct edits to installed copies bypass drift detection and silently desync from source.
+- **Never edit installed `lets-*` rules files or managed `tracker-<name>.md` adapter files** in `.claude/rules/` or `~/.claude/rules/`. They are plugin-managed copies refreshed by `/lets:init` / `/lets:update` (project) and `lets init --user` / `/lets:update` (global). Edit the canonical source `plugins/lets/rules/` file in the plugin instead — direct edits to installed copies bypass drift detection and silently desync from source. **Exception:** `tracker-<name>.board.md` is user-owned (scaffolded once, never overwritten) — edit it freely.
 
 ## Slash Command Discipline
 
@@ -129,7 +129,7 @@ Stay alert to recurring themes across a session — repeated topics, related ide
 
 **Patterns to surface:**
 - **3+ recurring topic.** User asks / decisions / ideas touch the same area (file, feature, concern) 3+ times in a session → mention briefly: "Це 3-тя річ про X сьогодні — варто винести в окремий таск або epic?"
-- **Before `bd create`.** Use the `create-task` skill, which (will) search for duplicates first. If creating directly, run `bd search <keywords>` and confirm whether a similar task already exists.
+- **Before creating a task.** Use the `create-task` skill, which (will) search for duplicates first. If creating directly, run the tracker's `search` verb (beads: `bd search <keywords>`) and confirm whether a similar task already exists.
 - **Repeated blocker.** Same error / failure / dependency hits 3rd time → stop incremental patching. Step back, investigate root cause, surface to user: "Це 3-й раз на цей блокер — давай розберемось чому, замість обходити."
 - **Branch kitchen-sink.** Current branch accumulates commits across unrelated themes → mention: "На гілці зараз X + Y + Z — split на окремі PR'и?"
 - **Long unresolved debate.** 5+ turns weighing trade-offs without decision → suggest `/lets:opinion` for external angle, or `/lets:ask` for a single expert.
@@ -208,9 +208,9 @@ This applies everywhere:
 - Report rows: `[P2] **Test Coverage** (`proj-1om`)`
 - Bad: "starting epic 0nf?", "closing 24o.2", "Bottleneck: proj-ffj blocks 2 tasks"
 
-If you don't know the task title, run `bd show <id>` to get it.
+If you don't know the task title, resolve it via the tracker's `show` verb (beads: `bd show <id>`).
 
-## Beads Best Practices
+## Task Tracker Practices
 
 ### Task Tracker
 
@@ -236,7 +236,7 @@ A ` ```lets-tracker ` block is a neutral verb CALL, not shell. Resolve it: (1) i
 - non-beads adapter whose `tracker-<name>.md` IS loaded → resolve via its file (e.g. an `mcp__*` tool). Translate native↔neutral statuses so surrounding logic stays adapter-agnostic.
 - non-beads named but NO `tracker-<name>.md` loaded (upgraded the plugin but hasn't re-run `/lets:init` / `/lets:update`) → behave as `none`: do NOT run `bd` (wrong store), tell the user the tracker isn't installed, nudge `/lets:update`.
 
-**Reads** (`show`, `list-by-status`) return the neutral shape `{id, title, status, url}` with `status` a neutral name (`open`/`in_progress`/`closed`); the body reads the returned field (annotated `# returns …`), never greps a tracker's native JSON.
+**Reads** (`show`, `list-by-status`) return the neutral shape `{id, title, status, url}` (`show` may add `description`) with `status` a neutral name (`open`/`in_progress`/`closed`); the body reads the returned field (annotated `# returns …`), never greps a tracker's native JSON.
 
 **Comment / description bodies are format-neutral / plain-text.** Rich markdown structure is a beads-only affordance; other adapters render best-effort. A body crosses to a verb (`comment-add`'s `body`, `create`'s `description`) one of two ways:
 - **Inline** — `body="..."` / `description="..."` for a short OR purely orchestrator-templated value (a multi-line template with NO `$(...)` shell expansion is allowed inline).
@@ -355,7 +355,7 @@ When conversation starts or user wants to begin working -> suggest `/lets:start`
 
 ### Task Selection (MANDATORY)
 
-Never work without a tracked task. User must pick existing task or create new one via beads.
+Never work without a tracked task. User must pick an existing task or create a new one in the active tracker (via the `create-task` skill).
 
 **Exception — main / assistant mode.** `/lets:start --main` (alias `--assistant`) enters a deliberate **no-task** session stance (project-assistant / PM): read + triage only on `$LETS_MERGE_BRANCH`. The task gate does NOT apply at session start — do not nag for a task or refuse triage / backlog grooming / task creation / notes. Code edits still require claiming a task first (the merge-branch boundary in `## Boundaries` is unchanged); on edit-intent, offer `take-task` / `create-task` rather than a bare refusal.
 

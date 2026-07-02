@@ -144,6 +144,11 @@ out with --plugin-root=${CLAUDE_PLUGIN_ROOT} plus the chosen flags.`,
 			if flagRulesScope != "" && flagRulesScope != "project" && flagRulesScope != "user" {
 				return emit(initcmd.NewResult(projectRoot, pluginRoot), fmt.Errorf("--rules-scope must be 'project' or 'user', got %q", flagRulesScope))
 			}
+			if flagTracker != "" && !initcmd.ValidTrackerName(flagTracker) {
+				// Fail fast (mirror --rules-scope): an invalid name would otherwise be
+				// persisted into .lets/.env and injected into model context every session.
+				return emit(initcmd.NewResult(projectRoot, pluginRoot), fmt.Errorf("--tracker must be a lowercase adapter name ([a-z0-9-]), got %q", flagTracker))
+			}
 
 			// Pass raw cobra flag values through to Prefs. Empty string means
 			// "user did not pass --<key>" — initcmd.Run gates fresh-creation on

@@ -186,7 +186,7 @@ AskUserQuestion(
 
 Bind label (lowercased, first word) to `$LAUNCHER`: "Terminal"→"terminal", "cmux"→"cmux". `cmux` needs no extra setup — it degrades to the terminal flow on non-macOS or when cmux isn't installed (the `lets cmux` launcher handles the fallback).
 
-### 2c-ter. Task tracker adapter
+### 2c-quater. Task tracker adapter
 
 AskUserQuestion(
   questions=[{

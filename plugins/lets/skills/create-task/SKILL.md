@@ -93,7 +93,9 @@ Show the full task `create` before executing. The multi-line description is writ
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel); mkdir -p "$LETS_PROJECT_ROOT/.lets/cache"
-cat > "$LETS_PROJECT_ROOT/.lets/cache/new-task-desc.md" <<'EOF'
+# Branch-suffixed so parallel worktrees (shared .lets/ symlink) don't clobber each other's draft.
+BRANCH_SLUG=$(git branch --show-current | tr '/' '-')
+cat > "$LETS_PROJECT_ROOT/.lets/cache/new-task-desc-${BRANCH_SLUG}.md" <<'EOF'
 ## Problem
 API calls fail silently on network errors.
 
@@ -105,7 +107,7 @@ EOF
 ```
 
 ```lets-tracker
-create title="Add retry logic to API client" type=feature priority=2 labels="epic:quality" description-file=.lets/cache/new-task-desc.md
+create title="Add retry logic to API client" type=feature priority=2 labels="epic:quality" description-file=.lets/cache/new-task-desc-<branch-slug>.md
 ```
 
 Then ask for explicit confirmation:

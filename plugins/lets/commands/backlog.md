@@ -527,6 +527,8 @@ For closing (tracker `close` - a state change, HARD-FAIL loud if it can't run):
 - close the task
 - If closing as duplicate: `comment-add` on `<other-id>` ("Absorbed from {closed-id}: {title}") then `close <id>`
 
+For reprioritizing: tracker `set-field task=<id> priority=<0-4>` (beads: `bd update <id> --priority=<N>`); on an adapter without a priority binding, tell the user and skip.
+
 For orphan tasks (no labels), suggest a label and ask:
 - tracker `label` - add `epic:{name}`
 

@@ -226,7 +226,7 @@ You are in an isolated worktree - your changes won't affect other teammates.
 {design field from the tracker's show, or "None"}
 
 **Previous Context:**
-{last 3 beads comments, or "No previous context"}
+{last 3 tracker comments, or "No previous context"}
 
 ## Your Boundaries
 

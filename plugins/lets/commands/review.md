@@ -594,7 +594,7 @@ Display full report in console.
 ## Step 10: Link Review to Active Task
 
 Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detect-task")`.
-If multiple tasks found via fallback, skip beads comment.
+If multiple tasks found via fallback, skip the tracker comment.
 If active task found:
 
 ```lets-tracker

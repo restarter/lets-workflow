@@ -144,7 +144,7 @@ AskUserQuestion(
 Resolve task-id now - after checkout the branch name changes to the PR branch.
 
 Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detect-task")`.
-If ambiguous or not found: skip beads logging later.
+If ambiguous or not found: skip the tracker logging later.
 
 Store detected task-id for use in tracker `comment-add` calls throughout the lifecycle.
 
@@ -758,7 +758,7 @@ git checkout {previous_branch from state}
 comment-add task={task_id} body="PR #{number}: {approved/merged/changes requested}"
 ```
 
-If task_id is null, skip beads logging.
+If task_id is null, skip the tracker logging.
 
 If not merging and not cleaning up (review posted, waiting for fixes):
 - Keep state file for follow-up

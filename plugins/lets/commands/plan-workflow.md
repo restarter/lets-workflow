@@ -13,7 +13,7 @@ Autonomous whole-command planning: you give a GOAL + a RUBRIC up front; the work
 
 ## Step 0: Resolve & claim (spawn entry)
 
-If the argument is an explicit **task id** (matches `<prefix>-<alphanum>[.N]`) rather than a free-text goal - as the autonomous pipeline launches it (`/lets:plan-workflow <id>` into a fresh worktree) - resolve-and-claim per the **detect-task** convention: treat the id as authoritative and, if the tracker's `show` reports `<id>` not `in_progress`, `Skill(skill: "lets:take-task", args: "<id>")` to claim it (the spawn-time entry claim is AUTO-MODE-exempt - see `detect-task/SKILL.md`). Then derive the GOAL from the task title + description for Step 1. A free-text goal argument skips this step (no claim).
+If the argument is an explicit **task id** - a single token matching the ACTIVE tracker's id shape per the **detect-task** convention (beads: `<prefix>-<alphanum>[.N]`; planfix-mcp: a pure-numeric id; do NOT hardcode the beads regex on a non-beads project) - rather than a free-text goal - as the autonomous pipeline launches it (`/lets:plan-workflow <id>` into a fresh worktree) - resolve-and-claim per the **detect-task** convention: treat the id as authoritative and, if the tracker's `show` reports `<id>` not `in_progress`, `Skill(skill: "lets:take-task", args: "<id>")` to claim it (the spawn-time entry claim is AUTO-MODE-exempt - see `detect-task/SKILL.md`). Then derive the GOAL from the task title + description for Step 1. A free-text goal argument skips this step (no claim).
 
 ## Pipeline-state marker (spawn-claimed runs only)
 
@@ -41,7 +41,7 @@ fi
 
 ## Step 1: Goal + Rubric
 
-Parse the goal from the argument (or, for a spawn-claimed task, from its title + description; else ask "What are we planning?"). Strip a `--fast` token anywhere in the argument if present (sets lean/fast mode for this run); the remainder is the goal OR the task id. The strip happens at INITIAL argument parsing - BEFORE Step 0's task-id pattern match - so `/lets:plan-workflow <task-id> --fast` (the natural autonomous-pipeline invocation) still resolve-and-claims: only the flag-stripped remainder is tested against `<prefix>-<alphanum>[.N]`. Mirror how native `/lets:plan` strips `--fast` - but note the two flags mean DIFFERENT things (see `## Fast mode` below).
+Parse the goal from the argument (or, for a spawn-claimed task, from its title + description; else ask "What are we planning?"). Strip a `--fast` token anywhere in the argument if present (sets lean/fast mode for this run); the remainder is the goal OR the task id. The strip happens at INITIAL argument parsing - BEFORE Step 0's task-id pattern match - so `/lets:plan-workflow <task-id> --fast` (the natural autonomous-pipeline invocation) still resolve-and-claims: only the flag-stripped remainder is tested against the active tracker's id shape (Step 0). Mirror how native `/lets:plan` strips `--fast` - but note the two flags mean DIFFERENT things (see `## Fast mode` below).
 
 Gather the **RUBRIC** - the steering criteria that REPLACE the interactive picks of native `/lets:plan`. Ask the user (free text, or a short list):
 - What does "good" look like here? (priority order: simplicity / performance / consistency / minimal-blast-radius / ...)
@@ -51,7 +51,7 @@ Gather the **RUBRIC** - the steering criteria that REPLACE the interactive picks
 
 **Do not proceed without a rubric** - it is the only steering signal the autonomous run receives. Echo the rubric back for confirmation before launching.
 
-**GATE 1 (spawn-claimed runs - the bounded up-front clarify gate).** For a spawn-claimed task (Step 0), the rubric is derived from the task's description + comments (the PM principle: steering lives in the bd task). If the task already carries enough steering, build the rubric from it and proceed with NO questions. Only if it is **insufficient** for a rubric: write the `gate-clarify` marker, fire the GATE 1 notify ("Plan needs your answers"), ask a SHORT bounded clarify set, record the answers to the task (tracker `comment-add`), then build the rubric and proceed. This is up-front gathering of the rubric (consistent with steer-by-rubric) — NOT a per-step interactive gate.
+**GATE 1 (spawn-claimed runs - the bounded up-front clarify gate).** For a spawn-claimed task (Step 0), the rubric is derived from the task's description + comments (the PM principle: steering lives in the tracker task). If the task already carries enough steering, build the rubric from it and proceed with NO questions. Only if it is **insufficient** for a rubric: write the `gate-clarify` marker, fire the GATE 1 notify ("Plan needs your answers"), ask a SHORT bounded clarify set, record the answers to the task (tracker `comment-add`), then build the rubric and proceed. This is up-front gathering of the rubric (consistent with steer-by-rubric) — NOT a per-step interactive gate.
 
 ## Step 2: Context + selection
 

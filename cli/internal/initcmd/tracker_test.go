@@ -342,3 +342,30 @@ func hasStepContaining(steps []Step, sub string) bool {
 	}
 	return false
 }
+
+// S14 regression (branch review 2026-07-02): the "non-beads => skip bd init"
+// invariant must live in the binary, not only in init.md's $SKIP_BEADS_FLAG. A
+// direct `lets init --tracker=none` WITHOUT --skip-beads must not run bd init
+// against a wrong-store .beads/ workspace.
+func TestRun_NonBeadsTrackerSkipsBeadsInit(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	tmp := t.TempDir()
+	gitInit(t, tmp)
+	pluginRoot := setupFakePluginRoot(t)
+	writeTrackerSource(t, pluginRoot, "none", "0.6.4")
+
+	prefs := trackerPrefs("none")
+	prefs.SkipBeads = false // the flag is NOT set - the tracker alone must gate
+	res, err := Run(context.Background(), prefs, tmp, pluginRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasStepContaining(res.Steps, "non-beads adapter, bd init skipped") {
+		t.Errorf("expected the tracker-derived beads skip step; steps: %+v", res.Steps)
+	}
+	if exists(t, filepath.Join(tmp, ".beads")) {
+		t.Error("bd init ran despite LETS_TRACKER=none (wrong-store workspace created)")
+	}
+}
