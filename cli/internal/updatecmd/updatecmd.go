@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"golang.org/x/mod/semver"
@@ -244,6 +245,73 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 		}
 	}
 
+	// --- Artifact 6: .claude/rules/tracker-<name>.md (project scope, optional) ---
+	// Row appears ONLY when LETS_TRACKER names an adapter the plugin ships
+	// (tracker-<name>.md present in the plugin payload). Absence - unset tracker,
+	// a typo, or a plugin without the file - means NO row, so a project that
+	// predates the tracker platform keeps the pre-tracker artifact set unchanged.
+	// Plugin-version-locked like user-rules: excluded from Consistent (it always
+	// equals the plugin after a sync). Tracker rules are always project-local (no
+	// user scope). Mirrors Artifact 4's drift/deferral/write pattern.
+	trackerName := ""
+	if data, err := os.ReadFile(filepath.Join(projectRoot, ".lets", ".env")); err == nil {
+		if vals, perr := envfile.Parse(bytes.NewReader(data)); perr == nil {
+			trackerName = vals["LETS_TRACKER"]
+		}
+	}
+	if trackerName != "" && initcmd.ValidTrackerName(trackerName) {
+		trackerSrc := filepath.Join(pluginRoot, "rules", "tracker-"+trackerName+".md")
+		if trackerData, readErr := os.ReadFile(trackerSrc); readErr == nil {
+			trackerDst := filepath.Join(projectRoot, ".claude", "rules", "tracker-"+trackerName+".md")
+			rulesDir := filepath.Dir(trackerDst)
+			// The documented switch path is "edit LETS_TRACKER in .lets/.env, then
+			// /lets:update" (init.md 2c-quater, docs/trackers.md) - so update must apply
+			// the same switch semantics as init Step 8b: drop the deactivated shipped
+			// adapter (never two adapter files loaded at once) and scaffold the
+			// create-once board profile. Both are independent of the version-sync
+			// deferral below: the switch is user intent read from .env, not a
+			// plugin-content sync. Notes land on the tracker-rules row's Detail.
+			var switchNotes []string
+			removed, removeFailed := initcmd.CleanupShippedTrackerFiles(rulesDir, trackerName)
+			for _, r := range removed {
+				switchNotes = append(switchNotes, r+" removed (tracker switched)")
+			}
+			for _, f := range removeFailed {
+				switchNotes = append(switchNotes, f+" is stale but could not be removed - two adapters loaded, remove it manually")
+			}
+			if msg, berr := initcmd.ScaffoldBoardOnce(pluginRoot, rulesDir, trackerName); berr != nil {
+				switchNotes = append(switchNotes, berr.Error())
+			} else if msg != "" {
+				switchNotes = append(switchNotes, fmt.Sprintf("tracker-%s.board.md scaffolded (user-owned)", trackerName))
+			}
+			dr := drift.Check(trackerSrc, trackerDst)
+			switch {
+			case dr.State == drift.StatePluginUnreadable:
+				result.Add(Artifact{Name: "tracker-rules", Status: StatusUnknown, Detail: "plugin tracker rules version unparseable (no `version:` frontmatter)"})
+			case dr.State == drift.StateOutdated && pluginBehind:
+				result.Add(Artifact{Name: "tracker-rules", Status: StatusDeferred, Detail: fmt.Sprintf("plugin behind (plugin v%s); tracker rules sync deferred until the plugin is updated", pluginVer)})
+			case dr.Detected():
+				if err := os.MkdirAll(filepath.Dir(trackerDst), 0o755); err != nil {
+					return result, err
+				}
+				if err := initcmd.AtomicWriteBytes(trackerDst, trackerData, 0o644); err != nil {
+					return result, fmt.Errorf("write tracker rules: %w", err)
+				}
+				drPost := drift.Check(trackerSrc, trackerDst)
+				result.Add(Artifact{Name: "tracker-rules", Status: StatusUpdated, CurrentVersion: drPost.InstalledVersion, Detail: rulesUpdatedDetail(dr) + fmt.Sprintf(" (tracker-%s.md)", trackerName)})
+			default:
+				result.Add(Artifact{Name: "tracker-rules", Status: StatusInSync, CurrentVersion: dr.InstalledVersion, Detail: fmt.Sprintf("tracks the plugin (tracker-%s.md)", trackerName)})
+			}
+			// Attach the switch notes to the tracker-rules row just added.
+			if len(switchNotes) > 0 {
+				last := &result.Artifacts[len(result.Artifacts)-1]
+				last.Detail = strings.TrimPrefix(last.Detail+"; "+strings.Join(switchNotes, "; "), "; ")
+			}
+		}
+		// source absent -> no row (init's Step 8b warns; update stays quiet about a
+		// missing adapter to keep the artifact set stable).
+	}
+
 	// Cross-reference: when an in-sync artifact's local source (the binary for
 	// .env, the plugin for rules) is itself behind the latest release, say so on
 	// the row. Runs after all four artifacts exist so per-artifact computation
@@ -288,7 +356,7 @@ func rulesUpdatedDetail(pre drift.Result) string {
 // whose tracked upstream is itself outdated, so two in-sync rows at different
 // versions read as explained rather than contradictory.
 func annotateInSyncBehind(r *Result) {
-	upstreamOf := map[string]string{".env": "binary", "rules": "plugin", "user-rules": "plugin"}
+	upstreamOf := map[string]string{".env": "binary", "rules": "plugin", "user-rules": "plugin", "tracker-rules": "plugin"}
 	latestBehind := map[string]string{} // outdated upstream name -> its latest version
 	for _, a := range r.Artifacts {
 		if (a.Name == "binary" || a.Name == "plugin") && a.Status == StatusOutdated {
@@ -357,7 +425,7 @@ func computeNextAction(r *Result, binaryVer string, latest LatestInfo) {
 	pluginOutdated := func() bool { s, _ := status("plugin"); return s == StatusOutdated }
 	rulesDeferred := func() bool {
 		for _, a := range r.Artifacts {
-			if (a.Name == "rules" || a.Name == "user-rules") && a.Status == StatusDeferred {
+			if (a.Name == "rules" || a.Name == "user-rules" || a.Name == "tracker-rules") && a.Status == StatusDeferred {
 				return true
 			}
 		}
@@ -372,7 +440,7 @@ func computeNextAction(r *Result, binaryVer string, latest LatestInfo) {
 	}
 	// 4. Rules were just synced - reload so the running session picks them up.
 	for _, a := range r.Artifacts {
-		if (a.Name == "rules" || a.Name == "user-rules") && a.Status == StatusUpdated {
+		if (a.Name == "rules" || a.Name == "user-rules" || a.Name == "tracker-rules") && a.Status == StatusUpdated {
 			r.NextAction = &NextAction{Kind: "reload", Message: "Restart Claude Code so the updated rules load - /exit, then reopen."}
 			return
 		}

@@ -144,9 +144,9 @@ AskUserQuestion(
 Resolve task-id now - after checkout the branch name changes to the PR branch.
 
 Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detect-task")`.
-If ambiguous or not found: skip beads logging later.
+If ambiguous or not found: skip the tracker logging later.
 
-Store detected task-id for use in `bd comments add` calls throughout the lifecycle.
+Store detected task-id for use in tracker `comment-add` calls throughout the lifecycle.
 
 ### 2.3 Worktree check and branch handling
 
@@ -250,7 +250,7 @@ Write initial state to `.lets/execution/pr-{number}/review.json` with Phase 1 fi
 
 **State fields:**
 - `stashed`: true if user chose "Stash" before checkout - cleanup must warn or pop
-- `task_id`: detected before branch switch, used for `bd comments add` calls
+- `task_id`: detected before branch switch, used for tracker `comment-add` calls
 
 ### 2.5 Run review analysis
 
@@ -510,11 +510,12 @@ Save summary_comment_id from output (parse the URL or ID from gh output).
 - Save review_id and summary_comment_id
 - Temp files (payload.json, summary.md, fallback.md) stay in PR folder for reference
 
-Log to beads:
+Log to the tracker:
 
-```bash
-bd comments add {task_id} "PR review posted on #<PR>: {N} inline comments, {M} summary items. Verdict: {verdict}"
-# Skip if task_id is null
+Skip if `task_id` is null.
+
+```lets-tracker
+comment-add task={task_id} body="PR review posted on #<PR>: {N} inline comments, {M} summary items. Verdict: {verdict}"
 ```
 
 ## Step 4: Phase 3 - Follow-up
@@ -751,13 +752,13 @@ git checkout {previous_branch from state}
 
 3. Delete PR folder: `rm -rf "$PR_DIR"`
 
-4. Log to beads (using task_id from state):
+4. Log to the tracker (using task_id from state):
 
-```bash
-bd comments add {task_id} "PR #{number}: {approved/merged/changes requested}"
+```lets-tracker
+comment-add task={task_id} body="PR #{number}: {approved/merged/changes requested}"
 ```
 
-If task_id is null, skip beads logging.
+If task_id is null, skip the tracker logging.
 
 If not merging and not cleaning up (review posted, waiting for fixes):
 - Keep state file for follow-up
@@ -1100,11 +1101,12 @@ Mark each as `reply_posted: true` and save `reply_posted_id` after successful po
 
 After all replies posted:
 - Set `replies_posted: true`
-- Log to beads:
+- Log to the tracker:
 
-```bash
-bd comments add {task_id} "Responded to PR #{number} review: {N} fixed, {M} agreed, {K} disagreed"
-# Skip if task_id is null
+Skip if `task_id` is null.
+
+```lets-tracker
+comment-add task={task_id} body="Responded to PR #{number} review: {N} fixed, {M} agreed, {K} disagreed"
 ```
 
 Switch back to previous branch if we checked out the PR branch in 6.1.

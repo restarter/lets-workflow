@@ -233,10 +233,13 @@ func readEnvVersion(path string) string {
 // without it, renderTemplate would emit `LETS_FOO=` (empty) and the
 // SessionStart hook would inject an empty value into model context.
 //
-// Tracker is asymmetric: it has no CLI flag (no --tracker), so prefs.Tracker is
-// always non-empty (cobra wrapper fills from defaults). For Tracker we invert
-// the precedence — existing value wins over that default — so user
-// customization in .env is preserved across regen; the default is the floor.
+// Tracker is asymmetric: it HAS a --tracker flag (a fresh-init pick), but
+// prefs.Tracker is always non-empty (the cobra wrapper fills it from --tracker
+// or the canonical default). So we invert the precedence — an existing .env
+// value wins over that flag-or-default — so user customization in .env is
+// preserved across regen (a re-init without --tracker keeps the current
+// adapter); the default is the floor. `lets init` warns when an explicit
+// --tracker is overridden (Step 8b).
 func mergePrefs(prefs Prefs, existing map[string]string) Prefs {
 	defaults := letsconfig.Defaults()
 	pick := func(flagVal, key string) string {

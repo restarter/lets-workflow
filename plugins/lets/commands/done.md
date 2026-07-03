@@ -21,7 +21,7 @@ If no task found: ask user which task to close.
 
 ### Epic Guard
 
-Check detected task type with `bd show <task-id>`.
+Check the detected task's type via the tracker's `show` verb (beads exposes `type`; an adapter that doesn't expose a type can't epic-guard - skip it).
 If type is **epic** - do NOT close it automatically:
 - Inform user: "This is an epic. Epics stay open for future tasks."
 - Offer: close a specific child task instead, or confirm epic closure if user insists.
@@ -34,8 +34,8 @@ In trunk-mode the following gates fire:
 - Step 4 commit range: `start:..HEAD` (the task boundary from `.task-<slug>`, not `$LETS_MERGE_BRANCH..HEAD`, which is empty when HEAD IS the merge-branch)
 - Already-Merged Guard: **skip** (PR on same-source-target is not a valid PR, nothing to detect)
 - Step 6 confirm: trunk-mode wording (push + close, no PR)
-- Step 7 bd comment: commit range uses `start:..HEAD` (same reason as Step 4)
-- Step 8 finish: upstream-aware push + `bd close` (no PR, no merge, no `git branch -d`)
+- Step 7 completion comment: commit range uses `start:..HEAD` (same reason as Step 4)
+- Step 8 finish: upstream-aware push + close (tracker `close` verb; no PR, no merge, no `git branch -d`)
 - Step 9 output: trunk-mode "Next" options (no "Merge & close", no "Switch to merge-branch")
 
 Trunk-mode requires `detect-task` (Step 1) to have returned an active task. If no task — abort with the standard "no task" path.
@@ -79,7 +79,7 @@ git fetch origin --quiet 2>/dev/null
 gh pr list --head "$(git branch --show-current)" --state merged --json number,url --limit 1 2>/dev/null
 ```
 
-If this returns a merged PR, the work already shipped: skip Steps 3-8 and finish via Step 9's "After PR" Merge & close handling - with one change, since the PR is already merged, do NOT run `gh pr merge`; do Step 7's completion comment, then `bd close` + (if not in a worktree) `git checkout {LETS_MERGE_BRANCH} && git pull`. Report the PR number/URL.
+If this returns a merged PR, the work already shipped: skip Steps 3-8 and finish via Step 9's "After PR" Merge & close handling - with one change, since the PR is already merged, do NOT run `gh pr merge`; do Step 7's completion comment, then close (tracker `close` verb) + (if not in a worktree) `git checkout {LETS_MERGE_BRANCH} && git pull`. Report the PR number/URL.
 
 Otherwise (no PR, or `gh` unavailable) continue to Step 3 - normal flow.
 
@@ -87,8 +87,8 @@ Otherwise (no PR, or `gh` unavailable) continue to Step 3 - normal flow.
 
 **Before closing - verify ALL requirements from the task description are met.**
 
-```bash
-bd show <task-id>
+```lets-tracker
+show task=<task-id>   # returns {id,title,status,url,description}; read description (+ type on beads) to verify scope
 ```
 
 Compare the task description against actual changes:
@@ -132,7 +132,7 @@ AskUserQuestion(
 
 **Handle response:**
 - **Fix first** -> stop, do NOT proceed to closing
-- **Update scope** -> update task description with `bd update`, then proceed
+- **Update scope** -> update the task description via the tracker's `set-field` verb, then proceed
 - **PR only, keep open** -> proceed to Step 4. In Step 8, create PR but do NOT close the task. In Step 9, skip "Merge & close" option - user explicitly chose to keep the task open for remaining work.
 
 **Only continue to Step 4 when all requirements are verified OR user chose "PR only, keep open".**
@@ -282,11 +282,13 @@ Next steps presented via AskUserQuestion (replaces LETS box).
 - **Finish** -> proceed to Step 7
 - **Keep working** -> stop, return to work
 
-## Step 7: Document in Beads
+## Step 7: Document in the Tracker
 
-Add completion comment to the task. **MANDATORY:** the `Claude session: $CLAUDE_CODE_SESSION_ID` line MUST appear in the comment between `## Completed` and `### Commits` — don't drop it. `$CLAUDE_CODE_SESSION_ID` is the Bash subprocess env var Claude Code injects (see CLAUDE.md → "Claude Code session identity"); bash expands it inside the double-quoted argument at runtime, so `bd` receives the literal session UUID. No pre-assignment / template substitution needed.
+Add completion comment to the task. **MANDATORY:** the `Claude session: $CLAUDE_CODE_SESSION_ID` line MUST appear in the comment between `## Completed` and `### Commits` — don't drop it. `$CLAUDE_CODE_SESSION_ID` is the Bash subprocess env var Claude Code injects (see CLAUDE.md → "Claude Code session identity"); bash expands it inside the heredoc at runtime (the body is written to a temp file, submitted via the `comment-add` verb's `body-file=`), so the tracker receives the literal session UUID. No pre-assignment / template substitution needed.
 
-**Self-contained bash** — computes `RANGE` locally so the bd comment is correct regardless of whether Step 4's `START` is still in scope (each Bash tool call is a fresh shell — no cross-Step env). Range from the task's `start:` boundary (uniform, with the same ancestry guard as Step 4); falls back to `$LETS_MERGE_BRANCH..HEAD` on a feature/worktree branch when no `start:` is recorded (on trunk Step 4 already aborted if it was empty). Git operations use bash `$(...)` substitution; only the narrative fields stay as orchestrator-filled `{...}` templates.
+**Self-contained bash** — computes `RANGE` locally so the comment body is correct regardless of whether Step 4's `START` is still in scope (each Bash tool call is a fresh shell — no cross-Step env). Range from the task's `start:` boundary (uniform, with the same ancestry guard as Step 4); falls back to `$LETS_MERGE_BRANCH..HEAD` on a feature/worktree branch when no `start:` is recorded (on trunk Step 4 already aborted if it was empty). Git operations use bash `$(...)` substitution; only the narrative fields stay as orchestrator-filled `{...}` templates.
+
+The bash block computes the body to a temp file; the `comment-add` verb then submits it via `body-file=` (lets-rules "Tracker Adapters" - no multi-line value crosses into the block; the orchestrator fills the `{...}` narrative fields before running):
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
@@ -298,8 +300,9 @@ if [ -n "$START" ]; then
 else
   RANGE="{LETS_MERGE_BRANCH}..HEAD"
 fi
-
-bd comments add <task-id> "## Completed $(date +%Y-%m-%d)
+mkdir -p "$LETS_PROJECT_ROOT/.lets/cache"
+cat > "$LETS_PROJECT_ROOT/.lets/cache/comment-<task-id>.md" <<EOF
+## Completed $(date +%Y-%m-%d)
 
 Claude session: $CLAUDE_CODE_SESSION_ID
 
@@ -313,7 +316,12 @@ $(git log $RANGE --oneline)
 - {any important choices made during this task}
 
 ### Files changed
-$(git diff --stat $RANGE)"
+$(git diff --stat $RANGE)
+EOF
+```
+
+```lets-tracker
+comment-add task=<task-id> body-file=.lets/cache/comment-<task-id>.md
 ```
 
 ## Step 8: Finish Task
@@ -338,7 +346,7 @@ MAIN_ROOT=$(cd "$(git rev-parse --git-common-dir)/.." 2>/dev/null && pwd)
 
 Push any unpushed commits, then close the task. No PR, no merge, no branch deletion.
 
-**Upstream-aware push** — first-push case (no upstream configured) must NOT silently no-op. The naive `git log @{u}..HEAD 2>/dev/null` returns 0 commits when upstream is unset, which would skip push entirely while `bd close` still runs — leaving the task marked done with work only on the local clone. This block detects upstream first:
+**Upstream-aware push** — first-push case (no upstream configured) must NOT silently no-op. The naive `git log @{u}..HEAD 2>/dev/null` returns 0 commits when upstream is unset, which would skip push entirely while the close still runs — leaving the task marked done with work only on the local clone. This block detects upstream first:
 
 ```bash
 if git rev-parse --abbrev-ref @{u} >/dev/null 2>&1; then
@@ -351,9 +359,15 @@ else
   # First push from this clone — set upstream
   git push -u origin {LETS_MERGE_BRANCH}
 fi
+```
 
-bd close <task-id> --reason="Trunk-mode: committed on {LETS_MERGE_BRANCH}, no PR"
+```lets-tracker
+close task=<task-id> reason="Trunk-mode: committed on {LETS_MERGE_BRANCH}, no PR"
+```
 
+Then drop the closed task's boundary (the close is a state change - HARD-FAIL loud if the binding can't run; do NOT proceed to cleanup if the close failed):
+
+```bash
 # Cleanup (B4): task closed, but the trunk branch lives on (it hosts more tasks). Drop the closed
 # task's task:/start:, KEEP session: so /lets:end still has a valid session boundary. Do NOT rm the
 # whole file — the next claim overwrites task:/start:, and a stray rm would strand /lets:end.
@@ -421,8 +435,8 @@ EOF
 ```
 
 After PR created:
-```bash
-bd comments add <task-id> "PR #XX created: <PR URL>"
+```lets-tracker
+comment-add task=<task-id> body="PR #XX created: <PR URL>"
 ```
 
 Task stays **open** until PR is merged.
@@ -440,8 +454,8 @@ git branch -d <branch>
 ```
 
 After merge:
-```bash
-bd close <task-id> --reason="Merged locally. Commits: {list}"
+```lets-tracker
+close task=<task-id> reason="Merged locally. Commits: {list}"
 ```
 
 ### If $LETS_PR_FLOW != github (local merge) AND in worktree:
@@ -464,8 +478,8 @@ git -C "$MAIN_ROOT" merge "$BRANCH"
 ```
 
 After merge:
-```bash
-bd close <task-id> --reason="Merged locally from worktree. Commits: {list}"
+```lets-tracker
+close task=<task-id> reason="Merged locally from worktree. Commits: {list}"
 ```
 
 Do NOT delete the branch or remove the worktree here - `/lets:worktree remove` handles cleanup.
@@ -495,7 +509,7 @@ AskUserQuestion(
 ```
 
 **Handle response:**
-- **Next task** -> show `bd ready --limit 5`, ask user to pick. When picked: invoke `Skill(skill: "lets:take-task", args: "<task-id>")` for status update + branch setup. Do NOT inline take-task logic.
+- **Next task** -> show the tracker's `ready` view (top 5), ask user to pick. When picked: invoke `Skill(skill: "lets:take-task", args: "<task-id>")` for status update + branch setup. Do NOT inline take-task logic.
 - **End session** -> invoke `Skill(skill: "lets:end")`
 
 ### After PR ($LETS_PR_FLOW == github), NOT in worktree:
@@ -529,11 +543,11 @@ AskUserQuestion(
 **Handle response:**
 - **Merge & close**:
   1. `gh pr merge {number} --squash --delete-branch`
-  2. `bd close {task-id}`
+  2. close the task (tracker `close` verb)
   3. `git checkout {LETS_MERGE_BRANCH} && git pull`
   4. If merge fails (conflicts, checks not passed) -> inform user, fall back to "Stay on branch"
 - **Stay on branch** -> stay on current branch, no checkout. User continues working freely.
-- **Next task** -> `git checkout {LETS_MERGE_BRANCH}`, then show `bd ready --limit 5`. When user picks: invoke `Skill(skill: "lets:take-task", args: "<task-id>")` for status update + branch setup.
+- **Next task** -> `git checkout {LETS_MERGE_BRANCH}`, then show the tracker's `ready` view (top 5). When user picks: invoke `Skill(skill: "lets:take-task", args: "<task-id>")` for status update + branch setup.
 - **End session** -> `git checkout {LETS_MERGE_BRANCH}`, then invoke `Skill(skill: "lets:end")`
 
 ### After PR ($LETS_PR_FLOW == github), IN worktree:
@@ -569,7 +583,7 @@ No "Next task" option - can't switch branches in a worktree. To start a new task
 **Handle response:**
 - **Merge & close**:
   1. `gh pr merge {number} --squash --delete-branch`
-  2. `bd close {task-id}`
+  2. close the task (tracker `close` verb)
   3. If merge fails (conflicts, checks not passed) -> inform user, fall back to "Stay here"
   4. After merge, remind: "Worktree can be removed: `/lets:worktree remove {name}` from the main repo terminal."
 - **Stay here** -> stay in worktree. User continues working.
@@ -601,7 +615,7 @@ AskUserQuestion(
 ```
 
 **Handle response:**
-- **Next task** -> show `bd ready --limit 5`, ask user to pick. When picked: invoke `Skill(skill: "lets:take-task", args: "<task-id>")` for status update + branch setup.
+- **Next task** -> show the tracker's `ready` view (top 5), ask user to pick. When picked: invoke `Skill(skill: "lets:take-task", args: "<task-id>")` for status update + branch setup.
 - **End session** -> invoke `Skill(skill: "lets:end")`
 
 ### After local merge ($LETS_PR_FLOW != github), IN worktree:
@@ -638,5 +652,5 @@ AskUserQuestion(
 - Document BEFORE finishing (Step 7 before Step 8)
 - If PR flow: task stays open, user closes after merge
 - If local merge: task closes immediately
-- If HEAD == `$LETS_MERGE_BRANCH` (trunk-mode): skip PR creation (same-source-target is not a valid PR), push (upstream-aware) + `bd close` instead — regardless of `$LETS_PR_FLOW`
+- If HEAD == `$LETS_MERGE_BRANCH` (trunk-mode): skip PR creation (same-source-target is not a valid PR), push (upstream-aware) + close (tracker `close` verb) instead — regardless of `$LETS_PR_FLOW`
 - Respond in user's language

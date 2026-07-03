@@ -24,12 +24,12 @@ Restore context and prepare for work. **User MUST select a task before working.*
 **If `<task-id>` provided** (e.g., `/lets:start lets-rmcwo`):
 - Skip Steps 1, 3, 5 (session history, status overview, task selection)
 - Run Step 2 (git state) briefly
-- `bd show <task-id>` + `bd comments <task-id>` for context — read the FULL description and ALL comments, never truncate
+- the tracker's `show` + `comment-list` for `<task-id>` — read the FULL description and ALL comments, never truncate
 - Jump to Step 6 (branch) with this task
 
 **If `--continue`:**
 - Run Step 1 (session history) - important for context recovery
-- `bd list --status=in_progress` - find task(s)
+- the tracker's `list-by-status` (in_progress) - find task(s)
 - If exactly 1 in_progress -> use it, skip Step 5
 - If multiple -> show selection with context from recent sessions
 - If none -> fall through to full flow
@@ -78,8 +78,8 @@ Report: branch, uncommitted changes, recent commits. **If the repo has no commit
 
 Show what's claimed and what's available — minimal data the user needs for Step 5 selection. Full project dashboard (label-groups progress, priority distribution, dependency graph) lives in explicit `/lets:status overview` or `/lets:status full` — not invoked at session start.
 
-```bash
-bd list --status=in_progress
+```lets-tracker
+list-by-status status=in_progress
 ```
 
 Then delegate to `/lets:status ready` to list available tasks grouped by epic.
@@ -96,7 +96,7 @@ Changes: {clean / X uncommitted files}
 Recent: {last 3 commits}
 
 ## In Progress
-{output from `bd list --status=in_progress`, or "(none)"}
+{output from the tracker's in_progress list, or "(none)"}
 
 ## Ready Tasks
 {output from `/lets:status ready` — already formatted with epic grouping}
@@ -109,11 +109,11 @@ Recent: {last 3 commits}
 > "Which task are you working on today?"
 >
 > Pick from ready tasks above, or:
-> - `bd create --title="..." --type=task --priority=2` for new task
-> - `bd update <id> --status=in_progress` to claim existing
+> - create a new task (the `create-task` skill - tracker `create` verb)
+> - claim an existing task (tracker `set-status=in_progress`)
 
 **If user doesn't want to pick a task** but describes work (e.g., "just want to fix proxy config"):
-- Auto-create: `bd create --title="Fix proxy config" --type=task --priority=3`
+- Auto-create via the `create-task` skill (e.g. "Fix proxy config", a P3 task)
 - Inform user: "Created task XX, working in feature branch"
 - This keeps traceability without friction
 
@@ -178,7 +178,7 @@ A persistent project-assistant / personal-PM session stance. NOT tied to a task.
 You are the **project orchestrator** - a pragmatic technical PM for THIS repository. For this session you:
 - Discuss general and strategic questions about the project.
 - Triage and groom the backlog: surface stale / duplicate / mis-prioritized tasks, propose structure and labels.
-- Create and refine beads tasks (via the `create-task` skill - user approves each).
+- Create and refine tracker tasks (via the `create-task` skill - user approves each).
 - Capture decisions, facts, and gotchas (`/lets:note`, or point the user to it).
 - Route the user to the right `/lets:*` command when concrete work starts.
 
@@ -197,7 +197,10 @@ mkdir -p "$LETS_PROJECT_ROOT/.lets/sessions"
 TASK_FILE="$LETS_PROJECT_ROOT/.lets/sessions/.task-${BRANCH_SLUG}"
 tmp=$(mktemp "${TASK_FILE}.XXXX")
 printf 'session: %s %s\n' "$(git rev-parse HEAD)" "$CLAUDE_CODE_SESSION_ID" > "$tmp" && mv -f "$tmp" "$TASK_FILE"
-bd stats
+```
+
+```lets-tracker
+stats
 ```
 
 Present a compact, triage-oriented summary: what's in progress, ready count, notable stale or high-priority items. Keep it short - this is a working surface, not a full dashboard (point to `/lets:status full` for that).

@@ -22,22 +22,34 @@ ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || {
 }
 cd "$ROOT"
 
+# Frontmatter-versioned rules files: lets-rules.md + the shipped tracker
+# adapters (drift-tracked alike; bumped together by bump-version.sh).
+# tracker-TEMPLATE.md and *.board.md pin 0.0.0 by design - excluded.
+RULES_FILES="plugins/lets/rules/lets-rules.md
+plugins/lets/rules/tracker-beads.md
+plugins/lets/rules/tracker-planfix-mcp.md
+plugins/lets/rules/tracker-none.md"
+
 # Required files exist
 for f in plugins/lets/.claude-plugin/plugin.json \
          .claude-plugin/marketplace.json \
-         plugins/lets/rules/lets-rules.md; do
+         $RULES_FILES; do
   [ -f "$f" ] || { echo "ERROR: file missing: $f" >&2; exit 2; }
 done
 
-# Read 3 source-tree versions
+# Read source-tree versions
 PLUGIN_JSON=$(jq -r .version plugins/lets/.claude-plugin/plugin.json)
 MARKET_JSON=$(jq -r '.plugins[] | select(.name=="lets") | .version' .claude-plugin/marketplace.json)
-RULES_MD=$(awk '
-  /^---$/ { c++; next }
-  c==1 && /^version:/ { sub(/^version:[ \t]*/, ""); sub(/[ \t]*$/, ""); print; exit }
-' plugins/lets/rules/lets-rules.md)
 
-# Sanity: all 3 must be non-empty
+read_frontmatter_version() {
+  awk '
+    /^---$/ { c++; next }
+    c==1 && /^version:/ { sub(/^version:[ \t]*/, ""); sub(/[ \t]*$/, ""); print; exit }
+  ' "$1"
+}
+RULES_MD=$(read_frontmatter_version plugins/lets/rules/lets-rules.md)
+
+# Sanity: all must be non-empty
 for v in "$PLUGIN_JSON" "$MARKET_JSON" "$RULES_MD"; do
   if [ -z "$v" ] || [ "$v" = "null" ]; then
     echo "ERROR: empty or missing version field" >&2
@@ -48,10 +60,17 @@ for v in "$PLUGIN_JSON" "$MARKET_JSON" "$RULES_MD"; do
   fi
 done
 
-# Compare 3 source-tree versions
+# Compare source-tree versions (plugin.json is the reference)
 ok=true
 [ "$PLUGIN_JSON" = "$MARKET_JSON" ] || ok=false
 [ "$MARKET_JSON" = "$RULES_MD" ]    || ok=false
+for f in $RULES_FILES; do
+  fv=$(read_frontmatter_version "$f")
+  if [ "$fv" != "$PLUGIN_JSON" ]; then
+    ok=false
+    printf "  %-45s %s (want %s)\n" "$f frontmatter:" "${fv:-<missing>}" "$PLUGIN_JSON"
+  fi
+done
 
 if ! $ok; then
   echo "Version drift detected:"

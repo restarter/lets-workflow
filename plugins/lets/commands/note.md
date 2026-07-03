@@ -43,9 +43,9 @@ If no active task or multiple tasks found - ask user which task to add a note to
 
 ## Step 2: Review Current State
 
-```bash
-bd show <task-id>
-bd comments <task-id>
+```lets-tracker
+show task=<task-id>          # returns {id,title,status,url,description}
+comment-list task=<task-id>
 ```
 
 Read the full description and all comments. Check existing comments to avoid duplicating info.
@@ -74,10 +74,19 @@ AskUserQuestion(
 
 ## Step 4: Add Note
 
-```bash
-bd comments add <task-id> "## {Note type} {YYYY-MM-DD}
+The orchestrator composes the note body into a temp file, then submits it via `body-file=` (lets-rules "Tracker Adapters"):
 
-{content based on type}"
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel); mkdir -p "$LETS_PROJECT_ROOT/.lets/cache"
+cat > "$LETS_PROJECT_ROOT/.lets/cache/note-<task-id>.md" <<EOF
+## {Note type} $(date +%Y-%m-%d)
+
+{content based on type}
+EOF
+```
+
+```lets-tracker
+comment-add task=<task-id> body-file=.lets/cache/note-<task-id>.md
 ```
 
 ### Note Templates
@@ -126,14 +135,14 @@ bd comments add <task-id> "## {Note type} {YYYY-MM-DD}
 
 If the task scope or understanding changed significantly, record it as a comment (never overwrite the description):
 
-```bash
-bd comments add <task-id> "[scope-change] <what changed and why>"
+```lets-tracker
+comment-add task=<task-id> body="[scope-change] <what changed and why>"
 ```
 
 ## Step 6: Verify
 
-```bash
-bd show <task-id>
+```lets-tracker
+show task=<task-id>
 ```
 
 ## Pre-Compact Resume Mode (`--pre-compact`)

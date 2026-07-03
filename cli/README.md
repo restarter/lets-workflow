@@ -139,7 +139,7 @@ Flags:
 What it does (idempotent, linear):
 
 1. Creates `.lets/` directory structure (`sessions/`, `reviews/`, `plans/`, `execution/`, `cache/`)
-2. Adds `.lets/`, `.beads/`, `.worktrees/` to `.gitignore`
+2. Adds `.lets/`, `.worktrees/`, and `.mcp.json` (a tracker adapter's MCP config can carry a secret token) to `.gitignore` via `EnsureGitignore` (`.beads/` is added separately by `bd init`)
 3. Migrates legacy `.lets/statusline.sh` (deletes the per-project shim if it matches the embedded snapshot — see `internal/initcmd/embedded_statusline_shim.sh`)
 4. Migrates legacy `.lets/config.yaml` → `.lets/.env` (preserves user values via allowlist regex). Yaml is deleted (not renamed); orphan yaml alongside an existing `.env` is also cleaned up.
 5. Writes/regenerates `.lets/.env` via `RegenerateEnv`. Always emits `LETS_ENV_VERSION` first key from `version.Version`. Skip path when version matches AND no value changes; regen path otherwise — preserves user values + foreign keys (latter under `# User-added keys` separator). Single `.env.bak` rotation per regen.
@@ -185,7 +185,7 @@ Goldens lock the exact byte output of `renderEnv`. After legitimate changes (new
 
 ## `lets update`
 
-Internal subcommand. Invoked by the `/lets:update` slash command (`commands/update.md`) with `--plugin-root=${CLAUDE_PLUGIN_ROOT}`. Syncs the drift-able LETS artifacts (four core + the optional user-scope rules copy); never prompts, never touches `settings.json` or beads — that's `lets init`'s job (init = setup; update = sync). Lives in `internal/cli/update.go` (cobra factory) + `internal/updatecmd/` (orchestration, GitHub latest-release lookup, plugin-version reader).
+Internal subcommand. Invoked by the `/lets:update` slash command (`commands/update.md`) with `--plugin-root=${CLAUDE_PLUGIN_ROOT}`. Syncs the drift-able LETS artifacts (four core + the optional user-scope rules copy + the optional `tracker-rules` adapter row); never prompts, never touches `settings.json` or beads — that's `lets init`'s job (init = setup; update = sync). Lives in `internal/cli/update.go` (cobra factory) + `internal/updatecmd/` (orchestration, GitHub latest-release lookup, plugin-version reader).
 
 ```bash
 lets update --plugin-root "${CLAUDE_PLUGIN_ROOT}" [--json] [--offline] [--refresh-cache]
@@ -197,7 +197,7 @@ Flags:
 - `--offline` — skip the GitHub latest-release check; `binary`/`plugin` come back `unknown`.
 - `--refresh-cache` — bypass the cached latest-release lookup and hit GitHub now.
 
-What it checks (never crashes for a network failure). Emission order is `.env → binary → plugin → rules → user-rules` so the **order-aware deferral** below can read the plugin's status off the already-computed artifact rather than re-deriving it:
+What it checks (never crashes for a network failure). Emission order is `.env → binary → plugin → rules → user-rules → tracker-rules` so the **order-aware deferral** below can read the plugin's status off the already-computed artifact rather than re-deriving it:
 
 | Artifact | Check | Action |
 |---|---|---|
@@ -206,6 +206,7 @@ What it checks (never crashes for a network failure). Emission order is `.env �
 | Claude Code plugin | `<pluginRoot>/.claude-plugin/plugin.json::version` vs latest release | Report only — `outdated` → drives `next_action.kind=plugin` (`/plugin marketplace update lets-workflow` + `/reload-plugins`, or enable auto-update; both user-only). |
 | `.claude/rules/lets-rules.md` | `drift.Check` against plugin source | Re-copy from the plugin (atomic write) on detected drift; `unknown` if the plugin's own frontmatter is unparseable; `in-sync` (tracks the plugin) otherwise. **Order-aware deferral (lets-rlue4):** when the installed rules are `outdated` AND the plugin itself is behind (outdated vs latest, or locally < the binary), the row is `deferred` and the file is **NOT written** — syncing now would advance to a stale lower version (the half-step). Only `StateOutdated` defers: a *missing* file still installs (behind rules beat none) and an *ahead* file keeps its current reset behavior. An `updated` row carries a past-tense detail ("was missing" / "was outdated (v…)"). **Scope-aware (`LETS_RULES_SCOPE`):** `scope=user` + missing project copy + present global = `delegated`; `scope=user` + nothing anywhere = `not-initialized`; a project copy under `scope=user` gets a report-only duplication hint. Any scope other than `user` is project semantics (fail-safe). |
 | `~/.claude/rules/lets-rules.md` (`user-rules`) | `drift.Check` against plugin source — **row omitted entirely when the file is absent** (user-scope install not in use; update never bootstraps it — that's `lets init --user`) | Same sync + same order-aware `deferred` gate as project rules EXCEPT `ahead`: a newer/customized global copy gets `status=ahead` ("not overwritten") and is left alone. Deliberately EXCLUDED from the `consistent` check (an ahead copy is a customization, not a partial upgrade). `annotateInSyncBehind` applies (upstream = plugin). |
+| `.claude/rules/tracker-<name>.md` (`tracker-rules`) | `drift.Check` against the plugin's `tracker-<name>.md` for the resolved `LETS_TRACKER` — **row appears only when the value names a shipped adapter** (unset/typo/pre-platform project → no row, artifact set unchanged) | Same sync + same order-aware `deferred` gate as project rules (only `StateOutdated` defers; missing still installs). Always project-local (no user scope). EXCLUDED from `consistent` (plugin-version-locked like `user-rules`). **Switch semantics:** the documented switch path is edit-`.env`-then-`/lets:update`, so the row also applies init Step 8b's switch actions — removes the deactivated shipped adapter (never two loaded at once) and scaffolds the create-once board profile; both reported on the row's `detail`. |
 
 **`next_action` (the self-driving loop).** After computing the artifacts, `Run` sets a single top-level `next_action` (`kind` ∈ `init | binary | plugin | reload | done`, plus `message`, `command` for binary, `version` for done) derived purely from the artifact statuses — the one ordered step the user should take this run (init → binary → plugin → reload → done). Re-running advances one step until `kind=done` (`✓ Everything on vX.Y.Z`). `next_action.command` is **execution-bound**: it is only ever the `installScriptCmd` const, never interpolated with dynamic data (a byte-equal test pins it). `deferred` rows land in the `Unknown` summary bucket (the actionable step is counted once, on the plugin row); `next_action` is the single source of "do this".
 

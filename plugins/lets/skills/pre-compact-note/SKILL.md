@@ -28,8 +28,12 @@ git status --short          # uncommitted / untracked
 
 English; one continuous line per paragraph - no hard wrap:
 
+The orchestrator composes the snapshot into a temp file, then submits it via `body-file=` (lets-rules "Tracker Adapters"):
+
 ```bash
-bd comments add <task-id> "## RESUME {YYYY-MM-DD} - {short label}
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel); mkdir -p "$LETS_PROJECT_ROOT/.lets/cache"
+cat > "$LETS_PROJECT_ROOT/.lets/cache/resume-<task-id>.md" <<EOF
+## RESUME $(date +%Y-%m-%d) - {short label}
 
 ### Where things live
 - repo / branch: {branch} @ {short-sha}; key paths touched: {file:line, ...}
@@ -47,7 +51,12 @@ bd comments add <task-id> "## RESUME {YYYY-MM-DD} - {short label}
 - NEXT: {the single concrete next action + how to resume it}
 
 ### Compaction
-- snapshot taken before /compact; resume with: bd show <task-id> + bd comments <task-id>"
+- snapshot taken before /compact; resume with the active tracker's show + comment-list for <task-id> (beads: bd show <task-id> + bd comments <task-id>)
+EOF
+```
+
+```lets-tracker
+comment-add task=<task-id> body-file=.lets/cache/resume-<task-id>.md
 ```
 
 ## Step 4: No active task (fallback) - never drop the snapshot
