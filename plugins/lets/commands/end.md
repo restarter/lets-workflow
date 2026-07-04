@@ -18,12 +18,12 @@ End a work session cleanly. `/lets:end` is a **settlement pass**: it reconciles 
 One settlement core (the default flow); the two flags below are separate paths, NOT modifiers of it:
 
 - **(default)** - full settlement pass (Steps 1-3) + worktree hint + a one-line terminal prose hint (Step 4 / Output). Auto-skip keeps it silent on a tidy session.
-- **`--pre-compact`** (alias `--resume`) - a pre-compaction snapshot, **NOT a session end and NOT a settlement pass**. It runs NO settlement (no commit / push / progress / finish offers) - it ONLY writes the shared session snapshot via `session-snapshot` (`kind=precompact`) and lets the session continue into `/compact`. **Identical to `/lets:note --pre-compact`** - both delegate to the same primitive with the skill owning task detection. See the early-exit at the top of Step 1.
+- **`--pre-compact`** (alias `--compact`) - a pre-compaction snapshot, **NOT a session end and NOT a settlement pass**. It runs NO settlement (no commit / push / progress / finish offers) - it ONLY writes the shared session snapshot via `session-snapshot` (`kind=precompact`) and lets the session continue into `/compact`. **Identical to `/lets:note --pre-compact`** - both delegate to the same primitive with the skill owning task detection. See the early-exit at the top of Step 1.
 - **`--fast`** - DEPRECATED. It now runs the default flow (which already stays silent when there is nothing to settle). Emit one line - `--fast is deprecated; running the unified /lets:end (it auto-skips when there's nothing to settle).` - then proceed as default. (Accepted for one release; removal is a follow-up.)
 
 ## Step 1: Detect (silent)
 
-**`--pre-compact` early exit (runs BEFORE any settlement detection):** if invoked with `--pre-compact` / `--resume`, do NOT run the settlement detect/settle steps. Delegate straight to the snapshot primitive - `Skill(skill: "lets:session-snapshot", args: "kind=precompact pointer=auto")` - then show the `--pre-compact` Output and STOP. This path is byte-identical to `/lets:note --pre-compact`. Steps 1-3 below are the DEFAULT (settlement) flow only.
+**`--pre-compact` early exit (runs BEFORE any settlement detection):** if invoked with `--pre-compact` / `--compact`, do NOT run the settlement detect/settle steps. Delegate straight to the snapshot primitive - `Skill(skill: "lets:session-snapshot", args: "kind=precompact pointer=auto")` - then show the `--pre-compact` Output and STOP. This path is byte-identical to `/lets:note --pre-compact`. Steps 1-3 below are the DEFAULT (settlement) flow only.
 
 Read all state ONCE, compute which settlements are actionable, prompt nothing here.
 

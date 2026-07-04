@@ -25,7 +25,7 @@ Use `/lets:note` when you want to add extra context that doesn't fit those flows
 
 ## Step 0: Argument Parsing
 
-**If `--pre-compact` (alias `--resume`) is passed** -> run **Pre-Compact Resume Mode** (below) INSTEAD of Steps 3-4: no type prompt, produce ONE recovery-grade snapshot. Do NOT run Step 1's interactive task prompt - the `session-snapshot` skill owns task detection (file-primary: ambiguity -> file only, no prompt), keeping this byte-identical to `/lets:end --pre-compact`. Then show the Pre-Compact output below, NOT the generic Output box (no separate verify - the skill returns the path + task id, and `/lets:end --pre-compact` likewise just delegates and stops).
+**If `--pre-compact` (alias `--compact`) is passed** -> run **Pre-Compact Resume Mode** (below) INSTEAD of Steps 3-4: no type prompt, produce ONE recovery-grade snapshot. Do NOT run Step 1's interactive task prompt - the `session-snapshot` skill owns task detection (file-primary: ambiguity -> file only, no prompt), keeping this byte-identical to `/lets:end --pre-compact`. Then show the Pre-Compact output below, NOT the generic Output box (no separate verify - the skill returns the path + task id, and `/lets:end --pre-compact` likewise just delegates and stops).
 
 **Otherwise** -> normal flow (Steps 1-6).
 
