@@ -22,7 +22,7 @@ Restore context and prepare for work. **User MUST select a task before working.*
 ## Step 0: Argument Parsing
 
 **If `<task-id>` provided** (e.g., `/lets:start lets-rmcwo`):
-- Skip Steps 1, 3, 5 (session history, status overview, task selection)
+- Skip Steps 1, 3, 5 (session history, orient, task selection)
 - Run Step 2 (git state) briefly
 - the tracker's `show` + `comment-list` for `<task-id>` — read the FULL description and ALL comments, never truncate
 - Jump to Step 6 (branch) with this task
@@ -38,7 +38,7 @@ Restore context and prepare for work. **User MUST select a task before working.*
 - Deliberate **NO-TASK** session stance. Do NOT select, claim, or auto-create a task.
 - **Precedence:** mutually exclusive with `<task-id>` and `--continue`. If an explicit task-id or `--continue` is ALSO present, the explicit task **wins** (run the normal task flow) and `--main` is ignored - tell the user it was dropped because a task was specified.
 - **Skip** Step 5 (Task Selection), Step 6 (Take Task), Step 8 (Task Size Assessment) - all task-bound.
-- **Run** Step 1 (session history), Step 2 (git state), Step 3 (task pickers - the backlog is the assistant's working material).
+- **Run** Step 1 (session history), Step 2 (git state), Step 3 (orient - the backlog is the assistant's working material).
 - Then go to `## Main Mode` (below) instead of Steps 4-9.
 
 **If no arguments** -> full flow (Steps 1-9 as below)
@@ -74,43 +74,28 @@ fi
 
 Report: branch, uncommitted changes, recent commits. **If the repo has no commits yet** (the `else` branch above fires), that's fine — say so in plain text; offer `git commit --allow-empty -m "chore: initial setup"` if the user wants an anchor for `git log` to work later. **Don't** raise `/lets:init` here (it's a separate concern) and **don't** treat the missing HEAD as a fatal error.
 
-## Step 3: Task Pickers
+## Step 3: Orient
 
-Show what's claimed and what's available — minimal data the user needs for Step 5 selection. Full project dashboard (label-groups progress, priority distribution, dependency graph) lives in explicit `/lets:status overview` or `/lets:status full` — not invoked at session start.
+Invoke `Skill(skill: "lets:orient")` - it renders Where you are / In flight / Next up (and the Project counts if the tracker provides them). This is the same snapshot `/lets:status` shows; start reuses it, then drives task selection below.
 
-```lets-tracker
-list-by-status status=in_progress
-```
+## Step 4: Present
 
-Then delegate to `/lets:status ready` to list available tasks grouped by epic.
-
-## Step 4: Present Summary
+The orient snapshot (Step 3) already shows In flight + Next up - don't repeat them. Present the recovery line, then the snapshot:
 
 ```
 ## Recent Sessions
-{compact summary from last 1-3 session files}
+{1-2 line recovery from the recent session file(s)}
 
-## Git
-Branch: {branch}
-Changes: {clean / X uncommitted files}
-Recent: {last 3 commits}
-
-## In Progress
-{output from the tracker's in_progress list, or "(none)"}
-
-## Ready Tasks
-{output from `/lets:status ready` — already formatted with epic grouping}
+{orient snapshot from Step 3 - Where you are / In flight / Next up / Project}
 ```
 
-## Step 5: Task Selection (MANDATORY)
+## Step 5: What do we do? (task selection - MANDATORY)
 
-**Every session needs a task.** Ask:
+**Every session needs a task.** From the orient snapshot, offer the moves:
 
-> "Which task are you working on today?"
->
-> Pick from ready tasks above, or:
-> - create a new task (the `create-task` skill - tracker `create` verb)
-> - claim an existing task (tracker `set-status=in_progress`)
+> - **Resume** the active task if In flight shows one you want to continue.
+> - **Pick** one from Next up.
+> - **Create** a new task (the `create-task` skill - tracker `create` verb), or claim an existing one (tracker `set-status=in_progress`).
 
 **If user doesn't want to pick a task** but describes work (e.g., "just want to fix proxy config"):
 - Auto-create via the `create-task` skill (e.g. "Fix proxy config", a P3 task)
@@ -188,7 +173,7 @@ You do **NOT** write or edit code in this mode. The moment the user wants to imp
 
 ### Step M1: Orient
 
-Steps 1-3 already ran (sessions, git, pickers). Main mode skips `take-task`, so save the **session boundary only** here (so `/lets:end` can still diff the session). Main mode has NO claimed task, so the `.task` file gets `session:` ONLY - never `task:`/`start:`, which would make `.task-main` look like a trunk claim and mis-fire trunk-mode. Then add a one-line backlog pulse:
+Steps 1-3 already ran (sessions, git, orient). Main mode skips `take-task`, so save the **session boundary only** here (so `/lets:end` can still diff the session). Main mode has NO claimed task, so the `.task` file gets `session:` ONLY - never `task:`/`start:`, which would make `.task-main` look like a trunk claim and mis-fire trunk-mode. Then add a one-line backlog pulse:
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
@@ -199,11 +184,7 @@ tmp=$(mktemp "${TASK_FILE}.XXXX")
 printf 'session: %s %s\n' "$(git rev-parse HEAD)" "$CLAUDE_CODE_SESSION_ID" > "$tmp" && mv -f "$tmp" "$TASK_FILE"
 ```
 
-```lets-tracker
-stats
-```
-
-Present a compact, triage-oriented summary: what's in progress, ready count, notable stale or high-priority items. Keep it short - this is a working surface, not a full dashboard (point to `/lets:status full` for that).
+Invoke `Skill(skill: "lets:orient")` - with no active task it degrades to branch + no-task + In flight + Next up + Project, which IS the PM triage surface. Keep it short - point to `bd stats` / `bd blocked` for the deep beads dashboard.
 
 **Guard:** Main mode expects `HEAD == $LETS_MERGE_BRANCH`. If on another branch (a worktree or feature branch - which are task-bound), say so in one line and suggest the normal task flow instead; proceed read-only if the user still wants the overview.
 
@@ -222,7 +203,8 @@ Respond as the persona. Common moves and where they route:
 | Review / clean up the backlog | `/lets:backlog` |
 | Quick no-agent backlog pulse | `/lets:backlog --fast` |
 | Think through a decision / topic | `/lets:opinion <topic>` |
-| Project overview / dependency view | `/lets:status overview` or `/lets:status full` |
+| Orient snapshot (where are we) | `/lets:status` |
+| Deep beads dashboard / dependency view | `bd stats` / `bd blocked` (beads-native) |
 | New task | `create-task` skill (user approves) |
 | Capture a decision / fact / gotcha | `/lets:note` |
 
