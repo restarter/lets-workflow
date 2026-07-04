@@ -148,6 +148,6 @@ Skip if the question is generic (not related to the active task).
 
 ## Notes
 
-- Agents use their own model from frontmatter (opus for critical agents, session model for others)
+- Agents inherit the session model (no per-agent model pins)
 - If the user asks a follow-up question about the same topic, route to the same expert
 - If the expert says "this needs a broader discussion", suggest `/lets:opinion`

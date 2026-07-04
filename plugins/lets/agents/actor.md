@@ -2,7 +2,6 @@
 name: actor
 description: Meta-agent that adopts external personalities and adapts them to LETS modes. Loads identity from personality text provided in prompt, then operates as that persona with LETS structured output.
 tools: Read, Grep, Glob, Bash
-model: opus
 color: purple
 ---
 

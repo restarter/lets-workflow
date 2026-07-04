@@ -307,7 +307,7 @@ For each selected agent, use the Task tool with:
 
 - **subagent_type**: The agent identifier from the catalog (e.g., `lets:architect`)
 - **prompt**: Provide review context (see below)
-- Agents use their own model from frontmatter (opus for architect/security/backend, session model for others)
+- Agents inherit the session model (no per-agent model pins)
 
 ### Task Prompt Template
 
