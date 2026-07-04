@@ -55,7 +55,7 @@ AskUserQuestion(
 Handle response:
 - **Stash** -> `git stash`, proceed with branch switch, remind to `git stash pop` later
 - **Commit first** -> delegate to commit skill, then proceed with branch switch
-- **Stay** -> skip branch switch, warn about mixed work. Stop here.
+- **Stay** -> skip branch switch, warn about mixed work, then continue to Step 5 (the task was already claimed in Step 1 - save its `.task` state file for the current branch; do NOT stop before it, or detect-task/`/lets:done` are left with a claim but no boundary file).
 
 If staying on current branch (worktree, already correct) or no changes - skip this step.
 
@@ -169,7 +169,7 @@ When triggered standalone (not via `/lets:start`):
 Task claimed: **{task title}** (`{task-id}`)
 Branch: {branch-name}
 
-┌─ LETS ───────────────────────────────────────────┐
+┌─ LETS ────────────────────────────────────────────┐
 │  Plan?    /lets:plan · --fast · plan-workflow     │
 │  Check?   /lets:check                             │
 └───────────────────────────────────────────────────┘
