@@ -884,7 +884,6 @@ comment-add task=<task-id> body="Plan review: {verdict}. {N} issues found."
 ```
 ┌─ LETS ───────────────────────┐
 │  Execute?      /lets:execute │
-│  New session?  /lets:start   │
 └──────────────────────────────┘
 ```
 

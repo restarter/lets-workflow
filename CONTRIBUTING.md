@@ -76,7 +76,7 @@ Update these files:
 
 ### Command output requirements
 
-Every lets:* command MUST end with a branded LETS box:
+Every command response ends with exactly ONE footer of the right type - the runtime rule is `plugins/lets/rules/lets-rules.md` `### Response Footer` (Act = AskUserQuestion / Nav = LETS box / Close = prose or nothing; never mix; Nav content is state-driven). This section covers authoring the **Nav** box.
 
 ```
 ┌─ LETS ─────────────────┐
@@ -85,30 +85,23 @@ Every lets:* command MUST end with a branded LETS box:
 ```
 
 **Box format:**
-- Header: `┌─ LETS ─` + padding with `─` + `┐`
-- Lines: `│  ` + content + padding + ` │`
-- Footer: `└─` + padding with `─` + `┘`
-- Min width: 25 chars
-- **All boxes in one file MUST have the same width** - use the widest box's content as the reference and pad the rest. (Quick check: extract every box, the header/content/footer line lengths must all match per-box and across boxes in the file.)
+- Header `┌─ LETS ─` + `─` padding + `┐`; lines `│  ` + content + padding + ` │`; footer `└─` + `─` padding + `┘`. Min width 25.
+- **All boxes in one file MUST be the same width**, measured in DISPLAY columns = Unicode code points, NOT bytes (the box-drawing glyphs are 3 bytes each, so a byte count like `awk length` lies). Verify:
+  ```bash
+  python3 -c "import sys;[print(len(l.rstrip())) for l in open(sys.argv[1]) if l.rstrip().endswith(('┐','│','┘'))]" <file> | sort -u | wc -l   # expect 1 (matches box lines by their right edge; skips tree diagrams)
+  ```
 
-**Content guidelines:**
-- Short action word + `?` (e.g., "Commit?", "Next?", "Fix?")
-- **ONLY `/lets:*` commands** - never raw commands like `bd sync`, `bd update`
-- **Exception:** `git push` allowed after `/lets:done` or `/lets:end`
-- **No command = no box** - if next step isn't a /lets:* command, just ask in plain text
-- **Internal invocation = no box** - when a command is invoked programmatically by another command (e.g., `/lets:review --json` called by `/lets:github-pr`, OR a Rule 7 Skill-tool follow-through from an `AskUserQuestion` pick — see `lets-rules.md` `## AskUserQuestion Conventions` Rule 7), the inner command's LETS box is waived; only the outermost user-invoked command emits a box
+**Content:**
+- Short action word + `?` (e.g. "Commit?", "Fix?"), then a `/lets:*` command. **ONLY `/lets:*`** (exception: `git push` after `/lets:done`/`/lets:end`). If the next step is NOT a `/lets:*` command (a shell command, "restart to apply", etc.) → no box, use a Close prose line.
+- **No command / internal invocation → no footer** (a `/lets:*` called by another command, or a Rule-7 follow-through — see `lets-rules.md` `## AskUserQuestion Conventions` Rule 7). Only the outermost user-invoked command emits one.
+- **State-driven** (per the runtime rule): task active → NEVER `/lets:start` (it is only a no-task / bootstrap escape hatch); "reset context, keep the task" → `/clear` + the mid-task command, never `/lets:start`.
 
-**Which shortcuts to offer (pick from these three, in order):**
-1. **Most-likely next step** in the workflow loop - always include. (After `/lets:check` -> `/lets:commit`; after `/lets:commit` -> `/lets:done`; after `/lets:plan` -> `/lets:execute`; etc.)
-2. **A lighter/faster alternative**, if one exists - include when applicable. Pairs: `/lets:check` is the lighter `/lets:review`; `/lets:check --plan` is the lighter `/lets:review --plan`; `/lets:ask` is the lighter `/lets:opinion`. If a box offers the heavy command, offer the light one alongside it (and pass the matching flag - `/lets:review --local` -> also `/lets:check --local`).
-3. **An escape hatch** - `/lets:start` (new task), `/lets:end` (wrap session), or `/lets:status` (where am I). Pure-navigation boxes (e.g. `Start? /lets:start` after `/lets:init`) are *only* an escape hatch and that's fine - don't pad them with irrelevant options.
-
-Don't exceed ~4 lines in a box. If a command genuinely has only one sensible next step, one line is correct.
+**Which shortcuts (pick in order):** (1) most-likely next step in the loop; (2) a lighter alt if one exists (`/lets:check` for `/lets:review`, `/lets:ask` for `/lets:opinion` — pass the matching flag); (3) one escape hatch (`/lets:start` / `/lets:end` / `/lets:status`). ≤4 lines; one line is correct when there is a single sensible step.
 
 ### Command checklist
 
-- [ ] Has LETS box in output section
-- [ ] LETS box shortcuts follow the guidance above (most-likely next step + lighter alternative where one exists + escape hatch); all boxes in the file are the same width
+- [ ] Response ends with exactly one footer of the right type (Act/Nav/Close - see the Response Footer rule)
+- [ ] Nav-box shortcuts follow the guidance above (next step + lighter alt + escape hatch; no `/lets:start` mid-task); all boxes in the file are the same display-column width (python recipe)
 - [ ] Updates Skill Quick Reference in `plugins/lets/rules/lets-rules.md` (do NOT bump frontmatter `version` per change — once per release at ceremony, see the version-coherence rule above)
 - [ ] Updates `/lets:install` Essential Skills / Planning Skills tables
 - [ ] Follows session flow (start -> work -> commit -> done -> end)

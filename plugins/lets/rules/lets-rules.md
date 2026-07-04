@@ -384,56 +384,43 @@ When user wants to switch tasks mid-session: handle current work first (ask abou
 - Significant changes -> Suggest `/lets:review` for full deep review
 - If user asks about context usage -> Tell them `/context`, don't speculate on percentages (see Context Window Management section)
 
-### Phase Detection & LETS Boxes
+### Response Footer
 
-Every milestone should show a LETS box with relevant next steps.
+Every response ends with exactly ONE footer - never mix two. Pick the type by what the next step is:
 
-| Phase | Trigger | LETS box |
-|-------|---------|----------|
-| **Active work** | AI just edited files | `opinion` + `check` |
-| **Work done** | Feature/fix complete | `review` + `commit` |
-| **After commit** | Commit succeeded | `done` or `end` |
-| **Task done** | `/lets:done` ran | AskUserQuestion: stay / next / end |
-| **Decision point** | AI presents 2+ options | `opinion` |
+| Type | Surface | Next step is… | Who acts |
+|------|---------|---------------|----------|
+| Act | AskUserQuestion | the AI's, with 2+ viable choices | user picks -> AI runs |
+| Nav | LETS box | the user's to start (a `/lets:*`) | user types it |
+| Close | one prose line, or nothing | terminal / internal / single obvious step | — |
 
-**Rule:** If AI made changes -> always suggest `/lets:check` first.
+**Internal invocation** (one `/lets:*` calls another - e.g. `/lets:review --json` inside `/lets:github-pr`, or a Rule-7 follow-through) -> no footer; only the outermost user-invoked command emits one.
 
-**Exception — internal invocation:** When a `/lets:*` command is invoked programmatically by another command (e.g., `/lets:review --json` called by `/lets:github-pr`), the inner command's LETS box is waived. Only the outer command shows its box to avoid duplicate / conflicting next-step suggestions in one response.
+**Nav content is state-driven** - choose by phase + state, not habit:
+- Task active -> NEVER `/lets:start` (it re-runs task selection); `/lets:start` is only a no-task / bootstrap escape hatch.
+- "Reset context, keep the task" -> `/clear` + the mid-task command (e.g. `/lets:execute`), never `/lets:start`.
+- Pair a heavy command with its light alt (`/lets:review`+`/lets:check`, `/lets:opinion`+`/lets:ask`); close with one escape hatch. If the AI changed files, include `/lets:check`.
 
-**Active work:**
-```
-┌─ LETS ─────────────────────────┐
-│  Decision?  /lets:opinion      │
-│  Check?     /lets:check        │
-└────────────────────────────────┘
-```
+**Phase -> footer** (canonical set; draw in the box format below):
 
-**Work done:**
+| Phase (what just happened) | Type | Footer content |
+|----------------------------|------|----------------|
+| AI edited files | Nav | `opinion` · `check` |
+| Feature/fix complete | Nav | `review`+`check` · `commit` |
+| Commit succeeded | Nav | `done` · `end` |
+| Decision the AI will execute | Act | AskUserQuestion (the options) |
+| Decision to defer to an expert | Nav | `opinion` (or `ask`) |
+| `/lets:done` ran | Act | AskUserQuestion: stay / next / end |
+| Session end | Close | prose: `/compact` vs `/clear` |
+| No active task (bootstrap) | Nav | `start` - the ONLY footer that offers `/lets:start` |
+
+**Box format** - all boxes in a file share one width; ≤4 lines; 1-cell glyphs:
 ```
 ┌─ LETS ─────────────────────────┐
 │  Review?  /lets:review         │
 │  Commit?  /lets:commit         │
 └────────────────────────────────┘
 ```
-
-**After commit:**
-```
-┌─ LETS ─────────────────────────┐
-│  Done?  /lets:done             │
-│  End?   /lets:end              │
-└────────────────────────────────┘
-```
-
-### Decision Points
-
-When presenting 2+ options, ALWAYS show:
-```
-┌─ LETS ─────────────────────────┐
-│  Analyze?  /lets:opinion       │
-└────────────────────────────────┘
-```
-
-This applies when: presenting implementation approaches, choosing between solutions, trade-off decisions, architecture choices.
 
 ### Commit, Task Done & Session End
 
