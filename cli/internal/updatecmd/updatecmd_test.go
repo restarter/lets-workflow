@@ -907,6 +907,147 @@ func TestPrintReport_UserRulesRow(t *testing.T) {
 	}
 }
 
+// --- tracker-rules artifact (lets-5d48z) ---
+
+// trackerFile writes a minimal tracker-<name>.md with the given frontmatter
+// version (only `version:` matters to drift.Check).
+func trackerFile(t *testing.T, path, name, ver string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := fmt.Sprintf("---\nname: tracker-%s\nversion: %s\n---\n\n# tracker %s\n", name, ver, name)
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// scaffoldWithTracker extends scaffold with an Artifact-6 tracker pair: the
+// plugin SOURCE tracker-<name>.md (at srcVer) and the INSTALLED project copy (at
+// installedVer; "" = absent). scaffold already writes LETS_TRACKER=beads into
+// .env, so pass name="beads" to match it. A SEPARATE helper from scaffold by
+// design: scaffold ships NO tracker source, so the existing len==4 /
+// Summary.UpToDate==4 assertions stay valid (modifying scaffold breaks them all).
+func scaffoldWithTracker(t *testing.T, envVer, rulesVer, pluginVer, binVer, name, installedVer, srcVer string) (projectRoot, pluginRoot string) {
+	t.Helper()
+	projectRoot, pluginRoot = scaffold(t, envVer, rulesVer, pluginVer, binVer)
+	trackerFile(t, filepath.Join(pluginRoot, "rules", "tracker-"+name+".md"), name, srcVer)
+	if installedVer != "" {
+		trackerFile(t, filepath.Join(projectRoot, ".claude", "rules", "tracker-"+name+".md"), name, installedVer)
+	}
+	return projectRoot, pluginRoot
+}
+
+func TestRun_TrackerRulesInSync(t *testing.T) {
+	pr, plug := scaffoldWithTracker(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0", "beads", "0.6.0", "0.6.0")
+	r, err := Run(context.Background(), Options{LatestFn: stubLatest("0.6.0")}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Artifacts) != 5 {
+		t.Fatalf("expected 5 artifacts (incl. tracker-rules), got %d", len(r.Artifacts))
+	}
+	a := find(t, r, "tracker-rules")
+	if a.Status != StatusInSync || !strings.Contains(a.Detail, "tracks the plugin (tracker-beads.md)") {
+		t.Errorf("tracker-rules: %+v", a)
+	}
+	// tracker-rules folds into the in-sync bucket: 4 (env/rules/binary/plugin) + 1.
+	if r.Summary.UpToDate != 5 {
+		t.Errorf("Summary.UpToDate = %d, want 5", r.Summary.UpToDate)
+	}
+}
+
+func TestRun_TrackerRulesOutdated_Rewritten(t *testing.T) {
+	// installed adapter behind the plugin source, plugin NOT behind -> rewrite.
+	pr, plug := scaffoldWithTracker(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0", "beads", "0.5.0", "0.6.0")
+	r, err := Run(context.Background(), Options{LatestFn: stubLatest("0.6.0")}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := find(t, r, "tracker-rules")
+	if a.Status != StatusUpdated || a.CurrentVersion != "0.6.0" {
+		t.Errorf("tracker-rules: %+v", a)
+	}
+	if !strings.Contains(a.Detail, "was outdated (v0.5.0)") || !strings.Contains(a.Detail, "tracker-beads.md") {
+		t.Errorf("detail: %q", a.Detail)
+	}
+	// a just-synced tracker-rules drives the reload next-action.
+	if r.NextAction == nil || r.NextAction.Kind != "reload" {
+		t.Fatalf("next_action = %+v, want kind=reload", r.NextAction)
+	}
+}
+
+func TestRun_TrackerRulesDeferred(t *testing.T) {
+	// Half-step guard: installed adapter behind the plugin source, but the plugin
+	// is behind the binary (offline pluginBehind path) -> defer, file untouched.
+	// Offline (no LatestFn) so the plugin row is Unknown, NOT Outdated: this
+	// isolates that the DEFERRED tracker-rules row alone drives next_action=plugin
+	// (the rulesDeferred() wiring now includes tracker-rules).
+	pr, plug := scaffoldWithTracker(t, "0.7.0", "0.6.0", "0.6.0", "0.7.0", "beads", "0.5.0", "0.6.0")
+	trackerPath := filepath.Join(pr, ".claude", "rules", "tracker-beads.md")
+	before, _ := os.ReadFile(trackerPath)
+	r, err := Run(context.Background(), Options{}, pr, plug) // offline: pluginBehind via binary > plugin
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := find(t, r, "tracker-rules").Status; got != StatusDeferred {
+		t.Errorf("tracker-rules status = %s, want deferred", got)
+	}
+	after, _ := os.ReadFile(trackerPath)
+	if string(before) != string(after) {
+		t.Error("tracker rules written despite deferral")
+	}
+	if r.NextAction == nil || r.NextAction.Kind != "plugin" {
+		t.Fatalf("next_action = %+v, want kind=plugin (deferred tracker-rules)", r.NextAction)
+	}
+}
+
+func TestRun_TrackerRulesSourceAbsent_NoArtifact(t *testing.T) {
+	// LETS_TRACKER=beads (scaffold default) but the plugin ships no tracker-beads.md
+	// source -> no row, keeping the pre-tracker artifact set (4) stable.
+	pr, plug := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0")
+	r, err := Run(context.Background(), Options{LatestFn: stubLatest("0.6.0")}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if findMaybe(r, "tracker-rules") != nil {
+		t.Error("tracker-rules row must be omitted when the plugin ships no adapter source")
+	}
+	if len(r.Artifacts) != 4 {
+		t.Fatalf("expected 4 artifacts (no tracker-rules), got %d", len(r.Artifacts))
+	}
+}
+
+func TestRun_TrackerRulesInvalidName_NoArtifact(t *testing.T) {
+	// A path-traversal LETS_TRACKER is rejected by ValidTrackerName before any
+	// filepath.Join -> no row (Artifact-6 mirrors init Step 8b's guard).
+	pr, plug := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0")
+	body := "# LETS plugin config\nLETS_ENV_VERSION=0.6.0\nLETS_LANGUAGE=English\nLETS_MERGE_BRANCH=main\nLETS_PR_FLOW=local\nLETS_TRACKER=../evil\nLETS_LAUNCHER=terminal\nLETS_RULES_SCOPE=project\n"
+	if err := os.WriteFile(filepath.Join(pr, ".lets", ".env"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r, err := Run(context.Background(), Options{LatestFn: stubLatest("0.6.0")}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if findMaybe(r, "tracker-rules") != nil {
+		t.Error("tracker-rules row must be omitted for an invalid LETS_TRACKER name")
+	}
+}
+
+func TestPrintReport_TrackerRulesRow(t *testing.T) {
+	pr, plug := scaffoldWithTracker(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0", "beads", "0.6.0", "0.6.0")
+	r, err := Run(context.Background(), Options{LatestFn: stubLatest("0.6.0")}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	PrintReport(&buf, r)
+	if !strings.Contains(buf.String(), "tracker-rules") {
+		t.Errorf("report missing tracker-rules row:\n%s", buf.String())
+	}
+}
+
 // --- LETS_RULES_SCOPE matrix (lets-wug9k) ---
 
 // scopeFixture builds a project (.env carrying `scope`, optional project rules
@@ -1052,5 +1193,58 @@ func TestRun_RulesScopeKeyMigration(t *testing.T) {
 	data, _ := os.ReadFile(filepath.Join(envDir, ".env"))
 	if !strings.Contains(string(data), "LETS_RULES_SCOPE=project") {
 		t.Errorf("migration must add LETS_RULES_SCOPE=project:\n%s", data)
+	}
+}
+
+// B1 regression (branch review 2026-07-02): missing tracker adapter is INSTALLED
+// by update (StateMissing must not fall under the deferral guard) - the parity
+// twin of TestRun_RulesMissingGetsInstalled for Artifact 6.
+func TestRun_TrackerRulesMissing_Installed(t *testing.T) {
+	pr, plug := scaffoldWithTracker(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0", "beads", "", "0.6.0")
+	r, err := Run(context.Background(), Options{LatestFn: stubLatest("0.6.0")}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := find(t, r, "tracker-rules")
+	if a.Status != StatusUpdated || !strings.Contains(a.Detail, "was missing") {
+		t.Errorf("tracker-rules: %+v", a)
+	}
+	if _, err := os.Stat(filepath.Join(pr, ".claude", "rules", "tracker-beads.md")); err != nil {
+		t.Error("tracker-beads.md not installed by update")
+	}
+}
+
+// B1 regression (branch review 2026-07-02): the DOCUMENTED tracker-switch path is
+// "edit LETS_TRACKER in .lets/.env, then /lets:update" - update must remove the
+// deactivated shipped adapter, or two adapter files stay auto-loaded at once
+// (conflicting verb bindings; the state cleanupShippedTrackerFiles exists to
+// prevent). Previously cleanup ran only from init Step 8b.
+func TestRun_TrackerSwitch_StaleAdapterRemoved(t *testing.T) {
+	// Project starts on beads (installed adapter present), plugin ships both.
+	pr, plug := scaffoldWithTracker(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0", "beads", "0.6.0", "0.6.0")
+	trackerFile(t, filepath.Join(plug, "rules", "tracker-none.md"), "none", "0.6.0")
+	// The user switches to none by editing .env (the documented path).
+	env := "# LETS plugin config\nLETS_ENV_VERSION=0.6.0\nLETS_LANGUAGE=English\nLETS_MERGE_BRANCH=main\nLETS_PR_FLOW=local\nLETS_TRACKER=none\nLETS_LAUNCHER=terminal\nLETS_RULES_SCOPE=project\n"
+	if err := os.WriteFile(filepath.Join(pr, ".lets", ".env"), []byte(env), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	r, err := Run(context.Background(), Options{LatestFn: stubLatest("0.6.0")}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := find(t, r, "tracker-rules")
+	if a.Status != StatusUpdated {
+		t.Errorf("tracker-rules status = %s, want updated (new adapter was missing); %+v", a.Status, a)
+	}
+	if !strings.Contains(a.Detail, "tracker-beads.md removed (tracker switched)") {
+		t.Errorf("switch note missing from Detail: %q", a.Detail)
+	}
+	rules := filepath.Join(pr, ".claude", "rules")
+	if _, err := os.Stat(filepath.Join(rules, "tracker-beads.md")); !os.IsNotExist(err) {
+		t.Error("stale tracker-beads.md still installed after switch-via-update")
+	}
+	if _, err := os.Stat(filepath.Join(rules, "tracker-none.md")); err != nil {
+		t.Error("tracker-none.md not installed after switch-via-update")
 	}
 }

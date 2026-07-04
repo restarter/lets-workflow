@@ -15,7 +15,7 @@ LETS_MERGE_BRANCH=main
 # PR flow: github | bitbucket | local
 LETS_PR_FLOW=local
 
-# Task tracker (currently 'beads'; schema reserved for Linear/Jira)
+# Task tracker adapter: beads | planfix-mcp | none (selects .claude/rules/tracker-<name>.md)
 LETS_TRACKER=beads
 
 # Worktree launcher: terminal (print the cd command) | cmux (open in a cmux workspace, macOS only)

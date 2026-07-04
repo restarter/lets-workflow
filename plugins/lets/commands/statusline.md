@@ -100,10 +100,7 @@ Saved statusline appearance: {command}
 ## Output
 
 ```
-┌─ LETS ─────────────────────────────────────┐
-│  Preview now?  echo '{}' | lets statusline │
-│  Restart to apply the change               │
-└─────────────────────────────────────────────┘
+Preview: `echo '{}' | lets statusline`. Restart Claude Code (or start a new session) to apply.
 ```
 
 ## Rules

@@ -1,6 +1,6 @@
 ---
 name: create-task
-description: This skill should be used when creating a beads task - "create task", "create issue", "bd create", "new task", "add task", "add issue". Ensures all required fields are provided, enforces English-only task content, and suggests epic labels. Triggers on any task creation in any context - commands, planning, or direct conversation.
+description: This skill should be used when creating a task in the active tracker - "create task", "create issue", "bd create", "new task", "add task", "add issue". Ensures all required fields are provided, enforces English-only task content, and suggests epic labels. Triggers on any task creation in any context - commands, planning, or direct conversation.
 ---
 
 # Create Task
@@ -11,15 +11,15 @@ Standardized task creation that enforces required fields and suggests labels. Fi
 
 ## IMPORTANT: Language
 
-**All task content MUST be in English regardless of conversation language.** If the user is speaking another language, translate to English before running `bd create`.
+**All task content MUST be in English regardless of conversation language.** If the user is speaking another language, translate to English before creating the task.
 
 Applies to every field:
-- `--title`
-- `--description` (problem statement, acceptance criteria, examples)
-- `--labels`
-- Any subsequent `bd comments add` / `bd update` on this task
+- `title`
+- `description` (problem statement, acceptance criteria, examples)
+- `labels`
+- Any subsequent `comment-add` / `set-field` on this task
 
-**Why:** tasks are searched, filtered, and cross-referenced across the team and external systems (Planfix, GitHub). Mixed-language tasks break `bd search` and confuse non-native-language readers.
+**Why:** tasks are searched, filtered, and cross-referenced across the team and external systems (Planfix, GitHub). Mixed-language tasks break tracker `search` and confuse non-native-language readers.
 
 ## Why This Exists
 
@@ -27,15 +27,15 @@ Tasks created without labels, priority, or description become orphaned and hard 
 
 ## Required Fields
 
-Every `bd create` call MUST include ALL of these:
+Every task `create` MUST include ALL of these:
 
-| Flag | Required | Rules |
+| Field | Required | Rules |
 |------|----------|-------|
-| `--title` | Always | Imperative mood, clear action. Under 80 chars |
-| `--type` | Always | One of: `task`, `bug`, `feature`, `epic` |
-| `--priority` | Always | 0-4 (0=critical, 1=high, 2=medium, 3=low, 4=backlog) |
-| `--description` | Always | Why this task exists + acceptance criteria |
-| `--labels` | Always | At least one `epic:<name>` label for grouping |
+| `title` | Always | Imperative mood, clear action. Under 80 chars |
+| `type` | Always | One of: `task`, `bug`, `feature`, `epic` |
+| `priority` | Always | 0-4 (0=critical, 1=high, 2=medium, 3=low, 4=backlog) |
+| `description` | Always | Why this task exists + acceptance criteria |
+| `labels` | Always | At least one `epic:<name>` label for grouping |
 
 ## Label Selection
 
@@ -43,15 +43,11 @@ Labels are project-specific. ALWAYS discover them dynamically - never hardcode.
 
 ### Step L1: Discover Existing Labels
 
-```bash
-bd list --all 2>/dev/null | grep -oE '\[epic:[a-z0-9_-]+\]' | tr -d '[]' | sort -u
+```lets-tracker
+label   # list all labels; filter the result for `epic:*`. On a tracker that marks `label` absent, skip label discovery (no epic suggestions - propose a label by hand).
 ```
 
-If no labels found, also check closed epics for label conventions:
-
-```bash
-bd list --all --type=epic 2>/dev/null
-```
+If no labels found, also scan recent tasks for `epic:*` naming conventions via `list-by-status`.
 
 ### Step L2: Present Labels to User
 
@@ -68,7 +64,7 @@ Show discovered labels and ask which fits:
 
 If no existing label fits:
 1. Propose a new `epic:<name>` label with a short explanation of the grouping
-2. Ask if an epic task should be created for this theme: `bd create --title="<Theme Name>" --type=epic --labels="epic:<name>" ...`
+2. Ask if an epic task should be created for this theme (the `create` verb, `type=epic`, `labels="epic:<name>"`)
 3. Wait for user approval before creating either the label or the epic
 
 ## Creation Flow
@@ -93,21 +89,25 @@ From the user's input, derive:
 
 ### Step 3: Present for Approval
 
-Show the full `bd create` command before executing:
+Show the full task `create` before executing. The multi-line description is written to a temp file and passed as `description-file=` (lets-rules "Tracker Adapters"); the short fields go inline:
 
-```
-bd create \
-  --title="Add retry logic to API client" \
-  --type=feature \
-  --priority=2 \
-  --labels="epic:quality" \
-  --description="## Problem
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel); mkdir -p "$LETS_PROJECT_ROOT/.lets/cache"
+# Branch-suffixed so parallel worktrees (shared .lets/ symlink) don't clobber each other's draft.
+BRANCH_SLUG=$(git branch --show-current | tr '/' '-')
+cat > "$LETS_PROJECT_ROOT/.lets/cache/new-task-desc-${BRANCH_SLUG}.md" <<'EOF'
+## Problem
 API calls fail silently on network errors.
 
 ## Acceptance criteria
 - Retry up to 3 times with exponential backoff
 - Log each retry attempt
-- Surface final error to user"
+- Surface final error to user
+EOF
+```
+
+```lets-tracker
+create title="Add retry logic to API client" type=feature priority=2 labels="epic:quality" description-file=.lets/cache/new-task-desc-<branch-slug>.md
 ```
 
 Then ask for explicit confirmation:
@@ -118,7 +118,7 @@ AskUserQuestion(
     question: "Create this task?",
     header: "Create Task",
     options: [
-      { label: "Create", description: "Run `bd create` with the fields shown above" },
+      { label: "Create", description: "Create the task with the fields shown above" },
       { label: "Cancel", description: "Don't create — return to revise fields" }
     ],
     multiSelect: false
@@ -132,20 +132,20 @@ Handle response:
 
 ### Step 4: Execute
 
-Run `bd create` with all fields. Report the created task ID.
+Run the `create` verb with all fields. Report the created task ID.
 
 ## Bulk Creation
 
 When creating multiple tasks (e.g., during planning):
 
 - Present all tasks as a table first for review
-- After approval, create in parallel using subagents or sequential `bd create` calls
+- After approval, create in parallel using subagents or sequential `create` calls
 - Every task still needs all required fields - no shortcuts
 
 ## Anti-patterns
 
 - **Never** create a task without `--labels`
-- **Never** use bare `bd create --title="..."` without other fields
+- **Never** use a bare `create` with only a title (no type/priority/description/labels)
 - **Never** use `--parent` flag (causes merge collisions in multi-user setup)
 - **Never** skip user approval for task creation
 - **Never** use priority words ("high", "medium") - use numbers 0-4
@@ -154,4 +154,4 @@ When creating multiple tasks (e.g., during planning):
 
 User-facing skill. Auto-triggers on "create task", "new task", "bd create".
 Commands that create tasks (`/lets:start`, `/lets:backlog`, `/lets:plan`) trigger this skill implicitly via description match.
-See: `grep -r "bd create" commands/` for commands that create tasks.
+See: `grep -r "create-task" commands/` for commands that create tasks.

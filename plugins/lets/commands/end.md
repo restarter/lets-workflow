@@ -106,18 +106,22 @@ AskUserQuestion(
 1. **Commit** -> `Skill(skill: "lets:commit")`. (If both Commit and Finish task are picked, commit runs first, then hand off.)
 2. **Finish task** -> **HAND-OFF + STOP.** Say "Task looks done - handing off to /lets:done." then `Skill(skill: "lets:done")` and **STOP the entire /lets:end flow** (do NOT run Step 3, Step 4, or Output). `/lets:done` owns everything after: it commits/pushes/PRs/closes AND ends with its own terminal menu (which may switch branches or even call `/lets:end`). If end "continued" past the hand-off, the branch-slugged summary could land on the wrong branch and end<->done could recurse. So done SUPERSEDES S5 (push), S2 (done writes its own completion comment), S4 (no end-summary when finishing) and S6 (done shows its own worktree hint). The one residual path - done's menu -> "End session" -> a fresh `/lets:end` - is safe: that second end finds everything settled and silently wraps.
 3. **Push** (only reached when Finish task was NOT picked) -> upstream-aware push of the current branch, NO PR, never `--force`: `git push` when upstream exists and ahead; `git push -u origin <branch>` on first push. The explicit multiSelect pick IS the approval (same as picking "Commit" authorizes the commit - satisfies the git.md / AUTO MODE "push needs explicit approval" rule, which is why the option label always names the concrete target).
-4. **Post progress** (only reached when Finish task was NOT picked) -> write the bd progress comment (Step 3 template).
+4. **Post progress** (only reached when Finish task was NOT picked) -> write the progress comment (tracker `comment-add`, Step 3 template).
 
 ## Step 3: Write artifacts
 
 (Reached in the default + `--pre-compact` flows; skipped only on the Finish-task hand-off, which stopped the flow in Step 2.)
 
-### 3a. bd progress comment (only if "Post progress" was picked)
+### 3a. Progress comment (only if "Post progress" was picked)
 
-Records task-level context for multi-session work. **MANDATORY:** the `Claude session: $CLAUDE_CODE_SESSION_ID` line MUST appear between `## Session progress` and `### Range` - bash expands the env var at runtime, so `bd` gets the literal UUID. The commit LIST is intentionally dropped (git owns it); keep a range pointer. (Decision A: the range is `session:`-anchored, so a second `/lets:end` in one session may re-cover already-reported commits - acceptable by design.)
+Records task-level context for multi-session work. **MANDATORY:** the `Claude session: $CLAUDE_CODE_SESSION_ID` line MUST appear between `## Session progress` and `### Range` - bash expands the env var at runtime in the heredoc, so the tracker gets the literal UUID. The commit LIST is intentionally dropped (git owns it); keep a range pointer. (Decision A: the range is `session:`-anchored, so a second `/lets:end` in one session may re-cover already-reported commits - acceptable by design.)
+
+The bash block writes the progress body to a temp file; the `comment-add` verb submits it via `body-file=` (lets-rules "Tracker Adapters" - the orchestrator fills the `{...}` narrative fields first):
 
 ```bash
-bd comments add <task-id> "## Session progress $(date +%Y-%m-%d)
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel); mkdir -p "$LETS_PROJECT_ROOT/.lets/cache"
+cat > "$LETS_PROJECT_ROOT/.lets/cache/progress-<task-id>.md" <<EOF
+## Session progress $(date +%Y-%m-%d)
 
 Claude session: $CLAUDE_CODE_SESSION_ID
 
@@ -131,7 +135,12 @@ Claude session: $CLAUDE_CODE_SESSION_ID
 - {what's left}
 
 ### Context for next session
-- {recovery info}"
+- {recovery info}
+EOF
+```
+
+```lets-tracker
+comment-add task=<task-id> body-file=.lets/cache/progress-<task-id>.md
 ```
 
 ### 3b. Session summary file (ALWAYS)
@@ -216,7 +225,7 @@ Resume comment -> {task-id}  (or {session-file path} if no active task)
 Session summary -> .lets/sessions/{dated}-precompact-{branch}.md
 Branch: {branch}
 
-Safe to /compact now - same window continues. Resume context: bd show {task-id} + bd comments {task-id}
+Safe to /compact now - same window continues. Resume context: the active tracker's show + comment-list for {task-id} (beads: bd show {task-id} + bd comments {task-id})
 ```
 
 Then STOP - no AskUserQuestion, no push, no `git checkout`. The session continues.

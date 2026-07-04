@@ -175,7 +175,7 @@ The returned aggregate `{ claims, sources, as_of, web, counts }` is the only thi
 
 ## Capture
 
-Do NOT `bd comments add` autonomously. If `detect-task` returns an active, question-relevant task, **suggest `/lets:note`** with a one-liner naming what would be recorded (per `.claude/rules/lets-rules.md` "## Discovery Logging"). OUT OF SCOPE: auto-creating bd tasks from findings (the user pipes to `create-task` if wanted).
+Do NOT add a tracker comment autonomously. If `detect-task` returns an active, question-relevant task, **suggest `/lets:note`** with a one-liner naming what would be recorded (per `.claude/rules/lets-rules.md` "## Discovery Logging"). OUT OF SCOPE: auto-creating tasks from findings (the user pipes to `create-task` if wanted).
 
 ## Output
 

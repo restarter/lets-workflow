@@ -275,11 +275,11 @@ When the completion notification arrives, the returned aggregate is the only thi
 Record the decision in beads for future context recovery:
 
 Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detect-task")`.
-If multiple tasks found, skip beads comment.
+If multiple tasks found, skip the tracker comment.
 If active task found:
 
-```bash
-bd comments add <task-id> "Decision: {topic}. Chose: {recommended option}. Reason: {1-sentence why}"
+```lets-tracker
+comment-add task=<task-id> body="Decision: {topic}. Chose: {recommended option}. Reason: {1-sentence why}"
 ```
 
 ## Rules
@@ -344,8 +344,8 @@ When user is satisfied, proceed to Output.
 
 If active task exists, record the discussion outcome:
 
-```bash
-bd comments add <task-id> "Decision discussion: {topic}. Explored: {what was discussed}. Conclusion: {final stance}"
+```lets-tracker
+comment-add task=<task-id> body="Decision discussion: {topic}. Explored: {what was discussed}. Conclusion: {final stance}"
 ```
 
 ## Output

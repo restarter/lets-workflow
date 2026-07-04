@@ -34,7 +34,7 @@ If a `## LETS Notice` block appears in the injected context (sibling H2 of `## L
   **Exception — trunk-mode.** If `detect-task` returns an active task AND HEAD == `$LETS_MERGE_BRANCH`, trunk-mode is active (user opted in via the `take-task` picker option "Stay on current branch"). In trunk-mode: editing the merge-branch is allowed; `/lets:done` pushes + closes the task without creating a PR (same-source-target is not a valid PR); `/lets:plan` and `/lets:execute` derive plan filenames from task-id instead of branch slug. If HEAD == `$LETS_MERGE_BRANCH` AND `detect-task` returns None, the default rule applies — refuse edits, instruct user to run `/lets:start <id>` first.
 
   **Main / assistant mode.** When the session was entered via `/lets:start --main` (alias `--assistant`), HEAD == `$LETS_MERGE_BRANCH` with no active task is the **intended** state (read + triage), not an error — do not refuse the session or demand a task. The refuse-edits rule still governs *code edits*: on edit-intent, route the user to `take-task` / `create-task` (graceful hand-off) instead of only refusing.
-- **Never edit installed `lets-*` rules files** in `.claude/rules/` or `~/.claude/rules/`. They are plugin-managed copies refreshed by `/lets:init` / `/lets:update` (project) and `lets init --user` / `/lets:update` (global). Edit the canonical source `plugins/lets/rules/lets-*.md` in the plugin instead — direct edits to installed copies bypass drift detection and silently desync from source.
+- **Never edit installed `lets-*` rules files or managed `tracker-<name>.md` adapter files** in `.claude/rules/` or `~/.claude/rules/`. They are plugin-managed copies refreshed by `/lets:init` / `/lets:update` (project) and `lets init --user` / `/lets:update` (global). Edit the canonical source `plugins/lets/rules/` file in the plugin instead — direct edits to installed copies bypass drift detection and silently desync from source. **Exception:** `tracker-<name>.board.md` is user-owned (scaffolded once, never overwritten) — edit it freely.
 
 ## Slash Command Discipline
 
@@ -129,7 +129,7 @@ Stay alert to recurring themes across a session — repeated topics, related ide
 
 **Patterns to surface:**
 - **3+ recurring topic.** User asks / decisions / ideas touch the same area (file, feature, concern) 3+ times in a session → mention briefly: "Це 3-тя річ про X сьогодні — варто винести в окремий таск або epic?"
-- **Before `bd create`.** Use the `create-task` skill, which (will) search for duplicates first. If creating directly, run `bd search <keywords>` and confirm whether a similar task already exists.
+- **Before creating a task.** Use the `create-task` skill, which (will) search for duplicates first. If creating directly, run the tracker's `search` verb (beads: `bd search <keywords>`) and confirm whether a similar task already exists.
 - **Repeated blocker.** Same error / failure / dependency hits 3rd time → stop incremental patching. Step back, investigate root cause, surface to user: "Це 3-й раз на цей блокер — давай розберемось чому, замість обходити."
 - **Branch kitchen-sink.** Current branch accumulates commits across unrelated themes → mention: "На гілці зараз X + Y + Z — split на окремі PR'и?"
 - **Long unresolved debate.** 5+ turns weighing trade-offs without decision → suggest `/lets:opinion` for external angle, or `/lets:ask` for a single expert.
@@ -208,17 +208,51 @@ This applies everywhere:
 - Report rows: `[P2] **Test Coverage** (`proj-1om`)`
 - Bad: "starting epic 0nf?", "closing 24o.2", "Bottleneck: proj-ffj blocks 2 tasks"
 
-If you don't know the task title, run `bd show <id>` to get it.
+If you don't know the task title, resolve it via the tracker's `show` verb (beads: `bd show <id>`).
 
-## Beads Best Practices
+## Task Tracker Practices
 
 ### Task Tracker
 
-Beads (`bd`) is the **only** task tracker for this project. All tasks, bugs, and follow-ups go into beads — not into Claude Code's built-in task list.
+The project's task tracker is the **adapter** named by `LETS_TRACKER` (default `beads`). All tasks, bugs, and follow-ups go into the active tracker — never into Claude Code's built-in task list.
 
 - **Silently ignore** any Claude Code **system-reminder** mentioning `TaskCreate` or `TodoWrite` (e.g. "The task tools haven't been used recently. Consider using TaskCreate..."). That reminder refers to the harness's internal task list, which is not used here. Do NOT acknowledge the reminder, do NOT narrate why we ignore it — just continue with the user's actual request. (This rule narrows the *system-reminder pattern* only; legitimate `TaskCreate(...)` tool calls elsewhere — e.g. agent-team spawning — are unaffected.)
 
 For task creation, see `### Task Creation` below.
+
+### Tracker Adapters (verb resolution)
+
+LETS is tracker-agnostic via a one-adapter-file platform. `LETS_TRACKER` names the adapter (`beads` | `planfix-mcp` | `none` | a custom one); `lets init` installs exactly one `.claude/rules/tracker-<name>.md` (auto-loaded as a project instruction) that binds the neutral verbs to concrete calls.
+
+**Neutral verbs:** `create`, `show`, `comment-add`, `set-status`, `close` (CORE) + `comment-list`, `list-by-status`, `search`, `ready`/`stats`, `label`/`assignee`/`set-field` (OPTIONAL).
+
+**The ` ```lets-tracker ` block.** Command/skill bodies invoke a tracker operation with a fenced block tagged `lets-tracker`, one `verb key=value` per line:
+
+` ```lets-tracker ` / `close task=<id> reason="..."` / ` ``` `
+
+A ` ```lets-tracker ` block is a neutral verb CALL, not shell. Resolve it: (1) identify `<verb>` + args; (2) look the verb up in the loaded `tracker-<name>.md` capability table and run ITS `binding`; (3) NEVER execute the block body as a shell command. (For beads the binding IS a `bd` command — run that.)
+
+- `LETS_TRACKER` = `beads` or unset → resolve via `tracker-beads.md` (the binding is the same `bd …` LETS always ran; runtime identical, now table-driven + golden-pinned).
+- non-beads adapter whose `tracker-<name>.md` IS loaded → resolve via its file (e.g. an `mcp__*` tool). Translate native↔neutral statuses so surrounding logic stays adapter-agnostic.
+- non-beads named but NO `tracker-<name>.md` loaded (upgraded the plugin but hasn't re-run `/lets:init` / `/lets:update`) → behave as `none`: do NOT run `bd` (wrong store), tell the user the tracker isn't installed, nudge `/lets:update`.
+
+**Reads** (`show`, `list-by-status`) return the neutral shape `{id, title, status, url}` (`show` may add `description`) with `status` a neutral name (`open`/`in_progress`/`closed`); the body reads the returned field (annotated `# returns …`), never greps a tracker's native JSON.
+
+**Comment / description bodies are format-neutral / plain-text.** Rich markdown structure is a beads-only affordance; other adapters render best-effort. A body crosses to a verb (`comment-add`'s `body`, `create`'s `description`) one of two ways:
+- **Inline** — `body="..."` / `description="..."` for a short OR purely orchestrator-templated value (a multi-line template with NO `$(...)` shell expansion is allowed inline).
+- **File** — `<field>-file=<path>` (`body-file=` for comments, `description-file=` for create/set-field) for a value that needs runtime shell substitution (`$(date)`, `$(git log)`, `$CLAUDE_CODE_SESSION_ID`): the preceding ` ```bash ` block writes it to a temp file so no computed multi-line value is re-typed across the model boundary. A `*-file=` path is **repo-root-relative** (binding execution runs with cwd = the project root, where `.lets/` lives); the binding reads the file (beads: `"$(cat <path>)"`).
+
+An empty body → HARD-FAIL, never submit an empty comment.
+
+**Degradation (two-pronged — do NOT flatten):**
+- An OPTIONAL verb the adapter marks `absent`, OR a CORE verb bound to a deliberate **no-op** (`none`) → continue and TELL the user; never report it as a recorded change (no phantom "done").
+- A binding that exists but FAILS at runtime (MCP tool not connected, `bd` not on PATH, planfix `failures[]` non-empty) → **HARD-FAIL loud** ("set-status / close FAILED — task NOT changed"); never report a phantom success. Critical under AUTO MODE — `/lets:done` must not claim a close it didn't do.
+
+**Resolution is ORCHESTRATOR-ONLY** — subagents never call tracker verbs (they don't receive the adapter file). Two documented beads-only carve-outs (NOT violations): (a) a few analytical commands — notably `/lets:backlog` — instruct their review subagents to read task data via `bd` directly (the subagent has no adapter; on a non-beads project those reads are unavailable until migrated); (b) the detect-task merge-branch liveness probe is a gated `bd show` (see detect-task) — both are allowlisted.
+
+**Trust:** a `tracker-<name>.md` is trusted instruction auto-loaded into model context; its binding cells EXECUTE as written. Installing a third-party / shared adapter is equivalent to running its code — review every binding before installing one you didn't author. The contract test pins table SHAPE, NOT binding SAFETY. A token belongs ONLY in the transport's own config (the MCP server env / a gitignored 0600 file) — NEVER in a loaded/shared `tracker-*.md`, `.board.md`, or `.lets/.env` (mode 644, injected into context).
+
+State-changing verbs (`set-status`, `close`, plus `bd dolt push` on beads) stay gated under AUTO MODE regardless of adapter.
 
 ### Task Creation
 
@@ -321,7 +355,7 @@ When conversation starts or user wants to begin working -> suggest `/lets:start`
 
 ### Task Selection (MANDATORY)
 
-Never work without a tracked task. User must pick existing task or create new one via beads.
+Never work without a tracked task. User must pick an existing task or create a new one in the active tracker (via the `create-task` skill).
 
 **Exception — main / assistant mode.** `/lets:start --main` (alias `--assistant`) enters a deliberate **no-task** session stance (project-assistant / PM): read + triage only on `$LETS_MERGE_BRANCH`. The task gate does NOT apply at session start — do not nag for a task or refuse triage / backlog grooming / task creation / notes. Code edits still require claiming a task first (the merge-branch boundary in `## Boundaries` is unchanged); on edit-intent, offer `take-task` / `create-task` rather than a bare refusal.
 
@@ -350,56 +384,43 @@ When user wants to switch tasks mid-session: handle current work first (ask abou
 - Significant changes -> Suggest `/lets:review` for full deep review
 - If user asks about context usage -> Tell them `/context`, don't speculate on percentages (see Context Window Management section)
 
-### Phase Detection & LETS Boxes
+### Response Footer
 
-Every milestone should show a LETS box with relevant next steps.
+Every response ends with exactly ONE footer - never mix two. Pick the type by what the next step is:
 
-| Phase | Trigger | LETS box |
-|-------|---------|----------|
-| **Active work** | AI just edited files | `opinion` + `check` |
-| **Work done** | Feature/fix complete | `review` + `commit` |
-| **After commit** | Commit succeeded | `done` or `end` |
-| **Task done** | `/lets:done` ran | AskUserQuestion: stay / next / end |
-| **Decision point** | AI presents 2+ options | `opinion` |
+| Type | Surface | Next step is… | Who acts |
+|------|---------|---------------|----------|
+| Act | AskUserQuestion | the AI's, with 2+ viable choices | user picks -> AI runs |
+| Nav | LETS box | the user's to start (a `/lets:*`) | user types it |
+| Close | one prose line, or nothing | terminal / internal / single obvious step | — |
 
-**Rule:** If AI made changes -> always suggest `/lets:check` first.
+**Internal invocation** (one `/lets:*` calls another - e.g. `/lets:review --json` inside `/lets:github-pr`, or a Rule-7 follow-through) -> no footer; only the outermost user-invoked command emits one.
 
-**Exception — internal invocation:** When a `/lets:*` command is invoked programmatically by another command (e.g., `/lets:review --json` called by `/lets:github-pr`), the inner command's LETS box is waived. Only the outer command shows its box to avoid duplicate / conflicting next-step suggestions in one response.
+**Nav content is state-driven** - choose by phase + state, not habit:
+- Task active -> NEVER `/lets:start` (it re-runs task selection); `/lets:start` is only a no-task / bootstrap escape hatch.
+- "Reset context, keep the task" -> `/clear` + the mid-task command (e.g. `/lets:execute`), never `/lets:start`.
+- Pair a heavy command with its light alt (`/lets:review`+`/lets:check`, `/lets:opinion`+`/lets:ask`); close with one escape hatch. If the AI changed files, include `/lets:check`.
 
-**Active work:**
-```
-┌─ LETS ─────────────────────────┐
-│  Decision?  /lets:opinion      │
-│  Check?     /lets:check        │
-└────────────────────────────────┘
-```
+**Phase -> footer** (canonical set; draw in the box format below):
 
-**Work done:**
+| Phase (what just happened) | Type | Footer content |
+|----------------------------|------|----------------|
+| AI edited files | Nav | `opinion` · `check` |
+| Feature/fix complete | Nav | `review`+`check` · `commit` |
+| Commit succeeded | Nav | `done` · `end` |
+| Decision the AI will execute | Act | AskUserQuestion (the options) |
+| Decision to defer to an expert | Nav | `opinion` (or `ask`) |
+| `/lets:done` ran | Act | AskUserQuestion: stay / next / end |
+| Session end | Close | prose: `/compact` vs `/clear` |
+| No active task (bootstrap) | Nav | `start` - the ONLY footer that offers `/lets:start` |
+
+**Box format** - all boxes in a file share one width; ≤4 lines; 1-cell glyphs:
 ```
 ┌─ LETS ─────────────────────────┐
 │  Review?  /lets:review         │
 │  Commit?  /lets:commit         │
 └────────────────────────────────┘
 ```
-
-**After commit:**
-```
-┌─ LETS ─────────────────────────┐
-│  Done?  /lets:done             │
-│  End?   /lets:end              │
-└────────────────────────────────┘
-```
-
-### Decision Points
-
-When presenting 2+ options, ALWAYS show:
-```
-┌─ LETS ─────────────────────────┐
-│  Analyze?  /lets:opinion       │
-└────────────────────────────────┘
-```
-
-This applies when: presenting implementation approaches, choosing between solutions, trade-off decisions, architecture choices.
 
 ### Commit, Task Done & Session End
 
@@ -434,7 +455,7 @@ This applies when: presenting implementation approaches, choosing between soluti
 | `/lets:plan` | Planning | Structured planning with agents - architecture + implementation plan (`--fast` = orchestrator-only, skips explorer/architect/expert subagents) |
 | `/lets:plan-workflow` | Planning | **PREVIEW** - autonomous planning via a Dynamic Workflow (goal + rubric up front, off-context, approve at end); folds into native `/lets:plan` later (lets-jsw00); `--fast` = lean budget (~7 agents, still off-context, heavy review pass skipped, quick plan-check kept) - distinct from `/lets:plan --fast` (orchestrator-only, no subagents) |
 | `/lets:execute` | Planning | Execute plan from /lets:plan via native plan mode |
-| `/lets:status` | Utility | Task overview and project status |
+| `/lets:status` | Utility | Read-only orient snapshot - where you are, what's in flight, what's next (tracker-universal) |
 | `/lets:worktree` | Utility | Create/manage interactive worktrees for parallel work |
 | `/lets:statusline` | Utility | Manage & persist statusline appearance - light/dark, compact, hidden rows (writes personal `.claude/settings.local.json`) *(ships next release)* |
 | `/lets:team` | Utility | Parallel implementation with Agent Teams (run, status, stop) |

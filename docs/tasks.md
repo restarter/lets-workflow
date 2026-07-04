@@ -1,8 +1,8 @@
 # Tasks
 
-LETS is task-driven: every session starts by picking a task, every commit links to it. Task tracking is handled by [beads](https://github.com/steveyegge/beads) (the `bd` CLI / Claude Code plugin), which LETS depends on. The reason for a tracker rather than an ad-hoc TODO list is persistence — task descriptions, decisions, and discovery notes survive conversation compaction and carry across sessions.
+LETS is task-driven: every session starts by picking a task, every commit links to it. Task tracking goes through a pluggable **tracker adapter** (`LETS_TRACKER`); the default adapter is [beads](https://github.com/steveyegge/beads) (the `bd` CLI / Claude Code plugin), which LETS depends on for the default — alternative adapters (`planfix-mcp`, `none`) are described in [trackers.md](trackers.md) *(ships next release)*. The reason for a tracker rather than an ad-hoc TODO list is persistence — task descriptions, decisions, and discovery notes survive conversation compaction and carry across sessions.
 
-> beads is required. Install it with its own one-liner:
+> beads is required for the default adapter. Install it with its own one-liner:
 > ```bash
 > curl -fsSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/install.sh | bash
 > ```
@@ -51,7 +51,7 @@ A few beads conventions LETS follows:
 
 ## `/lets:status` — where things stand
 
-`/lets:status` gives a compact overview: what's ready, what's in progress, what's blocked, recent activity. It's also what `/lets:start` runs to show you the task list.
+`/lets:status` renders a lean, read-only orient snapshot: where you are (branch + active task), what's in flight, and what's next. It's the same snapshot `/lets:start` and `/lets:backlog --fast` open with. The dependency graph lives in native `bd blocked`; per-epic label progress and AI insights are retired from `/lets:status` (still reachable via `/lets:backlog`).
 
 ## `/lets:backlog` — ideation and backlog work
 

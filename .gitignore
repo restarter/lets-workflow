@@ -12,6 +12,8 @@ dolt-server.*
 dolt-monitor.*
 .worktrees/
 .claude/worktrees/
+# MCP server config - may carry secrets (e.g. a Planfix API token in its env block); never commit
+.mcp.json
 .claude/scheduled_tasks*
 .beads/
 /docs-local/
@@ -27,3 +29,6 @@ issues.jsonl
 # bv (beads viewer) local config and caches
 .bv/
 .lets
+
+# Private filled-in tracker board instance (real account ids + team PII) - never commit to this public repo
+.claude/rules/tracker-planfix-mcp.board.md

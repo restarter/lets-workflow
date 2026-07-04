@@ -107,16 +107,24 @@ jq --indent 2 --arg v "$NEW_VERSION" \
 mv "$TMP" .claude-plugin/marketplace.json
 TMP=$(mktemp)
 
-# 3. lets-rules.md frontmatter
-echo "  • plugins/lets/rules/lets-rules.md (frontmatter)"
-awk -v new="$NEW_VERSION" '
-  BEGIN { c=0 }
-  /^---$/ { c++; print; next }
-  c==1 && /^version:/ { print "version: " new; next }
-  { print }
-' plugins/lets/rules/lets-rules.md > "$TMP"
-mv "$TMP" plugins/lets/rules/lets-rules.md
-TMP=$(mktemp)
+# 3. lets-rules.md + shipped tracker adapter frontmatter.
+#    Shipped adapters (tracker-beads/planfix-mcp/none) are drift-tracked like
+#    lets-rules.md, so their version: bumps at the same ceremony. tracker-TEMPLATE.md
+#    and *.board.md deliberately pin 0.0.0 (author-facing / user-owned) - excluded.
+for rules_file in plugins/lets/rules/lets-rules.md \
+                  plugins/lets/rules/tracker-beads.md \
+                  plugins/lets/rules/tracker-planfix-mcp.md \
+                  plugins/lets/rules/tracker-none.md; do
+  echo "  • $rules_file (frontmatter)"
+  awk -v new="$NEW_VERSION" '
+    BEGIN { c=0 }
+    /^---$/ { c++; print; next }
+    c==1 && /^version:/ { print "version: " new; next }
+    { print }
+  ' "$rules_file" > "$TMP"
+  mv "$TMP" "$rules_file"
+  TMP=$(mktemp)
+done
 
 # 4. CHANGELOG: STABLE only — rename [Unreleased] → [X.Y.Z] - DATE + bottom links.
 #    For prereleases, CHANGELOG is left intact; release.yml uses [Unreleased] as notes.

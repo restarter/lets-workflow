@@ -88,10 +88,12 @@ func Run(ctx context.Context, prefs Prefs, projectRoot, pluginRoot string) (Resu
 	}
 	result.Add(Step{Status: StepOK, Message: ".lets/ structure (5 dirs)"})
 
-	// 2. .gitignore — only LETS-owned paths. `bd init` writes its own .beads/
-	// entries (and its own auto-generated CLAUDE.md / AGENTS.md hook block);
-	// we don't speak for it.
-	if err := EnsureGitignore(projectRoot, []string{".lets/", ".worktrees/"}); err != nil {
+	// 2. .gitignore — LETS-owned paths + .mcp.json. A tracker adapter's MCP
+	// config (.mcp.json) can carry a secret token (e.g. PLANFIX_TOKEN for the
+	// planfix-mcp adapter), and the tracker docs promise `lets init` gitignores
+	// it - so we own that entry. `bd init` writes its own .beads/ entries (and
+	// its own auto-generated CLAUDE.md / AGENTS.md hook block); we don't speak for it.
+	if err := EnsureGitignore(projectRoot, []string{".lets/", ".worktrees/", ".mcp.json"}); err != nil {
 		return result, err
 	}
 	result.Add(Step{Status: StepOK, Message: ".gitignore entries"})
@@ -232,14 +234,88 @@ func Run(ctx context.Context, prefs Prefs, projectRoot, pluginRoot string) (Resu
 		}
 	}
 
-	// 9. beads
-	if !prefs.SkipBeads {
-		bdSteps := runBeadsInit(ctx, projectRoot)
-		for _, s := range bdSteps {
+	// 8b. .claude/rules/tracker-<name>.md (conditional on the RESOLVED LETS_TRACKER)
+	//
+	// Read the resolved tracker from the just-written .lets/.env (Step 5) - NOT
+	// prefs.Tracker. The cobra layer fills prefs.Tracker from --tracker or the
+	// canonical default; mergePrefs (inside RegenerateEnv) reconciles an existing
+	// project's customized LETS_TRACKER and writes the winner to .env. So .env is
+	// the single source of the resolved value here, for both a fresh --tracker
+	// pick and a re-init that must preserve an existing non-beads adapter.
+	activeTracker := resolvedTracker(envPath)
+	if tracker := activeTracker; tracker != "" {
+		rulesDir := filepath.Join(projectRoot, ".claude", "rules")
+		// An explicit --tracker that lost to an existing .env value on re-init:
+		// surface it (mergePrefs keeps the existing adapter; --tracker is a
+		// fresh-init pick). Only when the requested flag differs from the winner.
+		if prefs.TrackerExplicit && prefs.Tracker != "" && prefs.Tracker != tracker {
+			result.Add(Step{Status: StepWarn, Message: fmt.Sprintf("--tracker=%q ignored: existing project LETS_TRACKER=%q wins on re-init (edit .lets/.env to change it); --tracker applies to a fresh init only.", prefs.Tracker, tracker)})
+		}
+		if !ValidTrackerName(tracker) {
+			// Never filepath.Join an unsanitized value - a hand-edited .env with
+			// LETS_TRACKER=../x must not escape .claude/rules/. Fail safe.
+			result.Add(Step{Status: StepWarn, Message: fmt.Sprintf("LETS_TRACKER %q is not a valid adapter name ([a-z0-9-]) - skipping tracker install", tracker)})
+		} else {
+			trackerSrc := filepath.Join(pluginRoot, "rules", "tracker-"+tracker+".md")
+			trackerData, terr := os.ReadFile(trackerSrc)
+			switch {
+			case os.IsNotExist(terr):
+				result.Add(Step{Status: StepWarn, Message: fmt.Sprintf("no adapter shipped for LETS_TRACKER=%q (expected tracker-%s.md) - check the value", tracker, tracker)})
+			case terr != nil:
+				return result, fmt.Errorf("read tracker rules %s: %w", trackerSrc, terr)
+			default:
+				trackerDst := filepath.Join(rulesDir, "tracker-"+tracker+".md")
+				// Drop a previously-installed, plugin-shipped tracker file that is no
+				// longer active (tracker switch). Whitelist-gated - user files safe.
+				removed, removeFailed := CleanupShippedTrackerFiles(rulesDir, tracker)
+				for _, r := range removed {
+					result.Add(Step{Status: StepOK, Message: fmt.Sprintf(".claude/rules/%s removed (tracker switched to %q)", r, tracker)})
+				}
+				for _, f := range removeFailed {
+					result.Add(Step{Status: StepWarn, Message: fmt.Sprintf("could not remove stale .claude/rules/%s - two adapters are loaded; remove it manually", f)})
+				}
+				dtr := drift.Check(trackerSrc, trackerDst)
+				if dtr.Detected() {
+					if err := os.MkdirAll(rulesDir, 0o755); err != nil {
+						return result, err
+					}
+					if err := AtomicWriteBytes(trackerDst, trackerData, 0o644); err != nil {
+						return result, fmt.Errorf("write tracker rules: %w", err)
+					}
+					switch dtr.State {
+					case drift.StateMissing:
+						result.Add(Step{Status: StepOK, Message: fmt.Sprintf(".claude/rules/tracker-%s.md installed (v%s)", tracker, dtr.PluginVersion)})
+					case drift.StateUnknown:
+						result.Add(Step{Status: StepOK, Message: fmt.Sprintf(".claude/rules/tracker-%s.md refreshed (was: unparseable, now v%s)", tracker, dtr.PluginVersion)})
+					default:
+						result.Add(Step{Status: StepOK, Message: fmt.Sprintf(".claude/rules/tracker-%s.md updated (v%s -> v%s)", tracker, dtr.InstalledVersion, dtr.PluginVersion)})
+					}
+				} else {
+					result.Add(Step{Status: StepSkip, Message: fmt.Sprintf(".claude/rules/tracker-%s.md (v%s up to date)", tracker, dtr.InstalledVersion)})
+				}
+				// Scaffold the optional board profile once (create-if-absent).
+				if msg, berr := ScaffoldBoardOnce(pluginRoot, rulesDir, tracker); berr != nil {
+					result.Add(Step{Status: StepWarn, Message: berr.Error()})
+				} else if msg != "" {
+					result.Add(Step{Status: StepOK, Message: msg})
+				}
+			}
+		}
+	}
+
+	// 9. beads. A non-beads adapter implies the skip regardless of the flag -
+	// `bd init` on a planfix-mcp/none project would create a wrong-store .beads/
+	// workspace. Belt-and-suspenders with init.md's $SKIP_BEADS_FLAG (the markdown
+	// sets the flag as UX; the binary must be correct for direct-CLI callers too).
+	switch {
+	case prefs.SkipBeads:
+		result.Add(Step{Status: StepSkip, Message: "beads (--skip-beads)"})
+	case activeTracker != "" && activeTracker != "beads":
+		result.Add(Step{Status: StepSkip, Message: fmt.Sprintf("beads (LETS_TRACKER=%s - non-beads adapter, bd init skipped)", activeTracker)})
+	default:
+		for _, s := range runBeadsInit(ctx, projectRoot) {
 			result.Add(s)
 		}
-	} else {
-		result.Add(Step{Status: StepSkip, Message: "beads (--skip-beads)"})
 	}
 
 	return result, nil

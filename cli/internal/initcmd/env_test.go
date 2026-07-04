@@ -117,8 +117,8 @@ func TestRegenerateEnv_PreservesForeignKeys(t *testing.T) {
 }
 
 func TestRegenerateEnv_PreservesUserTracker(t *testing.T) {
-	// Tracker has no CLI flag → cobra always fills prefs.Tracker from defaults.
-	// User-customized LETS_TRACKER in .env must survive regen unchanged.
+	// --tracker is a fresh-init pick, but an existing .env value wins on regen
+	// (inverted precedence). User-customized LETS_TRACKER must survive unchanged.
 	path := filepath.Join(t.TempDir(), ".env")
 	if err := os.WriteFile(path, []byte("LETS_LANGUAGE=English\nLETS_MERGE_BRANCH=main\nLETS_PR_FLOW=local\nLETS_TRACKER=linear\n"), 0o644); err != nil {
 		t.Fatal(err)

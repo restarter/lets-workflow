@@ -109,6 +109,9 @@ function clusterIdeas(items) {
 
 // ── PROMPTS (built from args; KEEP IN SYNC with backlog.md Phase 3 prompt) ──
 function backlogIdeatePrompt() {
+  // tracker: the "Use bd commands" instruction in this prompt is beads-only by design
+  // (subagent reads bd directly; see lets-rules "Tracker Adapters" exception - backlog
+  // is in the deferred analytical-migration set, not a violation of the invariant).
   return `ultrathink
 
 PROJECT_ROOT: ${projectRoot}. Do NOT read or search files outside this directory.

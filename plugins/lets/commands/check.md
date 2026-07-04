@@ -282,14 +282,14 @@ If `--json` was provided, emit a structured object instead of the console report
 
 ## Step 5: Link to Active Task
 
-Skip entirely if `--json` was set, or if mode is PR / `--file` (those aren't tied to the active branch's task). For local modes, if issues were found, record in beads:
+Skip entirely if `--json` was set, or if mode is PR / `--file` (those aren't tied to the active branch's task). For local modes, if issues were found, record in the tracker:
 
 Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detect-task")`.
-If multiple tasks found, skip beads comment.
+If multiple tasks found, skip the tracker comment.
 If active task found AND issues detected:
 
-```bash
-bd comments add <task-id> "Quick check ({mode}): {verdict}. {N} issues found."
+```lets-tracker
+comment-add task=<task-id> body="Quick check ({mode}): {verdict}. {N} issues found."
 ```
 
 If clean (no issues) - skip, don't add noise to the task.

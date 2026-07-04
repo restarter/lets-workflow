@@ -594,11 +594,11 @@ Display full report in console.
 ## Step 10: Link Review to Active Task
 
 Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detect-task")`.
-If multiple tasks found via fallback, skip beads comment.
+If multiple tasks found via fallback, skip the tracker comment.
 If active task found:
 
-```bash
-bd comments add <task-id> "Code review ({PR #X | local}): {verdict}. {N} issues found."
+```lets-tracker
+comment-add task=<task-id> body="Code review ({PR #X | local}): {verdict}. {N} issues found."
 ```
 
 ---
@@ -874,8 +874,8 @@ Saved to: .lets/reviews/{date}-plan-review.md
 Save to `.lets/reviews/{date}-plan-review.md`
 
 If active task found:
-```bash
-bd comments add <task-id> "Plan review: {verdict}. {N} issues found."
+```lets-tracker
+comment-add task=<task-id> body="Plan review: {verdict}. {N} issues found."
 ```
 
 ### Plan Review Output
@@ -884,7 +884,6 @@ bd comments add <task-id> "Plan review: {verdict}. {N} issues found."
 ```
 ┌─ LETS ───────────────────────┐
 │  Execute?      /lets:execute │
-│  New session?  /lets:start   │
 └──────────────────────────────┘
 ```
 

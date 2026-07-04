@@ -104,7 +104,7 @@ Then, inside the Claude Code session:
 | `/lets:end` | End session - save progress, sync tasks, create summary (`--pre-compact` snapshots before /compact without ending) |
 | `/lets:commit` | Commit with review and conventional commit format |
 | `/lets:done` | Finish task - create PR (GitHub mode) or merge locally |
-| `/lets:status` | Task overview and project status |
+| `/lets:status` | Read-only orient snapshot — where you are, what's in flight, what's next (tracker-universal) |
 | `/lets:note` | Add note to active task (`--pre-compact` snapshots the session before /compact) |
 
 ### Planning & Execution
@@ -317,7 +317,7 @@ LETS_MERGE_BRANCH=main
 # PR flow: github | bitbucket | local
 LETS_PR_FLOW=github
 
-# Task tracker (currently beads supported)
+# Task tracker adapter: beads | planfix-mcp | none  (selects .claude/rules/tracker-<name>.md; see docs/trackers.md) — non-beads adapters ship next release
 LETS_TRACKER=beads
 ```
 
@@ -373,7 +373,8 @@ The README is the tour; **[docs/](docs/)** is the manual.
 | [agents.md](docs/agents.md) | The 14 expert agents, what triggers each, tiered scoring, agent modes, and the actor agent. |
 | [parallel-work.md](docs/parallel-work.md) | Working on several tasks at once — `/lets:team` (autonomous agents) and `/lets:worktree` (parallel terminals). |
 | [autonomous.md](docs/autonomous.md) | Hands-off flows — Dynamic Workflows (`--workflow`) and the autonomous task pipeline (spawn → plan → execute, two gates). |
-| [tasks.md](docs/tasks.md) | Task tracking with beads — the task lifecycle, taking and creating tasks, notes, `/lets:backlog`, beads memory, shared backlogs for teams. |
+| [tasks.md](docs/tasks.md) | Task tracking — the task lifecycle, taking and creating tasks, notes, `/lets:backlog`, beads memory, shared backlogs for teams. |
+| [trackers.md](docs/trackers.md) | Pluggable tracker adapters — `LETS_TRACKER` selects `beads` (default) \| `planfix-mcp` \| `none`; one drift-tracked `tracker-<name>.md` per adapter, the neutral verb set, and how to add one. *(ships next release)* |
 | [commands.md](docs/commands.md) | Full reference for every `/lets:*` command. |
 | [configuration.md](docs/configuration.md) | `.lets/.env` settings, the `.lets/` file layout, `lets init` vs `bd init` setup order, and dependencies. |
 

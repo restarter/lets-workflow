@@ -15,7 +15,7 @@ LETS_MERGE_BRANCH=main
 # PR flow: github | bitbucket | local
 LETS_PR_FLOW=github
 
-# Task tracker (currently: beads)
+# Task tracker adapter: beads | planfix-mcp | none
 LETS_TRACKER=beads
 ```
 
@@ -24,7 +24,7 @@ LETS_TRACKER=beads
 | `LETS_LANGUAGE` | The language Claude responds in when it isn't clear from your message. An English language name (`English`, `Ukrainian`, `Japanese`, …) regardless of the script it's written in. |
 | `LETS_MERGE_BRANCH` | The branch tasks merge into and PRs target. Used wherever LETS would otherwise assume `main`. |
 | `LETS_PR_FLOW` | `github` — `/lets:done` pushes and opens a PR via `gh`. `bitbucket` — planned. `local` — no PR; `/lets:done` merges locally. |
-| `LETS_TRACKER` | The task tracker. Currently `beads`. (The schema is reserved for future trackers; today everything calls `bd` regardless.) |
+| `LETS_TRACKER` | The task tracker **adapter**: `beads` (default), `planfix-mcp`, or `none`. Selects the `.claude/rules/tracker-<name>.md` that `lets init` installs; commands resolve verbs through it. See [trackers.md](trackers.md). *(ships next release)* |
 | `LETS_RULES_SCOPE` | Where this project's workflow rules come from: `project` (its own `.claude/rules/lets-rules.md` copy — the default) or `user` (deliberately no project copy; rules come from the global `~/.claude/rules/lets-rules.md`). Set automatically by `/lets:init` when you pick "Rely on global"; `/lets:update` then leaves the project copy uncreated (`delegated`) instead of restoring it. Any value other than `user` behaves as `project`. *(ships next release)* |
 
 The first line of the file is `LETS_ENV_VERSION` — that's metadata (which `lets` version last wrote the file), not something you set. Keys you add yourself are preserved across `/lets:init` and `/lets:update`, kept under a `# User-added keys` separator.
@@ -83,7 +83,7 @@ Don't edit either `lets-rules.md` copy by hand — they're managed copies, rewri
 
 Run `/lets:init` first — it'll run `bd init` for you if both `lets` and `bd` are on `$PATH`; you can also run `bd init` manually afterwards. The two tools touch different files:
 
-- **`lets init`** writes only LETS-owned `.gitignore` entries (`.lets/`, `.worktrees/`), creates the `.lets/` layout and `.lets/.env`, copies `.claude/rules/lets-rules.md`, and sets the statusline in `.claude/settings.json`.
+- **`lets init`** writes only LETS-owned `.gitignore` entries (`.lets/`, `.worktrees/`, and `.mcp.json` — which can carry a tracker adapter's secret token), creates the `.lets/` layout and `.lets/.env`, copies `.claude/rules/lets-rules.md`, and sets the statusline in `.claude/settings.json`.
 - **`bd init`** adds its own `.gitignore` entries (`.beads/...`, `issues.jsonl`, `.beads-credential-key`), installs a project-scoped SessionStart + PreCompact hook block into `.claude/settings.json`, and creates `CLAUDE.md` / `AGENTS.md` if they don't exist yet.
 
 > **Known quirk:** bd's project-scoped PreCompact hook runs in addition to the plugin's, so on a compaction the rules get injected twice. Harmless — being tracked for a fix.
