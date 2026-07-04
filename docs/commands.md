@@ -10,7 +10,7 @@ Every `/lets:*` command, grouped. For the day-to-day flow see **[workflow.md](wo
 | `/lets:end` | End the session — save progress, sync the task tracker, write a summary for next time. |
 | `/lets:commit` | Commit changes — review, conventional commit message, task ID in the scope and a `Task:` footer. Use this instead of `git commit`. Also auto-triggers on "commit" in conversation. |
 | `/lets:done` | Finish the task — push the branch and open a PR (GitHub mode), or merge locally and close the task (local/bitbucket). |
-| `/lets:status` | Task overview and project status — ready, in progress, blocked, recent activity. |
+| `/lets:status` | Read-only orient snapshot — where you are, what's in flight, what's next (tracker-universal). |
 | `/lets:note` | Add a note to the active task — a decision, gotcha, fact, or reference. |
 
 See **[tasks.md](tasks.md)** for the task lifecycle.
