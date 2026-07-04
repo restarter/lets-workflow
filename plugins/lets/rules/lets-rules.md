@@ -441,7 +441,7 @@ Every response ends with exactly ONE footer - never mix two. Pick the type by wh
 | Skill | Category | When |
 |-------|----------|------|
 | `/lets:start` | Session | Beginning of session |
-| `/lets:end` | Session | End of session - settlement pass (commit / push / progress / summary checks, auto-skips when tidy); `--pre-compact` also writes a resume snapshot and keeps the session going |
+| `/lets:end` | Session | End of session - settlement pass (commit / push / progress / snapshot, auto-skips when tidy); `--pre-compact` skips settlement and only writes the shared snapshot, keeping the session going |
 | `/lets:done` | Task | Task is complete |
 | `/lets:commit` | Code | Ready to commit (also auto-triggers on "commit", "закоміть") |
 | `/lets:check` | Code | Quick sanity check (~30s) - inline 6-lens; same targets as `/lets:review` (local/staged/last-commit/branch/PR/`--file`/`--plan`/`--json`), no subagents |
@@ -489,3 +489,4 @@ You don't have programmatic access to your own token count, and context window s
 - If user asks how much context is used, tell them to run `/context` - don't speculate.
 - You cannot measure context pressure — so never infer "the session is long" from tool-call count, elapsed time, or files touched, and never proactively push `/lets:end` / a "fresh window" on that guess. Raise wrapping up only on a real signal: the user brings it up, compaction is imminent, or the user ran `/context` and it's high.
 - Trust user's judgement: if they want to continue despite a long session, continue.
+- **Post-compact, your in-window context is real context - use it (the file still wins).** After a `/compact` you retain the compacted conversation (active task, next step, decisions); reconstruct from it, don't act like a blank slate. This does NOT license skipping the durable trail: in any recovery flow (`/lets:start`, `--continue`, take-task) still read the snapshot file - it is authoritative and catches what compaction dropped. Memory and file are additive; on conflict, trust the file.

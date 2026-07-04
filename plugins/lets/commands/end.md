@@ -1,11 +1,11 @@
 ---
-description: End a work session - a settlement pass that reconciles uncommitted / unpushed work + session context into git, beads, and a summary file. --pre-compact also writes a resume snapshot and keeps the session going.
+description: End a work session - a settlement pass that reconciles uncommitted / unpushed work + session context into git, beads, and a session snapshot file. --pre-compact skips settlement and only writes the shared snapshot, keeping the session going.
 argument-hint: "[--pre-compact]"
 ---
 
 # Session End
 
-End a work session cleanly. `/lets:end` is a **settlement pass**: it reconciles the volatile session state (uncommitted changes, unpushed commits, in-conversation context) into durable stores (git remote, beads, a session-summary file) so the window can close - or compact - without losing anything.
+End a work session cleanly. `/lets:end` is a **settlement pass**: it reconciles the volatile session state (uncommitted changes, unpushed commits, in-conversation context) into durable stores (git remote, beads, a session-snapshot file) so the window can close - or compact - without losing anything.
 
 **This is NOT task completion.** Use `/lets:done` to finish a TASK; `/lets:end` ends a SESSION.
 
@@ -15,13 +15,15 @@ End a work session cleanly. `/lets:end` is a **settlement pass**: it reconciles 
 
 ## Modes
 
-One settlement core, two modifiers:
+One settlement core (the default flow); the two flags below are separate paths, NOT modifiers of it:
 
-- **(default)** - full settlement pass (Steps 1-3) + worktree hint + a one-line terminal prose hint (Steps 4-5 / Output). Auto-skip keeps it silent on a tidy session.
-- **`--pre-compact`** (alias `--resume`) - a pre-compaction snapshot, **NOT a session end**: run the settlement pass **minus** the task-done offer (S3) and **minus** the terminal hint, **plus** an always-written resume snapshot (Step 4). Each step states its own `--pre-compact` delta. The session continues into `/compact`.
+- **(default)** - full settlement pass (Steps 1-3) + worktree hint + a one-line terminal prose hint (Step 4 / Output). Auto-skip keeps it silent on a tidy session.
+- **`--pre-compact`** (alias `--compact`) - a pre-compaction snapshot, **NOT a session end and NOT a settlement pass**. It runs NO settlement (no commit / push / progress / finish offers) - it ONLY writes the shared session snapshot via `session-snapshot` (`kind=precompact`) and lets the session continue into `/compact`. **Identical to `/lets:note --pre-compact`** - both delegate to the same primitive with the skill owning task detection. See the early-exit at the top of Step 1.
 - **`--fast`** - DEPRECATED. It now runs the default flow (which already stays silent when there is nothing to settle). Emit one line - `--fast is deprecated; running the unified /lets:end (it auto-skips when there's nothing to settle).` - then proceed as default. (Accepted for one release; removal is a follow-up.)
 
 ## Step 1: Detect (silent)
+
+**`--pre-compact` early exit (runs BEFORE any settlement detection):** if invoked with `--pre-compact` / `--compact`, do NOT run the settlement detect/settle steps. Delegate straight to the snapshot primitive - `Skill(skill: "lets:session-snapshot", args: "kind=precompact pointer=auto")` - then show the `--pre-compact` Output and STOP. This path is byte-identical to `/lets:note --pre-compact`. Steps 1-3 below are the DEFAULT (settlement) flow only.
 
 Read all state ONCE, compute which settlements are actionable, prompt nothing here.
 
@@ -75,7 +77,7 @@ fi
 GIT_DIR=$(git rev-parse --git-dir 2>/dev/null); echo "GIT_DIR=$GIT_DIR"
 ```
 
-**Actionable set:** S1 if DIRTY; S2 if active task `in_progress` AND `SESSION_COMMITS > 0`; S3 same gate as S2; S5 if `AHEAD > 0` (or no-upstream + local commits exist). S4 always; S6 if `GIT_DIR` contains `worktrees/`; S7 if `--pre-compact`.
+**Actionable set:** S1 if DIRTY; S2 if active task `in_progress` AND `SESSION_COMMITS > 0`; S3 same gate as S2; S5 if `AHEAD > 0` (or no-upstream + local commits exist). S4 always; S6 if `GIT_DIR` contains `worktrees/`. (No S7 - the pre-compact snapshot is the Step 1 early exit above, not a settlement step.)
 
 **No-boundary rule:** when `START_REF` is empty (no `session:`, no back-compat ref) `SESSION_COMMITS` is unknown - **S3 SKIPS** (never offer to finish a task on a guess) and **S2 is a best-effort OFFER** carrying the staleness NOTE (range approximate). S1/S4/S5/S6 are unaffected.
 
@@ -93,7 +95,7 @@ AskUserQuestion(
     options: [
       { label: "Commit", description: "Run /lets:commit for the uncommitted changes" },            # S1, only if DIRTY
       { label: "Post progress", description: "Add a Session Progress comment to {task-id}" },        # S2, only if actionable
-      { label: "Finish task", description: "Run /lets:done - work looks complete" },                 # S3, only if actionable; OMIT under --pre-compact
+      { label: "Finish task", description: "Run /lets:done - work looks complete" },                 # S3, only if actionable (pre-compact never reaches Step 2 - it early-exits in Step 1)
       { label: "Push", description: "Push {N} commits to origin/{branch} (no PR)" }                  # S5, only if AHEAD>0; label names the concrete target = informed consent
     ],
     multiSelect: true
@@ -104,19 +106,27 @@ AskUserQuestion(
 **Execution order (run the picks in this fixed order; deselect-all = "end as-is"):**
 
 1. **Commit** -> `Skill(skill: "lets:commit")`. (If both Commit and Finish task are picked, commit runs first, then hand off.)
-2. **Finish task** -> **HAND-OFF + STOP.** Say "Task looks done - handing off to /lets:done." then `Skill(skill: "lets:done")` and **STOP the entire /lets:end flow** (do NOT run Step 3, Step 4, or Output). `/lets:done` owns everything after: it commits/pushes/PRs/closes AND ends with its own terminal menu (which may switch branches or even call `/lets:end`). If end "continued" past the hand-off, the branch-slugged summary could land on the wrong branch and end<->done could recurse. So done SUPERSEDES S5 (push), S2 (done writes its own completion comment), S4 (no end-summary when finishing) and S6 (done shows its own worktree hint). The one residual path - done's menu -> "End session" -> a fresh `/lets:end` - is safe: that second end finds everything settled and silently wraps.
+2. **Finish task** -> **HAND-OFF + STOP.** Say "Task looks done - handing off to /lets:done." then `Skill(skill: "lets:done")` and **STOP the entire /lets:end flow** (do NOT run Step 3, Step 4, or Output). `/lets:done` owns everything after: it commits/pushes/PRs/closes AND ends with its own terminal menu (which may switch branches or even call `/lets:end`). If end "continued" past the hand-off, the branch-slugged snapshot could land on the wrong branch and end<->done could recurse. So done SUPERSEDES S5 (push), S2 (done writes its own completion comment), S4 (no end-snapshot when finishing) and S6 (done shows its own worktree hint). The one residual path - done's menu -> "End session" -> a fresh `/lets:end` - is safe: that second end finds everything settled and silently wraps.
 3. **Push** (only reached when Finish task was NOT picked) -> upstream-aware push of the current branch, NO PR, never `--force`: `git push` when upstream exists and ahead; `git push -u origin <branch>` on first push. The explicit multiSelect pick IS the approval (same as picking "Commit" authorizes the commit - satisfies the git.md / AUTO MODE "push needs explicit approval" rule, which is why the option label always names the concrete target).
-4. **Post progress** (only reached when Finish task was NOT picked) -> write the progress comment (tracker `comment-add`, Step 3 template).
+4. **Post progress** (only reached when Finish task was NOT picked) -> remember this pick; the progress comment is written in Step 3b, AFTER Step 3a produces the snapshot file it references. Do NOT write it here.
 
 ## Step 3: Write artifacts
 
-(Reached in the default + `--pre-compact` flows; skipped only on the Finish-task hand-off, which stopped the flow in Step 2.)
+(Reached in the DEFAULT flow only; the `--pre-compact` early exit in Step 1 handled that path. Skipped on the Finish-task hand-off, which stopped the flow in Step 2.)
 
-### 3a. Progress comment (only if "Post progress" was picked)
+### 3a. Session snapshot (ALWAYS, written FIRST)
 
-Records task-level context for multi-session work. **MANDATORY:** the `Claude session: $CLAUDE_CODE_SESSION_ID` line MUST appear between `## Session progress` and `### Range` - bash expands the env var at runtime in the heredoc, so the tracker gets the literal UUID. The commit LIST is intentionally dropped (git owns it); keep a range pointer. (Decision A: the range is `session:`-anchored, so a second `/lets:end` in one session may re-cover already-reported commits - acceptable by design.)
+Write the session-level snapshot that bootstraps the next `/lets:start`, via the shared primitive so end's snapshot and the pre-compact snapshot never drift. The `pointer` arg depends on whether "Post progress" was picked in Step 2:
 
-The bash block writes the progress body to a temp file; the `comment-add` verb submits it via `body-file=` (lets-rules "Tracker Adapters" - the orchestrator fills the `{...}` narrative fields first):
+`Skill(skill: "lets:session-snapshot", args: "kind=end pointer=<off if Post progress was picked, else auto> task-id={task-id} range={RANGE_DESC}")` - `task-id` from Step 1; `range` LAST (contains spaces).
+
+- `pointer=off` (Post progress picked) -> the skill writes NO task comment; end folds the pointer into the progress comment's `### Snapshot` line (3b).
+- `pointer=auto` (Post progress NOT picked) -> the skill writes the standalone one-line pointer to its own file; 3b then does nothing task-side. Either way exactly ONE task comment, and the pointer string lives ONLY in the skill (Step 4) - no cross-file duplication.
+- `kind=end` -> file `<ts>-<slug>.md` (no `-precompact-` infix). `range` -> the skill includes the `### Range` block. Capture the returned `SNAP_FILE` path - used in 3b + the Output block.
+
+### 3b. Progress comment (only when "Post progress" was picked)
+
+**If "Post progress" was picked in Step 2** (3a passed `pointer=off`): write the `## Session progress` comment. **MANDATORY:** the `Claude session: $CLAUDE_CODE_SESSION_ID` line MUST appear between `## Session progress` and `### Range` (bash expands the env var at runtime in the heredoc, so the tracker gets the literal UUID). The commit LIST is intentionally dropped (git owns it); keep a range pointer. End the comment with a `### Snapshot` line pointing at 3a's file - this IS the task-side pointer, so do NOT also write a standalone one. The bash block writes the body to a temp file; the `comment-add` verb submits it via `body-file=` (lets-rules "Tracker Adapters" - the orchestrator fills the `{...}` narrative fields first):
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel); mkdir -p "$LETS_PROJECT_ROOT/.lets/cache"
@@ -136,6 +146,9 @@ Claude session: $CLAUDE_CODE_SESSION_ID
 
 ### Context for next session
 - {recovery info}
+
+### Snapshot
+- .lets/sessions/{SNAP_FILE basename}
 EOF
 ```
 
@@ -143,54 +156,9 @@ EOF
 comment-add task=<task-id> body-file=.lets/cache/progress-<task-id>.md
 ```
 
-### 3b. Session summary file (ALWAYS)
+**If "Post progress" was NOT picked:** do NOTHING here - 3a passed `pointer=auto`, so the skill already wrote the standalone pointer to its own file (the pointer string lives ONLY in the skill's Step 4 - no duplication).
 
-Session-level context that bootstraps the next `/lets:start`. Always written (the future no-beads user has only this). `--pre-compact` delta: same template, written to a `-precompact-`-slugged filename to mark a mid-session snapshot.
-
-```bash
-LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-BRANCH=$(git branch --show-current); BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
-mkdir -p "$LETS_PROJECT_ROOT/.lets/sessions"
-SUMMARY_FILE="$LETS_PROJECT_ROOT/.lets/sessions/$(date +%Y-%m-%d-%H%M)-${BRANCH_SLUG}.md"            # default
-# --pre-compact: SUMMARY_FILE="$LETS_PROJECT_ROOT/.lets/sessions/$(date +%Y-%m-%d-%H%M)-precompact-${BRANCH_SLUG}.md"
-
-# Resolve the actual transcript path ($CLAUDE_CODE_SESSION_ID is the Bash-injected env var).
-TRANSCRIPT_PATH=$(find "$HOME/.claude/projects" -maxdepth 2 -name "${CLAUDE_CODE_SESSION_ID}.jsonl" 2>/dev/null | head -1)
-TRANSCRIPT_PATH=${TRANSCRIPT_PATH:-"(not found)"}
-```
-
-Write `$SUMMARY_FILE` with this template - **no `### Commits` list**, a `### Range` pointer instead. `${CLAUDE_SESSION_ID}` is command-load-time template substitution (already the literal UUID) - write it through verbatim.
-
-```markdown
-## Session Summary {YYYY-MM-DD HH:MM}
-
-### Claude Session
-- ID: `${CLAUDE_SESSION_ID}`
-- Transcript: `$TRANSCRIPT_PATH`
-
-### Range
-- {RANGE_DESC}
-
-### Done
-- {what was completed - narrative, not a commit dump}
-
-### In Progress / Next
-- {task id}: {what remains}; next: {concrete next action}
-
-### Key Decisions
-- {decisions / trade-offs}
-
-### Context for Next Session
-- Branch: {branch}; Task: {task-id and title}; {anything needed to continue}
-```
-
-## Step 4: Resume snapshot (--pre-compact only)
-
-Default flow: skip this step.
-
-`--pre-compact`: write the recovery-grade `## RESUME` snapshot via the shared skill - `Skill(skill: "lets:pre-compact-note")`. This runs UNCONDITIONALLY (even if the user skipped every settlement in Step 2). The skill detects the active task, writes the snapshot, and falls back to a `.lets/sessions/` file when there is no active task. Single source of truth shared with `/lets:note --pre-compact` - the template never drifts.
-
-## Step 5: Worktree hint
+## Step 4: Worktree hint
 
 Output-time, never a prompt. If `GIT_DIR` contains `worktrees/`: extract the worktree name (last path segment); if the task finished this session show the cleanup line, else show the resume line. (When the task was finished via the Step 2 hand-off, `/lets:done` already showed this - end never reaches here in that case.)
 
@@ -205,7 +173,7 @@ Git: {clean / N uncommitted}
 Branch: {branch}
 Task: {task-id and title, or "none"}
 Settled: {e.g. "committed; pushed 3" / "nothing - tidy session"}
-Summary: .lets/sessions/{dated}-{slug}.md
+Snapshot: .lets/sessions/{dated}-{slug}.md
 ```
 
 If in a worktree, append one line - cleanup (task done) or resume (`cd {LETS_PROJECT_ROOT from LETS Config} && claude -> /lets:start`).
@@ -221,21 +189,22 @@ Then a SINGLE prose line (no AskUserQuestion, no wrap-up card):
 ```
 ## Pre-Compact Snapshot
 
-Resume comment -> {task-id}  (or {session-file path} if no active task)
-Session summary -> .lets/sessions/{dated}-precompact-{branch}.md
+Snapshot -> .lets/sessions/{dated}-precompact-{branch}.md
+Task pointer -> {task-id}  (only if a task is unambiguously active; else "none - file only")
 Branch: {branch}
 
-Safe to /compact now - same window continues. Resume context: the active tracker's show + comment-list for {task-id} (beads: bd show {task-id} + bd comments {task-id})
+Safe to /compact now - same window continues. Resume: /lets:start reads the snapshot file (the tracked task holds task-level context).
 ```
 
-Then STOP - no AskUserQuestion, no push, no `git checkout`. The session continues.
+Then STOP - no AskUserQuestion, no settlement, no push, no `git checkout`. The session continues. (Identical output contract to `/lets:note --pre-compact`.)
 
 ## Rules
 
 - **end never writes the `.task-<slug>` boundary** - it only reads `session:` (take-task + the hook own writes).
 - **Tidy session = silent wrap** - when nothing is actionable, end produces zero prompts.
 - **NEVER push without explicit user approval** - the Step 2 multiSelect pick is that approval.
-- **Always write the session summary** (except on the Finish-task hand-off, where `/lets:done` owns the record).
+- **Always write the session snapshot** via the shared `session-snapshot` primitive (except on the Finish-task hand-off, where `/lets:done` owns the record). The snapshot is file-primary; the task gets at most a one-line pointer.
+- **`--pre-compact` runs NO settlement** (snapshot-only; it early-exits at the top of Step 1).
 - **End with a one-line compact/clear prose hint, never a wrap-up card.**
 - **Suggest `/lets:done`** only when there is real work this session (S3 gate) - don't nag every end.
 - Respond in user's language.
