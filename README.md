@@ -104,7 +104,7 @@ Then, inside the Claude Code session:
 | `/lets:end` | End session - save progress, sync tasks, create summary (`--pre-compact` snapshots before /compact without ending) |
 | `/lets:commit` | Commit with review and conventional commit format |
 | `/lets:done` | Finish task - create PR (GitHub mode) or merge locally |
-| `/lets:status` | Task overview and project status |
+| `/lets:status` | Read-only orient snapshot — where you are, what's in flight, what's next (tracker-universal) |
 | `/lets:note` | Add note to active task (`--pre-compact` snapshots the session before /compact) |
 
 ### Planning & Execution

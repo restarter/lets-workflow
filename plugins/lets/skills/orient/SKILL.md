@@ -18,16 +18,9 @@ Built on git + `detect-task` + neutral tracker verbs, so it degrades cleanly on 
 
 Invoke `Skill(skill: "lets:detect-task")` -> an id or None. (A skill may invoke another skill; this is a normal nested `Skill`-tool call in the same orchestrator context.)
 
-**Inline fallback** (only if the nested `Skill` call is unavailable): read the task-state file, else parse the branch name - the same precedence `detect-task` uses, minimal form:
+**Inline fallback** (only if the nested `Skill` call is unavailable - rare: skill-invokes-skill is sound, this is belt-and-suspenders): do NOT re-derive the id with a partial copy of detect-task's precedence ladder (it would rot when the branch format changes and would drop detect-task's merge-branch liveness probe + `list-by-status` fallback). Instead skip the active-task line and note it degraded - the In flight section (Step 3) still surfaces any in_progress task. `detect-task` stays the single source of branch-format truth.
 
-```bash
-LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-BRANCH=$(git branch --show-current); BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
-sed -n 's/^task: //p' "$LETS_PROJECT_ROOT/.lets/sessions/.task-${BRANCH_SLUG}" 2>/dev/null | head -1
-# else: id is the segment after feature/ or worktree- , up to the first -<slug> boundary
-```
-
-If an id resolves, get its title with the tracker's `show`:
+When Step 1 yields an id, get its title with the tracker's `show`:
 
 ```lets-tracker
 show task=<id>   # returns {id, title, status, url}

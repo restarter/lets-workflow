@@ -70,10 +70,10 @@ LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 ```
 
 ```lets-tracker
-stats
 list-by-status status=open limit=30
-list-by-status status=in_progress
 ```
+
+(`stats` + the in_progress list already came from the orient snapshot above - don't re-fetch them.)
 
 ```bash
 git log --oneline -15

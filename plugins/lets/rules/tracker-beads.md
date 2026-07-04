@@ -29,7 +29,7 @@ The reference adapter. Binds the neutral verbs to the `bd` CLI - the historical,
 | comment-list   | OPT  | yes | `bd comments <id>` |
 | list-by-status | OPT  | yes | `bd list --status=<status> [--json] [--limit N]`; `--json` exposes `status`/`priority` for parsing. For id-only output, parse `--json` — bd has no `--format=ids` (an unknown `--format` value yields empty output, not an error) |
 | search         | OPT  | yes | `bd search <query>` |
-| ready/stats    | OPT  | yes | `bd ready [--limit N]` (`limit=0` → `--limit 0` = ALL ready tasks, the ready/full views' contract) / `bd stats` / `bd blocked` (dep-graph tree) / per-label progress + priority histogram (see Notes) |
+| ready/stats    | OPT  | yes | `bd ready [--limit N]` (`limit=0` → `--limit 0` = ALL ready tasks; used by `/lets:backlog`) / `bd stats` / `bd blocked` (dep-graph tree) / per-label progress + priority histogram (see Notes) |
 | label          | OPT  | yes | bare `label` (all project labels, e.g. the `epic:*` set) → `bd label list-all`; `label task=<id>` → `bd label list <id>` (one issue's labels); `label add task=<id> value=<l>` → `bd label add <id> <l>`. The bare verb is `list-all`, NOT `bd label list` (which requires an id and errors without one) |
 | assignee       | OPT  | yes | `bd update <id> --assignee=<name>` |
 | set-field      | OPT  | yes | `set-field task=<id> description-file=<path>` → `bd update <id> --description="$(cat <path>)"` (overwrite); `set-field task=<id> priority=<0-4>` → `bd update <id> --priority=<0-4>` (backlog Reprioritize) |

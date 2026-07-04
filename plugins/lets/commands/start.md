@@ -38,7 +38,7 @@ Restore context and prepare for work. **User MUST select a task before working.*
 - Deliberate **NO-TASK** session stance. Do NOT select, claim, or auto-create a task.
 - **Precedence:** mutually exclusive with `<task-id>` and `--continue`. If an explicit task-id or `--continue` is ALSO present, the explicit task **wins** (run the normal task flow) and `--main` is ignored - tell the user it was dropped because a task was specified.
 - **Skip** Step 5 (Task Selection), Step 6 (Take Task), Step 8 (Task Size Assessment) - all task-bound.
-- **Run** Step 1 (session history), Step 2 (git state), Step 3 (orient - the backlog is the assistant's working material).
+- **Run** Step 1 (session history), Step 2 (git state). The orient snapshot is rendered once by Main Mode M1 (below), AFTER the session-boundary write - do NOT also run Step 3 (that would render orient twice).
 - Then go to `## Main Mode` (below) instead of Steps 4-9.
 
 **If no arguments** -> full flow (Steps 1-9 as below)
@@ -94,7 +94,7 @@ The orient snapshot (Step 3) already shows In flight + Next up - don't repeat th
 **Every session needs a task.** From the orient snapshot, offer the moves:
 
 > - **Resume** the active task if In flight shows one you want to continue.
-> - **Pick** one from Next up.
+> - **Pick** one from Next up (the top 5 ready - for the full list, `bd ready` or `/lets:backlog`).
 > - **Create** a new task (the `create-task` skill - tracker `create` verb), or claim an existing one (tracker `set-status=in_progress`).
 
 **If user doesn't want to pick a task** but describes work (e.g., "just want to fix proxy config"):
@@ -173,7 +173,7 @@ You do **NOT** write or edit code in this mode. The moment the user wants to imp
 
 ### Step M1: Orient
 
-Steps 1-3 already ran (sessions, git, orient). Main mode skips `take-task`, so save the **session boundary only** here (so `/lets:end` can still diff the session). Main mode has NO claimed task, so the `.task` file gets `session:` ONLY - never `task:`/`start:`, which would make `.task-main` look like a trunk claim and mis-fire trunk-mode. Then add a one-line backlog pulse:
+Steps 1-2 already ran (sessions, git). Main mode skips `take-task`, so save the **session boundary only** here (so `/lets:end` can still diff the session). Main mode has NO claimed task, so the `.task` file gets `session:` ONLY - never `task:`/`start:`, which would make `.task-main` look like a trunk claim and mis-fire trunk-mode. Then add a one-line backlog pulse:
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)

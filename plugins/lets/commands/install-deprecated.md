@@ -87,7 +87,7 @@ Team:     /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /le
 | `/lets:update` | Setup | Sync project with the current release - `.lets/.env` + rules self-heal (incl. the user-level global rules when installed), plus `lets` binary / plugin version status |
 | `/lets:worktree` | Utility | Create/manage worktrees for parallel sessions |
 | `/lets:team` | Utility | Parallel implementation with Agent Teams |
-| `/lets:status` | Utility | Task overview anytime |
+| `/lets:status` | Utility | Read-only orient snapshot — where you are, what's in flight, what's next |
 | `/lets:note` | Utility | Add note to active task |
 | `/lets:statusline` | Utility | Manage & persist statusline appearance - light/dark, compact, hidden rows *(ships next release)* |
 | `/lets:backlog` | Planning | Backlog review (multi-agent) + `--fast` quick no-agent pulse + interactive cleanup triage |
