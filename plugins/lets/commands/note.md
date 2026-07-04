@@ -25,7 +25,7 @@ Use `/lets:note` when you want to add extra context that doesn't fit those flows
 
 ## Step 0: Argument Parsing
 
-**If `--pre-compact` (alias `--resume`) is passed** -> run **Pre-Compact Resume Mode** (below) INSTEAD of Steps 3-4: no type prompt, produce ONE recovery-grade snapshot. Do NOT run Step 1's interactive task prompt - the `session-snapshot` skill owns task detection (file-primary: ambiguity -> file only, no prompt), keeping this byte-identical to `/lets:end --pre-compact`. Still run the verify (conditional - only when a pointer was written) and show the Pre-Compact output below, NOT the generic Output box.
+**If `--pre-compact` (alias `--resume`) is passed** -> run **Pre-Compact Resume Mode** (below) INSTEAD of Steps 3-4: no type prompt, produce ONE recovery-grade snapshot. Do NOT run Step 1's interactive task prompt - the `session-snapshot` skill owns task detection (file-primary: ambiguity -> file only, no prompt), keeping this byte-identical to `/lets:end --pre-compact`. Then show the Pre-Compact output below, NOT the generic Output box (no separate verify - the skill returns the path + task id, and `/lets:end --pre-compact` likewise just delegates and stops).
 
 **Otherwise** -> normal flow (Steps 1-6).
 
@@ -151,7 +151,7 @@ Run this right before `/compact` (or when a long session is about to be auto-sum
 
 `Skill(skill: "lets:session-snapshot", args: "kind=precompact pointer=auto")`
 
-The skill gathers session + git state, ALWAYS writes the snapshot to a `.lets/sessions/` file, and adds a one-line pointer to the active task only when one is unambiguously active. It returns the snapshot file path (and the task id if a pointer was written). Verify from that return - the tracker's `show` for the task ONLY when a pointer was written; otherwise skip it (no task to show). Then show the Pre-Compact output below - NOT the generic `## Output` box (this path has its own, identical to `/lets:end --pre-compact`):
+The skill gathers session + git state, ALWAYS writes the snapshot to a `.lets/sessions/` file, and adds a one-line pointer to the active task only when one is unambiguously active. It returns the snapshot file path (and the task id if a pointer was written) - report directly from that return; no separate verify round-trip (this keeps the path symmetric with `/lets:end --pre-compact`, which also just delegates and stops). Then show the Pre-Compact output below - NOT the generic `## Output` box (this path has its own, identical to `/lets:end --pre-compact`):
 
 ```
 ## Pre-Compact Snapshot

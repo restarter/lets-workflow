@@ -48,11 +48,18 @@ echo "TRANSCRIPT_PATH=$TRANSCRIPT_PATH"
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 BRANCH_SLUG=$(git branch --show-current | tr '/' '-')
 mkdir -p "$LETS_PROJECT_ROOT/.lets/sessions"
-# kind=precompact -> SNAP_FILE=".../$(date +%Y-%m-%d-%H%M)-precompact-${BRANCH_SLUG}.md"
-# kind=end        -> SNAP_FILE=".../$(date +%Y-%m-%d-%H%M)-${BRANCH_SLUG}.md"
+TS=$(date +%Y-%m-%d-%H%M)
+# Keep ONLY the SNAP_BASENAME line matching the `kind` arg (delete the other):
+SNAP_BASENAME="${TS}-precompact-${BRANCH_SLUG}.md"   # kind=precompact
+SNAP_BASENAME="${TS}-${BRANCH_SLUG}.md"              # kind=end
+SNAP_FILE="$LETS_PROJECT_ROOT/.lets/sessions/${SNAP_BASENAME}"
+# ECHO both - a bash var is invisible to the Write tool, and the minute-precise
+# basename must be reused VERBATIM downstream (Step 4 pointer + the Return), never recomputed.
+echo "SNAP_BASENAME=$SNAP_BASENAME"
+echo "SNAP_FILE=$SNAP_FILE"
 ```
 
-Write `$SNAP_FILE` via the Write tool with the template below, substituting the bash-captured `$SID` / `$TRANSCRIPT_PATH` from Step 2. Use ONLY that single bash session-id channel (`$CLAUDE_CODE_SESSION_ID`, captured as `$SID`) - do NOT use the command-load-time template channel (the `CLAUDE_SESSION_ID` template variable in `${...}` form), which is fragile inside a multiline Write arg (lets-bdkvd QA #13) and would itself be substituted here if written literally. English; one continuous line per paragraph - no hard wrap. For any section with nothing to record, write a single `- (none)` stub, never a blank block - EXCEPT `### Range`, which is OMITTED ENTIRELY (not stubbed) unless the caller passed `range`: when `range` is present, insert a `### Range` block (`- {RANGE_DESC}`) between `### Remaining + NEXT STEP` and `### Compaction`. So the literal template below has no Range section.
+Write `$SNAP_FILE` (the echoed path) via the Write tool with the template below, substituting the bash-captured `$SID` / `$TRANSCRIPT_PATH` from Step 2 - and reuse `$SNAP_BASENAME` verbatim in Step 4 + the Return, never recomputing the minute-precise timestamp. Use ONLY that single bash session-id channel (`$CLAUDE_CODE_SESSION_ID`, captured as `$SID`) - do NOT use the command-load-time template channel (the `CLAUDE_SESSION_ID` template variable in `${...}` form), which is fragile inside a multiline Write arg (lets-bdkvd QA #13) and would itself be substituted here if written literally. English; one continuous line per paragraph - no hard wrap. For any section with nothing to record, write a single `- (none)` stub, never a blank block - EXCEPT `### Range`, which is OMITTED ENTIRELY (not stubbed) unless the caller passed `range`: when `range` is present, insert a `### Range` block (`- {RANGE_DESC}`) between `### Remaining + NEXT STEP` and `### Compaction`. So the literal template below has no Range section.
 
     ## RESUME {YYYY-MM-DD HH:MM} - {short label}
 
@@ -81,12 +88,12 @@ Write `$SNAP_FILE` via the Write tool with the template below, substituting the 
 
 ## Step 4: One-line task pointer (conditional)
 
-If `pointer=auto` AND a task is unambiguously active, compose the one-line pointer to a temp file (it needs `$(date)` + the just-written basename), then submit it via the tracker `comment-add` verb with `body-file=` (lets-rules "Tracker Adapters"):
+If `pointer=auto` AND a task is unambiguously active, compose the one-line pointer to a temp file (the heading date is `$(date +%Y-%m-%d)`; the snapshot basename is the `SNAP_BASENAME` echoed in Step 3 - reuse it VERBATIM, do NOT recompute the minute-precise timestamp, or the pointer drifts off the file actually written), then submit it via the tracker `comment-add` verb with `body-file=` (lets-rules "Tracker Adapters"):
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel); mkdir -p "$LETS_PROJECT_ROOT/.lets/cache"
 cat > "$LETS_PROJECT_ROOT/.lets/cache/pointer-<task-id>.md" <<EOF
-## RESUME $(date +%Y-%m-%d) - snapshot: .lets/sessions/<snap-file-basename>
+## RESUME $(date +%Y-%m-%d) - snapshot: .lets/sessions/<SNAP_BASENAME echoed in Step 3>
 EOF
 ```
 
@@ -98,4 +105,4 @@ Otherwise (`pointer=off`, or no unambiguous task): write nothing to the task - t
 
 ## Return
 
-Report to the caller: the snapshot file path, and the task id if a pointer was written. The caller handles any further output.
+Report to the caller: the snapshot file path (the `SNAP_FILE` echoed in Step 3), and the task id if a pointer was written. The caller handles any further output.
