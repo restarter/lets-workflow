@@ -25,7 +25,7 @@ Use `/lets:note` when you want to add extra context that doesn't fit those flows
 
 ## Step 0: Argument Parsing
 
-**If `--pre-compact` (alias `--resume`) is passed** -> run **Pre-Compact Resume Mode** (below) INSTEAD of Steps 3-4: no type prompt, produce ONE recovery-grade snapshot. Still run Step 1 (detect-task), Step 6 (verify), and the Output box.
+**If `--pre-compact` (alias `--resume`) is passed** -> run **Pre-Compact Resume Mode** (below) INSTEAD of Steps 3-4: no type prompt, produce ONE recovery-grade snapshot. Do NOT run Step 1's interactive task prompt - the `session-snapshot` skill owns task detection (file-primary: ambiguity -> file only, no prompt), keeping this byte-identical to `/lets:end --pre-compact`. Still run the verify (conditional - only when a pointer was written) and show the Pre-Compact output below, NOT the generic Output box.
 
 **Otherwise** -> normal flow (Steps 1-6).
 
@@ -147,11 +147,23 @@ show task=<task-id>
 
 ## Pre-Compact Resume Mode (`--pre-compact`)
 
-Run this right before `/compact` (or when a long session is about to be auto-summarized). **Skip Step 3** (no type prompt) — delegate to the internal **pre-compact-note** skill, which writes the recovery-grade `## RESUME` snapshot to the active task. Single source of truth, shared with `/lets:end --pre-compact`, so the template never drifts:
+Run this right before `/compact` (or when a long session is about to be auto-summarized). **Skip Step 3** (no type prompt) - delegate to the internal **session-snapshot** skill (`kind=precompact`), which ALWAYS writes the recovery-grade `## RESUME` snapshot to a `.lets/sessions/` file and adds a one-line pointer to the active task only when one is unambiguously active. Single source of truth, shared with `/lets:end --pre-compact` (now byte-identical to this), so the template never drifts:
 
-`Skill(skill: "lets:pre-compact-note")`
+`Skill(skill: "lets:session-snapshot", args: "kind=precompact pointer=auto")`
 
-The skill gathers session + git state, writes the snapshot to the active task (the one from Step 1), and falls back to a `.lets/sessions/` file when there is no active task. Then run Step 6 (verify) and show the Output box.
+The skill gathers session + git state, ALWAYS writes the snapshot to a `.lets/sessions/` file, and adds a one-line pointer to the active task only when one is unambiguously active. It returns the snapshot file path (and the task id if a pointer was written). Verify from that return - the tracker's `show` for the task ONLY when a pointer was written; otherwise skip it (no task to show). Then show the Pre-Compact output below - NOT the generic `## Output` box (this path has its own, identical to `/lets:end --pre-compact`):
+
+```
+## Pre-Compact Snapshot
+
+Snapshot -> .lets/sessions/{dated}-precompact-{branch}.md
+Task pointer -> {task-id}  (only if a task is unambiguously active; else "none - file only")
+Branch: {branch}
+
+Safe to /compact now - same window continues. Resume: /lets:start reads the snapshot file (the tracked task holds task-level context).
+```
+
+Then STOP - the session continues. (Identical output contract to `/lets:end --pre-compact`.)
 
 ## Output
 
