@@ -101,7 +101,7 @@ Then, inside the Claude Code session:
 | Command | Description |
 |---------|-------------|
 | `/lets:start` | Start session - restore context, show tasks, create feature branch (`--main` = no-task project-assistant mode) |
-| `/lets:end` | End session - save progress, sync tasks, create summary (`--pre-compact` snapshots before /compact without ending) |
+| `/lets:end` | End session - save progress, sync tasks, write snapshot (`--pre-compact` snapshots before /compact without ending) |
 | `/lets:commit` | Commit with review and conventional commit format |
 | `/lets:done` | Finish task - create PR (GitHub mode) or merge locally |
 | `/lets:status` | Read-only orient snapshot — where you are, what's in flight, what's next (tracker-universal) |
@@ -208,7 +208,7 @@ A LETS session runs a loop: start, work, commit, finish.
 
 **Commit** - `/lets:commit` reviews changes and creates a conventional commit (`feat:`, `fix:`, `docs:`, …) linked to the active task.
 
-**Finish** - `/lets:done` creates a PR on GitHub (or merges locally). `/lets:end` saves a session summary so the next conversation picks up where you left off.
+**Finish** - `/lets:done` creates a PR on GitHub (or merges locally). `/lets:end` saves a session snapshot so the next conversation picks up where you left off.
 
 ### Plan, then build
 

@@ -16,7 +16,7 @@ LETS gives Claude Code a structure to work inside: every session starts with a t
 
 **`/lets:done`** — finishes the task. In GitHub mode it pushes the branch and opens a PR (the task stays open until the PR merges). In local/bitbucket mode it merges to your merge branch and closes the task.
 
-**`/lets:end`** — saves a session summary so the next conversation picks up where you left off.
+**`/lets:end`** — saves a session snapshot so the next conversation picks up where you left off.
 
 > Two separate lifecycles: a **session** is one conversation (`/lets:start` … `/lets:end`); a **task** is picked at start and finished with `/lets:done` — it can span several sessions. When you return to an unfinished task, `/lets:start` restores its context from the task's comments.
 

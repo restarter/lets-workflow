@@ -60,7 +60,7 @@ Everything LETS generates lives under `.lets/` (gitignored):
 ```
 .lets/.env              Project settings (the keys above)
 .lets/.env.example      Reference defaults (regenerated each `lets init`)
-.lets/sessions/         Session summaries and start references
+.lets/sessions/         Session snapshots and start references
 .lets/reviews/          Saved review reports
 .lets/plans/            Implementation plans from /lets:plan
 .lets/execution/        PR review state and team records

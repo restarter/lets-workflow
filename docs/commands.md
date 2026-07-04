@@ -7,7 +7,7 @@ Every `/lets:*` command, grouped. For the day-to-day flow see **[workflow.md](wo
 | Command | What it does |
 |---------|--------------|
 | `/lets:start` | Start a session — restore context, show tasks, create a feature branch. `/lets:start <task-id>` jumps to a task; `/lets:start --continue` resumes the in-progress one. |
-| `/lets:end` | End the session — save progress, sync the task tracker, write a summary for next time. |
+| `/lets:end` | End the session — save progress, sync the task tracker, write a snapshot for next time. |
 | `/lets:commit` | Commit changes — review, conventional commit message, task ID in the scope and a `Task:` footer. Use this instead of `git commit`. Also auto-triggers on "commit" in conversation. |
 | `/lets:done` | Finish the task — push the branch and open a PR (GitHub mode), or merge locally and close the task (local/bitbucket). |
 | `/lets:status` | Read-only orient snapshot — where you are, what's in flight, what's next (tracker-universal). |
