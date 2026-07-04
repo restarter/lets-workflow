@@ -94,7 +94,7 @@ The orient snapshot (Step 3) already shows In flight + Next up - don't repeat th
 **Every session needs a task.** From the orient snapshot, offer the moves:
 
 > - **Resume** the active task if In flight shows one you want to continue.
-> - **Pick** one from Next up (the top 5 ready - for the full list, `bd ready` or `/lets:backlog`).
+> - **Pick** one from Next up (the top 5 ready - for the full list, `/lets:backlog`, or `bd ready` on beads).
 > - **Create** a new task (the `create-task` skill - tracker `create` verb), or claim an existing one (tracker `set-status=in_progress`).
 
 **If user doesn't want to pick a task** but describes work (e.g., "just want to fix proxy config"):
@@ -173,18 +173,29 @@ You do **NOT** write or edit code in this mode. The moment the user wants to imp
 
 ### Step M1: Orient
 
-Steps 1-2 already ran (sessions, git). Main mode skips `take-task`, so save the **session boundary only** here (so `/lets:end` can still diff the session). Main mode has NO claimed task, so the `.task` file gets `session:` ONLY - never `task:`/`start:`, which would make `.task-main` look like a trunk claim and mis-fire trunk-mode. Then add a one-line backlog pulse:
+Steps 1-2 already ran (sessions, git). Main mode skips `take-task`, so save the **session boundary** here (so `/lets:end` can still diff the session). Main mode claims no task, so it does NOT create a `task:`/`start:` (that would make `.task-main` mis-fire trunk-mode). But it must NOT destroy a live trunk claim either - so it **preserves** any existing `task:`/`start:` (merge-write, like the SessionStart hook) and refreshes only `session:`. A genuine main-mode file (no prior `task:`) stays `session:`-only; a preserved live claim then surfaces through orient below instead of being silently clobbered. Then add a one-line backlog pulse:
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 BRANCH=$(git branch --show-current); BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
 mkdir -p "$LETS_PROJECT_ROOT/.lets/sessions"
 TASK_FILE="$LETS_PROJECT_ROOT/.lets/sessions/.task-${BRANCH_SLUG}"
+# Preserve an existing live trunk claim (task:/start:) - a full-file session:-only write would
+# destroy it, and its /lets:done would then hard-abort with no start:. Merge-write, like the hook.
+PREV_TASK=""; PREV_START=""
+if [ -f "$TASK_FILE" ]; then
+  PREV_TASK=$(sed -n 's/^task: //p' "$TASK_FILE" | head -1)
+  PREV_START=$(sed -n 's/^start: //p' "$TASK_FILE" | head -1)
+fi
 tmp=$(mktemp "${TASK_FILE}.XXXX")
-printf 'session: %s %s\n' "$(git rev-parse HEAD)" "$CLAUDE_CODE_SESSION_ID" > "$tmp" && mv -f "$tmp" "$TASK_FILE"
+{
+  [ -n "$PREV_TASK" ] && echo "task: $PREV_TASK"
+  [ -n "$PREV_START" ] && echo "start: $PREV_START"
+  printf 'session: %s %s\n' "$(git rev-parse HEAD)" "$CLAUDE_CODE_SESSION_ID"
+} > "$tmp" && mv -f "$tmp" "$TASK_FILE"
 ```
 
-Invoke `Skill(skill: "lets:orient")` - with no active task it degrades to branch + no-task + In flight + Next up + Project, which IS the PM triage surface. Keep it short - point to `bd stats` / `bd blocked` for the deep beads dashboard.
+Invoke `Skill(skill: "lets:orient")` - with no active task it degrades to branch + no-task + In flight + Next up + Project, which IS the PM triage surface. Keep it short - on beads, point to `bd stats` / `bd blocked` for the deep dashboard.
 
 **Guard:** Main mode expects `HEAD == $LETS_MERGE_BRANCH`. If on another branch (a worktree or feature branch - which are task-bound), say so in one line and suggest the normal task flow instead; proceed read-only if the user still wants the overview.
 

@@ -262,16 +262,24 @@ BRANCH=$(git branch --show-current)
 SLUG=${BRANCH#feature/}; [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ] && SLUG="${TASK_ID}"
 PLAN=""; [ -n "$SLUG" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
 BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
-START_REF=$(sed -n 's/^session: //p' "$LETS_PROJECT_ROOT/.lets/sessions/.task-${BRANCH_SLUG}" 2>/dev/null | head -1 | awk '{print $1}')
+# Plan execution is TASK-scoped (a plan can run across sessions), so anchor on the task boundary
+# start:, NOT session: - session: would under-report every prior session's commits.
+START_REF=$(sed -n 's/^start: //p' "$LETS_PROJECT_ROOT/.lets/sessions/.task-${BRANCH_SLUG}" 2>/dev/null | head -1)
 [ -z "$START_REF" ] && START_REF=$(cat "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}" 2>/dev/null)  # back-compat: legacy session ref
+# Degrade loud - never silently record "Commits: 0" into a durable tracker comment on a missing/bad boundary.
+if printf '%s' "$START_REF" | grep -Eq '^[0-9a-f]{7,40}$' && git rev-parse --verify --quiet "${START_REF}^{commit}" >/dev/null; then
+  COUNT=$(git log --oneline "${START_REF}..HEAD" | wc -l | tr -d ' '); LOG=$(git log --oneline "${START_REF}..HEAD")
+else
+  COUNT="unknown (task boundary not found)"; LOG="(commit range unavailable - no valid start: boundary in .task-${BRANCH_SLUG})"
+fi
 mkdir -p "$LETS_PROJECT_ROOT/.lets/cache"
 cat > "$LETS_PROJECT_ROOT/.lets/cache/exec-complete-<task-id>.md" <<EOF
 ## Plan execution complete $(date +%Y-%m-%d)
 
 Plan: ${PLAN:-(none found)}
-Commits: $(git log --oneline ${START_REF}..HEAD | wc -l | tr -d ' ')
+Commits: ${COUNT}
 
-$(git log --oneline ${START_REF}..HEAD)
+${LOG}
 EOF
 ```
 
