@@ -78,7 +78,7 @@ Adjust based on decision complexity - add more experts for cross-cutting decisio
 - `architect` and `pragmatist` always included
 - Table above is a starting point, not a cap - add or remove agents based on context
 - `actor` can replace or supplement any domain agent. If actor is selected, invoke `Skill(skill: "lets:actor-fetch-personality", args: "<personality-source-from-user>")` to fetch the personality. Pass the returned `PERSONALITY:` block in the actor's Task prompt only.
-- Agents use their own model from frontmatter (opus for critical agents, session model for others)
+- Agents inherit the session model (no per-agent model pins)
 
 **Confirmation gate:** If planning to launch more than 10 experts:
 

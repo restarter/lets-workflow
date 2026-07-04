@@ -2,7 +2,6 @@
 name: security
 description: Security specialist for vulnerability detection, auth review, crypto assessment, secrets scanning, and input validation analysis. Use when reviewing security-sensitive code, auth flows, data handling, or API endpoints.
 tools: Read, Grep, Glob, Bash
-model: opus
 color: red
 ---
 
