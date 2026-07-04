@@ -51,7 +51,7 @@ A few beads conventions LETS follows:
 
 ## `/lets:status` — where things stand
 
-`/lets:status` gives a compact overview: what's ready, what's in progress, what's blocked, recent activity. It's also what `/lets:start` runs to show you the task list.
+`/lets:status` renders a lean, read-only orient snapshot: where you are (branch + active task), what's in flight, and what's next. It's the same snapshot `/lets:start` and `/lets:backlog --fast` open with. The dependency graph lives in native `bd blocked`; per-epic label progress and AI insights are retired from `/lets:status` (still reachable via `/lets:backlog`).
 
 ## `/lets:backlog` — ideation and backlog work
 
