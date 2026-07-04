@@ -161,6 +161,16 @@ comment-list task=<task-id>
 
 Read the full description and ALL comments — they hold the multi-session context. Present: "Resuming **{task title}** (`{task-id}`). Last session: {summary from the latest tracker comment}"
 
+Also surface the most recent session snapshot for this branch (the file trail `/lets:start` full-mode reads - the quick `<task-id>` path skips Step 1, so read it here):
+
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+BRANCH_SLUG=$(git branch --show-current | tr '/' '-')
+LATEST_SNAP=$(ls -t "$LETS_PROJECT_ROOT/.lets/sessions/"*"-${BRANCH_SLUG}.md" 2>/dev/null | head -1)
+```
+
+If `$LATEST_SNAP` is non-empty, Read it and fold its `### Remaining + NEXT STEP` into the "Last session: ..." line. If empty, rely on the tracker's comments alone (fresh branch - no snapshot yet).
+
 ## Output
 
 When triggered standalone (not via `/lets:start`):
