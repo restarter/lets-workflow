@@ -764,7 +764,7 @@ Built: {full flow (explorer + architect + expert agents) | fast mode (orchestrat
 - {decision 1}
 - {decision 2}
 
-Start a new session to execute the plan with clean context.
+Want a clean context before executing? Run `/clear` then `/lets:execute` - the task stays active.
 ```
 
 ```
@@ -772,7 +772,6 @@ Start a new session to execute the plan with clean context.
 │  Check plan?   /lets:check --plan  │
 │  Review plan?  /lets:review --plan │
 │  Execute?      /lets:execute       │
-│  New session?  /lets:start         │
 └────────────────────────────────────┘
 ```
 

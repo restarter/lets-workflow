@@ -266,10 +266,12 @@ No active task - project-assistant / PM stance on `{LETS_MERGE_BRANCH}`.
 - For technical decisions: `/lets:opinion`
 - When task done: `/lets:commit` - `/lets:done` - `/lets:end`
 
+**Working on:** **{task title}** (`{task-id}`) on `{branch-name}`
+
 ┌─ LETS ─────────────────────────┐
-│  Working on: {task-id}         │
-│  {task title, truncated}       │
-│  Branch: {branch-name}         │
+│  Plan?    /lets:plan           │
+│  Check?   /lets:check          │
+│  Note?    /lets:note           │
 └────────────────────────────────┘
 ```
 
