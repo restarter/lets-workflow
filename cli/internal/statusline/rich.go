@@ -506,7 +506,7 @@ var tips = []string{
 	"Read the codebase first — match the patterns already there.",
 	"Smallest change that solves the problem — easier to review and revert.",
 	"Branch piling up unrelated work? Split it into separate PRs.",
-	"/lets:status overview is a compact read of the whole board.",
+	"/lets:status is a read-only orient snapshot — where you are, what's next.",
 	"Repeated blocker 3x? Stop patching — find the root cause.",
 	"Keep written artifacts in English, even when we chat in another language.",
 	"/lets:review --file <path> audits an existing file's quality.",

@@ -178,12 +178,9 @@ func TestTrackerBeads_BindsBdCommands(t *testing.T) {
 			}
 		}
 	}
-	// The label-group progress mechanism lives in ## Notes (too long for a cell):
-	// /lets:status overview/labels/full depend on it for the NN/MM bars - the B2
-	// branch-review regression (main's 3ad2a05 --all fix must not drift out again).
-	if !strings.Contains(content, "bd list --label <label> --json --all") {
-		t.Error(`tracker-beads.md: Notes must carry the label-group binding "bd list --label <label> --json --all" (/lets:status NN/MM bars have no other data source)`)
-	}
+	// (The label-group progress + priority-histogram Notes bindings were removed with the
+	// 5-view /lets:status dashboards in the orient unification (lets-qsgmd); no command
+	// renders the NN/MM bars now, so there is nothing left to pin here.)
 }
 
 // TestTrackerAdapters_VerbVocabInSync pins the canonical neutral-verb list against
