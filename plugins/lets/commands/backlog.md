@@ -59,6 +59,12 @@ No agents. The orchestrator gathers backlog context directly and enters conversa
 
 ### Step F1: Gather Context
 
+Start with the shared snapshot so the pulse builds on the same "where are we" view as `/lets:status`:
+
+Invoke `Skill(skill: "lets:orient")`.
+
+Then gather the backlog-specific extras the snapshot doesn't cover:
+
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 ```
@@ -84,7 +90,7 @@ If an area/epic argument was passed alongside `--fast`:
 
 ### Step F2: Open with Observations
 
-Based on gathered context, present 3-5 proactive observations:
+Based on the orient snapshot above plus the backlog signals gathered, present 3-5 proactive observations:
 
 ```
 ## Backlog Pulse
