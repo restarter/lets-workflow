@@ -441,7 +441,7 @@ Write `.lets/execution/team-{team-name}.json`:
   "status": "completed",
   "tasks": [
     {
-      "task_id": "{beads-id}",
+      "task_id": "{task-id}",
       "teammate": "{name}",
       "status": "completed|stopped",
       "commits": ["abc1234"]
@@ -601,7 +601,7 @@ Check teammate commits: git log --oneline {BASE_SHA}..HEAD
 
 - **Main repo only** - teams cannot be created from a worktree
 - **One team at a time** - check for existing teams before creating
-- **Lead handles beads** - teammates don't touch beads, lead records everything
+- **Lead records to the tracker** - teammates don't touch the tracker, the lead records everything
 - **Plan approval required** - all teammates spawn with `mode: "plan"`, lead reviews before implementation
 - **Parallel spawn** - all teammates launched in a single message for concurrent work
 - **Graceful shutdown** - always request shutdown before cleanup

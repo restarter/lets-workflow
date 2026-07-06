@@ -88,7 +88,7 @@ Additionally:
     If installed → run, then render its `steps[]` like Step 2e renders project steps:
 
     ```bash
-    lets init --user --json --plugin-root="${CLAUDE_PLUGIN_ROOT}" --language={LANGUAGE}
+    lets init --user --json --plugin-root="${CLAUDE_PLUGIN_ROOT}" --language="{LANGUAGE}"
     ```
 
     (`{LANGUAGE}` is an orchestrator placeholder — substitute the English language name BEFORE running. If no language is bound yet (Step 2a hasn't run), ask Step 2a's language question first. NEVER leave a bash variable here: `$LANG` is the POSIX locale env var (`en_US.UTF-8`) and bash would expand it, silently poisoning `~/.lets/.env` in every future session. Add `--launcher={LAUNCHER}` only if the user customized the launcher this session.)
@@ -246,7 +246,7 @@ echo "SCOPE=${SCOPE:-unset} GLOBAL=$GLOBAL PROJECT=$PROJECT"
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 lets init --json \
   --plugin-root="${CLAUDE_PLUGIN_ROOT}" \
-  --language={LANGUAGE} \
+  --language="{LANGUAGE}" \
   --merge-branch={BRANCH} \
   --pr-flow={FLOW} \
   --launcher={LAUNCHER} \
@@ -374,7 +374,7 @@ Bind: "Keep current" → `$RULES_SCOPE_FLAG="--rules-scope=$CURRENT_RULES_SCOPE"
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 lets init --json \
   --plugin-root="${CLAUDE_PLUGIN_ROOT}" \
-  --language={LANGUAGE} \
+  --language="{LANGUAGE}" \
   --merge-branch={BRANCH} \
   --pr-flow={FLOW} \
   --launcher={LAUNCHER} \

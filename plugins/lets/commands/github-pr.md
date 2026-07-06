@@ -453,10 +453,13 @@ Field requirements:
 - `comments[].side`: always "RIGHT" (commenting on new code)
 - `comments[].body`: markdown comment body
 
-Step 2: Post the review.
+Step 2: Post the review. Re-derive REPO/PR_DIR (a Write sat between this and the earlier assignment - fresh shell):
 
 ```bash
-gh api repos/${REPO}/pulls/{PR}/reviews \
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+PR_DIR="$LETS_PROJECT_ROOT/.lets/execution/pr-{number}"
+gh api "repos/$REPO/pulls/{PR}/reviews" \
   --method POST \
   --input "$PR_DIR/payload.json"
 ```
@@ -704,9 +707,11 @@ Still needs work on {N} findings:
 {list of unresolved BLOCKER/SUGGESTION items}
 ```
 
-Then:
+Then (re-derive PR_DIR - the verdict Write sat between this and its earlier assignment):
 
 ```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+PR_DIR="$LETS_PROJECT_ROOT/.lets/execution/pr-{number}"
 # Approve
 gh pr review <PR> --approve --body-file "$PR_DIR/verdict.md"
 

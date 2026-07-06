@@ -34,6 +34,8 @@ printf '%s|%s|%s\n' "{TASK_ID}" "{PHASE}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$L
 
 ## Step 1: Active Task Detection
 
+**Positional argument** — if it is a path (ends in `.md` or contains `/`), it is a **plan-path**: bind `{PLAN_ARG}` to it (Step 2 consumes it and skips slug derivation) and skip the task resolve-and-claim below. Otherwise treat it as a `<task-id>`.
+
 Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detect-task")`.
 If not on a feature/worktree branch and no in-progress task found - ask user which task to execute.
 
@@ -221,7 +223,7 @@ AskUserQuestion(
 - **Straight-through** -> Step 5 (native plan mode); after the plan-mode approval, implement all tasks with NO per-task pause and `/lets:commit` at each plan commit point without re-asking.
 - **Step-by-step** -> Step 5 (native plan mode); after the plan-mode approval, implement one task, pause for user review before the next, and confirm each `/lets:commit`.
 - **Auto** -> proceed exactly as `--auto` (Step 5's `--auto` behavior + pipeline-state marker + execute-blocked notify). **Guard:** if on `$LETS_MERGE_BRANCH`, REFUSE Auto here too (same rule as Step 1's `--auto` refuse - AUTO MODE never edits the merge-branch); tell the user to pick step-by-step / straight-through or take a feature branch.
-- **Team** -> do NOT enter native plan mode. Hand off to the team flow: `Skill(skill: "lets:team", args: "run")` - it spawns parallel implementers in isolated worktrees from this plan. After it completes, the user reviews via `/lets:review --local`. Skip Steps 5-6.
+- **Team** -> do NOT enter native plan mode. Hand off to the team flow: `Skill(skill: "lets:team", args: "run")` - it re-selects ready tasks from the tracker (`ready` picker / `--tasks`) for parallel implementers in isolated worktrees; the plan you just validated is context, not its task list (plan-driven team execution is tracked in **Wire /lets:team to execute a plan's Task decomposition** (`lets-a524x`)). After it completes, the user reviews via `/lets:review --local`. Skip Steps 5-6.
 
 (A remembered default / `LETS_EXECUTE_MODE` to skip the picker on every run is a deferred follow-up - this ships the picker + flag shortcuts only.)
 

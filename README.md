@@ -316,7 +316,7 @@ LETS_MERGE_BRANCH=main
 # PR flow: github | bitbucket | local
 LETS_PR_FLOW=github
 
-# Task tracker adapter: beads | planfix-mcp | none  (selects .claude/rules/tracker-<name>.md; see docs/trackers.md) — non-beads adapters ship next release
+# Task tracker adapter: beads | planfix-mcp | none  (selects .claude/rules/tracker-<name>.md; see docs/trackers.md)
 LETS_TRACKER=beads
 ```
 
@@ -356,7 +356,6 @@ Add `--light` for light-background terminals (default palette is dark). Full det
 | [git](https://git-scm.com/) | Yes | Version control, branching, worktrees |
 | [beads](https://github.com/steveyegge/beads) | Yes | Task tracking and issue management (Claude Code plugin) |
 | [gh](https://cli.github.com/) | Optional | GitHub PR workflow (when `LETS_PR_FLOW=github`) |
-| [jq](https://jqlang.github.io/jq/) | Optional | Parsing beads JSON in the `/lets:backlog` stats path |
 
 ## 📚 Documentation
 

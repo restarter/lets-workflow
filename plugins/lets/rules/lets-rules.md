@@ -256,7 +256,7 @@ State-changing verbs (`set-status`, `close`, plus `bd dolt push` on beads) stay 
 
 ### Task Creation
 
-Use the `create-task` skill (auto-triggers on "create task", "new task", "bd create" variations). It enforces required fields (--title, --type, --priority, --description, --labels) and discovers project-specific labels dynamically. Tasks use hash-based IDs (collision-free in multi-user setup).
+Use the `create-task` skill (auto-triggers on "create task", "new task", "bd create" variations). It enforces required fields (`title`, `type`, `priority`, `description`, `labels`) and discovers project-specific labels dynamically (on beads: the `bd create` flags; hash-based IDs, collision-free in multi-user setup).
 
 ### Updating Tasks
 

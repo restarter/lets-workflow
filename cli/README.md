@@ -18,7 +18,7 @@ cli/
 │   │   └── *_test.go             # Black-box tests (package cli_test)
 │   ├── letsconfig/               # Canonical LETS_* key metadata + defaults (single source of truth)
 │   ├── envfile/                  # .lets/.env reader (whitelist + parser, mirrors bash semantics)
-│   ├── frontmatter/              # YAML frontmatter `version` reader (drift check via x/mod/semver)
+│   ├── frontmatter/              # YAML frontmatter `version` reader (parses via x/mod/semver)
 │   ├── drift/                    # Rules-file drift check + user-facing drift messages
 │   ├── gitutil/                  # Shared git helpers
 │   ├── hook/sessionstart/        # SessionStart + PreCompact output (LETS Config + Notice + drift check)
@@ -320,6 +320,6 @@ The workflow rules themselves do NOT travel through the hook — they live in `.
 
 Every `lets <sub> --json` emits a single JSON object on stdout, valid even on `ok=false` (partial-completion contract — `steps[]` carries work done before the error; `error` carries `kind`/`message`/`remediation`). The cobra layer sets `SilenceUsage` + `SilenceErrors`; the human-readable error duplicates `result.Error` to stderr.
 
-**`SchemaVersion` is per-package, not shared.** `initcmd`, `updatecmd`, and `worktreecmd` each declare their own `const SchemaVersion` (`initcmd` + `worktreecmd` = 1, `updatecmd` = 2), so a breaking change in one doesn't force a coordinated bump in the others. Field additions are minor (consumers ignore unknown fields); each package's `TestResult_SchemaContract` test fails on key drift, forcing a conscious bump decision.
+**`SchemaVersion` is per-package, not shared.** `initcmd`, `updatecmd`, `worktreecmd`, `cmuxcmd`, and `statuslinecmd` each declare their own `const SchemaVersion` (`updatecmd` = 2; the rest = 1), so a breaking change in one doesn't force a coordinated bump in the others. Field additions are minor (consumers ignore unknown fields); each package's `TestResult_SchemaContract` test fails on key drift, forcing a conscious bump decision.
 
 **New `--json` subcommand packages should copy `worktreecmd`'s pattern** — a shared `Envelope` core + per-subcommand result wrappers — rather than inventing a new shape. Per-subcommand contracts: the `### ... --json contract` subsections above (`lets init`, `lets update`, `lets worktree`).
