@@ -162,9 +162,9 @@ AskUserQuestion(
 
 ### Step R6: Create Team
 
-Save the current HEAD as base for later commit verification:
+Save the current HEAD as base for later commit verification. Echo it so the orchestrator captures the value - each Bash call is a fresh shell, so a bare assignment is lost; substitute it as `{BASE_SHA}` in the R10 / T6 blocks below (HEAD moves once teammate commits land, so it cannot be recomputed later):
 ```bash
-BASE_SHA=$(git rev-parse HEAD)
+BASE_SHA=$(git rev-parse HEAD); echo "$BASE_SHA"
 ```
 
 ```
@@ -397,9 +397,9 @@ Wait for shutdown confirmations.
 `isolation: "worktree"` auto cherry-picks teammate commits onto the current branch when worktrees are cleaned up. No separate branches survive - all work lands directly on the branch you started from.
 
 ```bash
-# BASE_SHA was saved at team start (R6)
+# {BASE_SHA} = the HEAD echoed at team start (R6), substituted by the orchestrator
 # Show all commits since team started
-git log --oneline ${BASE_SHA}..HEAD
+git log --oneline {BASE_SHA}..HEAD
 ```
 
 Verify each teammate's commit is present. If a commit is missing (teammate was stopped mid-work), note it.
@@ -414,7 +414,7 @@ cat > "$LETS_PROJECT_ROOT/.lets/cache/team-exec-<task-id>.md" <<EOF
 
 Teammate: {name}
 Commits:
-$(git log --oneline ${BASE_SHA}..HEAD --grep='Task: {task-id}')
+$(git log --oneline {BASE_SHA}..HEAD --grep='Task: {task-id}')
 EOF
 ```
 
@@ -441,7 +441,7 @@ Write `.lets/execution/team-{team-name}.json`:
   "status": "completed",
   "tasks": [
     {
-      "task_id": "{beads-id}",
+      "task_id": "{task-id}",
       "teammate": "{name}",
       "status": "completed|stopped",
       "commits": ["abc1234"]
@@ -587,7 +587,7 @@ Teammates stopped: {N}
 Completed commits are on the current branch (auto cherry-picked on worktree cleanup).
 In-progress work from stopped teammates may be lost if they didn't commit before shutdown.
 
-Check teammate commits: git log --oneline ${BASE_SHA}..HEAD
+Check teammate commits: git log --oneline {BASE_SHA}..HEAD
 
 ┌─ LETS ─────────────────────────┐
 │  Check?   /lets:check --local  │
@@ -601,7 +601,7 @@ Check teammate commits: git log --oneline ${BASE_SHA}..HEAD
 
 - **Main repo only** - teams cannot be created from a worktree
 - **One team at a time** - check for existing teams before creating
-- **Lead handles beads** - teammates don't touch beads, lead records everything
+- **Lead records to the tracker** - teammates don't touch the tracker, the lead records everything
 - **Plan approval required** - all teammates spawn with `mode: "plan"`, lead reviews before implementation
 - **Parallel spawn** - all teammates launched in a single message for concurrent work
 - **Graceful shutdown** - always request shutdown before cleanup

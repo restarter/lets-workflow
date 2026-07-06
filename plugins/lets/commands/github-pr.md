@@ -273,8 +273,8 @@ Save review_json path in state file.
 
 | # | Severity | Title | File | Line |
 |---|----------|-------|------|------|
-| 1 | critical | {title} | {file} | {line} |
-| 2 | important | {title} | {file} | {line} |
+| 1 | BLOCKER | {title} | {file} | {line} |
+| 2 | SUGGESTION | {title} | {file} | {line} |
 ...
 
 Review JSON: {review_json path}
@@ -383,8 +383,11 @@ For each finding marked as "inline":
 
 ```bash
 # gh pr diff does NOT support -- file_path syntax
-# Filter the diff output to extract hunks for the target file
-gh pr diff <PR> | awk '/^diff --git.*{file_path}$/,/^diff --git/'
+# Filter the diff to the target file's section. Use flag-based state, NOT a range
+# pattern: a range's end pattern is tested against the SAME line that opened it, so
+# `/^diff --git.*f$/,/^diff --git/` collapses to the single header line (0 hunks).
+# Pass the path via -v so its slashes don't terminate an awk /regex/ literal.
+gh pr diff <PR> | awk -v f="{file_path}" '$0 ~ "^diff --git" {p = ($0 ~ f "$")} p'
 ```
 
 2. Parse diff hunks to determine which new-side line numbers are present:
@@ -429,13 +432,13 @@ Write the FULL payload to `$PR_DIR/payload.json`:
       "path": "src/search.py",
       "line": 42,
       "side": "RIGHT",
-      "body": "**[critical]** SQL injection in search query\n\nUser input concatenated directly into SQL query.\n\n**Suggestion:** Use parameterized queries.\n\n```python\ncursor.execute(\"SELECT * FROM items WHERE name = %s\", (user_input,))\n```"
+      "body": "**[BLOCKER]** SQL injection in search query\n\nUser input concatenated directly into SQL query.\n\n**Suggestion:** Use parameterized queries.\n\n```python\ncursor.execute(\"SELECT * FROM items WHERE name = %s\", (user_input,))\n```"
     },
     {
       "path": "src/auth.py",
       "line": 15,
       "side": "RIGHT",
-      "body": "**[important]** Missing rate limiting on login endpoint\n\n..."
+      "body": "**[SUGGESTION]** Missing rate limiting on login endpoint\n\n..."
     }
   ]
 }
@@ -450,18 +453,30 @@ Field requirements:
 - `comments[].side`: always "RIGHT" (commenting on new code)
 - `comments[].body`: markdown comment body
 
-Step 2: Post the review.
+Step 2: Post the review. Re-derive REPO/PR_DIR (a Write sat between this and the earlier assignment - fresh shell):
 
 ```bash
-gh api repos/${REPO}/pulls/{PR}/reviews \
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+PR_DIR="$LETS_PROJECT_ROOT/.lets/execution/pr-{number}"
+gh api "repos/$REPO/pulls/{PR}/reviews" \
   --method POST \
   --input "$PR_DIR/payload.json"
 ```
 
 Step 3: Parse response.
-The response JSON includes:
+The `POST .../reviews` response is a review object - it has `.id` but NO `comments` array:
 - `.id` -> save as review_id in state
-- `.comments[].id` -> map to findings by path+line, save as posted_comment_id
+
+Then fetch the created inline comments to recover their IDs (the review response omits them):
+
+```bash
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+gh api "repos/$REPO/pulls/{PR}/reviews/{review_id}/comments" \
+  --jq '.[] | {id, path, line: (.line // .original_line)}'
+```
+
+- map each returned comment `.id` to the finding at the same path+line, save as posted_comment_id
 
 If gh api returns error (400/422):
 1. Show the error message
@@ -643,15 +658,15 @@ Show approval checklist based on findings and follow-up status:
 ```
 ## Approval Checklist - PR #{number}
 
-Critical findings:
+BLOCKER findings:
 - [x] {title} - Fixed
 - [ ] {title} - Not fixed
 
-Important findings:
+SUGGESTION findings:
 - [x] {title} - Fixed
 - [ ] {title} - Not fixed
 
-Summary: {X}/{Y} critical fixed, {A}/{B} important fixed
+Summary: {X}/{Y} BLOCKER fixed, {A}/{B} SUGGESTION fixed
 ```
 
 ### 5.2 User decides
@@ -662,7 +677,7 @@ AskUserQuestion(
     question: "PR #{number} - your verdict?",
     header: "Verdict",
     options: [
-      { label: "Approve", description: "All critical issues resolved" },
+      { label: "Approve", description: "All BLOCKER issues resolved" },
       { label: "Request changes", description: "Still needs work" },
       { label: "Skip", description: "Don't submit a review verdict" }
     ],
@@ -682,19 +697,21 @@ Write verdict body to `$PR_DIR/verdict.md`:
 
 For approve:
 ```
-LGTM. All critical findings have been addressed.
+LGTM. All BLOCKER findings have been addressed.
 {brief summary of what was fixed}
 ```
 
 For request changes:
 ```
 Still needs work on {N} findings:
-{list of unresolved critical/important items}
+{list of unresolved BLOCKER/SUGGESTION items}
 ```
 
-Then:
+Then (re-derive PR_DIR - the verdict Write sat between this and its earlier assignment):
 
 ```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+PR_DIR="$LETS_PROJECT_ROOT/.lets/execution/pr-{number}"
 # Approve
 gh pr review <PR> --approve --body-file "$PR_DIR/verdict.md"
 
@@ -801,7 +818,7 @@ Else: `gh pr checkout <PR>` (same stash handling as Step 2.3).
 
 **Detect active task** (before branch switch, same as Step 2.2):
 Use the **detect-task** skill: `Skill(skill: "lets:detect-task")`.
-Store detected task_id for beads logging in 6.6.
+Store detected task_id for tracker logging in 6.6.
 
 Check for existing `$PR_DIR/response.json`:
 - If exists and `replies_posted: false` -> offer to resume (skip to 6.3, only triage comments where `decision == null`)
@@ -1075,19 +1092,24 @@ If "Save for later": save state, exit with resume LETS box.
 
 If "Post all": post each reply by type.
 
-**Inline comments** (threaded reply):
+**Inline comments** (threaded reply). Re-derive REPO (fresh shell) and write the body to a file so multi-line replies post literally, not with an escaped `\n`:
 ```bash
-gh api repos/${REPO}/pulls/{PR}/comments \
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+PR_DIR="$LETS_PROJECT_ROOT/.lets/execution/pr-{PR}"
+printf '%s\n' "{reply_text}" > "$PR_DIR/reply-{n}.md"
+gh api "repos/$REPO/pulls/{PR}/comments" \
   --method POST \
-  -F body="{reply_text}" \
+  --field body=@"$PR_DIR/reply-{n}.md" \
   -F in_reply_to={github_id}
 ```
 
-**General comments** (new top-level comment with quote):
+**General comments** (new top-level comment with quote) - build the quote + reply with real newlines via `printf`, then post with `--body-file`:
 ```bash
-gh api repos/${REPO}/issues/{PR}/comments \
-  --method POST \
-  -F body="> {first 2 lines of original}\n\n{reply_text}"
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+PR_DIR="$LETS_PROJECT_ROOT/.lets/execution/pr-{PR}"
+printf '> %s\n\n%s\n' "{first 2 lines of original}" "{reply_text}" > "$PR_DIR/reply-{n}.md"
+gh pr comment {PR} --body-file "$PR_DIR/reply-{n}.md"
 ```
 
 **Per-reply error handling:** If a reply fails (404 - comment deleted, 422 - validation error):

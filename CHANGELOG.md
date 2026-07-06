@@ -18,6 +18,7 @@
 
 ### Fixed
 - **`/lets:check --plan` finds trunk-mode plans (lets-u06sc).** In trunk-mode (on the merge-branch) the plan lookup used the branch slug (`main`), which never matched `plan.md`'s `<date>-<task-id>.md` save name — forcing a manual `--plan <path>` every time. It now calls detect-task in plan mode and derives the slug from the task-id (with a task-id fallback glob), mirroring `/lets:execute` and `/lets:review --plan` (which already did this).
+- **Full-plugin consistency audit (lets-s7kut).** A fable-model sweep of the plugin surface (commands, skills, agents, rules, docs) fixed 6 command exec-blockers (github-pr inline-comment fetch + reply fresh-shell, team `BASE_SHA` loss, backlog invalid `bd` status, init `--language` locale collision, start `--main` boundary write), tracker-neutral prose leftovers, marker-discipline slips, contract desyncs (review reduce order, plan-workflow typed error), and stale doc references (release tags, agent counts, cli/README package tree). Verified by a 5-agent branch review + `go test` golden/contract pins.
 
 ## [0.6.4] - 2026-06-12
 

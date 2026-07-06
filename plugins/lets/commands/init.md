@@ -88,7 +88,7 @@ Additionally:
     If installed → run, then render its `steps[]` like Step 2e renders project steps:
 
     ```bash
-    lets init --user --json --plugin-root="${CLAUDE_PLUGIN_ROOT}" --language={LANGUAGE}
+    lets init --user --json --plugin-root="${CLAUDE_PLUGIN_ROOT}" --language="{LANGUAGE}"
     ```
 
     (`{LANGUAGE}` is an orchestrator placeholder — substitute the English language name BEFORE running. If no language is bound yet (Step 2a hasn't run), ask Step 2a's language question first. NEVER leave a bash variable here: `$LANG` is the POSIX locale env var (`en_US.UTF-8`) and bash would expand it, silently poisoning `~/.lets/.env` in every future session. Add `--launcher={LAUNCHER}` only if the user customized the launcher this session.)
@@ -246,13 +246,15 @@ echo "SCOPE=${SCOPE:-unset} GLOBAL=$GLOBAL PROJECT=$PROJECT"
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 lets init --json \
   --plugin-root="${CLAUDE_PLUGIN_ROOT}" \
-  --language="$LANG" \
-  --merge-branch="$BRANCH" \
-  --pr-flow="$FLOW" \
-  --launcher="$LAUNCHER" \
-  --tracker="$TRACKER" \
-  $SKIP_BEADS_FLAG $RULES_SCOPE_FLAG
+  --language="{LANGUAGE}" \
+  --merge-branch={BRANCH} \
+  --pr-flow={FLOW} \
+  --launcher={LAUNCHER} \
+  --tracker={TRACKER} \
+  {SKIP_BEADS_FLAG} {RULES_SCOPE_FLAG}
 ```
+
+The `{...}` values are orchestrator bindings from Steps 2a-2c-quater ({LANGUAGE} = the English language name bound in 2a; {BRANCH}/{FLOW}/{LAUNCHER}/{TRACKER}; and the two flag fragments {SKIP_BEADS_FLAG}/{RULES_SCOPE_FLAG}, each either empty or its flag) — substitute each literal BEFORE running. NEVER leave a `$`-var: `$LANG` is the POSIX locale env var (`en_US.UTF-8`) and bash would expand it, poisoning `LETS_LANGUAGE` in `.lets/.env`.
 
 Capture stdout (JSON object).
 
@@ -264,7 +266,7 @@ Show summary line: `<ok_count> ok · <skip_count> skip · <migrate_count> migrat
 
 If `drift.detected: true` AND `drift.message != ""`, show `drift.message` directly (canonical wording from binary, no slash command formatting needed).
 
-**Restart hint** — scan `steps[]` for messages containing `statusLine ->`, `.claude/rules/lets-rules.md installed`, or `.claude/rules/lets-rules.md updated`. If ANY match → show hint right before the LETS box:
+**Restart hint** — scan `steps[]` for messages containing `statusLine ->`, `.claude/rules/lets-rules.md installed`, `.claude/rules/lets-rules.md updated`, or a `tracker-` rules message (`installed` / `updated` / `refreshed`). If ANY match → show hint right before the LETS box:
 
 (Note: `.lets/.env regenerated` is intentionally NOT in the scan — env regen only changes the file's header/comment and version marker, but the SessionStart hook injects only canonical user-facing keys to model context. The values themselves don't change unless `changed_keys` is non-empty AND a session restart isn't required for that.)
 
@@ -351,7 +353,7 @@ If "Keep current" picked, substitute `$LANG = $CURRENT_LANG`. Else use selected 
 
 Repeat for MergeBranch (`$BRANCH`), PRFlow (`$FLOW`), and Launcher (`$LAUNCHER` — "Keep current" shows `$LETS_LAUNCHER` from LETS Config, plus options terminal / cmux).
 
-**Rules scope** — only ask when `GLOBAL=PRESENT` (otherwise there's nothing to rely on; bind `$RULES_SCOPE_FLAG=""`):
+**Rules scope** — first run the **Global-rules check** from Step 2d (it computes `SCOPE`/`GLOBAL`/`PROJECT`; the change-config path does not otherwise set them). Then only ask when `GLOBAL=PRESENT` (otherwise there's nothing to rely on; bind `$RULES_SCOPE_FLAG=""`):
 
 AskUserQuestion(
   questions=[{
@@ -372,12 +374,14 @@ Bind: "Keep current" → `$RULES_SCOPE_FLAG="--rules-scope=$CURRENT_RULES_SCOPE"
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 lets init --json \
   --plugin-root="${CLAUDE_PLUGIN_ROOT}" \
-  --language="$LANG" \
-  --merge-branch="$BRANCH" \
-  --pr-flow="$FLOW" \
-  --launcher="$LAUNCHER" \
-  $RULES_SCOPE_FLAG
+  --language="{LANGUAGE}" \
+  --merge-branch={BRANCH} \
+  --pr-flow={FLOW} \
+  --launcher={LAUNCHER} \
+  {RULES_SCOPE_FLAG}
 ```
+
+Same placeholder-substitution rule as Step 2d: substitute {LANGUAGE}/{BRANCH}/{FLOW}/{LAUNCHER}/{RULES_SCOPE_FLAG} literals BEFORE running; never leave a `$`-var (`$LANG` = POSIX locale, would poison `.lets/.env`).
 
 Passing the prefs flags triggers `env_action.kind=regenerated` (binary detects values differ from existing .env, regenerates while preserving foreign keys + user-customized `LETS_TRACKER`).
 

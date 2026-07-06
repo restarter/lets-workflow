@@ -4,13 +4,13 @@ description: Finish a task - document, create PR or merge, close
 
 # Task Done
 
-Complete the current task. Document work, create PR or merge locally, close in beads.
+Complete the current task. Document work, create PR or merge locally, close in the tracker.
 
 **This is NOT session end.** Use `/lets:end` to end a session. `/lets:done` finishes a TASK.
 
 > **Convention used in this file (per CLAUDE.md "Naming Convention: LETS_*"):**
-> - `{LETS_FOO}` placeholder inside ` ```bash ` snippets - the orchestrator substitutes the literal value before running the command. Required because Bash tool calls are fresh shells; `$LETS_FOO` would be unset.
-> - `$LETS_FOO` in prose, AskUserQuestion descriptions, and section headings - read-only reference to the LETS Config inject. Do NOT change `{LETS_FOO}` to `$LETS_FOO` in bash blocks - it will silently produce wrong commands.
+> - `{LETS_FOO}` placeholder inside ` ```bash ` snippets AND AskUserQuestion strings - the orchestrator substitutes the literal value before running / before the tool call. Required because Bash tool calls are fresh shells (`$LETS_FOO` unset) and AskUserQuestion renders strings literally.
+> - `$LETS_FOO` in prose and section headings only - read-only reference to the LETS Config inject. Do NOT use `$LETS_FOO` in bash blocks or AskUserQuestion strings - it silently produces wrong commands or a literal `$LETS_FOO` in the rendered question.
 
 > **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
 
@@ -396,7 +396,7 @@ If gh is not installed or not authenticated, use **AskUserQuestion**:
 ```
 AskUserQuestion(
   questions=[{
-    question: "gh CLI is not available but {LETS_PR_FLOW}=github. What to do?",
+    question: "gh CLI is not available but LETS_PR_FLOW=github. What to do?",
     header: "gh CLI",
     options: [
       { label: "Local merge", description: "Fall back to local merge for this task" },
@@ -420,7 +420,7 @@ git push -u origin <branch>
 # Create PR
 gh pr create --title "<type>: <task title>" --body "$(cat <<'EOF'
 ## Summary
-{task description from beads}
+{task description from the tracker}
 
 ## Changes
 {git log {LETS_MERGE_BRANCH}..HEAD --oneline}
@@ -594,7 +594,7 @@ No "Next task" option - can't switch branches in a worktree. To start a new task
 
 ```
 Task: **{title}** ({task-id}) - CLOSED
-Merged to $LETS_MERGE_BRANCH
+Merged to {LETS_MERGE_BRANCH}
 Branch {feature-branch} deleted
 ```
 
@@ -622,7 +622,7 @@ AskUserQuestion(
 
 ```
 Task: **{title}** ({task-id}) - CLOSED
-Merged to $LETS_MERGE_BRANCH (from worktree via git -C)
+Merged to {LETS_MERGE_BRANCH} (from worktree via git -C)
 ```
 
 Then use **AskUserQuestion**:
@@ -634,7 +634,8 @@ AskUserQuestion(
     header: "Cleanup",
     options: [
       { label: "Remove worktree", description: "Switch to main repo and run /lets:worktree remove {name}" },
-      { label: "Keep", description: "Keep worktree for now - clean up later with /lets:worktree remove" }
+      { label: "Keep working", description: "Stay in the worktree and keep working - clean up later with /lets:worktree remove" },
+      { label: "End session", description: "Run /lets:end to save context and wrap up - worktree stays for later removal" }
     ],
     multiSelect: false
   }]
@@ -643,7 +644,8 @@ AskUserQuestion(
 
 **Handle response:**
 - **Remove worktree** -> inform: "Switch to main repo terminal and run `/lets:worktree remove {name}`" (cannot remove worktree from inside it)
-- **Keep** -> invoke `Skill(skill: "lets:end")` to save session context
+- **Keep working** -> no session change; continue working in the worktree. Remind: clean up later with `/lets:worktree remove {name}` from the main repo.
+- **End session** -> invoke `Skill(skill: "lets:end")` to save session context (the worktree stays; remove it later from the main repo)
 
 ## Rules
 

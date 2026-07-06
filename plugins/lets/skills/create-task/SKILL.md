@@ -5,7 +5,7 @@ description: This skill should be used when creating a task in the active tracke
 
 # Create Task
 
-Standardized task creation that enforces required fields and suggests labels. Fires in any context where a beads task is being created - inside commands, during planning, or in direct conversation.
+Standardized task creation that enforces required fields and suggests labels. Fires in any context where a task is being created - inside commands, during planning, or in direct conversation.
 
 > **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
 
@@ -144,9 +144,9 @@ When creating multiple tasks (e.g., during planning):
 
 ## Anti-patterns
 
-- **Never** create a task without `--labels`
+- **Never** create a task without `labels`
 - **Never** use a bare `create` with only a title (no type/priority/description/labels)
-- **Never** use `--parent` flag (causes merge collisions in multi-user setup)
+- **Never** use a parent/child hierarchy (beads `--parent` - causes merge collisions in multi-user setup)
 - **Never** skip user approval for task creation
 - **Never** use priority words ("high", "medium") - use numbers 0-4
 

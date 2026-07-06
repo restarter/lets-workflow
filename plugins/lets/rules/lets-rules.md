@@ -57,7 +57,7 @@ When invoking `AskUserQuestion`, command/skill spec files declare the **semantic
 4. **option `description`** — 5-15 words about the **consequence** of picking, not a duplicate of label. Translate to `$LETS_LANGUAGE`.
 5. **`multiSelect: true`** — ONLY when options are non-exclusive (e.g. pick several experts, several approaches, several files). Default `false`.
 6. **`preview`** — for side-by-side comparison of visual artifacts (code snippets, ASCII mockups, file structures, config blocks, layout variants). Only with `multiSelect: false`. Skip for simple preference questions where labels + descriptions suffice.
-7. **Follow-through (auto-execute):** when the user picks an option whose `label` or `description` names a `/lets:*` command, IMMEDIATELY invoke it via the `Skill` tool: `Skill(skill: "lets:<name>", args: "<args>")`. Do NOT narrate "now run /lets:X" — execute. Auto-execute is equivalent to the user typing `/lets:<name> <args>`; the invoked target's own approval gates and pre-checks apply as normal. If `args` is supplied and the invoked target has no arg-handling branch, surface the gap rather than improvising. **Exceptions** (treat as prose hint, do NOT auto-execute): (a) option only *qualifies* the slash command with `later`, `if needed`, `optionally`, `or`; (b) cross-terminal / cross-context hints (e.g. `"Switch to main repo terminal and run /lets:X"`); (c) `/clear`-chained workflows where the slash command is reached after a context-reset step (e.g. `"/clear + /lets:start"`) — auto-executing before `/clear` defeats the explicit reset intent. **AUTO MODE preserved:** auto-execute does NOT bypass approval gates inside the invoked target (push, close, external-facing ops still require explicit user approval per the invoked target's own flow).
+7. **Follow-through (auto-execute):** when the user picks an option whose `label` or `description` names a `/lets:*` command, IMMEDIATELY invoke it via the `Skill` tool: `Skill(skill: "lets:<name>", args: "<args>")`. Do NOT narrate "now run /lets:X" — execute. Auto-execute is equivalent to the user typing `/lets:<name> <args>`; the invoked target's own approval gates and pre-checks apply as normal. If `args` is supplied and the invoked target has no arg-handling branch, surface the gap rather than improvising. **Exceptions** (treat as prose hint, do NOT auto-execute): (a) option only *qualifies* the slash command with `later`, `if needed`, `optionally`, `or`; (b) cross-terminal / cross-context hints (e.g. `"Switch to main repo terminal and run /lets:X"`); (c) `/clear`-chained workflows where the slash command is reached after a context-reset step (e.g. `"/clear + /lets:start"`) — auto-executing before `/clear` defeats the explicit reset intent; (d) the option's own **Handle-response** block specifies a different action for that pick (e.g. a gate whose handler says to stop and instruct the user rather than invoke) — the handler wins over auto-execute. **AUTO MODE preserved:** auto-execute does NOT bypass approval gates inside the invoked target (push, close, external-facing ops still require explicit user approval per the invoked target's own flow).
 8. **Skip AskUserQuestion entirely** when only one sensible action exists. Execute the action and inform the user briefly.
 9. **Substitute `{LETS_FOO}` before tool call (MANDATORY).** Orchestrator MUST replace every `{LETS_FOO}` in `label`/`description`/`question` strings with the value from injected LETS Config before passing to the tool — the tool renders strings literally, no auto-substitution. `$LETS_FOO` is forbidden inside AskUserQuestion strings (reserved for orchestrator-read prose / headers / comments).
 
@@ -256,15 +256,15 @@ State-changing verbs (`set-status`, `close`, plus `bd dolt push` on beads) stay 
 
 ### Task Creation
 
-Use the `create-task` skill (auto-triggers on "create task", "new task", "bd create" variations). It enforces required fields (--title, --type, --priority, --description, --labels) and discovers project-specific labels dynamically. Tasks use hash-based IDs (collision-free in multi-user setup).
+Use the `create-task` skill (auto-triggers on "create task", "new task", "bd create" variations). It enforces required fields (`title`, `type`, `priority`, `description`, `labels`) and discovers project-specific labels dynamically (on beads: the `bd create` flags; hash-based IDs, collision-free in multi-user setup).
 
 ### Updating Tasks
 
-- **Never use `bd update --notes` or `bd update --description` to append info** - these overwrite existing content. Use `bd comments add` for all incremental updates.
+- **Never append info by overwriting a field** (beads: `bd update --notes` / `--description` replace, not append) - these clobber existing content. Use the `comment-add` verb for all incremental updates (beads: `bd comments add`).
 
-### Dependencies
+### Dependencies (where the tracker supports them)
 
-- Use `bd dep add` **sparingly** - only when task B literally cannot start without task A being done
+- Use the dependency link (beads: `bd dep add`) **sparingly** - only when task B literally cannot start without task A being done
 - Most tasks are independent - don't over-link
 - Before adding a dep, ask: "Can someone start this task right now without the other?" If yes - no dep needed
 

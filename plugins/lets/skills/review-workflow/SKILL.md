@@ -19,7 +19,7 @@ Workflow({ scriptPath: "${CLAUDE_PLUGIN_ROOT}/skills/review-workflow/review.work
 A multi-stage chain so per-agent reports never enter the conversation - only the final aggregate returns:
 
 1. **Review** - fan out the selected `lets:<name>` review agents in parallel (structured `FINDING_SCHEMA` output).
-2. **Reduce** - NIT-filter (unless small diff), split systemic, dedupe (keep highest tier), sort by tier.
+2. **Reduce** - split systemic (any tier) into its own section, NIT-filter the rest (unless small diff), dedupe (keep highest tier), sort by tier.
 3. **Verify** - for each BLOCKER/SUGGESTION, fan out `lets:skeptic` agents (2, or 3 for BLOCKER) to refute it. Apply the **asymmetric drop rule**: SUGGESTION drops on a simple majority `real=false`; BLOCKER drops only on near-unanimous high-confidence refute, otherwise downgrades. Count `refuted`.
 4. **Aggregate** - verdict over the verified set, per-agent summary, counts.
 

@@ -13,7 +13,7 @@ Turn a task or idea into a detailed implementation plan. Clarifies scope, explor
 
 ## --fast mode
 
-`/lets:plan --fast` (combinable with a task-id or feature description, e.g. `/lets:plan lets-abc --fast`) skips the three subagent-dispatch phases - **Step 4** (explorer agents), **Step 6** (architect agents), **Step 7** (expert agents) - and replaces them with orchestrator-only equivalents (read files yourself, draft approaches inline, self-evaluate risks). Use it when the user explicitly wants a collaborative talk-through without subagent budget: "let's just plan it together, I'll review". Everything else - clarifying questions, interactive discussion, plan format, beads recording, the saved file - is identical to the full flow. The plan's shape doesn't change; only *how* it's built.
+`/lets:plan --fast` (combinable with a task-id or feature description, e.g. `/lets:plan lets-abc --fast`) skips the three subagent-dispatch phases - **Step 4** (explorer agents), **Step 6** (architect agents), **Step 7** (expert agents) - and replaces them with orchestrator-only equivalents (read files yourself, draft approaches inline, self-evaluate risks). Use it when the user explicitly wants a collaborative talk-through without subagent budget: "let's just plan it together, I'll review". Everything else - clarifying questions, interactive discussion, plan format, tracker recording, the saved file - is identical to the full flow. The plan's shape doesn't change; only *how* it's built.
 
 When `--fast` is **not** set, run the full flow exactly as written.
 
@@ -37,10 +37,11 @@ If Step 1 captured an explicit `<task-id>` argument (e.g. an interactive `--flow
 
 If task found:
 ```lets-tracker
-show task=<task-id>   # returns {id,title,status,url,description}
+show task=<task-id>          # returns {id,title,status,url,description}
+comment-list task=<task-id>  # existing comments
 ```
 
-Load: title, description, design notes, existing comments.
+Load: title, description, existing comments (+ design notes on beads - beads exposes `design`).
 
 If no task found, warn:
 > "No active task detected. Every session needs a task. Create one (the `create-task` skill) or pick from the tracker's `ready` view."
@@ -175,7 +176,7 @@ FEATURE GOAL: {feature goal from Step 1}
 USER CLARIFICATIONS: {answers from Step 3}
 
 TASK CONTEXT:
-{task title and description from beads, if available}
+{task title and description from the tracker, if available}
 
 YOUR FOCUS:
 {specific bullets tailored to this focus area}

@@ -366,7 +366,12 @@ const evalFindings = evalRaw.filter(Boolean).flatMap(r => r.findings || [])
 
 phase('Plan')
 const planRes = await agent(planPrompt(winnerArch, evalFindings), { agentType: 'lets:architect', label: 'plan', schema: PLAN_SCHEMA })
-let planMd = planRes ? planRes.plan_markdown : null // null -> dispatcher surfaces "plan synthesis failed", never fabricates
+let planMd = planRes ? planRes.plan_markdown : null
+if (planMd == null) {
+  // Plan synthesis itself wiped out (agent error / null plan_markdown). Surface a typed error like the
+  // four upstream stages instead of falling through to the success return with a null plan (anti-silent-fail).
+  return { error: 'plan_synthesis_failed', plan_markdown: null, decision_log, winner, approaches, eval_findings: evalFindings, counts: { mode: MODE, explorers: map.length, approaches: approaches.length, architected: archs.length, judges: judgeResults.length } }
+}
 
 // Stage 7-8: review the WRITTEN plan (mirror /lets:review --plan) + revise. Never lose planMd on agent error.
 // Fast mode SKIPS this heavy pass only; the quick Plan Check/Refine below runs in BOTH modes.

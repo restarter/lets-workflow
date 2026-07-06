@@ -56,7 +56,7 @@ AskUserQuestion(
     question: "Commit with this message?",
     header: "Commit",
     options: [
-      { label: "Commit", description: "Stage all changes and commit" },
+      { label: "Commit", description: "Stage the reviewed files (or keep the staged set) and commit" },
       { label: "Cancel", description: "Don't commit, keep changes unstaged" }
     ],
     multiSelect: false

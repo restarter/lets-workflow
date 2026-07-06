@@ -70,7 +70,7 @@ This is a one-time setup per machine. When Claude Code asks who to install for, 
 
 ### User-scope install (global rules)
 
-*(ships next release)* With the plugin installed at **user scope** ("install for yourself everywhere"), one extra step makes LETS work in every project without per-project init: run `/lets:init` in any project — when it detects the user-scope install it offers `lets init --user`, which writes two files:
+With the plugin installed at **user scope** ("install for yourself everywhere"), one extra step makes LETS work in every project without per-project init: run `/lets:init` in any project — when it detects the user-scope install it offers `lets init --user`, which writes two files:
 
 - `~/.claude/rules/lets-rules.md` — the workflow rules, loaded by Claude Code in **every** project (frontmatter-version-tracked, synced by `/lets:update`'s `user-rules` artifact).
 - `~/.lets/.env` — your personal defaults: `LETS_LANGUAGE` and `LETS_LAUNCHER`. Per-project keys (merge branch, PR flow) deliberately stay out — those belong in each project's `.lets/.env`.
@@ -115,8 +115,6 @@ With plugin auto-update enabled (above), staying current is a single self-drivin
 - Each run advances one step and shows exactly one next action (binary → plugin → reload → done).
 - If the binary is behind, `/lets:update` offers to run the installer in-session (approval-gated) — no terminal needed.
 - It never syncs the workflow rules to a plugin that's still behind (the row shows `deferred`); it tells you to update the plugin first, so you never get stranded mid-upgrade.
-
-> *The single self-driving loop above ships next release. On the current release `/lets:update` already self-heals `.lets/.env` + rules and reports the binary/plugin version status — you just run the update steps it lists.*
 
 ---
 

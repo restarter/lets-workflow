@@ -1,7 +1,5 @@
 # /lets:research — web-first sourced research
 
-> **Status: in development (`lets-ppetz`) — not yet released.** This page documents the approved design ahead of implementation; details may shift slightly before the command ships. Tracked in the implementation plan under `.lets/plans/`.
-
 Ask a question about the outside world, get back a concise answer where every non-trivial claim carries a citation — searched and fetched from the live web, cross-checked by a skeptic agent, and honestly labeled where the evidence is thin.
 
 ```

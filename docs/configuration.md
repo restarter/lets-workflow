@@ -24,18 +24,19 @@ LETS_TRACKER=beads
 | `LETS_LANGUAGE` | The language Claude responds in when it isn't clear from your message. An English language name (`English`, `Ukrainian`, `Japanese`, …) regardless of the script it's written in. |
 | `LETS_MERGE_BRANCH` | The branch tasks merge into and PRs target. Used wherever LETS would otherwise assume `main`. |
 | `LETS_PR_FLOW` | `github` — `/lets:done` pushes and opens a PR via `gh`. `bitbucket` — planned. `local` — no PR; `/lets:done` merges locally. |
-| `LETS_TRACKER` | The task tracker **adapter**: `beads` (default), `planfix-mcp`, or `none`. Selects the `.claude/rules/tracker-<name>.md` that `lets init` installs; commands resolve verbs through it. See [trackers.md](trackers.md). *(ships next release)* |
-| `LETS_RULES_SCOPE` | Where this project's workflow rules come from: `project` (its own `.claude/rules/lets-rules.md` copy — the default) or `user` (deliberately no project copy; rules come from the global `~/.claude/rules/lets-rules.md`). Set automatically by `/lets:init` when you pick "Rely on global"; `/lets:update` then leaves the project copy uncreated (`delegated`) instead of restoring it. Any value other than `user` behaves as `project`. *(ships next release)* |
+| `LETS_TRACKER` | The task tracker **adapter**: `beads` (default), `planfix-mcp`, or `none`. Selects the `.claude/rules/tracker-<name>.md` that `lets init` installs; commands resolve verbs through it. See [trackers.md](trackers.md). |
+| `LETS_LAUNCHER` | How `/lets:worktree create` opens a new worktree session: `terminal` (default — prints a `cd … && claude` command) or `cmux` (opens a cmux workspace, macOS only). A preference, not a guarantee: `cmux` falls back to `terminal` when cmux is absent or off-macOS. |
+| `LETS_RULES_SCOPE` | Where this project's workflow rules come from: `project` (its own `.claude/rules/lets-rules.md` copy — the default) or `user` (deliberately no project copy; rules come from the global `~/.claude/rules/lets-rules.md`). Set automatically by `/lets:init` when you pick "Rely on global"; `/lets:update` then leaves the project copy uncreated (`delegated`) instead of restoring it. Any value other than `user` behaves as `project`. |
 
 The first line of the file is `LETS_ENV_VERSION` — that's metadata (which `lets` version last wrote the file), not something you set. Keys you add yourself are preserved across `/lets:init` and `/lets:update`, kept under a `# User-added keys` separator.
 
 > **Not for secrets.** The SessionStart hook injects the `LETS_*` values from this file into Claude's context every session, and the file is world-readable on disk. GitHub auth goes through `gh auth login`; other secrets belong in your OS keychain or a tool-specific credential file (for example `.beads/.env` for beads).
 
-> **Migrating from `config.yaml`:** if a project still has `.lets/config.yaml` from an older version, `/lets:init` migrates it to `.lets/.env`. The yaml file is left in place for reference but no longer read.
+> **Migrating from `config.yaml`:** if a project still has `.lets/config.yaml` from an older version, `/lets:init` migrates it to `.lets/.env` and removes the yaml file (its values now live in `.lets/.env`).
 
 ## `~/.lets/.env` — user-level defaults
 
-*(ships next release)* `lets init --user` (offered by `/lets:init` when the plugin is installed at user scope) writes a machine-global defaults file with the two genuinely personal keys:
+`lets init --user` (offered by `/lets:init` when the plugin is installed at user scope) writes a machine-global defaults file with the two genuinely personal keys:
 
 | Key | Why it's user-level |
 |-----|---------------------|
@@ -98,7 +99,6 @@ For a shared task database across a team, `bd init --server --database=<name>` c
 | [git](https://git-scm.com/) | Yes | Version control, branching, worktrees |
 | [beads](https://github.com/steveyegge/beads) | Yes | Task tracking (Claude Code plugin / `bd` CLI) |
 | [gh](https://cli.github.com/) | Optional | GitHub PR workflow (`LETS_PR_FLOW=github`) |
-| [jq](https://jqlang.github.io/jq/) | Optional | Statusline JSON parsing |
 
 Installing the `lets` binary itself: see **[installation.md](installation.md)**.
 

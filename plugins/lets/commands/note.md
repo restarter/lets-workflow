@@ -4,7 +4,7 @@ description: Add a note to the active task - progress, decisions, context. --pre
 
 # Task Note
 
-Add a note to the active beads task. For mid-work documentation - progress updates, research findings, decisions, context for future sessions.
+Add a note to the active task. For mid-work documentation - progress updates, research findings, decisions, context for future sessions.
 
 **This is a utility, not a flow step.** Main flow handles documentation automatically:
 - `/lets:commit` records commits to the task

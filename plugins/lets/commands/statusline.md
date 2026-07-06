@@ -24,7 +24,7 @@ The choice is written to `.claude/settings.local.json` (personal, gitignored) - 
 lets statusline config --show --json
 ```
 
-Parse the envelope and report the current appearance in one line (palette + which rows are hidden + compact), plus the `settings_path`. Then stop (show the box).
+Parse the envelope and report the current appearance in one line (palette + which rows are hidden + compact), plus the `settings_path`. Then stop (render the Output line).
 
 ## Reset
 
@@ -32,7 +32,7 @@ Parse the envelope and report the current appearance in one line (palette + whic
 lets statusline config --reset --json
 ```
 
-Parse the envelope; on `ok=true` confirm "reset to defaults". Add the restart note. Show the box.
+Parse the envelope; on `ok=true` confirm "reset to defaults". Add the restart note. Render the Output line.
 
 ## Configure
 

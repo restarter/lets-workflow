@@ -26,7 +26,7 @@ When reviewing a Claude Code plugin (commands/*.md, agents/*.md, hooks/), also c
 
 - **CLAUDE.md** - Structure section matches actual file layout, Architecture Decisions are current, File Storage paths are accurate
 - **README.md** - Agent table matches actual agents in `agents/`. Feature descriptions are current.
-- **rules/lets-rules.md** - Skill Quick Reference table includes all commands from commands/*.md (and frontmatter `version` bumped on changes so SessionStart drift check fires)
+- **rules/lets-rules.md** - Skill Quick Reference table includes all commands from commands/*.md (the frontmatter `version` is bumped once per release at ceremony time - do NOT flag an unchanged version on a rules edit)
 - **commands/install.md** - Essential Skills and Planning Skills tables match actual available commands
 - **Command descriptions** (frontmatter `description:` field) - match what the command actually does
 

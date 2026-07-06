@@ -41,7 +41,7 @@ What happens (stable release):
 - Runs gates: `make test`, `make build`, `verify-versions`
 - Commits "chore: release v0.6.0"
 
-If the script fails, fix and re-run. The script is idempotent: it doesn't touch git unless all gates pass.
+The script commits only after all gates pass. On a gate failure the version + CHANGELOG edits stay in the working tree, so a plain re-run dies at the clean-tree pre-check — `git restore` the edited files (`plugin.json`, `marketplace.json`, `lets-rules.md` + the tracker adapters, `CHANGELOG.md`) first, then fix and re-run.
 
 For **prereleases** (`X.Y.Z-rc.N`, `-beta.N`, `-alpha.N`) the flow is identical EXCEPT:
 - bump-version.sh edits **3** files (CHANGELOG is left intact — full content stays under `[Unreleased]`)

@@ -1,11 +1,11 @@
 ---
-description: End a work session - a settlement pass that reconciles uncommitted / unpushed work + session context into git, beads, and a session snapshot file. --pre-compact skips settlement and only writes the shared snapshot, keeping the session going.
+description: End a work session - a settlement pass that reconciles uncommitted / unpushed work + session context into git, the tracker, and a session snapshot file. --pre-compact skips settlement and only writes the shared snapshot, keeping the session going.
 argument-hint: "[--pre-compact]"
 ---
 
 # Session End
 
-End a work session cleanly. `/lets:end` is a **settlement pass**: it reconciles the volatile session state (uncommitted changes, unpushed commits, in-conversation context) into durable stores (git remote, beads, a session-snapshot file) so the window can close - or compact - without losing anything.
+End a work session cleanly. `/lets:end` is a **settlement pass**: it reconciles the volatile session state (uncommitted changes, unpushed commits, in-conversation context) into durable stores (git remote, the tracker, a session-snapshot file) so the window can close - or compact - without losing anything.
 
 **This is NOT task completion.** Use `/lets:done` to finish a TASK; `/lets:end` ends a SESSION.
 

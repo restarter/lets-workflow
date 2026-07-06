@@ -72,7 +72,7 @@ The pipeline degrades cleanly rather than failing:
 - cmux is macOS-only.
 - `plan-workflow` needs Claude Code ≥ 2.1.154 on a paid plan.
 
-> These flows ship next release; `/lets:plan-workflow` is a PREVIEW. Until then they live behind the dev binary / `--plugin-dir`.
+> `/lets:plan-workflow` is a PREVIEW — dogfooded across projects before it folds into native `/lets:plan`.
 
 ## See also
 

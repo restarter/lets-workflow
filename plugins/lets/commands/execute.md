@@ -1,6 +1,6 @@
 ---
 description: Execute implementation plan from /lets:plan - load plan and enter native plan mode
-argument-hint: "[--status] [--team] [--step|--straight|--auto]"
+argument-hint: "[task-id|plan-path] [--status] [--team] [--step|--straight|--auto]"
 ---
 
 # Execute Plan
@@ -33,6 +33,8 @@ printf '%s|%s|%s\n' "{TASK_ID}" "{PHASE}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$L
 **Execute-blocked notify.** On a hard-stop under `--auto` (3×-fail / fabrication / a gated op reached / `$LETS_MERGE_BRANCH` refused), after writing the `blocked` marker, fire the **marker-gated gate-notification** so an unattended session surfaces instead of stalling. Use the authoritative snippet documented in `plan-workflow.md` "## Gate notifications" (don't re-paraphrase), incl. its single-quote rule for substituted values: `lets cmux notify --cwd "$LETS_PROJECT_ROOT" --title 'Execute blocked — needs you' --body '<reason>' --json 2>/dev/null || true`, guarded by the `pipeline-state-{TASK_ID}` marker existing. Best-effort — the run also halts visibly in-band.
 
 ## Step 1: Active Task Detection
+
+**Positional argument** — if it is a path (ends in `.md` or contains `/`), it is a **plan-path**: bind `{PLAN_ARG}` to it (Step 2 consumes it and skips slug derivation) and skip the task resolve-and-claim below. Otherwise treat it as a `<task-id>`.
 
 Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detect-task")`.
 If not on a feature/worktree branch and no in-progress task found - ask user which task to execute.
@@ -70,27 +72,37 @@ AskUserQuestion(
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 BRANCH=$(git branch --show-current)
+PLAN=""
 
-# Derive slug: trunk-mode uses task-id (plan.md saves <date>-<task-id>.md on the merge-branch);
-# otherwise the branch slug (covers feature/* and worktree-* branches).
-# ${TASK_ID} is substituted by the orchestrator from the Step 1 detect-task result.
-if [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ]; then
-  SLUG="${TASK_ID}"
-else
-  SLUG="${BRANCH#feature/}"
+# Explicit plan-path argument wins: `/lets:execute <path-to-plan>.md` skips slug derivation
+# entirely (the escape hatch for detached HEAD / unresolved task-id / cross-worktree cases).
+# {PLAN_ARG} = the orchestrator-substituted path argument, empty when none was passed.
+if [ -n "{PLAN_ARG}" ] && [ -f "{PLAN_ARG}" ]; then
+  PLAN="{PLAN_ARG}"
 fi
 
-# Guard: an empty slug (detached HEAD, or unresolved task-id in trunk-mode) would collapse the
-# glob to *.md -> global latest -> another worktree's plan (the exact bug this task fixes).
-if [ -z "$SLUG" ]; then
-  echo "Could not derive a plan slug (detached HEAD or unresolved task-id). Pass a path or run /lets:start."
-else
-  # Latest plan for this slug - matches date-prefixed (YYYY-MM-DD-HHMM-<slug>.md) AND legacy bare
-  # <slug>.md. Slug-scoped, NOT global latest: .lets/plans is shared across worktrees via symlink.
-  PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
-  # Fallback: match by task-id (catches trunk-mode plans + naming drift, e.g. plan-workflow output)
-  if [ -z "$PLAN" ] && [ -n "${TASK_ID}" ]; then
-    PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${TASK_ID}"*.md 2>/dev/null | head -1)
+if [ -z "$PLAN" ]; then
+  # Derive slug: trunk-mode uses task-id (plan.md saves <date>-<task-id>.md on the merge-branch);
+  # otherwise the branch slug (covers feature/* and worktree-* branches).
+  # ${TASK_ID} is substituted by the orchestrator from the Step 1 detect-task result.
+  if [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ]; then
+    SLUG="${TASK_ID}"
+  else
+    SLUG="${BRANCH#feature/}"
+  fi
+
+  # Guard: an empty slug (detached HEAD, or unresolved task-id in trunk-mode) would collapse the
+  # glob to *.md -> global latest -> another worktree's plan (the exact bug this task fixes).
+  if [ -z "$SLUG" ]; then
+    echo "Could not derive a plan slug (detached HEAD or unresolved task-id). Pass a plan path (/lets:execute <path>.md) or run /lets:start."
+  else
+    # Latest plan for this slug - matches date-prefixed (YYYY-MM-DD-HHMM-<slug>.md) AND legacy bare
+    # <slug>.md. Slug-scoped, NOT global latest: .lets/plans is shared across worktrees via symlink.
+    PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
+    # Fallback: match by task-id (catches trunk-mode plans + naming drift, e.g. plan-workflow output)
+    if [ -z "$PLAN" ] && [ -n "${TASK_ID}" ]; then
+      PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${TASK_ID}"*.md 2>/dev/null | head -1)
+    fi
   fi
 fi
 
@@ -211,7 +223,7 @@ AskUserQuestion(
 - **Straight-through** -> Step 5 (native plan mode); after the plan-mode approval, implement all tasks with NO per-task pause and `/lets:commit` at each plan commit point without re-asking.
 - **Step-by-step** -> Step 5 (native plan mode); after the plan-mode approval, implement one task, pause for user review before the next, and confirm each `/lets:commit`.
 - **Auto** -> proceed exactly as `--auto` (Step 5's `--auto` behavior + pipeline-state marker + execute-blocked notify). **Guard:** if on `$LETS_MERGE_BRANCH`, REFUSE Auto here too (same rule as Step 1's `--auto` refuse - AUTO MODE never edits the merge-branch); tell the user to pick step-by-step / straight-through or take a feature branch.
-- **Team** -> do NOT enter native plan mode. Hand off to the team flow: `Skill(skill: "lets:team", args: "run")` - it spawns parallel implementers in isolated worktrees from this plan. After it completes, the user reviews via `/lets:review --local`. Skip Steps 5-6.
+- **Team** -> do NOT enter native plan mode. Hand off to the team flow: `Skill(skill: "lets:team", args: "run")` - it re-selects ready tasks from the tracker (`ready` picker / `--tasks`) for parallel implementers in isolated worktrees; the plan you just validated is context, not its task list (plan-driven team execution is tracked in **Wire /lets:team to execute a plan's Task decomposition** (`lets-a524x`)). After it completes, the user reviews via `/lets:review --local`. Skip Steps 5-6.
 
 (A remembered default / `LETS_EXECUTE_MODE` to skip the picker on every run is a deferred follow-up - this ships the picker + flag shortcuts only.)
 
