@@ -273,8 +273,8 @@ Save review_json path in state file.
 
 | # | Severity | Title | File | Line |
 |---|----------|-------|------|------|
-| 1 | critical | {title} | {file} | {line} |
-| 2 | important | {title} | {file} | {line} |
+| 1 | BLOCKER | {title} | {file} | {line} |
+| 2 | SUGGESTION | {title} | {file} | {line} |
 ...
 
 Review JSON: {review_json path}
@@ -432,13 +432,13 @@ Write the FULL payload to `$PR_DIR/payload.json`:
       "path": "src/search.py",
       "line": 42,
       "side": "RIGHT",
-      "body": "**[critical]** SQL injection in search query\n\nUser input concatenated directly into SQL query.\n\n**Suggestion:** Use parameterized queries.\n\n```python\ncursor.execute(\"SELECT * FROM items WHERE name = %s\", (user_input,))\n```"
+      "body": "**[BLOCKER]** SQL injection in search query\n\nUser input concatenated directly into SQL query.\n\n**Suggestion:** Use parameterized queries.\n\n```python\ncursor.execute(\"SELECT * FROM items WHERE name = %s\", (user_input,))\n```"
     },
     {
       "path": "src/auth.py",
       "line": 15,
       "side": "RIGHT",
-      "body": "**[important]** Missing rate limiting on login endpoint\n\n..."
+      "body": "**[SUGGESTION]** Missing rate limiting on login endpoint\n\n..."
     }
   ]
 }
@@ -462,9 +462,18 @@ gh api repos/${REPO}/pulls/{PR}/reviews \
 ```
 
 Step 3: Parse response.
-The response JSON includes:
+The `POST .../reviews` response is a review object - it has `.id` but NO `comments` array:
 - `.id` -> save as review_id in state
-- `.comments[].id` -> map to findings by path+line, save as posted_comment_id
+
+Then fetch the created inline comments to recover their IDs (the review response omits them):
+
+```bash
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+gh api "repos/$REPO/pulls/{PR}/reviews/{review_id}/comments" \
+  --jq '.[] | {id, path, line: (.line // .original_line)}'
+```
+
+- map each returned comment `.id` to the finding at the same path+line, save as posted_comment_id
 
 If gh api returns error (400/422):
 1. Show the error message
@@ -646,15 +655,15 @@ Show approval checklist based on findings and follow-up status:
 ```
 ## Approval Checklist - PR #{number}
 
-Critical findings:
+BLOCKER findings:
 - [x] {title} - Fixed
 - [ ] {title} - Not fixed
 
-Important findings:
+SUGGESTION findings:
 - [x] {title} - Fixed
 - [ ] {title} - Not fixed
 
-Summary: {X}/{Y} critical fixed, {A}/{B} important fixed
+Summary: {X}/{Y} BLOCKER fixed, {A}/{B} SUGGESTION fixed
 ```
 
 ### 5.2 User decides
@@ -665,7 +674,7 @@ AskUserQuestion(
     question: "PR #{number} - your verdict?",
     header: "Verdict",
     options: [
-      { label: "Approve", description: "All critical issues resolved" },
+      { label: "Approve", description: "All BLOCKER issues resolved" },
       { label: "Request changes", description: "Still needs work" },
       { label: "Skip", description: "Don't submit a review verdict" }
     ],
@@ -685,14 +694,14 @@ Write verdict body to `$PR_DIR/verdict.md`:
 
 For approve:
 ```
-LGTM. All critical findings have been addressed.
+LGTM. All BLOCKER findings have been addressed.
 {brief summary of what was fixed}
 ```
 
 For request changes:
 ```
 Still needs work on {N} findings:
-{list of unresolved critical/important items}
+{list of unresolved BLOCKER/SUGGESTION items}
 ```
 
 Then:
@@ -1078,19 +1087,24 @@ If "Save for later": save state, exit with resume LETS box.
 
 If "Post all": post each reply by type.
 
-**Inline comments** (threaded reply):
+**Inline comments** (threaded reply). Re-derive REPO (fresh shell) and write the body to a file so multi-line replies post literally, not with an escaped `\n`:
 ```bash
-gh api repos/${REPO}/pulls/{PR}/comments \
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+PR_DIR="$LETS_PROJECT_ROOT/.lets/execution/pr-{PR}"
+printf '%s\n' "{reply_text}" > "$PR_DIR/reply-{n}.md"
+gh api "repos/$REPO/pulls/{PR}/comments" \
   --method POST \
-  -F body="{reply_text}" \
+  --field body=@"$PR_DIR/reply-{n}.md" \
   -F in_reply_to={github_id}
 ```
 
-**General comments** (new top-level comment with quote):
+**General comments** (new top-level comment with quote) - build the quote + reply with real newlines via `printf`, then post with `--body-file`:
 ```bash
-gh api repos/${REPO}/issues/{PR}/comments \
-  --method POST \
-  -F body="> {first 2 lines of original}\n\n{reply_text}"
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+PR_DIR="$LETS_PROJECT_ROOT/.lets/execution/pr-{PR}"
+printf '> %s\n\n%s\n' "{first 2 lines of original}" "{reply_text}" > "$PR_DIR/reply-{n}.md"
+gh pr comment {PR} --body-file "$PR_DIR/reply-{n}.md"
 ```
 
 **Per-reply error handling:** If a reply fails (404 - comment deleted, 422 - validation error):

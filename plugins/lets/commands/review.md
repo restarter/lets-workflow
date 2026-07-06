@@ -271,7 +271,6 @@ Skipped:
 - frontend (no frontend changes)
 - qa (no test files)
 - git-historian (mostly new files)
-- docs (will check inline)
 
 > Subagents have a separate rate limit - no cost to your conversation.
 ```
@@ -385,7 +384,7 @@ Workflow({ scriptPath: "${CLAUDE_PLUGIN_ROOT}/skills/review-workflow/review.work
 
 The skeleton is a committed asset in the `review-workflow` skill (`skills/review-workflow/review.workflow.js`) - NOT reproduced inline. `${CLAUDE_PLUGIN_ROOT}` is substituted at command-load time, so this markdown already carries the literal absolute path. The script is static; all per-review data travels in `args`. See `skills/review-workflow/SKILL.md` for the `args` contract and the stage flow (fan-out -> dedupe -> verify -> aggregate).
 
-The skeleton's stages: **(1) Review** - fan out `lets:<name>` agents (structured `FINDING_SCHEMA`); **(2) Reduce** - NIT-filter (unless small diff), split systemic, dedupe keep-highest-tier, sort; **(3) Verify** - per BLOCKER/SUGGESTION, fan out `lets:skeptic` (2, or 3 for BLOCKER) with the asymmetric drop rule (Step 6.6); **(4) Aggregate** - verdict over the verified set, summary, `counts` incl. `refuted`. It returns `{ verdict, findings, systemic, summary, counts }`.
+The skeleton's stages: **(1) Review** - fan out `lets:<name>` agents (structured `FINDING_SCHEMA`); **(2) Reduce** - split systemic (any tier) into its own section, NIT-filter the rest (unless small diff), dedupe keep-highest-tier, sort; **(3) Verify** - per BLOCKER/SUGGESTION, fan out `lets:skeptic` (2, or 3 for BLOCKER) with the asymmetric drop rule (Step 6.6); **(4) Aggregate** - verdict over the verified set, summary, `counts` incl. `refuted`. It returns `{ verdict, findings, systemic, summary, counts }`.
 
 **The workflow runs in the BACKGROUND.** The tool returns immediately with a task ID / `runId` - NOT the aggregate. Do not try to read findings from the tool's immediate return. The fan-out continues in the background and a `<task-notification>` arrives when it completes; the orchestrator is re-invoked at that point. Optionally tell the user "Review fan-out running in the background - {N} agents" so the wait is visible (they can watch via `/workflows`).
 
@@ -404,9 +403,9 @@ When the workflow's completion notification arrives, the orchestrator resumes wi
 
 Wait for all agents, then:
 
-1. **Filter:** Keep [BLOCKER] and [SUGGESTION]. Include [NIT] only for small diffs (<50 lines)
-2. **Dedupe:** Remove duplicate issues found by multiple agents. When deduplicating, keep the highest tier (BLOCKER > SUGGESTION > NIT)
-3. **Separate:** Split into regular findings and `[SYSTEMIC]` findings
+1. **Separate systemic first:** Split `[SYSTEMIC]` findings into their own section BEFORE any tier filter. The systemic instruction downgrades tier by one, so a `[SUGGESTION]`-systemic arrives as `[NIT]`; filtering NITs first would drop it before the split can capture it.
+2. **Filter:** From the regular (non-systemic) findings, keep [BLOCKER] and [SUGGESTION]. Include [NIT] only for small diffs (<50 lines)
+3. **Dedupe:** Remove duplicate issues found by multiple agents. When deduplicating, keep the highest tier (BLOCKER > SUGGESTION > NIT)
 4. **Prioritize:** Sort by tier ([BLOCKER] first, then [SUGGESTION], then [NIT])
 5. **Count:** Tally issues by category
 

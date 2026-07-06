@@ -1,6 +1,6 @@
 ---
 description: Execute implementation plan from /lets:plan - load plan and enter native plan mode
-argument-hint: "[--status] [--team] [--step|--straight|--auto]"
+argument-hint: "[task-id|plan-path] [--status] [--team] [--step|--straight|--auto]"
 ---
 
 # Execute Plan
@@ -70,27 +70,37 @@ AskUserQuestion(
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 BRANCH=$(git branch --show-current)
+PLAN=""
 
-# Derive slug: trunk-mode uses task-id (plan.md saves <date>-<task-id>.md on the merge-branch);
-# otherwise the branch slug (covers feature/* and worktree-* branches).
-# ${TASK_ID} is substituted by the orchestrator from the Step 1 detect-task result.
-if [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ]; then
-  SLUG="${TASK_ID}"
-else
-  SLUG="${BRANCH#feature/}"
+# Explicit plan-path argument wins: `/lets:execute <path-to-plan>.md` skips slug derivation
+# entirely (the escape hatch for detached HEAD / unresolved task-id / cross-worktree cases).
+# {PLAN_ARG} = the orchestrator-substituted path argument, empty when none was passed.
+if [ -n "{PLAN_ARG}" ] && [ -f "{PLAN_ARG}" ]; then
+  PLAN="{PLAN_ARG}"
 fi
 
-# Guard: an empty slug (detached HEAD, or unresolved task-id in trunk-mode) would collapse the
-# glob to *.md -> global latest -> another worktree's plan (the exact bug this task fixes).
-if [ -z "$SLUG" ]; then
-  echo "Could not derive a plan slug (detached HEAD or unresolved task-id). Pass a path or run /lets:start."
-else
-  # Latest plan for this slug - matches date-prefixed (YYYY-MM-DD-HHMM-<slug>.md) AND legacy bare
-  # <slug>.md. Slug-scoped, NOT global latest: .lets/plans is shared across worktrees via symlink.
-  PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
-  # Fallback: match by task-id (catches trunk-mode plans + naming drift, e.g. plan-workflow output)
-  if [ -z "$PLAN" ] && [ -n "${TASK_ID}" ]; then
-    PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${TASK_ID}"*.md 2>/dev/null | head -1)
+if [ -z "$PLAN" ]; then
+  # Derive slug: trunk-mode uses task-id (plan.md saves <date>-<task-id>.md on the merge-branch);
+  # otherwise the branch slug (covers feature/* and worktree-* branches).
+  # ${TASK_ID} is substituted by the orchestrator from the Step 1 detect-task result.
+  if [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ]; then
+    SLUG="${TASK_ID}"
+  else
+    SLUG="${BRANCH#feature/}"
+  fi
+
+  # Guard: an empty slug (detached HEAD, or unresolved task-id in trunk-mode) would collapse the
+  # glob to *.md -> global latest -> another worktree's plan (the exact bug this task fixes).
+  if [ -z "$SLUG" ]; then
+    echo "Could not derive a plan slug (detached HEAD or unresolved task-id). Pass a plan path (/lets:execute <path>.md) or run /lets:start."
+  else
+    # Latest plan for this slug - matches date-prefixed (YYYY-MM-DD-HHMM-<slug>.md) AND legacy bare
+    # <slug>.md. Slug-scoped, NOT global latest: .lets/plans is shared across worktrees via symlink.
+    PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
+    # Fallback: match by task-id (catches trunk-mode plans + naming drift, e.g. plan-workflow output)
+    if [ -z "$PLAN" ] && [ -n "${TASK_ID}" ]; then
+      PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${TASK_ID}"*.md 2>/dev/null | head -1)
+    fi
   fi
 fi
 

@@ -594,7 +594,7 @@ No "Next task" option - can't switch branches in a worktree. To start a new task
 
 ```
 Task: **{title}** ({task-id}) - CLOSED
-Merged to $LETS_MERGE_BRANCH
+Merged to {LETS_MERGE_BRANCH}
 Branch {feature-branch} deleted
 ```
 
@@ -622,7 +622,7 @@ AskUserQuestion(
 
 ```
 Task: **{title}** ({task-id}) - CLOSED
-Merged to $LETS_MERGE_BRANCH (from worktree via git -C)
+Merged to {LETS_MERGE_BRANCH} (from worktree via git -C)
 ```
 
 Then use **AskUserQuestion**:
@@ -634,7 +634,8 @@ AskUserQuestion(
     header: "Cleanup",
     options: [
       { label: "Remove worktree", description: "Switch to main repo and run /lets:worktree remove {name}" },
-      { label: "Keep", description: "Keep worktree for now - clean up later with /lets:worktree remove" }
+      { label: "Keep working", description: "Stay in the worktree and keep working - clean up later with /lets:worktree remove" },
+      { label: "End session", description: "Run /lets:end to save context and wrap up - worktree stays for later removal" }
     ],
     multiSelect: false
   }]
@@ -643,7 +644,8 @@ AskUserQuestion(
 
 **Handle response:**
 - **Remove worktree** -> inform: "Switch to main repo terminal and run `/lets:worktree remove {name}`" (cannot remove worktree from inside it)
-- **Keep** -> invoke `Skill(skill: "lets:end")` to save session context
+- **Keep working** -> no session change; continue working in the worktree. Remind: clean up later with `/lets:worktree remove {name}` from the main repo.
+- **End session** -> invoke `Skill(skill: "lets:end")` to save session context (the worktree stays; remove it later from the main repo)
 
 ## Rules
 
