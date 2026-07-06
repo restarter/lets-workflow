@@ -266,7 +266,7 @@ Show summary line: `<ok_count> ok · <skip_count> skip · <migrate_count> migrat
 
 If `drift.detected: true` AND `drift.message != ""`, show `drift.message` directly (canonical wording from binary, no slash command formatting needed).
 
-**Restart hint** — scan `steps[]` for messages containing `statusLine ->`, `.claude/rules/lets-rules.md installed`, or `.claude/rules/lets-rules.md updated`. If ANY match → show hint right before the LETS box:
+**Restart hint** — scan `steps[]` for messages containing `statusLine ->`, `.claude/rules/lets-rules.md installed`, `.claude/rules/lets-rules.md updated`, or a `tracker-` rules message (`installed` / `updated` / `refreshed`). If ANY match → show hint right before the LETS box:
 
 (Note: `.lets/.env regenerated` is intentionally NOT in the scan — env regen only changes the file's header/comment and version marker, but the SessionStart hook injects only canonical user-facing keys to model context. The values themselves don't change unless `changed_keys` is non-empty AND a session restart isn't required for that.)
 
