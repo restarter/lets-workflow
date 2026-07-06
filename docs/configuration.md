@@ -99,7 +99,7 @@ For a shared task database across a team, `bd init --server --database=<name>` c
 | [git](https://git-scm.com/) | Yes | Version control, branching, worktrees |
 | [beads](https://github.com/steveyegge/beads) | Yes | Task tracking (Claude Code plugin / `bd` CLI) |
 | [gh](https://cli.github.com/) | Optional | GitHub PR workflow (`LETS_PR_FLOW=github`) |
-| [jq](https://jqlang.github.io/jq/) | Optional | Statusline JSON parsing |
+| [jq](https://jqlang.github.io/jq/) | Optional | Parsing beads JSON in the `/lets:backlog` stats path |
 
 Installing the `lets` binary itself: see **[installation.md](installation.md)**.
 

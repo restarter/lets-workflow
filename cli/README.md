@@ -2,7 +2,7 @@
 
 Go binary that ships alongside the LETS Claude Code plugin (`../plugins/lets/`).
 
-The plugin's `hooks.json` and slash commands invoke `lets <subcommand>` for cross-platform behavior. Eventually replaces all bash scripts under `plugins/lets/hooks/` and `plugins/lets/scripts/lets/`.
+The plugin's `hooks.json` and slash commands invoke `lets <subcommand>` for cross-platform behavior (the former `plugins/lets/hooks/*.sh` and `plugins/lets/scripts/lets/` bash surfaces are gone).
 
 ## Layout
 
@@ -13,16 +13,24 @@ cli/
 │   ├── cli/                      # Cobra command factories (one file per subcommand)
 │   │   ├── root.go, version.go
 │   │   ├── hook.go, hook_session_start.go, hook_precompact.go
-│   │   ├── statusline.go, init.go
+│   │   ├── statusline.go, init.go, update.go
+│   │   ├── worktree.go (+ worktree_stub.go), cmux.go (+ cmux_stub.go)
 │   │   └── *_test.go             # Black-box tests (package cli_test)
+│   ├── letsconfig/               # Canonical LETS_* key metadata + defaults (single source of truth)
 │   ├── envfile/                  # .lets/.env reader (whitelist + parser, mirrors bash semantics)
 │   ├── frontmatter/              # YAML frontmatter `version` reader (drift check via x/mod/semver)
+│   ├── drift/                    # Rules-file drift check + user-facing drift messages
+│   ├── gitutil/                  # Shared git helpers
 │   ├── hook/sessionstart/        # SessionStart + PreCompact output (LETS Config + Notice + drift check)
-│   ├── initcmd/                  # `lets init` orchestration (init.go + migrate.go + jsonmerge.go +
-│   │                             #   state.go + render.go + embed.go + embedded_statusline_shim.sh)
+│   ├── initcmd/                  # `lets init` orchestration (init.go + migrate.go + env.go +
+│   │                             #   render.go + tracker.go + embed.go + …)
+│   ├── updatecmd/                # `lets update` (order-aware next_action, deferred rules; SchemaVersion=2)
+│   ├── worktreecmd/              # `lets worktree create/remove/list/info` (//go:build unix)
+│   ├── cmuxcmd/                  # `lets cmux open/rename/notify` (optional macOS launcher, //go:build unix)
 │   ├── statusline/               # Render loop, OAuth fetch, cache (build-tag splits:
 │   │                             #   keychain_darwin.go vs keychain_other.go,
 │   │                             #   spawn_unix.go vs spawn_windows.go)
+│   ├── statuslinecmd/            # `lets statusline config` persistence (own SchemaVersion + envelope)
 │   └── version/version.go        # CLI version (var, ldflags-overridable)
 ├── go.mod, go.sum
 ├── .golangci.yml
@@ -125,14 +133,16 @@ Internal subcommand. Designed to be invoked by the `/lets:init` slash command, w
 ```bash
 lets init \
   --plugin-root "${CLAUDE_PLUGIN_ROOT}" \
-  [--language English --merge-branch main --pr-flow local] \
-  [--skip-beads] [--json]
+  [--language English --merge-branch main --pr-flow local --tracker beads --launcher terminal] \
+  [--rules-scope project] [--skip-beads] [--json]
+  # or: lets init --user --language English   (user-scope global install)
 ```
 
 Required: `--plugin-root` (or `$CLAUDE_PLUGIN_ROOT`). Prefs flags are required only when creating `.env` from scratch (no existing `.env`, no legacy `config.yaml` to migrate from); on existing `.env` they're optional — empty value means "preserve current". `--github` is a deprecated alias for `--pr-flow=github`.
 
 Flags:
-- `--language`, `--merge-branch`, `--pr-flow` — preference flags. Empty value (no flag passed) signals "use existing or fail if creating fresh". Non-empty triggers regen with new value.
+- `--language`, `--merge-branch`, `--pr-flow`, `--tracker`, `--launcher` — preference flags. Empty value (no flag passed) signals "use existing or fail if creating fresh". Non-empty triggers regen with new value. `--tracker` (`beads` | `planfix-mcp` | `none`) additionally installs the matching `.claude/rules/tracker-<name>.md` adapter on a fresh init (an existing `.env` value wins on re-init, with a warning).
+- `--rules-scope` (`project` | `user`), `--user` — rules-install scope; `--user` does the machine-global install (`~/.claude/rules/` + `~/.lets/.env`) instead of a project init.
 - `--skip-beads` — skip the final `bd init` step.
 - `--json` — emit machine-readable JSON to stdout (single object, schema_version=1). Slash command `/lets:init` consumes this.
 
@@ -310,6 +320,6 @@ The workflow rules themselves do NOT travel through the hook — they live in `.
 
 Every `lets <sub> --json` emits a single JSON object on stdout, valid even on `ok=false` (partial-completion contract — `steps[]` carries work done before the error; `error` carries `kind`/`message`/`remediation`). The cobra layer sets `SilenceUsage` + `SilenceErrors`; the human-readable error duplicates `result.Error` to stderr.
 
-**`SchemaVersion` is per-package, not shared.** `initcmd`, `updatecmd`, and `worktreecmd` each declare their own `const SchemaVersion = 1`, so a breaking change in one doesn't force a coordinated bump in the others. Field additions are minor (consumers ignore unknown fields); each package's `TestResult_SchemaContract` test fails on key drift, forcing a conscious bump decision.
+**`SchemaVersion` is per-package, not shared.** `initcmd`, `updatecmd`, and `worktreecmd` each declare their own `const SchemaVersion` (`initcmd` + `worktreecmd` = 1, `updatecmd` = 2), so a breaking change in one doesn't force a coordinated bump in the others. Field additions are minor (consumers ignore unknown fields); each package's `TestResult_SchemaContract` test fails on key drift, forcing a conscious bump decision.
 
 **New `--json` subcommand packages should copy `worktreecmd`'s pattern** — a shared `Envelope` core + per-subcommand result wrappers — rather than inventing a new shape. Per-subcommand contracts: the `### ... --json contract` subsections above (`lets init`, `lets update`, `lets worktree`).

@@ -356,7 +356,7 @@ Add `--light` for light-background terminals (default palette is dark). Full det
 | [git](https://git-scm.com/) | Yes | Version control, branching, worktrees |
 | [beads](https://github.com/steveyegge/beads) | Yes | Task tracking and issue management (Claude Code plugin) |
 | [gh](https://cli.github.com/) | Optional | GitHub PR workflow (when `LETS_PR_FLOW=github`) |
-| [jq](https://jqlang.github.io/jq/) | Optional | Statusline JSON parsing |
+| [jq](https://jqlang.github.io/jq/) | Optional | Parsing beads JSON in the `/lets:backlog` stats path |
 
 ## 📚 Documentation
 

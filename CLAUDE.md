@@ -72,7 +72,7 @@ The remaining dev-binary gotchas — `LETS_ENV_VERSION` stamping, old worktrees,
 - **Adversarial verification + Dynamic Workflows (opt-in `--workflow`).** `/lets:review` refutes every `[BLOCKER]`/`[SUGGESTION]` with `lets:skeptic` agents before reporting (asymmetric drop: SUGGESTION on a simple-majority `real=false`; BLOCKER only on near-unanimous high-confidence refute, downgraded on a simple-majority, else kept). Runs in BOTH standard (Task, capped) and `--workflow` (off-context) modes — `--workflow` is a pure performance lever, same verified findings. `/lets:review`, `/lets:opinion`, `/lets:backlog`, `/lets:research` ship committed workflow skeletons (`skills/<name>-workflow/<name>.workflow.js`); authoring standard + runtime constraints in **Dynamic Workflow Assets** below.
 - **Audience for plugin source** — `commands/`, `skills/`, `agents/`, `rules/lets-rules.md` are read by the model (orchestrator + subagents), never by humans: write terse, structured, marker-driven (`MANDATORY`/`NEVER`/`IMPORTANT`), tables over prose. Human-facing docs are `README.md` + `CLAUDE.md`. Full guidance: `CONTRIBUTING.md` "## Audience of plugin source".
 - **Claude Code session-id channels (two of them — pick the right one).**
-  - `${CLAUDE_SESSION_ID}` — **template substitution** in command/skill markdown: Claude Code rewrites it to the literal session UUID before the model reads the spec. Available since Claude Code v2.1.9. Use when a top-level orchestrator markdown needs the value pre-rendered (e.g. inside a markdown template the model later writes via the Write tool).
+  - `${CLAUDE_SESSION_ID}` — **template substitution** in command/skill markdown: Claude Code rewrites it to the literal session UUID before the model reads the spec. Available since Claude Code v2.1.9. Currently **unused** in the plugin: the last consumer (the pre-compact snapshot) moved to the bash channel because this template channel is fragile inside a multiline Write-tool arg (`session-snapshot` SKILL / lets-bdkvd QA #13). Prefer `$CLAUDE_CODE_SESSION_ID` (bash) for any new use.
   - `$CLAUDE_CODE_SESSION_ID` — **Bash subprocess env var** Claude Code injects into every Bash tool invocation. Use inside bash commands — `bash` expands it at runtime, no template/model magic needed. **Preferred** for bash-only contexts (e.g. `bd comments add "... $CLAUDE_CODE_SESSION_ID ..."`) because it sidesteps the placeholder-skip fragility QA found in template-substitution-inside-multiline-args (`lets-bdkvd` QA #13). Also the only channel subagents and external scripts can read.
   - **Naming gotcha:** template has no `_CODE_`, env var has `_CODE_`. They are NOT aliases.
   - As of this branch, `/lets:end` + `/lets:done` use `$CLAUDE_CODE_SESSION_ID`; broader adoption (subagents stamping session_id, statusline, `/lets:team` records) tracked in `lets-bdkvd`.
@@ -135,7 +135,7 @@ A LETS command that orchestrates many agents can run them inside a Claude Code *
 
 Two-phase tag-driven pipeline (bump → review → tag → distribute). The full maintainer ceremony — phase-by-phase commands, prerelease handling, recovery, and the design rationale (why two phases / bash / goreleaser, prerelease CHANGELOG handling) — lives in `RELEASING.md` (see its `## Rationale` for the "why").
 
-**Source-tree version invariant:** a single semver string spans `plugin.json`, `marketplace.json`, and `lets-rules.md` frontmatter (the binary version derives from the git tag via ldflags). Drift between any of these fails `verify-versions.yml`. Bumped once per release at ceremony time — never per change.
+**Source-tree version invariant:** a single semver string spans `plugin.json`, `marketplace.json`, and the frontmatter of `lets-rules.md` + the shipped `tracker-{beads,planfix-mcp,none}.md` adapters (`tracker-TEMPLATE.md` and `*.board.md` pin `0.0.0` by design; the binary version derives from the git tag via ldflags). Drift between any of these fails `verify-versions.yml`. Bumped once per release at ceremony time — never per change.
 
 ## File Storage
 
@@ -144,7 +144,7 @@ This includes hook debug logs, temp files, and any runtime artifacts.
 **WARNING:** Always use `.lets/` (with dot prefix), never `lets/`. The dot is easy to miss in manual paths.
 
 ```
-.lets/.env               # Per-project settings (LETS_LANGUAGE, LETS_MERGE_BRANCH, LETS_PR_FLOW, LETS_TRACKER, LETS_LAUNCHER)
+.lets/.env               # Per-project settings (LETS_LANGUAGE, LETS_MERGE_BRANCH, LETS_PR_FLOW, LETS_TRACKER, LETS_LAUNCHER, LETS_RULES_SCOPE)
 .lets/.env.example       # Reference defaults — generated each `lets init` from canonical letsconfig.Keys defaults via renderEnvExample(). Not used by the hook; it's a user-facing template
 .lets/.env.bak           # Single backup written by `RegenerateEnv` before mutation. Plugin-owned: user-created files at this path are silently overwritten — copy elsewhere for permanent backup
 .lets/sessions/          # Session snapshots (file-primary ## RESUME via session-snapshot; -precompact- infix for pre-compact); .task-<slug> state file (task/start/session boundaries, validated cache - lets-dsdmp)
@@ -210,7 +210,7 @@ LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 mkdir -p "$LETS_PROJECT_ROOT/.lets/sessions"
 ```
 
-`LETS_PROJECT_ROOT` is the **only** key computable in-shell (via `git rev-parse`). Other `LETS_*` keys (`LETS_MERGE_BRANCH`, `LETS_PR_FLOW`, `LETS_LANGUAGE`, `LETS_TRACKER`, `LETS_LAUNCHER`) have no shell-side derivation - inside bash snippets, use the `{LETS_FOO}` template form so the orchestrator substitutes the literal value before running. Trying to use `$LETS_FOO` in a bash block (without local assignment) yields empty string - silently wrong commands.
+`LETS_PROJECT_ROOT` is the **only** key computable in-shell (via `git rev-parse`). Other `LETS_*` keys (`LETS_MERGE_BRANCH`, `LETS_PR_FLOW`, `LETS_LANGUAGE`, `LETS_TRACKER`, `LETS_LAUNCHER`, `LETS_RULES_SCOPE`) have no shell-side derivation - inside bash snippets, use the `{LETS_FOO}` template form so the orchestrator substitutes the literal value before running. Trying to use `$LETS_FOO` in a bash block (without local assignment) yields empty string - silently wrong commands.
 
 ### User config file
 
