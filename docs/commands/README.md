@@ -6,4 +6,4 @@ Pages are added over time. Commands without a page here are covered by the quick
 
 | Command | Page | Status |
 |---------|------|--------|
-| `/lets:research` | [research.md](research.md) | In development (`lets-ppetz`) — not yet released |
+| `/lets:research` | [research.md](research.md) | Shipped (v0.6.4) |

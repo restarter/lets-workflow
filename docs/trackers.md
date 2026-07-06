@@ -1,7 +1,5 @@
 # Task Trackers
 
-> *(ships next release)* — the pluggable tracker platform below is merged but not yet in a tagged release; the current release supports beads only.
-
 LETS is **tracker-agnostic**. Instead of hardcoding beads (`bd`), a project binds whatever task store it wants through a single **adapter file**. One config key, `LETS_TRACKER`, names the adapter; `lets init` installs exactly one `.claude/rules/tracker-<name>.md` (auto-loaded, drift-tracked like `lets-rules.md`) that binds the neutral verbs to concrete calls.
 
 ## The model

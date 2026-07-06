@@ -71,9 +71,9 @@ In Claude Code:
 >
 > - **"Install for all collaborators on this repository"** *(project scope)* — recommended for shared repos; the choice lands in `.claude/settings.json`, so teammates inherit `lets` without re-installing.
 > - **"Install for you, in this repo only"** *(local scope)* — fine for a solo or throwaway project; not committed.
-> - **"Install for yourself everywhere"** *(user scope)* — one install for all your projects *(ships next release)*. After installing, `/lets:init` in any project offers `lets init --user`: global workflow rules land in `~/.claude/rules/lets-rules.md` and your personal defaults (language, launcher) in `~/.lets/.env` — every project gets LETS without per-project setup. Project rules override global on conflict. Details, precedence, and the opt-out limitation: [docs/installation.md](docs/installation.md).
+> - **"Install for yourself everywhere"** *(user scope)* — one install for all your projects. After installing, `/lets:init` in any project offers `lets init --user`: global workflow rules land in `~/.claude/rules/lets-rules.md` and your personal defaults (language, launcher) in `~/.lets/.env` — every project gets LETS without per-project setup. Project rules override global on conflict. Details, precedence, and the opt-out limitation: [docs/installation.md](docs/installation.md).
 
-**Stay current (do this once):** in `/plugin` → **Marketplaces** → `lets-workflow`, **Enable auto-update** — the plugin then tracks every release on its own. Staying current then collapses to a single self-driving loop: run `/lets:update`, do the one thing it says, re-run until it prints `✓ Everything on vX.Y.Z` — each run advances one step (binary → plugin → reload → done), the binary step offers to run the installer in-session, and rules never sync to a plugin that's still behind. *(self-driving loop ships next release; today `/lets:update` reports each step and you run them.)*
+**Stay current (do this once):** in `/plugin` → **Marketplaces** → `lets-workflow`, **Enable auto-update** — the plugin then tracks every release on its own. Staying current then collapses to a single self-driving loop: run `/lets:update`, do the one thing it says, re-run until it prints `✓ Everything on vX.Y.Z` — each run advances one step (binary → plugin → reload → done), the binary step offers to run the installer in-session, and rules never sync to a plugin that's still behind.
 
 (Or install from a local clone — `git clone https://github.com/restarter/lets-workflow`, then `/plugin marketplace add ./lets-workflow` and `/plugin install lets` — handy for hacking on the plugin: edit the clone, then `/reload-plugins` to pick up your changes.)
 
@@ -116,7 +116,7 @@ Then, inside the Claude Code session:
 | `/lets:execute` | Execute plan from `/lets:plan` via native plan mode |
 | `/lets:team` | Parallel implementation with Agent Teams |
 | `/lets:worktree` | Create/manage worktrees for parallel sessions |
-| `/lets:statusline` | Manage & persist statusline appearance - light/dark, compact, hidden rows *(ships next release)* |
+| `/lets:statusline` | Manage & persist statusline appearance - light/dark, compact, hidden rows |
 
 ### Review & Analysis
 
@@ -128,7 +128,7 @@ Then, inside the Claude Code session:
 | `/lets:review-round` | Work through a received review round - triage comments, record decisions, one final edit-pass |
 | `/lets:opinion` | Technical decision analysis (dynamic expert agents in parallel) |
 | `/lets:ask` | Quick expert consultation (single agent) |
-| `/lets:research` | Web-sourced cited answer to an external/technical question - cross-check flags weak/contradicted claims (`--workflow` off-context, `--project` repo-grounded) *(ships next release)* |
+| `/lets:research` | Web-sourced cited answer to an external/technical question - cross-check flags weak/contradicted claims (`--workflow` off-context, `--project` repo-grounded) |
 
 ### Init & Update
 
@@ -193,7 +193,7 @@ A LETS session runs a loop: start, work, commit, finish.
 │  /lets:ask       Quick question to a single expert                        │
 │  /lets:check     Quick sanity check (6 perspectives, ~30s)                │
 │  /lets:review    Full multi-agent code review (~2-3 min)                  │
-│  /lets:research  Web-sourced cited answer to a question (ships next rel)  │
+│  /lets:research  Web-sourced cited answer to a question                   │
 │                                                                           │
 ├─ You plan, Claude builds ─────────────────────────────────────────────────┤
 │  /lets:backlog     Backlog review (multi-agent) + cleanup triage          │
@@ -222,8 +222,7 @@ A LETS session runs a loop: start, work, commit, finish.
 
 **Execute** (`/lets:execute`) - implements the plan step by step in native plan mode. You approve each step before Claude proceeds. No surprises.
 
-**Research** (`/lets:research`) - unlike `/lets:opinion` (project-grounded judgment, no web) or `/lets:ask` (a quick model-knowledge consult), this answers an external or technical question with a CITED synthesis: it searches the web, fetches the best sources, and a cross-check pass flags single-source, contradicted, or stale claims before presenting. The deliverable is a sourced answer with a Sources list and an as-of date. `--workflow` runs it off-context; `--project` grounds findings against this repo. *(ships next release)*
-
+**Research** (`/lets:research`) - unlike `/lets:opinion` (project-grounded judgment, no web) or `/lets:ask` (a quick model-knowledge consult), this answers an external or technical question with a CITED synthesis: it searches the web, fetches the best sources, and a cross-check pass flags single-source, contradicted, or stale claims before presenting. The deliverable is a sourced answer with a Sources list and an as-of date. `--workflow` runs it off-context; `--project` grounds findings against this repo.
 ### Code review
 
 → Full docs: [docs/code-review.md](docs/code-review.md)
@@ -275,7 +274,7 @@ cd .worktrees/auth-feature && claude  # Terminal 2 - start new session
 
 Each worktree gets its own branch, shares the task database and config via symlinks. Full LETS workflow in each terminal.
 
-On macOS with [cmux](https://github.com/manaflow-ai/cmux) installed, set `LETS_LAUNCHER=cmux` (or run `/lets:init` and pick cmux) and `/lets:worktree create` opens the session in a cmux workspace automatically — no second terminal. It stays optional: without cmux (or on Linux/Windows) it falls back to the `cd … && claude` command above. *(ships in v0.7)*
+On macOS with [cmux](https://github.com/manaflow-ai/cmux) installed, set `LETS_LAUNCHER=cmux` (or run `/lets:init` and pick cmux) and `/lets:worktree create` opens the session in a cmux workspace automatically — no second terminal. It stays optional: without cmux (or on Linux/Windows) it falls back to the `cd … && claude` command above.
 
 ### LETS Help Boxes
 
@@ -337,8 +336,7 @@ Flags (set in `settings.json`'s `command`):
 | `--no-task` *(or env `LETS_STATUSLINE_TASK=off`)* | Hide the task line (also skips the background `bd` refresh) |
 | `--compact` | Legacy 2-line bar (fallback if the box misbehaves) |
 
-To make a choice stick without hand-editing settings, run `/lets:statusline` (interactive) or `lets statusline config --light …` — it persists the flags to your personal, gitignored `.claude/settings.local.json` (not the shared `settings.json`, so it won't force your palette on collaborators). Restart Claude Code to apply. *(ships next release)*
-
+To make a choice stick without hand-editing settings, run `/lets:statusline` (interactive) or `lets statusline config --light …` — it persists the flags to your personal, gitignored `.claude/settings.local.json` (not the shared `settings.json`, so it won't force your palette on collaborators). Restart Claude Code to apply.
 ```json
 {
   "statusLine": {
@@ -374,7 +372,7 @@ The README is the tour; **[docs/](docs/)** is the manual.
 | [parallel-work.md](docs/parallel-work.md) | Working on several tasks at once — `/lets:team` (autonomous agents) and `/lets:worktree` (parallel terminals). |
 | [autonomous.md](docs/autonomous.md) | Hands-off flows — Dynamic Workflows (`--workflow`) and the autonomous task pipeline (spawn → plan → execute, two gates). |
 | [tasks.md](docs/tasks.md) | Task tracking — the task lifecycle, taking and creating tasks, notes, `/lets:backlog`, beads memory, shared backlogs for teams. |
-| [trackers.md](docs/trackers.md) | Pluggable tracker adapters — `LETS_TRACKER` selects `beads` (default) \| `planfix-mcp` \| `none`; one drift-tracked `tracker-<name>.md` per adapter, the neutral verb set, and how to add one. *(ships next release)* |
+| [trackers.md](docs/trackers.md) | Pluggable tracker adapters — `LETS_TRACKER` selects `beads` (default) \| `planfix-mcp` \| `none`; one drift-tracked `tracker-<name>.md` per adapter, the neutral verb set, and how to add one. |
 | [commands.md](docs/commands.md) | Full reference for every `/lets:*` command. |
 | [configuration.md](docs/configuration.md) | `.lets/.env` settings, the `.lets/` file layout, `lets init` vs `bd init` setup order, and dependencies. |
 

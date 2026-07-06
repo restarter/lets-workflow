@@ -38,7 +38,7 @@ See **[plan-execute.md](plan-execute.md)**, **[parallel-work.md](parallel-work.m
 | `/lets:review-round` | Work through a RECEIVED review round — triage each comment (accept/reject/defer/done), record decisions to the task, keep the artifact frozen, then apply all edits in one final pass. The inverse of `/lets:review`. |
 | `/lets:opinion` | Technical decision analyzed by expert agents in parallel, with a recommendation. Dynamic agent count. |
 | `/lets:ask` | Quick consultation with a single expert agent — like pinging a colleague. |
-| `/lets:research` | Answer an external/technical question with a CITED web synthesis — decompose, search + fetch sources, cross-check flags weak/contradicted claims, then a sourced answer + Sources list + as-of date. `--workflow` off-context; `--project` grounds against this repo. Deep dive: **[commands/research.md](commands/research.md)**. *(ships next release)* |
+| `/lets:research` | Answer an external/technical question with a CITED web synthesis — decompose, search + fetch sources, cross-check flags weak/contradicted claims, then a sourced answer + Sources list + as-of date. `--workflow` off-context; `--project` grounds against this repo. Deep dive: **[commands/research.md](commands/research.md)**. |
 
 See **[code-review.md](code-review.md)** and **[agents.md](agents.md)**.
 
@@ -46,8 +46,8 @@ See **[code-review.md](code-review.md)** and **[agents.md](agents.md)**.
 
 | Command | What it does |
 |---------|--------------|
-| `/lets:init` | Initialize LETS in the current project — creates `.lets/`, writes `.lets/.env` with defaults, copies the workflow rules to `.claude/rules/lets-rules.md`, wires up the statusline, and runs `bd init` if beads is installed. Re-run anytime to self-heal drift or change config. With a user-scope plugin install it also offers `lets init --user` — global rules to `~/.claude/rules/` + personal defaults to `~/.lets/.env` *(ships next release)*. |
-| `/lets:update` | Sync the project with the current release — a single self-driving loop: run it, do the one thing it says, re-run until `✓ Everything on vX.Y.Z`. Self-heals `.lets/.env` and the rules file (plus the user-level global rules when installed — never overwriting a customized copy); rules sync is **deferred** while the plugin is behind (no stale half-step). The binary step installs in-session on approval; the plugin step is a Claude Code slash command. *(ships next release)* |
+| `/lets:init` | Initialize LETS in the current project — creates `.lets/`, writes `.lets/.env` with defaults, copies the workflow rules to `.claude/rules/lets-rules.md`, wires up the statusline, and runs `bd init` if beads is installed. Re-run anytime to self-heal drift or change config. With a user-scope plugin install it also offers `lets init --user` — global rules to `~/.claude/rules/` + personal defaults to `~/.lets/.env`. |
+| `/lets:update` | Sync the project with the current release — a single self-driving loop: run it, do the one thing it says, re-run until `✓ Everything on vX.Y.Z`. Self-heals `.lets/.env` and the rules file (plus the user-level global rules when installed — never overwriting a customized copy); rules sync is **deferred** while the plugin is behind (no stale half-step). The binary step installs in-session on approval; the plugin step is a Claude Code slash command. |
 
 See **[installation.md](installation.md)** and **[configuration.md](configuration.md)**.
 
