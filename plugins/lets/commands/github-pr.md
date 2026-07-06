@@ -804,7 +804,7 @@ Else: `gh pr checkout <PR>` (same stash handling as Step 2.3).
 
 **Detect active task** (before branch switch, same as Step 2.2):
 Use the **detect-task** skill: `Skill(skill: "lets:detect-task")`.
-Store detected task_id for beads logging in 6.6.
+Store detected task_id for tracker logging in 6.6.
 
 Check for existing `$PR_DIR/response.json`:
 - If exists and `replies_posted: false` -> offer to resume (skip to 6.3, only triage comments where `decision == null`)

@@ -260,11 +260,11 @@ Use the `create-task` skill (auto-triggers on "create task", "new task", "bd cre
 
 ### Updating Tasks
 
-- **Never use `bd update --notes` or `bd update --description` to append info** - these overwrite existing content. Use `bd comments add` for all incremental updates.
+- **Never append info by overwriting a field** (beads: `bd update --notes` / `--description` replace, not append) - these clobber existing content. Use the `comment-add` verb for all incremental updates (beads: `bd comments add`).
 
-### Dependencies
+### Dependencies (where the tracker supports them)
 
-- Use `bd dep add` **sparingly** - only when task B literally cannot start without task A being done
+- Use the dependency link (beads: `bd dep add`) **sparingly** - only when task B literally cannot start without task A being done
 - Most tasks are independent - don't over-link
 - Before adding a dep, ask: "Can someone start this task right now without the other?" If yes - no dep needed
 

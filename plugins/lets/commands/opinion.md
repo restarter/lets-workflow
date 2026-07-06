@@ -272,7 +272,7 @@ When the completion notification arrives, the returned aggregate is the only thi
 
 ## Step 6: Link Decision to Active Task
 
-Record the decision in beads for future context recovery:
+Record the decision in the tracker for future context recovery:
 
 Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detect-task")`.
 If multiple tasks found, skip the tracker comment.

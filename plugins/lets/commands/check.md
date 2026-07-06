@@ -46,7 +46,7 @@ Parse the argument(s):
 | `--last-commit` | Local | `git diff HEAD~1` |
 | `--branch` | Local | `git diff {LETS_MERGE_BRANCH}...HEAD` (three-dot, merge-base diff) |
 
-`--json` is a modifier that can accompany any code mode (not plan mode): emit structured JSON instead of the console report (see Step 4.5). Skip the LETS box and the beads comment when `--json` is set - the caller handles output.
+`--json` is a modifier that can accompany any code mode (not plan mode): emit structured JSON instead of the console report (see Step 4.5). Skip the LETS box and the tracker comment when `--json` is set - the caller handles output.
 
 **This command never dispatches subagents in any mode** - all review is inline (Step 3's 6 lenses). PR and file modes just change what gets fed to those lenses.
 

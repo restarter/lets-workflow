@@ -58,7 +58,7 @@ AskUserQuestion(
     question: "Name for the worktree? (lowercase, no spaces - used for directory and branch)",
     header: "NameMode",
     options: [
-      { label: "From task", description: "Auto-generate from current or selected beads task" },
+      { label: "From task", description: "Auto-generate from the current or a selected tracker task" },
       { label: "Custom", description: "Enter a custom name" }
     ],
     multiSelect: false
@@ -124,7 +124,7 @@ lets cmux open "{worktree.path}" --name "{slug}" --description "{task-id} · {ta
 
 **`--flow`:** when a `--flow` override was passed, the `/lets:start {task-id}` inside the `--command` is replaced by the flow's command — `--flow plan` → `'/lets:plan {task-id}'`, `--flow plan-workflow` → `'/lets:plan-workflow {task-id}'` — composing with `--auto` (e.g. `--command "claude --permission-mode auto '/lets:plan-workflow {task-id}'"`). Only the command string changes; the `lets cmux open` flags are otherwise identical. Requires a task id (a taskless worktree has no `{task-id}` to plan — ignore `--flow` and keep `--command "claude"`).
 
-**Taskless worktree** (custom name, no beads task): drop the `/lets:start {task-id}` argument — use `--command "claude"` and derive `{slug}` from the worktree name; **also drop `--description`** (no task id to stamp — the `--name` slug is identity enough). Only emit `/lets:start {task-id}` and `--description` when a task id is actually known. (`--auto` still applies: `--command "claude --permission-mode auto"`.)
+**Taskless worktree** (custom name, no tracker task): drop the `/lets:start {task-id}` argument — use `--command "claude"` and derive `{slug}` from the worktree name; **also drop `--description`** (no task id to stamp — the `--name` slug is identity enough). Only emit `/lets:start {task-id}` and `--description` when a task id is actually known. (`--auto` still applies: `--command "claude --permission-mode auto"`.)
 
 Parse the `launch` block:
 - `launched=true` → "Opened cmux workspace **{workspace_name}**" (Step C4 "cmux" block).

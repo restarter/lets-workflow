@@ -1,5 +1,5 @@
 ---
-description: Work through a RECEIVED round of review comments (inline markers, a review file, or PR threads) on a spec/doc/PR. Triage each item, record decisions to the beads task, keep the artifact FROZEN, then apply all edits in ONE final pass. Use when a reviewer returns N comments to incorporate.
+description: Work through a RECEIVED round of review comments (inline markers, a review file, or PR threads) on a spec/doc/PR. Triage each item, record decisions to the tracker task, keep the artifact FROZEN, then apply all edits in ONE final pass. Use when a reviewer returns N comments to incorporate.
 argument-hint: "[path-or-review-source]"
 ---
 
@@ -86,7 +86,7 @@ Only after EVERY comment + reframe is decided:
 
 ## Step 7: Respond to the reviewer
 - Summarize accepted / rejected (reasons) / deferred (triggers) so each comment is traceable.
-- **Audience boundary:** in an external/team channel (PR thread, issue tracker, chat) NEVER expose internal beads task IDs or absolute repo paths - reference the artifact by bare filename + in-doc IDs. Match the channel's language for the response; conversation in the user's language.
+- **Audience boundary:** in an external/team channel (PR thread, issue tracker, chat) NEVER expose internal tracker task IDs or absolute repo paths - reference the artifact by bare filename + in-doc IDs. Match the channel's language for the response; conversation in the user's language.
 - For a GitHub PR, hand the per-comment summary to `/lets:github-pr --respond` to post replies inline.
 - Re-share the updated artifact if delivered as an attachment.
 
