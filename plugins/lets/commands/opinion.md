@@ -77,7 +77,7 @@ Adjust based on decision complexity - add more experts for cross-cutting decisio
 **Guidelines:**
 - `architect` and `pragmatist` always included
 - Table above is a starting point, not a cap - add or remove agents based on context
-- `actor` can replace or supplement any domain agent. If actor is selected, invoke `Skill(skill: "lets:actor-fetch-personality", args: "<personality-source-from-user>")` to fetch the personality. Pass the returned `PERSONALITY:` block in the actor's Task prompt only.
+- `actor` is **never auto-selected** - offer it only on an explicit user request that includes a personality source (URL or file). When the user requests it, invoke `Skill(skill: "lets:actor-fetch-personality", args: "<personality-source-from-user>")` to fetch the personality. Pass the returned `PERSONALITY:` block in the actor's Task prompt only.
 - Agents inherit the session model (no per-agent model pins)
 
 **Confirmation gate:** If planning to launch more than 10 experts:

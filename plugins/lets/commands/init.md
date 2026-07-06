@@ -353,7 +353,7 @@ If "Keep current" picked, substitute `$LANG = $CURRENT_LANG`. Else use selected 
 
 Repeat for MergeBranch (`$BRANCH`), PRFlow (`$FLOW`), and Launcher (`$LAUNCHER` — "Keep current" shows `$LETS_LAUNCHER` from LETS Config, plus options terminal / cmux).
 
-**Rules scope** — only ask when `GLOBAL=PRESENT` (otherwise there's nothing to rely on; bind `$RULES_SCOPE_FLAG=""`):
+**Rules scope** — first run the **Global-rules check** from Step 2d (it computes `SCOPE`/`GLOBAL`/`PROJECT`; the change-config path does not otherwise set them). Then only ask when `GLOBAL=PRESENT` (otherwise there's nothing to rely on; bind `$RULES_SCOPE_FLAG=""`):
 
 AskUserQuestion(
   questions=[{

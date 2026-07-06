@@ -69,7 +69,7 @@ Before asking, show the verbatim command and its provenance so the user can veri
 AskUserQuestion(
   questions=[{
     question: "lets binary v{current} < v{latest}. Run the install script now?",
-    header: "Update binary",
+    header: "Binary",
     options: [
       { label: "Run install.sh (Recommended)", description: "Runs the curl install.sh | bash command in this session" },
       { label: "Show command only", description: "Print it; I'll run it myself in a terminal" },
@@ -123,4 +123,4 @@ If `ok == false`: NO LETS box. Plain-text status only.
 - Idempotent self-driving loop: each run advances one step and prints one `next_action`; re-run until `✓ Everything on vX.Y.Z`. Safe to re-run; `.env`/rules only change when actually stale.
 - The binary backs up `.env` to `.lets/.env.bak` automatically when it regenerates the header
 - The Go binary cannot replace itself or reinstall the plugin. The `/lets:update` orchestrator CAN run the binary installer in-session (Step 3.5, approval-gated, one attempt per run); the plugin step stays a user-only Claude Code slash command.
-- On a dev build (`lets version` shows `dev`), `.env`'s `LETS_ENV_VERSION` flips to `dev` and the binary/plugin checks are best-effort - same as `/lets:init` on a dev build
+- On a dev build (`lets version` shows `dev`), `/lets:update` reports `.env: dev` and **skips** the `.env` regen (only `/lets:init` restamps `LETS_ENV_VERSION`); the binary/plugin checks stay best-effort

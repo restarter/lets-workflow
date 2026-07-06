@@ -27,7 +27,7 @@ Backlog management in three modes. Review (heavy) launches an explorer + paralle
 - `--fast` passed with `cleanup` is ignored with a one-line note (Cleanup is already no-agent triage).
 - `--workflow` passed with `cleanup` is ignored with a one-line note (Cleanup has no agents).
 
-If an argument is provided, parse it: `--fast` -> Fast mode (below); `review` -> Review Backlog Mode; `cleanup` -> Cleanup Mode.
+If an argument is provided, parse it: `--fast` -> Fast mode (below); `review` -> Review Backlog Mode; `cleanup` -> Cleanup Mode. A remaining token that is **neither** `review` nor `cleanup` is an **area/topic filter** -> Fast mode with that token as the F1 filter (e.g. `/lets:backlog --fast auth` scopes the pulse to auth; a bare `/lets:backlog <area>` implies Fast mode too).
 
 If no argument, use AskUserQuestion:
 
@@ -81,7 +81,7 @@ git log --oneline -15
 
 Also use the Grep tool (not bash grep) to scan for tech-debt signals:
 ```
-Grep(pattern="TODO|FIXME|HACK|XXX", path="$LETS_PROJECT_ROOT", output_mode="content", head_limit=20)
+Grep(pattern="TODO|FIXME|HACK|XXX", path="{LETS_PROJECT_ROOT}", output_mode="content", head_limit=20)
 ```
 
 If an area/epic argument was passed alongside `--fast`:
