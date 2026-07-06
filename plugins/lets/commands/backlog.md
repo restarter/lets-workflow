@@ -181,7 +181,7 @@ AVAILABLE CONTEXT SOURCES (read what's relevant, skip what's not):
    Run: bd stats
    Run: bd list --status=open -n 50
    Run: bd list --status=in_progress
-   Run: bd list --status=done -n 20
+   Run: bd list --status=closed -n 20
    Purpose: understand task distribution, priorities, what's active
 
 2. TASK DETAILS (selective - pick 5-10 most interesting tasks)
@@ -492,10 +492,6 @@ Analyze loaded data and group:
 
 ### Missing Labels/Priority
 - **{title}** (`id`) - no labels, priority P4
-...
-
-### Done but Not Closed
-- **{title}** (`id`) - status done
 ...
 
 ### Orphan Tasks (no labels/epic grouping)

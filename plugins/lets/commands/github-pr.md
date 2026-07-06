@@ -383,8 +383,11 @@ For each finding marked as "inline":
 
 ```bash
 # gh pr diff does NOT support -- file_path syntax
-# Filter the diff output to extract hunks for the target file
-gh pr diff <PR> | awk '/^diff --git.*{file_path}$/,/^diff --git/'
+# Filter the diff to the target file's section. Use flag-based state, NOT a range
+# pattern: a range's end pattern is tested against the SAME line that opened it, so
+# `/^diff --git.*f$/,/^diff --git/` collapses to the single header line (0 hunks).
+# Pass the path via -v so its slashes don't terminate an awk /regex/ literal.
+gh pr diff <PR> | awk -v f="{file_path}" '$0 ~ "^diff --git" {p = ($0 ~ f "$")} p'
 ```
 
 2. Parse diff hunks to determine which new-side line numbers are present:

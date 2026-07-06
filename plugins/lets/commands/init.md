@@ -246,13 +246,15 @@ echo "SCOPE=${SCOPE:-unset} GLOBAL=$GLOBAL PROJECT=$PROJECT"
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 lets init --json \
   --plugin-root="${CLAUDE_PLUGIN_ROOT}" \
-  --language="$LANG" \
-  --merge-branch="$BRANCH" \
-  --pr-flow="$FLOW" \
-  --launcher="$LAUNCHER" \
-  --tracker="$TRACKER" \
-  $SKIP_BEADS_FLAG $RULES_SCOPE_FLAG
+  --language={LANGUAGE} \
+  --merge-branch={BRANCH} \
+  --pr-flow={FLOW} \
+  --launcher={LAUNCHER} \
+  --tracker={TRACKER} \
+  {SKIP_BEADS_FLAG} {RULES_SCOPE_FLAG}
 ```
+
+The `{...}` values are orchestrator bindings from Steps 2a-2c-quater ({LANGUAGE} = the English language name bound in 2a; {BRANCH}/{FLOW}/{LAUNCHER}/{TRACKER}; and the two flag fragments {SKIP_BEADS_FLAG}/{RULES_SCOPE_FLAG}, each either empty or its flag) — substitute each literal BEFORE running. NEVER leave a `$`-var: `$LANG` is the POSIX locale env var (`en_US.UTF-8`) and bash would expand it, poisoning `LETS_LANGUAGE` in `.lets/.env`.
 
 Capture stdout (JSON object).
 
@@ -372,12 +374,14 @@ Bind: "Keep current" → `$RULES_SCOPE_FLAG="--rules-scope=$CURRENT_RULES_SCOPE"
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 lets init --json \
   --plugin-root="${CLAUDE_PLUGIN_ROOT}" \
-  --language="$LANG" \
-  --merge-branch="$BRANCH" \
-  --pr-flow="$FLOW" \
-  --launcher="$LAUNCHER" \
-  $RULES_SCOPE_FLAG
+  --language={LANGUAGE} \
+  --merge-branch={BRANCH} \
+  --pr-flow={FLOW} \
+  --launcher={LAUNCHER} \
+  {RULES_SCOPE_FLAG}
 ```
+
+Same placeholder-substitution rule as Step 2d: substitute {LANGUAGE}/{BRANCH}/{FLOW}/{LAUNCHER}/{RULES_SCOPE_FLAG} literals BEFORE running; never leave a `$`-var (`$LANG` = POSIX locale, would poison `.lets/.env`).
 
 Passing the prefs flags triggers `env_action.kind=regenerated` (binary detects values differ from existing .env, regenerates while preserving foreign keys + user-customized `LETS_TRACKER`).
 
