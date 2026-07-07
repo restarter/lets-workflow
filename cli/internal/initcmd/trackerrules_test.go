@@ -244,22 +244,30 @@ func tableRowCells(content, verb string) []string {
 
 // TestTrackerRules_CoreSupported asserts every shipped adapter EXCEPT none marks
 // all 5 CORE verbs supported. The `supported` cell (column 2) normalizes via a
-// prefix match: planfix-mcp renders set-status/close as "yes¹" (a footnote for the
-// process-gated caveat), so a bare == "yes" would false-fail. `none` is the
+// prefix match: a process-gated adapter may render set-status/close as a
+// footnoted "yes¹", so a bare == "yes" would false-fail. `none` is the
 // sanctioned exception - it ships CORE rows supported=no (null adapter, no store).
 // Distinct from TestTrackerRules_Contract (which checks the CORE row EXISTS): this
 // checks the row's supported VALUE, catching a CORE verb shipped as a silent hole.
+//
+// Non-beads coverage note (lets-xdjue): the shipped set is beads + none, so only
+// beads exercises the CORE-supported=yes path here (none is the null-adapter
+// exception). A non-beads adapter that SUPPORTS core verbs (and the footnoted-
+// "yes" normalization above) will be re-covered when the planned Jira/Trello
+// worked-example adapter lands; no synthetic fixture is added now (YAGNI).
 func TestTrackerRules_CoreSupported(t *testing.T) {
 	dir := pluginRulesDir(t)
 	matches, err := filepath.Glob(filepath.Join(dir, "tracker-*.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	var checked int
 	for _, path := range matches {
 		base := filepath.Base(path)
 		if strings.HasSuffix(base, ".board.md") || base == "tracker-TEMPLATE.md" || base == "tracker-none.md" {
 			continue
 		}
+		checked++
 		t.Run(base, func(t *testing.T) {
 			data, err := os.ReadFile(path)
 			if err != nil {
@@ -277,6 +285,9 @@ func TestTrackerRules_CoreSupported(t *testing.T) {
 				}
 			}
 		})
+	}
+	if checked == 0 {
+		t.Fatalf("no non-none tracker-*.md adapters found in %s - test wiring broken", dir)
 	}
 }
 
