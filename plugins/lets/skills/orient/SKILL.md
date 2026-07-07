@@ -10,7 +10,7 @@ Render the shared "where am I / what's in flight / what's next" snapshot. Consum
 
 > This skill ONLY gathers + renders the snapshot block. It does NOT select, claim, mutate, or advise. The caller appends its own follow-through.
 
-Built on git + `detect-task` + neutral tracker verbs, so it degrades cleanly on any tracker (`beads` | `planfix-mcp` | `none`).
+Built on git + `detect-task` + neutral tracker verbs, so it degrades cleanly on any tracker (`beads` | `none` | a custom adapter).
 
 > **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own - the tool invocation is part of the contract.
 
@@ -64,7 +64,7 @@ stats
 ```
 
 - beads -> read the totals `bd stats` already computes (open / in_progress / closed) - native, correct, no pagination risk.
-- planfix-mcp -> `stats` is `partial`; OMIT the block in v1.
+- a tracker whose `stats` is `partial` -> OMIT the block in v1.
 - none -> `stats` is absent; OMIT the block.
 
 If the active adapter marks `stats` absent, OMIT the `## Project` section entirely - never render an empty/broken block.

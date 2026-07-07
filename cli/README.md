@@ -141,7 +141,7 @@ lets init \
 Required: `--plugin-root` (or `$CLAUDE_PLUGIN_ROOT`). Prefs flags are required only when creating `.env` from scratch (no existing `.env`, no legacy `config.yaml` to migrate from); on existing `.env` they're optional — empty value means "preserve current". `--github` is a deprecated alias for `--pr-flow=github`.
 
 Flags:
-- `--language`, `--merge-branch`, `--pr-flow`, `--tracker`, `--launcher` — preference flags. Empty value (no flag passed) signals "use existing or fail if creating fresh". Non-empty triggers regen with new value. `--tracker` (`beads` | `planfix-mcp` | `none`) additionally installs the matching `.claude/rules/tracker-<name>.md` adapter on a fresh init (an existing `.env` value wins on re-init, with a warning).
+- `--language`, `--merge-branch`, `--pr-flow`, `--tracker`, `--launcher` — preference flags. Empty value (no flag passed) signals "use existing or fail if creating fresh". Non-empty triggers regen with new value. `--tracker` (`beads` | `none`) additionally installs the matching `.claude/rules/tracker-<name>.md` adapter on a fresh init (an existing `.env` value wins on re-init, with a warning).
 - `--rules-scope` (`project` | `user`), `--user` — rules-install scope; `--user` does the machine-global install (`~/.claude/rules/` + `~/.lets/.env`) instead of a project init.
 - `--skip-beads` — skip the final `bd init` step.
 - `--json` — emit machine-readable JSON to stdout (single object, schema_version=1). Slash command `/lets:init` consumes this.

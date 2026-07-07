@@ -13,7 +13,7 @@ Autonomous whole-command planning: you give a GOAL + a RUBRIC up front; the work
 
 ## Step 0: Resolve & claim (spawn entry)
 
-If the argument is an explicit **task id** - a single token matching the ACTIVE tracker's id shape per the **detect-task** convention (beads: `<prefix>-<alphanum>[.N]`; planfix-mcp: a pure-numeric id; do NOT hardcode the beads regex on a non-beads project) - rather than a free-text goal - as the autonomous pipeline launches it (`/lets:plan-workflow <id>` into a fresh worktree) - resolve-and-claim per the **detect-task** convention: treat the id as authoritative and, if the tracker's `show` reports `<id>` not `in_progress`, `Skill(skill: "lets:take-task", args: "<id>")` to claim it (the spawn-time entry claim is AUTO-MODE-exempt - see `detect-task/SKILL.md`). Then derive the GOAL from the task title + description for Step 1. A free-text goal argument skips this step (no claim).
+If the argument is an explicit **task id** - a single token matching the ACTIVE tracker's id shape per the **detect-task** convention (beads: `<prefix>-<alphanum>[.N]`; a numeric-id tracker: a pure-numeric id; do NOT hardcode the beads regex on a non-beads project) - rather than a free-text goal - as the autonomous pipeline launches it (`/lets:plan-workflow <id>` into a fresh worktree) - resolve-and-claim per the **detect-task** convention: treat the id as authoritative and, if the tracker's `show` reports `<id>` not `in_progress`, `Skill(skill: "lets:take-task", args: "<id>")` to claim it (the spawn-time entry claim is AUTO-MODE-exempt - see `detect-task/SKILL.md`). Then derive the GOAL from the task title + description for Step 1. A free-text goal argument skips this step (no claim).
 
 ## Pipeline-state marker (spawn-claimed runs only)
 

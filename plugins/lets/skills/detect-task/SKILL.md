@@ -30,7 +30,7 @@ Extract the task ID from the branch name. Formats:
 
 The `<task-id>` shape is TRACKER-DEPENDENT (the id sits immediately after `feature/` or `worktree-`, up to the first `-<slug>` boundary):
 - beads: `<prefix>-<alphanum>[.<number>]` - e.g. `lets-abc`, `lets-abc.1`, `proj-xyz.42`
-- planfix-mcp: a pure-numeric id - e.g. `48647`, so `feature/48647-<slug>`
+- a numeric-id tracker: a pure-numeric id - e.g. `48647`, so `feature/48647-<slug>`
 - other adapters: the tracker's own id shape
 
 **Do NOT apply the beads `<prefix>-<alphanum>` regex on a non-beads project** - it false-positives on a slug word: `feature/48647-lifecycle-test` makes the beads regex capture `lifecycle-test`, NOT the numeric id `48647`. Match using the ACTIVE tracker's id shape (`{LETS_TRACKER}` from LETS Config). When the branch shape is ambiguous, the `.task-<slug>` file (Step 1.5, authoritative) and the `list-by-status` fallback are safer than a branch-name guess.

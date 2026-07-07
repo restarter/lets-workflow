@@ -70,7 +70,7 @@ GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
 - Two branch shapes possible (`/lets:worktree create` supports both):
   - `worktree-<task-id>-<slug>` — new-branch mode (the LETS convention); auto-detect task ID
   - any other shape (e.g. `feature/foo`) — attached existing branch via `lets worktree create --attach`; no task ID in the name
-- Task-id pattern is TRACKER-DEPENDENT (see detect-task): beads `<prefix>-<alphanum>[.<number>]` (e.g. `lets-abc`, `lets-abc.1`); planfix-mcp a pure-numeric id
+- Task-id pattern is TRACKER-DEPENDENT (see detect-task): beads `<prefix>-<alphanum>[.<number>]` (e.g. `lets-abc`, `lets-abc.1`); a numeric-id tracker uses a pure-numeric id
 - If task ID found in branch name: confirm with user via the tracker's `show` verb
 - If branch shape is "attached" (no matching task ID): rely on the task-id passed as the skill argument — don't try to extract from the branch name
 - Present: "In worktree, using branch: {branch}"
