@@ -41,8 +41,9 @@ func NewUpdateCmd() *cobra.Command {
   ~/.claude/rules/lets-rules.md user-scope global rules - row appears only when the file
                                 exists; synced like project rules EXCEPT a newer/customized
                                 (ahead) copy is reported, never overwritten
-  .claude/rules/tracker-<n>.md  the active tracker adapter (row appears only when
-                                LETS_TRACKER names a shipped adapter) - synced like project
+  .claude/rules/tracker-<n>.md  the active tracker adapter (row appears when LETS_TRACKER
+                                names a shipped adapter, or a user-authored one with an
+                                installed copy - reported delegated) - synced like project
                                 rules; on a tracker switch (edited .env) the deactivated
                                 adapter file is removed and the board profile scaffolded
 

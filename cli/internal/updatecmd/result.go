@@ -114,8 +114,9 @@ func (r *Result) Add(a Artifact) {
 	r.Artifacts = append(r.Artifacts, a)
 	switch a.Status {
 	case StatusUpToDate, StatusInSync, StatusDelegated:
-		// delegated is a healthy target state (scope=user, rules come from the
-		// global copy) - belongs in the "in sync" bucket, not action-needed.
+		// delegated is a healthy target state (scope=user rules from the global
+		// copy, OR a user-authored tracker adapter with no shipped source) -
+		// belongs in the "in sync" bucket, not action-needed.
 		r.Summary.UpToDate++
 	case StatusUpdated:
 		r.Summary.Updated++

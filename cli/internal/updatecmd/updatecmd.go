@@ -246,10 +246,12 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 	}
 
 	// --- Artifact 6: .claude/rules/tracker-<name>.md (project scope, optional) ---
-	// Row appears ONLY when LETS_TRACKER names an adapter the plugin ships
-	// (tracker-<name>.md present in the plugin payload). Absence - unset tracker,
-	// a typo, or a plugin without the file - means NO row, so a project that
-	// predates the tracker platform keeps the pre-tracker artifact set unchanged.
+	// Row appears when LETS_TRACKER names an adapter the plugin ships
+	// (tracker-<name>.md in the payload), OR a user-authored/unshipped adapter with
+	// an installed .claude/rules/tracker-<name>.md copy (reported delegated, "left
+	// as-is"). Only a name with NEITHER a shipped source NOR an installed copy -
+	// unset, a typo, or a pre-platform project - yields NO row, so such a project
+	// keeps the pre-tracker artifact set unchanged.
 	// Plugin-version-locked like user-rules: excluded from Consistent (it always
 	// equals the plugin after a sync). Tracker rules are always project-local (no
 	// user scope). Mirrors Artifact 4's drift/deferral/write pattern.
