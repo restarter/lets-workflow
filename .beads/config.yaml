@@ -65,7 +65,7 @@ no-git-ops: true
 # JSONL fallback, viewers) can read the file without a SQL connection.
 export:
   git-add: false
-  # auto: false
+  auto: false   # disabled: full-DB JSONL export over WAN on every op made bd hang ~2min (server-mode; VPS is canonical). Run `bd export` manually if a fresh JSONL is needed.
 
 # Disable Dolt-mode auto-backup (calls CALL DOLT_BACKUP('add', ...) which
 # requires admin SQL grants our per-database user doesn't have).
