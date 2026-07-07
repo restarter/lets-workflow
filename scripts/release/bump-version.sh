@@ -108,13 +108,17 @@ mv "$TMP" .claude-plugin/marketplace.json
 TMP=$(mktemp)
 
 # 3. lets-rules.md + shipped tracker adapter frontmatter.
-#    Shipped adapters (tracker-beads/planfix-mcp/none) are drift-tracked like
-#    lets-rules.md, so their version: bumps at the same ceremony. tracker-TEMPLATE.md
-#    and *.board.md deliberately pin 0.0.0 (author-facing / user-owned) - excluded.
-for rules_file in plugins/lets/rules/lets-rules.md \
-                  plugins/lets/rules/tracker-beads.md \
-                  plugins/lets/rules/tracker-planfix-mcp.md \
-                  plugins/lets/rules/tracker-none.md; do
+#    RULES_FILES is GLOBBED (lets-rules.md + tracker-*.md, minus the pinned
+#    tracker-TEMPLATE.md and user-owned *.board.md), so a NEW adapter is bumped AND
+#    staged automatically - no edit here or in verify-versions.sh. Keep this
+#    exclusion rule identical to verify-versions.sh's glob.
+RULES_FILES="plugins/lets/rules/lets-rules.md"
+for f in plugins/lets/rules/tracker-*.md; do
+  [ -e "$f" ] || continue
+  case "$f" in *tracker-TEMPLATE.md|*.board.md) continue ;; esac
+  RULES_FILES="$RULES_FILES $f"
+done
+for rules_file in $RULES_FILES; do
   echo "  • $rules_file (frontmatter)"
   awk -v new="$NEW_VERSION" '
     BEGIN { c=0 }
@@ -194,14 +198,17 @@ if [ "$DRY_RUN" = true ]; then
   exit 0
 fi
 
+# Stage $RULES_FILES whole (lets-rules.md + the globbed tracker adapters, computed
+# above): the rules-file loop bumped every entry and verify-versions checks them, so
+# leaving any unstaged ships a drifted release commit (CI fail).
 if $IS_PRERELEASE; then
   git add plugins/lets/.claude-plugin/plugin.json \
           .claude-plugin/marketplace.json \
-          plugins/lets/rules/lets-rules.md
+          $RULES_FILES
 else
   git add plugins/lets/.claude-plugin/plugin.json \
           .claude-plugin/marketplace.json \
-          plugins/lets/rules/lets-rules.md \
+          $RULES_FILES \
           CHANGELOG.md
 fi
 git commit -m "chore: release v$NEW_VERSION"

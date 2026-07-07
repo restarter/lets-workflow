@@ -37,14 +37,14 @@ make bump VERSION=0.6.0
 ```
 
 What happens (stable release):
-- `scripts/release/bump-version.sh` edits 4 files: `plugin.json`, `marketplace.json`, `lets-rules.md` frontmatter, `CHANGELOG.md` (renames `[Unreleased]` → `[0.6.0] - DATE` with all accumulated entries; inserts fresh empty `[Unreleased]` above; updates bottom-of-file links)
+- `scripts/release/bump-version.sh` edits the version-source files — `plugin.json`, `marketplace.json`, and the frontmatter-versioned rules files (`lets-rules.md` + the three shipped tracker adapters `tracker-{beads,planfix-mcp,none}.md`) — plus `CHANGELOG.md` (renames `[Unreleased]` → `[0.6.0] - DATE` with all accumulated entries; inserts fresh empty `[Unreleased]` above; updates bottom-of-file links)
 - Runs gates: `make test`, `make build`, `verify-versions`
 - Commits "chore: release v0.6.0"
 
 The script commits only after all gates pass. On a gate failure the version + CHANGELOG edits stay in the working tree, so a plain re-run dies at the clean-tree pre-check — `git restore` the edited files (`plugin.json`, `marketplace.json`, `lets-rules.md` + the tracker adapters, `CHANGELOG.md`) first, then fix and re-run.
 
 For **prereleases** (`X.Y.Z-rc.N`, `-beta.N`, `-alpha.N`) the flow is identical EXCEPT:
-- bump-version.sh edits **3** files (CHANGELOG is left intact — full content stays under `[Unreleased]`)
+- bump-version.sh edits the version-source files (`plugin.json`, `marketplace.json`, `lets-rules.md` + the 3 tracker adapters) but leaves **CHANGELOG intact** — full content stays under `[Unreleased]`
 - release.yml falls back to `[Unreleased]` content for the GH Release page notes
 - See "Validating before the real release" below for the canonical rc → final ceremony.
 
@@ -92,7 +92,7 @@ gh run watch
 
 To exercise the full pipeline without burning the final tag, cut a prerelease (semver suffix `-rc.N`, `-beta.N`, etc.). Prereleases are deliberately lightweight:
 
-- bump-version.sh **does NOT touch CHANGELOG.md** for prereleases — only source-tree version sources (plugin.json, marketplace.json, lets-rules.md frontmatter)
+- bump-version.sh **does NOT touch CHANGELOG.md** for prereleases — only source-tree version sources (plugin.json, marketplace.json, lets-rules.md + the 3 tracker adapters' frontmatter)
 - release.yml falls back to `[Unreleased]` content for the GH Release page notes
 - goreleaser auto-flags `-rc.N` as prerelease via `release.prerelease: auto`
 
@@ -100,7 +100,7 @@ To exercise the full pipeline without burning the final tag, cut a prerelease (s
 git checkout main && git pull
 git checkout -b release/0.6.0-rc.1
 make bump VERSION=0.6.0-rc.1
-# → 3 source-tree files changed (CHANGELOG untouched)
+# → source-tree version files changed (plugin.json, marketplace.json, lets-rules.md + 3 tracker adapters; CHANGELOG untouched)
 git push -u origin release/0.6.0-rc.1
 gh pr create
 # After merge:

@@ -22,13 +22,16 @@ ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || {
 }
 cd "$ROOT"
 
-# Frontmatter-versioned rules files: lets-rules.md + the shipped tracker
-# adapters (drift-tracked alike; bumped together by bump-version.sh).
-# tracker-TEMPLATE.md and *.board.md pin 0.0.0 by design - excluded.
-RULES_FILES="plugins/lets/rules/lets-rules.md
-plugins/lets/rules/tracker-beads.md
-plugins/lets/rules/tracker-planfix-mcp.md
-plugins/lets/rules/tracker-none.md"
+# Frontmatter-versioned rules files: lets-rules.md + the shipped tracker adapters,
+# GLOBBED so a new adapter is checked automatically (no edit here or in
+# bump-version.sh). Exclude the pinned tracker-TEMPLATE.md and user-owned *.board.md
+# (both pin 0.0.0). Keep this exclusion rule identical to bump-version.sh's glob.
+RULES_FILES="plugins/lets/rules/lets-rules.md"
+for f in plugins/lets/rules/tracker-*.md; do
+  [ -e "$f" ] || continue
+  case "$f" in *tracker-TEMPLATE.md|*.board.md) continue ;; esac
+  RULES_FILES="$RULES_FILES $f"
+done
 
 # Required files exist
 for f in plugins/lets/.claude-plugin/plugin.json \
