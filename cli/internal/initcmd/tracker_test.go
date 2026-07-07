@@ -185,6 +185,36 @@ func TestRun_TrackerSourceMissing(t *testing.T) {
 	}
 }
 
+// LETS_TRACKER names an unshipped adapter BUT an installed copy already exists:
+// it's a user-authored adapter - keep it, StepSkip (not StepWarn), don't remove it.
+func TestRun_TrackerSourceMissing_UserAuthoredKept(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	tmp := t.TempDir()
+	gitInit(t, tmp)
+	pluginRoot := setupFakePluginRoot(t) // no tracker-custom.md shipped
+	writeProjectEnv(t, tmp, "custom")
+	rules := filepath.Join(tmp, ".claude", "rules")
+	if err := os.MkdirAll(rules, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dst := filepath.Join(rules, "tracker-custom.md")
+	if err := os.WriteFile(dst, []byte("---\nname: tracker-custom\nversion: 1.0.0\n---\n# mine\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	result, err := Run(context.Background(), trackerPrefs("beads"), tmp, pluginRoot)
+	if err != nil {
+		t.Fatalf("must not error: %v", err)
+	}
+	if !hasStepContaining(result.Steps, "user-authored adapter") {
+		t.Errorf("expected a StepSkip keeping the user-authored adapter; steps:\n%v", result.Steps)
+	}
+	if !exists(t, dst) {
+		t.Error("the user-authored adapter copy must be kept")
+	}
+}
+
 // Board profile is scaffolded once and NEVER overwritten on a later run.
 func TestRun_BoardScaffoldOnce(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {

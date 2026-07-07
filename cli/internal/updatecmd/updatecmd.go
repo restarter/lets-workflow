@@ -307,9 +307,17 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 				last := &result.Artifacts[len(result.Artifacts)-1]
 				last.Detail = strings.TrimPrefix(last.Detail+"; "+strings.Join(switchNotes, "; "), "; ")
 			}
+		} else if os.IsNotExist(readErr) {
+			// No plugin-shipped source: a user-authored (unshipped) adapter. If an
+			// installed copy exists in .claude/rules/, report it left-as-is in the
+			// green group (parity with init Step 8b's gentle skip), never an error.
+			// Nothing installed either -> no row (typo / pre-tracker project). A
+			// non-IsNotExist read error stays silently ignored, as before.
+			trackerDst := filepath.Join(projectRoot, ".claude", "rules", "tracker-"+trackerName+".md")
+			if _, derr := os.Stat(trackerDst); derr == nil {
+				result.Add(Artifact{Name: "tracker-rules", Status: StatusDelegated, Detail: fmt.Sprintf("user-authored adapter (tracker-%s.md not shipped) - left as-is", trackerName)})
+			}
 		}
-		// source absent -> no row (init's Step 8b warns; update stays quiet about a
-		// missing adapter to keep the artifact set stable).
 	}
 
 	// Cross-reference: when an in-sync artifact's local source (the binary for

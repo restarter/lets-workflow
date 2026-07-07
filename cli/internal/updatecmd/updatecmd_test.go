@@ -1018,6 +1018,30 @@ func TestRun_TrackerRulesSourceAbsent_NoArtifact(t *testing.T) {
 	}
 }
 
+func TestRun_TrackerRulesUserAuthored_Delegated(t *testing.T) {
+	// LETS_TRACKER names an unshipped adapter (no plugin source) BUT an installed
+	// copy exists -> a user-authored adapter: emit a delegated (green) tracker-rules
+	// row "left as-is", not silence, not an error (parity with init Step 8b).
+	pr, plug := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0")
+	body := "# LETS plugin config\nLETS_ENV_VERSION=0.6.0\nLETS_LANGUAGE=English\nLETS_MERGE_BRANCH=main\nLETS_PR_FLOW=local\nLETS_TRACKER=custom\nLETS_LAUNCHER=terminal\nLETS_RULES_SCOPE=project\n"
+	if err := os.WriteFile(filepath.Join(pr, ".lets", ".env"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// installed copy present, no plugin source for "custom"
+	trackerFile(t, filepath.Join(pr, ".claude", "rules", "tracker-custom.md"), "custom", "1.0.0")
+	r, err := Run(context.Background(), Options{LatestFn: stubLatest("0.6.0")}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := findMaybe(r, "tracker-rules")
+	if a == nil {
+		t.Fatal("tracker-rules row must be present for a user-authored adapter with an installed copy")
+	}
+	if a.Status != StatusDelegated || !strings.Contains(a.Detail, "user-authored adapter") {
+		t.Errorf("tracker-rules: %+v, want StatusDelegated + 'user-authored adapter'", a)
+	}
+}
+
 func TestRun_TrackerRulesInvalidName_NoArtifact(t *testing.T) {
 	// A path-traversal LETS_TRACKER is rejected by ValidTrackerName before any
 	// filepath.Join -> no row (Artifact-6 mirrors init Step 8b's guard).
