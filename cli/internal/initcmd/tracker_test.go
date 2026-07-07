@@ -67,8 +67,8 @@ func TestRun_TrackerInstalled(t *testing.T) {
 }
 
 // B1 regression: the resolved tracker comes from .lets/.env, NOT prefs.Tracker.
-// A project whose .env says planfix-mcp, re-inited with the cobra DEFAULT
-// prefs.Tracker=beads, must install tracker-planfix-mcp.md and NOT tracker-beads.md.
+// A project whose .env says demo, re-inited with the cobra DEFAULT
+// prefs.Tracker=beads, must install tracker-demo.md and NOT tracker-beads.md.
 func TestRun_TrackerFromEnvNotDefault(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not available")
@@ -77,16 +77,16 @@ func TestRun_TrackerFromEnvNotDefault(t *testing.T) {
 	gitInit(t, tmp)
 	pluginRoot := setupFakePluginRoot(t)
 	writeTrackerSource(t, pluginRoot, "beads", "0.6.4")
-	writeTrackerSource(t, pluginRoot, "planfix-mcp", "0.6.4")
-	writeProjectEnv(t, tmp, "planfix-mcp")
+	writeTrackerSource(t, pluginRoot, "demo", "0.6.4")
+	writeProjectEnv(t, tmp, "demo")
 
 	// prefs.Tracker = "beads" simulates the cobra default when --tracker is unset.
 	if _, err := Run(context.Background(), trackerPrefs("beads"), tmp, pluginRoot); err != nil {
 		t.Fatal(err)
 	}
 	rules := filepath.Join(tmp, ".claude", "rules")
-	if !exists(t, filepath.Join(rules, "tracker-planfix-mcp.md")) {
-		t.Error("tracker-planfix-mcp.md must be installed (resolved from .env)")
+	if !exists(t, filepath.Join(rules, "tracker-demo.md")) {
+		t.Error("tracker-demo.md must be installed (resolved from .env)")
 	}
 	if exists(t, filepath.Join(rules, "tracker-beads.md")) {
 		t.Error("tracker-beads.md must NOT be installed - prefs.Tracker leaked over the .env value (B1)")
@@ -223,17 +223,17 @@ func TestRun_BoardScaffoldOnce(t *testing.T) {
 	tmp := t.TempDir()
 	gitInit(t, tmp)
 	pluginRoot := setupFakePluginRoot(t)
-	writeTrackerSource(t, pluginRoot, "planfix-mcp", "0.6.4")
-	if err := os.WriteFile(filepath.Join(pluginRoot, "rules", "tracker-planfix-mcp.board.md"),
-		[]byte("---\nname: tracker-planfix-mcp.board\nversion: 0.0.0\n---\n# board template\n"), 0o644); err != nil {
+	writeTrackerSource(t, pluginRoot, "demo", "0.6.4")
+	if err := os.WriteFile(filepath.Join(pluginRoot, "rules", "tracker-demo.board.md"),
+		[]byte("---\nname: tracker-demo.board\nversion: 0.0.0\n---\n# board template\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	writeProjectEnv(t, tmp, "planfix-mcp")
+	writeProjectEnv(t, tmp, "demo")
 
-	if _, err := Run(context.Background(), trackerPrefs("planfix-mcp"), tmp, pluginRoot); err != nil {
+	if _, err := Run(context.Background(), trackerPrefs("demo"), tmp, pluginRoot); err != nil {
 		t.Fatal(err)
 	}
-	boardDst := filepath.Join(tmp, ".claude", "rules", "tracker-planfix-mcp.board.md")
+	boardDst := filepath.Join(tmp, ".claude", "rules", "tracker-demo.board.md")
 	if !exists(t, boardDst) {
 		t.Fatal("board profile not scaffolded on first run")
 	}
@@ -241,7 +241,7 @@ func TestRun_BoardScaffoldOnce(t *testing.T) {
 	if err := os.WriteFile(boardDst, []byte("MY EDITED BOARD"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Run(context.Background(), trackerPrefs("planfix-mcp"), tmp, pluginRoot); err != nil {
+	if _, err := Run(context.Background(), trackerPrefs("demo"), tmp, pluginRoot); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(boardDst)
@@ -250,9 +250,9 @@ func TestRun_BoardScaffoldOnce(t *testing.T) {
 	}
 }
 
-// .mcp.json can carry a tracker adapter's secret token (e.g. PLANFIX_TOKEN for
-// planfix-mcp); lets init must gitignore it so a user project can't commit the
-// token - the tracker docs promise this. Regression for the branch review's B1.
+// .mcp.json can carry an MCP-based tracker adapter's secret token, so lets init
+// must gitignore it so a user project can't commit the token - the tracker docs
+// promise this. Regression for the branch review's B1.
 func TestRun_GitignoresMcpJson(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not available")
