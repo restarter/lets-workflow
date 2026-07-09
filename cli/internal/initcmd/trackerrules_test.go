@@ -254,7 +254,16 @@ func tableRowCells(content, verb string) []string {
 // beads exercises the CORE-supported=yes path here (none is the null-adapter
 // exception). A non-beads adapter that SUPPORTS core verbs (and the footnoted-
 // "yes" normalization above) will be re-covered when the planned Jira/Trello
-// worked-example adapter lands; no synthetic fixture is added now (YAGNI).
+// worked-example adapter lands. The normalization itself is pinned directly by
+// TestCoreSupportedCell below, so no synthetic adapter fixture is needed (YAGNI).
+
+// coreSupportedCell reports whether a capability-table `supported` cell counts as
+// "yes" for a CORE verb. Prefix-match so a process-gated adapter's footnoted
+// "yes¹" passes where a bare == "yes" would false-fail.
+func coreSupportedCell(cell string) bool {
+	return strings.HasPrefix(strings.TrimSpace(cell), "yes")
+}
+
 func TestTrackerRules_CoreSupported(t *testing.T) {
 	dir := pluginRulesDir(t)
 	matches, err := filepath.Glob(filepath.Join(dir, "tracker-*.md"))
@@ -280,7 +289,7 @@ func TestTrackerRules_CoreSupported(t *testing.T) {
 					t.Errorf("%s: no table row for CORE verb %q", base, v)
 					continue
 				}
-				if sup := strings.TrimSpace(cells[2]); !strings.HasPrefix(sup, "yes") {
+				if sup := strings.TrimSpace(cells[2]); !coreSupportedCell(sup) {
 					t.Errorf("%s: CORE verb %q supported=%q, want yes (a non-none adapter must support every CORE verb)", base, v, sup)
 				}
 			}
@@ -288,6 +297,30 @@ func TestTrackerRules_CoreSupported(t *testing.T) {
 	}
 	if checked == 0 {
 		t.Fatalf("no non-none tracker-*.md adapters found in %s - test wiring broken", dir)
+	}
+}
+
+// TestCoreSupportedCell pins the supported-cell normalization directly, decoupled
+// from any tracker-*.md fixture, so the footnoted-"yes¹" tolerance can't silently
+// regress to a bare == "yes". No shipped adapter renders a footnoted cell now, so
+// this predicate test is the only thing exercising that branch.
+func TestCoreSupportedCell(t *testing.T) {
+	for _, tc := range []struct {
+		cell string
+		want bool
+	}{
+		{"yes", true},
+		{"yes¹", true},
+		{" yes ", true},
+		{"yes (process-gated)", true},
+		{"no", false},
+		{"", false},
+		{"absent", false},
+		{"partial", false},
+	} {
+		if got := coreSupportedCell(tc.cell); got != tc.want {
+			t.Errorf("coreSupportedCell(%q) = %v, want %v", tc.cell, got, tc.want)
+		}
 	}
 }
 
