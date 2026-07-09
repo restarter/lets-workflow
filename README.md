@@ -316,7 +316,7 @@ LETS_MERGE_BRANCH=main
 # PR flow: github | bitbucket | local
 LETS_PR_FLOW=github
 
-# Task tracker adapter: beads | planfix-mcp | none  (selects .claude/rules/tracker-<name>.md; see docs/trackers.md)
+# Task tracker adapter: beads | none  (selects .claude/rules/tracker-<name>.md; see docs/trackers.md)
 LETS_TRACKER=beads
 ```
 
@@ -371,7 +371,7 @@ The README is the tour; **[docs/](docs/)** is the manual.
 | [parallel-work.md](docs/parallel-work.md) | Working on several tasks at once — `/lets:team` (autonomous agents) and `/lets:worktree` (parallel terminals). |
 | [autonomous.md](docs/autonomous.md) | Hands-off flows — Dynamic Workflows (`--workflow`) and the autonomous task pipeline (spawn → plan → execute, two gates). |
 | [tasks.md](docs/tasks.md) | Task tracking — the task lifecycle, taking and creating tasks, notes, `/lets:backlog`, beads memory, shared backlogs for teams. |
-| [trackers.md](docs/trackers.md) | Pluggable tracker adapters — `LETS_TRACKER` selects `beads` (default) \| `planfix-mcp` \| `none`; one drift-tracked `tracker-<name>.md` per adapter, the neutral verb set, and how to add one. |
+| [trackers.md](docs/trackers.md) | Pluggable tracker adapters — `LETS_TRACKER` selects `beads` (default) \| `none`; one drift-tracked `tracker-<name>.md` per adapter, the neutral verb set, and how to add one. |
 | [commands.md](docs/commands.md) | Full reference for every `/lets:*` command. |
 | [configuration.md](docs/configuration.md) | `.lets/.env` settings, the `.lets/` file layout, `lets init` vs `bd init` setup order, and dependencies. |
 

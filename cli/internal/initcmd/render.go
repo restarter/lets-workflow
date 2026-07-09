@@ -16,7 +16,7 @@ type Prefs struct {
 	Language    string // e.g. "English", "Ukrainian"
 	MergeBranch string // e.g. "main", "develop"
 	PRFlow      string // "local" | "github" | "bitbucket"
-	Tracker     string // adapter name: "beads" (default) | "planfix-mcp" | "none"
+	Tracker     string // adapter name: "beads" (default) | "none"
 	Launcher    string // "terminal" (default) | "cmux"
 	RulesScope  string // "project" (own .claude/rules copy) | "user" (rely on ~/.claude/rules) | "" = preserve-or-default
 	SkipBeads   bool

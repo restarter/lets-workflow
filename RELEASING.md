@@ -37,7 +37,7 @@ make bump VERSION=0.6.0
 ```
 
 What happens (stable release):
-- `scripts/release/bump-version.sh` edits the version-source files — `plugin.json`, `marketplace.json`, and the frontmatter-versioned rules files (`lets-rules.md` + the three shipped tracker adapters `tracker-{beads,planfix-mcp,none}.md`) — plus `CHANGELOG.md` (renames `[Unreleased]` → `[0.6.0] - DATE` with all accumulated entries; inserts fresh empty `[Unreleased]` above; updates bottom-of-file links)
+- `scripts/release/bump-version.sh` edits the version-source files — `plugin.json`, `marketplace.json`, and the frontmatter-versioned rules files (`lets-rules.md` + the two shipped tracker adapters `tracker-{beads,none}.md`) — plus `CHANGELOG.md` (renames `[Unreleased]` → `[0.6.0] - DATE` with all accumulated entries; inserts fresh empty `[Unreleased]` above; updates bottom-of-file links)
 - Runs gates: `make test`, `make build`, `verify-versions`
 - Commits "chore: release v0.6.0"
 

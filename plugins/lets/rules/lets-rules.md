@@ -222,7 +222,7 @@ For task creation, see `### Task Creation` below.
 
 ### Tracker Adapters (verb resolution)
 
-LETS is tracker-agnostic via a one-adapter-file platform. `LETS_TRACKER` names the adapter (`beads` | `planfix-mcp` | `none` | a custom one); `lets init` installs exactly one `.claude/rules/tracker-<name>.md` (auto-loaded as a project instruction) that binds the neutral verbs to concrete calls.
+LETS is tracker-agnostic via a one-adapter-file platform. `LETS_TRACKER` names the adapter (`beads` | `none` | a custom one); `lets init` installs exactly one `.claude/rules/tracker-<name>.md` (auto-loaded as a project instruction) that binds the neutral verbs to concrete calls.
 
 **Neutral verbs:** `create`, `show`, `comment-add`, `set-status`, `close` (CORE) + `comment-list`, `list-by-status`, `search`, `ready`/`stats`, `label`/`assignee`/`set-field` (OPTIONAL).
 
@@ -246,7 +246,7 @@ An empty body → HARD-FAIL, never submit an empty comment.
 
 **Degradation (two-pronged — do NOT flatten):**
 - An OPTIONAL verb the adapter marks `absent`, OR a CORE verb bound to a deliberate **no-op** (`none`) → continue and TELL the user; never report it as a recorded change (no phantom "done").
-- A binding that exists but FAILS at runtime (MCP tool not connected, `bd` not on PATH, planfix `failures[]` non-empty) → **HARD-FAIL loud** ("set-status / close FAILED — task NOT changed"); never report a phantom success. Critical under AUTO MODE — `/lets:done` must not claim a close it didn't do.
+- A binding that exists but FAILS at runtime (MCP tool not connected, `bd` not on PATH, an MCP adapter's `failures[]` non-empty) → **HARD-FAIL loud** ("set-status / close FAILED — task NOT changed"); never report a phantom success. Critical under AUTO MODE — `/lets:done` must not claim a close it didn't do.
 
 **Resolution is ORCHESTRATOR-ONLY** — subagents never call tracker verbs (they don't receive the adapter file). Two documented beads-only carve-outs (NOT violations): (a) a few analytical commands — notably `/lets:backlog` — instruct their review subagents to read task data via `bd` directly (the subagent has no adapter; on a non-beads project those reads are unavailable until migrated); (b) the detect-task merge-branch liveness probe is a gated `bd show` (see detect-task) — both are allowlisted.
 

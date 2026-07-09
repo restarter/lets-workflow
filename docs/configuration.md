@@ -15,7 +15,7 @@ LETS_MERGE_BRANCH=main
 # PR flow: github | bitbucket | local
 LETS_PR_FLOW=github
 
-# Task tracker adapter: beads | planfix-mcp | none
+# Task tracker adapter: beads | none
 LETS_TRACKER=beads
 ```
 
@@ -24,7 +24,7 @@ LETS_TRACKER=beads
 | `LETS_LANGUAGE` | The language Claude responds in when it isn't clear from your message. An English language name (`English`, `Ukrainian`, `Japanese`, …) regardless of the script it's written in. |
 | `LETS_MERGE_BRANCH` | The branch tasks merge into and PRs target. Used wherever LETS would otherwise assume `main`. |
 | `LETS_PR_FLOW` | `github` — `/lets:done` pushes and opens a PR via `gh`. `bitbucket` — planned. `local` — no PR; `/lets:done` merges locally. |
-| `LETS_TRACKER` | The task tracker **adapter**: `beads` (default), `planfix-mcp`, or `none`. Selects the `.claude/rules/tracker-<name>.md` that `lets init` installs; commands resolve verbs through it. See [trackers.md](trackers.md). |
+| `LETS_TRACKER` | The task tracker **adapter**: `beads` (default) or `none`. Selects the `.claude/rules/tracker-<name>.md` that `lets init` installs; commands resolve verbs through it. See [trackers.md](trackers.md). |
 | `LETS_LAUNCHER` | How `/lets:worktree create` opens a new worktree session: `terminal` (default — prints a `cd … && claude` command) or `cmux` (opens a cmux workspace, macOS only). A preference, not a guarantee: `cmux` falls back to `terminal` when cmux is absent or off-macOS. |
 | `LETS_RULES_SCOPE` | Where this project's workflow rules come from: `project` (its own `.claude/rules/lets-rules.md` copy — the default) or `user` (deliberately no project copy; rules come from the global `~/.claude/rules/lets-rules.md`). Set automatically by `/lets:init` when you pick "Rely on global"; `/lets:update` then leaves the project copy uncreated (`delegated`) instead of restoring it. Any value other than `user` behaves as `project`. |
 

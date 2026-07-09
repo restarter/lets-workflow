@@ -88,11 +88,10 @@ func Run(ctx context.Context, prefs Prefs, projectRoot, pluginRoot string) (Resu
 	}
 	result.Add(Step{Status: StepOK, Message: ".lets/ structure (5 dirs)"})
 
-	// 2. .gitignore — LETS-owned paths + .mcp.json. A tracker adapter's MCP
-	// config (.mcp.json) can carry a secret token (e.g. PLANFIX_TOKEN for the
-	// planfix-mcp adapter), and the tracker docs promise `lets init` gitignores
-	// it - so we own that entry. `bd init` writes its own .beads/ entries (and
-	// its own auto-generated CLAUDE.md / AGENTS.md hook block); we don't speak for it.
+	// 2. .gitignore — LETS-owned paths + .mcp.json. An MCP-based tracker adapter's
+	// .mcp.json can carry a secret token, and the tracker docs promise `lets init`
+	// gitignores it - so we own that entry. `bd init` writes its own .beads/ entries
+	// (and its own auto-generated CLAUDE.md / AGENTS.md hook block); we don't speak for it.
 	if err := EnsureGitignore(projectRoot, []string{".lets/", ".worktrees/", ".mcp.json"}); err != nil {
 		return result, err
 	}
@@ -260,7 +259,17 @@ func Run(ctx context.Context, prefs Prefs, projectRoot, pluginRoot string) (Resu
 			trackerData, terr := os.ReadFile(trackerSrc)
 			switch {
 			case os.IsNotExist(terr):
-				result.Add(Step{Status: StepWarn, Message: fmt.Sprintf("no adapter shipped for LETS_TRACKER=%q (expected tracker-%s.md) - check the value", tracker, tracker)})
+				// No plugin-shipped source for this adapter. If the project already has
+				// an installed copy in .claude/rules/, treat it as a user-authored
+				// (custom) adapter - keep it and skip quietly; a shipped-set warning
+				// would nag a deliberate choice. Warn only when no adapter file exists
+				// at all (a likely typo in LETS_TRACKER).
+				trackerDst := filepath.Join(rulesDir, "tracker-"+tracker+".md")
+				if _, derr := os.Stat(trackerDst); derr == nil {
+					result.Add(Step{Status: StepSkip, Message: fmt.Sprintf(".claude/rules/tracker-%s.md kept (user-authored adapter - not shipped)", tracker)})
+				} else {
+					result.Add(Step{Status: StepWarn, Message: fmt.Sprintf("no adapter shipped for LETS_TRACKER=%q (expected tracker-%s.md) - check the value", tracker, tracker)})
+				}
 			case terr != nil:
 				return result, fmt.Errorf("read tracker rules %s: %w", trackerSrc, terr)
 			default:
@@ -304,7 +313,7 @@ func Run(ctx context.Context, prefs Prefs, projectRoot, pluginRoot string) (Resu
 	}
 
 	// 9. beads. A non-beads adapter implies the skip regardless of the flag -
-	// `bd init` on a planfix-mcp/none project would create a wrong-store .beads/
+	// `bd init` on a none (or custom) project would create a wrong-store .beads/
 	// workspace. Belt-and-suspenders with init.md's $SKIP_BEADS_FLAG (the markdown
 	// sets the flag as UX; the binary must be correct for direct-CLI callers too).
 	switch {

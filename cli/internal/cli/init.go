@@ -190,7 +190,7 @@ out with --plugin-root=${CLAUDE_PLUGIN_ROOT} plus the chosen flags.`,
 	cmd.Flags().StringVar(&flagMergeBranch, "merge-branch", "", "Target branch for merges (default: main)")
 	cmd.Flags().StringVar(&flagPRFlow, "pr-flow", "", "PR flow: local | github | bitbucket")
 	cmd.Flags().StringVar(&flagLauncher, "launcher", "", "Worktree launcher: terminal | cmux (default terminal)")
-	cmd.Flags().StringVar(&flagTracker, "tracker", "", "Task tracker adapter: beads | planfix-mcp | none (default beads; selects .claude/rules/tracker-<name>.md)")
+	cmd.Flags().StringVar(&flagTracker, "tracker", "", "Task tracker adapter: beads | none (default beads; selects .claude/rules/tracker-<name>.md)")
 	cmd.Flags().BoolVar(&flagGithub, "github", false, "(deprecated) alias for --pr-flow=github")
 	cmd.Flags().BoolVar(&flagSkipBeads, "skip-beads", false, "Skip beads initialization")
 	cmd.Flags().StringVar(&flagRulesScope, "rules-scope", "", "Rules sourcing for this project: project (own copy) | user (rely on ~/.claude/rules)")

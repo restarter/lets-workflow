@@ -35,7 +35,7 @@ const (
 	StatusUnknown        ArtifactStatus = "unknown"         // couldn't determine (offline, unreadable)
 	StatusNotInitialized ArtifactStatus = "not-initialized" // .env absent - project never `lets init`-ed
 	StatusDev            ArtifactStatus = "dev"             // running an untagged dev binary - no comparison
-	StatusDelegated      ArtifactStatus = "delegated"       // project rules deliberately absent (LETS_RULES_SCOPE=user) - rules come from ~/.claude/rules
+	StatusDelegated      ArtifactStatus = "delegated"       // deliberately not plugin-managed here: project rules via ~/.claude/rules (LETS_RULES_SCOPE=user), OR a user-authored tracker adapter with no shipped source
 	StatusDeferred       ArtifactStatus = "deferred"        // rules sync held back: the plugin is behind, syncing now would write a stale lower version. Resolves once the plugin is updated.
 )
 
@@ -114,8 +114,9 @@ func (r *Result) Add(a Artifact) {
 	r.Artifacts = append(r.Artifacts, a)
 	switch a.Status {
 	case StatusUpToDate, StatusInSync, StatusDelegated:
-		// delegated is a healthy target state (scope=user, rules come from the
-		// global copy) - belongs in the "in sync" bucket, not action-needed.
+		// delegated is a healthy target state (scope=user rules from the global
+		// copy, OR a user-authored tracker adapter with no shipped source) -
+		// belongs in the "in sync" bucket, not action-needed.
 		r.Summary.UpToDate++
 	case StatusUpdated:
 		r.Summary.Updated++

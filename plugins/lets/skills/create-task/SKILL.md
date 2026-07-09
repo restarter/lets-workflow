@@ -19,7 +19,7 @@ Applies to every field:
 - `labels`
 - Any subsequent `comment-add` / `set-field` on this task
 
-**Why:** tasks are searched, filtered, and cross-referenced across the team and external systems (Planfix, GitHub). Mixed-language tasks break tracker `search` and confuse non-native-language readers.
+**Why:** tasks are searched, filtered, and cross-referenced across the team and external systems (GitHub, Linear). Mixed-language tasks break tracker `search` and confuse non-native-language readers.
 
 ## Why This Exists
 

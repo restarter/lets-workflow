@@ -246,10 +246,12 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 	}
 
 	// --- Artifact 6: .claude/rules/tracker-<name>.md (project scope, optional) ---
-	// Row appears ONLY when LETS_TRACKER names an adapter the plugin ships
-	// (tracker-<name>.md present in the plugin payload). Absence - unset tracker,
-	// a typo, or a plugin without the file - means NO row, so a project that
-	// predates the tracker platform keeps the pre-tracker artifact set unchanged.
+	// Row appears when LETS_TRACKER names an adapter the plugin ships
+	// (tracker-<name>.md in the payload), OR a user-authored/unshipped adapter with
+	// an installed .claude/rules/tracker-<name>.md copy (reported delegated, "left
+	// as-is"). Only a name with NEITHER a shipped source NOR an installed copy -
+	// unset, a typo, or a pre-platform project - yields NO row, so such a project
+	// keeps the pre-tracker artifact set unchanged.
 	// Plugin-version-locked like user-rules: excluded from Consistent (it always
 	// equals the plugin after a sync). Tracker rules are always project-local (no
 	// user scope). Mirrors Artifact 4's drift/deferral/write pattern.
@@ -307,9 +309,17 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 				last := &result.Artifacts[len(result.Artifacts)-1]
 				last.Detail = strings.TrimPrefix(last.Detail+"; "+strings.Join(switchNotes, "; "), "; ")
 			}
+		} else if os.IsNotExist(readErr) {
+			// No plugin-shipped source: a user-authored (unshipped) adapter. If an
+			// installed copy exists in .claude/rules/, report it left-as-is in the
+			// green group (parity with init Step 8b's gentle skip), never an error.
+			// Nothing installed either -> no row (typo / pre-tracker project). A
+			// non-IsNotExist read error stays silently ignored, as before.
+			trackerDst := filepath.Join(projectRoot, ".claude", "rules", "tracker-"+trackerName+".md")
+			if _, derr := os.Stat(trackerDst); derr == nil {
+				result.Add(Artifact{Name: "tracker-rules", Status: StatusDelegated, Detail: fmt.Sprintf("user-authored adapter (tracker-%s.md not shipped) - left as-is", trackerName)})
+			}
 		}
-		// source absent -> no row (init's Step 8b warns; update stays quiet about a
-		// missing adapter to keep the artifact set stable).
 	}
 
 	// Cross-reference: when an in-sync artifact's local source (the binary for

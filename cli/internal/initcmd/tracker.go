@@ -16,7 +16,7 @@ import (
 // user-authored tracker-<custom>.md, any *.board.md, lets-rules.md, or git.md
 // in .claude/rules/ is never touched. Keep in sync with the shipped
 // plugins/lets/rules/tracker-*.md files and the CONTRIBUTING recipe.
-var shippedTrackers = []string{"beads", "planfix-mcp", "none"}
+var shippedTrackers = []string{"beads", "none"}
 
 // trackerNameRe constrains an adapter name to a branch/path-safe shape. The
 // value flows into filepath.Join for both the write target and the cleanup
