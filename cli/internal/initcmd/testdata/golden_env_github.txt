@@ -18,7 +18,7 @@ LETS_PR_FLOW=github
 # Task tracker adapter: beads | none (selects .claude/rules/tracker-<name>.md)
 LETS_TRACKER=beads
 
-# Worktree launcher: terminal (print the cd command) | cmux (open in a cmux workspace, macOS only)
+# Worktree launcher: terminal (print the cd command) | cmux (cmux workspace, macOS only) | tmux (tmux window/session, Linux + macOS)
 LETS_LAUNCHER=terminal
 
 # Where this project's workflow rules come from: project (own .claude/rules copy) | user (rely on the ~/.claude/rules global copy)

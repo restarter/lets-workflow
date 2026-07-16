@@ -274,7 +274,7 @@ cd .worktrees/auth-feature && claude  # Terminal 2 - start new session
 
 Each worktree gets its own branch, shares the task database and config via symlinks. Full LETS workflow in each terminal.
 
-On macOS with [cmux](https://github.com/manaflow-ai/cmux) installed, set `LETS_LAUNCHER=cmux` (or run `/lets:init` and pick cmux) and `/lets:worktree create` opens the session in a cmux workspace automatically — no second terminal. It stays optional: without cmux (or on Linux/Windows) it falls back to the `cd … && claude` command above.
+On Linux or macOS with [tmux](https://github.com/tmux/tmux) installed, set `LETS_LAUNCHER=tmux` (or run `/lets:init` and pick tmux) and `/lets:worktree create` opens the session in a tmux window/session automatically — no second terminal. On macOS, [cmux](https://github.com/manaflow-ai/cmux) is a GUI alternative (`LETS_LAUNCHER=cmux`). Both stay optional: without the launcher's binary (or on Windows) it falls back to the `cd … && claude` command above.
 
 ### LETS Help Boxes
 
