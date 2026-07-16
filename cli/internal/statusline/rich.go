@@ -476,7 +476,7 @@ var tips = []string{
 	"Got a review back? /lets:review-round triages each comment, edits in one pass.",
 	"No task yet? /lets:start --main is project-assistant mode — triage, groom, plan.",
 	"Open question about your project? /lets:opinion thinks it through with expert agents.",
-	"On macOS with cmux? LETS_LAUNCHER=cmux opens worktrees in a cmux workspace.",
+	"Parallel worktrees? LETS_LAUNCHER=tmux (Linux/macOS) or cmux (macOS) auto-opens the session.",
 	"Plan looks risky? /lets:check --plan is a fast plan sanity pass.",
 	"Never work without a task — /lets:start picks or creates one.",
 	"Out of sync with the latest release? /lets:update self-heals config + rules.",
