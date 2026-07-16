@@ -103,3 +103,58 @@ func sanitizeName(s string) string {
 	}
 	return out
 }
+
+// activeTargetRaw runs `tmux display-message -p <targetFormat>` to get the
+// client's current target. Overridable in tests.
+var activeTargetRaw = func(ctx context.Context, bin string) ([]byte, error) {
+	return exec.CommandContext(ctx, bin, "display-message", "-p", "#{session_name}:#{window_index}").Output()
+}
+
+// resolveTarget picks the tmux target: explicit ref wins, else a pane matching
+// cwd, else the active window. Returns ("", "") when nothing matches - callers
+// degrade with reason "pane_not_found".
+func resolveTarget(ctx context.Context, bin, ref, cwd string) (target, title string) {
+	if ref != "" {
+		return ref, ""
+	}
+	if cwd != "" {
+		panes, err := listPanes(ctx, bin)
+		if err != nil {
+			return "", ""
+		}
+		if p := findByPath(panes, cwd); p != nil {
+			return p.Target(), p.Title
+		}
+		return "", ""
+	}
+	out, err := activeTargetRaw(ctx, bin)
+	if err != nil {
+		return "", ""
+	}
+	return strings.TrimSpace(string(out)), ""
+}
+
+// listClientsRaw runs `tmux list-clients -F '#{client_name}'` SERVER-WIDE (no
+// -t): every client attached to any session. Overridable in tests. Errors when
+// no tmux server is running at all.
+var listClientsRaw = func(ctx context.Context, bin string) ([]byte, error) {
+	return exec.CommandContext(ctx, bin, "list-clients", "-F", "#{client_name}").Output()
+}
+
+// listClients returns the names of every client attached to the tmux server.
+// An EMPTY slice with a nil error is the meaningful case: the server is up (our
+// detached session may well be in it) but no human is looking. Notify turns that
+// into reason=no_client rather than a phantom success - see Notify's doc.
+func listClients(ctx context.Context, bin string) ([]string, error) {
+	out, err := listClientsRaw(ctx, bin)
+	if err != nil {
+		return nil, err
+	}
+	var clients []string
+	for _, line := range strings.Split(strings.TrimRight(string(out), "\n"), "\n") {
+		if line != "" {
+			clients = append(clients, line)
+		}
+	}
+	return clients, nil
+}
