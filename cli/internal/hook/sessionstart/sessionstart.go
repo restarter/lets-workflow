@@ -21,7 +21,6 @@ import (
 	_ "embed"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -152,9 +151,8 @@ func driftCheck(pluginRulesPath, projectRoot, homeDir, rulesScope string) string
 	return "## LETS Notice\n\n" + msg + "\n\n→ Surface this to the user at the start of your next response (one line), then continue - do not skip it."
 }
 
-// mergedEnv overlays the project .lets/.env over the user-level ~/.lets/.env
-// (project wins; only non-empty project values mask - an explicitly emptied
-// project key falls through to the user default rather than deleting it).
+// mergedEnv resolves LETS_* config for injection: letsconfig.MergedEnv does the
+// project-over-user overlay; this adds the hook-only LETS_MERGE_BRANCH fallback.
 // Whitelist filtering stays at emit time in Run, so foreign keys in either
 // file are consistently dropped from injection.
 //
@@ -166,21 +164,7 @@ func driftCheck(pluginRulesPath, projectRoot, homeDir, rulesScope string) string
 // git call. Uninitialized repos DO pay one spawn per hook fire (SessionStart
 // AND PreCompact), bounded by the 1s timeout.
 func mergedEnv(projectRoot, homeDir string) map[string]string {
-	merged := map[string]string{}
-	if homeDir != "" {
-		userEnv, _ := readEnvFile(filepath.Join(homeDir, ".lets", ".env"))
-		for k, v := range userEnv {
-			if v != "" {
-				merged[k] = v
-			}
-		}
-	}
-	projEnv, _ := readEnvFile(filepath.Join(projectRoot, ".lets", ".env"))
-	for k, v := range projEnv {
-		if v != "" {
-			merged[k] = v
-		}
-	}
+	merged := letsconfig.MergedEnv(projectRoot, homeDir)
 	if merged["LETS_MERGE_BRANCH"] == "" {
 		if b := gitutil.DefaultBranch(projectRoot, time.Second); b != "" {
 			// Branch names are attacker-influenced in cloned repos, and this is
@@ -212,15 +196,4 @@ func mergedEnv(projectRoot, homeDir string) map[string]string {
 // hanging git would noticeably delay Claude Code startup.
 func DetectProjectRoot() string {
 	return gitutil.ProjectRoot("", 2*time.Second)
-}
-
-// readEnvFile parses the .env file at path. A missing file is not an error -
-// returns empty map.
-func readEnvFile(path string) (map[string]string, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return map[string]string{}, err
-	}
-	defer func() { _ = f.Close() }()
-	return envfile.Parse(f)
 }
