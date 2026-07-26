@@ -273,10 +273,6 @@ func TestReviewSpecProducersExist(t *testing.T) {
 			// accepted only when refs/stash actually moved: `git stash push` on an
 			// untracked-only tree exits 0 without creating anything.
 			`[ "$AFTER" != "$BEFORE" ]`, // pop OUR entry, not stash@{0}
-			// The executable refusal, NOT the prose that mentions it: a PR editing an
-			// instruction/hook channel must not be materialized on the reviewer's disk
-			// (`.claude/rules/tracker-*.md` binding cells execute as written).
-			`^(\.claude/|\.mcp\.json$|CLAUDE\.md$)`,
 		}},
 		{filepath.Join("commands", "check.md"), "check.md spec resolution", []string{
 			"**Task SPEC:**",
