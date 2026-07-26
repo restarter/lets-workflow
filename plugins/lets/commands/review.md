@@ -474,7 +474,9 @@ Construct the `args` object:
   changedFiles: "{changed-file list with stats, or single path for --file}",
   code: "{full diff, or full file content for --file}",
   smallDiff: true | false,        // true when diff < 50 lines -> NIT findings are kept
-  systemicCheck: true | false      // false for --file mode (no diff baseline)
+  systemicCheck: true | false,     // false for --file mode (no diff baseline)
+  spec: "{spec from Step 3 - EMPTY STRING when unavailable, never a sentinel}",
+  prTree: true | false             // PR mode: did Step 2.5 put the PR's code on disk? true for non-PR modes
 }
 ```
 
@@ -499,6 +501,7 @@ The skeleton's stages: **(1) Review** - fan out `lets:<name>` agents (structured
 When the workflow's completion notification arrives, the orchestrator resumes with the workflow's returned aggregate object as the result - **this** is the only thing that enters context (the per-agent review reports AND the skeptic verdicts stayed in script variables). The findings are already verified (the script ran Step 6.6 as its Stage 3) and `counts.refuted` says how many were dropped/downgraded. If the workflow failed or returned nothing, surface the error and offer the standard `/lets:review` (Task-based) flow; do not silently drop the review. With the aggregate in hand:
 - **Step 6.5** - grep-verify each `systemic[]` entry. If an agent was wrong (pattern only in this file), reclassify it into `findings` at its original tier and recompute the verdict from the new counts. Otherwise trust the script's `verdict`.
 - **Step 6.6** - already done in-workflow (Stage 3); do NOT re-run skeptics. Surface `counts.refuted` as `refuted_count`; if `counts.verify_failed` > 0, warn that that many findings couldn't be verified (kept unverified).
+- **Step 6.7** - restore the branch if Step 2.5 checked out the PR. Runs on the workflow-failure branch too, not only on success - otherwise a failed run strands the user on the PR branch.
 - **Step 8** - save the markdown report (render from the returned object).
 - **Step 8.5** - if `--json`, write `.lets/reviews/{date}-{mode}.json`. The workflow's `findings` and `verdict` map 1:1 onto the Step 8.5 shape - keep those field names exactly (`/lets:github-pr` reads only those two). The rest of the Step 8.5 wrapper is NOT in the return object and Claude must supply it: add top-level `date`, `mode`, and `findings_count`; and transform each `systemic[]` entry from the finding shape (`{title, file, line, tier, ...}`) into the Step 8.5 systemic shape `{title, count, description}` (use `systemic_count` as `count`). Do not write the raw return object verbatim.
 - **Step 9 / Step 10** - output/post and link to task exactly as the standard flow.

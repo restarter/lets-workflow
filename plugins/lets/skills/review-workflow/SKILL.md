@@ -35,6 +35,8 @@ A multi-stage chain so per-agent reports never enter the conversation - only the
 | `code` | string | the diff (or full file content for `--file`) |
 | `smallDiff` | bool | `true` keeps NIT findings (diff < 50 lines) |
 | `systemicCheck` | bool | `false` for `--file` (no diff baseline) |
+| `spec` | string | task description from the tracker's `show` (or the PR body); **empty when unavailable** - never a sentinel string. Drives `specBlock` in the review prompt and the narrower `specBlockSkeptic` in the verify prompt. Treated as UNTRUSTED data (fenced, authority-bounded) and normalized + length-capped in the script, since the markdown cap is prose only |
+| `prTree` | bool | does the working tree hold the reviewed code? `true` for all non-PR modes and for PR mode after a checkout; `false` adds a REVIEW TREE warning to both prompts |
 
 ## Returns
 
@@ -46,3 +48,10 @@ A multi-stage chain so per-agent reports never enter the conversation - only the
 - No sibling `import` - all logic stays inline in `review.workflow.js`.
 - No `Date.now()` / `Math.random()` / `new Date()`.
 - Top-level `await`/`return` are used (the runtime wraps the body), so the file is NOT Node-importable - it has no clean unit test; the verdict/dedupe/verify logic is kept in sync with `review.md` prose by discipline and validated by the live smoke test.
+- **Syntax IS checkable** - but NOT with bare `node --check`: because line 2 is `export const meta`, it exits 0 on syntactically broken input (verified on node v22), including an unterminated template literal - the exact failure mode of the long backticked prompt strings. Copying to `.mjs` fails the other way (`Illegal return statement`). Wrap the body instead, mirroring the runtime:
+
+  ```bash
+  { echo 'async function __w(){'; sed 's/^export //' review.workflow.js; echo '}'; } | node --check /dev/stdin
+  ```
+
+  Verified to exit 0 on the real file and 1 on a copy with a broken template literal.
