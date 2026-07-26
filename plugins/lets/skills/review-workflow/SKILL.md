@@ -36,6 +36,7 @@ A multi-stage chain so per-agent reports never enter the conversation - only the
 | `smallDiff` | bool | `true` keeps NIT findings (diff < 50 lines) |
 | `systemicCheck` | bool | `false` for `--file` (no diff baseline) |
 | `spec` | string | task description from the tracker's `show` (or the PR body); **empty when unavailable** - never a sentinel. Drives `specBlock` in the review prompt and the narrower `specBlockSkeptic` in the verify prompt. Normalized in the script (non-string/whitespace-only → empty, 150 lines / 8000 chars, `--- BEGIN/END SPEC` inside the value neutralized so it cannot escape its own fence) |
+| `specTrusted` | bool | `false` when `spec` came from the PR body, i.e. written by the author of the code under review. Reviewers still get it (scope context); `specBlockSkeptic` is suppressed - a skeptic's `real=false` is consumed deterministically by `decide()` and would delete a finding with no human in the loop |
 | `prTree` | bool | does the working tree hold the reviewed code? `true` for all non-PR modes and for PR mode after a checkout; `false` adds a REVIEW TREE warning to both prompts. **Omitted on a `PR-*` mode is treated as `false`** - failing toward "the tree may be wrong" rather than silently trusting it |
 
 ## Returns

@@ -59,15 +59,18 @@ func region(t *testing.T, src, what, start, end string) string {
 // markdown and the JS skeptic prompt must carry the narrow wording and must NOT
 // carry the reviewer's cap.
 func TestSkepticSpecBlockIsNarrower(t *testing.T) {
-	for _, c := range []struct{ file, what, start, end string }{
+	for _, c := range []struct{ file, what, start, end, trustGuard string }{
 		{filepath.Join("commands", "review.md"), "review.md skeptic template",
-			"**Skeptic prompt template.**", "**Asymmetric drop rule"},
+			"**Skeptic prompt template.**", "**Asymmetric drop rule", "spec_trusted"},
 		{filepath.Join("skills", "review-workflow", "review.workflow.js"), "js specBlockSkeptic",
-			"const specBlockSkeptic =", "const treeBlock ="},
+			"const specBlockSkeptic =", "const treeBlock =", "specTrusted !== false"},
 	} {
 		body := squash(region(t, readPlugin(t, c.file), c.what, c.start, c.end))
 		if !strings.Contains(body, "NEVER use the SPEC as grounds to refute a correctness") {
 			t.Errorf("%s: lost the narrow wording - a skeptic must not refute a real bug on spec grounds", c.what)
+		}
+		if !strings.Contains(body, c.trustGuard) {
+			t.Errorf("%s: lost %q - a PR-body spec is written by the author of the code being judged, and a skeptic's real=false deletes findings", c.what, c.trustGuard)
 		}
 		for _, banned := range []string{"cap it at", "SCOPE vs SPEC"} {
 			if strings.Contains(body, banned) {
@@ -121,7 +124,7 @@ func TestWorkflowPromptsAreWired(t *testing.T) {
 	}
 	reviewMd := readPlugin(t, filepath.Join("commands", "review.md"))
 	skillMd := readPlugin(t, filepath.Join("skills", "review-workflow", "SKILL.md"))
-	for _, k := range []string{"spec", "prTree"} {
+	for _, k := range []string{"spec", "prTree", "specTrusted"} {
 		if !regexp.MustCompile(`\b` + k + `\b`).MatchString(destructure) {
 			t.Errorf("review.workflow.js: %q is not destructured from input", k)
 		}
