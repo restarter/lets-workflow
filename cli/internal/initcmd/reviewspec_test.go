@@ -269,10 +269,14 @@ func TestReviewSpecProducersExist(t *testing.T) {
 			"spec_trusted",                            // a PR-body spec must not reach the skeptics
 			".review-restore-$CLAUDE_CODE_SESSION_ID", // session-keyed: .lets/ is shared by every worktree
 			"git stash pop \"$IDX\"",                  // pop OUR entry, not stash@{0}
+			// One shell for record-ref/stash/checkout/unwind, and the stash sha is
+			// accepted only when refs/stash actually moved: `git stash push` on an
+			// untracked-only tree exits 0 without creating anything.
+			`[ "$AFTER" != "$BEFORE" ]`, // pop OUR entry, not stash@{0}
 			// The executable refusal, NOT the prose that mentions it: a PR editing an
 			// instruction/hook channel must not be materialized on the reviewer's disk
 			// (`.claude/rules/tracker-*.md` binding cells execute as written).
-			`^(\.claude/|\.mcp\.json$|CLAUDE\.md$|\.lets/)`,
+			`^(\.claude/|\.mcp\.json$|CLAUDE\.md$)`,
 		}},
 		{filepath.Join("commands", "check.md"), "check.md spec resolution", []string{
 			"**Task SPEC:**",
@@ -295,6 +299,56 @@ func TestReviewSpecProducersExist(t *testing.T) {
 				t.Errorf("%s: missing %q - the SPEC is pinned in the prompts but nothing produces it", c.what, n)
 			}
 		}
+	}
+}
+
+// bashFences returns the body of every ```bash-family fence in src.
+func bashFences(src string) []string {
+	var out []string
+	var cur strings.Builder
+	in := false
+	for _, line := range strings.Split(src, "\n") {
+		t := strings.TrimSpace(line)
+		if strings.HasPrefix(t, "```") {
+			if in {
+				out = append(out, cur.String())
+				cur.Reset()
+				in = false
+			} else if bashFenceOpen.MatchString(t) {
+				in = true
+			}
+			continue
+		}
+		if in {
+			cur.WriteString(line + "\n")
+		}
+	}
+	return out
+}
+
+// TestReviewSwitchIsOneShell pins the structural invariant that cost two rounds
+// of the same bug: recording the restore ref, stashing, checking out, and
+// unwinding on failure must live in ONE bash fence. Each Bash tool call is a
+// fresh shell (CLAUDE.md, "Surface forms"), so splitting them drops $F and $SH
+// and the restore silently loses the stash - twice shipped, twice caught by
+// hand. A test is cheaper than a third round.
+func TestReviewSwitchIsOneShell(t *testing.T) {
+	// The SWITCH block is the one that WRITES the state file (`mv -f "$tmp" "$F"`).
+	// Step 6.7's restore block also names .review-restore- but only reads it.
+	var found bool
+	for _, f := range bashFences(readPlugin(t, filepath.Join("commands", "review.md"))) {
+		if !strings.Contains(f, ".review-restore-") || !strings.Contains(f, `mv -f "$tmp"`) {
+			continue
+		}
+		found = true
+		for _, need := range []string{"git stash push", "gh pr checkout", `[ "$AFTER" != "$BEFORE" ]`, `rm -f "$F"`} {
+			if !strings.Contains(f, need) {
+				t.Errorf("review.md: the switch block writes the restore state but %q is in a DIFFERENT bash fence - a fresh shell loses $F/$SH and the stash is stranded", need)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("review.md: no bash fence writes the .review-restore- state file")
 	}
 }
 

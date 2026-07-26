@@ -180,9 +180,11 @@ If file not found, inform user and exit.
 
 **Refuse the switch when the PR edits an execution channel.** Checking out a PR puts its files on your disk for the whole fan-out - including files this project loads as instructions or runs as hooks.
 
+Both checks read the diff already fetched in Step 2 - do not re-download it:
+
 ```bash
-gh pr diff <PR> --name-only | grep -Eq '^(\.claude/|\.mcp\.json$|CLAUDE\.md$|\.lets/)' && echo "SENSITIVE"
-gh pr diff <PR> | grep -q '^new mode 120000' && echo "SYMLINK"
+gh pr diff <PR> --name-only | grep -Eq '^(\.claude/|\.mcp\.json$|CLAUDE\.md$)' && echo "SENSITIVE"
+grep -q '^new mode 120000' <<< "{the Step 2 diff}" && echo "SYMLINK"
 ```
 
 On `SENSITIVE` or `SYMLINK`: do NOT offer the switch. Set `pr_tree = false`, review from the diff, and say which file class triggered it. A PR that rewrites your rules, hooks, tracker bindings or `.mcp.json` is exactly the PR you must not materialize - `.claude/rules/tracker-*.md` binding cells execute as written.
@@ -205,20 +207,13 @@ AskUserQuestion(
 
 ### "Switch to PR branch"
 
-**Where you came from is in this conversation** - the block below prints it. The file is only the backup for a context compaction during a long fan-out (`--workflow` runs in the background). Keyed by session id, so parallel worktree sessions never share it; `.lets/` is one symlinked directory for all of them.
+**Ask about a dirty tree BEFORE the switch block** - the whole switch is ONE bash call, so record-ref / stash / checkout / unwind share a shell and nothing has to survive a fresh one:
 
 ```bash
-LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-mkdir -p "$LETS_PROJECT_ROOT/.lets/sessions"
-F="$LETS_PROJECT_ROOT/.lets/sessions/.review-restore-$CLAUDE_CODE_SESSION_ID"
-# Detached HEAD gives an empty branch name; rev-parse is checkout-able either way.
-REF=$(git branch --show-current); [ -n "$REF" ] || REF=$(git rev-parse HEAD)
-tmp=$(mktemp "$F.XXXX"); printf 'ref: %s\n' "$REF" > "$tmp" && mv -f "$tmp" "$F"
-echo "will restore to: $REF"
 git status --short
 ```
 
-If uncommitted changes exist, ask - declare the contract, do not improvise it:
+If that printed anything:
 
 ```
 AskUserQuestion(
@@ -235,22 +230,41 @@ AskUserQuestion(
 )
 ```
 
-On **Commit first**: `Skill(skill: "lets:commit")`, then continue. On **Review from diff**: fall through to the diff path. On **Stash**, record the entry's SHA - `refs/stash` is a stack shared by every worktree of the repo, so a blind `git stash pop` later can restore somebody else's work:
+On **Commit first**: `Skill(skill: "lets:commit")` first, then run the block below with `STASH=no`. On **Review from diff**: skip to the diff path. On **Stash** (or a clean tree): run the block below, `STASH=yes` only when the user picked Stash.
+
+Where you came from is also printed into this conversation - the file is just the backup for a compaction during a long fan-out (`--workflow` runs in the background). Keyed by session id, so the parallel worktree sessions sharing one symlinked `.lets/` never collide.
 
 ```bash
-git stash push -m "lets-review-pr-{number}" >/dev/null
-SH=$(git rev-parse -q --verify refs/stash)
-# Untracked-only dirt makes `git stash` a no-op that still exits 0 - only record a real entry.
-[ -n "$SH" ] && printf 'stash: %s\n' "$SH" >> "$F"
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+mkdir -p "$LETS_PROJECT_ROOT/.lets/sessions"
+F="$LETS_PROJECT_ROOT/.lets/sessions/.review-restore-$CLAUDE_CODE_SESSION_ID"
+STASH={yes when the user picked Stash, otherwise no}
+
+# Detached HEAD gives an empty branch name; rev-parse is checkout-able either way.
+REF=$(git branch --show-current); [ -n "$REF" ] || REF=$(git rev-parse HEAD)
+
+# Record OUR stash entry only. `git stash push` on an untracked-only tree prints
+# "No local changes to save" and exits 0, so refs/stash would still point at an
+# older entry - the user's, or a parallel worktree's (refs/stash is repo-global).
+BEFORE=$(git rev-parse -q --verify refs/stash)
+[ "$STASH" = yes ] && git stash push -m "lets-review-pr-{number}" >/dev/null
+AFTER=$(git rev-parse -q --verify refs/stash)
+SH=""; [ "$AFTER" != "$BEFORE" ] && SH="$AFTER"
+
+tmp=$(mktemp "$F.XXXX")
+{ printf 'ref: %s\n' "$REF"; [ -n "$SH" ] && printf 'stash: %s\n' "$SH"; } > "$tmp" && mv -f "$tmp" "$F"
+
+if gh pr checkout {number}; then
+  echo "SWITCHED - will restore to: $REF"
+else
+  # Unwind in the same shell: our sha is still in scope, so this pops OUR entry.
+  [ -n "$SH" ] && git stash pop "$(git stash list --format='%gd %H' | awk -v h="$SH" '$2==h{print $1;exit}')"
+  rm -f "$F"
+  echo "CHECKOUT FAILED - staying put, reviewing from the diff"
+fi
 ```
 
-```bash
-gh pr checkout <PR>
-```
-
-On failure: if we stashed, `git stash pop` immediately, delete the restore file, then fall back to the diff path and say why. Never leave the tree stashed; never abort the review outright.
-
-On success set `pr_tree = true`. The review is now identical to a local review - `PROJECT_ROOT` stays `{LETS_PROJECT_ROOT}`, `CODE:` carries the diff, agents may Read/Grep the working tree.
+On `SWITCHED` set `pr_tree = true` - the review is now identical to a local one: `PROJECT_ROOT` stays `{LETS_PROJECT_ROOT}`, `CODE:` carries the diff, agents may Read/Grep the working tree. On `CHECKOUT FAILED` the tree is already unwound; set `pr_tree = false`, say why, and continue with the diff path. Never abort the review outright.
 
 ### "Review from diff"
 
