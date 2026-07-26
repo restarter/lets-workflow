@@ -36,15 +36,13 @@ See **[agents.md](agents.md)** for the agent roster and how selection works.
 
 Both `/lets:check` and `/lets:review` pull the task's description and hand it to every reviewer. Without it a reviewer sees code that nothing calls yet and confidently reports it as dead — when the wiring may simply be the next PR. Work the spec describes is planned work, not scope creep. When no spec can be resolved the review still runs, says so in the report, and caps any "unused / dead / cut this" finding at `[SUGGESTION]` — never `[BLOCKER]`.
 
-Where the spec comes from depends on the target: local reviews use your branch's active task; on a PR, `/lets:review` looks up the task behind the PR's branch and falls back to the PR description, while `/lets:check` uses the PR description directly. `--file` reviews get no spec — an arbitrary file usually isn't the task you're working on. A `--file` review is therefore free to report dead code at full severity.
-
-The spec is fenced as reference data, and reviewers are instructed to treat anything inside it as content to report on, never as a command — it can't change a finding's severity or the verdict.
+Where the spec comes from depends on the target: local reviews use your branch's active task; on a PR it comes from the task behind the PR's branch, falling back to the PR description. `--file` reviews get no spec, so they stay free to report dead code at full severity.
 
 ### Reviewing a PR *(ships next release)*
 
 `/lets:review <PR>` asks once whether to switch your checkout to the PR's branch:
 
-- **Switch** — `gh pr checkout`, then the review is exactly like a local one: agents read the PR's real files, so cross-file checks and the adversarial verification pass judge the actual code. If your tree is dirty you're asked to stash or commit first. **Your branch is always restored when the review ends**, and a stash is popped only after that switch back succeeds. Project rules keep coming from your merge branch, so a PR that edits `CLAUDE.md` is reviewed as a diff rather than obeyed as instructions.
+- **Switch** — `gh pr checkout`, then the review is exactly like a local one: agents read the PR's real files, so cross-file checks and the adversarial verification pass judge the actual code. If your tree is dirty you're asked to stash or commit first. **Your branch is always restored when the review ends**, and a stash is popped only after that switch back succeeds.
 - **Review from diff** — nothing on disk changes. The reviewers work from the diff alone and are told plainly that the files on disk are the base branch, so they don't mistake old file contents for the PR's.
 
 It **never creates a worktree** — where you review is your call. Run it from your main checkout or from any worktree; the question is the same in both. `--json` never touches your working tree at all.

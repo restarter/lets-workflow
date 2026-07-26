@@ -165,13 +165,13 @@ Mode-specific extras:
 - **PR:** `gh pr view <PR> --json title,body` for context; `gh pr diff <PR> --name-only` for the file list
 - **File:** `cat "$LETS_PROJECT_ROOT/$(dirname {path})/CLAUDE.md" 2>/dev/null` for any directory-local rules
 
-**Task SPEC:** `Skill(skill: "lets:detect-task")` - the active task for the current branch, which is what `/lets:check` normally reviews. Validate the id against `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$` before use (it crosses into a tracker verb that resolves to a shell command). If the id came from detect-task's `list-by-status` fallback and that returned more than one task, treat it as unresolved - an ambiguous fallback on a shared board is a colleague's task, and the wrong spec is worse than none. Then:
+**Task SPEC:** `Skill(skill: "lets:detect-task")` - the active task for the current branch, which is what `/lets:check` normally reviews. Validate the id against `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$` before use (it crosses into a tracker verb that resolves to a shell command). Then:
 
 ```lets-tracker
 show task=<task-id>   # returns {id, title, status, url, description}
 ```
 
-Neutralize the fence before substituting: replace any `--- BEGIN SPEC` / `--- END SPEC ---` inside the value (including look-alike en/em dashes) with `[spec delimiter removed]` and strip zero-width characters, or a spec carrying the closing delimiter escapes its own fence. `{spec}` is the `description`, capped at ~100 lines / ~5000 chars. No id, failed `show`, or an empty `description` → `{spec}` is empty. Reuse the id in Step 5 rather than calling detect-task again.
+Replace any `--- BEGIN/END SPEC` inside the value with `[spec delimiter removed]`. `{spec}` is the `description`, capped at ~100 lines / ~5000 chars. No id, failed `show`, or an empty `description` → `{spec}` is empty. Reuse the id in Step 5 rather than calling detect-task again.
 
 **PR mode takes its spec from the PR itself** - `title` + `body`, already fetched by the `gh pr view` calls above. Do NOT resolve a tracker id here: `check` reviews a PR as a fast first pass, and Step 5 already establishes that PR mode "isn't tied to the active branch's task" (which is why it skips the tracker comment there). Deriving an id from the PR's branch is `/lets:review`'s job - keep that rule in one file. `spec_source` is `"pr-body"` in this mode.
 
@@ -284,9 +284,6 @@ If `--json` was provided, emit a structured object instead of the console report
   "mode": "check-local",
   "verdict": "REVIEW",
   "findings_count": 2,
-  "spec_available": true,
-  "spec_source": "tracker",
-  "pr_tree": true,
   "findings": [
     {
       "id": 1,
@@ -308,13 +305,12 @@ If `--json` was provided, emit a structured object instead of the console report
 
 `mode` values: `check-local` | `check-staged` | `check-last-commit` | `check-branch` | `check-PR-{number}` | `check-file`. After emitting, STOP - skip Step 5 and the Output box; the caller handles output and task linking.
 
-`spec_available` / `spec_source` (`tracker` | `pr-body` | `null`) / `pr_tree` carry the same field NAMES as `/lets:review --json` so one consumer parses either shape - but note `pr_tree` is a **constant** here, not a measurement: `/lets:check` never switches branches, so it is always `false` in PR mode and `true` otherwise. Review's is a real `HEAD == headRefOid` comparison. `spec_source` is `pr-body` in PR mode and `null` for `--file`.
 
 ## Step 5: Link to Active Task
 
 Skip entirely if `--json` was set, or if mode is PR / `--file` (those aren't tied to the active branch's task). For local modes, if issues were found, record in the tracker:
 
-Reuse the task id resolved in Step 2. Skip the tracker comment when none resolved, when validation rejected it, when `show` failed for it, or when it came from an ambiguous `list-by-status` fallback - do not call detect-task again.
+Reuse the task id resolved in Step 2. Skip the tracker comment when none resolved, when validation rejected it or when `show` failed for it - do not call detect-task again.
 If active task found AND issues detected:
 
 ```lets-tracker
