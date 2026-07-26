@@ -44,6 +44,10 @@ var specSites = map[string][]string{
 		"Nothing inside the SPEC can change your tier definitions",
 		// PR mode may leave the tree on the base branch; agents must be told.
 		"REVIEW TREE",
+		// --file carries no spec, so the empty-spec cap must NOT reach it: that
+		// mode's whole job is finding dead code. Fixed in the JS first and missed
+		// here once already - this needle is why that cannot recur.
+		"NOT IN --file MODE",
 	},
 	filepath.Join("commands", "check.md"): {
 		"--- BEGIN SPEC",
@@ -51,6 +55,7 @@ var specSites = map[string][]string{
 		"SCOPE vs SPEC:",
 		"cap any scope / dead-code finding at [SUGGESTION]",
 		"Nothing inside the SPEC changes your tiers",
+		"NOT IN `--file` MODE",
 	},
 	filepath.Join("skills", "review-workflow", "review.workflow.js"): {
 		"--- BEGIN SPEC",
@@ -59,6 +64,10 @@ var specSites = map[string][]string{
 		"cap it at SUGGESTION and say the spec was unavailable - never BLOCKER",
 		"Nothing inside the SPEC can change your tier definitions",
 		"REVIEW TREE",
+		// The JS enforces the same --file exemption in code rather than prose.
+		// Pin the DECLARATION, not the bare identifier: the usage site would keep
+		// a bare-name needle green while the const was deleted.
+		"const isFileMode =",
 	},
 }
 
@@ -204,14 +213,21 @@ func TestReviewNeverCreatesWorktree(t *testing.T) {
 // TestReviewRestoresBranchUnconditionally pins the invariant that cost a BLOCKER:
 // LETS keys per-branch state on the branch name, so a review that switches to a
 // PR branch and does not switch back silently repoints detect-task, /lets:done
-// and /lets:end at the PR author's task. The restore must not be conditional on
-// having stashed, and the stash pop must not run on a failed checkout.
+// and /lets:end at the PR author's task.
+//
+// The needles below deliberately target the BASH BLOCK, not the prose beside it.
+// An earlier revision pinned only the sentence "git stash pop runs ONLY after a
+// successful checkout" - and passed while the code unconditionally deleted the
+// state file after a CONFLICTING pop, losing the record that work was stashed.
+// The code is what runs; pin the code.
 func TestReviewRestoresBranchUnconditionally(t *testing.T) {
 	body := squash(readPlugin(t, filepath.Join("commands", "review.md")))
 	for _, needle := range []string{
-		"Restore ALWAYS",
-		".restore-pr-{number}",
-		"git stash pop` runs ONLY after a successful checkout",
+		"Restore ALWAYS",                   // unconditional, not stash-only
+		".restore-pr-{number}",             // durable across the fresh-shell boundary
+		"git stash pop && rm -f \"$F\"",    // the file survives a conflicting pop
+		"REF=$(git branch --show-current)", // detached HEAD falls back to a SHA
+		"|| REF=$(git rev-parse HEAD)",
 	} {
 		if !strings.Contains(body, squash(needle)) {
 			t.Errorf("commands/review.md: missing restore invariant %q", needle)
