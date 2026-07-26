@@ -147,7 +147,7 @@ This includes hook debug logs, temp files, and any runtime artifacts.
 .lets/.env               # Per-project settings (LETS_LANGUAGE, LETS_MERGE_BRANCH, LETS_PR_FLOW, LETS_TRACKER, LETS_LAUNCHER, LETS_RULES_SCOPE)
 .lets/.env.example       # Reference defaults — generated each `lets init` from canonical letsconfig.Keys defaults via renderEnvExample(). Not used by the hook; it's a user-facing template
 .lets/.env.bak           # Single backup written by `RegenerateEnv` before mutation. Plugin-owned: user-created files at this path are silently overwritten — copy elsewhere for permanent backup
-.lets/sessions/          # Session snapshots (file-primary ## RESUME via session-snapshot; -precompact- infix for pre-compact); .task-<slug> state file (task/start/session boundaries, validated cache - lets-dsdmp)
+.lets/sessions/          # Session snapshots (file-primary ## RESUME via session-snapshot; -precompact- infix for pre-compact); .task-<slug> state file (task/start/session boundaries, validated cache - lets-dsdmp); .review-restore-<session-id> (PR-mode branch/stash restore, session-keyed so parallel worktrees never share it; kept on a failed restore)
 .lets/reviews/           # Saved review reports
 .lets/plans/             # Implementation plans
 .lets/execution/         # Execution state (PR review: pr-{number}/, team records: team-*.json)

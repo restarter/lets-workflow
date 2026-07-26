@@ -264,13 +264,29 @@ func TestReviewSpecProducersExist(t *testing.T) {
 		{filepath.Join("commands", "review.md"), "review.md spec resolution", []string{
 			"### Resolve the task SPEC",
 			"show task=<task-id>",
-			"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$", // the only injection guard on a fork-authored branch name
-			"list-by-status",                    // the PR-mode refusal
+			"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",       // the only injection guard on a fork-authored branch name
+			"list-by-status",                          // the PR-mode refusal
+			"spec_trusted",                            // a PR-body spec must not reach the skeptics
+			".review-restore-$CLAUDE_CODE_SESSION_ID", // session-keyed: .lets/ is shared by every worktree
+			"git stash pop \"$IDX\"",                  // pop OUR entry, not stash@{0}
+			// The executable refusal, NOT the prose that mentions it: a PR editing an
+			// instruction/hook channel must not be materialized on the reviewer's disk
+			// (`.claude/rules/tracker-*.md` binding cells execute as written).
+			`^(\.claude/|\.mcp\.json$|CLAUDE\.md$|\.lets/)`,
 		}},
 		{filepath.Join("commands", "check.md"), "check.md spec resolution", []string{
 			"**Task SPEC:**",
 			"show task=<task-id>",
 			"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
+		}},
+		{filepath.Join("skills", "review-workflow", "review.workflow.js"), "js spec normalization", []string{
+			// Unanchored and dash-class: a line-anchored ASCII-only pattern is walked
+			// past by a zero-width prefix or by en/em dashes, and this project's
+			// no-hard-wrap rule makes an injected delimiter most likely mid-line.
+			"[-–—]{2,}",
+			"(BEGIN|END)\\s+SPEC",
+			"[... spec truncated ...]",
+			"specTrusted !== false",
 		}},
 	} {
 		body := readPlugin(t, c.file)
