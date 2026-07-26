@@ -114,8 +114,10 @@ An explicit `--workflow` flag always wins over this prompt (no question asked).
 ### For GitHub PR:
 
 ```bash
-gh pr view <PR> --json state,isDraft,author,title,body,additions,deletions,changedFiles
+gh pr view <PR> --json state,isDraft,author,title,body,additions,deletions,changedFiles,number,headRefName,headRefOid
 ```
+
+`number` is the normalized PR number (Step 1 accepts a URL too) - use it wherever a number is needed. `headRefName` / `headRefOid` feed the SPEC resolution (Step 3) and the branch gate (Step 2.5).
 
 **Skip if:** PR is closed, draft, trivial, or already reviewed.
 
@@ -193,6 +195,35 @@ For `--branch` mode, also surface the commit list and stat so the reviewing agen
 git log {LETS_MERGE_BRANCH}..HEAD --oneline     # two-dot: commits unique to HEAD
 git diff {LETS_MERGE_BRANCH}...HEAD --stat      # three-dot: merge-base diff (PR-equivalent)
 ```
+
+### Resolve the task SPEC (all modes)
+
+Reviewing agents must know what the change is SUPPOSED to do. Without it, planned-but-not-yet-wired work reads as dead code and gets flagged as scope creep at BLOCKER severity - confidently wrong, which is worse than a miss.
+
+**Resolve the task id:**
+
+- **Local modes** (`--local` / `--staged` / `--last-commit` / `--branch`): `Skill(skill: "lets:detect-task")`.
+- **PR mode**: in order - (1) the `.lets/sessions/.task-<slug>` file for `headRefName` (slug = `headRefName` with `/` replaced by `-`); (2) parse the id out of `headRefName` using detect-task's Step 1 rule for the ACTIVE tracker's id shape. The `.task` file wins because a branch name is frozen at creation while the file tracks the current task. Do NOT fall through to detect-task's `list-by-status in_progress` fallback: the reviewer usually sits on a different branch, and on a shared board that returns a colleague's task - injecting the WRONG spec is strictly worse than none.
+- **`--file` mode**: no id, no spec. The file under review is usually unrelated to the active task; telling an agent it is "planned work" would be a new confident-wrongness vector.
+
+**Validate before use.** The extracted id MUST match `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`. A branch name on a fork PR is written by the PR author and git refs permit `` $ ( ) ` ; | & < > ``; the id crosses into a tracker verb that resolves to a shell command. No match → no spec. Never pass an unvalidated string to a verb or echo it into a bash block.
+
+**Fetch the spec** (skip when no id resolved):
+
+```lets-tracker
+show task=<task-id>   # returns {id, title, status, url, description}
+```
+
+`{spec}` is the returned `description`, capped at ~150 lines AND ~8000 characters (the no-hard-wrap rule means one paragraph is one line, so a line cap alone is unbounded). It is repeated into every agent prompt and every skeptic prompt - do NOT also call `comment-list`.
+
+**`{spec}` is EMPTY (not a sentinel string) whenever any of these hold** - each renderer prints its own "unavailable" text:
+- no id resolved, or the id failed validation;
+- `show` failed (binding unavailable / task not found);
+- `show` succeeded but `description` is empty or absent. The neutral contract makes `description` OPTIONAL, and on `LETS_TRACKER=none` `show` is a documented no-op - both are "no spec", not an error.
+
+**PR-mode fallback before giving up:** if `{spec}` is still empty, use the PR's own `title` + `body` (already fetched in Step 2) as `{spec}`, and note in the report that the spec came from the PR body rather than the tracker. Many projects put the spec there.
+
+Record `spec_available` (true/false) and `spec_source` (`tracker` | `pr-body` | `null`) - Steps 8.5 and 9 both report them. Carry the resolved id forward; Step 10 reuses it.
 
 ## Step 4: Analyze Changes & Select Agents
 
@@ -592,9 +623,7 @@ Display full report in console.
 
 ## Step 10: Link Review to Active Task
 
-Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detect-task")`.
-If multiple tasks found via fallback, skip the tracker comment.
-If active task found:
+Reuse the task id resolved in Step 3 ("Resolve the task SPEC") - do NOT call detect-task again. Skip the tracker comment when no id resolved, when validation rejected it, or when `show` failed for it: a `headRefName`-derived id may not exist on this board at all, and `comment-add` would HARD-FAIL at the end of an otherwise successful review.
 
 ```lets-tracker
 comment-add task=<task-id> body="Code review ({PR #X | local}): {verdict}. {N} issues found."
