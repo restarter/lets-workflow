@@ -165,7 +165,7 @@ Mode-specific extras:
 - **PR:** `gh pr view <PR> --json title,body` for context; `gh pr diff <PR> --name-only` for the file list
 - **File:** `cat "$LETS_PROJECT_ROOT/$(dirname {path})/CLAUDE.md" 2>/dev/null` for any directory-local rules
 
-**Task SPEC:** `Skill(skill: "lets:detect-task")` - the active task for the current branch, which is what `/lets:check` normally reviews. Validate the id against `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$` before use (it crosses into a tracker verb that resolves to a shell command), then:
+**Task SPEC:** `Skill(skill: "lets:detect-task")` - the active task for the current branch, which is what `/lets:check` normally reviews. Validate the id against `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$` before use (it crosses into a tracker verb that resolves to a shell command). If the id came from detect-task's `list-by-status` fallback and that returned more than one task, treat it as unresolved - an ambiguous fallback on a shared board is a colleague's task, and the wrong spec is worse than none. Then:
 
 ```lets-tracker
 show task=<task-id>   # returns {id, title, status, url, description}
@@ -306,13 +306,13 @@ If `--json` was provided, emit a structured object instead of the console report
 
 `mode` values: `check-local` | `check-staged` | `check-last-commit` | `check-branch` | `check-PR-{number}` | `check-file`. After emitting, STOP - skip Step 5 and the Output box; the caller handles output and task linking.
 
-`spec_available` / `spec_source` (`tracker` | `pr-body` | `null`) / `pr_tree` mirror `/lets:review --json` so one consumer parses either. `spec_source` is `pr-body` in PR mode and `null` for `--file`; `pr_tree` is always `false` in PR mode (check never switches branches) and `true` otherwise.
+`spec_available` / `spec_source` (`tracker` | `pr-body` | `null`) / `pr_tree` carry the same field NAMES as `/lets:review --json` so one consumer parses either shape - but note `pr_tree` is a **constant** here, not a measurement: `/lets:check` never switches branches, so it is always `false` in PR mode and `true` otherwise. Review's is a real `HEAD == headRefOid` comparison. `spec_source` is `pr-body` in PR mode and `null` for `--file`.
 
 ## Step 5: Link to Active Task
 
 Skip entirely if `--json` was set, or if mode is PR / `--file` (those aren't tied to the active branch's task). For local modes, if issues were found, record in the tracker:
 
-Reuse the task id resolved in Step 2. Skip the tracker comment when none resolved, when validation rejected it, or when `show` failed for it - do not call detect-task again.
+Reuse the task id resolved in Step 2. Skip the tracker comment when none resolved, when validation rejected it, when `show` failed for it, or when it came from an ambiguous `list-by-status` fallback - do not call detect-task again.
 If active task found AND issues detected:
 
 ```lets-tracker

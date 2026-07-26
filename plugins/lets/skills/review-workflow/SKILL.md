@@ -35,8 +35,8 @@ A multi-stage chain so per-agent reports never enter the conversation - only the
 | `code` | string | the diff (or full file content for `--file`) |
 | `smallDiff` | bool | `true` keeps NIT findings (diff < 50 lines) |
 | `systemicCheck` | bool | `false` for `--file` (no diff baseline) |
-| `spec` | string | task description from the tracker's `show` (or the PR body); **empty when unavailable** - never a sentinel string. Drives `specBlock` in the review prompt and the narrower `specBlockSkeptic` in the verify prompt. Treated as UNTRUSTED data (fenced, authority-bounded) and normalized + length-capped in the script, since the markdown cap is prose only |
-| `prTree` | bool | does the working tree hold the reviewed code? `true` for all non-PR modes and for PR mode after a checkout; `false` adds a REVIEW TREE warning to both prompts |
+| `spec` | string | task description from the tracker's `show` (or the PR body); **empty when unavailable** - never a sentinel string. Drives `specBlock` in the review prompt and the narrower `specBlockSkeptic` in the verify prompt. Treated as UNTRUSTED data (fenced, authority-bounded) and normalized in the script - the markdown cap is prose only, so the script re-does it: non-string → empty, whitespace-only → empty, a leading `UNAVAILABLE` → empty (belt-and-braces against a sentinel leaking through), 150 lines / 8000 chars with an explicit `[... spec truncated ...]` marker, and any `--- BEGIN/END SPEC` line inside the value is neutralized so the value cannot escape its own fence |
+| `prTree` | bool | does the working tree hold the reviewed code? `true` for all non-PR modes and for PR mode after a checkout; `false` adds a REVIEW TREE warning to both prompts. **Omitted on a `PR-*` mode is treated as `false`** - failing toward "the tree may be wrong" rather than silently trusting it |
 
 ## Returns
 
