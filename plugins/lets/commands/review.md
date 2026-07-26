@@ -613,6 +613,9 @@ Write to `.lets/reviews/{date}-{mode}.json`:
   "findings_count": 5,
   "refuted_count": 2,
   "verify_failed": 0,
+  "spec_available": true,
+  "spec_source": "tracker",
+  "pr_tree": true,
   "findings": [
     {
       "id": 1,
@@ -644,6 +647,8 @@ Write to `.lets/reviews/{date}-{mode}.json`:
 `mode` values: `PR-{number}` | `local-review` | `branch-review` | (plan modes are handled by the Plan Review section, not this path).
 
 `refuted_count` is additive (consumers that don't know it ignore it, e.g. `/lets:github-pr` reads only `findings` + `verdict`): the number of findings the Step 6.6 verify pass dropped or downgraded. Omit or `0` when no verification ran.
+
+`spec_available` / `spec_source` (`tracker` | `pr-body` | `null`) / `pr_tree` are additive in exactly the same way. They matter because **Step 8.5 skips Steps 9-10** - without them, the "reviewed without a task spec" and "reviewed from the diff" caveats never reach ANY `--json` consumer, so a degraded review would be indistinguishable from a clean one. `pr_tree` is `true` for every non-PR mode and for PR mode after a checkout; `false` when PR mode reviewed from the diff.
 
 After saving, inform user: "Review saved to: {path}"
 Then STOP - skip Step 9 (Output) and Step 10 (Link to task).

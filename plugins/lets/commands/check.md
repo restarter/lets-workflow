@@ -282,6 +282,9 @@ If `--json` was provided, emit a structured object instead of the console report
   "mode": "check-local",
   "verdict": "REVIEW",
   "findings_count": 2,
+  "spec_available": true,
+  "spec_source": "tracker",
+  "pr_tree": true,
   "findings": [
     {
       "id": 1,
@@ -302,6 +305,8 @@ If `--json` was provided, emit a structured object instead of the console report
 ```
 
 `mode` values: `check-local` | `check-staged` | `check-last-commit` | `check-branch` | `check-PR-{number}` | `check-file`. After emitting, STOP - skip Step 5 and the Output box; the caller handles output and task linking.
+
+`spec_available` / `spec_source` (`tracker` | `pr-body` | `null`) / `pr_tree` mirror `/lets:review --json` so one consumer parses either. `spec_source` is `pr-body` in PR mode and `null` for `--file`; `pr_tree` is always `false` in PR mode (check never switches branches) and `true` otherwise.
 
 ## Step 5: Link to Active Task
 

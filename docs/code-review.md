@@ -28,6 +28,21 @@ Findings come back tiered:
 
 Agents are tuned to skip the obvious and focus on what matters — the goal is signal, not a wall of nitpicks.
 
+### The reviewers know what you were building
+
+Both `/lets:check` and `/lets:review` pull the active task's description from your tracker and hand it to every reviewer. Without it a reviewer sees code that nothing calls yet and confidently reports it as dead — the wiring may simply be the next PR. Work the spec describes is planned work, not scope creep. When no spec can be resolved the review still runs, says so in the report, and caps any "unused / dead / cut this" finding at `[SUGGESTION]` — never `[BLOCKER]`.
+
+The spec is treated as reference data, not as instructions: nothing written in a task description can change a finding's severity, the verdict, or what else gets reported.
+
+### Reviewing a PR
+
+`/lets:review <PR>` asks once whether to switch your checkout to the PR's branch:
+
+- **Switch** — `gh pr checkout`, then the review is exactly like a local one: agents read the PR's real files, so cross-file checks and the adversarial verification pass judge the actual code. Uncommitted work is stashed on request and restored afterwards.
+- **Review from diff** — nothing on disk changes. The reviewers work from the diff alone and are told plainly that the files on disk are the base branch, so they don't mistake old file contents for the PR's.
+
+It **never creates a worktree** — where you review is your call. Run it from your main checkout or from any worktree; the question is the same in both. `--json` never touches your working tree at all.
+
 For plan reviews (`/lets:review --plan`), agents are selected from signals in the plan content (mentions of migrations, API endpoints, Docker configs, …).
 
 See **[agents.md](agents.md)** for the agent roster and how selection works.
