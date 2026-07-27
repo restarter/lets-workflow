@@ -2,6 +2,7 @@ package initcmd
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -124,18 +125,227 @@ func TestWorkflowPromptsAreWired(t *testing.T) {
 	if destructure == "" {
 		t.Fatal("review.workflow.js: no `const { ... } = input` destructure found")
 	}
-	reviewMd := readPlugin(t, filepath.Join("commands", "review.md"))
+	// Both lookups are SCOPED, and the SKILL.md one matches the table ROW. A whole-file search for
+	// `spec` went green after the `spec` row was deleted, because the word also appears in the
+	// `specTrusted` row's prose - the exact trap this file's header says was designed out. Two of
+	// the three keys were unique only by luck.
+	w2 := region(t, readPlugin(t, filepath.Join("commands", "review.md")), "review.md W2 args",
+		"### W2: Build args", "### W3:")
 	skillMd := readPlugin(t, filepath.Join("skills", "review-workflow", "SKILL.md"))
 	for _, k := range []string{"spec", "prTree", "specTrusted"} {
 		if !regexp.MustCompile(`\b` + k + `\b`).MatchString(destructure) {
 			t.Errorf("review.workflow.js: %q is not destructured from input", k)
 		}
-		if !strings.Contains(reviewMd, k+":") {
-			t.Errorf("commands/review.md: W2 args block does not pass %q", k)
+		if !strings.Contains(w2, k+":") {
+			t.Errorf("commands/review.md: the W2 args block does not pass %q", k)
 		}
-		if !strings.Contains(skillMd, "`"+k+"`") {
-			t.Errorf("skills/review-workflow/SKILL.md: args table does not document %q", k)
+		if !strings.Contains(skillMd, "| `"+k+"` |") {
+			t.Errorf("skills/review-workflow/SKILL.md: the args table has no row for %q", k)
 		}
+	}
+}
+
+// TestReviewSpecBlockExists pins the branch's headline artifact in all THREE reviewer copies.
+// Mutation-proved gap: deleting the BEGIN SPEC fence from review.md's Step 5, deleting the whole
+// SCOPE vs SPEC paragraph, or setting `const specBlock = ”` each left the previous suite 4/4
+// green - and check.md was read by no test at all, despite being one of the four copies.
+func TestReviewSpecBlockExists(t *testing.T) {
+	for _, c := range []struct{ file, what, start, end, payload string }{
+		{filepath.Join("commands", "review.md"), "review.md Step 5 reviewer template",
+			"### Task Prompt Template", "## Workflow Mode", "{spec}"},
+		{filepath.Join("commands", "check.md"), "check.md Spec Alignment",
+			"### Spec Alignment", "### Review Focus", "{spec}"},
+		{filepath.Join("skills", "review-workflow", "review.workflow.js"), "js specBlock",
+			"const specBlock = SPEC", "// The skeptic returns", "${SPEC}"},
+	} {
+		body := squash(region(t, readPlugin(t, c.file), c.what, c.start, c.end))
+		for _, need := range []string{"BEGIN SPEC", "END SPEC", "SCOPE vs SPEC", c.payload} {
+			if !strings.Contains(body, need) {
+				t.Errorf("%s: lost %q - reviewers would run blind, which is the defect this branch fixes", c.what, need)
+			}
+		}
+	}
+	// The skeptic copies carry the payload too: TestSkepticSpecBlockIsNarrower pins their WORDING,
+	// which stayed green in mutation while the {spec}/${SPEC} slot itself was deleted - leaving a
+	// prompt that says "Use the SPEC ONLY when..." with no SPEC in it.
+	for _, c := range []struct{ file, what, start, end, payload string }{
+		{filepath.Join("commands", "review.md"), "review.md skeptic template",
+			"**Skeptic prompt template.**", "**Asymmetric drop rule", "{spec}"},
+		{filepath.Join("skills", "review-workflow", "review.workflow.js"), "js specBlockSkeptic",
+			"const specBlockSkeptic =", "const treeBlock =", "${SPEC}"},
+	} {
+		if body := region(t, readPlugin(t, c.file), c.what, c.start, c.end); !strings.Contains(body, c.payload) {
+			t.Errorf("%s: carries the SPEC instructions but not the %s slot they refer to", c.what, c.payload)
+		}
+	}
+}
+
+// TestReviewRestoreFenceIsPinned covers the half of the PR gate that gives the user their branch
+// back. Its sibling (the half that TAKES the branch) has been pinned since the one-shell bug;
+// this one was pinned by nothing, so deleting the whole step, gutting the ref, or replacing the
+// by-sha pop with a bare `git stash pop` all passed. The bare form is the dangerous one:
+// refs/stash is repo-global, so stash@{0} can be a parallel worktree's entry.
+func TestReviewRestoreFenceIsPinned(t *testing.T) {
+	var found bool
+	for _, f := range bashFences(readPlugin(t, filepath.Join("commands", "review.md"))) {
+		// Three fences touch `.review-restore-`: the SWITCH writes it (`mv -f "$tmp"`), the
+		// stray-scan globs it, and this one loads it into $BR to act on. Select on the assignment.
+		if !strings.Contains(f, `BR=$(sed`) {
+			continue
+		}
+		found = true
+		for _, need := range []string{`git checkout "$BR"`, `git stash pop "$IDX"`} {
+			if !strings.Contains(f, need) {
+				t.Errorf("review.md restore fence: lost %q", need)
+			}
+		}
+		if regexp.MustCompile(`git stash pop\s*(\n|$|;|&&)`).MatchString(f) {
+			t.Error("review.md restore fence: bare `git stash pop` - refs/stash is repo-global, so stash@{0} may belong to a parallel worktree")
+		}
+	}
+	if !found {
+		t.Fatal("review.md: no bash fence READS the .review-restore- state file - Step 6.7 gone?")
+	}
+}
+
+// switchFence returns the Step 2.5 switch block with its two orchestrator placeholders resolved,
+// ready to execute.
+func switchFence(t *testing.T, stash string) string {
+	t.Helper()
+	for _, f := range bashFences(readPlugin(t, filepath.Join("commands", "review.md"))) {
+		if !strings.Contains(f, ".review-restore-") || !strings.Contains(f, `mv -f "$tmp"`) {
+			continue
+		}
+		f = regexp.MustCompile(`(?m)^STASH=\{[^}]*\}$`).ReplaceAllString(f, "STASH="+stash)
+		return strings.ReplaceAll(f, "{number}", "42")
+	}
+	t.Fatal("review.md: switch fence not found")
+	return ""
+}
+
+// TestReviewSwitchFenceWritesRestoreState EXECUTES the switch block instead of grepping it.
+//
+// Every other guard here is text co-location, and text co-location is exactly what missed the bug
+// that shipped: a `{...}` group whose last command was conditional exits 1 whenever nothing was
+// stashed, so `&& mv` never ran and the restore record existed ONLY in the stash path - on a clean
+// tree the review ended with HEAD left on the PR branch. TestReviewSwitchIsOneShell passed
+// throughout. Running the block in three tree states catches that class; reading it did not.
+func TestReviewSwitchFenceWritesRestoreState(t *testing.T) {
+	for _, bin := range []string{"git", "sh"} {
+		if _, err := exec.LookPath(bin); err != nil {
+			t.Skipf("%s not available", bin)
+		}
+	}
+	for _, c := range []struct{ name, stash, dirty string }{
+		{"clean-tree", "no", ""},               // the DEFAULT path, and the one that was broken
+		{"stashed", "yes", "tracked"},          //
+		{"untracked-only", "yes", "untracked"}, // `git stash push` saves nothing yet exits 0
+		{"commit-first", "no", ""},             // user picked "Commit first" -> STASH=no
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			repo := t.TempDir()
+			stub := filepath.Join(repo, "stub")
+			mustRun := func(dir string, args ...string) {
+				t.Helper()
+				cmd := exec.Command(args[0], args[1:]...)
+				cmd.Dir = dir
+				cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
+				if out, err := cmd.CombinedOutput(); err != nil {
+					t.Fatalf("%v: %v\n%s", args, err, out)
+				}
+			}
+			mustRun(repo, "git", "init", "-q", "-b", "main", ".")
+			mustRun(repo, "git", "config", "user.email", "t@example.com")
+			mustRun(repo, "git", "config", "user.name", "t")
+			if err := os.WriteFile(filepath.Join(repo, "a.txt"), []byte("base\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			mustRun(repo, "git", "add", "-A")
+			mustRun(repo, "git", "commit", "-qm", "base")
+			mustRun(repo, "git", "checkout", "-q", "-b", "prbranch")
+			if err := os.WriteFile(filepath.Join(repo, "b.txt"), []byte("pr\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			mustRun(repo, "git", "add", "-A")
+			mustRun(repo, "git", "commit", "-qm", "pr")
+			mustRun(repo, "git", "checkout", "-q", "main")
+			if err := os.MkdirAll(filepath.Join(repo, ".lets", "sessions"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			switch c.dirty {
+			case "tracked":
+				if err := os.WriteFile(filepath.Join(repo, "a.txt"), []byte("base\nmine\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			case "untracked":
+				if err := os.WriteFile(filepath.Join(repo, "u.txt"), []byte("mine\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			// Stub `gh`: a successful `pr checkout --detach`, nothing else.
+			if err := os.MkdirAll(stub, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(stub, "gh"),
+				[]byte("#!/bin/sh\ngit checkout --detach -q prbranch\n"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+
+			// `sh -c` is the point: the artifact under test IS a shell block, extracted from
+			// committed markdown in this repo. No external input reaches it.
+			cmd := exec.Command("sh", "-c", switchFence(t, c.stash))
+			cmd.Dir = repo
+			cmd.Env = append(os.Environ(),
+				"PATH="+stub+string(os.PathListSeparator)+os.Getenv("PATH"),
+				"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null",
+				"CLAUDE_CODE_SESSION_ID=testsession")
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("switch fence exited %v\n%s", err, out)
+			}
+			if !strings.Contains(string(out), "SWITCHED") {
+				t.Fatalf("expected SWITCHED, got:\n%s", out)
+			}
+
+			state := filepath.Join(repo, ".lets", "sessions", ".review-restore-testsession")
+			body, err := os.ReadFile(state)
+			if err != nil {
+				t.Fatalf("restore record missing - Step 6.7 would print \"nothing to restore\" and leave the user on the PR branch: %v\n%s", err, out)
+			}
+			for _, need := range []string{"ref: main", "pr: 42"} {
+				if !strings.Contains(string(body), need) {
+					t.Errorf("restore record lacks %q; got:\n%s", need, body)
+				}
+			}
+			leftovers, _ := filepath.Glob(state + ".*")
+			if len(leftovers) > 0 {
+				t.Errorf("mktemp leftovers in .lets/sessions: %v", leftovers)
+			}
+		})
+	}
+}
+
+// TestReviewWorkflowScriptParses runs the syntax check SKILL.md documents. A bare `node --check`
+// on this file is a NO-OP - line 2 is `export`, which flips node to ESM detection and exits 0 even
+// on an unterminated template literal, i.e. precisely the failure mode of its long backticked
+// prompt strings. Nothing else in the repo runs node, so a syntax error here would surface only as
+// every `--workflow` review dying at runtime.
+func TestReviewWorkflowScriptParses(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node not available")
+	}
+	src := readPlugin(t, filepath.Join("skills", "review-workflow", "review.workflow.js"))
+	wrapped := "async function __w(){\n" +
+		strings.ReplaceAll("\n"+src, "\nexport ", "\n") + "\n}\n"
+	path := filepath.Join(t.TempDir(), "wrapped.js")
+	if err := os.WriteFile(path, []byte(wrapped), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(node, "--check", path)
+	cmd.Env = append(os.Environ(), "NODE_OPTIONS=") // an inherited --require preload breaks --check
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Errorf("review.workflow.js does not parse: %v\n%s", err, out)
 	}
 }
 
