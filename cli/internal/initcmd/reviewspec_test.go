@@ -54,11 +54,12 @@ func region(t *testing.T, src, what, start, end string) string {
 }
 
 // TestSkepticSpecBlockIsNarrower is the one that earns its keep. A skeptic
-// returns {real, confidence, reason} and cannot set a tier, so a reviewer-style
-// "cap it at SUGGESTION" would be executed with its only lever - real=false -
-// which the drop rule turns into a silent DELETE of the finding. Both the
-// markdown and the JS skeptic prompt must carry the narrow wording and must NOT
-// carry the reviewer's cap.
+// returns {real, confidence, reason} and cannot set a tier, so its only lever is
+// `real`. Any reviewer instruction shaped "do not report this" therefore comes
+// out as real=false, which the drop rule turns into a silent DELETE of the
+// finding - not a softened one. Both the markdown and the JS skeptic prompt must
+// carry the narrow wording and must NOT carry the reviewer's suppression
+// instruction.
 func TestSkepticSpecBlockIsNarrower(t *testing.T) {
 	for _, c := range []struct{ file, what, start, end, trustGuard string }{
 		// Start INSIDE the fence, not at the "**Skeptic prompt template.**" heading. The prose above
@@ -83,7 +84,7 @@ func TestSkepticSpecBlockIsNarrower(t *testing.T) {
 		// cap was removed, so banning it would be a vacuous assertion that passes by absence.
 		for _, banned := range []string{"do NOT report it as creep", "SCOPE vs SPEC"} {
 			if strings.Contains(body, banned) {
-				t.Errorf("%s: carries the REVIEWER's %q - a skeptic executes a tier cap as real=false, i.e. a drop", c.what, banned)
+				t.Errorf("%s: carries the REVIEWER's %q - a skeptic can only express it as real=false, i.e. a drop", c.what, banned)
 			}
 		}
 	}
@@ -170,6 +171,17 @@ func TestReviewSpecBlockExists(t *testing.T) {
 				t.Errorf("%s: lost %q - reviewers would run blind, which is the defect this branch fixes", c.what, need)
 			}
 		}
+	}
+
+	// Step 3 says --file resolves a spec like any other mode; 4.2.1 used to say "Skip the SPEC
+	// section entirely" for that same mode. Both sentences lived in this file at once, and the
+	// second silently won: the standard path stripped the block while the --workflow script (which
+	// has no file-mode branch) rendered it, so the two execution paths disagreed on --file. A
+	// contradiction inside one file is invisible to every other guard here, all of which read one
+	// region at a time. 4.2.1 is about AGENT SELECTION - the SPEC has no business being named in it.
+	if fileMode := region(t, readPlugin(t, filepath.Join("commands", "review.md")),
+		"review.md 4.2.1", "### 4.2.1 File Mode Adjustments", "### 4.3"); strings.Contains(fileMode, "Skip the SPEC") {
+		t.Error("commands/review.md 4.2.1: re-introduces a file-mode SPEC skip, contradicting Step 3 and the --workflow script")
 	}
 	// The skeptic copies carry the payload too: TestSkepticSpecBlockIsNarrower pins their WORDING,
 	// which stayed green in mutation while the {spec}/${SPEC} slot itself was deleted - leaving a

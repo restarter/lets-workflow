@@ -455,9 +455,10 @@ When reviewing a single file (`--file` mode), adjust agent selection:
 
 - **Skip git-historian** - no diff context, git blame adds noise for full-file review
 - **Skip systemic pattern check instruction** - not comparing against a diff baseline, remove SYSTEMIC PATTERN CHECK from agent prompts
-- **Skip the SPEC section entirely** - `--file` resolves no spec (Step 3), and rendering the empty-SPEC branch would cap dead-code findings at `[SUGGESTION]` in the one mode whose job is finding them. Remove the whole `--- BEGIN SPEC` … `SCOPE vs SPEC` block from agent prompts, do not render it empty
 - **Adjust pragmatist threshold** - include for files >100 lines (not ">200 lines changed")
 - **Display header** - show `Reviewing: {filename} ({N} lines)` instead of `Changes detected:`
+
+**The SPEC is NOT adjusted here.** `--file` resolves and renders it exactly like the local modes (Step 3). An earlier revision stripped the whole SPEC block in this mode, which quietly made `--file` the one target that could never be checked against acceptance criteria - the very thing a file review is best at ("a CSV of every US state, skip none"). The `--workflow` script has no file-mode branch either, so re-adding one here would also split the two execution paths.
 
 ### 4.3 Select Agents
 

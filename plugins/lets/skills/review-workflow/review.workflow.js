@@ -11,10 +11,11 @@ const { agents, mode, projectRoot, claudeMd, changedFiles, code, smallDiff, syst
 
 // Normalize `spec` here, not just in the command's prose: a non-string (the whole `show` object)
 // would interpolate as "[object Object]", and a whitespace-only string is TRUTHY - it would emit an
-// empty SPEC block instead of the explicit "none reached this review" one, which reads as a spec that says nothing rather than an absent spec. The
-// cap matters because the spec is repeated across agents.length review prompts PLUS 2-3 skeptic
-// prompts per verified finding (~35 copies on a typical run); a char cap is needed alongside the
-// line cap because the project's no-hard-wrap rule makes one paragraph exactly one line.
+// empty SPEC block instead of the explicit "none reached this review" one - a spec that says
+// nothing reads very differently from an absent spec.
+// The LENGTH cap below matters because the spec is repeated across agents.length review prompts
+// PLUS 2-3 skeptic prompts per verified finding (~35 copies on a typical run); a char cap is needed
+// alongside the line cap because the project's no-hard-wrap rule makes one paragraph exactly one line.
 const specText = (typeof spec === 'string' ? spec : '').trim()
 const specLines = specText.split('\n')
 const specClipped = specLines.slice(0, 150).join('\n').slice(0, 8000)
@@ -129,9 +130,9 @@ const specBlock = SPEC
 // ANY reviewer instruction of the form "do not report this" is executed as real=false, which
 // decide() maps to a DROP for a SUGGESTION. The reviewer's "if the SPEC covers it, do NOT report it
 // as creep" is exactly that shape, so it must not appear here - the skeptic is told the narrower
-// thing instead: a spec-covered scope finding is not real. It also must not read "the SPEC covers this file" as grounds to refute a
-// real bug: "out of scope for this diff" is already a listed refute ground below. KEEP IN SYNC with
-// review.md Step 6.6's skeptic prompt template.
+// thing instead: a spec-covered scope finding is not real. It also must not read "the SPEC covers
+// this file" as grounds to refute a real bug: "out of scope for this diff" is already a listed
+// refute ground below. KEEP IN SYNC with review.md Step 6.6's skeptic prompt template.
 // specTrusted === false means the spec IS the PR body - written by the author of the code under
 // review. Reviewers still get it for scope; the skeptic must not, because its real=false is
 // consumed deterministically by decide() and would delete a finding with no human in the loop.
