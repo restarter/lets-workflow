@@ -58,18 +58,22 @@ Each spawned session writes a per-task marker at `.lets/cache/pipeline-state-<id
 
 The pipeline degrades cleanly rather than failing:
 
+Gate notifications route through `lets notify`, which dispatches on `LETS_LAUNCHER` — so the degradation depends on the active launcher:
+
 | Condition | Behavior |
 |-----------|----------|
-| Not macOS / no cmux | `lets cmux notify` is a no-op (`ok=true`); the run continues without notifications |
+| `LETS_LAUNCHER=terminal` (default) | `lets notify` is a no-op (`ok=true`, `reason=launcher_terminal`); the run continues without notifications |
+| `LETS_LAUNCHER=cmux`, not macOS / no cmux | no-op (`ok=true`); the run continues |
+| `LETS_LAUNCHER=tmux`, nobody attached | `reason=no_client` — the run continues and the gate still halts in-band; the operator sees the notification the moment they attach to the tmux session (cmux's sidebar persists; tmux's status line needs an attached client, so this is the launcher's one real limitation vs cmux) |
 | `plan-workflow` unavailable | falls back to interactive `--flow plan` |
 | Interactive session (no spawn) | no marker is written → no notification noise |
-| Windows | `lets cmux notify` returns a parseable `not_macos` envelope (exit 0) |
+| Windows | `lets notify` returns a parseable `not_supported` envelope (exit 0) |
 
 ### Prerequisites
 
-- `lets cmux notify` needs the Go binary built (`make install`).
+- `lets notify` needs the Go binary built (`make install`).
 - `--flow` / `execute --auto` need the released plugin (or `make dev` / `--plugin-dir`).
-- cmux is macOS-only.
+- A notification channel needs `LETS_LAUNCHER=cmux` (macOS) or `LETS_LAUNCHER=tmux` (Linux/macOS, with a client attached); `terminal` surfaces gates in-band only.
 - `plan-workflow` needs Claude Code ≥ 2.1.154 on a paid plan.
 
 > `/lets:plan-workflow` is a PREVIEW — dogfooded across projects before it folds into native `/lets:plan`.

@@ -13,7 +13,7 @@ Thin dispatcher for interactive parallel worktrees. All filesystem/git work live
 ## Step 1: Determine Subcommand
 
 **If argument provided** (e.g., `/lets:worktree create auth-feature`), parse it:
-- `create <name>` -> go to Create. **First strip any `--cmux` / `--no-cmux` / `--auto` / `--flow <value>` / `--branch <ref>` token** out of the argument and carry them as overrides (`--cmux`/`--no-cmux` = launcher; `--auto` = autonomous permission mode; `--flow plan|plan-workflow` = which command the launch lands in — all for Step C3.5; `--branch <ref>` decouples the attached/created branch from the dir name — Step C2). Bind the remainder as `<name>` (so `create auth --flow plan-workflow --auto` => name `auth`, not the flags; `create pwa-46696 --branch feature/pwa-46696` => name `pwa-46696`, branch `feature/pwa-46696`).
+- `create <name>` -> go to Create. **First strip any `--cmux` / `--no-cmux` / `--tmux` / `--no-tmux` / `--auto` / `--flow <value>` / `--branch <ref>` token** out of the argument and carry them as overrides (`--cmux`/`--no-cmux`/`--tmux`/`--no-tmux` = launcher; `--auto` = autonomous permission mode; `--flow plan|plan-workflow` = which command the launch lands in — all for Step C3.5; `--branch <ref>` decouples the attached/created branch from the dir name — Step C2). Bind the remainder as `<name>` (so `create auth --flow plan-workflow --auto` => name `auth`, not the flags; `create pwa-46696 --branch feature/pwa-46696` => name `pwa-46696`, branch `feature/pwa-46696`).
 - `list` -> go to List
 - `remove <name>` -> go to Remove
 - `info` -> go to Info
@@ -42,7 +42,7 @@ AskUserQuestion(
 
 Create an interactive worktree. The Go subcommand owns the guard, name validation, `.gitignore` ensure, `git worktree add`, symlinks (`.lets/`, `.beads/.env`), verify, and rollback. The skill drives the user choices.
 
-Optional launcher override on the argument: `--cmux` / `--no-cmux` force the launcher for this run (otherwise `$LETS_LAUNCHER` decides — see Step C3.5).
+Optional launcher override on the argument: `--cmux` / `--no-cmux` / `--tmux` / `--no-tmux` force the launcher for this run (otherwise `$LETS_LAUNCHER` decides — see Step C3.5).
 
 Optional `--auto`: launch the session in `claude --permission-mode auto` (autonomous — auto-approves low-risk work, still gates push / PR / close / external per LETS AUTO MODE rules). Maps ONLY to `--permission-mode auto`, **never** `bypassPermissions`. Applies to the launcher paths in Step C3.5 / C4 (see Step C3.5).
 
@@ -109,10 +109,11 @@ AskUserQuestion(
 
 Decide how to open the worktree. Resolve in this order:
 
-1. Explicit override on the command argument: `--cmux` forces cmux, `--no-cmux` forces terminal.
-2. Else `$LETS_LAUNCHER` from injected LETS Config (`terminal` default | `cmux`).
+1. Explicit override on the command argument: `--cmux`/`--tmux` force that launcher, `--no-cmux`/`--no-tmux` force terminal.
+2. Else `$LETS_LAUNCHER` from injected LETS Config (`terminal` default | `cmux` | `tmux`).
+3. An unrecognized `$LETS_LAUNCHER` value → use `terminal` and print one line naming the bad value (`lets init --launcher` rejects these, but `.lets/.env` is hand-editable).
 
-**terminal** (default / `--no-cmux`): print the new-terminal command (Step C4 "terminal" block) — unchanged behavior.
+**terminal** (default / `--no-cmux` / `--no-tmux`): print the new-terminal command (Step C4 "terminal" block) — unchanged behavior.
 
 **cmux** (`$LETS_LAUNCHER=cmux` or `--cmux`): derive the workspace **slug** from the task title **per the `/rename` slug rule in `/lets:start` Step 7** — that spec is the single source of truth; don't re-paraphrase it here (e.g. **Integrate cmux as parallel-worktree launcher** → `cmux-launcher`). Also stamp the workspace **description** with `{task-id} · {task-title}` (the FULL task title — the description/tooltip has no width budget like the `--name` slug does), so each running session self-identifies which task it belongs to. Then:
 
@@ -132,6 +133,26 @@ Parse the `launch` block:
 - `launched=false`, other `reason` (cmux not found / not macOS / cmux error) → render `fallback_command` with a one-line note naming `reason` — same as the terminal block but prefixed with the reason.
 
 > **Keep in sync:** the slug rule is sourced from `/lets:start` Step 7 by pointer (not copied — one authoritative definition); the description-stamp + launched/fallback contract mirrors `cmuxcmd.Open` (`cli/internal/cmuxcmd/open.go`). The Go layer never hard-fails — always render whatever `launch` reports.
+
+**tmux** (`$LETS_LAUNCHER=tmux` or `--tmux`): derive the **slug** from the task title **per the `/rename` slug rule in `/lets:start` Step 7** (single source of truth). Then:
+
+```bash
+lets tmux open "{worktree.path}" --name "{slug}" --description "{task-id} · {task-title}" --command "claude '/lets:start {task-id}'" --json
+```
+
+`--auto` and `--flow` compose exactly as in the cmux branch — they only change the `--command` string.
+
+**`--description` is stored, not displayed** (unlike cmux, where it shows in `workspace list --json`). tmux has no tooltip and its window name IS the status line, so the description is stamped into the `@lets_task` window option; the window name stays the short slug. Don't promise the user a visible label for it.
+
+**Taskless worktree:** drop `/lets:start {task-id}` → `--command "claude"`, slug from the worktree name, and drop `--description`.
+
+Parse the `launch` block:
+- `launched=true`, `in_existing_session=true` (called from inside tmux) → "Opened tmux window **{target}**" — no attach needed.
+- `launched=true`, `in_existing_session=false` → "Created detached tmux session **{workspace_name}** ({target})" + `attach_command`.
+- `launched=false`, `reason=already_open` → a tmux pane (**{existing_target} {existing_title}**) already lives at this worktree. Don't spawn a duplicate; tell the user to switch to it, or re-run with `--force`.
+- `launched=false`, other `reason` (`tmux_not_found` / `tmux_error`) → render `fallback_command` prefixed with a one-line note naming `reason`.
+
+> **Keep in sync:** the launched/fallback contract mirrors `tmuxcmd.Open` (`cli/internal/tmuxcmd/open.go`); the slug rule is sourced from `/lets:start` Step 7 by pointer.
 
 **`--auto` scope (where it does NOT apply):** `--auto` only affects the **stay-on-current-branch launcher paths** (this Step C3.5 cmux call + the Step C4 terminal block) — the paths that emit a `claude` launch command. If the user picked **"Switch to worktree"** (Step C3 option 2), there is no launch command (the session continues in-place and only suggests `/lets:start`); when `--auto` was passed with that choice, surface one line — "`--auto` applies only when opening the worktree in a separate session — re-launch with `claude --permission-mode auto` if you want autonomous mode here." Do NOT silently drop it.
 
@@ -175,6 +196,24 @@ Opened cmux workspace {launch.workspace_name} → it's running `claude '/lets:st
 ```
 
 On `launched=false` (cmux absent / not macOS / cmux error), fall back to the terminal block above, prefixed with a one-line `{launch.reason}` note and the `{launch.fallback_command}`.
+
+**If staying on current branch (tmux launcher, `launched=true`):**
+
+```
+Worktree created: {worktree.path}
+Branch: {worktree.branch} ({worktree.branch_mode})
+Symlinks: lets={worktree.lets_symlinked} beads={worktree.beads_symlinked}
+
+Opened tmux session {launch.workspace_name} ({launch.target}) → running `claude '/lets:start {task-id}'`.
+Attach from a terminal:  {launch.attach_command}
+(Launched from inside tmux? It's a new window {launch.target} in your current session — no attach needed.)
+
+┌─ LETS ──────────────────────────┐
+│  List?  /lets:worktree list     │
+└─────────────────────────────────┘
+```
+
+On `launched=false` (tmux absent / tmux error), fall back to the terminal block above, prefixed with a one-line `{launch.reason}` note and `{launch.fallback_command}`.
 
 Recommended scripted idiom (e.g. tmux composition):
 

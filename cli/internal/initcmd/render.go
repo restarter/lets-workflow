@@ -17,7 +17,7 @@ type Prefs struct {
 	MergeBranch string // e.g. "main", "develop"
 	PRFlow      string // "local" | "github" | "bitbucket"
 	Tracker     string // adapter name: "beads" (default) | "none"
-	Launcher    string // "terminal" (default) | "cmux"
+	Launcher    string // "terminal" (default) | "cmux" | "tmux"
 	RulesScope  string // "project" (own .claude/rules copy) | "user" (rely on ~/.claude/rules) | "" = preserve-or-default
 	SkipBeads   bool
 	// TrackerExplicit records whether --tracker was passed on the command line

@@ -25,7 +25,7 @@ LETS_TRACKER=beads
 | `LETS_MERGE_BRANCH` | The branch tasks merge into and PRs target. Used wherever LETS would otherwise assume `main`. |
 | `LETS_PR_FLOW` | `github` — `/lets:done` pushes and opens a PR via `gh`. `bitbucket` — planned. `local` — no PR; `/lets:done` merges locally. |
 | `LETS_TRACKER` | The task tracker **adapter**: `beads` (default) or `none`. Selects the `.claude/rules/tracker-<name>.md` that `lets init` installs; commands resolve verbs through it. See [trackers.md](trackers.md). |
-| `LETS_LAUNCHER` | How `/lets:worktree create` opens a new worktree session: `terminal` (default — prints a `cd … && claude` command) or `cmux` (opens a cmux workspace, macOS only). A preference, not a guarantee: `cmux` falls back to `terminal` when cmux is absent or off-macOS. |
+| `LETS_LAUNCHER` | How `/lets:worktree create` opens a new worktree session: `terminal` (default — prints a `cd … && claude` command), `cmux` (a cmux workspace, macOS only), or `tmux` (a tmux window/session, Linux + macOS). A preference, not a guarantee: each falls back to `terminal` when its binary/platform is absent. |
 | `LETS_RULES_SCOPE` | Where this project's workflow rules come from: `project` (its own `.claude/rules/lets-rules.md` copy — the default) or `user` (deliberately no project copy; rules come from the global `~/.claude/rules/lets-rules.md`). Set automatically by `/lets:init` when you pick "Rely on global"; `/lets:update` then leaves the project copy uncreated (`delegated`) instead of restoring it. Any value other than `user` behaves as `project`. |
 
 The first line of the file is `LETS_ENV_VERSION` — that's metadata (which `lets` version last wrote the file), not something you set. Keys you add yourself are preserved across `/lets:init` and `/lets:update`, kept under a `# User-added keys` separator.
@@ -41,7 +41,7 @@ The first line of the file is `LETS_ENV_VERSION` — that's metadata (which `let
 | Key | Why it's user-level |
 |-----|---------------------|
 | `LETS_LANGUAGE` | You speak the same language in every project. |
-| `LETS_LAUNCHER` | Terminal-vs-cmux is a machine preference, not a project property. |
+| `LETS_LAUNCHER` | Terminal-vs-cmux-vs-tmux is a machine preference, not a project property. |
 
 Per-project keys (`LETS_MERGE_BRANCH`, `LETS_PR_FLOW`, `LETS_TRACKER`) are deliberately not managed here — a global `main` would be wrong in every `master`/`develop` repo. You *can* hand-add them: they're preserved under the `# User-added keys` separator and the hook injects them like any whitelisted key.
 
