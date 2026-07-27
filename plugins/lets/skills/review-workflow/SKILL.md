@@ -35,6 +35,9 @@ A multi-stage chain so per-agent reports never enter the conversation - only the
 | `code` | string | the diff (or full file content for `--file`) |
 | `smallDiff` | bool | `true` keeps NIT findings (diff < 50 lines) |
 | `systemicCheck` | bool | `false` for `--file` (no diff baseline) |
+| `spec` | string | task description from the tracker's `show` (or the PR body); **empty when unavailable** - never a sentinel. Drives `specBlock` in the review prompt and the narrower `specBlockSkeptic` in the verify prompt. Normalized in the script (non-string/whitespace-only → empty, 150 lines / 8000 chars, `BEGIN/END SPEC` delimiters inside the value neutralized on both sides - across every Unicode dash and with format characters stripped first - so it cannot escape its own fence) |
+| `specTrusted` | bool | `false` when `spec` came from the PR body, i.e. written by the author of the code under review. Reviewers still get it (scope context); `specBlockSkeptic` is suppressed - a skeptic's `real=false` is consumed deterministically by `decide()` and would delete a finding with no human in the loop. **On a `PR-*` mode it must be explicitly `true`** - omitted is treated as untrusted, the same fail-safe direction as `prTree` |
+| `prTree` | bool | does the working tree hold the reviewed code? `true` for all non-PR modes and for PR mode after a checkout; `false` adds a REVIEW TREE warning to both prompts. **Omitted on a `PR-*` mode is treated as `false`** - failing toward "the tree may be wrong" rather than silently trusting it |
 
 ## Returns
 
@@ -46,3 +49,10 @@ A multi-stage chain so per-agent reports never enter the conversation - only the
 - No sibling `import` - all logic stays inline in `review.workflow.js`.
 - No `Date.now()` / `Math.random()` / `new Date()`.
 - Top-level `await`/`return` are used (the runtime wraps the body), so the file is NOT Node-importable - it has no clean unit test; the verdict/dedupe/verify logic is kept in sync with `review.md` prose by discipline and validated by the live smoke test.
+- **Syntax IS checkable** - but NOT with bare `node --check`: because line 2 is `export const meta`, it exits 0 on syntactically broken input (verified on node v22), including an unterminated template literal - the exact failure mode of the long backticked prompt strings. Copying to `.mjs` fails the other way (`Illegal return statement`). Wrap the body instead, mirroring the runtime:
+
+  ```bash
+  { echo 'async function __w(){'; sed 's/^export //' review.workflow.js; echo '}'; } | node --check /dev/stdin
+  ```
+
+  Verified to exit 0 on the real file and 1 on a copy with a broken template literal.
