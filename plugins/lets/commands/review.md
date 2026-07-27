@@ -178,6 +178,21 @@ If file not found, inform user and exit.
 
 **NEVER create a git worktree here** - worktrees are the user's choice (`/lets:worktree`); this command reviews where it was launched. The gate applies identically in the main checkout and in any worktree.
 
+**First, surface any unfinished restore.** A session that died between the switch and Step 6.7 leaves a record nobody reads - its key is that session's id, so no later session recomputes it. A glob answers the only question that matters ("is there an unfinished restore in this repo?"), and the record carries `ref:`/`pr:` so it identifies itself:
+
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+for f in "$LETS_PROJECT_ROOT"/.lets/sessions/.review-restore-*; do
+  [ -e "$f" ] || continue
+  printf 'STRAY RESTORE %s -> ref: %s | pr: %s | stash: %s\n' "${f##*/}" \
+    "$(sed -n 's/^ref: //p' "$f" | head -1)" \
+    "$(sed -n 's/^pr: //p' "$f" | head -1)" \
+    "$(sed -n 's/^stash: //p' "$f" | head -1)"
+done
+```
+
+Any hit → tell the user before going further: which ref they can return to (`git checkout <ref>`) and whether a stash is waiting (`git stash list`). **Report, never act** - `.lets/` is one symlinked directory shared by every worktree of this repo, so a stray may belong to a parallel session that is still running.
+
 Ask:
 
 ```
@@ -221,11 +236,16 @@ AskUserQuestion(
 
 On **Commit first**: `Skill(skill: "lets:commit")` first, then run the block below with `STASH=no`. On **Review from diff**: skip to the diff path. On **Stash** (or a clean tree): run the block below, `STASH=yes` only when the user picked Stash.
 
-Where you came from is also printed into this conversation - the file is just the backup for a compaction during a long fan-out (`--workflow` runs in the background). Keyed by session id, so the parallel worktree sessions sharing one symlinked `.lets/` never collide.
+The restore command is also printed into this conversation, so a scrollback recovers the tree without the file. Keyed by session id, so the parallel worktree sessions sharing one symlinked `.lets/` never collide; the `ref:`/`pr:` fields make a stray identifiable to the scan above.
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 mkdir -p "$LETS_PROJECT_ROOT/.lets/sessions"
+
+# Fail closed on a missing session id: it is the record's only owner. Empty collapses $F to one
+# shared path across every worktree of this repo, and two sessions would clobber each other's ref.
+[ -n "$CLAUDE_CODE_SESSION_ID" ] || { echo "NO SESSION ID - not switching, reviewing from the diff"; exit 0; }
+
 F="$LETS_PROJECT_ROOT/.lets/sessions/.review-restore-$CLAUDE_CODE_SESSION_ID"
 STASH={yes when the user picked Stash, otherwise no}
 
@@ -238,22 +258,53 @@ REF=$(git branch --show-current); [ -n "$REF" ] || REF=$(git rev-parse HEAD)
 BEFORE=$(git rev-parse -q --verify refs/stash)
 [ "$STASH" = yes ] && git stash push -m "lets-review-pr-{number}" >/dev/null
 AFTER=$(git rev-parse -q --verify refs/stash)
-SH=""; [ "$AFTER" != "$BEFORE" ] && SH="$AFTER"
+SH=""; [ "$STASH" = yes ] && [ "$AFTER" != "$BEFORE" ] && SH="$AFTER"
 
-tmp=$(mktemp "$F.XXXX")
-{ printf 'ref: %s\n' "$REF"; [ -n "$SH" ] && printf 'stash: %s\n' "$SH"; } > "$tmp" && mv -f "$tmp" "$F"
+tmp=$(mktemp "$F.XXXX") || tmp=""
+if [ -n "$tmp" ]; then
+  {
+    printf 'ref: %s\n' "$REF"
+    printf 'pr: %s\n' "{number}"
+    [ -n "$SH" ] && printf 'stash: %s\n' "$SH"
+    :   # MANDATORY: a `{...}` group exits with its LAST command's status, so a conditional
+        # last line returns 1 whenever $SH is empty (clean tree - the common case) and `&& mv`
+        # never runs. The record would then exist only when we stashed, inverting "Restore ALWAYS".
+  } > "$tmp" && mv -f "$tmp" "$F"
+  rm -f "$tmp" 2>/dev/null
+fi
 
-if gh pr checkout {number}; then
-  echo "SWITCHED - will restore to: $REF"
-else
-  # Unwind in the same shell: our sha is still in scope, so this pops OUR entry.
+if [ ! -f "$F" ]; then
+  # No record on disk -> do NOT move HEAD. A failed write is not a reason to strand the user.
   [ -n "$SH" ] && git stash pop "$(git stash list --format='%gd %H' | awk -v h="$SH" '$2==h{print $1;exit}')"
-  rm -f "$F"
-  echo "CHECKOUT FAILED - staying put, reviewing from the diff"
+  echo "STATE WRITE FAILED - not switching, reviewing from the diff"
+else
+  HEAD_BEFORE=$(git rev-parse HEAD)
+  # --detach, and NEVER infer HEAD from gh's exit code. Without --detach, `gh pr checkout` is
+  # `git checkout <local-branch>` THEN `git merge --ff-only` (hence its own --force = "reset the
+  # existing local branch"): when a previous review left that branch behind and the author
+  # force-pushed, step 1 succeeds, step 2 fails, and gh exits non-zero with HEAD already moved.
+  # --detach is one step, creates no branch to diverge next time, and does not collide when the
+  # PR branch is already checked out in another worktree of this repo.
+  if gh pr checkout --detach {number} && [ "$(git rev-parse HEAD)" != "$HEAD_BEFORE" ]; then
+    echo "SWITCHED - restore with: git checkout $REF${SH:+ , then git stash pop (entry $SH)}"
+  elif [ "$(git rev-parse HEAD)" != "$HEAD_BEFORE" ]; then
+    # HEAD moved and gh still failed. Popping here would land the user's work on the PR code,
+    # and deleting the record would strand them: Step 6.7 owns the unwind. Touch neither.
+    echo "CHECKOUT PARTIAL - HEAD moved; restore state kept at $F; reviewing from the diff"
+  else
+    # HEAD provably unchanged - the only state in which popping and deleting are safe.
+    [ -n "$SH" ] && git stash pop "$(git stash list --format='%gd %H' | awk -v h="$SH" '$2==h{print $1;exit}')"
+    rm -f "$F"
+    echo "CHECKOUT FAILED - staying put, reviewing from the diff"
+  fi
 fi
 ```
 
-On `SWITCHED` set `pr_tree = true` - the review is now identical to a local one: `PROJECT_ROOT` stays `{LETS_PROJECT_ROOT}`, `CODE:` carries the diff, agents may Read/Grep the working tree. On `CHECKOUT FAILED` the tree is already unwound; set `pr_tree = false`, say why, and continue with the diff path. Never abort the review outright.
+On `SWITCHED` set `pr_tree = true` - the review is now identical to a local one: `PROJECT_ROOT` stays `{LETS_PROJECT_ROOT}`, `CODE:` carries the diff, agents may Read/Grep the working tree. HEAD is detached, which is intended: with no branch name, a restore that never runs cannot repoint `.lets/sessions/.task-<slug>` at the PR author's task, and `git status` announces the state on its own.
+
+On `CHECKOUT FAILED` the tree is already unwound; on `STATE WRITE FAILED` and `NO SESSION ID` nothing was touched. All three: set `pr_tree = false`, say why, continue with the diff path. On `CHECKOUT PARTIAL` the tree is NOT unwound - set `pr_tree = false`, tell the user HEAD moved, and let Step 6.7 restore at the end. Never abort the review outright.
+
+**MANDATORY once anything reported `SWITCHED` or `CHECKOUT PARTIAL`:** every exit path from here on - an error, a user abort, "no changes found", an early return - runs Step 6.7 FIRST. Step ordering alone does not carry this; an abort is precisely what skips it.
 
 ### "Review from diff"
 
@@ -643,11 +694,16 @@ Runs after ALL agent and skeptic work (standard mode: after Step 6.6; workflow m
 
 **Restore ALWAYS** - not only when we stashed. LETS keys per-branch state on the branch name (`.lets/sessions/.task-<branch-slug>`), so leaving HEAD on the PR branch silently repoints `detect-task`, `/lets:done` and `/lets:end` at the PR author's task, and disengages the merge-branch edit guard. `/lets:github-pr` has restored unconditionally since it was written; a read-only review must not be weaker.
 
+**Skip this step entirely** unless Step 2.5 reported `SWITCHED` or `CHECKOUT PARTIAL` in THIS run. `--json` and "Review from diff" both guarantee no working-tree side effects, and Step 2.5 deliberately leaves the record behind on a non-clean outcome - so an unguarded Step 6.7 would move HEAD at the end of a run that promised not to. The `pr:` match below is the second half of the same guard.
+
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 F="$LETS_PROJECT_ROOT/.lets/sessions/.review-restore-$CLAUDE_CODE_SESSION_ID"
 if [ ! -f "$F" ]; then
   echo "nothing to restore"
+elif [ "$(sed -n 's/^pr: //p' "$F" | head -1)" != "{number}" ]; then
+  # A record from an earlier review whose restore did not finish. Not ours to unwind.
+  echo "STALE RESTORE STATE for PR $(sed -n 's/^pr: //p' "$F" | head -1) - left at $F, not touching HEAD"
 else
   BR=$(sed -n 's/^ref: //p' "$F" | head -1)
   SH=$(sed -n 's/^stash: //p' "$F" | head -1)
