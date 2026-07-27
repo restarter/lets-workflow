@@ -61,8 +61,12 @@ func region(t *testing.T, src, what, start, end string) string {
 // carry the reviewer's cap.
 func TestSkepticSpecBlockIsNarrower(t *testing.T) {
 	for _, c := range []struct{ file, what, start, end, trustGuard string }{
+		// Start INSIDE the fence, not at the "**Skeptic prompt template.**" heading. The prose above
+		// the fence explains why the reviewer's wording is banned here, and it has to quote that
+		// wording to do so - anchoring at the heading makes the explanation trip its own guard.
+		// Mirrors the JS side, which starts at the assignment and so excludes its comment block.
 		{filepath.Join("commands", "review.md"), "review.md skeptic template",
-			"**Skeptic prompt template.**", "**Asymmetric drop rule", "spec_trusted"},
+			"MODE: review (adversarial verification)", "**Asymmetric drop rule", "spec_trusted"},
 		// Needle is the EXECUTABLE form, not the bare key: `specTrusted` also appears in the
 		// comment above the expression, so deleting the guard would leave a bare-key needle green.
 		{filepath.Join("skills", "review-workflow", "review.workflow.js"), "js specBlockSkeptic",
@@ -75,7 +79,9 @@ func TestSkepticSpecBlockIsNarrower(t *testing.T) {
 		if !strings.Contains(body, c.trustGuard) {
 			t.Errorf("%s: lost %q - a PR-body spec is written by the author of the code being judged, and a skeptic's real=false deletes findings", c.what, c.trustGuard)
 		}
-		for _, banned := range []string{"cap it at", "SCOPE vs SPEC"} {
+		// Ban what the reviewer says and the skeptic must never receive. NOT "cap it at" - the tier
+		// cap was removed, so banning it would be a vacuous assertion that passes by absence.
+		for _, banned := range []string{"do NOT report it as creep", "SCOPE vs SPEC"} {
 			if strings.Contains(body, banned) {
 				t.Errorf("%s: carries the REVIEWER's %q - a skeptic executes a tier cap as real=false, i.e. a drop", c.what, banned)
 			}
