@@ -62,8 +62,10 @@ func TestSkepticSpecBlockIsNarrower(t *testing.T) {
 	for _, c := range []struct{ file, what, start, end, trustGuard string }{
 		{filepath.Join("commands", "review.md"), "review.md skeptic template",
 			"**Skeptic prompt template.**", "**Asymmetric drop rule", "spec_trusted"},
+		// Needle is the EXECUTABLE form, not the bare key: `specTrusted` also appears in the
+		// comment above the expression, so deleting the guard would leave a bare-key needle green.
 		{filepath.Join("skills", "review-workflow", "review.workflow.js"), "js specBlockSkeptic",
-			"const specBlockSkeptic =", "const treeBlock =", "specTrusted !== false"},
+			"const specBlockSkeptic =", "const treeBlock =", "specTrusted === true"},
 	} {
 		body := squash(region(t, readPlugin(t, c.file), c.what, c.start, c.end))
 		if !strings.Contains(body, "NEVER use the SPEC as grounds to refute a correctness") {
