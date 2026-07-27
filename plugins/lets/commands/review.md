@@ -312,7 +312,6 @@ Set `pr_tree = false`, change nothing on disk, and render the `REVIEW TREE:` blo
 
 Record `pr_tree` - Step 9 reports it in the caveat line.
 
-
 ## Step 3: Gather Context
 
 ### For GitHub PR:
@@ -339,7 +338,6 @@ gh pr view <PR> --json title,body,commits
 ```
 
 The test-the-command-then-run-it shape is deliberate: `git show X | head` exits with `head`'s status, so a `|| echo WARNING` after the pipeline never fires.
-
 
 ### For Local Changes:
 
@@ -829,7 +827,6 @@ Write to `.lets/reviews/{date}-{mode}.json`:
 
 `refuted_count` is additive (consumers that don't know it ignore it, e.g. `/lets:github-pr` reads only `findings` + `verdict`): the number of findings the Step 6.6 verify pass dropped or downgraded. Omit or `0` when no verification ran.
 
-
 After saving, inform user: "Review saved to: {path}"
 Then STOP - skip Step 9 (Output) and Step 10 (Link to task).
 The calling command handles output and task linking.
@@ -848,6 +845,7 @@ gh pr comment <PR> --body "$(cat <<'EOF'
 
 {If `refuted_count` > 0, add a line: `_Adversarial verify dropped/downgraded {refuted_count} finding(s)._`}
 {If the spec was unavailable, add: `_Reviewed without a task spec - scope findings are unverified against planned work._`}
+{If the spec came from the PR body, add: `_Scope was judged against this PR's own description - no tracker task resolved._`}
 {If `pr_tree` is false, add: `_Reviewed from the diff - the working tree was not the PR branch._`}
 
 Found {N} issues:
@@ -903,7 +901,6 @@ Display full report in console.
 **Skip entirely in PR mode and in `--file` mode** - neither is tied to this branch's task. In PR mode the Step 3 id came from the PR's own head ref, so it names the *author's* task: writing a review note onto a colleague's task is not this command's job, and on a shared board the write target would be chosen by whoever named the branch. `--file` resolves no id at all. `/lets:check` Step 5 has held both positions since it was written; the two commands must not disagree.
 
 For local modes, reuse the task id resolved in Step 3 ("Resolve the task SPEC") - do NOT call detect-task again. Skip the comment when no id resolved (including the `fallback=no` `None`) or when `show` failed for it: `comment-add` would otherwise HARD-FAIL at the end of an otherwise successful review.
-
 
 ```lets-tracker
 comment-add task=<task-id> body="Code review ({PR #X | local}): {verdict}. {N} issues found."

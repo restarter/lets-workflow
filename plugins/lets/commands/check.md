@@ -307,7 +307,6 @@ If `--json` was provided, emit a structured object instead of the console report
 
 `mode` values: `check-local` | `check-staged` | `check-last-commit` | `check-branch` | `check-PR-{number}` | `check-file`. After emitting, STOP - skip Step 5 and the Output box; the caller handles output and task linking.
 
-
 ## Step 5: Link to Active Task
 
 Skip entirely if `--json` was set, or if mode is PR / `--file` (those aren't tied to the active branch's task). For local modes, if issues were found, record in the tracker:

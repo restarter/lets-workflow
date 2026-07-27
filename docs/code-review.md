@@ -34,15 +34,19 @@ See **[agents.md](agents.md)** for the agent roster and how selection works.
 
 ### The reviewers know what you were building *(ships next release)*
 
-Both `/lets:check` and `/lets:review` pull the task's description and hand it to every reviewer. Without it a reviewer sees code that nothing calls yet and confidently reports it as dead — when the wiring may simply be the next PR. Work the spec describes is planned work, not scope creep. When no spec can be resolved the review still runs, says so in the report, and caps any "unused / dead / cut this" finding at `[SUGGESTION]` — never `[BLOCKER]`.
+Both `/lets:check` and `/lets:review` pull the task's description and put it in front of the reviewers — the expert agents for `/lets:review`, the inline pass for `/lets:check`. Without it a reviewer sees code that nothing calls yet and confidently reports it as dead — when the wiring may simply be the next PR. Work the spec describes is planned work, not scope creep. When no spec can be resolved the review still runs, says so in the report, and caps any "unused / dead / cut this" finding at `[SUGGESTION]` — never `[BLOCKER]`.
 
-Where the spec comes from depends on the target: local reviews use your branch's active task; on a PR it comes from the task behind the PR's branch, falling back to the PR description. `--file` reviews get no spec, so they stay free to report dead code at full severity.
+Where the spec comes from depends on the command and the target. `/lets:review` uses your branch's active task locally, and on a PR the task behind the PR's own branch, falling back to the PR description. `/lets:check` uses your branch's active task locally and the PR description directly on a PR — resolving a task from a PR branch is `/lets:review`'s job, so that rule lives in one place. `--file` reviews get no spec either way, so they stay free to report dead code at full severity.
+
+A spec is only used to decide whether a finding of the shape "dead / unrelated / cut this" is planned work. It never softens a correctness, security, or logic finding, and the adversarial verification pass gets a deliberately narrower version of it — a verifier that can only answer "real or not" must not be handed a rule about severity. When the spec is the PR description — written by the author of the code under review — the verifiers don't see it at all.
 
 ### Reviewing a PR *(ships next release)*
 
 `/lets:review <PR>` asks once whether to switch your checkout to the PR's branch:
 
-- **Switch** — `gh pr checkout`, then the review is exactly like a local one: agents read the PR's real files, so cross-file checks and the adversarial verification pass judge the actual code. If your tree is dirty you're asked to stash or commit first. **Your branch is always restored when the review ends**, and a stash is popped only after that switch back succeeds.
+- **Switch** — checks out the PR at a detached HEAD, and the review is then exactly like a local one: agents read the PR's real files, so cross-file checks and the adversarial verification pass judge the actual code. If your tree is dirty you're asked to stash or commit first. **Your branch is restored when the review ends**, and a stash is popped only after that switch back succeeds. Project rules (`CLAUDE.md`) are still read from your merge branch, not from the PR — the PR's own edits to them show up in the diff, where a reviewer judges them instead of obeying them.
+
+  If a session dies mid-review, the return trip is `git checkout <your branch>` (the review prints that command when it switches) plus `git stash pop` if it stashed. The next `/lets:review <PR>` and the next `/lets:start` both notice the leftover and tell you.
 - **Review from diff** — nothing on disk changes. The reviewers work from the diff alone and are told plainly that the files on disk are the base branch, so they don't mistake old file contents for the PR's.
 
 It **never creates a worktree** — where you review is your call. Run it from your main checkout or from any worktree; the question is the same in both. `--json` never touches your working tree at all.

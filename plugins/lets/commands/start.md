@@ -70,9 +70,20 @@ if git rev-parse --verify --quiet HEAD >/dev/null; then
 else
   echo "(no commits yet — fresh repo)"
 fi
+
+# Unfinished PR-review restore. /lets:review keys its record by session id, so the session that
+# could act on it is gone - a fresh session is exactly where a stray must be surfaced.
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+for f in "$LETS_PROJECT_ROOT"/.lets/sessions/.review-restore-*; do
+  [ -e "$f" ] || continue
+  printf 'STRAY REVIEW RESTORE %s -> ref: %s | pr: %s | stash: %s\n' "${f##*/}" \
+    "$(sed -n 's/^ref: //p' "$f" | head -1)" \
+    "$(sed -n 's/^pr: //p' "$f" | head -1)" \
+    "$(sed -n 's/^stash: //p' "$f" | head -1)"
+done
 ```
 
-Report: branch, uncommitted changes, recent commits. **If the repo has no commits yet** (the `else` branch above fires), that's fine — say so in plain text; offer `git commit --allow-empty -m "chore: initial setup"` if the user wants an anchor for `git log` to work later. **Don't** raise `/lets:init` here (it's a separate concern) and **don't** treat the missing HEAD as a fatal error.
+Report: branch, uncommitted changes, recent commits. **On a `STRAY REVIEW RESTORE` line**, tell the user in one line: a PR review did not finish restoring, `git checkout <ref>` returns them, and a listed `stash:` is still in `git stash list`. Report only - never act: `.lets/` is shared by every worktree of this repo, so the stray may belong to a session that is still running. **If the repo has no commits yet** (the `else` branch above fires), that's fine — say so in plain text; offer `git commit --allow-empty -m "chore: initial setup"` if the user wants an anchor for `git log` to work later. **Don't** raise `/lets:init` here (it's a separate concern) and **don't** treat the missing HEAD as a fatal error.
 
 ## Step 3: Orient
 
