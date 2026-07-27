@@ -371,6 +371,12 @@ git diff {LETS_MERGE_BRANCH}...HEAD --stat      # three-dot: merge-base diff (PR
 
 Reviewing agents must know what the change is SUPPOSED to do. Without it, planned-but-not-yet-wired work reads as dead code and gets flagged as scope creep at BLOCKER severity - confidently wrong, which is worse than a miss.
 
+**Already resolved in this conversation? Reuse it.** If an earlier `/lets:review` or `/lets:check` here resolved the SPEC for the same task **from the same source**, it is still in context - skip the resolution below and carry that value (with its `spec_trusted` flag) forward.
+
+Same source matters as much as same task: a local-mode spec is the tracker `description`, a PR-mode spec is resolved from the PR's own head ref and may fall back to its `title`+`body` with `spec_trusted = false`. The ids can coincide while the provenance does not, and crossing them hands author-written text to the skeptics, whose `real=false` deletes findings. A local resolution is reusable only by another local-mode run; a PR resolution only by a run against the SAME PR.
+
+Not a cost optimization - a reliability one. The tracker may be remote (beads on a Dolt server, an MCP adapter) and a `show` can be slow or fail outright, which lands `{spec}` empty and sends the whole fan-out in blind. A value already in context cannot fail that way. Re-resolve when the active task changes, and when the user says the description changed - an edit made outside this conversation is not observable from here. Never ask; there is no gate here.
+
 **Resolve the task id.** `detect-task` owns the ref→id rule and its sanitization - do NOT re-derive either here:
 
 - **Local modes** (`--local` / `--staged` / `--last-commit` / `--branch`): `Skill(skill: "lets:detect-task", args: "fallback=no")`.

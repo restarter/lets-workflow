@@ -165,7 +165,13 @@ Mode-specific extras:
 - **PR:** `gh pr view <PR> --json title,body` for context; `gh pr diff <PR> --name-only` for the file list
 - **File:** `cat "$LETS_PROJECT_ROOT/$(dirname {path})/CLAUDE.md" 2>/dev/null` for any directory-local rules
 
-**Already resolved in this conversation? Reuse it and skip the two calls below.** If an earlier `/lets:check` or `/lets:review` here already resolved the SPEC for the SAME task, it is still in context. `/lets:check` is the 30-second path, run repeatedly while writing code, and a tracker `show` per invocation is a network round-trip on a hot path - the tracker may be remote (beads on a Dolt server, an MCP adapter). Re-resolve when the active task changes; also re-resolve when the user says the description changed - an edit made outside this conversation is not observable from here, so their word is the only signal. No question to the user, ever: `/lets:check` is invoked to run, not to be asked whether it should.
+**Already resolved in this conversation? Reuse it and skip the two calls below.** If an earlier `/lets:check` or `/lets:review` here resolved the SPEC for the same task **from the same source**, it is still in context.
+
+Same source matters as much as same task: a local-mode spec is the tracker `description`, a PR-mode spec is the PR's own `title`+`body` and carries `spec_trusted = false`. The ids can coincide while the provenance does not, and crossing them hands author-written text to the pass that deletes findings. So a local resolution is reusable only by another local-mode run, and a PR resolution only by a run against the SAME PR.
+
+`/lets:check` is the 30-second path, run repeatedly while writing code, so a tracker `show` per invocation is a network round-trip on a hot path - and the tracker may be remote (beads on a Dolt server, an MCP adapter), where the call can be slow or simply fail. A spec already in context is more reliable than a re-fetch, not merely cheaper.
+
+Re-resolve when the active task changes; also re-resolve when the user says the description changed - an edit made outside this conversation is not observable from here, so their word is the only signal. No question to the user, ever: `/lets:check` is invoked to run, not to be asked whether it should.
 
 **Task SPEC (local modes only - PR and `--file` are covered below):** `Skill(skill: "lets:detect-task", args: "fallback=no")` - the active task for the current branch, which is what `/lets:check` normally reviews. `fallback=no` keeps the `list-by-status` answer ("some task is in progress") out of the spec: on a shared board it is a colleague's task, and a wrong spec is worse than none. Then:
 
