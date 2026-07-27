@@ -38,6 +38,14 @@ Both `/lets:check` and `/lets:review` pull the task's description and put it in 
 
 Where the spec comes from depends on the command and the target. `/lets:review` uses your branch's active task locally, and on a PR the task behind the PR's own branch, falling back to the PR description. `/lets:check` uses your branch's active task locally and the PR description directly on a PR — resolving a task from a PR branch is `/lets:review`'s job, so that rule lives in one place. `--file` reviews get the spec too: a file is often exactly the task, and with acceptance criteria in hand ("a CSV of every US state, skip none") the review becomes a completeness check rather than a taste test.
 
+### On a PR, the reviewers also read the PR itself *(ships next release)*
+
+Three different things reach a reviewer and only one of them is the spec. The spec says what was *supposed* to be built. The PR description says what the author *claims* they built. The discussion says what people have *already said* about it. `/lets:review <PR>` now hands over all three — previously the description arrived only when no spec could be found, and the discussion never arrived at all.
+
+The discussion is the one that saves you re-reading the same objection twice. If a thread on `foo.go:42` already says "raised → fixed in abc1234 → verified", a reviewer that can see it says so instead of filing the finding again. Gathering it takes three separate calls on GitHub: comments under the PR, review summaries, and the inline comments anchored to lines — the last of which appear in none of the obvious ones. On a busy PR you're asked whether to load the whole thread history or just the anchored parts.
+
+None of it reaches the adversarial verification pass. Everything in that block is written by the author of the code being judged, or by people commenting on it, and a verifier can only answer "real or not" — so one "we agreed to ignore this" in a thread would delete a finding outright. Reviewers can weigh it and still report; a verifier can't.
+
 A spec is only used to decide whether a finding of the shape "dead / unrelated / cut this" is planned work. It never softens a correctness, security, or logic finding, and the adversarial verification pass gets a deliberately narrower version of it — a verifier that can only answer "real or not" must not be handed a rule about severity. When the spec is the PR description — written by the author of the code under review — the verifiers don't see it at all.
 
 ### Reviewing a PR *(ships next release)*

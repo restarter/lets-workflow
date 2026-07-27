@@ -133,8 +133,10 @@ func TestWorkflowPromptsAreWired(t *testing.T) {
 	// is `real`, which decide() consumes deterministically, so a single "we agreed to ignore this"
 	// in a thread would delete a finding with no human in the loop. Unlike specTrusted there is no
 	// trusted case to carve out - it must never reach a verifier under any flag.
-	if strings.Contains(skeptic, "prContext") {
-		t.Error("review.workflow.js: skepticPrompt sees the PR body/discussion - author-written text reaching the pass that DELETES findings")
+	for _, leak := range []string{"prContext", "prBody", "prDiscussion", "PR_BODY", "PR_DISCUSSION"} {
+		if strings.Contains(skeptic, leak) {
+			t.Errorf("review.workflow.js: skepticPrompt sees %q - author-written text reaching the pass that DELETES findings", leak)
+		}
 	}
 
 	destructure := regexp.MustCompile(`(?m)^const \{[^}]*\} = input`).FindString(js)
@@ -148,7 +150,7 @@ func TestWorkflowPromptsAreWired(t *testing.T) {
 	w2 := region(t, readPlugin(t, filepath.Join("commands", "review.md")), "review.md W2 args",
 		"### W2: Build args", "### W3:")
 	skillMd := readPlugin(t, filepath.Join("skills", "review-workflow", "SKILL.md"))
-	for _, k := range []string{"spec", "prTree", "specTrusted", "prContext"} {
+	for _, k := range []string{"spec", "prTree", "specTrusted", "prBody", "prDiscussion"} {
 		if !regexp.MustCompile(`\b` + k + `\b`).MatchString(destructure) {
 			t.Errorf("review.workflow.js: %q is not destructured from input", k)
 		}
