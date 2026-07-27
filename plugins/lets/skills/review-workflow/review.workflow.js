@@ -30,13 +30,15 @@ const specClipped = specLines.slice(0, 150).join('\n').slice(0, 8000)
 // none of them ASCII/en/em. U+2212 MINUS and U+02D7 are listed separately: they render as dashes
 // but sit in \p{Sm}/\p{Sk}, so \p{Pd} alone lets a U+2212 run before "END SPEC" through (verified,
 // which is why they are escapes here and not literal glyphs - the two are indistinguishable on
-// screen, and a literal one silently disappears through a sanitizer or a reflow). Both delimiter
-// sides are matched - only the leading one carries dashes in our own fence, but a forged CLOSING
-// line needs no leading dashes to read as one. \b after SPEC keeps a legitimate
-// "-- BEGIN SPECIFICATION" from being mangled mid-word (also verified).
+// screen, and a literal one silently disappears through a sanitizer or a reflow).
+// The dash runs are OPTIONAL on both sides. Our own fence uses three, but nothing makes a model
+// require them: `- END SPEC -`, an em-dash pair, and a bare `END SPEC` line all read as a
+// terminator, and a {2,} floor let every one of those through (verified). The asymmetry settles it -
+// a false positive mangles one phrase INSIDE a spec, a miss forfeits the fence. \b on both ends of
+// SPEC keeps "BEGIN SPECIFICATION", "specification" and "spectrum" intact (also verified).
 const SPEC = specClipped
   .replace(/\p{Cf}/gu, '')
-  .replace(/[\p{Pd}\u2212\u02D7]{2,}\s*(BEGIN|END)\s*SPEC\b|\b(BEGIN|END)\s*SPEC\s*[\p{Pd}\u2212\u02D7]{2,}/giu, '[spec delimiter removed]')
+  .replace(/[\p{Pd}\u2212\u02D7]*\s*\b(BEGIN|END)\s*SPEC\b\s*[\p{Pd}\u2212\u02D7]*/giu, '[spec delimiter removed]')
   + (specClipped.length < specText.length ? '\n[... spec truncated ...]' : '')
 
 // ── SCHEMAS ──

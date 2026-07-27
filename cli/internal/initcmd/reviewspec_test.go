@@ -210,17 +210,87 @@ func TestReviewRestoreFenceIsPinned(t *testing.T) {
 
 // switchFence returns the Step 2.5 switch block with its two orchestrator placeholders resolved,
 // ready to execute.
-func switchFence(t *testing.T, stash string) string {
+func switchFence(t *testing.T, stash, pr string) string {
 	t.Helper()
 	for _, f := range bashFences(readPlugin(t, filepath.Join("commands", "review.md"))) {
 		if !strings.Contains(f, ".review-restore-") || !strings.Contains(f, `mv -f "$tmp"`) {
 			continue
 		}
 		f = regexp.MustCompile(`(?m)^STASH=\{[^}]*\}$`).ReplaceAllString(f, "STASH="+stash)
-		return strings.ReplaceAll(f, "{number}", "42")
+		return strings.ReplaceAll(f, "{number}", pr)
 	}
 	t.Fatal("review.md: switch fence not found")
 	return ""
+}
+
+// smokeRepo builds a throwaway repo with two PR branches, a stubbed `gh` that detaches onto
+// prbranch<N>, and .lets/sessions/. Returns the repo path and the PATH prefix carrying the stub.
+func smokeRepo(t *testing.T, dirty string) (repo, stub string) {
+	t.Helper()
+	repo = t.TempDir()
+	stub = filepath.Join(repo, "stub")
+	env := append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir, cmd.Env = repo, env
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%v: %v\n%s", args, err, out)
+		}
+	}
+	write := func(name, body string, mode os.FileMode) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(repo, name), []byte(body), mode); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run("git", "init", "-q", "-b", "main", ".")
+	run("git", "config", "user.email", "t@example.com")
+	run("git", "config", "user.name", "t")
+	write("a.txt", "base\n", 0o644)
+	run("git", "add", "-A")
+	run("git", "commit", "-qm", "base")
+	for _, br := range []string{"prbranch42", "prbranch43"} {
+		run("git", "checkout", "-q", "-b", br, "main")
+		write(br+".txt", br+"\n", 0o644)
+		run("git", "add", "-A")
+		run("git", "commit", "-qm", br)
+	}
+	run("git", "checkout", "-q", "main")
+	if err := os.MkdirAll(filepath.Join(repo, ".lets", "sessions"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	switch dirty {
+	case "tracked":
+		write("a.txt", "base\nmine\n", 0o644)
+	case "untracked":
+		write("u.txt", "mine\n", 0o644)
+	}
+	if err := os.MkdirAll(stub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// `gh pr checkout --detach <N>` -> detach onto prbranch<N>. Last arg is the number.
+	write(filepath.Join("stub", "gh"),
+		"#!/bin/sh\nfor a in \"$@\"; do n=\"$a\"; done\ngit checkout --detach -q \"prbranch$n\"\n", 0o755)
+	return repo, stub
+}
+
+// runFence executes the switch block in repo and returns its combined output.
+func runFence(t *testing.T, repo, stub, stash, pr string) string {
+	t.Helper()
+	// `sh -c` is the point: the artifact under test IS a shell block, extracted from
+	// committed markdown in this repo. No external input reaches it.
+	cmd := exec.Command("sh", "-c", switchFence(t, stash, pr))
+	cmd.Dir = repo
+	cmd.Env = append(os.Environ(),
+		"PATH="+stub+string(os.PathListSeparator)+os.Getenv("PATH"),
+		"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null",
+		"CLAUDE_CODE_SESSION_ID=testsession")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("switch fence exited %v\n%s", err, out)
+	}
+	return string(out)
 }
 
 // TestReviewSwitchFenceWritesRestoreState EXECUTES the switch block instead of grepping it.
@@ -243,71 +313,12 @@ func TestReviewSwitchFenceWritesRestoreState(t *testing.T) {
 		{"commit-first", "no", ""},             // user picked "Commit first" -> STASH=no
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			repo := t.TempDir()
-			stub := filepath.Join(repo, "stub")
-			mustRun := func(dir string, args ...string) {
-				t.Helper()
-				cmd := exec.Command(args[0], args[1:]...)
-				cmd.Dir = dir
-				cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
-				if out, err := cmd.CombinedOutput(); err != nil {
-					t.Fatalf("%v: %v\n%s", args, err, out)
-				}
-			}
-			mustRun(repo, "git", "init", "-q", "-b", "main", ".")
-			mustRun(repo, "git", "config", "user.email", "t@example.com")
-			mustRun(repo, "git", "config", "user.name", "t")
-			if err := os.WriteFile(filepath.Join(repo, "a.txt"), []byte("base\n"), 0o644); err != nil {
-				t.Fatal(err)
-			}
-			mustRun(repo, "git", "add", "-A")
-			mustRun(repo, "git", "commit", "-qm", "base")
-			mustRun(repo, "git", "checkout", "-q", "-b", "prbranch")
-			if err := os.WriteFile(filepath.Join(repo, "b.txt"), []byte("pr\n"), 0o644); err != nil {
-				t.Fatal(err)
-			}
-			mustRun(repo, "git", "add", "-A")
-			mustRun(repo, "git", "commit", "-qm", "pr")
-			mustRun(repo, "git", "checkout", "-q", "main")
-			if err := os.MkdirAll(filepath.Join(repo, ".lets", "sessions"), 0o755); err != nil {
-				t.Fatal(err)
-			}
-			switch c.dirty {
-			case "tracked":
-				if err := os.WriteFile(filepath.Join(repo, "a.txt"), []byte("base\nmine\n"), 0o644); err != nil {
-					t.Fatal(err)
-				}
-			case "untracked":
-				if err := os.WriteFile(filepath.Join(repo, "u.txt"), []byte("mine\n"), 0o644); err != nil {
-					t.Fatal(err)
-				}
-			}
-			// Stub `gh`: a successful `pr checkout --detach`, nothing else.
-			if err := os.MkdirAll(stub, 0o755); err != nil {
-				t.Fatal(err)
-			}
-			if err := os.WriteFile(filepath.Join(stub, "gh"),
-				[]byte("#!/bin/sh\ngit checkout --detach -q prbranch\n"), 0o755); err != nil {
-				t.Fatal(err)
-			}
-
-			// `sh -c` is the point: the artifact under test IS a shell block, extracted from
-			// committed markdown in this repo. No external input reaches it.
-			cmd := exec.Command("sh", "-c", switchFence(t, c.stash))
-			cmd.Dir = repo
-			cmd.Env = append(os.Environ(),
-				"PATH="+stub+string(os.PathListSeparator)+os.Getenv("PATH"),
-				"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null",
-				"CLAUDE_CODE_SESSION_ID=testsession")
-			out, err := cmd.CombinedOutput()
-			if err != nil {
-				t.Fatalf("switch fence exited %v\n%s", err, out)
-			}
-			if !strings.Contains(string(out), "SWITCHED") {
+			repo, stub := smokeRepo(t, c.dirty)
+			out := runFence(t, repo, stub, c.stash, "42")
+			if !strings.Contains(out, "SWITCHED") {
 				t.Fatalf("expected SWITCHED, got:\n%s", out)
 			}
-
-			state := filepath.Join(repo, ".lets", "sessions", ".review-restore-testsession")
+			state := filepath.Join(repo, ".lets", "sessions", ".review-restore-testsession-pr42")
 			body, err := os.ReadFile(state)
 			if err != nil {
 				t.Fatalf("restore record missing - Step 6.7 would print \"nothing to restore\" and leave the user on the PR branch: %v\n%s", err, out)
@@ -322,6 +333,39 @@ func TestReviewSwitchFenceWritesRestoreState(t *testing.T) {
 				t.Errorf("mktemp leftovers in .lets/sessions: %v", leftovers)
 			}
 		})
+	}
+}
+
+// TestReviewSwitchKeepsAnEarlierRestoreRecord covers two PR reviews in ONE session, where the
+// first one's restore did not finish (Step 2.5 keeps the record on any non-clean outcome, and a
+// crash or an abort skips Step 6.7 entirely). With a session-only key the second review's
+// `mv -f` overwrote that record, and since HEAD was by then detached at the first PR, `ref:`
+// was rewritten to that detached sha - destroying the only route back to the user's branch.
+func TestReviewSwitchKeepsAnEarlierRestoreRecord(t *testing.T) {
+	for _, bin := range []string{"git", "sh"} {
+		if _, err := exec.LookPath(bin); err != nil {
+			t.Skipf("%s not available", bin)
+		}
+	}
+	repo, stub := smokeRepo(t, "")
+	sessions := filepath.Join(repo, ".lets", "sessions")
+
+	runFence(t, repo, stub, "no", "42") // leaves HEAD detached at prbranch42, record kept
+	runFence(t, repo, stub, "no", "43") // second review, same session
+
+	first, err := os.ReadFile(filepath.Join(sessions, ".review-restore-testsession-pr42"))
+	if err != nil {
+		t.Fatalf("the first review's record was destroyed by the second: %v", err)
+	}
+	if !strings.Contains(string(first), "ref: main") {
+		t.Errorf("the first record no longer points at the user's branch; got:\n%s", first)
+	}
+	second, err := os.ReadFile(filepath.Join(sessions, ".review-restore-testsession-pr43"))
+	if err != nil {
+		t.Fatalf("the second review wrote no record: %v", err)
+	}
+	if !strings.Contains(string(second), "pr: 43") {
+		t.Errorf("the second record is not for PR 43; got:\n%s", second)
 	}
 }
 
