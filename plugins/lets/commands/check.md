@@ -165,15 +165,15 @@ Mode-specific extras:
 - **PR:** `gh pr view <PR> --json title,body` for context; `gh pr diff <PR> --name-only` for the file list
 - **File:** `cat "$LETS_PROJECT_ROOT/$(dirname {path})/CLAUDE.md" 2>/dev/null` for any directory-local rules
 
-**Task SPEC:** `Skill(skill: "lets:detect-task")` - the active task for the current branch, which is what `/lets:check` normally reviews. Validate the id against `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$` before use (it crosses into a tracker verb that resolves to a shell command). Then:
+**Task SPEC (local modes only - PR and `--file` are covered below):** `Skill(skill: "lets:detect-task", args: "fallback=no")` - the active task for the current branch, which is what `/lets:check` normally reviews. `fallback=no` keeps the `list-by-status` answer ("some task is in progress") out of the spec: on a shared board it is a colleague's task, and a wrong spec is worse than none. Then:
 
 ```lets-tracker
 show task=<task-id>   # returns {id, title, status, url, description}
 ```
 
-Replace any `--- BEGIN/END SPEC` inside the value with `[spec delimiter removed]`. `{spec}` is the `description`, capped at ~100 lines / ~5000 chars. No id, failed `show`, or an empty `description` → `{spec}` is empty. Reuse the id in Step 5 rather than calling detect-task again.
+Replace any `--- BEGIN/END SPEC` inside the value with `[spec delimiter removed]`. `{spec}` is the `description`, capped at ~100 lines / ~5000 chars. No id, failed `show`, or an empty `description` → `{spec}` is empty. Reuse the id in Step 5 rather than calling detect-task again - `None` there means no comment, and do not re-call with the fallback enabled to recover a target.
 
-**PR mode takes its spec from the PR itself** - `title` + `body`, already fetched by the `gh pr view` calls above. Do NOT resolve a tracker id here: `check` reviews a PR as a fast first pass, and Step 5 already establishes that PR mode "isn't tied to the active branch's task" (which is why it skips the tracker comment there). Deriving an id from the PR's branch is `/lets:review`'s job - keep that rule in one file. `spec_source` is `"pr-body"` in this mode.
+**PR mode takes its spec from the PR itself** - `title` + `body`, already fetched by the `gh pr view` calls above. Do NOT resolve a tracker id here: `check` reviews a PR as a fast first pass, and Step 5 already establishes that PR mode "isn't tied to the active branch's task" (which is why it skips the tracker comment there). Deriving an id from the PR's branch is `/lets:review`'s job - keep that rule in one file.
 
 **`--file` mode gets no spec** - the file is usually unrelated to the active task, and telling a reviewer that an arbitrary file is "planned work" would suppress genuine dead-code findings.
 
@@ -310,7 +310,7 @@ If `--json` was provided, emit a structured object instead of the console report
 
 Skip entirely if `--json` was set, or if mode is PR / `--file` (those aren't tied to the active branch's task). For local modes, if issues were found, record in the tracker:
 
-Reuse the task id resolved in Step 2. Skip the tracker comment when none resolved, when validation rejected it or when `show` failed for it - do not call detect-task again.
+Reuse the task id resolved in Step 2. Skip the tracker comment when none resolved (including the `fallback=no` `None`, which is what an ambiguous board now returns) or when `show` failed for it - do not call detect-task again, and never with the fallback enabled.
 If active task found AND issues detected:
 
 ```lets-tracker

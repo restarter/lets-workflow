@@ -345,13 +345,15 @@ git diff {LETS_MERGE_BRANCH}...HEAD --stat      # three-dot: merge-base diff (PR
 
 Reviewing agents must know what the change is SUPPOSED to do. Without it, planned-but-not-yet-wired work reads as dead code and gets flagged as scope creep at BLOCKER severity - confidently wrong, which is worse than a miss.
 
-**Resolve the task id:**
+**Resolve the task id.** `detect-task` owns the ref→id rule and its sanitization - do NOT re-derive either here:
 
-- **Local modes** (`--local` / `--staged` / `--last-commit` / `--branch`): `Skill(skill: "lets:detect-task")`.
-- **PR mode**: (1) the `.lets/sessions/.task-<slug>` file for `headRefName` (slug = `headRefName` with `/`→`-`) - it outranks the branch name, which is frozen at creation; (2) else parse the id from `headRefName` per detect-task's Step 1 rule for the active tracker's id shape. **Never** the `list-by-status` fallback - on a shared board it returns a colleague's task, and the wrong spec is worse than none.
-- **`--file` mode**: no id, no spec. The file under review is usually unrelated to the active task; telling an agent it is "planned work" would be a new confident-wrongness vector.
+- **Local modes** (`--local` / `--staged` / `--last-commit` / `--branch`): `Skill(skill: "lets:detect-task", args: "fallback=no")`.
+- **PR mode**: `Skill(skill: "lets:detect-task", args: "branch=<headRefName> fallback=no")`.
+- **`--file` mode**: no call, no id, no spec. The file under review is usually unrelated to the active task; telling an agent it is "planned work" would be a new confident-wrongness vector.
 
-**Validate before use.** Both the slug and the extracted id must match `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$` - a fork PR's branch name is author-written and git refs permit `` $ ( ) ` ; | & ``. No match → skip to the PR-body fallback. Derive the slug in-shell, never by substituting the raw value into a path.
+`fallback=no` in BOTH modes. The `list-by-status` fallback answers "some task is in progress", not "this branch's task", so on a shared board it hands back a colleague's - and this id feeds every reviewer prompt AND every skeptic prompt, where a wrong spec is worse than none. It also makes the result unambiguous *by construction*, which is what a plain call cannot give: an id came from the state file or the ref name, never from the board.
+
+**ONE call, reused.** Step 10's tracker comment uses this same id; `None` there means no comment. Do NOT add a second, fallback-enabled call to recover a comment target - that reintroduces the ambiguous id the whole rule exists to keep out. The cost is a missing comment on a branch that carries no id and has no `.task-<slug>` file (an attached branch never claimed through `take-task`), which is the same case where the id could not be trusted anyway.
 
 **Fetch the spec** (skip when no id resolved):
 
@@ -879,7 +881,9 @@ Display full report in console.
 
 ## Step 10: Link Review to Active Task
 
-Reuse the task id resolved in Step 3 ("Resolve the task SPEC") - do NOT call detect-task again. Skip the tracker comment when no id resolved, when validation rejected it or when `show` failed for it: a `headRefName`-derived id may not exist on this board at all, and `comment-add` would HARD-FAIL at the end of an otherwise successful review.
+**Skip entirely in PR mode and in `--file` mode** - neither is tied to this branch's task. In PR mode the Step 3 id came from the PR's own head ref, so it names the *author's* task: writing a review note onto a colleague's task is not this command's job, and on a shared board the write target would be chosen by whoever named the branch. `--file` resolves no id at all. `/lets:check` Step 5 has held both positions since it was written; the two commands must not disagree.
+
+For local modes, reuse the task id resolved in Step 3 ("Resolve the task SPEC") - do NOT call detect-task again. Skip the comment when no id resolved (including the `fallback=no` `None`) or when `show` failed for it: `comment-add` would otherwise HARD-FAIL at the end of an otherwise successful review.
 
 
 ```lets-tracker
