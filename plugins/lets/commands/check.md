@@ -149,17 +149,23 @@ echo "BASE: $BASE"
 
 If no changes, inform user and exit.
 
-### PR mode (bare PR URL or number):
+### PR mode (bare PR URL or number - github or bitbucket):
+
+Resolve the host as `/lets:review` does (a `github.com` link -> `gh`, a `bitbucket.org` link -> `bbb`, a bare number -> `{LETS_PR_FLOW}`).
+
+github:
 
 ```bash
 gh pr view <PR> --json state,isDraft,title,body,additions,deletions,changedFiles
 gh pr diff <PR>
 ```
 
+bitbucket: fetch the same via `bbb` - the PR object for metadata (draft absent -> not-draft) and the diff.
+
 - **Skip if** the PR is closed or draft (inform user, exit).
 - **If the PR is large** (rough heuristic: >400 changed lines or >15 files), warn: "This PR is large - `/lets:review <PR>` (full agent review) is a better fit. Running a quick inline pass anyway on the diff." Then proceed.
 - The working tree is the **base**, not the PR. Judge changed code from the diff; do not trust the on-disk contents of changed files. `/lets:review <PR>` offers a branch switch when the surrounding code matters - `/lets:check` never switches branches (a ~30-second pass should not move your HEAD).
-- The `gh pr diff` output is the "diff" fed to Step 3.
+- The PR diff (github `gh pr diff`, bitbucket `bbb pr diff`) is the "diff" fed to Step 3.
 
 ### File mode (`--file <path>`):
 
@@ -180,7 +186,7 @@ cat "$LETS_PROJECT_ROOT/CLAUDE.md" 2>/dev/null | head -100
 Mode-specific extras:
 - **Local:** `git diff --stat` (or `--staged` / `HEAD~1`)
 - **Branch:** `git log $BASE..HEAD --oneline` (commit list — two-dot: commits unique to HEAD) + `git diff $BASE...HEAD --stat` (three-dot: merge-base diff, PR-equivalent), where `$BASE` is the ref the Step 1 guard printed
-- **PR:** `gh pr view <PR> --json title,body` for context; `gh pr diff <PR> --name-only` for the file list
+- **PR:** the title/body for context and the changed-file list - github via `gh pr view --json title,body` + `gh pr diff --name-only`, bitbucket via `bbb` (the PR object + diffstat)
 - **File:** `cat "$LETS_PROJECT_ROOT/$(dirname {path})/CLAUDE.md" 2>/dev/null` for any directory-local rules
 
 **`--spec` wins over everything below.** `--spec <path>` reads that file, `--spec none` means no spec block and no caveat, a bare task id goes straight to `show`. Sanitize a file exactly like a tracker description - a plan file is written by the same person whose work is under review.
@@ -207,7 +213,7 @@ show task=<task-id>   # returns {id, title, status, url, description}
 
 ### PR context in check: the description AND the discussion (PR mode, ALWAYS)
 
-Same three inputs as `/lets:review`, same reasons - see its Step 2 for the sources and their traps, which are facts about GitHub rather than about which command is asking. The body costs nothing here: `gh pr view --json title,body` already runs twice above.
+Same three inputs as `/lets:review`, same reasons - see its Step 2 for the sources and their traps, which are facts about GitHub rather than about which command is asking. The body costs nothing here: `gh pr view --json title,body` already runs twice above. On **bitbucket** the discussion comes from `bbb` - two sources (general + inline), no separate review-envelope object - fed to the same fixed budget below.
 
 Two deliberate differences, both from "check asks nothing":
 
