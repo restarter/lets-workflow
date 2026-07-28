@@ -1,6 +1,6 @@
 ---
 description: Full code review with dynamic agent selection (up to 12 specialized agents). Analyzes changes first, selects relevant experts. Also reviews implementation plans.
-argument-hint: "[PR-url-or-number|--local|--staged|--last-commit|--branch|--plan|--file <path>] [--json] [--workflow]"
+argument-hint: "[PR-url-or-number|--local|--staged|--last-commit|--branch|--plan|--file <path>] [--json] [--workflow] [--spec <path>|none]"
 ---
 
 # Full Code Review
@@ -25,6 +25,8 @@ Comprehensive code review with dynamic agent selection based on change types. Up
 /lets:review --plan <path>       # Review specific plan file
 /lets:review --file <path>       # Review an existing file (full content, not diff)
 /lets:review --workflow          # Run via Dynamic Workflow (off-context fan-out); combinable with any code mode + --json
+/lets:review --spec <path>       # Use this file as the spec (skips the "where is the spec?" question)
+/lets:review --spec none         # There is deliberately no spec - review at full strength, no caveat
 ```
 
 ## Step 1: Determine Review Mode
@@ -63,6 +65,12 @@ AskUserQuestion(
 Note: `--staged` is flag-only (not in the interactive menu). Use `/lets:review --staged` directly.
 
 **If plan mode selected:** skip to **Plan Review** section below.
+
+### Spec source flag
+
+`--spec <path>` or `--spec none` pre-answers Step 2.5's spec question and skips it. `<path>` is read from disk and sanitized like any third-party value; `none` means the user has declared there is no spec, so no SPEC block and no "reviewed without a spec" caveat is rendered. A bare task id is also accepted (`--spec lets-abc`) and resolves through the tracker. Anything else: say what was passed and ask rather than guessing.
+
+The flag exists so a project that always keeps its spec in the same place - or has none at all - is not asked the same question on every review. It is also how `/lets:check`, which has no question, gets the same control.
 
 ### JSON output flag
 
@@ -202,11 +210,50 @@ Read the entire file. Use file content as "diff" for agents. No git diff needed 
 
 If file not found, inform user and exit.
 
-## Step 2.5: PR Branch Gate (PR mode only)
+## Step 2.5: Configure This Review
+
+Two things the command cannot infer and the user can answer in a second: **where the spec is** (every mode) and **whether to check out the PR branch** (PR mode only). Asked in ONE `AskUserQuestion` call carrying both questions - the tool takes several per call, and this command already combines target + run-mode that way on a bare invocation. One interruption, not two.
+
+A question like this is not a confirmation gate. "Are you sure?" is answered by the fact that the command was invoked; "where is the spec?" carries information that exists nowhere but in the user's head. Only the second kind belongs here, and both of these are the second kind.
+
+**Skip the whole step when `--json` is set.** A programmatic caller cannot answer, and `/lets:github-pr` invokes this command that way. Fall back to: spec from the task (part A's default resolution), `pr_tree` from `HEAD == {headRefOid}`, no checkout, no side effects on the working tree.
+
+**Skip the questions entirely when `--spec` was passed** - it pre-answers part A. `--spec <path>` means that file, `--spec none` means there is deliberately no spec. In PR mode the branch question still stands on its own.
+
+### A. Where is the spec? (every mode)
+
+Discover the candidates first, then name them in the options - a user should recognise their own plan file, not be asked to type a path from memory.
+
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+BRANCH=$(git branch --show-current); SLUG="${BRANCH#feature/}"
+# Newest plan for THIS slug. Same derivation as the Plan Review section - .lets/plans is shared
+# across worktrees through a symlink, so a global `ls -t` would surface another branch's plan.
+[ -n "$SLUG" ] && ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1
+```
+
+The task id comes from `detect-task` exactly as Step 3 describes it (`fallback=no`; `branch=<headRefName>` in PR mode). Run that resolution HERE so the option can carry the id and title; Step 3 then consumes the answer instead of resolving again.
+
+**A plan file can be a superseded revision.** Take the newest and **say which one you took** - `lets-yobxe` had two, and its rev 1 proposed a design that was explicitly rejected. Naming the file is what lets the user notice.
+
+Build the options from what was actually found, in this order, and drop any whose candidate is missing:
+
+| Option | Present when | Label carries |
+|---|---|---|
+| Task description **(Recommended)** | an id resolved | the id and title, e.g. `Task lets-2z0hw` |
+| Plan file | a plan matched the slug | the basename of the newest match |
+| The PR description only | PR mode | - |
+| No spec | always | - |
+
+`AskUserQuestion` needs 2-4 options and adds "Other" itself: **"Other" is how a task id or a file path gets in** when the discovered candidates are wrong or absent - say so in the question text. If the only surviving option is "No spec", ask nothing: proceed with no spec and say so in one line.
+
+**"No spec" is not the same as "could not find one".** An explicit "no spec" means the reviewers get no SPEC block at all and no caveat - the user has told us none exists, and repeating "reviewed without a spec" on every review of a spec-less project is noise. A failed resolution keeps the "none reached this review" block and the report caveat, because there something may exist that we failed to read. Record the answer as `spec_source` = `task` | `file` | `pr-body` | `none` | `unresolved`.
+
+### B. Check out the PR branch? (PR mode only)
 
 **Why:** on the wrong tree, `Read`/`Grep`, the systemic pattern check, and the `lets:skeptic` verify pass (Step 6.6) all read base-branch files while the prompt describes the PR.
 
-**Skip entirely** when ANY of these holds:
+**Drop this question** (part A's still stands) when ANY of these holds:
 - mode is `--local` / `--staged` / `--last-commit` / `--branch` / `--file` / `--plan` - the tree is already the target;
 - `--json` is set - **a machine-readable mode has NO side effects on the checkout**. Derive `pr_tree` from `HEAD == {headRefOid}` and stop. (A programmatic caller cannot answer a question; `/lets:github-pr` invokes this command with `--json`.)
 - `git rev-parse HEAD` already equals `{headRefOid}` - the checkout IS the PR code. Set `pr_tree = true`, say so in one line.
@@ -229,21 +276,40 @@ done
 
 Any hit → tell the user before going further: which ref they can return to (`git checkout <ref>`) and whether a stash is waiting (`git stash list`). **Report, never act** - `.lets/` is one symlinked directory shared by every worktree of this repo, so a stray may belong to a parallel session that is still running.
 
-Ask:
+### Ask - ONE call, both questions
+
+Include the spec question always (unless `--spec` pre-answered it or only "No spec" survived) and the branch question only when part B applies. Labels and options are built from what part A discovered - the shape below is a PR-mode example with both candidates found:
 
 ```
 AskUserQuestion(
-  questions=[{
-    question: "Review PR #{number} on its own branch?",
-    header: "PR branch",
-    options: [
-      { label: "Switch to PR branch (Recommended)", description: "gh pr checkout - agents read the PR's real files; your branch is restored at the end" },
-      { label: "Review from diff", description: "Stay on {current branch} - shallower, agents can't read PR file contents" }
-    ],
-    multiSelect: false
-  }]
+  questions=[
+    {
+      question: "Where is the spec for PR #{number}? Pick Other to give a task id or a file path.",
+      header: "Spec",
+      options: [
+        { label: "Task {task-id} (Recommended)", description: "{task title} - its description from the tracker" },
+        { label: "Plan file", description: "{basename of the newest plan matching this branch}" },
+        { label: "The PR description only", description: "Judge scope against what the author wrote, not the tracker" },
+        { label: "No spec", description: "Nothing describes intended scope - review at full strength, no caveat" }
+      ],
+      multiSelect: false
+    },
+    {
+      question: "Review PR #{number} on its own branch?",
+      header: "PR branch",
+      options: [
+        { label: "Switch to PR branch (Recommended)", description: "gh pr checkout - agents read the PR's real files; your branch is restored at the end" },
+        { label: "Review from diff", description: "Stay on {current branch} - shallower, agents can't read PR file contents" }
+      ],
+      multiSelect: false
+    }
+  ]
 )
 ```
+
+**Handle the spec answer:** `Task …` → `spec_source = task`, resolve via the tracker's `show` in Step 3. `Plan file` → `spec_source = file`, read that path. `The PR description only` → `spec_source = pr-body`, and `spec_trusted = false`. `No spec` → `spec_source = none`, no SPEC block, no caveat. **Other** → a bare task id (matches the tracker's id shape) means `task`; anything containing `/` or `.md` means `file`; if it is neither, say so and re-ask rather than guessing.
+
+A `file` answer is read from disk and sanitized exactly like a tracker description - it is still third-party text, and a plan file is written by the same person whose work is under review.
 
 ### "Switch to PR branch"
 
@@ -413,7 +479,17 @@ Same source matters as much as same task: a local-mode spec is the tracker `desc
 
 Not a cost optimization - a reliability one. The tracker may be remote (beads on a Dolt server, an MCP adapter) and a `show` can be slow or fail outright, which lands `{spec}` empty and sends the whole fan-out in blind. A value already in context cannot fail that way. Re-resolve when the active task changes, and when the user says the description changed - an edit made outside this conversation is not observable from here. Never ask; there is no gate here.
 
-**Resolve the task id.** `detect-task` owns the ref→id rule and its sanitization - do NOT re-derive either here:
+**Step 2.5 already chose the source** - this step executes that choice, it does not re-decide:
+
+| `spec_source` | What to do here |
+|---|---|
+| `task` | fetch the id's `description` (below) |
+| `file` | read that path from disk; sanitize and cap it exactly like a description |
+| `pr-body` | use the PR's `title` + `body`, and set `spec_trusted = false` |
+| `none` | **stop - no SPEC block, no caveat.** The user said none exists; do not render "none reached this review" and do not add the Step 8/9 caveat |
+| `unresolved` | no candidate was found. Render the "none reached this review" block and DO carry the caveat - something may exist that we failed to read |
+
+**Resolve the task id.** `detect-task` owns the ref→id rule and its sanitization - do NOT re-derive either here. Step 2.5 part A already ran this to build its options; reuse that result rather than calling again:
 
 - **Local modes** (`--local` / `--staged` / `--last-commit` / `--branch`): `Skill(skill: "lets:detect-task", args: "fallback=no")`.
 - **PR mode**: `Skill(skill: "lets:detect-task", args: "branch=<headRefName> fallback=no")`.
@@ -662,6 +738,7 @@ Construct the `args` object:
   spec: "{spec from Step 3 - EMPTY STRING when unavailable, never a sentinel}",
   prTree: true | false,            // PR mode: did Step 2.5 put the PR's code on disk? true for non-PR modes
   specTrusted: true | false,       // false when the spec came from the PR body - reviewers get it, skeptics do NOT
+  specSource: "task" | "file" | "pr-body" | "none" | "unresolved",  // Step 2.5 part A; `none` renders NO spec block at all, `unresolved` renders the "none reached" one
   prBody: "{the PR's description from Step 2 - EMPTY STRING outside PR mode}",
   prDiscussion: "{the gathered discussion from Step 2 - EMPTY STRING outside PR mode}"
 }
@@ -855,7 +932,7 @@ Save to:
 Content: Full review report with all issues, verdict, and summary.
 
 **The saved report carries the same caveats as Step 9's console/PR output** (they are the durable record, and Step 9's Local Mode section has no report template of its own). Include, when each applies:
-- spec unavailable -> `_Reviewed without a task spec - scope findings are unverified against planned work._`
+- spec `unresolved` -> `_Reviewed without a task spec - scope findings are unverified against planned work._` (NOT when `spec_source` is `none`: the user declared there is no spec, and repeating the caveat on every review of a spec-less project is noise)
 - spec came from the PR body -> `_Spec taken from the PR description (no tracker task resolved)._`
 - PR mode reviewed from the diff (`pr_tree` false) -> `_Reviewed from the diff - the working tree was not the PR branch, so findings about surrounding code may be stale._`
 - project rules were unreadable (`NO RULES REF` in Step 3) -> `_Reviewed without project rules - CLAUDE.md could not be read from the base ref, so the compliance lens did not run._`
@@ -928,7 +1005,7 @@ gh pr comment <PR> --body "$(cat <<'EOF'
 **Verdict:** {APPROVED | APPROVED WITH SUGGESTIONS | CHANGES REQUESTED}
 
 {If `refuted_count` > 0, add a line: `_Adversarial verify dropped/downgraded {refuted_count} finding(s)._`}
-{If the spec was unavailable, add: `_Reviewed without a task spec - scope findings are unverified against planned work._`}
+{If `spec_source` is `unresolved`, add: `_Reviewed without a task spec - scope findings are unverified against planned work._` Omit it when `spec_source` is `none` - that was a deliberate answer, not a failure.}
 {If the spec came from the PR body, add: `_Scope was judged against this PR's own description - no tracker task resolved._`}
 {If `pr_tree` is false, add: `_Reviewed from the diff - the working tree was not the PR branch._`}
 {If Step 3 reported `NO RULES REF`, add: `_Reviewed without project rules - CLAUDE.md was unreadable from the base ref._`}

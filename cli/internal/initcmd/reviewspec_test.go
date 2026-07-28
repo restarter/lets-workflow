@@ -150,7 +150,7 @@ func TestWorkflowPromptsAreWired(t *testing.T) {
 	w2 := region(t, readPlugin(t, filepath.Join("commands", "review.md")), "review.md W2 args",
 		"### W2: Build args", "### W3:")
 	skillMd := readPlugin(t, filepath.Join("skills", "review-workflow", "SKILL.md"))
-	for _, k := range []string{"spec", "prTree", "specTrusted", "prBody", "prDiscussion"} {
+	for _, k := range []string{"spec", "specSource", "prTree", "specTrusted", "prBody", "prDiscussion"} {
 		if !regexp.MustCompile(`\b` + k + `\b`).MatchString(destructure) {
 			t.Errorf("review.workflow.js: %q is not destructured from input", k)
 		}
