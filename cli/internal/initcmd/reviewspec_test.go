@@ -295,9 +295,9 @@ func TestBranchGuardsAreIdentical(t *testing.T) {
 			}
 			found = true
 			seen[file] = strings.TrimSpace(f)
-			for _, need := range []string{"behind origin", "rev-list --count {LETS_MERGE_BRANCH}..origin/"} {
+			for _, need := range []string{`BASE="origin/{LETS_MERGE_BRANCH}"`, `echo "BASE: $BASE"`} {
 				if !strings.Contains(f, need) {
-					t.Errorf("%s: --branch guards lost the stale-merge-branch check (%q) - the diff would silently include already-merged work", file, need)
+					t.Errorf("%s: --branch guards no longer resolve and print the diff base (%q) - a worktree's local merge-branch is stale by construction, so the diff would include already-merged work", file, need)
 				}
 			}
 		}

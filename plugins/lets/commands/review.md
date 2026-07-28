@@ -57,7 +57,7 @@ AskUserQuestion(
 
 **Handle response:**
 - **Local changes** -> local mode with `git diff`
-- **Branch** -> local mode with `git diff {LETS_MERGE_BRANCH}...HEAD` (run guards from Step 2 first)
+- **Branch** -> local mode, diffing against the base the Step 2 guards resolve and print (run them first)
 - **Last commit** -> local mode with `git diff HEAD~1`
 - **Plan** -> skip to Plan Review section
 - **Other** (free text) -> treat as PR number or URL, use GitHub PR mode
@@ -183,8 +183,8 @@ git diff --staged
 # Last commit
 git diff HEAD~1
 
-# Full branch vs merge branch (three-dot, merge-base diff)
-git diff {LETS_MERGE_BRANCH}...HEAD
+# Full branch vs the resolved base (three-dot, merge-base diff) - $BASE is what the guards print
+git diff $BASE...HEAD
 ```
 
 For `--branch` mode, run these guards first. **If any guard prints output, STOP the entire command, surface that message to the user, and skip remaining steps** — bash `exit` only terminates the spawned shell, not the orchestrator's command flow.
@@ -193,15 +193,22 @@ For `--branch` mode, run these guards first. **If any guard prints output, STOP 
 [ -z "{LETS_MERGE_BRANCH}" ] && echo "LETS_MERGE_BRANCH is not configured. Edit .lets/.env or run /lets:init." && exit
 CURRENT=$(git branch --show-current)
 [ "$CURRENT" = "{LETS_MERGE_BRANCH}" ] && echo "On {LETS_MERGE_BRANCH} - nothing to review against itself." && exit
-git rev-parse --verify "{LETS_MERGE_BRANCH}" >/dev/null 2>&1 || { echo "Merge branch '{LETS_MERGE_BRANCH}' not found locally. Run: git fetch origin {LETS_MERGE_BRANCH}:{LETS_MERGE_BRANCH}"; exit; }
-# A merge-branch that EXISTS but is behind its remote silently widens the diff with commits that are
-# already merged - you end up reviewing someone else's landed work as if it were yours, and nothing
-# says so. Skipped when there is no remote-tracking ref, so a local-only repo is unaffected.
+# Resolve the diff base and PRINT it - each Bash call is a fresh shell, so a variable set here is
+# gone by the next fence; every command below uses the printed BASE, not the branch name.
+# Prefer the remote-tracking ref. In a worktree setup the LOCAL merge-branch is stale by
+# construction: it is checked out in the main repo and only moves when someone pulls there, so
+# diffing against it silently widens the review with commits that are already merged. The fetch
+# deliberately has NO refspec - `git fetch origin X:X` REFUSES while X is checked out in another
+# worktree, which in a project that uses worktrees it always is.
 if git rev-parse -q --verify "origin/{LETS_MERGE_BRANCH}" >/dev/null 2>&1; then
-  BEHIND=$(git rev-list --count {LETS_MERGE_BRANCH}..origin/{LETS_MERGE_BRANCH})
-  [ "$BEHIND" != "0" ] && echo "Local {LETS_MERGE_BRANCH} is $BEHIND commit(s) behind origin - the diff would include already-merged work. Run: git fetch origin {LETS_MERGE_BRANCH}:{LETS_MERGE_BRANCH}" && exit
+  git fetch --quiet origin "{LETS_MERGE_BRANCH}" 2>/dev/null
+  BASE="origin/{LETS_MERGE_BRANCH}"
+else
+  git rev-parse --verify "{LETS_MERGE_BRANCH}" >/dev/null 2>&1 || { echo "Neither '{LETS_MERGE_BRANCH}' nor 'origin/{LETS_MERGE_BRANCH}' exists - nothing to diff against. Run: git fetch origin {LETS_MERGE_BRANCH}"; exit; }
+  BASE="{LETS_MERGE_BRANCH}"
 fi
-[ "$(git rev-list --count {LETS_MERGE_BRANCH}..HEAD)" = "0" ] && echo "Branch has no commits ahead of {LETS_MERGE_BRANCH}." && exit
+[ "$(git rev-list --count $BASE..HEAD)" = "0" ] && echo "Branch has no commits ahead of $BASE." && exit
+echo "BASE: $BASE"
 ```
 
 If no changes found, inform user and exit.
@@ -479,14 +486,14 @@ The test-the-command-then-run-it shape is deliberate: `git show X | head` exits 
 cat CLAUDE.md 2>/dev/null | head -200
 
 # Get changed file list
-git diff --name-only  # (or --staged, HEAD~1, or {LETS_MERGE_BRANCH}...HEAD for --branch)
+git diff --name-only  # (or --staged, HEAD~1, or $BASE...HEAD for --branch)
 ```
 
 For `--branch` mode, also surface the commit list and stat so the reviewing agents see branch scope:
 
 ```bash
-git log {LETS_MERGE_BRANCH}..HEAD --oneline     # two-dot: commits unique to HEAD
-git diff {LETS_MERGE_BRANCH}...HEAD --stat      # three-dot: merge-base diff (PR-equivalent)
+git log $BASE..HEAD --oneline                  # two-dot: commits unique to HEAD
+git diff $BASE...HEAD --stat                   # three-dot: merge-base diff (PR-equivalent)
 ```
 
 ### Resolve the task SPEC (all modes)
@@ -1386,6 +1393,10 @@ comment-add task=<task-id> body="Plan review: {verdict}. {N} issues found."
 - For local: show full report in console + save to file
 - Agents define their own expertise, tiered scoring, output format, and mode behavior in agents/*.md
 - The review command only provides context (diff, CLAUDE.md) and orchestrates
+
+## Keeping this file consistent with `/lets:check`
+
+The two commands share a target surface, a SPEC contract and a PR-context block; only the reviewing population differs. The rule that governs which differences are legitimate lives in **`commands/check.md` -> "What This Is NOT"** - read it before adding anything here that check will not get. Every round of `lets-2z0hw` produced a bug from these two files drifting on something they were meant to state identically.
 
 ## Workflow Integration
 

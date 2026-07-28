@@ -46,7 +46,7 @@ Parse the argument(s):
 | `--local` / *no argument* | Local (default) | `git diff` (uncommitted) |
 | `--staged` | Local | `git diff --staged` |
 | `--last-commit` | Local | `git diff HEAD~1` |
-| `--branch` | Local | `git diff {LETS_MERGE_BRANCH}...HEAD` (three-dot, merge-base diff) |
+| `--branch` | Local | three-dot merge-base diff against the base the Step 1 guard resolves (`origin/{LETS_MERGE_BRANCH}` when it exists) |
 
 `--json` is a modifier that can accompany any code mode (not plan mode): emit structured JSON instead of the console report (see Step 4.5). Skip the LETS box and the tracker comment when `--json` is set - the caller handles output.
 
@@ -120,7 +120,7 @@ Output same format as code check, then:
 git diff                                    # default / --local: uncommitted
 git diff --staged                           # --staged
 git diff HEAD~1                             # --last-commit
-git diff {LETS_MERGE_BRANCH}...HEAD         # --branch (three-dot, merge-base diff)
+git diff $BASE...HEAD                       # --branch: $BASE is what the guard printed
 ```
 
 For `--branch` mode, run these guards first. **If any guard prints output, STOP the entire command, surface that message to the user, and skip remaining steps** — bash `exit` only terminates the spawned shell, not the orchestrator's command flow.
@@ -129,15 +129,22 @@ For `--branch` mode, run these guards first. **If any guard prints output, STOP 
 [ -z "{LETS_MERGE_BRANCH}" ] && echo "LETS_MERGE_BRANCH is not configured. Edit .lets/.env or run /lets:init." && exit
 CURRENT=$(git branch --show-current)
 [ "$CURRENT" = "{LETS_MERGE_BRANCH}" ] && echo "On {LETS_MERGE_BRANCH} - nothing to review against itself." && exit
-git rev-parse --verify "{LETS_MERGE_BRANCH}" >/dev/null 2>&1 || { echo "Merge branch '{LETS_MERGE_BRANCH}' not found locally. Run: git fetch origin {LETS_MERGE_BRANCH}:{LETS_MERGE_BRANCH}"; exit; }
-# A merge-branch that EXISTS but is behind its remote silently widens the diff with commits that are
-# already merged - you end up reviewing someone else's landed work as if it were yours, and nothing
-# says so. Skipped when there is no remote-tracking ref, so a local-only repo is unaffected.
+# Resolve the diff base and PRINT it - each Bash call is a fresh shell, so a variable set here is
+# gone by the next fence; every command below uses the printed BASE, not the branch name.
+# Prefer the remote-tracking ref. In a worktree setup the LOCAL merge-branch is stale by
+# construction: it is checked out in the main repo and only moves when someone pulls there, so
+# diffing against it silently widens the review with commits that are already merged. The fetch
+# deliberately has NO refspec - `git fetch origin X:X` REFUSES while X is checked out in another
+# worktree, which in a project that uses worktrees it always is.
 if git rev-parse -q --verify "origin/{LETS_MERGE_BRANCH}" >/dev/null 2>&1; then
-  BEHIND=$(git rev-list --count {LETS_MERGE_BRANCH}..origin/{LETS_MERGE_BRANCH})
-  [ "$BEHIND" != "0" ] && echo "Local {LETS_MERGE_BRANCH} is $BEHIND commit(s) behind origin - the diff would include already-merged work. Run: git fetch origin {LETS_MERGE_BRANCH}:{LETS_MERGE_BRANCH}" && exit
+  git fetch --quiet origin "{LETS_MERGE_BRANCH}" 2>/dev/null
+  BASE="origin/{LETS_MERGE_BRANCH}"
+else
+  git rev-parse --verify "{LETS_MERGE_BRANCH}" >/dev/null 2>&1 || { echo "Neither '{LETS_MERGE_BRANCH}' nor 'origin/{LETS_MERGE_BRANCH}' exists - nothing to diff against. Run: git fetch origin {LETS_MERGE_BRANCH}"; exit; }
+  BASE="{LETS_MERGE_BRANCH}"
 fi
-[ "$(git rev-list --count {LETS_MERGE_BRANCH}..HEAD)" = "0" ] && echo "Branch has no commits ahead of {LETS_MERGE_BRANCH}." && exit
+[ "$(git rev-list --count $BASE..HEAD)" = "0" ] && echo "Branch has no commits ahead of $BASE." && exit
+echo "BASE: $BASE"
 ```
 
 If no changes, inform user and exit.
@@ -172,7 +179,7 @@ cat "$LETS_PROJECT_ROOT/CLAUDE.md" 2>/dev/null | head -100
 
 Mode-specific extras:
 - **Local:** `git diff --stat` (or `--staged` / `HEAD~1`)
-- **Branch:** `git log {LETS_MERGE_BRANCH}..HEAD --oneline` (commit list — two-dot: commits unique to HEAD) + `git diff {LETS_MERGE_BRANCH}...HEAD --stat` (three-dot: merge-base diff, PR-equivalent)
+- **Branch:** `git log $BASE..HEAD --oneline` (commit list — two-dot: commits unique to HEAD) + `git diff $BASE...HEAD --stat` (three-dot: merge-base diff, PR-equivalent), where `$BASE` is the ref the Step 1 guard printed
 - **PR:** `gh pr view <PR> --json title,body` for context; `gh pr diff <PR> --name-only` for the file list
 - **File:** `cat "$LETS_PROJECT_ROOT/$(dirname {path})/CLAUDE.md" 2>/dev/null` for any directory-local rules
 
@@ -291,12 +298,6 @@ Use it for two things: what the author says this change does, and what has ALREA
 
 > Omit either half that is empty, and the whole block outside PR mode. Unlike `/lets:review` there is no skeptic here to withhold it from - check has no verification pass at all.
 
-**The rule these two commands are kept consistent by.** Every difference between `/lets:check` and `/lets:review` must be derivable from one of exactly TWO facts:
-
-1. **check dispatches no subagents** - so no skeptic, no adversarial pass, and nothing to withhold a block from;
-2. **check is fired repeatedly while writing code** - so it never asks a question (flags instead) and never moves your HEAD.
-
-Anything else that differs is drift, not design. Three such drifts were found and removed at once: the PR body reaching review but not check, the discussion reaching neither, and a spec cap that was smaller in the cheaper command. When adding to either file, name which of the two facts a new difference comes from - if neither fits, the other command needs the same change.
 
 ### Review Focus
 
@@ -421,6 +422,13 @@ Skip the box entirely when `--json` was set. Otherwise the box offers the `/lets
 - Respond in user's language
 
 ## What This Is NOT
+
+**The rule these two commands are kept consistent by.** Every difference between `/lets:check` and `/lets:review` must be derivable from one of exactly TWO facts:
+
+1. **check dispatches no subagents** - so no skeptic, no adversarial pass, and nothing to withhold a block from;
+2. **check is fired repeatedly while writing code** - so it never asks a question (flags instead) and never moves your HEAD.
+
+Anything else that differs is drift, not design. Three such drifts were found and removed at once: the PR body reaching review but not check, the discussion reaching neither, and a spec cap that was smaller in the cheaper command. When adding to either file, name which of the two facts a new difference comes from - if neither fits, the other command needs the same change.
 
 - NOT multi-agent - inline review only, no subagent dispatch in ANY mode (that's the one thing that never changes vs `/lets:review`)
 - NOT saved to file - console only (`--json` emits to console too, for tooling)
