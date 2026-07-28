@@ -67,9 +67,13 @@ func TestSkepticSpecBlockIsNarrower(t *testing.T) {
 		// wording to do so - anchoring at the heading makes the explanation trip its own guard.
 		// Mirrors the JS side, which starts at the assignment and so excludes its comment block.
 		{filepath.Join("commands", "review.md"), "review.md skeptic template",
-			"MODE: review (adversarial verification)", "**Asymmetric drop rule", "or in ANY PR mode"},
-		// Needle is the EXECUTABLE form, not the bare key: `specTrusted` also appears in the
-		// comment above the expression, so deleting the guard would leave a bare-key needle green.
+			"MODE: review (adversarial verification)", "**Asymmetric drop rule", "{omit-when: spec empty OR pr-mode}"},
+		// Both needles are chosen so the guard cannot pass on the EXPLANATION instead of the rule.
+		// On the JS side `isPRMode` appears in the comment above the expression, so the needle carries
+		// the negation - `!isPRMode` exists only in the executable line. On the markdown side there is
+		// no identifier at all, so the rule is written as a `{key: value}` token rather than a
+		// sentence: a prose needle would break on any reword, which this file's header calls out as
+		// worse than useless.
 		{filepath.Join("skills", "review-workflow", "review.workflow.js"), "js specBlockSkeptic",
 			"const specBlockSkeptic =", "const treeBlock =", "!isPRMode"},
 	} {
@@ -265,6 +269,49 @@ func TestPlanGlobsHandleTrunkMode(t *testing.T) {
 		}
 		if seen == 0 {
 			t.Errorf("%s: no bash fence globs .lets/plans - moved? update this guard", file)
+		}
+	}
+}
+
+// TestBranchGuardsAreIdentical pins the --branch preflight to be byte-for-byte the same in both
+// commands. It is the one block they genuinely share - four checks about the merge-branch, none of
+// which depend on who does the reviewing - and every round of this branch has produced a bug from
+// these two files drifting apart on something they were supposed to state identically.
+//
+// The guard the block grew last is why it matters: a merge-branch that EXISTS but sits behind its
+// remote silently widens the diff with already-merged commits, so a review reports someone else's
+// landed work as if it were the author's. That was found by it happening during a review of this
+// very branch. A fix that lands in one file and not the other leaves the other silently wrong.
+func TestBranchGuardsAreIdentical(t *testing.T) {
+	seen := map[string]string{}
+	for _, file := range []string{
+		filepath.Join("commands", "review.md"),
+		filepath.Join("commands", "check.md"),
+	} {
+		var found bool
+		for _, f := range bashFences(readPlugin(t, file)) {
+			if !strings.Contains(f, "is not configured. Edit .lets/.env") {
+				continue
+			}
+			found = true
+			seen[file] = strings.TrimSpace(f)
+			for _, need := range []string{"behind origin", "rev-list --count {LETS_MERGE_BRANCH}..origin/"} {
+				if !strings.Contains(f, need) {
+					t.Errorf("%s: --branch guards lost the stale-merge-branch check (%q) - the diff would silently include already-merged work", file, need)
+				}
+			}
+		}
+		if !found {
+			t.Errorf("%s: no --branch guard fence found - moved? update this guard", file)
+		}
+	}
+	if len(seen) == 2 {
+		var blocks []string
+		for _, v := range seen {
+			blocks = append(blocks, v)
+		}
+		if blocks[0] != blocks[1] {
+			t.Error("commands/review.md and commands/check.md carry DIFFERENT --branch guards - they check the same four things about the same branch and must not diverge")
 		}
 	}
 }

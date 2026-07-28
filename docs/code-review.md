@@ -50,6 +50,8 @@ Where the spec comes from by default depends on the command and the target. `/le
 
 Three different things reach a reviewer and only one of them is the spec. The spec says what was *supposed* to be built. The PR description says what the author *claims* they built. The discussion says what people have *already said* about it. `/lets:review <PR>` now hands over all three — previously the description arrived only when no spec could be found, and the discussion never arrived at all.
 
+`/lets:check <PR>` gets the same two blocks - it has no verification pass to withhold them from, and the description was already being fetched there anyway. The only difference is that check never asks how much discussion to load: it takes the anchored parts plus recent comments and leaves the rest, since asking is the thing check does not do.
+
 The discussion is the one that saves you re-reading the same objection twice. If a thread on `foo.go:42` already says "raised → fixed in abc1234 → verified", a reviewer that can see it says so instead of filing the finding again. Gathering it takes three separate calls on GitHub: comments under the PR, review summaries, and the inline comments anchored to lines — the last of which appear in none of the obvious ones. On a busy PR you're asked whether to load the whole thread history or just the anchored parts.
 
 None of it reaches the adversarial verification pass. Everything in that block is written by the author of the code being judged, or by people commenting on it, and a verifier can only answer "real or not" — so one "we agreed to ignore this" in a thread would delete a finding outright. Reviewers can weigh it and still report; a verifier can't.
