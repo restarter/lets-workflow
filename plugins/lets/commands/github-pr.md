@@ -7,7 +7,7 @@ argument-hint: "[PR-url-or-number|--respond|--follow-up|--approve|--merge|--stat
 
 Full GitHub PR review lifecycle: analyze code, discuss findings with user, post inline comments, follow-up on fixes, approve or request changes.
 
-**GitHub only.** This command drives PRs exclusively via the `gh` CLI. Bitbucket and local-merge PR flows are not implemented (`LETS_PR_FLOW=bitbucket|local` users finish tasks via `/lets:done`, not this command).
+**GitHub only** (the full posting lifecycle). This command drives inline comments / follow-up / approve / merge exclusively via the `gh` CLI. For **Bitbucket**, `/lets:review <PR>` already reviews a PR end to end (fetch + diff + discussion + summary post via `bbb`); only the inline/approve/merge lifecycle here stays GitHub-only for now. `LETS_PR_FLOW=local` users finish tasks via `/lets:done`.
 
 **Requires:** `gh` CLI installed and authenticated.
 
