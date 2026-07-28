@@ -67,18 +67,18 @@ func TestSkepticSpecBlockIsNarrower(t *testing.T) {
 		// wording to do so - anchoring at the heading makes the explanation trip its own guard.
 		// Mirrors the JS side, which starts at the assignment and so excludes its comment block.
 		{filepath.Join("commands", "review.md"), "review.md skeptic template",
-			"MODE: review (adversarial verification)", "**Asymmetric drop rule", "spec_trusted"},
+			"MODE: review (adversarial verification)", "**Asymmetric drop rule", "or in ANY PR mode"},
 		// Needle is the EXECUTABLE form, not the bare key: `specTrusted` also appears in the
 		// comment above the expression, so deleting the guard would leave a bare-key needle green.
 		{filepath.Join("skills", "review-workflow", "review.workflow.js"), "js specBlockSkeptic",
-			"const specBlockSkeptic =", "const treeBlock =", "specTrusted === true"},
+			"const specBlockSkeptic =", "const treeBlock =", "!isPRMode"},
 	} {
 		body := squash(region(t, readPlugin(t, c.file), c.what, c.start, c.end))
 		if !strings.Contains(body, "NEVER use the SPEC as grounds to refute a correctness") {
 			t.Errorf("%s: lost the narrow wording - a skeptic must not refute a real bug on spec grounds", c.what)
 		}
 		if !strings.Contains(body, c.trustGuard) {
-			t.Errorf("%s: lost %q - a PR-body spec is written by the author of the code being judged, and a skeptic's real=false deletes findings", c.what, c.trustGuard)
+			t.Errorf("%s: lost %q - in PR mode the spec is the PR author's own task or plan file, and a skeptic's real=false deletes findings", c.what, c.trustGuard)
 		}
 		// Ban what the reviewer says and the skeptic must never receive. NOT "cap it at" - the tier
 		// cap was removed, so banning it would be a vacuous assertion that passes by absence.
@@ -150,7 +150,7 @@ func TestWorkflowPromptsAreWired(t *testing.T) {
 	w2 := region(t, readPlugin(t, filepath.Join("commands", "review.md")), "review.md W2 args",
 		"### W2: Build args", "### W3:")
 	skillMd := readPlugin(t, filepath.Join("skills", "review-workflow", "SKILL.md"))
-	for _, k := range []string{"spec", "specSource", "prTree", "specTrusted", "prBody", "prDiscussion"} {
+	for _, k := range []string{"spec", "specSource", "prTree", "prBody", "prDiscussion"} {
 		if !regexp.MustCompile(`\b` + k + `\b`).MatchString(destructure) {
 			t.Errorf("review.workflow.js: %q is not destructured from input", k)
 		}
