@@ -28,16 +28,16 @@ plan-workflow writes `planning` at Step 3 (workflow launch), `gate-clarify` at G
 
 ## Gate notifications (authoritative)
 
-At a human gate, surface to the operator via cmux — **marker-gated** so only autonomous (spawn-claimed) runs notify; interactive runs have no marker and stay quiet. Resolve the workspace by the worktree path:
+At a human gate, surface to the operator through the **active launcher** (`$LETS_LAUNCHER`) — **marker-gated** so only autonomous (spawn-claimed) runs notify; interactive runs have no marker and stay quiet. `lets notify` dispatches on `LETS_LAUNCHER` (cmux → cmux workspace, tmux → attached tmux clients, terminal → no-op) — never name a launcher in the snippet. Resolve the target by the worktree path:
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 if [ -f "$LETS_PROJECT_ROOT/.lets/cache/pipeline-state-{TASK_ID}" ]; then
-  lets cmux notify --cwd "$LETS_PROJECT_ROOT" --title '{gate title}' --body '{gate body}' --json 2>/dev/null || true
+  lets notify --cwd "$LETS_PROJECT_ROOT" --title '{gate title}' --body '{gate body}' --json 2>/dev/null || true
 fi
 ```
 
-**Quoting:** the substituted values (`{gate title}`, `{gate body}` — the latter carries the user-authored task title) go in **single quotes**, so a title containing `$(...)`, backticks, or `$VAR` is a literal, not shell-expanded, before it reaches the injection-safe CLI. Only `$LETS_PROJECT_ROOT` stays double-quoted (it's a real shell var). If a substituted value contains a literal `'`, the orchestrator escapes it (`'\''`) when building the command. Degrades silently (`ok=true, notified=false`) off-macOS / cmux-absent / no match; `|| true` covers the non-unix stub. The notification is **best-effort surfacing** — the gate also halts visibly in-band; never rely on it alone. Gates: **GATE 1** "Plan needs your answers" (clarify), **GATE 2** "Plan ready to approve". **Keep in sync:** `execute.md` reuses this block for its execute-blocked notify.
+**Quoting:** the substituted values (`{gate title}`, `{gate body}` — the latter carries the user-authored task title) go in **single quotes**, so a title containing `$(...)`, backticks, or `$VAR` is a literal, not shell-expanded, before it reaches the injection-safe CLI. Only `$LETS_PROJECT_ROOT` stays double-quoted (it's a real shell var). If a substituted value contains a literal `'`, the orchestrator escapes it (`'\''`) when building the command. Degrades silently (`ok=true, notified=false`) when the launcher is `terminal`, unknown, its binary is absent, or nothing matches (tmux with no client attached → `no_client`); `|| true` covers the non-unix stub. The notification is **best-effort surfacing** — the gate also halts visibly in-band; never rely on it alone. Gates: **GATE 1** "Plan needs your answers" (clarify), **GATE 2** "Plan ready to approve". **Keep in sync:** `execute.md` reuses this block for its execute-blocked notify.
 
 ## Step 1: Goal + Rubric
 

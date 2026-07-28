@@ -109,7 +109,7 @@ var Keys = []Key{
 	},
 	{
 		Name:      "LETS_LAUNCHER",
-		Comment:   "Worktree launcher: terminal (print the cd command) | cmux (open in a cmux workspace, macOS only)",
+		Comment:   "Worktree launcher: terminal (print the cd command) | cmux (cmux workspace, macOS only) | tmux (tmux window/session, Linux + macOS)",
 		Default:   "terminal",
 		UserLevel: true,
 	},

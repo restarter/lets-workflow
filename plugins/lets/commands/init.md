@@ -172,19 +172,29 @@ Bind to `$BRANCH`. "Other" free-text → use as-is.
 
 ### 2c-ter. Worktree launcher
 
+**Detection-aware — probe the host FIRST, then build the option list** (offering a launcher that provably cannot work is the "wrong choice" this removes):
+
+```bash
+uname -s                                                 # Darwin | Linux
+command -v tmux >/dev/null 2>&1 && echo TMUX_PRESENT || echo TMUX_ABSENT
+command -v cmux >/dev/null 2>&1 && echo CMUX_PRESENT || echo CMUX_ABSENT
+```
+
+Build the options from the probe:
+- **Terminal** (Recommended) — always offered: `"Print a cd command to run in a new terminal. Works everywhere."`
+- **tmux** — offer on any unix (`Darwin` or `Linux`). Append ` (detected)` to the label when `TMUX_PRESENT`; when `TMUX_ABSENT` the description reads `"Open in a tmux window/session. tmux is not installed — falls back to terminal until you install it."`, else `"Open in a tmux window/session automatically (Linux + macOS)."`
+- **cmux** — offer ONLY when `uname -s` is `Darwin`. Append ` (detected)` when `CMUX_PRESENT`. **Omit the option entirely on Linux** — cmux is macOS-only.
+
 AskUserQuestion(
   questions=[{
     question: "How should LETS open new worktree sessions?",
     header: "Launcher",
-    options: [
-      { label: "Terminal (Recommended)", description: "Print a cd command to run in a new terminal. Works everywhere." },
-      { label: "cmux", description: "Open in a cmux workspace automatically (macOS + cmux only; falls back to terminal when absent)" }
-    ],
+    options: [ /* Terminal always; tmux on unix; cmux only on macOS — annotate (detected) per the probe */ ],
     multiSelect: false
   }]
 )
 
-Bind label (lowercased, first word) to `$LAUNCHER`: "Terminal"→"terminal", "cmux"→"cmux". `cmux` needs no extra setup — it degrades to the terminal flow on non-macOS or when cmux isn't installed (the `lets cmux` launcher handles the fallback).
+Bind label (lowercased, first word, drop a trailing ` (detected)`) to `$LAUNCHER`: "Terminal"→"terminal", "cmux"→"cmux", "tmux"→"tmux". No launcher needs extra setup — each degrades to the terminal flow when its binary (or platform) is absent (the `lets cmux` / `lets tmux` launcher handles the fallback).
 
 ### 2c-quater. Task tracker adapter
 
@@ -350,7 +360,7 @@ AskUserQuestion(
 
 If "Keep current" picked, substitute `$LANG = $CURRENT_LANG`. Else use selected label. "Other" free-text (auto-added by tool) → use the **ENGLISH name** of the language (Chinese, Polish, German, Russian, Japanese, ...). If the user types a native-script name (`Русский`, `Українська`, `日本語`, `中文`, `Deutsch`, ...), **normalise it to the English name** before binding — same rule as Step 2a; every value in `.lets/.env` is in English.
 
-Repeat for MergeBranch (`$BRANCH`), PRFlow (`$FLOW`), and Launcher (`$LAUNCHER` — "Keep current" shows `$LETS_LAUNCHER` from LETS Config, plus options terminal / cmux).
+Repeat for MergeBranch (`$BRANCH`), PRFlow (`$FLOW`), and Launcher (`$LAUNCHER` — "Keep current" shows `$LETS_LAUNCHER` from LETS Config, plus options terminal / cmux / tmux — apply the same detection-aware filtering as 2c-ter: omit cmux off macOS, mark a launcher `(detected)` when its binary is on PATH).
 
 **Rules scope** — first run the **Global-rules check** from Step 2d (it computes `SCOPE`/`GLOBAL`/`PROJECT`; the change-config path does not otherwise set them). Then only ask when `GLOBAL=PRESENT` (otherwise there's nothing to rely on; bind `$RULES_SCOPE_FLAG=""`):
 

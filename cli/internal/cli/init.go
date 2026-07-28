@@ -91,6 +91,15 @@ out with --plugin-root=${CLAUDE_PLUGIN_ROOT} plus the chosen flags.`,
 				return err
 			}
 
+			// Validate --launcher before any filesystem work, on EVERY path
+			// (--user and project). An unservable launcher must not be persisted
+			// into .lets/.env, whence the hook injects it into model context every
+			// session. Empty = "not supplied" -> preserve-or-default, so NOT run
+			// through ValidLauncher. Mirrors the --tracker fail-fast below.
+			if flagLauncher != "" && !letsconfig.ValidLauncher(flagLauncher) {
+				return emit(initcmd.NewResult("", ""), fmt.Errorf("--launcher must be one of %v, got %q", letsconfig.ShippedLaunchers, flagLauncher))
+			}
+
 			// --user: user-scope install (global rules + ~/.lets/.env). Works
 			// from ANY directory - no git project, no worktree guard (those are
 			// project-scope concerns).
@@ -189,7 +198,7 @@ out with --plugin-root=${CLAUDE_PLUGIN_ROOT} plus the chosen flags.`,
 	cmd.Flags().StringVar(&flagLanguage, "language", "", "Response language (English/Ukrainian/Italian/etc)")
 	cmd.Flags().StringVar(&flagMergeBranch, "merge-branch", "", "Target branch for merges (default: main)")
 	cmd.Flags().StringVar(&flagPRFlow, "pr-flow", "", "PR flow: local | github | bitbucket")
-	cmd.Flags().StringVar(&flagLauncher, "launcher", "", "Worktree launcher: terminal | cmux (default terminal)")
+	cmd.Flags().StringVar(&flagLauncher, "launcher", "", "Worktree launcher: terminal | cmux | tmux (default terminal)")
 	cmd.Flags().StringVar(&flagTracker, "tracker", "", "Task tracker adapter: beads | none (default beads; selects .claude/rules/tracker-<name>.md)")
 	cmd.Flags().BoolVar(&flagGithub, "github", false, "(deprecated) alias for --pr-flow=github")
 	cmd.Flags().BoolVar(&flagSkipBeads, "skip-beads", false, "Skip beads initialization")
