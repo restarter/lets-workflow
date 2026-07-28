@@ -237,6 +237,38 @@ func TestReviewRestoreFenceIsPinned(t *testing.T) {
 	}
 }
 
+// TestPlanGlobsHandleTrunkMode pins every place that looks up a plan file, not just the one that
+// broke. Step 2.5's spec-source discovery was added with a comment claiming "same derivation as the
+// Plan Review section" while carrying neither of that section's two guards, so on the merge-branch
+// its slug became the branch name and the glob matched whatever plan happened to contain it. A
+// claim of parity is not parity, and the next partial copy will be written the same way - so the
+// invariant is stated over ALL of them: a fence that globs .lets/plans must special-case trunk mode
+// and must fall back to the task id.
+func TestPlanGlobsHandleTrunkMode(t *testing.T) {
+	for _, file := range []string{
+		filepath.Join("commands", "review.md"),
+		filepath.Join("commands", "check.md"),
+	} {
+		var seen int
+		for _, f := range bashFences(readPlugin(t, file)) {
+			// Select fences that RUN the lookup, not ones that merely name the directory - the
+			// Usage block is a bash fence too and mentions .lets/plans in a comment.
+			if !strings.Contains(f, ".lets/plans/") || !strings.Contains(f, "ls -t") {
+				continue
+			}
+			seen++
+			for _, need := range []string{`= "{LETS_MERGE_BRANCH}"`, `{task-id}`} {
+				if !strings.Contains(f, need) {
+					t.Errorf("%s: a fence globs .lets/plans without %s - on the merge-branch the slug is the branch name and the glob picks another task's plan", file, need)
+				}
+			}
+		}
+		if seen == 0 {
+			t.Errorf("%s: no bash fence globs .lets/plans - moved? update this guard", file)
+		}
+	}
+}
+
 // switchFence returns the Step 2.5 switch block with its two orchestrator placeholders resolved,
 // ready to execute.
 func switchFence(t *testing.T, stash, pr string) string {

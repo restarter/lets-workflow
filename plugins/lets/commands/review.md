@@ -216,23 +216,38 @@ Two things the command cannot infer and the user can answer in a second: **where
 
 A question like this is not a confirmation gate. "Are you sure?" is answered by the fact that the command was invoked; "where is the spec?" carries information that exists nowhere but in the user's head. Only the second kind belongs here, and both of these are the second kind.
 
-**Skip the whole step when `--json` is set.** A programmatic caller cannot answer, and `/lets:github-pr` invokes this command that way. Fall back to: spec from the task (part A's default resolution), `pr_tree` from `HEAD == {headRefOid}`, no checkout, no side effects on the working tree.
+**What gets skipped is always a QUESTION, never the discovery.** Part A's resolution feeds Step 3 whether or not anyone was asked; skipping the work as well would leave Step 3 told to "reuse the result" of something that never ran.
 
-**Skip the questions entirely when `--spec` was passed** - it pre-answers part A. `--spec <path>` means that file, `--spec none` means there is deliberately no spec. In PR mode the branch question still stands on its own.
+| Condition | Spec question | Branch question | Effect |
+|---|---|---|---|
+| `--json` | skipped | skipped | Nothing may touch the working tree and no one can answer - `/lets:github-pr` invokes this command that way. Still run part A's discovery and take its default: `spec_source = task` when an id resolved, `unresolved` otherwise. `pr_tree` from `HEAD == {headRefOid}`, no checkout. |
+| `--spec` given | skipped | **still asked** | The flag answers where the spec is; it says nothing about the branch. |
+| only "No spec" survived part A | skipped | still asked | Nothing to choose between - proceed with `spec_source = none` and say so in one line. |
 
 ### A. Where is the spec? (every mode)
 
 Discover the candidates first, then name them in the options - a user should recognise their own plan file, not be asked to type a path from memory.
 
+**Resolve the task id BEFORE the block below** - it substitutes `{task-id}` into two globs. Use `detect-task` exactly as Step 3 describes it (`fallback=no`; `branch=<headRefName>` in PR mode); Step 3 then consumes this result instead of resolving again.
+
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-BRANCH=$(git branch --show-current); SLUG="${BRANCH#feature/}"
-# Newest plan for THIS slug. Same derivation as the Plan Review section - .lets/plans is shared
-# across worktrees through a symlink, so a global `ls -t` would surface another branch's plan.
-[ -n "$SLUG" ] && ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1
-```
+BRANCH=$(git branch --show-current)
+# Trunk-mode names plans by task-id, not by branch: on the merge-branch the branch slug is
+# "{LETS_MERGE_BRANCH}" and would glob every plan whose name happens to contain it. Same derivation
+# as the Plan Review section below, INCLUDING its task-id fallback - a partial copy of that logic
+# is how this silently picks another branch's plan. {task-id} comes from the detect-task run below.
+if [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ]; then SLUG="{task-id}"; else SLUG="${BRANCH#feature/}"; fi
 
-The task id comes from `detect-task` exactly as Step 3 describes it (`fallback=no`; `branch=<headRefName>` in PR mode). Run that resolution HERE so the option can carry the id and title; Step 3 then consumes the answer instead of resolving again.
+PLAN=""
+# .lets/plans is shared across worktrees through a symlink, so a global `ls -t` surfaces another
+# branch's plan. Slug-scoped, and an empty slug (detached HEAD) must not collapse the glob to *.md.
+[ -n "$SLUG" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
+if [ -z "$PLAN" ] && [ -n "{task-id}" ]; then
+  PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"{task-id}"*.md 2>/dev/null | head -1)
+fi
+[ -n "$PLAN" ] && echo "PLAN CANDIDATE: $PLAN"
+```
 
 **A plan file can be a superseded revision.** Take the newest and **say which one you took** - `lets-yobxe` had two, and its rev 1 proposed a design that was explicitly rejected. Naming the file is what lets the user notice.
 
