@@ -103,7 +103,7 @@ Then, inside the Claude Code session:
 | `/lets:start` | Start session - restore context, show tasks, create feature branch (`--main` = no-task project-assistant mode) |
 | `/lets:end` | End session - save progress, sync tasks, write snapshot (`--pre-compact` snapshots before /compact without ending) |
 | `/lets:commit` | Commit with review and conventional commit format |
-| `/lets:done` | Finish task - create PR (GitHub mode) or merge locally |
+| `/lets:done` | Finish task - create PR (GitHub or Bitbucket) or merge locally |
 | `/lets:status` | Read-only orient snapshot — where you are, what's in flight, what's next (tracker-universal) |
 | `/lets:note` | Add note to active task (`--pre-compact` snapshots the session before /compact) |
 
@@ -208,7 +208,7 @@ A LETS session runs a loop: start, work, commit, finish.
 
 **Commit** - `/lets:commit` reviews changes and creates a conventional commit (`feat:`, `fix:`, `docs:`, …) linked to the active task.
 
-**Finish** - `/lets:done` creates a PR on GitHub (or merges locally). `/lets:end` saves a session snapshot so the next conversation picks up where you left off.
+**Finish** - `/lets:done` creates a PR on GitHub or Bitbucket (or merges locally). `/lets:end` saves a session snapshot so the next conversation picks up where you left off.
 
 ### Plan, then build
 
@@ -237,7 +237,7 @@ Three levels of review, from 30-second sanity check to full PR lifecycle:
 
 #### GitHub PR Review Lifecycle (`/lets:github-pr`)
 
-This is where LETS shines. Instead of reviewing PRs in a browser, you do it from the terminal with expert agents. GitHub only — Bitbucket/local flows aren't implemented (those finish tasks via `/lets:done`):
+This is where LETS shines. Instead of reviewing PRs in a browser, you do it from the terminal with expert agents. This full inline lifecycle (post to the exact line, follow up, approve/merge) is GitHub only. Bitbucket PRs are reviewed with `/lets:review` (fetch, diff, discussion, and a posted summary comment) and finished with `/lets:done`:
 
 ```
 /lets:github-pr https://github.com/owner/repo/pull/42
@@ -356,6 +356,7 @@ Add `--light` for light-background terminals (default palette is dark). Full det
 | [git](https://git-scm.com/) | Yes | Version control, branching, worktrees |
 | [beads](https://github.com/steveyegge/beads) | Yes | Task tracking and issue management (Claude Code plugin) |
 | [gh](https://cli.github.com/) | Optional | GitHub PR workflow (when `LETS_PR_FLOW=github`) |
+| [bb-bash](https://github.com/restarter/bb-bash) (`bbb`) | Optional | Bitbucket PR workflow (when `LETS_PR_FLOW=bitbucket`) |
 
 ## 📚 Documentation
 
