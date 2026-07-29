@@ -417,12 +417,13 @@ else
   # force-pushed, step 1 succeeds, step 2 fails, and gh exits non-zero with HEAD already moved.
   # --detach is one step, creates no branch to diverge next time, and does not collide when the
   # PR branch is already checked out in another worktree of this repo.
-  # Checkout is the ONE host-specific line; everything around it is identical. Run the resolved host's:
-  #   github     -> gh pr checkout --detach {number}
-  #   bitbucket  -> git fetch origin {source-branch} && git checkout --detach {source-commit}
-  #                 (same-repo only - forks were dropped above; no bbb checkout verb, so git does it,
-  #                  --detach for the same reason github uses it). Its exit status feeds the && below.
-  if {CHECKOUT-COMMAND} && [ "$(git rev-parse HEAD)" != "$HEAD_BEFORE" ]; then
+  # Checkout is the ONE host-specific line; everything around it is identical. The line below is the
+  # github form (shown literally so it stays runnable + golden-tested). For a bitbucket host the
+  # orchestrator swaps ONLY this command for:
+  #   git fetch origin {source-branch} && git checkout --detach {source-commit}
+  # (same-repo only - forks were dropped above; no bbb checkout verb, so git does it, --detach for the
+  # same reason github uses it). Either command's exit status feeds the && below unchanged.
+  if gh pr checkout --detach {number} && [ "$(git rev-parse HEAD)" != "$HEAD_BEFORE" ]; then
     echo "SWITCHED - restore with: git checkout $REF${SH:+ , then git stash pop (entry $SH)}"
   elif [ "$(git rev-parse HEAD)" != "$HEAD_BEFORE" ]; then
     # HEAD moved and gh still failed. Popping here would land the user's work on the PR code,
