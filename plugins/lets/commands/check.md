@@ -213,7 +213,7 @@ show task=<task-id>   # returns {id, title, status, url, description}
 
 ### PR context in check: the description AND the discussion (PR mode, ALWAYS)
 
-Same three inputs as `/lets:review`, same reasons - see its Step 2 for the sources and their traps, which are facts about GitHub rather than about which command is asking. The body costs nothing here: `gh pr view --json title,body` already runs twice above. On **bitbucket** the discussion comes from `bbb` - two sources (general + inline), no separate review-envelope object - fed to the same fixed budget below.
+Same three inputs as `/lets:review`, same reasons - see its Step 2 for the sources and their traps, which are facts about GitHub rather than about which command is asking. The body costs nothing here: `gh pr view --json title,body` already runs twice above. On **bitbucket** the discussion comes from one `bbb pr comments` call - general + inline together, with reply threading, no separate review-envelope object - fed to the same fixed budget below.
 
 Two deliberate differences, both from "check asks nothing":
 

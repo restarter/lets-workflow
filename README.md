@@ -237,7 +237,7 @@ Three levels of review, from 30-second sanity check to full PR lifecycle:
 
 #### GitHub PR Review Lifecycle (`/lets:github-pr`)
 
-This is where LETS shines. Instead of reviewing PRs in a browser, you do it from the terminal with expert agents. This full inline lifecycle (post to the exact line, follow up, approve/merge) is GitHub only. Bitbucket PRs are reviewed with `/lets:review` (fetch, diff, discussion, and a posted summary comment) and finished with `/lets:done`:
+This is where LETS shines. Instead of reviewing PRs in a browser, you do it from the terminal with expert agents. `/lets:github-pr` is GitHub-only. Bitbucket PRs review with `/lets:review` (fetch, diff, discussion, summary comment) and finish with `/lets:done`:
 
 ```
 /lets:github-pr https://github.com/owner/repo/pull/42

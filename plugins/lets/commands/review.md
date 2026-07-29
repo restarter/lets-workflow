@@ -132,7 +132,7 @@ gh pr view <PR> --json state,isDraft,author,title,body,additions,deletions,chang
 gh pr diff <PR>
 ```
 
-**bitbucket** - the same via `bbb`: fetch the PR object for metadata (map it onto the same fields - state, draft, title, body, author, number, and the source branch + its head commit, which are Bitbucket's `headRefName`/`headRefOid` and what the Step 2.5 checkout uses) and the diff. Two traps: Bitbucket may not carry a draft flag - treat absent as not-draft; and the size counts (additions/deletions/changed files) are not on the PR object - derive them from the diffstat, or scope the trivial/large heuristic github-only and say so.
+**bitbucket** - the same via `bbb`: fetch the PR object as JSON for metadata (`bbb pr show` prints human text, so read the structured object from bbb's raw API) and map it onto the same fields - state, draft, title, body, author, number, and the source branch + its head commit, which are Bitbucket's `headRefName`/`headRefOid` and what the Step 2.5 checkout uses - plus the diff. Two traps: Bitbucket may not carry a draft flag - treat absent as not-draft; and the size counts (additions/deletions/changed files) are not on the PR object - derive them from the diffstat, or scope the trivial/large heuristic github-only and say so.
 
 `number` is the normalized PR number (Step 1 accepts a URL too) - use it wherever a number is needed. `headRefName` / `headRefOid` (github) or the source branch + head commit (bitbucket) feed the SPEC resolution (Step 3) and the branch gate (Step 2.5).
 
@@ -150,7 +150,7 @@ The discussion is what stops a fresh review re-reporting a finding that was rais
 - review bodies (`pulls/<n>/reviews`) - **skip entries whose `body` is empty**: those are envelopes GitHub creates when inline comments are submitted as a batch, not comments
 - inline comments anchored to lines (`pulls/<n>/comments`) - **in no `gh pr view --json` field at all**; they carry `path`, `line` and `in_reply_to_id`, so rebuild threads and keep their order
 
-Paginate all three - the default page is 30, so a busy PR truncates in silence. Use the host's own CLI: `gh` here. **On Bitbucket** the same threads come from `bbb`, with one structural difference: its comment endpoint returns general and inline comments together (inline carry path, line and reply linkage, so threads still rebuild in order), and there is no separate review-envelope object - so it is TWO sources, not three, and the "skip empty review bodies" trap above is github-only.
+Paginate all three - the default page is 30, so a busy PR truncates in silence. Use the host's own CLI: `gh` here. **On Bitbucket** it is simpler: a single `bbb pr comments` call returns general AND inline comments together (inline carry path, line and reply threading, so threads rebuild in order), and Bitbucket has no separate review-envelope object - so it is ONE source, not three, and the "skip empty review bodies" trap above is github-only. That call fetches one page (up to 100); for a busier PR, page through `bbb raw /pullrequests/<n>/comments` following `.next`.
 
 Measured on PR #2: `5 + 1 + 3 = 9` texts, where `gh pr view --json comments` alone returns 5. The failure is silent in both directions - the naive call looks like it worked, and counting the empty review envelopes inflates the total instead.
 
