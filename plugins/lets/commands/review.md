@@ -132,7 +132,7 @@ gh pr view <PR> --json state,isDraft,author,title,body,additions,deletions,chang
 gh pr diff <PR>
 ```
 
-**bitbucket** - the same via `bbb`: fetch the PR object for metadata (map it onto the same fields - state, draft, title, body, author, number, head branch, head commit) and the diff. Two traps: Bitbucket may not carry a draft flag - treat absent as not-draft; and the size counts (additions/deletions/changed files) are not on the PR object - derive them from the diffstat, or scope the trivial/large heuristic github-only and say so.
+**bitbucket** - the same via `bbb`: fetch the PR object for metadata (map it onto the same fields - state, draft, title, body, author, number, and the source branch + its head commit, which are Bitbucket's `headRefName`/`headRefOid` and what the Step 2.5 checkout uses) and the diff. Two traps: Bitbucket may not carry a draft flag - treat absent as not-draft; and the size counts (additions/deletions/changed files) are not on the PR object - derive them from the diffstat, or scope the trivial/large heuristic github-only and say so.
 
 `number` is the normalized PR number (Step 1 accepts a URL too) - use it wherever a number is needed. `headRefName` / `headRefOid` (github) or the source branch + head commit (bitbucket) feed the SPEC resolution (Step 3) and the branch gate (Step 2.5).
 
@@ -328,7 +328,7 @@ AskUserQuestion(
       question: "Review PR #{number} on its own branch?",
       header: "PR branch",
       options: [
-        { label: "Switch to PR branch (Recommended)", description: "gh pr checkout - agents read the PR's real files; your branch is restored at the end" },
+        { label: "Switch to PR branch (Recommended)", description: "Check out the PR branch - agents read the PR's real files; your branch is restored at the end" },
         { label: "Review from diff", description: "Stay on {current branch} - shallower, agents can't read PR file contents" }
       ],
       multiSelect: false
