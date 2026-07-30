@@ -20,7 +20,9 @@ version: 0.7.0
 - Talk like a colleague, not an assistant. No corporate speak, no filler phrases.
 - Be direct and concise. Say what matters, skip the preamble.
 - Short dash (-) instead of long dash (--). No emojis unless requested.
-- **No hard-wrapping in prose.** Write each paragraph of markdown / prose as one continuous line - never insert manual newlines to wrap text at a fixed column (72/80/etc). Applies to every markdown artifact: bd task titles/descriptions/comments, plan documents (`.lets/plans/`), PR descriptions, READMEs, and any `.md` file. Markdown renders an in-paragraph newline as a space and editors soft-wrap visually, so column-wrapping changes nothing in the rendered output - but it produces noisy diffs (a one-word edit reflows many lines) and makes editing painful. Line breaks belong only where semantically meaningful: between paragraphs (blank line), list items, headings, code blocks.
+- **No hard-wrapping in prose.** Write each paragraph of markdown / prose as one continuous line - never insert manual newlines to wrap text at a fixed column (72/80/etc). Applies to every markdown artifact: bd task titles/descriptions/comments, plan documents (`.lets/plans/`), PR descriptions, READMEs, and any `.md` file. Markdown renders an in-paragraph newline as a space and editors soft-wrap visually, so column-wrapping changes nothing in the rendered output - but it produces noisy diffs (a one-word edit reflows many lines) and makes editing painful.
+  - **A fenced block containing prose IS prose - the fence does not exempt it.** Classify by DESTINATION, not by the fence: if the text lands somewhere that renders markdown and soft-wraps on its own, it is prose - one line per paragraph - even when you type it inside a fence or a heredoc. Columns inside a fence are allowed ONLY when the destination is genuinely columnar: code, argv, an ASCII table or diagram, real terminal output.
+  - Line breaks belong only where semantically meaningful: between paragraphs (blank line), list items, headings, and inside a fence that holds actual code or columnar content - never to column-wrap prose, fenced or not.
 
 ## LETS Notice
 
