@@ -222,7 +222,7 @@ AskUserQuestion(
 
 Show what will happen based on `$LETS_PR_FLOW` from LETS Config:
 
-> **Note:** Conditionals below are binary (`== github` vs `!= github`). When Bitbucket integration lands, every `!= github` branch needs a 3rd case (currently `bitbucket` value falls into local-merge path). Search for `LETS_PR_FLOW != github` to find all sites.
+> **Note:** Three cases below - `github` (push + PR via `gh`), `bitbucket` (push + PR via `bbb`, mirrors github), and `local` (local merge). `local` is also the **fallback** for any unrecognized `LETS_PR_FLOW` value, so an unknown value never routes nowhere.
 
 ### If HEAD == `$LETS_MERGE_BRANCH` (trunk-mode):
 
@@ -260,7 +260,23 @@ AskUserQuestion(
 )
 ```
 
-### If $LETS_PR_FLOW != github:
+### If $LETS_PR_FLOW == bitbucket:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Ready to finish {task title}?",
+    header: "Finish",
+    options: [
+      { label: "Finish", description: "Push branch and create a Bitbucket PR to {LETS_MERGE_BRANCH}" },
+      { label: "Keep working", description: "Not done yet - go back to the task" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+### If $LETS_PR_FLOW == local (or any unrecognized value):
 
 ```
 AskUserQuestion(
@@ -381,7 +397,7 @@ if [ -f "$TASK_FILE" ]; then
 fi
 ```
 
-After this, skip the `### If $LETS_PR_FLOW == github (PR flow)` / `!= github` blocks below — they don't apply in trunk-mode.
+After this, skip the `### If $LETS_PR_FLOW == github / == bitbucket / == local` blocks below — they don't apply in trunk-mode.
 
 ### If $LETS_PR_FLOW == github (PR flow):
 
@@ -408,7 +424,7 @@ AskUserQuestion(
 ```
 
 **Handle response:**
-- **Local merge** -> jump to "If $LETS_PR_FLOW != github" section below
+- **Local merge** -> jump to the "If $LETS_PR_FLOW == local / fallback (local merge)" section below
 - **Cancel** -> stop, return to work
 
 **If gh is available, proceed with PR:**
@@ -443,7 +459,19 @@ Task stays **open** until PR is merged.
 
 **Do NOT switch branches yet** - user decides in Step 9.
 
-### If $LETS_PR_FLOW != github (local merge) AND NOT in worktree:
+### If $LETS_PR_FLOW == bitbucket (PR flow):
+
+Mirror the github flow via `bbb`. First check bbb is available (its `pr list` takes only `--state`/`--author` - there is no `--limit`, so don't pass one). If it isn't, offer the same fallback github does: fall back to a local merge (warn it bypasses review) or cancel and fix bbb first.
+
+If bbb is available: push the branch, then create the PR with bbb targeting `{LETS_MERGE_BRANCH}` - a title and a body built from the task, the same content the github branch builds. Record the PR URL on the task:
+
+```lets-tracker
+comment-add task=<task-id> body="Bitbucket PR created: <PR URL>"
+```
+
+The task stays **open** until the PR is merged - no local merge, no branch delete, no close. **Do NOT switch branches yet** - user decides in Step 9.
+
+### If $LETS_PR_FLOW == local / fallback (local merge) AND NOT in worktree:
 
 Use `$LETS_MERGE_BRANCH` from LETS Config for target branch.
 
@@ -458,7 +486,7 @@ After merge:
 close task=<task-id> reason="Merged locally. Commits: {list}"
 ```
 
-### If $LETS_PR_FLOW != github (local merge) AND in worktree:
+### If $LETS_PR_FLOW == local / fallback (local merge) AND in worktree:
 
 Cannot `git checkout` or `git branch -d` from inside a worktree. Use `git -C` to operate on the main repo:
 
@@ -590,7 +618,67 @@ No "Next task" option - can't switch branches in a worktree. To start a new task
 - **End session** -> invoke `Skill(skill: "lets:end")`. After the end-session flow completes, remind:
   "After PR merges, clean up: `/lets:worktree remove {name}` from the main repo terminal."
 
-### After local merge ($LETS_PR_FLOW != github), NOT in worktree:
+### After PR ($LETS_PR_FLOW == bitbucket), NOT in worktree:
+
+```
+Task: **{title}** ({task-id})
+PR: {PR URL}
+Status: open (the reviewer merges on Bitbucket)
+```
+
+No "Merge & close" - a Bitbucket PR is merged on the platform by the reviewer, not by `/lets:done`; that is the whole point (don't bypass team review).
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Task done. What's next?",
+    header: "Next step",
+    options: [
+      { label: "Stay on branch", description: "Stay on feature branch - for PR fixes or follow-up work" },
+      { label: "Next task", description: "Switch to {LETS_MERGE_BRANCH}, then claim another task via take-task" },
+      { label: "End session", description: "Switch to {LETS_MERGE_BRANCH}, run /lets:end" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Handle response:**
+- **Stay on branch** -> stay on current branch, no checkout.
+- **Next task** -> `git checkout {LETS_MERGE_BRANCH}`, then show the tracker's `ready` view (top 5); on pick, invoke `Skill(skill: "lets:take-task", args: "<task-id>")`.
+- **End session** -> `git checkout {LETS_MERGE_BRANCH}`, then invoke `Skill(skill: "lets:end")`.
+
+### After PR ($LETS_PR_FLOW == bitbucket), IN worktree:
+
+```
+Task: **{title}** ({task-id})
+PR: {PR URL}
+Status: open (the reviewer merges on Bitbucket)
+Worktree: {worktree path}
+```
+
+No "Merge & close" (reviewer merges on Bitbucket), no "Next task" (can't switch branches in a worktree).
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "PR created. What's next?",
+    header: "Next step",
+    options: [
+      { label: "Stay here", description: "Stay in this worktree for PR fixes or follow-up" },
+      { label: "End session", description: "Run /lets:end - save context and wrap up" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Handle response:**
+- **Stay here** -> stay in worktree. User continues working.
+- **End session** -> invoke `Skill(skill: "lets:end")`. After the end-session flow completes, remind:
+  "After the PR merges, clean up: `/lets:worktree remove {name}` from the main repo terminal."
+
+### After local merge ($LETS_PR_FLOW == local / fallback), NOT in worktree:
 
 ```
 Task: **{title}** ({task-id}) - CLOSED
@@ -618,7 +706,7 @@ AskUserQuestion(
 - **Next task** -> show the tracker's `ready` view (top 5), ask user to pick. When picked: invoke `Skill(skill: "lets:take-task", args: "<task-id>")` for status update + branch setup.
 - **End session** -> invoke `Skill(skill: "lets:end")`
 
-### After local merge ($LETS_PR_FLOW != github), IN worktree:
+### After local merge ($LETS_PR_FLOW == local / fallback), IN worktree:
 
 ```
 Task: **{title}** ({task-id}) - CLOSED
