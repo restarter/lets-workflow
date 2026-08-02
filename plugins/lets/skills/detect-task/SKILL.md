@@ -44,31 +44,23 @@ LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 BRANCH=$(git branch --show-current); BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
 TASK_FILE="$LETS_PROJECT_ROOT/.lets/sessions/.task-${BRANCH_SLUG}"
 FILE_TASK=$(sed -n 's/^task: //p' "$TASK_FILE" 2>/dev/null | head -1)
-if [ -n "$FILE_TASK" ]; then
-  if [ "{LETS_TRACKER}" = "beads" ] && [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ] && command -v bd >/dev/null 2>&1; then
-    # ALLOWLISTED beads-only liveness probe (lets-rules "Tracker Adapters" carve-out). On the
-    # merge-branch ONLY, distinguish a live trunk task from a stale .task-main / main-mode.
-    # GATE ON THE ACTIVE TRACKER, not just `command -v bd`: on a non-beads project where bd merely
-    # happens to be on PATH, the old `command -v bd` gate would probe the WRONG store. With
-    # {LETS_TRACKER}!=beads the AND is false -> fall through to trusting the .task file (non-beads
-    # adapters have no cheap shell liveness `show`; the merge-branch-only scope + next-claim-overwrite
-    # bound the risk). The {LETS_TRACKER}/{LETS_MERGE_BRANCH} literals are orchestrator-substituted.
-    # Parse the FIRST "status" (the task's own top-level field). grep -o isolates each
-    # "status": "X" so head -1 takes the first object's status even on compact JSON - a greedy
-    # sed '.*"status".*' would grab the LAST (a nested dependency's) and mis-classify.
-    STATUS=$(bd show "$FILE_TASK" --json 2>/dev/null | grep -o '"status": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
-    [ "$STATUS" = "in_progress" ] && echo "$FILE_TASK"   # else fall through (stale: closed/abandoned/crash-after-close)
-  else
-    echo "$FILE_TASK"   # off the merge-branch, or non-beads tracker, or no bd: trust the file directly
-  fi
-fi
+[ -n "$FILE_TASK" ] && printf 'task=%s on_merge_branch=%s\n' "$FILE_TASK" \
+  "$([ "$BRANCH" = "{LETS_MERGE_BRANCH}" ] && echo yes || echo no)"
 ```
 
-If this yields an id, use it; otherwise fall through to the branch-name parse, then the `list-by-status` fallback. (The beads liveness probe parses `bd show --json`'s status field; fall back to `bd show` text parse if the installed bd differs.)
+**`on_merge_branch=no`** - trust `task=` directly and stop here. The branch corroborates the file, and a just-closed id in a worktree is low-severity (the next claim overwrites it).
 
-**Precedence (full):** explicit task-id arg -> `.task-<slug>` `task:` (beads-liveness-validated ON THE MERGE-BRANCH) -> branch-name id -> the tracker's `list-by-status` (in_progress), first id (skipped entirely when the caller passes `fallback=no` - see Optional arguments). On id-carrying branches `take-task` writes branch + file together so they agree; the file fills the id-less gaps (trunk / custom worktree / attach) and, in a multi-task worktree, reflects the current (switched) task the frozen branch name can't.
+**`on_merge_branch=yes`** - the file alone cannot tell a live trunk claim from a stale `.task-main` left by a closed task or a main-mode session, so verify it:
 
-**beads-liveness scope (perf + bd-hang safety):** the `bd show` probe runs ONLY on `{LETS_MERGE_BRANCH}` AND only when the active tracker is beads (the wrong-store gate above), where it is the sole signal separating a live trunk task from a stale `.task-main` / main-mode. Off the merge-branch, or on a non-beads tracker, it does NOT run - detect-task is on the hot path of 10+ commands and a per-call status probe would reintroduce the per-command cost and risk hanging (no portable `timeout` on macOS; a non-beads `show` would be an MCP round-trip). Trusting the file otherwise is safe: `feature/<id>` corroborates via the branch, and a just-closed `task:` in a worktree (or a stale `.task-main` on a non-beads merge-branch) is low-severity (the next claim overwrites).
+```lets-tracker
+show task=<FILE_TASK>   # returns {id,title,status,url}; read status
+```
+
+`status` is `in_progress` -> use the id. Any other neutral status -> the claim is stale; fall through to the branch-name parse. `show` unsupported (`LETS_TRACKER=none`) or failing -> trust the file and say in one line that liveness could not be checked.
+
+**Precedence (full):** explicit task-id arg -> `.task-<slug>` `task:` (liveness-validated on the merge-branch via the neutral `show`) -> branch-name id -> the tracker's `list-by-status` (in_progress), first id (skipped entirely when the caller passes `fallback=no` - see Optional arguments). On id-carrying branches `take-task` writes branch + file together so they agree; the file fills the id-less gaps (trunk / custom worktree / attach) and, in a multi-task worktree, reflects the current (switched) task the frozen branch name can't.
+
+**Liveness scope (hot path).** The `show` probe runs ONLY on `{LETS_MERGE_BRANCH}`, the sole place a stale `.task-main` is indistinguishable from a live trunk claim. Off the merge-branch it does NOT run - detect-task is on the hot path of 10+ commands. This IS a cost change for non-beads adapters, which previously skipped the probe entirely: an MCP `show` is a network round-trip, and there is no portable `timeout` on macOS to bound it. We accept that on the merge-branch only, because the alternative is a non-beads project trusting a possibly-stale file forever. An adapter whose `show` is known slow may mark it so in its binding cell; the probe then skips and says liveness was not checked. Trusting the file elsewhere is safe: `feature/<id>` corroborates via the branch, and a just-closed `task:` in a worktree is low-severity (the next claim overwrites).
 
 ### Step 2: Fallback
 

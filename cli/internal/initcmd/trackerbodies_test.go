@@ -37,15 +37,13 @@ var bdCommand = regexp.MustCompile("(?:^|[|;&`]|\\$\\(|\\b(?:then|do|else|elif|x
 var bashFence = regexp.MustCompile("^```(?:bash|sh|shell|zsh|console)\\b")
 
 // allowedExecutableBd: repo-relative file -> substrings of lines permitted to
-// carry executable bd inside a ```bash fence. The ONLY sanctioned exception is
-// the detect-task merge-branch liveness probe - an allowlisted beads-only read
-// gated on LETS_TRACKER=beads (D7 / lets-rules "Tracker Adapters"). Everything
-// else in a command/skill BODY must be a neutral ```lets-tracker block.
-var allowedExecutableBd = map[string][]string{
-	filepath.Join("skills", "detect-task", "SKILL.md"): {
-		`bd show "$FILE_TASK" --json`,
-	},
-}
+// carry executable bd inside a ```bash fence. EMPTY BY DESIGN (lets-x1rnx): the
+// last exception - detect-task's merge-branch liveness probe - now goes through
+// the neutral `show` verb like everything else. A new entry here means a command
+// body learned to speak one tracker's dialect again; TestAllowlistShipsEmpty
+// makes re-adding one an explicit, reviewable test change rather than a silent
+// line in the commit that needed it.
+var allowedExecutableBd = map[string][]string{}
 
 // TestNoExecutableBdInCommandBodies enforces the neutral-verb invariant: no
 // executable bd survives in a command/skill body's ```bash fence outside the
