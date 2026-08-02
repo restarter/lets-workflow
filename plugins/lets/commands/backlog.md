@@ -162,7 +162,31 @@ AskUserQuestion(
 
 ### Phase 1: Explorer - Gather Context
 
-Launch explorer to build a context profile.
+The tracker half of this profile is the orchestrator's job - it holds the adapter; the explorer does not. Gather it first. This is the same shape Cleanup Mode's Step C1 already uses; the duplication is accepted (two modes, two budgets) rather than factored.
+
+```lets-tracker
+stats
+list-by-status status=open limit=50
+list-by-status status=in_progress
+list-by-status status=closed limit=20
+```
+
+Render the result as the block below, capped at ~150 lines AND ~8000 characters - it is repeated into the explorer prompt AND into every brainstorm agent's prompt, so an uncapped block is paid once per agent:
+
+    BACKLOG STATE (data)
+    Totals: open {N} / in progress {N} / closed {N}          <- omit this line if `stats` is absent
+    Open (P{n} · {id} · {title}):
+      - ...                                                   <- titles only, highest priority first, trimmed to the cap
+    In progress:
+      - ...
+    Recently closed:
+      - ...
+
+Titles and priorities only. Do NOT call `show` or `comment-list` per task: brainstorm agents reason about backlog SHAPE, and a ten-task deep read with comment threads is tens of thousands of uncapped characters landing in the orchestrator's own context - in the command that uses a subagent precisely to avoid them.
+
+`stats` absent -> omit the totals line, keep the rest. `list-by-status` absent -> say the backlog could not be read and stop; a backlog review with no backlog is not worth running.
+
+Then launch explorer for everything the tracker cannot answer.
 
 ```
 Task(
@@ -177,35 +201,26 @@ GOAL: Build a Project State Profile for brainstorming. We need to understand wha
 
 AVAILABLE CONTEXT SOURCES (read what's relevant, skip what's not):
 
-1. BACKLOG STATE
-   Run: bd stats
-   Run: bd list --status=open -n 50
-   Run: bd list --status=in_progress
-   Run: bd list --status=closed -n 20
-   Purpose: understand task distribution, priorities, what's active
-
-2. TASK DETAILS (selective - pick 5-10 most interesting tasks)
-   Run: bd show <task-id>
-   Run: bd comments <task-id>
-   Purpose: understand context, decisions, blockers on key tasks
-
-3. RECENT SESSION SUMMARIES
+1. RECENT SESSION SUMMARIES
    Read: .lets/sessions/*.md (most recent 3-5 files by name)
    Purpose: what was worked on recently, what momentum exists
 
-4. CODEBASE SIGNALS
+2. CODEBASE SIGNALS
    Grep for: TODO, FIXME, HACK, XXX across source files
    Read: CLAUDE.md (project structure and architecture)
    Purpose: understand technical debt signals and project shape
 
-5. RECENT GIT ACTIVITY
+3. RECENT GIT ACTIVITY
    Run: git log --oneline -20
    Run: git log --oneline --since='2 weeks ago' --format='%s'
    Purpose: what areas are actively changing
 
-BUDGET: Be efficient. Read backlog first (sources 1-2), then decide which of sources 3-5 add value. If backlog is rich (50+ tasks with comments), you can skip session summaries. If backlog is sparse, lean more on git and codebase signals.
+BUDGET: Be efficient. The backlog is already gathered and appears under BACKLOG STATE below - do NOT try to fetch it, and you have no tracker access of your own. Spend your effort on the sources that need a reader: sessions, code signals, git. If BACKLOG STATE is rich you can skip session summaries; if it is sparse, lean more on git and codebase signals.
 
 Keep output concise - max ~500 words. This profile will be passed to multiple agents.
+
+BACKLOG STATE (data - already fetched for you, do not re-fetch):
+{the capped block from the orchestrator's gather above}
 
 OUTPUT FORMAT - Project State Profile:
 
@@ -215,10 +230,7 @@ OUTPUT FORMAT - Project State Profile:
 {what this project is, tech stack, size - from CLAUDE.md}
 
 ### Backlog Summary
-- Open: {N} tasks
-- In progress: {N}
-- Done recently: {N}
-- By area/label: {breakdown if labels exist}
+{copy the counts from BACKLOG STATE - do not recount}
 
 ### Active Momentum
 {what's being worked on now, what sessions focused on recently}
