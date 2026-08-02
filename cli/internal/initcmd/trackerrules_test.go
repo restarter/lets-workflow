@@ -53,6 +53,83 @@ func capsTable(content string) string {
 // coreVerbs every adapter MUST bind (have a row for).
 var coreVerbs = []string{"create", "show", "comment-add", "set-status", "close"}
 
+// neutralFields is the declarable vocabulary. A declaration naming something
+// outside it is invisible to callers, which match on the neutral side.
+var neutralFields = map[string]bool{
+	"id": true, "title": true, "status": true, "url": true, "description": true,
+	"type": true, "priority": true, "labels": true, "design": true, "assignee": true,
+}
+
+// adapterPaths returns every live adapter file the contract tests apply to: the
+// shipped set plus the testdata fixtures, excluding user board profiles and the
+// copy-me TEMPLATE. Fixtures cannot live in plugins/lets/rules -
+// TestShippedTrackers_MatchOnDisk requires every adapter file there to appear in
+// shippedTrackers - so they are globbed separately, and they are what exercises
+// the partial-adapter branch the shipped set (beads + the null adapter) cannot.
+func adapterPaths(t *testing.T) []string {
+	t.Helper()
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	var paths []string
+	for _, glob := range []string{
+		filepath.Join(pluginRulesDir(t), "tracker-*.md"),
+		filepath.Join(filepath.Dir(thisFile), "testdata", "tracker-*.md"),
+	} {
+		matches, err := filepath.Glob(glob)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, p := range matches {
+			base := filepath.Base(p)
+			if strings.HasSuffix(base, ".board.md") || base == "tracker-TEMPLATE.md" {
+				continue
+			}
+			paths = append(paths, p)
+		}
+	}
+	if len(paths) == 0 {
+		t.Fatal("no adapter files found - test wiring broken")
+	}
+	return paths
+}
+
+// declaredNames extracts the declared field names from the text following an
+// `accepts:` / `returns:` marker: the backticked tokens up to the terminating
+// period. The period matters - a binding cell continues past the declaration with
+// the transport call, which is itself backticked.
+//
+// A rename is written `priority`→`severity` and the NEUTRAL (left) side is what
+// is returned, because that is the side a caller matches on. Returning the native
+// side would fail every renaming adapter against the neutral vocabulary - i.e.
+// exactly the adapters the rename syntax exists for.
+func declaredNames(rest string) []string {
+	if end := strings.Index(rest, "."); end >= 0 {
+		rest = rest[:end]
+	}
+	var names []string
+	parts := strings.Split(rest, "`")
+	for i := 1; i < len(parts); i += 2 {
+		name := strings.TrimSpace(parts[i])
+		if name == "" {
+			continue
+		}
+		// A rename may be written `priority`→`severity` (two spans) or
+		// `priority→severity` (one). Handle both: keep the left side, and skip a
+		// span that is only the native half of an arrow pair.
+		if arrow := strings.Index(name, "→"); arrow >= 0 {
+			name = strings.TrimSpace(name[:arrow])
+		} else if i >= 2 && strings.HasSuffix(strings.TrimSpace(parts[i-1]), "→") {
+			continue // this span is the native side of `neutral`→`native`
+		}
+		if name != "" {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
 // pluginRulesDir resolves <repo>/plugins/lets/rules from this test file's path
 // (cli/internal/initcmd/trackerrules_test.go -> up 3 -> repo root).
 func pluginRulesDir(t *testing.T) string {
@@ -90,18 +167,8 @@ func tableVerbs(content string) map[string]bool {
 // and a Degradation section. A malformed adapter fails CI here instead of
 // silently skipping the drift copy at runtime.
 func TestTrackerRules_Contract(t *testing.T) {
-	dir := pluginRulesDir(t)
-	matches, err := filepath.Glob(filepath.Join(dir, "tracker-*.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var checked int
-	for _, path := range matches {
+	for _, path := range adapterPaths(t) {
 		base := filepath.Base(path)
-		if strings.HasSuffix(base, ".board.md") || base == "tracker-TEMPLATE.md" {
-			continue // user board template / copy-me skeleton are not live adapters
-		}
-		checked++
 		t.Run(base, func(t *testing.T) {
 			data, err := os.ReadFile(path)
 			if err != nil {
@@ -126,8 +193,57 @@ func TestTrackerRules_Contract(t *testing.T) {
 			}
 		})
 	}
-	if checked == 0 {
-		t.Fatalf("no tracker-*.md adapters found in %s - test wiring broken", dir)
+}
+
+// TestTrackerRules_FieldsDeclared pins the lets-x1rnx contract addition: an adapter
+// must say what create/set-field accept and what show returns, in NEUTRAL names.
+// An undeclared field is one a command collects from the user and silently drops.
+//
+// Asserting the declared names are neutral - not merely that the marker is present -
+// is what makes this a contract pin rather than a checklist: `accepts: whatever` must
+// fail. Markers sit at the HEAD of the binding cell, which dodges the escaped-pipe
+// cell-truncation documented on the set-status row above.
+//
+// tracker-none passes on `accepts: nothing` / `returns: nothing`: declaredNames finds
+// no backticked token, so the neutral check is vacuous while the presence check is
+// not. That dependency is real - reword those cells and this fails on `none`, where
+// the tempting fix is to exclude it and silently halve the guard.
+func TestTrackerRules_FieldsDeclared(t *testing.T) {
+	for _, path := range adapterPaths(t) {
+		base := filepath.Base(path)
+		t.Run(base, func(t *testing.T) {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			caps := capsTable(string(data))
+			for _, tc := range []struct{ verb, decl string }{
+				{"create", "accepts:"},
+				{"show", "returns:"},
+				{"set-field", "accepts:"},
+			} {
+				cells := tableRowCells(caps, tc.verb)
+				if cells == nil {
+					t.Errorf("%s: no binding row for %q", base, tc.verb)
+					continue
+				}
+				idx := strings.Index(cells[3], tc.decl)
+				if idx < 0 {
+					t.Errorf("%s: verb %q binding must declare %q (an undeclared field is one a caller drops silently)", base, tc.verb, tc.decl)
+					continue
+				}
+				rest := strings.TrimSpace(cells[3][idx+len(tc.decl):])
+				if rest == "" {
+					t.Errorf("%s: verb %q declares %q with nothing after it", base, tc.verb, tc.decl)
+					continue
+				}
+				for _, name := range declaredNames(rest) {
+					if !neutralFields[name] {
+						t.Errorf("%s: verb %q declares non-neutral field %q - callers match on neutral names, so this one is invisible to them", base, tc.verb, name)
+					}
+				}
+			}
+		})
 	}
 }
 
@@ -265,16 +381,11 @@ func coreSupportedCell(cell string) bool {
 }
 
 func TestTrackerRules_CoreSupported(t *testing.T) {
-	dir := pluginRulesDir(t)
-	matches, err := filepath.Glob(filepath.Join(dir, "tracker-*.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	var checked int
-	for _, path := range matches {
+	for _, path := range adapterPaths(t) {
 		base := filepath.Base(path)
-		if strings.HasSuffix(base, ".board.md") || base == "tracker-TEMPLATE.md" || base == "tracker-none.md" {
-			continue
+		if base == "tracker-none.md" {
+			continue // the sanctioned null-adapter exception
 		}
 		checked++
 		t.Run(base, func(t *testing.T) {
@@ -296,7 +407,7 @@ func TestTrackerRules_CoreSupported(t *testing.T) {
 		})
 	}
 	if checked == 0 {
-		t.Fatalf("no non-none tracker-*.md adapters found in %s - test wiring broken", dir)
+		t.Fatal("no non-none adapters found - test wiring broken")
 	}
 }
 

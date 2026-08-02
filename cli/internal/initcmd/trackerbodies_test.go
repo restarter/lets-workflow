@@ -33,8 +33,18 @@ var bdCommand = regexp.MustCompile("(?:^|[|;&`]|\\$\\(|\\b(?:then|do|else|elif|x
 
 // bashFence matches a bash-family fence opener incl. tag variants (```shell,
 // ```zsh, ```console, or an info string after the tag) - an exact-match gate
-// let a variant-tagged block escape the scan entirely (S11).
+// let a variant-tagged block escape the scan entirely (S11). It now also selects
+// WHICH tier of the scan applies to a fence's body (see the walk below).
 var bashFence = regexp.MustCompile("^```(?:bash|sh|shell|zsh|console)\\b")
+
+// bdBareWord matches `bd` as a standalone token. Applied to every NON-bash fence
+// and to whole .workflow.js assets, where there is no legitimate bd at all: those
+// bodies are prompts, and the neutral-verb platform exists precisely so a subagent
+// never learns one tracker's dialect. This tier is what sees the forms bdCommand
+// cannot by construction - `Run: bd stats`, `Use bd commands (bd show, bd
+// comments)`, `{suggested bd create command}` - none of which sit in command
+// position (lets-x1rnx).
+var bdBareWord = regexp.MustCompile(`(^|[^A-Za-z0-9_])bd([^A-Za-z0-9_]|$)`)
 
 // allowedExecutableBd: repo-relative file -> substrings of lines permitted to
 // carry executable bd inside a ```bash fence. EMPTY BY DESIGN (lets-x1rnx): the
@@ -60,7 +70,8 @@ func TestNoExecutableBdInCommandBodies(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			if info.IsDir() || !strings.HasSuffix(path, ".md") {
+			isWorkflow := strings.HasSuffix(path, ".workflow.js")
+			if info.IsDir() || (!strings.HasSuffix(path, ".md") && !isWorkflow) {
 				return nil
 			}
 			scanned++
@@ -69,22 +80,45 @@ func TestNoExecutableBdInCommandBodies(t *testing.T) {
 				return err
 			}
 			rel, _ := filepath.Rel(root, path)
-			inBash := false
+			// A .workflow.js asset is prompt strings and orchestration end to end - no
+			// fences to track, and no legitimate bd anywhere. It is a committed COPY of
+			// a command's prompt, which is how backlog's kept instructing subagents to
+			// run bd long after the command itself stopped: the walk used to be .md-only,
+			// so nothing could see it.
+			if isWorkflow {
+				for i, line := range strings.Split(string(data), "\n") {
+					if bdBareWord.MatchString(line) {
+						t.Errorf("%s:%d bd in a workflow asset (the orchestrator injects tracker data; agents get none of their own): %s", rel, i+1, strings.TrimSpace(line))
+					}
+				}
+				return nil
+			}
+			inFence, bashKind := false, false
 			for i, line := range strings.Split(string(data), "\n") {
 				trimmed := strings.TrimSpace(line)
 				if strings.HasPrefix(trimmed, "```") {
-					switch {
-					case !inBash && bashFence.MatchString(trimmed):
-						inBash = true
-					case inBash:
+					if inFence {
 						// Known limitation: a heredoc BODY containing a ``` line closes
 						// the fence early (unscanned tail) - acceptable; heredoc-carried
 						// markdown is data, not commands the model runs.
-						inBash = false
+						inFence, bashKind = false, false
+					} else {
+						inFence, bashKind = true, bashFence.MatchString(trimmed)
 					}
 					continue
 				}
-				if !inBash || strings.HasPrefix(trimmed, "#") || !bdCommand.MatchString(line) {
+				if !inFence || strings.HasPrefix(trimmed, "#") {
+					continue
+				}
+				// Two tiers. In a bash fence the prose-vs-command distinction is real, so
+				// only command-position bd counts. In any other fence - a Task( prompt, a
+				// lets-tracker block, an output template - no bd is legitimate, and the
+				// forms that actually regress are not in command position.
+				if bashKind {
+					if !bdCommand.MatchString(line) {
+						continue
+					}
+				} else if !bdBareWord.MatchString(line) {
 					continue
 				}
 				allowed := false
@@ -95,7 +129,7 @@ func TestNoExecutableBdInCommandBodies(t *testing.T) {
 					}
 				}
 				if !allowed {
-					t.Errorf("%s:%d executable bd in a command body (use a ```lets-tracker block): %s", rel, i+1, trimmed)
+					t.Errorf("%s:%d bd in a command body (use a ```lets-tracker block): %s", rel, i+1, trimmed)
 				}
 			}
 			return nil
@@ -109,6 +143,16 @@ func TestNoExecutableBdInCommandBodies(t *testing.T) {
 	}
 }
 
+// TestAllowlistShipsEmpty makes re-adding an exception an explicit test change.
+// Without it "the allowlist ships empty" is a comment: the commit that needed an
+// exemption could append its own and leave CI green, which is exactly how the one
+// entry this map used to hold survived three releases.
+func TestAllowlistShipsEmpty(t *testing.T) {
+	if len(allowedExecutableBd) != 0 {
+		t.Errorf("allowedExecutableBd ships empty by design (lets-x1rnx); got %d entr(ies): %v", len(allowedExecutableBd), allowedExecutableBd)
+	}
+}
+
 // canonicalVerbTokens is the callable neutral vocabulary for a ```lets-tracker
 // block line's leading token (ready/stats split into their callable forms).
 // TestTrackerAdapters_VerbVocabInSync owns the same canon on the adapter/rules
@@ -118,6 +162,18 @@ var canonicalVerbTokens = map[string]bool{
 	"close": true, "comment-list": true, "list-by-status": true, "search": true,
 	"ready": true, "stats": true, "label": true, "assignee": true, "set-field": true,
 }
+
+// neutralStatuses is the canonical status vocabulary a ```lets-tracker line may
+// name: required open/in_progress/closed plus optional in_review/blocked. Whether
+// a given adapter CARRIES an optional one is a runtime check the command makes
+// against that adapter's `## Neutral statuses` section; this is the spelling gate.
+var neutralStatuses = map[string]bool{
+	"open": true, "in_progress": true, "closed": true, "in_review": true, "blocked": true,
+}
+
+// statusArg captures a literal status= value. A placeholder (`status=<neutral>`)
+// does not match the class and is deliberately skipped rather than false-failed.
+var statusArg = regexp.MustCompile(`\bstatus=([A-Za-z_]+)`)
 
 // TestTrackerBlockVerbsResolvable is the inverse of
 // TestNoExecutableBdInCommandBodies (branch-review S10): every ```lets-tracker
@@ -169,6 +225,13 @@ func TestTrackerBlockVerbsResolvable(t *testing.T) {
 				token := strings.Fields(trimmed)[0]
 				if !canonicalVerbTokens[token] {
 					t.Errorf("%s:%d ```lets-tracker line starts with %q - not a canonical verb (would not resolve against any adapter)", rel, i+1, token)
+				}
+				// Argument VALUES went unpinned until lets-x1rnx - which is how a
+				// `status=in_review` reached a reviewed plan without anyone noticing that
+				// beads enumerates only open/in_progress/closed/blocked and would reject
+				// it at runtime, mid-/lets:done.
+				if m := statusArg.FindStringSubmatch(trimmed); m != nil && !neutralStatuses[m[1]] {
+					t.Errorf("%s:%d ```lets-tracker line uses status=%s - not a neutral status (open|in_progress|closed|in_review|blocked)", rel, i+1, m[1])
 				}
 				if strings.Count(line, "\"")%2 == 1 {
 					inString = true
