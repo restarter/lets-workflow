@@ -30,7 +30,7 @@ Required: `open`, `in_progress`, `closed`. Optional: `in_review`, `blocked`.
 | show           | CORE | yes    | {how to fetch `{id, title, status, url, description}` by id; status as a NEUTRAL name} |
 | comment-add    | CORE | yes    | {how to add a comment body to a task} |
 | set-status     | CORE | yes    | {how to set a NEUTRAL status on a task} |
-| close          | CORE | yes    | {how to close/complete a task (optional reason)} |
+| close          | CORE | yes    | {how to close/complete a task (optional reason)}. Returns the task's status AFTER the call, as a NEUTRAL name - a POST-CONDITION the adapter must actually have left the task in, never a diagnosis of what it would have done. `closed` = closed. Another neutral status = this board's terminal is process-gated, so the adapter performed the legal advance instead and the caller reports a handoff, not a close. No status at all = nothing happened (a no-op adapter). A binding that FAILED is not a status - it HARD-FAILs per Degradation |
 | comment-list   | OPT  | yes/no | {how to list a task's comments, or `absent`} |
 | list-by-status | OPT  | yes/no | {how to list tasks by neutral status (status returned NEUTRAL), or `absent`} |
 | search         | OPT  | yes/no | {how to search tasks by text, or `absent`} |

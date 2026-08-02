@@ -25,7 +25,7 @@ The reference adapter. Binds the neutral verbs to the `bd` CLI - the historical,
 | show           | CORE | yes | `bd show <id>` (text) or `bd show <id> --json` when a field is parsed; `--json` exposes `status` as a neutral name |
 | comment-add    | CORE | yes | `bd comments add <id> "$(cat <body-file>)"` for `body-file=<path>`, or `bd comments add <id> "<body>"` for inline `body=`; empty body → HARD-FAIL, do not submit |
 | set-status     | CORE | yes | `bd update <id> --status=<open\|in_progress\|closed\|blocked>` |
-| close          | CORE | yes | `bd close <id> [--reason="..."]` |
+| close          | CORE | yes | `bd close <id> [--reason="..."]`; returns `closed` - beads has no gated terminal, so close is always a legal transition |
 | comment-list   | OPT  | yes | `bd comments <id>` |
 | list-by-status | OPT  | yes | `bd list --status=<status> [--json] [--limit N]`; `--json` exposes `status`/`priority` for parsing. For id-only output, parse `--json` — bd has no `--format=ids` (an unknown `--format` value yields empty output, not an error) |
 | search         | OPT  | yes | `bd search <query>` |
