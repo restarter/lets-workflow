@@ -24,10 +24,14 @@ Required: `open`, `in_progress`, `closed`. Optional: `in_review`, `blocked`.
 
 <!-- PINNED CONTRACT: the header row below is fixed and machine-parsed by the adapter contract test and the beads golden test. Do not reorder or rename columns; put any extra detail inside the binding cell, never in a new column. -->
 
+- **Declare fields with the NEUTRAL vocabulary.** `create` opens with `accepts:`, `show` with `returns:`, `set-field` with `accepts:`. List only neutral argument names - `id`, `title`, `status`, `url`, `description`, `type`, `priority`, `labels`, `design`, `assignee`. A tracker that stores one under a different native name writes the rename inline with an arrow: `priority→severity`. Never invent a name: a caller matches on the NEUTRAL side, so `accepts: severity` alone is invisible to it. An adapter that marks the verb unsupported declares nothing - it is outside this rule, not exempt from it.
+- **An offerable field MUST be declared.** An undeclared field is one a command collects from the user and then drops, or renders as though the tracker had answered - the same phantom-success class as reporting a close that never happened. Declaring nothing extra is fine; declaring nothing at all is not.
+- **Keep declared fields minimal.** Every field a read verb carries multiplies its payload. On a REST-backed adapter one extra custom field has repeatedly pushed a `list` response past what fits in a single reply - declare the fields callers actually consume, not everything the tracker can return.
+
 | verb | tier | supported | binding |
 |------|------|-----------|---------|
-| create         | CORE | yes    | {how to create a task; returns `{id, url}`} |
-| show           | CORE | yes    | {how to fetch `{id, title, status, url, description}` by id; status as a NEUTRAL name} |
+| create         | CORE | yes    | accepts: {the NEUTRAL field names THIS create really stores - a caller must not collect anything else}. {how to create a task; returns `{id, url}`} |
+| show           | CORE | yes    | returns: {the NEUTRAL field names THIS show really returns - `id`, `title`, `status`, `url`, `description` are required whenever `supported = yes`; add any extra this tracker carries}. {how to fetch them by id; status as a NEUTRAL name} |
 | comment-add    | CORE | yes    | {how to add a comment body to a task} |
 | set-status     | CORE | yes    | {how to set a NEUTRAL status on a task} |
 | close          | CORE | yes    | {how to close/complete a task (optional reason)}. Returns the task's status AFTER the call, as a NEUTRAL name - a POST-CONDITION the adapter must actually have left the task in, never a diagnosis of what it would have done. `closed` = closed. Another neutral status = this board's terminal is process-gated, so the adapter performed the legal advance instead and the caller reports a handoff, not a close. No status at all = nothing happened (a no-op adapter). A binding that FAILED is not a status - it HARD-FAILs per Degradation |
@@ -37,7 +41,7 @@ Required: `open`, `in_progress`, `closed`. Optional: `in_review`, `blocked`.
 | ready/stats    | OPT  | yes/no | {ready-graph / stats / blocked views, or `absent`} |
 | label          | OPT  | yes/no | {label ops, or `absent`} |
 | assignee       | OPT  | yes/no | {assignee ops, or `absent`} |
-| set-field      | OPT  | yes/no | {overwrite a field (e.g. description), or `absent`} |
+| set-field      | OPT  | yes/no | accepts: {the NEUTRAL field names this adapter can overwrite}. {how to overwrite them, or `absent`} |
 
 ## Degradation
 
