@@ -88,7 +88,7 @@ Otherwise (no PR, or `gh` unavailable) continue to Step 3 - normal flow.
 **Before closing - verify ALL requirements from the task description are met.**
 
 ```lets-tracker
-show task=<task-id>   # returns {id,title,status,url,description}; read description (+ type on beads) to verify scope
+show task=<task-id>   # returns {id,title,status,url,description}; read description - plus any field the adapter's `show` declares (beads: `type`) - to verify scope
 ```
 
 Compare the task description against actual changes:
