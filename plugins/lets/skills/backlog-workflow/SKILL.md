@@ -28,6 +28,7 @@ Workflow({ scriptPath: "${CLAUDE_PLUGIN_ROOT}/skills/backlog-workflow/backlog.wo
 | key | type | meaning |
 |---|---|---|
 | `profile` | string | the explorer's Project State Profile (in-context Phase 1 output, ~500 words) |
+| `backlogState` | string | the orchestrator's capped BACKLOG STATE block (Phase 1) - the agents' only task data; they have no tracker access of their own |
 | `agents` | `[{name}]` | selected agent short-names (no `lets:` prefix; exclude `actor`) |
 | `projectRoot` | string | absolute project root (agents must not read outside it) |
 | `claudeMd` | string | CLAUDE.md context (first ~100 lines) |

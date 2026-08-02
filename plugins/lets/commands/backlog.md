@@ -352,8 +352,6 @@ CRITICAL: Launch ALL selected agents in a SINGLE message with multiple Task tool
 
 For each selected agent:
 
-<!-- tracker: the prompt's "Use bd commands" line is beads-only BY DESIGN - backlog's orchestrator path is neutralized (lets-tracker verbs), but the explorer/brainstorm SUBAGENTS read bd directly because they don't receive the adapter file. This is the documented Cat-C carve-out, NOT a violation of "subagents never call tracker verbs" (see lets-rules "Tracker Adapters"). On a non-beads project these subagent reads are unavailable. -->
-
 ```
 Task(
   subagent_type="lets:{agent-name}",
@@ -365,13 +363,16 @@ MODE: brainstorm (review backlog)
 
 Review the project's BACKLOG of tasks from your area of expertise. Surface gaps in WHAT'S BEING TRACKED: missing themes, priority imbalances, areas with no tasks but clear need from your domain.
 
-You are NOT reviewing code, counting duplications, finding stale files, or hunting bugs in source. The PROJECT STATE PROFILE below is your primary source. Use bd commands (bd show, bd comments) for task details. Code reads are allowed only as evidence for a backlog observation ("this critical area has no tasks tracking it"), never as primary investigation.
+You are NOT reviewing code, counting duplications, finding stale files, or hunting bugs in source. The PROJECT STATE PROFILE below is your primary source. Task details are in the BACKLOG STATE block below - that is your source; you have no tracker access of your own. Code reads are allowed only as evidence for a backlog observation ("this critical area has no tasks tracking it"), never as primary investigation.
 
 PROJECT RULES (from CLAUDE.md):
 {CLAUDE.md content, first 100 lines - architecture decisions and structure}
 
 PROJECT STATE PROFILE:
 {explorer output from Phase 1}
+
+BACKLOG STATE (data):
+{the same capped block from Phase 1}
 
 INSTRUCTIONS:
 - Anchor on the BACKLOG STATE from the profile above (open/in-progress tasks, recent closures, gaps)
@@ -389,7 +390,7 @@ OUTPUT FORMAT:
 ### Missing from Backlog
 1. **{theme or task that should exist}** [Impact: high/medium]
    {why this gap matters from your domain}
-   {suggested bd create command or task brief}
+   {a task brief: title, why it matters, acceptance in one line}
 
 ### Existing Tasks Needing Adjustment
 - **{task-id}** ({title}): {what to change: bump priority, expand scope, split, deprioritize, close as obsolete, with reason}
@@ -591,6 +592,7 @@ Use the agents SELECTED in Phase 2 (do not re-select). **Exclude `lets:actor`** 
 ```
 {
   profile: "{explorer Project State Profile from Phase 1}",
+  backlogState: "{the capped BACKLOG STATE block from Phase 1}",
   agents: [ { name: "pragmatist" }, { name: "architect" }, ... ],   // short names, no "lets:" prefix
   projectRoot: "{LETS_PROJECT_ROOT from LETS Config}",
   claudeMd: "{CLAUDE.md content, first 100 lines}"
