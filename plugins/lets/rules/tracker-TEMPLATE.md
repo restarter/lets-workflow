@@ -48,6 +48,14 @@ Required: `open`, `in_progress`, `closed`. Optional: `in_review`, `blocked`.
 - **OPTIONAL verb absent** (`supported = no`) -> the calling command continues and tells the user the capability is unavailable for this tracker. Never crash.
 - **CORE verb unresolved at runtime** (binding can't be performed - e.g. an MCP tool is not connected) -> HARD-FAIL loud (e.g. "close FAILED - task NOT closed"); do NOT report success. This matters under AUTO MODE: a `/lets:done` must never claim it closed a task it did not.
 
+## Claim hygiene
+
+Every factual claim - a binding, a payload limit, a rendering note, a board quirk - carries how it was established, inline in the cell or sentence it qualifies: `[VERIFIED <date>]` (exercised against the real tracker), `[ASSUMED]` (from documentation, not yet run), `[UNVERIFIED]` (a deliberate guess). A worked row:
+
+| close | CORE | yes | `PATCH /tasks/<id>` `[VERIFIED 2026-08-02]`; returns `in_review`, not `closed` `[ASSUMED]` - the gated terminal is documented but untested |
+
+The marker goes INSIDE the binding cell: the table header is pinned, so a new column is not an option. An unverified claim stated flatly is worse than none - this file is auto-loaded instruction, so the agent acts on it.
+
 ## Board profile (optional)
 
 Project-specific semantics (native status ids, transitions, principles, default project, server name, REST nuances) live in a sibling `tracker-TEMPLATE.board.md` - user-owned, scaffolded once by `lets init`, NEVER overwritten, auto-loaded as a project instruction. If present, honor its status map + transitions. Switching `LETS_TRACKER` does NOT remove a board file (only the managed adapter `.md` is cleaned up) - delete a stale `*.board.md` by hand so it stops loading into context.
