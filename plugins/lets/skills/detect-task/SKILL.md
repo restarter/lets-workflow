@@ -33,7 +33,7 @@ The `<task-id>` shape is TRACKER-DEPENDENT (the id sits immediately after `featu
 - a numeric-id tracker: a pure-numeric id - e.g. `48647`, so `feature/48647-<slug>`
 - other adapters: the tracker's own id shape
 
-**Do NOT apply the beads `<prefix>-<alphanum>` regex on a non-beads project** - it false-positives on a slug word: `feature/48647-lifecycle-test` makes the beads regex capture `lifecycle-test`, NOT the numeric id `48647`. Match using the ACTIVE tracker's id shape (`{LETS_TRACKER}` from LETS Config). When the branch shape is ambiguous, the `.task-<slug>` file (Step 1.5, authoritative) and the `list-by-status` fallback are safer than a branch-name guess.
+**Do NOT apply the beads `<prefix>-<alphanum>` regex on a non-beads project** - it false-positives on a slug word: `feature/48647-lifecycle-test` makes the beads regex capture `lifecycle-test`, NOT the numeric id `48647`. Match using the ACTIVE tracker's id shape (`{LETS_TRACKER}` from LETS Config). When the branch shape is ambiguous, the `.task-<slug>` file (Step 1.5, authoritative) and the Step 2 search-and-confirm fallback are safer than a branch-name guess.
 
 ### Step 1.5: Task-State File (fills the gap when the branch name carries no id)
 
@@ -58,17 +58,27 @@ show task=<FILE_TASK>   # returns {id,title,status,url}; read status
 
 `status` is `in_progress` -> use the id. Any other neutral status -> the claim is stale; fall through to the branch-name parse. `show` unsupported (`LETS_TRACKER=none`) or failing -> trust the file and say in one line that liveness could not be checked.
 
-**Precedence (full):** explicit task-id arg -> `.task-<slug>` `task:` (liveness-validated on the merge-branch via the neutral `show`) -> branch-name id -> the tracker's `list-by-status` (in_progress), first id (skipped entirely when the caller passes `fallback=no` - see Optional arguments). On id-carrying branches `take-task` writes branch + file together so they agree; the file fills the id-less gaps (trunk / custom worktree / attach) and, in a multi-task worktree, reflects the current (switched) task the frozen branch name can't.
+**Precedence (full):** explicit task-id arg -> `.task-<slug>` `task:` (liveness-validated on the merge-branch via the neutral `show`) -> branch-name id -> a CONFIRMED `search` hit (never an unconfirmed one; skipped entirely when the caller passes `fallback=no` - see Optional arguments). On id-carrying branches `take-task` writes branch + file together so they agree; the file fills the id-less gaps (trunk / custom worktree / attach) and, in a multi-task worktree, reflects the current (switched) task the frozen branch name can't.
 
 **Liveness scope (hot path).** The `show` probe runs ONLY on `{LETS_MERGE_BRANCH}`, the sole place a stale `.task-main` is indistinguishable from a live trunk claim. Off the merge-branch it does NOT run - detect-task is on the hot path of 10+ commands. This IS a cost change for non-beads adapters, which previously skipped the probe entirely: an MCP `show` is a network round-trip, and there is no portable `timeout` on macOS to bound it. We accept that on the merge-branch only, because the alternative is a non-beads project trusting a possibly-stale file forever. An adapter whose `show` is known slow may mark it so in its binding cell; the probe then skips and says liveness was not checked. Trusting the file elsewhere is safe: `feature/<id>` corroborates via the branch, and a just-closed `task:` in a worktree is low-severity (the next claim overwrites).
 
-### Step 2: Fallback
+### Step 2: Fallback (branch name carries no id)
 
-If branch parse finds no ID:
+The board cannot answer "which task is this branch about" - only "which tasks are in progress". On a shared board the first of those is a colleague's. So do not list; search, using what this session already knows.
+
+Build a query from the branch slug with the shape words removed (`feature/`, `worktree-`, `bugfix/`). `feature/planfix-adapter-rules-sync` yields `planfix adapter rules sync`.
 
 ```lets-tracker
-list-by-status status=in_progress   # returns the in_progress task list; take the first .id
+search query="<terms>"   # returns candidate tasks; NEVER auto-select one
 ```
+
+Then judge, and say why: "this branch looks like **{title}** (`{id}`) - the branch slug matches its title". Ask the user to confirm before the id is used for anything.
+
+- `search` absent, or it returns nothing -> fall back to `list-by-status status=in_progress` and present that list to choose from. Do NOT take the first.
+- Exactly one candidate -> still confirm. One result is not evidence of ownership; it is one result.
+- User declines or does not answer -> return None. None is a correct answer here.
+
+**An id that came from this step is NEVER used silently.** That is the whole rule, and it is about provenance rather than identity: an id from the `.task` file or from the branch name is this branch's by construction, so it needs no confirmation; an id from the board is a guess, so it always does. No tracker needs a notion of "me" for this to hold, and on a branch LETS created this step never runs at all.
 
 ### Explicit task-id argument (resolve-and-claim)
 
@@ -91,19 +101,20 @@ Passed as space-separated `key=value` via the `Skill` invocation's `args`. Both 
 
   An id parsed out of the ref NAME (Step 1) must clear the same character class before it crosses a tracker verb - on beads that verb resolves to a `bd` command, i.e. a second shell hop.
 
-- **`fallback=no`** - skip Step 2 and return None rather than the first `list-by-status` id.
+- **`fallback=no`** - skip Step 2 entirely and return None rather than a searched-and-confirmed id.
 
-**Why `fallback=no` exists.** The fallback answers "some task is in progress", not "this branch's task" - on a shared board it returns a colleague's. Tolerable for a tracker comment; NOT tolerable for anything that feeds a prompt (a wrong spec is worse than none). Passing it also makes provenance observable at the call site *by construction*: fallback off + an id returned = the id came from the state file or the ref name, never from the board.
+**Why `fallback=no` exists.** The reason is no longer "the fallback returns a colleague's task" - it now asks before it answers - but that a confirmation is a QUESTION, and a question is unacceptable mid-fan-out, in a `--json` run, or on a read-only orient surface. It also keeps provenance unambiguous at the call site *by construction*: fallback off + an id returned = the id came from the state file or the ref name, never from the board.
 
-### Step 3: Multiple Tasks
+### Step 3: Confirming a searched id
 
-If fallback returns multiple tasks - behavior depends on the caller:
+Step 2 always ends in a confirmation - not only when the result was ambiguous. What the confirmation looks like depends on the caller:
 - **commit**: AskUserQuestion to pick task or "None"
 - **done**: AskUserQuestion to pick task to close
-- **review/check/opinion/ask**: skip the tracker comment if ambiguous. review/check additionally pass `fallback=no` when resolving the SPEC, so an ambiguous id can never reach a reviewer prompt
+- **review/check/opinion/ask**: skip the tracker comment if ambiguous. review/check additionally pass `fallback=no` when resolving the SPEC, so a searched id can never reach a reviewer prompt
 - **note**: AskUserQuestion to pick task to add note to
+- **any other caller** (orient, start, end, plan, execute, team, github-pr): an unconfirmed hit is None. These are read/orient surfaces - they must not open a picker of their own; `orient` in particular declares that it does not select or claim.
 
-The calling command specifies what to do when ambiguous.
+**AUTO MODE consequence (a decision, not an accident):** an unattended `/lets:execute --auto` on an attached branch with no id in its name now returns None rather than adopting a board task, and stops saying the task could not be resolved. Adopting a stranger's task unattended is the worse failure.
 
 ## Output
 

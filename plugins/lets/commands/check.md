@@ -199,7 +199,7 @@ Same source matters as much as same task. On a PR there is no spec unless `--spe
 
 Re-resolve when the active task changes; also re-resolve when the user says the description changed - an edit made outside this conversation is not observable from here, so their word is the only signal. No question to the user, ever: `/lets:check` is invoked to run, not to be asked whether it should.
 
-**Task SPEC (local modes only - PR and `--file` are covered below):** `Skill(skill: "lets:detect-task", args: "fallback=no")` - the active task for the current branch, which is what `/lets:check` normally reviews. `fallback=no` keeps the `list-by-status` answer ("some task is in progress") out of the spec: on a shared board it is a colleague's task, and a wrong spec is worse than none. Then:
+**Task SPEC (local modes only - PR and `--file` are covered below):** `Skill(skill: "lets:detect-task", args: "fallback=no")` - the active task for the current branch, which is what `/lets:check` normally reviews. `fallback=no` keeps the searched fallback out of the spec path: it now asks before it answers, and `/lets:check` is the 30-second pass with no question to spare - a wrong spec is worse than none. Then:
 
 ```lets-tracker
 show task=<task-id>   # returns {id, title, status, url, description}
