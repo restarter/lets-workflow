@@ -41,6 +41,8 @@ Every task `create` MUST include every field the active adapter's `create` decla
 
 ## Label Selection
 
+**Run this whole section only if the adapter's `create` declares `labels` in `accepts:`.** The `label` verb being supported is a different question - a tracker can carry labels on a task and still not take them at creation time, and walking the user through discovery and a pick only to drop the answer is the exact failure this skill's Required Fields section forbids.
+
 Labels are project-specific. ALWAYS discover them dynamically - never hardcode.
 
 ### Step L1: Discover Existing Labels
@@ -107,6 +109,8 @@ API calls fail silently on network errors.
 - Surface final error to user
 EOF
 ```
+
+The example below is shaped for an adapter that declares all five fields (beads does). On one that declares fewer, send fewer - the declaration decides, not this example:
 
 ```lets-tracker
 create title="Add retry logic to API client" type=feature priority=2 labels="epic:quality" description-file=.lets/cache/new-task-desc-<branch-slug>.md

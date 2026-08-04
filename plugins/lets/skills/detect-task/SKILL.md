@@ -60,9 +60,11 @@ show task=<FILE_TASK>   # returns {id,title,status,url}; read status
 
 **Precedence (full):** explicit task-id arg -> `.task-<slug>` `task:` (liveness-validated on the merge-branch via the neutral `show`) -> branch-name id -> a CONFIRMED `search` hit (never an unconfirmed one; skipped entirely when the caller passes `fallback=no` - see Optional arguments). On id-carrying branches `take-task` writes branch + file together so they agree; the file fills the id-less gaps (trunk / custom worktree / attach) and, in a multi-task worktree, reflects the current (switched) task the frozen branch name can't.
 
-**Liveness scope (hot path).** The `show` probe runs ONLY on `{LETS_MERGE_BRANCH}`, the sole place a stale `.task-main` is indistinguishable from a live trunk claim. Off the merge-branch it does NOT run - detect-task is on the hot path of 10+ commands. This IS a cost change for non-beads adapters, which previously skipped the probe entirely: an MCP `show` is a network round-trip, and there is no portable `timeout` on macOS to bound it. We accept that on the merge-branch only, because the alternative is a non-beads project trusting a possibly-stale file forever. An adapter whose `show` is known slow may mark it so in its binding cell; the probe then skips and says liveness was not checked. Trusting the file elsewhere is safe: `feature/<id>` corroborates via the branch, and a just-closed `task:` in a worktree is low-severity (the next claim overwrites).
+**Liveness scope (hot path).** The `show` probe runs ONLY on `{LETS_MERGE_BRANCH}`, the sole place a stale `.task-main` is indistinguishable from a live trunk claim. Off the merge-branch it does NOT run - detect-task is on the hot path of 10+ commands. This IS a cost change for non-beads adapters, which previously skipped the probe entirely: an MCP `show` is a network round-trip, and there is no portable `timeout` on macOS to bound it. We accept that on the merge-branch only, and unmitigated: the alternative is a non-beads project trusting a possibly-stale file forever. (An earlier draft promised an opt-out marker an adapter could set; no such marker was ever defined, and an escape hatch that does not exist is worse than none because it reads as coverage.) Trusting the file elsewhere is safe: `feature/<id>` corroborates via the branch, and a just-closed `task:` in a worktree is low-severity (the next claim overwrites).
 
 ### Step 2: Fallback (branch name carries no id)
+
+**Callers listed as no-picker in Step 3 skip this step entirely** - return None instead. They cannot answer the confirmation this step ends in, so running it would spend a `search` (or `list-by-status`) round-trip on a result discarded by construction, on the hot path of 10+ commands.
 
 The board cannot answer "which task is this branch about" - only "which tasks are in progress". On a shared board the first of those is a colleague's. So do not list; search, using what this session already knows.
 
@@ -99,7 +101,7 @@ Passed as space-separated `key=value` via the `Skill` invocation's `args`. Both 
   sed -n 's/^task: //p' "$LETS_PROJECT_ROOT/.lets/sessions/.task-$SLUG" 2>/dev/null | head -1
   ```
 
-  An id parsed out of the ref NAME (Step 1) must clear the same character class before it crosses a tracker verb - on beads that verb resolves to a `bd` command, i.e. a second shell hop.
+  **ANY id must clear that character class before it crosses a tracker verb**, whatever its origin - on beads the verb resolves to a `bd` command, i.e. a second shell hop, and the value is typed by the model rather than quoted by a shell. That covers the id parsed out of a ref NAME (Step 1), the `task:` value lifted out of the `.task-<slug>` file (Step 1.5) - which used to be consumed inside the same shell and now crosses the boundary - and the query terms Step 2 derives from a branch slug. `take-task` writes the file, so a clean file is an invariant maintained on the write side; do not rely on it on the read side.
 
 - **`fallback=no`** - skip Step 2 entirely and return None rather than a searched-and-confirmed id.
 
@@ -112,7 +114,7 @@ Step 2 always ends in a confirmation - not only when the result was ambiguous. W
 - **done**: AskUserQuestion to pick task to close
 - **review/check/opinion/ask**: skip the tracker comment if ambiguous. review/check additionally pass `fallback=no` when resolving the SPEC, so a searched id can never reach a reviewer prompt
 - **note**: AskUserQuestion to pick task to add note to
-- **any other caller** (orient, start, end, plan, execute, team, github-pr): an unconfirmed hit is None. These are read/orient surfaces - they must not open a picker of their own; `orient` in particular declares that it does not select or claim.
+- **any other caller** (orient, start, end, plan, execute, github-pr): **no picker** - these skip Step 2 outright and take None. They are read/orient surfaces; `orient` in particular declares that it does not select or claim.
 
 **AUTO MODE consequence (a decision, not an accident):** an unattended `/lets:execute --auto` on an attached branch with no id in its name now returns None rather than adopting a board task, and stops saying the task could not be resolved. Adopting a stranger's task unattended is the worse failure.
 

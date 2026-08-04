@@ -16,22 +16,25 @@ This file teaches the orchestrator how to perform the neutral task-tracker verbs
 
 ## Neutral statuses
 
-Required: `open`, `in_progress`, `closed`. Optional: `in_review`, `blocked`.
+**This section is a DECLARATION, not a vocabulary listing - prune it to this board.** Naming an optional status here is what AUTHORIZES a command to move a task there: `/lets:done` advances to `in_review` after opening a PR only if this section names `in_review`. Leave the line as copied and a caller will push tasks into a column your board does not have.
 
-`show` and `list-by-status` MUST return the task's status as one of these neutral names (the adapter translates native -> neutral), and the neutral task shape `{id, title, status, url}`. This keeps consuming commands (e.g. `[ "$STATUS" = "in_progress" ]`) adapter-agnostic.
+Required (every adapter): `open`, `in_progress`, `closed`.
+Optional - list ONLY what this board really has, delete the rest: {`in_review`, `blocked`}.
+
+`show` and `list-by-status` MUST return the task's status as one of these neutral names (the adapter translates native -> neutral), and the neutral task shape `{id, title, status}` (+ `description` on `show`, + `url` only from a tracker that has per-task links). This keeps consuming commands (e.g. `[ "$STATUS" = "in_progress" ]`) adapter-agnostic.
 
 ## Capabilities + bindings
 
 <!-- PINNED CONTRACT: the header row below is fixed and machine-parsed by the adapter contract test and the beads golden test. Do not reorder or rename columns; put any extra detail inside the binding cell, never in a new column. -->
 
-- **Declare fields with the NEUTRAL vocabulary.** `create` opens with `accepts:`, `show` with `returns:`, `set-field` with `accepts:`. List only neutral argument names - `id`, `title`, `status`, `url`, `description`, `type`, `priority`, `labels`, `design`, `assignee`. A tracker that stores one under a different native name writes the rename inline with an arrow: `priority→severity`. Never invent a name: a caller matches on the NEUTRAL side, so `accepts: severity` alone is invisible to it. An adapter that marks the verb unsupported declares nothing - it is outside this rule, not exempt from it.
+- **Declare fields with the NEUTRAL vocabulary.** `create` opens with `accepts:`, `show` with `returns:`, `set-field` with `accepts:`. List only neutral argument names - `id`, `title`, `status`, `url`, `description`, `type`, `priority`, `labels`, `design`, `assignee`. A tracker that stores one under a different native name writes the rename inline with an arrow: `priority→severity`. Never invent a name: a caller matches on the NEUTRAL side, so `accepts: severity` alone is invisible to it. **Close the declaration with a period** before the binding prose resumes - that period is the terminator, and without it the transport call's own backticks are read as field names. An adapter that marks the verb unsupported still writes the marker with nothing in it: `accepts: nothing - absent`.
 - **An offerable field MUST be declared.** An undeclared field is one a command collects from the user and then drops, or renders as though the tracker had answered - the same phantom-success class as reporting a close that never happened. Declaring nothing extra is fine; declaring nothing at all is not.
 - **Keep declared fields minimal.** Every field a read verb carries multiplies its payload. On a REST-backed adapter one extra custom field has repeatedly pushed a `list` response past what fits in a single reply - declare the fields callers actually consume, not everything the tracker can return.
 
 | verb | tier | supported | binding |
 |------|------|-----------|---------|
 | create         | CORE | yes    | accepts: {the NEUTRAL field names THIS create really stores - a caller must not collect anything else}. {how to create a task; returns `{id, url}`} |
-| show           | CORE | yes    | returns: {the NEUTRAL field names THIS show really returns - `id`, `title`, `status`, `url`, `description` are required whenever `supported = yes`; add any extra this tracker carries}. {how to fetch them by id; status as a NEUTRAL name} |
+| show           | CORE | yes    | returns: {the NEUTRAL field names THIS show really returns - `id`, `title`, `status`, `description` are required whenever `supported = yes` because commands read them unconditionally; `url` only if this tracker actually has a per-task link (beads has none); add any extra it carries}. {how to fetch them by id; status as a NEUTRAL name} |
 | comment-add    | CORE | yes    | {how to add a comment body to a task} |
 | set-status     | CORE | yes    | {how to set a NEUTRAL status on a task} |
 | close          | CORE | yes    | {how to close/complete a task (optional reason)}. Returns the task's status AFTER the call, as a NEUTRAL name - a POST-CONDITION the adapter must actually have left the task in, never a diagnosis of what it would have done. `closed` = closed. Another neutral status = this board's terminal is process-gated, so the adapter performed the legal advance instead and the caller reports a handoff, not a close. No status at all = nothing happened (a no-op adapter). A binding that FAILED is not a status - it HARD-FAILs per Degradation |
@@ -50,11 +53,15 @@ Required: `open`, `in_progress`, `closed`. Optional: `in_review`, `blocked`.
 
 ## Claim hygiene
 
-Every factual claim - a binding, a payload limit, a rendering note, a board quirk - carries how it was established, inline in the cell or sentence it qualifies: `[VERIFIED <date>]` (exercised against the real tracker), `[ASSUMED]` (from documentation, not yet run), `[UNVERIFIED]` (a deliberate guess). A worked row:
+**Scope: claims you have NOT exercised against the running tracker.** A binding you have run, or one checkable from a local `--help`, needs no marker - the next reader verifies it in seconds. What needs one is everything taken from documentation, inferred, or guessed: a payload limit, a rendering quirk, a transition the board may or may not permit, a field name you have not seen in a response.
 
-| close | CORE | yes | `PATCH /tasks/<id>` `[VERIFIED 2026-08-02]`; returns `in_review`, not `closed` `[ASSUMED]` - the gated terminal is documented but untested |
+Mark those inline, in the cell or sentence they qualify: `[ASSUMED]` (from docs, not yet run), `[UNVERIFIED]` (a deliberate guess), `[VERIFIED <date>]` once confirmed. A worked row:
 
-The marker goes INSIDE the binding cell: the table header is pinned, so a new column is not an option. An unverified claim stated flatly is worse than none - this file is auto-loaded instruction, so the agent acts on it.
+| close | CORE | yes | `PATCH /tasks/<id>`; returns `in_review`, not `closed` `[ASSUMED]` - the gated terminal is documented but untested |
+
+The marker goes INSIDE the binding cell: the table header is pinned, so a new column is not an option.
+
+An unexercised claim stated flatly is worse than none - this file is auto-loaded instruction, so the agent acts on it. The rule is scoped rather than universal on purpose: a convention nobody can follow completely is one nobody follows at all, and a file dense with `[VERIFIED]` on self-evident bindings teaches the next author that markers are noise.
 
 ## Board profile (optional)
 
