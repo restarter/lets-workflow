@@ -60,6 +60,17 @@ var neutralFields = map[string]bool{
 	"type": true, "priority": true, "labels": true, "design": true, "assignee": true,
 }
 
+// requiredShowFields are what a SUPPORTED `show` must promise, because commands read
+// them without checking: detect-task's liveness probe indexes `status`, and
+// done/plan/review/check all read `description`.
+//
+// `url` is deliberately NOT here. The neutral shape has named it since 0.7.0, but the
+// reference adapter has no url at all - beads has no `--url` flag and its output
+// carries no link - so requiring it would either fail the reference adapter or force
+// it to keep declaring a field it cannot return, which is the exact falseness this
+// whole mechanism exists to remove. Optional field, honestly optional.
+var requiredShowFields = []string{"id", "title", "status", "description"}
+
 // adapterPaths returns every live adapter file the contract tests apply to: the
 // shipped set plus the testdata fixtures, excluding user board profiles and the
 // copy-me TEMPLATE. Fixtures cannot live in plugins/lets/rules -
@@ -96,19 +107,33 @@ func adapterPaths(t *testing.T) []string {
 }
 
 // declaredNames extracts the declared field names from the text following an
-// `accepts:` / `returns:` marker: the backticked tokens up to the terminating
-// period. The period matters - a binding cell continues past the declaration with
-// the transport call, which is itself backticked.
+// `accepts:` / `returns:` marker: the backticked tokens up to the terminator.
 //
-// A rename is written `priority`→`severity` and the NEUTRAL (left) side is what
-// is returned, because that is the side a caller matches on. Returning the native
-// side would fail every renaming adapter against the neutral vocabulary - i.e.
-// exactly the adapters the rename syntax exists for.
-func declaredNames(rest string) []string {
-	if end := strings.Index(rest, "."); end >= 0 {
+// The terminator is the first ". " - a period FOLLOWED BY SPACE - or a period at
+// the very end. NOT any period: a cell reading "accepts: `title` (v1.2 API),
+// `description`" would cut inside "v1.2" and silently stop checking every field
+// after it, which is the one thing this assertion exists for. A declaration must
+// therefore be closed with a period before the binding prose resumes; that
+// requirement is stated in tracker-TEMPLATE.md's declaration bullet.
+//
+// A rename is written `priority`→`severity` and the NEUTRAL (left) side is what is
+// returned, because that is the side a caller matches on. Returning the native side
+// would fail every renaming adapter against the neutral vocabulary - i.e. exactly
+// the adapters the rename syntax exists for.
+//
+// malformed reports an odd number of backticks in the span: the pairing walk below
+// would then invent names out of prose, producing a baffling failure that accuses
+// the author of declaring a field called "and a stray". The caller reports it as
+// malformed instead of guessing.
+func declaredNames(rest string) (names []string, malformed bool) {
+	if end := strings.Index(rest, ". "); end >= 0 {
 		rest = rest[:end]
+	} else {
+		rest = strings.TrimSuffix(strings.TrimSpace(rest), ".")
 	}
-	var names []string
+	if strings.Count(rest, "`")%2 != 0 {
+		return nil, true
+	}
 	parts := strings.Split(rest, "`")
 	for i := 1; i < len(parts); i += 2 {
 		name := strings.TrimSpace(parts[i])
@@ -127,7 +152,42 @@ func declaredNames(rest string) []string {
 			names = append(names, name)
 		}
 	}
-	return names
+	return names, false
+}
+
+// TestDeclaredNames pins the extractor directly, decoupled from any adapter file -
+// the same shape as TestCoreSupportedCell, and for the same reason: a helper whose
+// only coverage is "the current corpus happens to pass" stops detecting silently.
+// The first three cases are the ones that made it worth writing.
+func TestDeclaredNames(t *testing.T) {
+	for _, tc := range []struct {
+		name, in  string
+		want      []string
+		malformed bool
+	}{
+		{"period inside a version does not truncate", "`title` (v1.2 API), `description`. `POST /x`", []string{"title", "description"}, false},
+		{"terminator ends the span before the transport call", "`title`, `description`. `bd create --title=x`", []string{"title", "description"}, false},
+		{"trailing period with nothing after it", "`title`, `labels`.", []string{"title", "labels"}, false},
+		{"two-span rename keeps the neutral side", "`title`, `priority`→`severity`.", []string{"title", "priority"}, false},
+		{"one-span rename keeps the neutral side", "`title`, `priority→severity`.", []string{"title", "priority"}, false},
+		{"no backticks at all", "nothing - no-op; the branch is the only handle", nil, false},
+		{"odd backtick count is malformed, not invented names", "`title` and a stray ` char, `description`.", nil, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, malformed := declaredNames(tc.in)
+			if malformed != tc.malformed {
+				t.Fatalf("malformed = %v, want %v", malformed, tc.malformed)
+			}
+			if len(got) != len(tc.want) {
+				t.Fatalf("got %v, want %v", got, tc.want)
+			}
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Errorf("got[%d] = %q, want %q", i, got[i], tc.want[i])
+				}
+			}
+		})
+	}
 }
 
 // pluginRulesDir resolves <repo>/plugins/lets/rules from this test file's path
@@ -237,11 +297,39 @@ func TestTrackerRules_FieldsDeclared(t *testing.T) {
 					t.Errorf("%s: verb %q declares %q with nothing after it", base, tc.verb, tc.decl)
 					continue
 				}
-				for _, name := range declaredNames(rest) {
+				names, malformed := declaredNames(rest)
+				if malformed {
+					t.Errorf("%s: verb %q declaration has an odd number of backticks - close every `name` (see tracker-TEMPLATE.md)", base, tc.verb)
+					continue
+				}
+				declared := map[string]bool{}
+				for _, name := range names {
 					if !neutralFields[name] {
 						t.Errorf("%s: verb %q declares non-neutral field %q - callers match on neutral names, so this one is invisible to them", base, tc.verb, name)
 					}
+					declared[name] = true
 				}
+				// A supported `show` must promise what commands unconditionally read:
+				// detect-task reads `status` off it, done/plan/review read `description`.
+				// Asserting only that the NAMES are neutral let an adapter declare
+				// `returns: title.` and pass while three consumers index into fields it
+				// never promised (lets-x1rnx review S-1).
+				if tc.verb == "show" && coreSupportedCell(cells[2]) {
+					for _, req := range requiredShowFields {
+						if !declared[req] {
+							t.Errorf("%s: `show` is supported but does not declare %q - commands read it unconditionally", base, req)
+						}
+					}
+				}
+			}
+			// `close` returns the status the task ended in - the contract /lets:done
+			// branches on at five sites. The beads golden pins only `bd close <id>
+			// [--reason`, so the outcome clause sits outside every existing assertion and
+			// could be deleted with CI green (lets-x1rnx review S-2).
+			if cells := tableRowCells(caps, "close"); cells == nil {
+				t.Errorf("%s: no binding row for \"close\"", base)
+			} else if !strings.Contains(cells[3], "returns") {
+				t.Errorf("%s: `close` must state the status it leaves the task in - `closed`, another neutral status for a process-gated terminal, or NO status for a no-op adapter. Without it the caller defaults to reporting a close it cannot confirm", base)
 			}
 		})
 	}
@@ -334,6 +422,38 @@ func TestTrackerAdapters_VerbVocabInSync(t *testing.T) {
 		for _, part := range strings.Split(v, "/") {
 			if !strings.Contains(rulesStr, "`"+part+"`") {
 				t.Errorf("neutral verb %q (part %q) not named in lets-rules \"Tracker Adapters\" verb list", v, part)
+			}
+		}
+	}
+}
+
+// TestTrackerVocabulariesInSync pins the two canons this package enforces against
+// the TEMPLATE prose an adapter author actually reads. Without it, adding a field or
+// a status to the TEMPLATE leaves CI rejecting an author who followed the docs, and
+// removing one leaves CI enforcing a vocabulary the docs no longer teach.
+//
+// TestTrackerAdapters_VerbVocabInSync already does exactly this for the verb
+// vocabulary; neutralFields and neutralStatuses arrived without the equivalent.
+func TestTrackerVocabulariesInSync(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join(pluginRulesDir(t), "tracker-TEMPLATE.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(data)
+	for _, tc := range []struct {
+		what, heading string
+		canon         map[string]bool
+	}{
+		{"field", "## Capabilities + bindings", neutralFields},
+		{"status", "## Neutral statuses", neutralStatuses},
+	} {
+		span := sectionSpan(content, tc.heading)
+		if span == "" {
+			t.Fatalf("tracker-TEMPLATE.md: %q section not found", tc.heading)
+		}
+		for name := range tc.canon {
+			if !strings.Contains(span, "`"+name+"`") {
+				t.Errorf("tracker-TEMPLATE.md %q: neutral %s %q is enforced by CI but never named there - an author following the docs would be rejected for using it", tc.heading, tc.what, name)
 			}
 		}
 	}
