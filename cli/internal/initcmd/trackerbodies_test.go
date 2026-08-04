@@ -55,16 +55,22 @@ var bdBareWord = regexp.MustCompile(`(^|[^A-Za-z0-9_])bd([^A-Za-z0-9_]|$)`)
 // line in the commit that needed it.
 var allowedExecutableBd = map[string][]string{}
 
-// TestNoExecutableBdInCommandBodies enforces the neutral-verb invariant: no
-// executable bd survives in a command/skill body's ```bash fence outside the
-// allowlist. Promotes the one-time grep sweep into a durable CI guard so a future
-// edit can't silently re-introduce a literal bd verb-call (the failure mode the
-// neutral-verb rewrite, lets-5d48z, set out to eliminate). Subagent-embedded bd
-// (e.g. backlog's explorer/brainstorm prompts) lives in plain ``` fences, not
-// ```bash, so it is naturally out of scope (the Cat-C carve-out).
+// TestNoExecutableBdInCommandBodies enforces the neutral-verb invariant: no bd
+// survives in a command/skill body or a workflow asset. Promotes the one-time grep
+// sweep into a durable CI guard so a future edit can't silently re-introduce a
+// literal bd verb-call (the failure mode the neutral-verb rewrite, lets-5d48z, set
+// out to eliminate).
+//
+// Scope is deliberately wider than the name's "Executable" suggests, and wider than
+// it was before lets-x1rnx. Subagent-embedded bd - backlog's explorer and brainstorm
+// prompts - used to be described here as "naturally out of scope (the Cat-C
+// carve-out)". That carve-out is gone: the orchestrator now injects tracker data and
+// no subagent gets tracker access, so a bd inside a prompt fence is a defect, not an
+// exception. It went unseen for three releases precisely because it sat in a plain
+// fence in a file the walk did not read.
 func TestNoExecutableBdInCommandBodies(t *testing.T) {
 	root := pluginDir(t)
-	var scanned int
+	var scanned, scannedWorkflows int
 	for _, sub := range []string{"commands", "skills"} {
 		err := filepath.Walk(filepath.Join(root, sub), func(path string, info os.FileInfo, err error) error {
 			if err != nil {
@@ -74,7 +80,11 @@ func TestNoExecutableBdInCommandBodies(t *testing.T) {
 			if info.IsDir() || (!strings.HasSuffix(path, ".md") && !isWorkflow) {
 				return nil
 			}
-			scanned++
+			if isWorkflow {
+				scannedWorkflows++
+			} else {
+				scanned++
+			}
 			data, err := os.ReadFile(path)
 			if err != nil {
 				return err
@@ -93,21 +103,43 @@ func TestNoExecutableBdInCommandBodies(t *testing.T) {
 				}
 				return nil
 			}
-			inFence, bashKind := false, false
+			// Fence STACK, not a toggle. A TAGGED line (```bash, ```lets-tracker, ```json)
+			// always OPENS - including inside another fence, which is the only way a bash
+			// block nested in an output template is ever reached. A BARE ``` closes the
+			// innermost fence, or opens a plain one when nothing is open.
+			//
+			// Depth matters because a toggle-on-every-fence machine consumes the nested
+			// opener AS a closer: the nested body is then classified as outside any fence
+			// and skipped by both tiers, and the parity stays inverted for the rest of the
+			// file. That is a coverage REGRESSION - the pre-lets-x1rnx machine, which only
+			// ever tracked bash openers, caught a bd inside `worktree.md`'s nested block and
+			// the toggle version did not. Live examples: commands/worktree.md:165-174,
+			// commands/github-pr.md:956-969.
+			//
+			// Known limitation, unchanged: a heredoc BODY carrying a ``` line pops a fence
+			// early - acceptable, heredoc-carried markdown is data, not commands to run.
+			var fences []bool // one entry per open fence; true = bash-family
 			for i, line := range strings.Split(string(data), "\n") {
 				trimmed := strings.TrimSpace(line)
 				if strings.HasPrefix(trimmed, "```") {
-					if inFence {
-						// Known limitation: a heredoc BODY containing a ``` line closes
-						// the fence early (unscanned tail) - acceptable; heredoc-carried
-						// markdown is data, not commands the model runs.
-						inFence, bashKind = false, false
-					} else {
-						inFence, bashKind = true, bashFence.MatchString(trimmed)
+					switch {
+					case len(trimmed) > 3: // tagged -> always an opener, even when nested
+						fences = append(fences, bashFence.MatchString(trimmed))
+					case len(fences) > 0: // bare inside something -> closes the innermost
+						fences = fences[:len(fences)-1]
+					default: // bare at top level -> opens a plain fence
+						fences = append(fences, false)
 					}
 					continue
 				}
-				if !inFence || strings.HasPrefix(trimmed, "#") {
+				if len(fences) == 0 {
+					continue
+				}
+				bashKind := fences[len(fences)-1]
+				// The `#` skip is for BASH COMMENTS. In any other fence `#` is a markdown
+				// heading - ~140 of them sit inside output templates and Task( prompts, and
+				// skipping those would blind the bare-word tier to `### Suggested bd create`.
+				if bashKind && strings.HasPrefix(trimmed, "#") {
 					continue
 				}
 				// Two tiers. In a bash fence the prose-vs-command distinction is real, so
@@ -118,19 +150,25 @@ func TestNoExecutableBdInCommandBodies(t *testing.T) {
 					if !bdCommand.MatchString(line) {
 						continue
 					}
-				} else if !bdBareWord.MatchString(line) {
+					allowed := false
+					for _, frag := range allowedExecutableBd[rel] {
+						if strings.Contains(line, frag) {
+							allowed = true
+							break
+						}
+					}
+					if !allowed {
+						t.Errorf("%s:%d executable bd in a command body (use a ```lets-tracker block): %s", rel, i+1, trimmed)
+					}
 					continue
 				}
-				allowed := false
-				for _, frag := range allowedExecutableBd[rel] {
-					if strings.Contains(line, frag) {
-						allowed = true
-						break
-					}
+				if !bdBareWord.MatchString(line) {
+					continue
 				}
-				if !allowed {
-					t.Errorf("%s:%d bd in a command body (use a ```lets-tracker block): %s", rel, i+1, trimmed)
-				}
+				// Deliberately a different message: this tier fires inside output templates
+				// (text the model PRINTS) and inside Task( prompts, where a lets-tracker
+				// block is exactly what you cannot use - verb resolution is orchestrator-only.
+				t.Errorf("%s:%d bd named in a non-bash fence - a prompt or output template must not teach one tracker's dialect; the orchestrator injects tracker data instead: %s", rel, i+1, trimmed)
 			}
 			return nil
 		})
@@ -138,8 +176,14 @@ func TestNoExecutableBdInCommandBodies(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// Per-source counters, not one total: a combined count stays non-zero when ONE
+	// source silently drops out, which is how the .workflow.js blindness would come
+	// back (a renamed suffix, a relocated skill dir) with CI green.
 	if scanned == 0 {
 		t.Fatal("scanned 0 markdown files under plugins/lets - test wiring broken")
+	}
+	if scannedWorkflows == 0 {
+		t.Fatal("scanned 0 *.workflow.js assets - the walk extension regressed; workflow assets are committed COPIES of command prompts and go unguarded without it")
 	}
 }
 
