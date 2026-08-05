@@ -27,17 +27,21 @@ Tasks created without labels, priority, or description become orphaned and hard 
 
 ## Required Fields
 
-Every task `create` MUST include ALL of these:
+Every task `create` MUST include every field the active adapter's `create` declares in `accepts:` - and nothing else:
 
 | Field | Required | Rules |
 |------|----------|-------|
 | `title` | Always | Imperative mood, clear action. Under 80 chars |
-| `type` | Always | One of: `task`, `bug`, `feature`, `epic` |
-| `priority` | Always | 0-4 (0=critical, 1=high, 2=medium, 3=low, 4=backlog) |
+| `type` | If declared | One of: `task`, `bug`, `feature`, `epic` |
+| `priority` | If declared | 0-4 (0=critical, 1=high, 2=medium, 3=low, 4=backlog) |
 | `description` | Always | Why this task exists + acceptance criteria |
-| `labels` | Always | At least one `epic:<name>` label for grouping |
+| `labels` | If declared | At least one `epic:<name>` label for grouping |
+
+**"If declared" means:** read the active adapter's `create` binding cell. Ask for a field only when its `accepts:` list carries it. When it does not, either use the rename the adapter declares (`priority→severity` means ask for priority, send severity) or say in one line that this tracker has no such field, and move on. Never collect a value and drop it - the user has no way to tell that happened.
 
 ## Label Selection
+
+**Run this whole section only if the adapter's `create` declares `labels` in `accepts:`.** The `label` verb being supported is a different question - a tracker can carry labels on a task and still not take them at creation time, and walking the user through discovery and a pick only to drop the answer is the exact failure this skill's Required Fields section forbids.
 
 Labels are project-specific. ALWAYS discover them dynamically - never hardcode.
 
@@ -79,7 +83,7 @@ Do NOT ask for each field separately - infer type, priority, and labels from con
 
 ### Step 2: Compose Fields
 
-From the user's input, derive:
+From the user's input, derive only the fields the adapter's `create` declares in `accepts:` - skip the rest without asking:
 
 1. **Title** - imperative mood, specific action (e.g., "Add retry logic to API client")
 2. **Type** - infer from context: bug (something broken), feature (new capability), task (chore/refactor), epic (theme)
@@ -105,6 +109,8 @@ API calls fail silently on network errors.
 - Surface final error to user
 EOF
 ```
+
+The example below is shaped for an adapter that declares all five fields (beads does). On one that declares fewer, send fewer - the declaration decides, not this example:
 
 ```lets-tracker
 create title="Add retry logic to API client" type=feature priority=2 labels="epic:quality" description-file=.lets/cache/new-task-desc-<branch-slug>.md
@@ -144,8 +150,8 @@ When creating multiple tasks (e.g., during planning):
 
 ## Anti-patterns
 
-- **Never** create a task without `labels`
-- **Never** use a bare `create` with only a title (no type/priority/description/labels)
+- **Never** create a task without `labels` *when the adapter declares `labels`* - on an adapter that does not, say so once and proceed
+- **Never** send a field the adapter's `accepts:` does not list, and never silently omit one it does
 - **Never** use a parent/child hierarchy (beads `--parent` - causes merge collisions in multi-user setup)
 - **Never** skip user approval for task creation
 - **Never** use priority words ("high", "medium") - use numbers 0-4

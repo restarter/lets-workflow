@@ -12,7 +12,7 @@ For working the backlog (pulse / ideas / cleanup) use `/lets:backlog`. To claim 
 
 Invoke `Skill(skill: "lets:orient")` - it renders `## Where you are` / `## In flight` / `## Next up` (and `## Project` counts when the tracker provides them), degrading per tracker (`beads` | `none` | a custom adapter).
 
-If a legacy view argument was passed (`overview` / `ready` / `labels` / `blocked` / `full`), ignore it and note once: "Status is now a single orient snapshot; the old views were removed. On beads, deep dashboards live in native `bd stats` / `bd blocked`."
+If a legacy view argument was passed (`overview` / `ready` / `labels` / `blocked` / `full`), ignore it and note once: "Status is now a single orient snapshot; the old views were removed. Deeper dashboards, where a tracker offers them, live in that tracker's own native tooling."
 
 ## Step 2: Footer (Response Footer model)
 

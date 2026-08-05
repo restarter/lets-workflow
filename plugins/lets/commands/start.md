@@ -105,7 +105,7 @@ The orient snapshot (Step 3) already shows In flight + Next up - don't repeat th
 **Every session needs a task.** From the orient snapshot, offer the moves:
 
 > - **Resume** the active task if In flight shows one you want to continue.
-> - **Pick** one from Next up (the top 5 ready - for the full list, `/lets:backlog`, or `bd ready` on beads).
+> - **Pick** one from Next up (the top 5 ready - for the full list, `/lets:backlog`).
 > - **Create** a new task (the `create-task` skill - tracker `create` verb), or claim an existing one (tracker `set-status=in_progress`).
 
 **If user doesn't want to pick a task** but describes work (e.g., "just want to fix proxy config"):
@@ -212,7 +212,7 @@ if [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ]; then
 fi
 ```
 
-Invoke `Skill(skill: "lets:orient")` - with no active task it degrades to branch + no-task + In flight + Next up + Project, which IS the PM triage surface. Keep it short - on beads, point to `bd stats` / `bd blocked` for the deep dashboard.
+Invoke `Skill(skill: "lets:orient")` - with no active task it degrades to branch + no-task + In flight + Next up + Project, which IS the PM triage surface. Keep it short - if the tracker has a deeper native dashboard, point the user at it in one line.
 
 
 ### Step M2: Set the stance
@@ -231,7 +231,7 @@ Respond as the persona. Common moves and where they route:
 | Quick no-agent backlog pulse | `/lets:backlog --fast` |
 | Think through a decision / topic | `/lets:opinion <topic>` |
 | Orient snapshot (where are we) | `/lets:status` |
-| Deep beads dashboard / dependency view | `bd stats` / `bd blocked` (beads-native) |
+| Deep dashboard / dependency view | the tracker's own native view, if it has one |
 | New task | `create-task` skill (user approves) |
 | Capture a decision / fact / gotcha | `/lets:note` |
 

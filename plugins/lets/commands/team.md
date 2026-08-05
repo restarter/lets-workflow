@@ -223,10 +223,10 @@ You are in an isolated worktree - your changes won't affect other teammates.
 {full task description from the tracker's show}
 
 **Design Notes:**
-{design field from the tracker's show, or "None"}
+{design - only if the adapter's `show` declares it in `returns:`; otherwise OMIT this block entirely. Do NOT render "None": it reads as "this task has no design notes", which is a claim about the task, not about the tracker}
 
 **Previous Context:**
-{last 3 tracker comments, or "No previous context"}
+{last 3 tracker comments - only if `comment-list` is supported; otherwise OMIT this block. "No previous context" would assert something about the task that was never looked up}
 
 ## Your Boundaries
 

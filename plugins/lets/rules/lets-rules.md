@@ -238,7 +238,7 @@ A ` ```lets-tracker ` block is a neutral verb CALL, not shell. Resolve it: (1) i
 - non-beads adapter whose `tracker-<name>.md` IS loaded → resolve via its file (e.g. an `mcp__*` tool). Translate native↔neutral statuses so surrounding logic stays adapter-agnostic.
 - non-beads named but NO `tracker-<name>.md` loaded (upgraded the plugin but hasn't re-run `/lets:init` / `/lets:update`) → behave as `none`: do NOT run `bd` (wrong store), tell the user the tracker isn't installed, nudge `/lets:update`.
 
-**Reads** (`show`, `list-by-status`) return the neutral shape `{id, title, status, url}` (`show` may add `description`) with `status` a neutral name (`open`/`in_progress`/`closed`); the body reads the returned field (annotated `# returns …`), never greps a tracker's native JSON.
+**Reads** (`show`, `list-by-status`) return the neutral shape `{id, title, status}` plus `description` on `show`, and `url` only from a tracker that has per-task links (beads has none). `status` is a neutral name — required `open`/`in_progress`/`closed`; optional `in_review`/`blocked`, and an adapter carries an optional one only if its own `## Neutral statuses` section names it, so never emit one without checking. The body reads the returned field (annotated `# returns …`), never greps a tracker's native JSON. `close` **declares** its outcome rather than parsing one: the adapter's `close` row states the status it leaves the task in — `closed` means closed, another status means the board advanced the task instead and the caller MUST report the handoff rather than a close, no status at all means nothing happened.
 
 **Comment / description bodies are format-neutral / plain-text.** Rich markdown structure is a beads-only affordance; other adapters render best-effort. A body crosses to a verb (`comment-add`'s `body`, `create`'s `description`) one of two ways:
 - **Inline** — `body="..."` / `description="..."` for a short OR purely orchestrator-templated value (a multi-line template with NO `$(...)` shell expansion is allowed inline).
@@ -246,11 +246,12 @@ A ` ```lets-tracker ` block is a neutral verb CALL, not shell. Resolve it: (1) i
 
 An empty body → HARD-FAIL, never submit an empty comment.
 
-**Degradation (two-pronged — do NOT flatten):**
+**Degradation (two-pronged — do NOT flatten), then preflight:**
 - An OPTIONAL verb the adapter marks `absent`, OR a CORE verb bound to a deliberate **no-op** (`none`) → continue and TELL the user; never report it as a recorded change (no phantom "done").
 - A binding that exists but FAILS at runtime (MCP tool not connected, `bd` not on PATH, an MCP adapter's `failures[]` non-empty) → **HARD-FAIL loud** ("set-status / close FAILED — task NOT changed"); never report a phantom success. Critical under AUTO MODE — `/lets:done` must not claim a close it didn't do.
+- **Preflight (a precondition, not a degradation mode).** Before OFFERING a verb, field, or mode, read the capability table: a field the active binding does not declare in `accepts:` must be mapped to one it does, or named unavailable — never collected and dropped. Symmetrically on the read side, never render a field the adapter's `show` does not declare in `returns:` — an invented value is a claim about the task, not about the tracker.
 
-**Resolution is ORCHESTRATOR-ONLY** — subagents never call tracker verbs (they don't receive the adapter file). Two documented beads-only carve-outs (NOT violations): (a) a few analytical commands — notably `/lets:backlog` — instruct their review subagents to read task data via `bd` directly (the subagent has no adapter; on a non-beads project those reads are unavailable until migrated); (b) the detect-task merge-branch liveness probe is a gated `bd show` (see detect-task) — both are allowlisted.
+**Resolution is ORCHESTRATOR-ONLY** — subagents never call tracker verbs (they don't receive the adapter file). A command that needs tracker data inside a subagent prompt pulls it itself and INJECTS it as fenced data. There are no exceptions and no carve-outs.
 
 **Trust:** a `tracker-<name>.md` is trusted instruction auto-loaded into model context; its binding cells EXECUTE as written. Installing a third-party / shared adapter is equivalent to running its code — review every binding before installing one you didn't author. The contract test pins table SHAPE, NOT binding SAFETY. A token belongs ONLY in the transport's own config (the MCP server env / a gitignored 0600 file) — NEVER in a loaded/shared `tracker-*.md`, `.board.md`, or `.lets/.env` (mode 644, injected into context).
 

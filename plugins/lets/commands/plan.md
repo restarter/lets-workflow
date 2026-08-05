@@ -38,10 +38,10 @@ If Step 1 captured an explicit `<task-id>` argument (e.g. an interactive `--flow
 If task found:
 ```lets-tracker
 show task=<task-id>          # returns {id,title,status,url,description}
-comment-list task=<task-id>  # existing comments
+comment-list task=<task-id>  # existing comments; absent -> continue with the description alone and say so
 ```
 
-Load: title, description, existing comments (+ design notes on beads - beads exposes `design`).
+Load: title, description, existing comments, plus any further field the adapter's `show` declares in `returns:` (beads declares `design`).
 
 If no task found, warn:
 > "No active task detected. Every session needs a task. Create one (the `create-task` skill) or pick from the tracker's `ready` view."

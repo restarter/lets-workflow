@@ -20,18 +20,18 @@ None tracked. `set-status` / `close` are no-ops.
 
 | verb | tier | supported | binding |
 |------|------|-----------|---------|
-| create         | CORE | no | no-op - tell the user no tracker is configured; the branch is the only handle |
-| show           | CORE | no | no-op - nothing to show (no store) |
+| create         | CORE | no | accepts: nothing - no-op; tell the user no tracker is configured, the branch is the only handle |
+| show           | CORE | no | returns: nothing - no-op, no store |
 | comment-add    | CORE | no | no-op - the comment is not persisted to a task |
 | set-status     | CORE | no | no-op - no status to set |
-| close          | CORE | no | no-op - nothing to close |
+| close          | CORE | no | no-op - nothing to close; returns NO status (distinct from an advance: the caller says no tracker is configured, not that the task moved) |
 | comment-list   | OPT  | no | absent |
 | list-by-status | OPT  | no | absent |
 | search         | OPT  | no | absent |
 | ready/stats    | OPT  | no | absent |
 | label          | OPT  | no | absent |
 | assignee       | OPT  | no | absent |
-| set-field      | OPT  | no | absent |
+| set-field      | OPT  | no | accepts: nothing - absent |
 
 ## Degradation
 

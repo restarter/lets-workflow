@@ -18,7 +18,7 @@ Built on git + `detect-task` + neutral tracker verbs, so it degrades cleanly on 
 
 Invoke `Skill(skill: "lets:detect-task")` -> an id or None. (A skill may invoke another skill; this is a normal nested `Skill`-tool call in the same orchestrator context.)
 
-**Inline fallback** (only if the nested `Skill` call is unavailable - rare: skill-invokes-skill is sound, this is belt-and-suspenders): do NOT re-derive the id with a partial copy of detect-task's precedence ladder (it would rot when the branch format changes and would drop detect-task's merge-branch liveness probe + `list-by-status` fallback). Instead skip the active-task line and note it degraded - the In flight section (Step 3) still surfaces any in_progress task. `detect-task` stays the single source of branch-format truth.
+**Inline fallback** (only if the nested `Skill` call is unavailable - rare: skill-invokes-skill is sound, this is belt-and-suspenders): do NOT re-derive the id with a partial copy of detect-task's precedence ladder (it would rot when the branch format changes and would drop detect-task's merge-branch liveness check + its search-and-confirm fallback). Instead skip the active-task line and note it degraded - the In flight section (Step 3) still surfaces any in_progress task. `detect-task` stays the single source of branch-format truth.
 
 When Step 1 yields an id, get its title with the tracker's `show`:
 

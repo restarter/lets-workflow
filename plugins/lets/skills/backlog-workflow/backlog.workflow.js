@@ -7,7 +7,7 @@ export const meta = {
 
 // ── ARGS (defensive parse - the runtime may deliver args as a JSON string) ──
 const input = typeof args === 'string' ? JSON.parse(args) : (args || {})
-const { profile, agents, projectRoot, claudeMd } = input
+const { profile, backlogState, agents, projectRoot, claudeMd } = input
 
 // ── SCHEMAS ──
 // Backlog idea: category is backlog-semantic (missing/adjust/theme). adjust ideas embed the
@@ -109,9 +109,6 @@ function clusterIdeas(items) {
 
 // ── PROMPTS (built from args; KEEP IN SYNC with backlog.md Phase 3 prompt) ──
 function backlogIdeatePrompt() {
-  // tracker: the "Use bd commands" instruction in this prompt is beads-only by design
-  // (subagent reads bd directly; see lets-rules "Tracker Adapters" exception - backlog
-  // is in the deferred analytical-migration set, not a violation of the invariant).
   return `ultrathink
 
 PROJECT_ROOT: ${projectRoot}. Do NOT read or search files outside this directory.
@@ -120,7 +117,7 @@ MODE: brainstorm (review backlog)
 
 Review the project's BACKLOG of tasks from your area of expertise. Surface gaps in WHAT'S BEING TRACKED: missing themes, priority imbalances, areas with no tasks but clear need from your domain.
 
-You are NOT reviewing code, counting duplications, finding stale files, or hunting bugs in source. The PROJECT STATE PROFILE below is your primary source. Use bd commands (bd show, bd comments) for task details. Code reads are allowed only as evidence for a backlog observation, never as primary investigation.
+You are NOT reviewing code, counting duplications, finding stale files, or hunting bugs in source. The PROJECT STATE PROFILE below is your primary source. Task details are in the BACKLOG STATE block below - that is your source; you have no tracker access of your own. Code reads are allowed only as evidence for a backlog observation, never as primary investigation.
 
 PROJECT RULES (from CLAUDE.md):
 ${claudeMd}
@@ -128,8 +125,11 @@ ${claudeMd}
 PROJECT STATE PROFILE:
 ${profile}
 
+BACKLOG STATE (data):
+${backlogState || '(not supplied - reason from the profile alone)'}
+
 Generate 3-7 backlog-level ideas through your domain lens, each categorized:
-- "missing": a task/theme that SHOULD exist but does not - include a suggested bd create brief in the description
+- "missing": a task/theme that SHOULD exist but does not - include a task brief in the description (title, why it matters, acceptance in one line)
 - "adjust": an existing task needing re-prioritization, scope-change, split, or close - reference it as **Task Title** (\`task-id\`) in the description
 - "theme": an observation about backlog distribution, gaps, or drift from project goals
 Each idea must be backlog-actionable and specific to THIS project (not "improve testing" but "backlog has 0 tasks tracking auth flow regressions despite 4 recent auth changes"). Rank by impact (high/medium). Return structured output under "ideas"; do not fabricate - return fewer if you have nothing useful.`

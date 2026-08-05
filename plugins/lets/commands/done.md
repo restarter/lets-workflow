@@ -88,7 +88,7 @@ Otherwise (no PR, or `gh` unavailable) continue to Step 3 - normal flow.
 **Before closing - verify ALL requirements from the task description are met.**
 
 ```lets-tracker
-show task=<task-id>   # returns {id,title,status,url,description}; read description (+ type on beads) to verify scope
+show task=<task-id>   # returns {id,title,status,url,description}; read description - plus any field the adapter's `show` declares (beads: `type`) - to verify scope
 ```
 
 Compare the task description against actual changes:
@@ -381,6 +381,8 @@ fi
 close task=<task-id> reason="Trunk-mode: committed on {LETS_MERGE_BRANCH}, no PR"
 ```
 
+Read the status `close` returned. `closed` -> report the task closed. Another status -> the board does not permit a close from here and advanced the task instead: report "**{title}** (`{id}`) advanced to {status}, not closed - a human carries it the rest of the way", and do NOT describe the task as done. No status at all -> no tracker is configured; say that, and claim neither. A close that FAILED is not a status - HARD-FAIL per the Degradation rule.
+
 Then drop the closed task's boundary (the close is a state change - HARD-FAIL loud if the binding can't run; do NOT proceed to cleanup if the close failed):
 
 ```bash
@@ -455,6 +457,14 @@ After PR created:
 comment-add task=<task-id> body="PR #XX created: <PR URL>"
 ```
 
+The task is now waiting on review rather than being worked on. Advance it ONLY if the active adapter's `## Neutral statuses` section names `in_review`:
+
+```lets-tracker
+set-status task=<task-id> status=in_review
+```
+
+If it does not name `in_review`, skip this call silently - the task stays where it is and nothing was lost. Do not infer support from the tracker's name; read the adapter's own status list. On a board that does carry it, this is the whole handoff: the task lands in the review column and a human takes it from there.
+
 Task stays **open** until PR is merged.
 
 **Do NOT switch branches yet** - user decides in Step 9.
@@ -468,6 +478,14 @@ If bbb is available: push the branch, then create the PR with bbb targeting `{LE
 ```lets-tracker
 comment-add task=<task-id> body="Bitbucket PR created: <PR URL>"
 ```
+
+The task is now waiting on review rather than being worked on. Advance it ONLY if the active adapter's `## Neutral statuses` section names `in_review`:
+
+```lets-tracker
+set-status task=<task-id> status=in_review
+```
+
+If it does not name `in_review`, skip this call silently - the task stays where it is and nothing was lost. Do not infer support from the tracker's name; read the adapter's own status list.
 
 The task stays **open** until the PR is merged - no local merge, no branch delete, no close. **Do NOT switch branches yet** - user decides in Step 9.
 
@@ -485,6 +503,8 @@ After merge:
 ```lets-tracker
 close task=<task-id> reason="Merged locally. Commits: {list}"
 ```
+
+Read the status `close` returned. `closed` -> report the task closed. Another status -> the board does not permit a close from here and advanced the task instead: report "**{title}** (`{id}`) advanced to {status}, not closed - a human carries it the rest of the way", and do NOT describe the task as done. No status at all -> no tracker is configured; say that, and claim neither. A close that FAILED is not a status - HARD-FAIL per the Degradation rule.
 
 ### If $LETS_PR_FLOW == local / fallback (local merge) AND in worktree:
 
@@ -510,6 +530,8 @@ After merge:
 close task=<task-id> reason="Merged locally from worktree. Commits: {list}"
 ```
 
+Read the status `close` returned. `closed` -> report the task closed. Another status -> the board does not permit a close from here and advanced the task instead: report "**{title}** (`{id}`) advanced to {status}, not closed - a human carries it the rest of the way", and do NOT describe the task as done. No status at all -> no tracker is configured; say that, and claim neither. A close that FAILED is not a status - HARD-FAIL per the Degradation rule.
+
 Do NOT delete the branch or remove the worktree here - `/lets:worktree remove` handles cleanup.
 
 ## Step 9: Output
@@ -517,7 +539,7 @@ Do NOT delete the branch or remove the worktree here - `/lets:worktree remove` h
 ### After trunk-mode finish (HEAD == `$LETS_MERGE_BRANCH`):
 
 ```
-Task: **{title}** ({task-id}) - CLOSED
+Task: **{title}** ({task-id}) - {CLOSED, or "advanced to {status}" when close returned another status, or "unchanged - no tracker" when it returned none}
 Branch: {LETS_MERGE_BRANCH} (trunk-mode, no PR)
 Pushed: {N} commits to origin/{LETS_MERGE_BRANCH}
 ```
@@ -545,7 +567,7 @@ AskUserQuestion(
 ```
 Task: **{title}** ({task-id})
 PR: #{number} - {PR URL}
-Status: open (close after PR merge)
+Status: {in_review if the advance ran, else open} (close after PR merge)
 ```
 
 **If user chose "PR only, keep open" in Step 3**, skip "Merge & close" - task has remaining work. Use same AskUserQuestion below but WITHOUT the "Merge & close" option.
@@ -571,7 +593,7 @@ AskUserQuestion(
 **Handle response:**
 - **Merge & close**:
   1. `gh pr merge {number} --squash --delete-branch`
-  2. close the task (tracker `close` verb)
+  2. close the task (tracker `close` verb) - read what it returned: `closed` means closed; another status means the board advanced the task instead, so report the handoff and do NOT call it done; no status means no tracker; a failed close HARD-FAILs
   3. `git checkout {LETS_MERGE_BRANCH} && git pull`
   4. If merge fails (conflicts, checks not passed) -> inform user, fall back to "Stay on branch"
 - **Stay on branch** -> stay on current branch, no checkout. User continues working freely.
@@ -583,7 +605,7 @@ AskUserQuestion(
 ```
 Task: **{title}** ({task-id})
 PR: #{number} - {PR URL}
-Status: open (close after PR merge)
+Status: {in_review if the advance ran, else open} (close after PR merge)
 Worktree: {worktree path}
 ```
 
@@ -611,7 +633,7 @@ No "Next task" option - can't switch branches in a worktree. To start a new task
 **Handle response:**
 - **Merge & close**:
   1. `gh pr merge {number} --squash --delete-branch`
-  2. close the task (tracker `close` verb)
+  2. close the task (tracker `close` verb) - read what it returned: `closed` means closed; another status means the board advanced the task instead, so report the handoff and do NOT call it done; no status means no tracker; a failed close HARD-FAILs
   3. If merge fails (conflicts, checks not passed) -> inform user, fall back to "Stay here"
   4. After merge, remind: "Worktree can be removed: `/lets:worktree remove {name}` from the main repo terminal."
 - **Stay here** -> stay in worktree. User continues working.
@@ -623,7 +645,7 @@ No "Next task" option - can't switch branches in a worktree. To start a new task
 ```
 Task: **{title}** ({task-id})
 PR: {PR URL}
-Status: open (the reviewer merges on Bitbucket)
+Status: {in_review if the advance ran, else open} (the reviewer merges on Bitbucket)
 ```
 
 No "Merge & close" - a Bitbucket PR is merged on the platform by the reviewer, not by `/lets:done`; that is the whole point (don't bypass team review).
@@ -653,7 +675,7 @@ AskUserQuestion(
 ```
 Task: **{title}** ({task-id})
 PR: {PR URL}
-Status: open (the reviewer merges on Bitbucket)
+Status: {in_review if the advance ran, else open} (the reviewer merges on Bitbucket)
 Worktree: {worktree path}
 ```
 
@@ -681,7 +703,7 @@ AskUserQuestion(
 ### After local merge ($LETS_PR_FLOW == local / fallback), NOT in worktree:
 
 ```
-Task: **{title}** ({task-id}) - CLOSED
+Task: **{title}** ({task-id}) - {CLOSED, or "advanced to {status}" when close returned another status, or "unchanged - no tracker" when it returned none}
 Merged to {LETS_MERGE_BRANCH}
 Branch {feature-branch} deleted
 ```
@@ -709,7 +731,7 @@ AskUserQuestion(
 ### After local merge ($LETS_PR_FLOW == local / fallback), IN worktree:
 
 ```
-Task: **{title}** ({task-id}) - CLOSED
+Task: **{title}** ({task-id}) - {CLOSED, or "advanced to {status}" when close returned another status, or "unchanged - no tracker" when it returned none}
 Merged to {LETS_MERGE_BRANCH} (from worktree via git -C)
 ```
 
