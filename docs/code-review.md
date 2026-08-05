@@ -32,7 +32,7 @@ For plan reviews (`/lets:review --plan`), agents are selected from signals in th
 
 See **[agents.md](agents.md)** for the agent roster and how selection works.
 
-### The reviewers know what you were building *(ships next release)*
+### The reviewers know what you were building
 
 Both `/lets:check` and `/lets:review` pull the task's description and put it in front of the reviewers — the expert agents for `/lets:review`, the inline pass for `/lets:check`. Without it a reviewer sees code that nothing calls yet and confidently reports it as dead — when the wiring may simply be the next PR. Work the spec describes is planned work, not scope creep. When no spec can be resolved the review still runs and says so on any scope finding — but it does **not** downgrade that finding. A missing spec is missing information about intent, not evidence that the code is fine, so the severity stays whatever the reviewer judges it to be. That matters most if you work without a task tracker at all: your reviews are exactly as sharp as everyone else's.
 
@@ -46,7 +46,7 @@ Both `/lets:check` and `/lets:review` pull the task's description and put it in 
 
 Where the spec comes from by default depends on the command and the target. `/lets:review` uses your branch's active task locally, and on a PR the task behind the PR's own branch. `/lets:check` uses your branch's active task locally and has no spec on a PR unless you pass `--spec` — resolving a task from a PR branch is `/lets:review`'s job, so that rule lives in one place. `--file` reviews get the spec too: a file is often exactly the task, and with acceptance criteria in hand ("a CSV of every US state, skip none") the review becomes a completeness check rather than a taste test.
 
-### On a PR, the reviewers also read the PR itself *(ships next release)*
+### On a PR, the reviewers also read the PR itself
 
 Three different things reach a reviewer and only one of them is the spec. The spec says what was *supposed* to be built. The PR description says what the author *claims* they built. The discussion says what people have *already said* about it. `/lets:review <PR>` now hands over all three — previously the description arrived only when no spec could be found, and the discussion never arrived at all.
 
@@ -58,7 +58,7 @@ None of it reaches the adversarial verification pass. Everything in that block i
 
 A spec is only used to decide whether a finding of the shape "dead / unrelated / cut this" is planned work. It never softens a correctness, security, or logic finding, and the adversarial verification pass gets a deliberately narrower version of it — a verifier that can only answer "real or not" must not be handed a rule about severity. On a PR the verifiers get no spec at all: whatever it came from, it is the PR author's own task or their own plan file, so it is their account of their work either way.
 
-### Reviewing a PR *(ships next release)*
+### Reviewing a PR
 
 `/lets:review <PR>` asks once whether to switch your checkout to the PR's branch:
 
