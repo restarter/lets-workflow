@@ -82,14 +82,14 @@ Team:     /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /le
 | `/lets:review-round` | Code | Work through a received review round - triage, decisions->task, one final edit-pass |
 | `/lets:opinion` | Expert | Technical decision needed |
 | `/lets:ask` | Expert | Quick question to one expert |
-| `/lets:research` | Expert | Web-sourced cited answer to an external/technical question (`--workflow` off-context) *(ships next release)* |
+| `/lets:research` | Expert | Web-sourced cited answer to an external/technical question (`--workflow` off-context) |
 | `/lets:init` | Setup | Initialize LETS in a new project; re-run for self-heal or config change. User-scope plugin install: offers `lets init --user` (global rules + `~/.lets/.env` defaults) |
 | `/lets:update` | Setup | Sync project with the current release - `.lets/.env` + rules self-heal (incl. the user-level global rules when installed), plus `lets` binary / plugin version status |
 | `/lets:worktree` | Utility | Create/manage worktrees for parallel sessions |
 | `/lets:team` | Utility | Parallel implementation with Agent Teams |
 | `/lets:status` | Utility | Read-only orient snapshot — where you are, what's in flight, what's next |
 | `/lets:note` | Utility | Add note to active task |
-| `/lets:statusline` | Utility | Manage & persist statusline appearance - light/dark, compact, hidden rows *(ships next release)* |
+| `/lets:statusline` | Utility | Manage & persist statusline appearance - light/dark, compact, hidden rows |
 | `/lets:backlog` | Planning | Backlog review (multi-agent) + `--fast` quick no-agent pulse + interactive cleanup triage |
 
 ### Auto-triggered Skills
