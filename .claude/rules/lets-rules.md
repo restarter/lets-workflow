@@ -1,6 +1,6 @@
 ---
 name: lets-rules
-version: 0.7.0
+version: 0.8.0
 ---
 
 <!-- DO NOT EDIT - managed by lets init / lets install. To add custom rules, create a sibling *.md file in this directory (e.g. .claude/rules/team-conventions.md). Files prefixed `lets-` are owned by the LETS plugin and overwritten on update. -->
@@ -20,7 +20,9 @@ version: 0.7.0
 - Talk like a colleague, not an assistant. No corporate speak, no filler phrases.
 - Be direct and concise. Say what matters, skip the preamble.
 - Short dash (-) instead of long dash (--). No emojis unless requested.
-- **No hard-wrapping in prose.** Write each paragraph of markdown / prose as one continuous line - never insert manual newlines to wrap text at a fixed column (72/80/etc). Applies to every markdown artifact: bd task titles/descriptions/comments, plan documents (`.lets/plans/`), PR descriptions, READMEs, and any `.md` file. Markdown renders an in-paragraph newline as a space and editors soft-wrap visually, so column-wrapping changes nothing in the rendered output - but it produces noisy diffs (a one-word edit reflows many lines) and makes editing painful. Line breaks belong only where semantically meaningful: between paragraphs (blank line), list items, headings, code blocks.
+- **No hard-wrapping in prose.** Write each paragraph of markdown / prose as one continuous line - never insert manual newlines to wrap text at a fixed column (72/80/etc). Applies to every markdown artifact: bd task titles/descriptions/comments, plan documents (`.lets/plans/`), PR descriptions, READMEs, and any `.md` file. Markdown renders an in-paragraph newline as a space and editors soft-wrap visually, so column-wrapping changes nothing in the rendered output - but it produces noisy diffs (a one-word edit reflows many lines) and makes editing painful.
+  - **A fenced block containing prose IS prose - the fence does not exempt it.** Classify by DESTINATION, not by the fence: if the text lands somewhere that renders markdown and soft-wraps on its own, it is prose - one line per paragraph - even when you type it inside a fence or a heredoc. Columns inside a fence are allowed ONLY when the destination is genuinely columnar: code, argv, an ASCII table or diagram, real terminal output.
+  - Line breaks belong only where semantically meaningful: between paragraphs (blank line), list items, headings, and inside a fence that holds actual code or columnar content - never to column-wrap prose, fenced or not.
 
 ## LETS Notice
 
@@ -236,7 +238,7 @@ A ` ```lets-tracker ` block is a neutral verb CALL, not shell. Resolve it: (1) i
 - non-beads adapter whose `tracker-<name>.md` IS loaded → resolve via its file (e.g. an `mcp__*` tool). Translate native↔neutral statuses so surrounding logic stays adapter-agnostic.
 - non-beads named but NO `tracker-<name>.md` loaded (upgraded the plugin but hasn't re-run `/lets:init` / `/lets:update`) → behave as `none`: do NOT run `bd` (wrong store), tell the user the tracker isn't installed, nudge `/lets:update`.
 
-**Reads** (`show`, `list-by-status`) return the neutral shape `{id, title, status, url}` (`show` may add `description`) with `status` a neutral name (`open`/`in_progress`/`closed`); the body reads the returned field (annotated `# returns …`), never greps a tracker's native JSON.
+**Reads** (`show`, `list-by-status`) return the neutral shape `{id, title, status}` plus `description` on `show`, and `url` only from a tracker that has per-task links (beads has none). `status` is a neutral name — required `open`/`in_progress`/`closed`; optional `in_review`/`blocked`, and an adapter carries an optional one only if its own `## Neutral statuses` section names it, so never emit one without checking. The body reads the returned field (annotated `# returns …`), never greps a tracker's native JSON. `close` **declares** its outcome rather than parsing one: the adapter's `close` row states the status it leaves the task in — `closed` means closed, another status means the board advanced the task instead and the caller MUST report the handoff rather than a close, no status at all means nothing happened.
 
 **Comment / description bodies are format-neutral / plain-text.** Rich markdown structure is a beads-only affordance; other adapters render best-effort. A body crosses to a verb (`comment-add`'s `body`, `create`'s `description`) one of two ways:
 - **Inline** — `body="..."` / `description="..."` for a short OR purely orchestrator-templated value (a multi-line template with NO `$(...)` shell expansion is allowed inline).
@@ -244,11 +246,12 @@ A ` ```lets-tracker ` block is a neutral verb CALL, not shell. Resolve it: (1) i
 
 An empty body → HARD-FAIL, never submit an empty comment.
 
-**Degradation (two-pronged — do NOT flatten):**
+**Degradation (two-pronged — do NOT flatten), then preflight:**
 - An OPTIONAL verb the adapter marks `absent`, OR a CORE verb bound to a deliberate **no-op** (`none`) → continue and TELL the user; never report it as a recorded change (no phantom "done").
 - A binding that exists but FAILS at runtime (MCP tool not connected, `bd` not on PATH, an MCP adapter's `failures[]` non-empty) → **HARD-FAIL loud** ("set-status / close FAILED — task NOT changed"); never report a phantom success. Critical under AUTO MODE — `/lets:done` must not claim a close it didn't do.
+- **Preflight (a precondition, not a degradation mode).** Before OFFERING a verb, field, or mode, read the capability table: a field the active binding does not declare in `accepts:` must be mapped to one it does, or named unavailable — never collected and dropped. Symmetrically on the read side, never render a field the adapter's `show` does not declare in `returns:` — an invented value is a claim about the task, not about the tracker.
 
-**Resolution is ORCHESTRATOR-ONLY** — subagents never call tracker verbs (they don't receive the adapter file). Two documented beads-only carve-outs (NOT violations): (a) a few analytical commands — notably `/lets:backlog` — instruct their review subagents to read task data via `bd` directly (the subagent has no adapter; on a non-beads project those reads are unavailable until migrated); (b) the detect-task merge-branch liveness probe is a gated `bd show` (see detect-task) — both are allowlisted.
+**Resolution is ORCHESTRATOR-ONLY** — subagents never call tracker verbs (they don't receive the adapter file). A command that needs tracker data inside a subagent prompt pulls it itself and INJECTS it as fenced data. There are no exceptions and no carve-outs.
 
 **Trust:** a `tracker-<name>.md` is trusted instruction auto-loaded into model context; its binding cells EXECUTE as written. Installing a third-party / shared adapter is equivalent to running its code — review every binding before installing one you didn't author. The contract test pins table SHAPE, NOT binding SAFETY. A token belongs ONLY in the transport's own config (the MCP server env / a gitignored 0600 file) — NEVER in a loaded/shared `tracker-*.md`, `.board.md`, or `.lets/.env` (mode 644, injected into context).
 
@@ -445,23 +448,23 @@ Every response ends with exactly ONE footer - never mix two. Pick the type by wh
 | `/lets:done` | Task | Task is complete |
 | `/lets:commit` | Code | Ready to commit (also auto-triggers on "commit", "закоміть") |
 | `/lets:check` | Code | Quick sanity check (~30s) - inline 6-lens; same targets as `/lets:review` (local/staged/last-commit/branch/PR/`--file`/`--plan`/`--json`), no subagents |
-| `/lets:review` | Code | Full deep review (~2-3 min) |
+| `/lets:review` | Code | Full deep review (~2-3 min); `<PR>` offers a `gh pr checkout` so agents read the real tree - it stashes on a dirty tree and restores the branch at the end |
 | `/lets:github-pr` | Code | GitHub PR review lifecycle (review, respond, follow-up, approve) |
 | `/lets:review-round` | Code | Work through a RECEIVED review round - triage N comments, decisions->task, artifact FROZEN, one final edit-pass (inverse of `/lets:review`) |
 | `/lets:opinion` | Expert | Technical decision (dynamic agent count; `--workflow` = off-context fan-out + adversarial challenge) |
 | `/lets:ask` | Expert | Quick expert consultation (1 agent) |
-| `/lets:research` | Expert | Web-sourced CITED answer to an external/technical question; cross-check pass flags single-source/contradicted/stale claims (`--workflow` = off-context; `--project` = repo-grounded) *(ships next release)* |
+| `/lets:research` | Expert | Web-sourced CITED answer to an external/technical question; cross-check pass flags single-source/contradicted/stale claims (`--workflow` = off-context; `--project` = repo-grounded) |
 | `/lets:backlog` | Planning | Backlog review (multi-agent; `--workflow` = off-context) + `--fast` quick no-agent pulse + interactive cleanup triage |
 | `/lets:plan` | Planning | Structured planning with agents - architecture + implementation plan (`--fast` = orchestrator-only, skips explorer/architect/expert subagents) |
 | `/lets:plan-workflow` | Planning | **PREVIEW** - autonomous planning via a Dynamic Workflow (goal + rubric up front, off-context, approve at end); folds into native `/lets:plan` later (lets-jsw00); `--fast` = lean budget (~7 agents, still off-context, heavy review pass skipped, quick plan-check kept) - distinct from `/lets:plan --fast` (orchestrator-only, no subagents) |
 | `/lets:execute` | Planning | Execute plan from /lets:plan via native plan mode |
 | `/lets:status` | Utility | Read-only orient snapshot - where you are, what's in flight, what's next (tracker-universal) |
 | `/lets:worktree` | Utility | Create/manage interactive worktrees for parallel work |
-| `/lets:statusline` | Utility | Manage & persist statusline appearance - light/dark, compact, hidden rows (writes personal `.claude/settings.local.json`) *(ships next release)* |
+| `/lets:statusline` | Utility | Manage & persist statusline appearance - light/dark, compact, hidden rows (writes personal `.claude/settings.local.json`) |
 | `/lets:team` | Utility | Parallel implementation with Agent Teams (run, status, stop) |
 | `/lets:note` | Utility | Add note to active task (`--pre-compact` = resume snapshot before /compact) |
-| `/lets:init`    | Setup | Per-project initialization. Re-run for self-heal (drift fix) or to change config; offers the user-scope global-rules install (`lets init --user`) when the plugin is user-scoped *(ships next release)* |
-| `/lets:update`  | Setup | Sync project with the current release - `.lets/.env` + rules self-heal, plus version status for the `lets` binary and the plugin, plus the user-level global rules when installed *(ships next release)* |
+| `/lets:init`    | Setup | Per-project initialization. Re-run for self-heal (drift fix) or to change config; offers the user-scope global-rules install (`lets init --user`) when the plugin is user-scoped |
+| `/lets:update`  | Setup | Sync project with the current release - `.lets/.env` + rules self-heal, plus version status for the `lets` binary and the plugin, plus the user-level global rules when installed |
 
 ### Auto-triggered Skills
 
