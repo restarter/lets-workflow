@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- **A plan is never a go (lets-p9xh8).** Five times in one day a `/lets:plan` -> plan-review round ended with the model implementing the plan on its own - no `/lets:execute`, no approval to write code. The rules now say it where the decision is made: approval of a plan is approval of a document, the only way into code is the user running `/lets:execute`, and "ok" / "approved" / an APPROVED review verdict never start implementation. Every plan file now opens with a `THIS PLAN IS NOT A GO` banner and closes with a reminder, written by the model itself in `/lets:plan` (all modes) and applied at save time by `/lets:plan-workflow`, so the rule rides along wherever the plan is read - review, check, execute, a resumed session after `/clear`. `/lets:review --plan` and `/lets:check --plan` end by saying so in first person. `/lets:execute` gains a Deviation gate: when reality changes the plan's approach mid-run (a tool behaving differently than assumed, a step infeasible as written, a file the plan never named), it stops and asks instead of quietly re-planning in place - under `--auto` that is a hard-stop with the blocked marker and notify.
+
 ## [0.8.0] - 2026-08-05
 
 ### Added
