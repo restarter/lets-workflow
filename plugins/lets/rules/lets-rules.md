@@ -96,6 +96,8 @@ AskUserQuestion(
 **One rule above all: transparency. User sees everything, decides everything.**
 
 - Never commit or push without explicit user approval
+- **NEVER start writing code without an explicit user approval to write code.** Presenting a plan, a diff proposal, or an analysis and getting "ok" / "good" / "+" back is approval of THAT TEXT, not of implementation. Before the first Edit/Write ask, in words, "Start implementing?" - unless the user already invoked a command whose own gate authorizes code (`/lets:execute` after its plan-mode approval, `/lets:team run`).
+- **A plan is NEVER executed by itself.** After `/lets:plan` (any mode: full, `--fast`, `/lets:plan-workflow`) and after every plan-review round (`/lets:review --plan`, `/lets:check --plan`, APPROVED included) the ONLY way into code is the user typing `/lets:execute`. Any reaction to the plan - "ok", "approved", "looks good", a question, a requested edit - is a reaction to the DOCUMENT. Reply "Plan accepted - run `/lets:execute` when ready." and STOP. Plan files carry a `THIS PLAN IS NOT A GO` banner for this reason - obey it wherever you read one.
 - Never silently switch approaches when something fails - stop, explain, present options, wait
 - Don't touch code without explicit approval: no deleting, commenting out, or "simplifying" existing code user didn't ask about
 
@@ -157,18 +159,20 @@ AUTO MODE (autonomous execution: `/loop`, `/lets:execute --auto`, `/lets:team` p
 - Same tool / command fails 3+ times in a row → stop iterating, find root cause.
 - Detected fabrication (referring to nonexistent files / tasks / commits) → stop, verify with read/grep.
 - Scope drift outside the claimed task → ask whether to expand scope or create follow-up.
+- Mid-execution deviation from the approved plan → STOP before the next edit. A deviation is anything that changes the plan's APPROACH, not a line: a dependency/tool behaving differently than the plan assumed (other API, parameters, version), a step infeasible as written, a file/module the plan never names becoming necessary, a task's Verify not matching its Expected. A silently adapted plan is a new, unapproved plan. Surface expected-vs-actual and the options; under `--auto` write the `blocked` marker and notify. Cosmetic adaptation (a renamed variable, a moved line) is not a deviation.
 - Autonomous run (`--auto`) on `$LETS_MERGE_BRANCH` → REFUSE + halt. `--auto` never auto-enables trunk-mode: editing the merge-branch is a deliberate human opt-in (the take-task picker), not something an unattended session may self-authorize. Surface "needs a feature branch" and stop.
 
 **Soft stops** (pause and ask):
 - Decision point with 2+ viable approaches → use `AskUserQuestion`, don't pick autonomously.
 - New large scope proposed mid-task → pause: suggest finishing or parking the current task first (branch-focus hygiene — not session length).
-- Implementation about to start without an approved plan → present the plan, wait. Don't begin editing.
+- Implementation about to start without an approved plan → present the plan, wait. Don't begin editing. An approved PLAN is still not approved CODE: after `/lets:plan` the run enters code only through `/lets:execute`'s own approval.
 
 **Plan-visibility gate** (applies even in AUTO MODE):
 - Before editing code/files the user has not already seen and approved as a concrete plan — present the plan first: per task/file, what changes, in what order. Wait for "go". AUTO MODE speeds up execution of an *approved* plan; it never authorizes starting unseen work.
 - "Execute immediately" = run the next step of an already-approved plan without re-confirming each step. It does NOT mean "skip showing the plan".
 - "Let's think about how to do X" / "подумаємо як" / "проаналізуй" / "how to do X?" = request for a plan or analysis, NOT a green light to edit. Produce the plan/analysis, stop, wait.
 - Multi-task batches: show the full batch breakdown (per-task approach + files touched) before the first edit. One approval covers the whole batch — no need to re-ask per task — but the user must see it before any code changes.
+- Plan approval ≠ execution approval. A saved plan, a plan-review verdict (even APPROVED), or "ok" on either never starts implementation - `/lets:execute` does, and inside it the plan-mode approval is the gate. This holds after `/clear`, `/compact`, and in a new session that re-reads the plan.
 
 **Escape hatch:**
 - User interrupt = stop the current action, ack the interruption, await direction. Don't resume without explicit re-approval.
@@ -333,7 +337,7 @@ PR review:  /lets:github-pr <PR> -> discuss -> post -> /lets:github-pr --follow-
 PR respond: /lets:github-pr --respond <PR> -> triage -> fix -> reply
 ```
 
-If a plan exists from `/lets:plan`, use `/lets:execute` to implement it. Execute enters native plan mode; use `/lets:commit` at natural commit points.
+If a plan exists from `/lets:plan`, the user runs `/lets:execute` to implement it - nothing else starts implementation, and the model never starts it on its own. Execute enters native plan mode (its approval is the code-write gate); use `/lets:commit` at natural commit points.
 
 Two separate lifecycles:
 - **Session:** `/lets:start` ... `/lets:end` (one conversation)
