@@ -59,7 +59,7 @@ echo "SNAP_BASENAME=$SNAP_BASENAME"
 echo "SNAP_FILE=$SNAP_FILE"
 ```
 
-Write `$SNAP_FILE` (the echoed path) via the Write tool with the template below, substituting the bash-captured `$SID` / `$TRANSCRIPT_PATH` from Step 2 - and reuse `$SNAP_BASENAME` verbatim in Step 4 + the Return, never recomputing the minute-precise timestamp. Use ONLY that single bash session-id channel (`$CLAUDE_CODE_SESSION_ID`, captured as `$SID`) - do NOT use the command-load-time template channel (the `CLAUDE_SESSION_ID` template variable in `${...}` form), which is fragile inside a multiline Write arg (lets-bdkvd QA #13) and would itself be substituted here if written literally. English; one continuous line per paragraph - no hard wrap. For any section with nothing to record, write a single `- (none)` stub, never a blank block - EXCEPT `### Range`, which is OMITTED ENTIRELY (not stubbed) unless the caller passed `range`: when `range` is present, insert a `### Range` block (`- {RANGE_DESC}`) between `### Remaining + NEXT STEP` and `### Compaction`. So the literal template below has no Range section.
+Write `$SNAP_FILE` (the echoed path) via the Write tool with the template below, substituting the bash-captured `$SID` / `$TRANSCRIPT_PATH` from Step 2 - and reuse `$SNAP_BASENAME` verbatim in Step 4 + the Return, never recomputing the minute-precise timestamp. Use ONLY that single bash session-id channel (`$CLAUDE_CODE_SESSION_ID`, captured as `$SID`) - do NOT use the command-load-time template channel (the `CLAUDE_SESSION_ID` template variable in `${...}` form), which is fragile inside a multiline Write arg (lets-bdkvd QA #13) and would itself be substituted here if written literally. English; one continuous line per paragraph - no hard wrap. For any section with nothing to record, write a single `- (none)` stub, never a blank block - EXCEPT `### Range`, which is OMITTED ENTIRELY (not stubbed) unless the caller passed `range`: when `range` is present, insert a `### Range` block (`- {RANGE_DESC}`) between `### Remaining + NEXT STEP` and `### Compaction`. So the literal template below has no Range section. If a plan file exists for the task and `/lets:execute` has not approved implementation in this session, the `NEXT:` line MUST be `/lets:execute <plan or task>` - never "implement Task N" / "continue with the code"; a resumed session re-reads the plan, whose banner says the same.
 
     ## RESUME {YYYY-MM-DD HH:MM} - {short label}
 
@@ -80,7 +80,7 @@ Write `$SNAP_FILE` (the echoed path) via the Write tool with the template below,
 
     ### Remaining + NEXT STEP
     - {open items}
-    - NEXT: {the single concrete next action + how to resume it}
+    - NEXT: {the single concrete next action + how to resume it; with an unexecuted plan this is `/lets:execute`, never "implement Task N"}
 
     ### Compaction
     - {precompact: snapshot before /compact; resume via /lets:start / --continue, which reads this file}
