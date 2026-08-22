@@ -711,27 +711,7 @@ Before saving, verify the plan passes these gates:
 
 ### Save Plan
 
-Derive plan filename from the current branch:
-
-```bash
-LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-BRANCH=$(git branch --show-current)
-if [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ]; then
-  # Trunk-mode: branch name has no task scope, derive slug from task-id (from detect-task in Step 2)
-  SLUG="{TASK_ID}"
-else
-  SLUG="${BRANCH#feature/}"   # e.g., 0nf.10-improve-statusline
-fi
-STAMP=$(date +%Y-%m-%d-%H%M)   # same convention as .lets/sessions/ - keeps plan history, no overwrite
-mkdir -p "$LETS_PROJECT_ROOT/.lets/plans"
-PLAN_FILE="$LETS_PROJECT_ROOT/.lets/plans/${STAMP}-${SLUG}.md"
-echo "$PLAN_FILE"   # capture the exact dated path - this is where you Write the plan
-```
-
-Write plan to: `$PLAN_FILE` (i.e. `.lets/plans/${STAMP}-${SLUG}.md`)
-
-Example: branch `feature/0nf.10-improve-statusline` -> `.lets/plans/2026-06-06-1846-0nf.10-improve-statusline.md`
-Trunk-mode example: branch `main`, task `lets-abc` -> `.lets/plans/2026-06-06-1846-lets-abc.md`
+Resolve the path via `Skill(skill: "lets:artifact-path", args: "kind=plan ext=md task={TASK_ID}")` (TASK_ID from Step 2; omit `task=` when none) and Write the plan to the echoed `ARTIFACT_FILE` VERBATIM. Shape: `.lets/plans/{date}-{HHMM}-{task-id}-plan[-vN].md`, e.g. `.lets/plans/2026-08-22-0210-lets-05c4s-plan.md`. The task id is the identity (branch slug not needed); a second plan in the same minute becomes `-v2` - never overwritten. `.lets/` is shared across worktrees, so NEVER hand-build the path (lets-05c4s).
 
 ### Record in the Tracker
 
@@ -750,7 +730,7 @@ Plan: {saved plan path}"
 ```
 ## Plan Ready: **{task title}** (`{task-id}`)
 
-Saved: `.lets/plans/${STAMP}-${SLUG}.md`
+Saved: `{ARTIFACT_FILE}`
 Built: {full flow (explorer + architect + expert agents) | fast mode (orchestrator-only - no subagents)}
 
 ### Approach
