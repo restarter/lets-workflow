@@ -626,7 +626,7 @@ comment-add task=<task-id> body="Exploration insights:
 
 Write a detailed implementation plan for the chosen architecture.
 
-<!-- Keep in sync: the two banner lines (`THIS PLAN IS NOT A GO` header, `REMINDER: do not start writing code` footer) are byte-identical in plan-workflow.md Step 4 (applied at save time). Change both or neither. -->
+> **Keep in sync:** the two banner lines (`THIS PLAN IS NOT A GO` header, `REMINDER: do not start writing code` footer) are byte-identical in plan-workflow.md Step 4 (applied at save time) - change both or neither. The stop sentences in this file's Output, review.md / check.md plan mode, and lets-rules.md all end with the same grep-able clause `run `/lets:execute` when ready.`
 
 ### Plan Format
 
@@ -774,7 +774,7 @@ Built: {full flow (explorer + architect + expert agents) | fast mode (orchestrat
 - {decision 1}
 - {decision 2}
 
-**Plan saved. I will not write any code from it - implementation starts only when you run `/lets:execute`.**
+**Plan saved. I will not write any code from it - run `/lets:execute` when ready.**
 
 Want a clean context before executing? Run `/clear` then `/lets:execute` - the task stays active.
 ```

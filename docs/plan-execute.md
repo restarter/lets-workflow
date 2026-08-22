@@ -10,7 +10,7 @@ For anything bigger than a quick fix, LETS splits the work in two: **`/lets:plan
 
 1. **Codebase exploration.** Explorer agents map the parts of the codebase the change touches — existing patterns, integration points, what's already there. The number of explorers scales with the project: a small repo gets one; a large monorepo gets up to ten, each mapping a different area.
 2. **Architecture design.** With the lay of the land in hand, the plan is designed — components, data flow, build order, trade-offs. Expert agents, selected by what the plan involves (migrations, API endpoints, Docker, …), evaluate it.
-3. **A written plan.** The result is saved to `.lets/plans/` — a step-by-step implementation plan you can read, edit, and hand to `/lets:execute`.
+3. **A written plan.** The result is saved to `.lets/plans/` — a step-by-step implementation plan you can read, edit, and hand to `/lets:execute`. Every plan opens with a STOP banner: approving the plan (or a plan review) approves the document, never the code — `/lets:execute` is the only way into implementation, and Claude will not start it on its own.
 
 ### `--fast` — skip the agents
 
@@ -20,7 +20,7 @@ Not to be confused with `/lets:plan-workflow --fast` — THAT keeps the off-cont
 
 ## `/lets:execute` — build it
 
-`/lets:execute` loads the plan from `/lets:plan` and implements it in Claude Code's native plan mode. You approve each step before Claude proceeds — no step happens without your go-ahead. Use `/lets:commit` at natural commit points along the way.
+`/lets:execute` loads the plan from `/lets:plan` and implements it in Claude Code's native plan mode. You approve the execution strategy before any code is written, and pick how it runs (step-by-step with a pause after each task, straight-through, or unattended `--auto`). If reality diverges from the plan's approach mid-run — a tool behaving differently than assumed, a step that can't be done as written — Claude stops and asks instead of quietly re-planning in place (under `--auto` that is a hard stop). Use `/lets:commit` at natural commit points along the way.
 
 ## The full loop
 

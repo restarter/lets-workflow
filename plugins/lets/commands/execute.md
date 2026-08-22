@@ -246,7 +246,7 @@ Call `EnterPlanMode`.
 **In plan mode**, Claude:
 1. Reads the existing plan from `.lets/plans/`
 2. Reads the current state of files referenced in the plan (to detect drift)
-3. Creates an execution strategy - adapting the plan's tasks to the actual codebase state
+3. Creates an execution strategy - adapting the plan's tasks to the actual codebase state (restructuring HERE is legitimate because `ExitPlanMode` puts it in front of the user; after approval, any approach change is a deviation - gate below)
 4. Writes the execution strategy to the plan file (the file specified by plan mode)
 5. Calls `ExitPlanMode` when ready for user approval
 
@@ -279,10 +279,11 @@ AskUserQuestion(
 - **Under `--auto`** (unattended - cannot ask): a deviation is a HARD-STOP. Write the `blocked` marker, fire the execute-blocked notify (`--title 'Execute blocked — plan deviation'`, body = the one-line expected vs actual), and halt. Never adapt silently.
 
 **Fallback:** If `EnterPlanMode` tool is not available or returns an error, skip plan mode tools entirely. Instead:
-1. Present each plan task one by one with files to change and expected outcome
-2. Implement the task, then ask user to review before moving on
-3. Use `/lets:commit` at commit points indicated in the plan
-4. Track completed tasks by appending `[DONE]` markers in the plan file
+1. Present the plan summary, then ask in words "Start implementing?" and WAIT - no edit before an explicit yes (this replaces the plan-mode approval as the one code-write approval)
+2. Present each plan task one by one with files to change and expected outcome
+3. Implement the task, then ask user to review before moving on
+4. Use `/lets:commit` at commit points indicated in the plan
+5. Track completed tasks by appending `[DONE]` markers in the plan file
 
 The plan file provides the roadmap; explicit user approval provides the gates.
 
