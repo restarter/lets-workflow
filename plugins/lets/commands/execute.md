@@ -98,11 +98,9 @@ if [ -z "$PLAN" ]; then
   else
     # Latest plan for this slug - matches date-prefixed (YYYY-MM-DD-HHMM-<slug>.md) AND legacy bare
     # <slug>.md. Slug-scoped, NOT global latest: .lets/plans is shared across worktrees via symlink.
-    PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
-    # Fallback: match by task-id (catches trunk-mode plans + naming drift, e.g. plan-workflow output)
-    if [ -z "$PLAN" ] && [ -n "${TASK_ID}" ]; then
-      PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${TASK_ID}"*.md 2>/dev/null | head -1)
-    fi
+    # task-id first (artifact-path naming, lets-05c4s); branch slug = legacy fallback
+    [ -n "${TASK_ID}" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${TASK_ID}"*.md 2>/dev/null | head -1)
+    [ -z "$PLAN" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
   fi
 fi
 
@@ -124,8 +122,9 @@ BRANCH=$(git branch --show-current)
 # Show plan info (re-resolve: each bash block is a fresh shell). Same guarded lookup as Step 2.
 SLUG=${BRANCH#feature/}; [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ] && SLUG="${TASK_ID}"
 PLAN=""
-[ -n "$SLUG" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
-[ -z "$PLAN" ] && [ -n "${TASK_ID}" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${TASK_ID}"*.md 2>/dev/null | head -1)
+# task-id first (artifact-path naming, lets-05c4s); branch slug = legacy fallback
+[ -n "${TASK_ID}" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${TASK_ID}"*.md 2>/dev/null | head -1)
+[ -z "$PLAN" ] && [ -n "$SLUG" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
 echo "Plan: ${PLAN:-(none found)}"
 ```
 
@@ -272,7 +271,9 @@ After implementation is complete (all plan tasks done). **Under `--auto`:** writ
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 BRANCH=$(git branch --show-current)
 SLUG=${BRANCH#feature/}; [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ] && SLUG="${TASK_ID}"
-PLAN=""; [ -n "$SLUG" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
+PLAN=""  # task-id first (artifact-path naming, lets-05c4s); branch slug = legacy fallback
+[ -n "${TASK_ID}" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${TASK_ID}"*.md 2>/dev/null | head -1)
+[ -z "$PLAN" ] && [ -n "$SLUG" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
 BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
 # Plan execution is TASK-scoped (a plan can run across sessions), so anchor on the task boundary
 # start:, NOT session: - session: would under-report every prior session's commits.

@@ -83,11 +83,9 @@ if [ -z "$SLUG" ]; then
 else
   # Latest plan for THIS slug - matches date-prefixed (YYYY-MM-DD-HHMM-<slug>.md) and legacy bare
   # <slug>.md. Slug-scoped, NOT global `ls -t`: .lets/plans is shared across worktrees via symlink.
-  PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
-  # Fallback: glob match by task-id (catches trunk-mode plans + naming drift, e.g. plan-workflow output)
-  if [ -z "$PLAN" ] && [ -n "{task-id}" ]; then
-    PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"{task-id}"*.md 2>/dev/null | head -1)
-  fi
+  # task-id first (artifact-path naming, lets-05c4s); branch slug = legacy fallback
+  [ -n "{task-id}" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"{task-id}"*.md 2>/dev/null | head -1)
+  [ -z "$PLAN" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
 fi
 ```
 
