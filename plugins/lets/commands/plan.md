@@ -7,7 +7,7 @@ argument-hint: "[feature description] [--fast]"
 
 Turn a task or idea into a detailed implementation plan. Clarifies scope, explores codebase, discusses approaches with user, designs architecture for selected approaches, evaluates with experts, then writes a bite-sized plan.
 
-**HARD-GATE: This command produces a plan, NOT code. No files are modified except .lets/plans/.**
+**HARD-GATE: This command produces a plan, NOT code. No files are modified except .lets/plans/. The command ENDS when the plan is saved - implementation starts ONLY when the user runs `/lets:execute`. Nothing the user says after the plan ("ok", "approved", a question) starts it.**
 
 > **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
 
@@ -626,6 +626,8 @@ comment-add task=<task-id> body="Exploration insights:
 
 Write a detailed implementation plan for the chosen architecture.
 
+> **Keep in sync:** the two banner lines (`THIS PLAN IS NOT A GO` header, `REMINDER: do not start writing code` footer) are byte-identical in plan-workflow.md Step 4 (applied at save time) - change both or neither. The stop sentences in this file's Output, review.md / check.md plan mode, and lets-rules.md all end with the same grep-able clause `run `/lets:execute` when ready.`
+
 ### Plan Format
 
 ```markdown
@@ -635,6 +637,8 @@ Write a detailed implementation plan for the chosen architecture.
 **Date:** {YYYY-MM-DD}
 **Goal:** {one sentence}
 **Approach:** {chosen option name and summary}
+
+> **STOP - THIS PLAN IS NOT A GO.** Execute it ONLY through `/lets:execute` (its plan-mode approval is the only code-write approval). NEVER implement this plan directly. "ok" / "approved" / a review verdict on this document is NOT a request to write code.
 
 ---
 
@@ -694,6 +698,10 @@ When all tasks complete:
 ## Success Criteria
 - [ ] {measurable outcome 1}
 - [ ] {measurable outcome 2}
+
+---
+
+> **REMINDER: do not start writing code from this plan. The user runs `/lets:execute` when ready - nothing happens before that.**
 ```
 
 ### Plan Quality Gates
@@ -706,6 +714,7 @@ Before saving, verify the plan passes these gates:
 - Every task has a verification step with expected output
 - Every logical unit has a commit point
 - File paths are exact and verified against explorer findings
+- The STOP banner (`THIS PLAN IS NOT A GO`) is the first thing after the title block and the REMINDER footer is the last line - a plan without them is not finished
 
 ## Step 10: Save & Output
 
@@ -745,6 +754,8 @@ Built: {full flow (explorer + architect + expert agents) | fast mode (orchestrat
 - {decision 1}
 - {decision 2}
 
+**Plan saved. I will not write any code from it - run `/lets:execute` when ready.**
+
 Want a clean context before executing? Run `/clear` then `/lets:execute` - the task stays active.
 ```
 
@@ -760,6 +771,7 @@ Want a clean context before executing? Run `/clear` then `/lets:execute` - the t
 
 ## Rules
 
+- **THE PLAN IS THE END OF THIS COMMAND.** After the Plan Ready output, STOP. The next user message - "ok", "approved", "+", a question, an edit request - is about the document, never a go for code. Edit the plan if asked; answer questions; otherwise reply "Plan accepted - run `/lets:execute` when ready." Applies identically to `--fast`.
 - **NEVER write code** outside the plan document in `.lets/plans/`
 - **NEVER skip clarifying questions** (Step 3) - vague input produces vague plans, in fast mode too
 - **EVERY phase transition requires user approval** via AskUserQuestion

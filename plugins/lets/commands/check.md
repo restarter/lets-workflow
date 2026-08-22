@@ -99,7 +99,7 @@ Read the plan and review with 5 lenses (same confidence filter):
 - **[Scope]** Is the plan proportional to the problem? Overengineered? Underspecified?
 - **[Clarity]** Can a developer follow this without guessing? Ambiguous steps?
 
-Output same format as code check, then:
+Output same format as code check, then print: Plan check done. I will not implement it - run `/lets:execute` when ready. A plan-check verdict (any verdict) is about the document; NEVER start implementing, fixes go into the plan file only. Then:
 
 ```
 ┌─ LETS ────────────────────────────────────┐

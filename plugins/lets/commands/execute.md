@@ -7,7 +7,7 @@ argument-hint: "[task-id|plan-path] [--status] [--team] [--step|--straight|--aut
 
 Load an implementation plan and execute it using Claude Code's native plan mode. The plan provides the roadmap; native plan mode provides approval gates.
 
-**Plan is a roadmap, not a script.** Read real files before every change. Adapt to current context.
+**Plan is a roadmap, not a script.** Read real files before every change. Adapt cosmetically (a renamed variable, a line that moved). Anything that changes the plan's APPROACH is a **deviation** - see the Deviation gate in Step 5 - and STOPS the run; a silently adapted plan is a new, unapproved plan.
 
 > **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
 
@@ -245,7 +245,7 @@ Call `EnterPlanMode`.
 **In plan mode**, Claude:
 1. Reads the existing plan from `.lets/plans/`
 2. Reads the current state of files referenced in the plan (to detect drift)
-3. Creates an execution strategy - adapting the plan's tasks to the actual codebase state
+3. Creates an execution strategy - adapting the plan's tasks to the actual codebase state (restructuring HERE is legitimate because `ExitPlanMode` puts it in front of the user; after approval, any approach change is a deviation - gate below)
 4. Writes the execution strategy to the plan file (the file specified by plan mode)
 5. Calls `ExitPlanMode` when ready for user approval
 
@@ -255,11 +255,34 @@ Call `EnterPlanMode`.
 
 **Progress tracking:** After completing each plan task, append `[DONE]` to its `### Task N:` heading in the plan file. This makes resume self-documenting - on re-entry, skip tasks already marked `[DONE]`.
 
+**Deviation gate (every mode, every task).** Before each edit, compare reality with the plan step. A deviation is anything that changes the plan's approach rather than a line of code: a dependency/tool behaving differently than the plan assumed (other API, parameters, version); a step infeasible as described; a file/module the plan never names becoming necessary; a task's Verify not matching its Expected. On a deviation: STOP - no further edits - and show what the plan expected, what reality is, and what each option would change. Then:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Reality diverges from the plan at Task {N}: {one-line expected vs actual}. How to proceed?",
+    header: "Deviation",
+    options: [
+      { label: "Adapt as described", description: "Apply the adaptation spelled out above, then continue the plan" },
+      { label: "Re-plan", description: "Stop executing; update the plan via /lets:plan first" },
+      { label: "Cancel", description: "Stop here; nothing more is edited" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+- **Adapt as described** -> apply exactly the adaptation shown, note it in the plan file under the task (`**Deviation:** ...`), continue.
+- **Re-plan** -> stop; invoke `Skill(skill: "lets:plan")`.
+- **Cancel** -> stop, return to the user.
+- **Under `--auto`** (unattended - cannot ask): a deviation is a HARD-STOP. Write the `blocked` marker, fire the execute-blocked notify (`--title 'Execute blocked — plan deviation'`, body = the one-line expected vs actual), and halt. Never adapt silently.
+
 **Fallback:** If `EnterPlanMode` tool is not available or returns an error, skip plan mode tools entirely. Instead:
-1. Present each plan task one by one with files to change and expected outcome
-2. Implement the task, then ask user to review before moving on
-3. Use `/lets:commit` at commit points indicated in the plan
-4. Track completed tasks by appending `[DONE]` markers in the plan file
+1. Present the plan summary, then ask in words "Start implementing?" and WAIT - no edit before an explicit yes (this replaces the plan-mode approval as the one code-write approval)
+2. Present each plan task one by one with files to change and expected outcome
+3. Implement the task, then ask user to review before moving on
+4. Use `/lets:commit` at commit points indicated in the plan
+5. Track completed tasks by appending `[DONE]` markers in the plan file
 
 The plan file provides the roadmap; explicit user approval provides the gates.
 
@@ -305,8 +328,9 @@ comment-add task=<task-id> body-file=.lets/cache/exec-complete-<task-id>.md
 - **NEVER execute blindly** - read actual file state before every change
 - **NEVER commit without user approval** - use `/lets:commit` at plan commit points
 - **Don't work on `$LETS_MERGE_BRANCH` without explicit opt-in** - Step 1 soft-gates with a prompt; user must pick "Continue here" to enable trunk-mode (plan lookup uses task-id)
-- **Adapt, don't paste** - plan intent matters more than plan text
-- **Stop on mismatch** - if reality diverges significantly from plan, surface it immediately
+- **Adapt cosmetically, never structurally** - plan intent matters more than plan text, but an approach change is a deviation, not an adaptation
+- **Stop on deviation** - the Deviation gate (Step 5) runs before every edit; no answer = no edit; under `--auto` it is a hard-stop
+- **NEVER edit before the plan-mode approval** - `ExitPlanMode` approved by the user is the one code-write approval; the fallback path (no plan mode) asks "Start implementing?" in words first
 - Respond in user's language
 
 ## Output
