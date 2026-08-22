@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- **Artifacts in `.lets/` no longer overwrite each other across worktrees (lets-05c4s).** `.lets/` is one directory symlinked into every worktree, and review reports were named `{date}-{mode}.md` with no task id, no time and no existence check - two sessions reviewing plans on the same day wrote the same file, and a plan review was lost that way on 2026-08-21. A new internal skill `artifact-path` is now the single place that names an artifact: `{date}-{HHMM}-{task-id}-{kind}[-vN].{ext}` for plans, reviews (md + json) and session snapshots - the task id is mandatory whenever a task is active, a taskless session gets `{branch}-{6hex}` from its session id, and an existing path gets a `-v2`/`-v3` sibling instead of being overwritten. Existing files are not renamed; every reader (`/lets:check --plan`, `/lets:review --plan`, `/lets:execute`, `/lets:start`, `take-task`) looks the task-id name up first and falls back to the legacy branch-slug name.
+
 ## [0.8.0] - 2026-08-05
 
 ### Added
