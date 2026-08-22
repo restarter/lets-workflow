@@ -1386,14 +1386,16 @@ comment-add task=<task-id> body="Plan review: {verdict}. {N} issues found."
 
 ### Plan Review Output
 
-**If approved:**
+Whatever the verdict, this command ends here. **A plan-review verdict - APPROVED included - is about the document. NEVER start implementing; the user runs `/lets:execute`.** Fixes go into the plan file only.
+
+**If approved:** print: Plan review: APPROVED. I will not implement it - run `/lets:execute` when ready. Then the box:
 ```
 ┌─ LETS ───────────────────────┐
 │  Execute?      /lets:execute │
 └──────────────────────────────┘
 ```
 
-**If needs revision:** No box. List action items to fix in the plan first.
+**If needs revision:** No box. List action items to fix in the plan file (and only there) first. Do not touch code.
 
 ---
 
