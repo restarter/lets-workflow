@@ -173,7 +173,7 @@ Git: {clean / N uncommitted}
 Branch: {branch}
 Task: {task-id and title, or "none"}
 Settled: {e.g. "committed; pushed 3" / "nothing - tidy session"}
-Snapshot: .lets/sessions/{dated}-{slug}.md
+Snapshot: .lets/sessions/{date}-{HHMM}-{task-id}-snapshot.md
 ```
 
 If in a worktree, append one line - cleanup (task done) or resume (`cd {LETS_PROJECT_ROOT from LETS Config} && claude -> /lets:start`).
@@ -189,7 +189,7 @@ Then a SINGLE prose line (no AskUserQuestion, no wrap-up card):
 ```
 ## Pre-Compact Snapshot
 
-Snapshot -> .lets/sessions/{dated}-precompact-{branch}.md
+Snapshot -> .lets/sessions/{date}-{HHMM}-{task-id}-snapshot-precompact.md
 Task pointer -> {task-id}  (only if a task is unambiguously active; else "none - file only")
 Branch: {branch}
 
