@@ -16,7 +16,7 @@ Goal: ONE recovery-grade `## RESUME` snapshot, **file-primary** - it ALWAYS land
 
 Passed via the `Skill` invocation's `args` string as space-separated `key=value` pairs (e.g. `args: "kind=end pointer=off task-id=lets-abc range=session: X..HEAD (3 commits)"`). Put `range=` / `task-id=` LAST when the value contains spaces - each consumes the rest of the string. Any omitted key falls to its default.
 
-- `kind` = `precompact` (default) | `end` - sets the filename infix: `precompact` -> `<ts>-precompact-<slug>.md`, `end` -> `<ts>-<slug>.md`.
+- `kind` = `precompact` (default) | `end` - selects the `artifact-path` kind (`snapshot-precompact` / `snapshot`); Step 3 owns the filename, never build it here.
 - `pointer` = `off` (default) | `auto` - whether the skill writes the standalone one-line task pointer. `off` is the SAFE default (a caller that forgets never double-writes a task comment); a caller that wants the skill to write the pointer passes `auto` explicitly (both pre-compact callers do). `/lets:end` default passes `off` when it folds the pointer into its own progress comment, `auto` otherwise.
 - `range` (optional) - a RANGE_DESC string (e.g. `session: <ref>..HEAD (N commits)`); include the `### Range` block ONLY when provided. Only `/lets:end` default passes it.
 - `task-id` (optional) - pre-resolved active task from the caller's own detect-task.
