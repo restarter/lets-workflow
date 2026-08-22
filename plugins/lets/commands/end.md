@@ -122,7 +122,7 @@ Write the session-level snapshot that bootstraps the next `/lets:start`, via the
 
 - `pointer=off` (Post progress picked) -> the skill writes NO task comment; end folds the pointer into the progress comment's `### Snapshot` line (3b).
 - `pointer=auto` (Post progress NOT picked) -> the skill writes the standalone one-line pointer to its own file; 3b then does nothing task-side. Either way exactly ONE task comment, and the pointer string lives ONLY in the skill (Step 4) - no cross-file duplication.
-- `kind=end` -> file `<ts>-<slug>.md` (no `-precompact-` infix). `range` -> the skill includes the `### Range` block. Capture the returned `SNAP_FILE` path - used in 3b + the Output block.
+- `kind=end` -> the `snapshot` artifact kind (no `-precompact` suffix); the path comes from the skill's return, never rebuild it. `range` -> the skill includes the `### Range` block. Capture the returned `SNAP_FILE` path - used in 3b + the Output block.
 
 ### 3b. Progress comment (only when "Post progress" was picked)
 
@@ -173,7 +173,7 @@ Git: {clean / N uncommitted}
 Branch: {branch}
 Task: {task-id and title, or "none"}
 Settled: {e.g. "committed; pushed 3" / "nothing - tidy session"}
-Snapshot: .lets/sessions/{dated}-{slug}.md
+Snapshot: .lets/sessions/{date}-{HHMM}-{task-id}-snapshot.md
 ```
 
 If in a worktree, append one line - cleanup (task done) or resume (`cd {LETS_PROJECT_ROOT from LETS Config} && claude -> /lets:start`).
@@ -189,7 +189,7 @@ Then a SINGLE prose line (no AskUserQuestion, no wrap-up card):
 ```
 ## Pre-Compact Snapshot
 
-Snapshot -> .lets/sessions/{dated}-precompact-{branch}.md
+Snapshot -> .lets/sessions/{date}-{HHMM}-{task-id}-snapshot-precompact.md
 Task pointer -> {task-id}  (only if a task is unambiguously active; else "none - file only")
 Branch: {branch}
 

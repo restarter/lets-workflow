@@ -51,11 +51,13 @@ BRANCH=$(git branch --show-current)
 BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
 mkdir -p "$LETS_PROJECT_ROOT/.lets/sessions"
 
-# Read last 3 sessions for this branch (or all branches if none found)
-SESSIONS=$(ls -t "$LETS_PROJECT_ROOT/.lets/sessions/"*"-${BRANCH_SLUG}.md" 2>/dev/null | head -3)
-if [ -z "$SESSIONS" ]; then
-  SESSIONS=$(ls -t "$LETS_PROJECT_ROOT/.lets/sessions/"*.md 2>/dev/null | head -3)
-fi
+# Read last 3 snapshots: task-id-named first (artifact-path naming, lets-05c4s), then the branch
+# slug (legacy {TS}-{branch}.md AND taskless {branch}-{hex}-snapshot), then any branch.
+TASK_ID=$(sed -n 's/^task: //p' "$LETS_PROJECT_ROOT/.lets/sessions/.task-${BRANCH_SLUG}" 2>/dev/null | head -1)
+SESSIONS=""
+[ -n "$TASK_ID" ] && SESSIONS=$(ls -t "$LETS_PROJECT_ROOT/.lets/sessions/"*"-${TASK_ID}-snapshot"*.md 2>/dev/null | head -3)
+[ -z "$SESSIONS" ] && SESSIONS=$(ls -t "$LETS_PROJECT_ROOT/.lets/sessions/"*"-${BRANCH_SLUG}"*.md 2>/dev/null | head -3)
+[ -z "$SESSIONS" ] && SESSIONS=$(ls -t "$LETS_PROJECT_ROOT/.lets/sessions/"*.md 2>/dev/null | head -3)
 ```
 
 **Read EACH session file** found above using the Read tool (up to 3 files in parallel). Then present a compact summary of all sessions. Focus on: what was done, key decisions, next steps suggested.

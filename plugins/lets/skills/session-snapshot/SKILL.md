@@ -16,7 +16,7 @@ Goal: ONE recovery-grade `## RESUME` snapshot, **file-primary** - it ALWAYS land
 
 Passed via the `Skill` invocation's `args` string as space-separated `key=value` pairs (e.g. `args: "kind=end pointer=off task-id=lets-abc range=session: X..HEAD (3 commits)"`). Put `range=` / `task-id=` LAST when the value contains spaces - each consumes the rest of the string. Any omitted key falls to its default.
 
-- `kind` = `precompact` (default) | `end` - sets the filename infix: `precompact` -> `<ts>-precompact-<slug>.md`, `end` -> `<ts>-<slug>.md`.
+- `kind` = `precompact` (default) | `end` - selects the `artifact-path` kind (`snapshot-precompact` / `snapshot`); Step 3 owns the filename, never build it here.
 - `pointer` = `off` (default) | `auto` - whether the skill writes the standalone one-line task pointer. `off` is the SAFE default (a caller that forgets never double-writes a task comment); a caller that wants the skill to write the pointer passes `auto` explicitly (both pre-compact callers do). `/lets:end` default passes `off` when it folds the pointer into its own progress comment, `auto` otherwise.
 - `range` (optional) - a RANGE_DESC string (e.g. `session: <ref>..HEAD (N commits)`); include the `### Range` block ONLY when provided. Only `/lets:end` default passes it.
 - `task-id` (optional) - pre-resolved active task from the caller's own detect-task.
@@ -44,20 +44,7 @@ echo "TRANSCRIPT_PATH=$TRANSCRIPT_PATH"
 
 ## Step 3: Write the snapshot FILE (ALWAYS)
 
-```bash
-LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-BRANCH_SLUG=$(git branch --show-current | tr '/' '-')
-mkdir -p "$LETS_PROJECT_ROOT/.lets/sessions"
-TS=$(date +%Y-%m-%d-%H%M)
-# Keep ONLY the SNAP_BASENAME line matching the `kind` arg (delete the other):
-SNAP_BASENAME="${TS}-precompact-${BRANCH_SLUG}.md"   # kind=precompact
-SNAP_BASENAME="${TS}-${BRANCH_SLUG}.md"              # kind=end
-SNAP_FILE="$LETS_PROJECT_ROOT/.lets/sessions/${SNAP_BASENAME}"
-# ECHO both - a bash var is invisible to the Write tool, and the minute-precise
-# basename must be reused VERBATIM downstream (Step 4 pointer + the Return), never recomputed.
-echo "SNAP_BASENAME=$SNAP_BASENAME"
-echo "SNAP_FILE=$SNAP_FILE"
-```
+Resolve the path via `Skill(skill: "lets:artifact-path", args: "kind=snapshot ext=md")` for `kind=end`, or `kind=snapshot-precompact` for `kind=precompact`; pass `task=<id>` when the caller already resolved one. The echoed `ARTIFACT_FILE` is `$SNAP_FILE` and its basename is `$SNAP_BASENAME` - reuse both VERBATIM in Step 4 + the Return, never recompute (a second `date` drifts the pointer off the file actually written). Shape: `.lets/sessions/{date}-{HHMM}-{task-id|branch-slug-6hex}-snapshot[-precompact][-vN].md` - task-scoped, `-vN` on collision, so parallel worktrees sharing `.lets/` never overwrite each other (lets-05c4s).
 
 Write `$SNAP_FILE` (the echoed path) via the Write tool with the template below, substituting the bash-captured `$SID` / `$TRANSCRIPT_PATH` from Step 2 - and reuse `$SNAP_BASENAME` verbatim in Step 4 + the Return, never recomputing the minute-precise timestamp. Use ONLY that single bash session-id channel (`$CLAUDE_CODE_SESSION_ID`, captured as `$SID`) - do NOT use the command-load-time template channel (the `CLAUDE_SESSION_ID` template variable in `${...}` form), which is fragile inside a multiline Write arg (lets-bdkvd QA #13) and would itself be substituted here if written literally. English; one continuous line per paragraph - no hard wrap. For any section with nothing to record, write a single `- (none)` stub, never a blank block - EXCEPT `### Range`, which is OMITTED ENTIRELY (not stubbed) unless the caller passed `range`: when `range` is present, insert a `### Range` block (`- {RANGE_DESC}`) between `### Remaining + NEXT STEP` and `### Compaction`. So the literal template below has no Range section. If a plan file exists for the task and `/lets:execute` has not approved implementation in this session, the `NEXT:` line MUST be `/lets:execute <plan or task>` - never "implement Task N" / "continue with the code"; a resumed session re-reads the plan, whose banner says the same.
 

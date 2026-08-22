@@ -166,7 +166,9 @@ Also surface the most recent session snapshot for this branch (the file trail `/
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 BRANCH_SLUG=$(git branch --show-current | tr '/' '-')
-LATEST_SNAP=$(ls -t "$LETS_PROJECT_ROOT/.lets/sessions/"*"-${BRANCH_SLUG}.md" 2>/dev/null | head -1)
+# Task-id-named snapshot first (artifact-path naming, lets-05c4s); legacy {TS}-{branch}.md as fallback.
+LATEST_SNAP=$(ls -t "$LETS_PROJECT_ROOT/.lets/sessions/"*"-<task-id>-snapshot"*.md 2>/dev/null | head -1)
+[ -z "$LATEST_SNAP" ] && LATEST_SNAP=$(ls -t "$LETS_PROJECT_ROOT/.lets/sessions/"*"-${BRANCH_SLUG}"*.md 2>/dev/null | head -1)
 ```
 
 If `$LATEST_SNAP` is non-empty, Read it and fold its `### Remaining + NEXT STEP` into the "Last session: ..." line. If empty, rely on the tracker's comments alone (fresh branch - no snapshot yet).
