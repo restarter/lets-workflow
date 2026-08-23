@@ -61,6 +61,8 @@ git log --oneline "$BASE"..HEAD 2>/dev/null | head -30
 
 ## Step 3: Target facts
 
+**Run the commands, never recall from memory** - the same rule as Step 2, and it binds hardest here, because this is where a session that already did the work is most tempted to narrate it. A commit's intent comes from its message; whether a file is new or modified, and how many lines moved, comes from `git show --stat` / `git diff --stat`. A brief that calls an appended-to file "new" costs the reviewer their trust in every other line of it.
+
 | Mode | Gather |
 |---|---|
 | `--plan` | absolute path, title line, task count, `[DONE]` markers, which code it will touch, whether execution started (commits since the plan's date). An unspecified path resolves task-id-first (`*<task-id>*.md`), then `*<branch-slug>*.md`, both scoped - `.lets/plans` is shared across worktrees. **Name the file taken**; it may be a superseded revision |
@@ -115,7 +117,9 @@ Never render a `url` - beads returns none; include a link only when the adapter'
 - push, commit, or modify files; touch zones: <list>; re-open decisions above
 ```
 
-The `REMEDY QUALITY` line is **standing text, not a per-run judgement call** - every brief, every mode; the hand-off is the only moment this command gets to set the external reviewer's contract. Composition rules, stated here and nowhere else in this file: the brief is in **English** regardless of conversation language; paths absolute; shas full or 12+ chars; no "as discussed"; under ~80 lines; drop any section that has nothing; **never paste the diff** - the reviewer has the repo, so pointers and verification commands beat a dump.
+The `REMEDY QUALITY` line is **standing text, not a per-run judgement call** - every brief, every mode; the hand-off is the only moment this command gets to set the external reviewer's contract. `How to verify locally` carries commands that **demonstrably exercise the change**, not plausible-looking ones. Name a test by its actual function name rather than a guessed `-run` filter - a filter that matches nothing exits 0, so the reviewer is handed a green run that never touched the thing under review. Carry any caveat the repo documents for those commands (this repo: `-count=1` on Go tests that read `plugins/`, or the cache serves a stale PASS).
+
+Composition rules, stated here and nowhere else in this file: the brief is in **English** regardless of conversation language; paths absolute; shas full or 12+ chars; no "as discussed"; under ~80 lines; drop any section that has nothing; **never paste the diff** - the reviewer has the repo, so pointers and verification commands beat a dump.
 
 ## Step 6: Deliver
 
