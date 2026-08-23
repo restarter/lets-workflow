@@ -80,6 +80,7 @@ Team:     /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /le
 | `/lets:review` | Code | Full deep review (~2-3 min) |
 | `/lets:github-pr` | Code | GitHub PR review lifecycle (review, respond, follow-up, approve) |
 | `/lets:review-round` | Code | Work through a received review round - triage, decisions->task, one final edit-pass |
+| `/lets:review-handoff` | Code | Hand-off brief for an external reviewer - same targets as `/lets:review`, plus `--commits` / `--range` |
 | `/lets:opinion` | Expert | Technical decision needed |
 | `/lets:ask` | Expert | Quick question to one expert |
 | `/lets:research` | Expert | Web-sourced cited answer to an external/technical question (`--workflow` off-context) |

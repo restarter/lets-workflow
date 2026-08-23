@@ -313,7 +313,7 @@ The skill walks the user through an `AskUserQuestion` for each kind — follow t
 - **Study codebase first.** Read existing patterns, tests, and docs before non-trivial work. Match what's there.
 - **Think in the stack's idioms.** Naming conventions, error handling, testing style — let the project's existing code be the guide.
 - **Reuse before reinventing.** If a helper / abstraction already exists, use it. Don't build a parallel version.
-- **Smallest change that solves the problem.** Avoid incidental refactoring "while we're here". Surgical changes are easier to review and easier to revert.
+- **Fix the cause at the owning boundary.** Before patching a symptom, identify the root cause and the component that canonically owns the behavior. Prefer the smallest coherent change at that boundary that prevents recurrence - the smallest *diff* at the wrong boundary is a workaround, and one that compensates inside a consumer for a defect owned elsewhere is worse than no fix, because it masks the defect for every other consumer. Avoid incidental refactoring "while we're here", and do not widen a local issue into speculative refactoring. Surgical changes are easier to review and easier to revert.
 - **Plan for breaking changes.** Data-shape changes, contract changes — propose migrations or back-compat path, don't break silently.
 - **Present trade-offs, not just choices.** When proposing approaches, name the alternatives and why you picked this one.
 
@@ -455,6 +455,7 @@ Every response ends with exactly ONE footer - never mix two. Pick the type by wh
 | `/lets:review` | Code | Full deep review (~2-3 min); `<PR>` offers a `gh pr checkout` so agents read the real tree - it stashes on a dirty tree and restores the branch at the end |
 | `/lets:github-pr` | Code | GitHub PR review lifecycle (review, respond, follow-up, approve) |
 | `/lets:review-round` | Code | Work through a RECEIVED review round - triage N comments, decisions->task, artifact FROZEN, one final edit-pass (inverse of `/lets:review`) |
+| `/lets:review-handoff` | Code | Hand the current state OUT - one self-contained brief another agent (fresh session, Codex, external reviewer) can act on with no context; same target selectors as `/lets:review`, plus handoff-only `--commits` / `--range` |
 | `/lets:opinion` | Expert | Technical decision (dynamic agent count; `--workflow` = off-context fan-out + adversarial challenge) |
 | `/lets:ask` | Expert | Quick expert consultation (1 agent) |
 | `/lets:research` | Expert | Web-sourced CITED answer to an external/technical question; cross-check pass flags single-source/contradicted/stale claims (`--workflow` = off-context; `--project` = repo-grounded) |

@@ -99,6 +99,8 @@ Read the plan and review with 5 lenses (same confidence filter):
 - **[Scope]** Is the plan proportional to the problem? Overengineered? Underspecified?
 - **[Clarity]** Can a developer follow this without guessing? Ambiguous steps?
 
+REMEDY QUALITY: for each reported issue, ask whether the proposed fix removes the cause or only makes this instance pass - and hold the plan's own remedies to the same standard, since a step that patches a symptom where it surfaces rather than at the component that owns the behavior is itself an issue. Prefer the smallest fix at the owning boundary; do not propose broad refactoring in a quick check.
+
 Output same format as code check, then print: Plan check done. I will not implement it - run `/lets:execute` when ready. A plan-check verdict (any verdict) is about the document; NEVER start implementing, fixes go into the plan file only. Then:
 
 ```
@@ -310,6 +312,10 @@ Ask yourself:
 - Can this be exploited?
 - Does this violate project rules?
 - Will the next developer be confused?
+
+### Remedy Quality
+
+REMEDY QUALITY: for each reported issue, ask whether the proposed fix removes the cause or only makes this instance pass. Prefer the smallest fix at the owning boundary - the component that canonically owns the behavior, which is not always where the symptom surfaced; a fix that compensates inside a consumer for a defect owned elsewhere masks it for every other consumer. Do not propose broad refactoring in a quick check: when the systemic correction is disproportionate, say so and name it.
 
 ### Severity Filter
 
