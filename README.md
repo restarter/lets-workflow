@@ -126,6 +126,7 @@ Then, inside the Claude Code session:
 | `/lets:review` | Full code review with dynamic agent selection (~2-3 min) |
 | `/lets:github-pr` | GitHub PR review lifecycle - analyze, discuss, post inline, follow-up, approve |
 | `/lets:review-round` | Work through a received review round - triage comments, record decisions, one final edit-pass |
+| `/lets:review-handoff` | Hand-off brief so another agent (fresh session, Codex, external reviewer) can pick up the exact state and review it - same target selectors as `/lets:review`, plus `--commits` / `--range` |
 | `/lets:opinion` | Technical decision analysis (dynamic expert agents in parallel) |
 | `/lets:ask` | Quick expert consultation (single agent) |
 | `/lets:research` | Web-sourced cited answer to an external/technical question - cross-check flags weak/contradicted claims (`--workflow` off-context, `--project` repo-grounded) |

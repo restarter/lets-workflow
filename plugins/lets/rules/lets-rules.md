@@ -455,6 +455,7 @@ Every response ends with exactly ONE footer - never mix two. Pick the type by wh
 | `/lets:review` | Code | Full deep review (~2-3 min); `<PR>` offers a `gh pr checkout` so agents read the real tree - it stashes on a dirty tree and restores the branch at the end |
 | `/lets:github-pr` | Code | GitHub PR review lifecycle (review, respond, follow-up, approve) |
 | `/lets:review-round` | Code | Work through a RECEIVED review round - triage N comments, decisions->task, artifact FROZEN, one final edit-pass (inverse of `/lets:review`) |
+| `/lets:review-handoff` | Code | Hand the current state OUT - one self-contained brief another agent (fresh session, Codex, external reviewer) can act on with no context; same target selectors as `/lets:review`, plus handoff-only `--commits` / `--range` |
 | `/lets:opinion` | Expert | Technical decision (dynamic agent count; `--workflow` = off-context fan-out + adversarial challenge) |
 | `/lets:ask` | Expert | Quick expert consultation (1 agent) |
 | `/lets:research` | Expert | Web-sourced CITED answer to an external/technical question; cross-check pass flags single-source/contradicted/stale claims (`--workflow` = off-context; `--project` = repo-grounded) |
