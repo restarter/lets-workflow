@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-08-23
+
 ### Added
 - **Hand a review out, and demand root-cause fixes when it comes back (lets-2nevb).** New `/lets:review-handoff` produces one self-contained brief for an agent with no context - a fresh session, Codex, any external reviewer - covering a plan, a branch, uncommitted or staged work, the last N commits, an explicit range, a PR, or a single file. It reviews nothing itself and writes no file. Its target selectors mirror `/lets:review`, so the same flag reviews here or hands off there, with two deliberate differences: `--commits <N>` / `--range <a>..<b>` are handoff-only, because review has no target for "the commits that answer a review round", and `--pr` survives as an alias of the bare PR form. It works in a repo with no LETS installed - no `.lets/`, no tracker - where a task id recovered from the branch name still reaches the brief, marked as carrying no tracker metadata rather than silently dropped, and a bare PR number resolves its forge from the remote URL when `LETS_PR_FLOW` is absent. Alongside it, a rule the review family now states everywhere under the marker **`REMEDY QUALITY`**: a finding must separate the observed symptom from its root cause and propose the smallest coherent fix at the component that canonically owns the behavior, with a stated reason when a local workaround is taken instead - the smallest *diff* at the wrong boundary is a workaround, not a fix. It reaches every prompt that can act on it (the standard reviewer fan-out, the `--file` variant, all three plan-review agents, both `/lets:check` modes, and the `--workflow` copy) and deliberately **not** the skeptic, whose only output is `real` and for whom any "do not report this" instruction becomes a silent drop. The brief `/lets:review-handoff` writes carries the same ask, so a hand-off sets its reviewer's contract instead of hoping for one.
 
@@ -523,7 +525,8 @@ Initial release with expert agents team.
 - SessionStart hook injecting workflow rules
 - Plugin structure: commands, agents, hooks
 
-[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/restarter/lets-workflow/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/restarter/lets-workflow/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/restarter/lets-workflow/compare/v0.6.4...v0.7.0
 [0.6.4]: https://github.com/restarter/lets-workflow/compare/v0.6.3...v0.6.4
