@@ -66,7 +66,7 @@ git log --oneline "$BASE"..HEAD 2>/dev/null | head -30
 | Mode | Gather |
 |---|---|
 | `--plan` | absolute path, title line, task count, `[DONE]` markers, which code it will touch, whether execution started (commits since the plan's date). An unspecified path resolves task-id-first (`*<task-id>*.md`), then `*<branch-slug>*.md`, both scoped - `.lets/plans` is shared across worktrees. **Name the file taken**; it may be a superseded revision |
-| `--branch` | `git diff --stat <base>...HEAD`, the commit list, base sha, whether pushed (`git rev-parse origin/<branch>`), open PR id if any |
+| `--branch` | `git diff --stat <base>...HEAD`, base sha, whether pushed (`git rev-parse origin/<branch>`), open PR id if any, and the commit list with **each commit's own `git show --stat`** - the range stat says which files the branch touched, never which commit touched them, and attributing them by inference is how a brief claims a file landed two commits before it did |
 | `--local` / `--staged` | `git diff --stat` (or `--staged`), the file list, and that the work is uncommitted - the reviewer reads the working tree, not a ref |
 | `--last-commit` / `--commits N` / `--range` | exact shas, `git show --stat` per commit, and **why** they exist - which findings they answer, quoting the finding ids or the reviewer's wording |
 | `<PR>` / `--pr` | PR id + URL, host, target branch, head sha; for a fix round, each reviewer point mapped to its answering commit, plus points deliberately NOT addressed and why |
