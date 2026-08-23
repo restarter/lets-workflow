@@ -313,7 +313,7 @@ The skill walks the user through an `AskUserQuestion` for each kind — follow t
 - **Study codebase first.** Read existing patterns, tests, and docs before non-trivial work. Match what's there.
 - **Think in the stack's idioms.** Naming conventions, error handling, testing style — let the project's existing code be the guide.
 - **Reuse before reinventing.** If a helper / abstraction already exists, use it. Don't build a parallel version.
-- **Smallest change that solves the problem.** Avoid incidental refactoring "while we're here". Surgical changes are easier to review and easier to revert.
+- **Fix the cause at the owning boundary.** Before patching a symptom, identify the root cause and the component that canonically owns the behavior. Prefer the smallest coherent change at that boundary that prevents recurrence - the smallest *diff* at the wrong boundary is a workaround, and one that compensates inside a consumer for a defect owned elsewhere is worse than no fix, because it masks the defect for every other consumer. Avoid incidental refactoring "while we're here", and do not widen a local issue into speculative refactoring. Surgical changes are easier to review and easier to revert.
 - **Plan for breaking changes.** Data-shape changes, contract changes — propose migrations or back-compat path, don't break silently.
 - **Present trade-offs, not just choices.** When proposing approaches, name the alternatives and why you picked this one.
 
