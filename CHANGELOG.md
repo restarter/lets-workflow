@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- **`/lets:start --continue` resumes instead of re-orienting (lets-z1q8b).** With exactly one in_progress task the command still rendered the full orient snapshot (In flight / Next up / Project) and ran `list-by-status` twice, so a resume read like a backlog review. It now skips orient and task selection, shows only the recent-session recovery line, and hands straight to `take-task`, which reads the task comments and latest snapshot. Multiple in_progress tasks still get the snapshot for selection; none falls through to the full flow.
+
 ## [0.8.1] - 2026-08-23
 
 ### Added

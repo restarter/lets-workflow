@@ -29,9 +29,10 @@ Restore context and prepare for work. **User MUST select a task before working.*
 
 **If `--continue`:**
 - Run Step 1 (session history) - important for context recovery
+- Run Step 2 (git state) briefly
 - the tracker's `list-by-status` (in_progress) - find task(s)
-- If exactly 1 in_progress -> use it, skip Step 5
-- If multiple -> show selection with context from recent sessions
+- If exactly 1 in_progress -> use it. **Skip Step 3 (orient) and Step 5** - the task is already known, so the Next up / Project snapshot is noise (and it would re-run `list-by-status` a second time inside orient). Present only the `## Recent Sessions` recovery line (Step 4), then jump to Step 6 (take-task) - its Step 6 context recovery reads the task comments + latest snapshot
+- If multiple -> run Step 3 (orient) and show selection with context from recent sessions
 - If none -> fall through to full flow
 
 **If `--main` or `--assistant` provided** (project-assistant / PM mode):
@@ -101,6 +102,8 @@ The orient snapshot (Step 3) already shows In flight + Next up - don't repeat th
 
 {orient snapshot from Step 3 - Where you are / In flight / Next up / Project}
 ```
+
+`--continue` with exactly one in_progress task skipped Step 3 - present only `## Recent Sessions` + one line naming the task being resumed, no snapshot.
 
 ## Step 5: What do we do? (task selection - MANDATORY)
 
