@@ -19,6 +19,8 @@ SESSION_RANGE_DESC=<one-line human description, always carrying the trust level>
 
 Diagnostic NOTEs go to stderr - surface them to the user, they are the loud half of every degradation.
 
+**Fail closed.** If the four lines do not arrive, the caller MUST assume `SESSION_TRUST=none` / `SESSION_COMMITS=unknown` and proceed as though no boundary exists. Never re-derive one inline - a second copy is a second answer, which is the defect this skill exists to prevent.
+
 ## Trust levels
 
 | level | boundary | what the caller may claim |
@@ -36,24 +38,43 @@ The NON-slugged `.lets/sessions/.session-start-ref` is deliberately NOT read: on
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-BRANCH=$(git branch --show-current); BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
+BRANCH=$(git branch --show-current)
+# A branch-scoped question needs a branch. Detached HEAD has none (/lets:review's PR checkout
+# detaches deliberately), and `.task-` with an empty slug is a path a hostile PR can ship.
+if [ -z "$BRANCH" ]; then
+  echo "NOTE: detached HEAD - no branch to scope a session boundary to." >&2
+  echo "SESSION_BOUNDARY=none"; echo "SESSION_TRUST=none"; echo "SESSION_COMMITS=unknown"
+  echo "SESSION_RANGE_DESC=boundary unknown - detached HEAD"
+  exit 0
+fi
+BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
 
 # --- READ (session: line, then the legacy SLUGGED ref - never a global one) ---
 TASK_FILE="$LETS_PROJECT_ROOT/.lets/sessions/.task-${BRANCH_SLUG}"
 SESSION_LINE=$(sed -n 's/^session: //p' "$TASK_FILE" 2>/dev/null | head -1)
 START_REF=$(echo "$SESSION_LINE" | awk '{print $1}')
 STORED_SID=$(echo "$SESSION_LINE" | awk '{print $2}')
-TRUST=exact
-# A sid other than this session's means no /lets:start ran here (no take-task / hook refresh), so
-# the boundary belongs to a PRIOR session - real and branch-scoped, but not this session's.
-[ -n "$START_REF" ] && [ "$STORED_SID" != "$CLAUDE_CODE_SESSION_ID" ] && TRUST=prior-session
+# Shape guard (N1): the boundary is a plugin-written SHA - blank anything non-hex before it expands
+# unquoted into the git range, so a hand-edited state file can't inject git option args. It
+# ANNOUNCES itself: a malformed value means the file was edited, and that is the one input class
+# that must never be reported as "nothing was recorded".
+case "$START_REF" in *[!0-9a-f]*)
+  echo "NOTE: session: boundary in ${TASK_FILE##*/} is malformed (not a hex sha) - ignored." >&2
+  START_REF=""; STORED_SID="" ;;
+esac
+# `exact` requires a POSITIVE match on BOTH sides. Two empty strings compare equal, and both
+# markdown writers can emit a sid-less line, so a `!=` test would grant `exact` on absence of
+# evidence - the lets-370mx failure mode through a different door.
+TRUST=prior-session
+[ -n "$START_REF" ] && [ -n "$STORED_SID" ] && [ -n "$CLAUDE_CODE_SESSION_ID" ] \
+  && [ "$STORED_SID" = "$CLAUDE_CODE_SESSION_ID" ] && TRUST=exact
 if [ -z "$START_REF" ]; then
-  START_REF=$(cat "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}" 2>/dev/null)
-  [ -n "$START_REF" ] && TRUST=prior-session
+  START_REF=$(cat "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}" 2>/dev/null | head -1 | awk '{print $1}')
+  case "$START_REF" in *[!0-9a-f]*)
+    echo "NOTE: legacy ref for ${BRANCH_SLUG} is malformed - ignored." >&2
+    START_REF="" ;;
+  esac
 fi
-# Defense-in-depth (N1): the boundary is a plugin-written SHA - blank anything non-hex before it
-# expands unquoted into the git range, so a hand-edited state file can't inject git option args.
-case "$START_REF" in *[!0-9a-f]*) START_REF="" ;; esac
 
 # --- VALIDATE (a recorded SHA is a claim, not a fact) ---
 MERGE_BASE=$(git merge-base HEAD "origin/{LETS_MERGE_BRANCH}" 2>/dev/null || git merge-base HEAD "{LETS_MERGE_BRANCH}" 2>/dev/null)
@@ -69,9 +90,17 @@ if [ -n "$START_REF" ]; then
   fi
   # Age floor: a session boundary is hours-to-days old. 14d is the generous outer edge of one
   # session; past it the file is stale, not long-running. Catches the trunk case the floor cannot.
+  # Captured and validated, never inlined into the arithmetic: an empty operand makes bash error
+  # the assignment, then error the comparison, leaving REJECT unset - i.e. the one guard whose job
+  # is catching a stale file would fail OPEN. The rev-parse above makes that unreachable short of
+  # a damaged object store; a guard this cheap should not depend on that being true.
   if [ -z "$REJECT" ]; then
-    AGE_D=$(( ( $(date +%s) - $(git show -s --format=%ct "$START_REF") ) / 86400 ))
-    [ "$AGE_D" -gt 14 ] && REJECT="${AGE_D} days old - older than any single session"
+    CT=$(git show -s --format=%ct "$START_REF" 2>/dev/null)
+    case "$CT" in
+      ""|*[!0-9]*) REJECT="commit timestamp unreadable" ;;
+      *) AGE_D=$(( ( $(date +%s) - CT ) / 86400 ))
+         [ "$AGE_D" -gt 14 ] && REJECT="${AGE_D} days old - older than any single session" ;;
+    esac
   fi
   [ -n "$REJECT" ] && { echo "NOTE: recorded boundary ${START_REF} REJECTED (${REJECT}) - not used." >&2; START_REF=""; TRUST=none; }
 fi
@@ -114,4 +143,4 @@ echo "SESSION_RANGE_DESC=${DESC}"
 
 ## Integration
 
-Internal skill. Consumers: `/lets:end` Step 1 (settlement gating) and the `session-snapshot` skill (the `### Range` block, when the caller passed no `range=`).
+Internal skill. Consumers: `/lets:end` Step 1 (settlement gating), `/lets:execute` Status mode (its "commits this session" line), and the `session-snapshot` skill (the `### Range` block, when the caller passed no `range=`).

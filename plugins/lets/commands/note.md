@@ -156,16 +156,20 @@ Both flags write the SAME recovery-grade `## RESUME` snapshot and differ only in
 
 The skill gathers session + git state, writes the file, and returns the snapshot path (plus the task id if a pointer was written) - report directly from that return; no separate verify round-trip. `kind=session` additionally resolves the session range through `session-boundary`, so its snapshot carries a qualified `### Range` block; `kind=precompact` deliberately does not, keeping the pre-`/compact` path lean. Then show that flag's output below - NOT the generic `## Output` box:
 
+### --session
+
 ```
 ## Session Snapshot
 
 Snapshot -> .lets/sessions/{date}-{HHMM}-{task-id}-snapshot.md
 Task pointer -> {task-id}  (only if a task is unambiguously active; else "none - file only")
 Branch: {branch}
-Range: {SESSION_RANGE_DESC resolved by the skill}
+Range: {RANGE_DESC returned by the skill, or "none - no valid session boundary"}
 
 Recorded - the session continues. Resume later: /lets:start reads the snapshot file.
 ```
+
+### --pre-compact
 
 ```
 ## Pre-Compact Snapshot

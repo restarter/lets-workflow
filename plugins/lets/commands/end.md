@@ -30,7 +30,7 @@ Read all state ONCE, compute which settlements are actionable, prompt nothing he
 
 First find the active task: use the **detect-task** skill - `Skill(skill: "lets:detect-task")`. (No task -> S2/S3 below auto-skip; main-mode `/lets:end` is a normal, mostly-silent settle.)
 
-Then read its STATUS - S2 and S3 both gate on it, and detect-task's own liveness probe runs only on `$LETS_MERGE_BRANCH`, so off the merge-branch nothing here knows the status yet:
+Then, **only if detect-task returned a task**, read its STATUS - S2 and S3 both gate on it, and detect-task's own liveness probe runs only on `$LETS_MERGE_BRANCH`, so off the merge-branch nothing here knows the status yet. No task means no read and no id to substitute; skip straight to the state block below:
 
 ```lets-tracker
 show task=<task-id>   # returns {id,title,status}; read status
@@ -43,7 +43,10 @@ Then resolve the session boundary through the shared reader - `Skill(skill: "let
 Then one bash block for the rest of the state:
 
 ```bash
-BRANCH=$(git branch --show-current)
+# Echoed, not just assigned: a bash var dies with the fence, and three consumers downstream need
+# the branch - the Output line, Step 4's worktree hint, and S5's label, whose whole job is to name
+# the concrete push target (informed consent).
+BRANCH=$(git branch --show-current); echo "BRANCH=$BRANCH"
 
 git status --short   # DIRTY if non-empty (S1)
 
@@ -58,18 +61,18 @@ fi
 GIT_DIR=$(git rev-parse --git-dir 2>/dev/null); echo "GIT_DIR=$GIT_DIR"
 ```
 
-**Actionable set:** S1 if DIRTY; S2 if the active task is `in_progress` AND `SESSION_COMMITS > 0` AND `SESSION_TRUST` is `exact` or `prior-session`; S3 if the active task is NOT closed AND this session touched it (`SESSION_COMMITS > 0` OR DIRTY OR `AHEAD > 0`); S5 if `AHEAD > 0` (or no-upstream + local commits exist). S4 always; S6 if `GIT_DIR` contains `worktrees/`. (No S7 - the snapshot-only flags are Step 1 early exits, not settlement steps.)
+**Actionable set:** S1 if DIRTY; S2 if the active task is `in_progress` AND `SESSION_COMMITS > 0`; S3 if the active task's status is `open` or `in_progress` AND this session touched it (`SESSION_COMMITS > 0` OR DIRTY OR `AHEAD > 0`); S5 if `AHEAD > 0` (or no-upstream + local commits exist). S4 always; S6 if `GIT_DIR` contains `worktrees/`. (No S7 - the snapshot-only flags are Step 1 early exits, not settlement steps.)
 
-**Boundary-trust rule.** `SESSION_TRUST` decides what may be CLAIMED - a number is only as good as the boundary under it, so the level travels with `RANGE_DESC` into the chat, the snapshot's `### Range` block and the progress comment:
+**Boundary-trust rule.** `SESSION_TRUST` never gates an OFFER - it gates what may be CLAIMED. S2 is offered on any boundary; what changes is the wording, because `RANGE_DESC` carries the level with it into the chat, the snapshot's `### Range` block and the progress comment. That is the whole mechanism: a weak boundary degrades the sentence, it does not suppress the record. (`session-boundary` defines the levels - do not restate them here.)
 
-| `SESSION_TRUST` | boundary | S2 Post progress | the range in writing |
-|---|---|---|---|
-| `exact` | this session's `session:` line | offer | stated as this session's work |
-| `prior-session` | a `session:` line or legacy slugged ref from an earlier session | offer, NOTE carried | marked best-effort |
-| `estimate` | nothing recorded; derived from the branch point off `$LETS_MERGE_BRANCH` | best-effort offer, marked approx | marked as the branch's range, not the session's |
-| `none` | nothing usable (rejected, or absent while HEAD is `$LETS_MERGE_BRANCH`) | best-effort offer, no number | no number at all |
+| `SESSION_TRUST` | the range in writing |
+|---|---|
+| `exact` | stated as this session's work |
+| `prior-session` | marked best-effort, NOTE carried |
+| `estimate` | marked as the branch's range, not the session's |
+| `none` | no number at all |
 
-**S3 is deliberately NOT on this table.** Whether to refer the user to `/lets:done` is a status fact plus observable activity - the task is open, and this session committed, dirtied or got ahead - never an inference from a commit count about whether the work is finished. That inference is `/lets:done`'s Scope Verification step, which reads the task description; `end` does not attempt it. S1/S4/S5/S6 are likewise unaffected by `SESSION_TRUST`.
+**S3 is deliberately off this axis.** Whether to refer the user to `/lets:done` is a status fact plus observable activity, never an inference from a commit count about whether the work is finished. That inference is `/lets:done`'s Scope Verification step, which reads the task description; `end` does not attempt it. The gate is `open`/`in_progress` rather than "not closed" because `in_review` means `/lets:done` ALREADY ran (it sets that status after opening the PR) and `blocked` is not a state `done` can advance - referring either one sends the user in a circle. S1/S4/S5/S6 are unaffected by `SESSION_TRUST`.
 
 ## Step 2: Settle
 
@@ -84,8 +87,8 @@ AskUserQuestion(
     header: "Settle",
     options: [
       { label: "Commit", description: "Run /lets:commit for the uncommitted changes" },            # S1, only if DIRTY
-      { label: "Post progress", description: "Add a Session Progress comment to {task-id}" },        # S2, only if actionable
-      { label: "Finish task", description: "Task {task-id} is still open - hand off to /lets:done" }, # S3, only if actionable (the snapshot-only flags never reach Step 2 - they early-exit in Step 1)
+      { label: "Post progress", description: "Add a Session Progress comment to **{task title}** ({task-id})" },  # S2, only if actionable
+      { label: "Finish task", description: "**{task title}** ({task-id}) is still open - hand off to /lets:done" }, # S3, only if actionable (the snapshot-only flags never reach Step 2 - they early-exit in Step 1)
       { label: "Push", description: "Push {N} commits to origin/{branch} (no PR)" }                  # S5, only if AHEAD>0; label names the concrete target = informed consent
     ],
     multiSelect: true
@@ -96,17 +99,17 @@ AskUserQuestion(
 **Execution order (run the picks in this fixed order; deselect-all = "end as-is"):**
 
 1. **Commit** -> `Skill(skill: "lets:commit")`. (If both Commit and Finish task are picked, commit runs first, then hand off.)
-2. **Finish task** -> **REFER + STOP.** Say "Handing off to /lets:done." then `Skill(skill: "lets:done")` and **STOP the entire /lets:end flow** (do NOT run Step 3, Step 4, or Output). That is the whole rule, and it is deliberately the whole rule: `end` does not enumerate what `done` will redo, because once `end` stops there is nothing left for it to reason about. `done` owns the task lifecycle from here - its own scope check, its commit/push/PR/close, and its terminal menu, which may switch branches or call `/lets:end` again (safe: that second end finds everything settled and silently wraps). Stopping is what keeps the branch-slugged snapshot off a branch `done` may have moved away from.
+2. **Finish task** -> **REFER + STOP.** Say "Handing off to /lets:done" and name any other picks being dropped with it (`multiSelect` lets the user select alongside it, and silently discarding a pick is worse than declining it). Then `Skill(skill: "lets:done")` and **STOP the entire /lets:end flow** (do NOT run Step 3, Step 4, or Output). That is the whole rule, and it is deliberately the whole rule: `end` does not enumerate what `done` will redo, because once `end` stops there is nothing left for it to reason about. `done` owns the task lifecycle from here - its own scope check, its commit/push/PR/close, and its terminal menu, which may switch branches or call `/lets:end` again. That re-entry is safe BECAUSE S3 gates on `open`/`in_progress`: `done` leaves the task `closed` or `in_review`, neither of which re-arms this offer. Stopping is what keeps the branch-slugged snapshot off a branch `done` may have moved away from.
 3. **Push** (only reached when Finish task was NOT picked) -> upstream-aware push of the current branch, NO PR, never `--force`: `git push` when upstream exists and ahead; `git push -u origin <branch>` on first push. The explicit multiSelect pick IS the approval (same as picking "Commit" authorizes the commit - satisfies the git.md / AUTO MODE "push needs explicit approval" rule, which is why the option label always names the concrete target).
 4. **Post progress** (only reached when Finish task was NOT picked) -> remember this pick; the progress comment is written in Step 3b, AFTER Step 3a produces the snapshot file it references. Do NOT write it here.
 
 ## Step 3: Write artifacts
 
-(Reached in the DEFAULT flow only; the `--pre-compact` early exit in Step 1 handled that path. Skipped on the Finish-task hand-off, which stopped the flow in Step 2.)
+(Reached in the DEFAULT flow only; the snapshot-only early exit in Step 1 handled those paths. Skipped on the Finish-task hand-off, which stopped the flow in Step 2.)
 
 ### 3a. Session snapshot (ALWAYS, written FIRST)
 
-Write the session-level snapshot that bootstraps the next `/lets:start`, via the shared primitive so end's snapshot and the pre-compact snapshot never drift. The `pointer` arg depends on whether "Post progress" was picked in Step 2:
+Write the session-level snapshot that bootstraps the next `/lets:start`, via the shared primitive so every snapshot kind shares one template and none of them drift. The `pointer` arg depends on whether "Post progress" was picked in Step 2:
 
 `Skill(skill: "lets:session-snapshot", args: "kind=end pointer=<off if Post progress was picked, else auto> task-id={task-id} range={RANGE_DESC}")` - `task-id` from Step 1; `range` LAST (contains spaces).
 
@@ -150,7 +153,9 @@ comment-add task=<task-id> body-file=.lets/cache/progress-<task-id>.md
 
 ## Step 4: Worktree hint
 
-Output-time, never a prompt. If `GIT_DIR` contains `worktrees/`: extract the worktree name (last path segment) and show the resume line. There is no "task finished" variant - the Step 2 referral stops end before Step 4, so a finished task's worktree hint belongs to `/lets:done`.
+Output-time, never a prompt. If `GIT_DIR` contains `worktrees/`: extract the worktree name (last path segment), then pick by the status read in Step 1 - `closed` -> the cleanup line (`/lets:worktree remove {name}` from the main repo), anything else -> the resume line.
+
+Both branches are reachable, and not through Step 2: the referral stops end before Step 4, so this is never the hand-off path. The cleanup branch exists for the INDEPENDENT route - `/lets:done` runs on its own, closes the task, and its worktree menu offers "End session", which lands here with a closed task. Printing a resume hint there contradicts what `done` just said. If the status is UNKNOWN (no task, or the read failed), show the resume line: it is the safe default, since it points at work rather than at deletion.
 
 ## Output
 
@@ -182,7 +187,7 @@ Then a SINGLE prose line (no AskUserQuestion, no wrap-up card):
 Snapshot -> .lets/sessions/{date}-{HHMM}-{task-id}-snapshot.md
 Task pointer -> {task-id}  (only if a task is unambiguously active; else "none - file only")
 Branch: {branch}
-Range: {SESSION_RANGE_DESC from the snapshot's own boundary read}
+Range: {RANGE_DESC returned by the skill, or "none - no valid session boundary"}
 
 Recorded - the session continues. Resume later: /lets:start reads the snapshot file.
 ```

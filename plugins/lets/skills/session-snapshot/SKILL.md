@@ -6,7 +6,7 @@ user-invocable: false
 
 # Session Snapshot
 
-Shared snapshot primitive for `/lets:end` (settlement + snapshot + close) and for the snapshot-only flags `--session` and `--pre-compact` on both `/lets:end` and `/lets:note`. **Single source of truth** - every caller delegates here so the template and file/pointer behavior never drift.
+Shared snapshot primitive for `/lets:end` (settlement + snapshot) and for the snapshot-only flags `--session` and `--pre-compact` on both `/lets:end` and `/lets:note`. **Single source of truth** - every caller delegates here so the template and file/pointer behavior never drift.
 
 Goal: ONE recovery-grade `## RESUME` snapshot, **file-primary** - it ALWAYS lands in a `.lets/sessions/` file (the single trail `/lets:start` reads), regardless of task state (feature / trunk / --main / no-task). The active task gets only a ONE-LINE pointer to that file, and only when a task is unambiguously active (via detect-task, NEVER a `list-by-status | head -1` guess).
 
@@ -17,7 +17,7 @@ Goal: ONE recovery-grade `## RESUME` snapshot, **file-primary** - it ALWAYS land
 Passed via the `Skill` invocation's `args` string as space-separated `key=value` pairs (e.g. `args: "kind=end pointer=off task-id=lets-abc range=session: X..HEAD (3 commits)"`). Put `range=` / `task-id=` LAST when the value contains spaces - each consumes the rest of the string. Any omitted key falls to its default.
 
 - `kind` = `precompact` (default) | `session` | `end` - selects the `artifact-path` kind and the `### Compaction` line. `precompact` -> `snapshot-precompact`; `session` and `end` BOTH -> `snapshot`, because a session record and a session-end record are the same artifact written at different moments, and a fourth filename shape would buy nothing. Step 3 owns the filename, never build it here.
-- `pointer` = `off` (default) | `auto` - whether the skill writes the standalone one-line task pointer. `off` is the SAFE default (a caller that forgets never double-writes a task comment); a caller that wants the skill to write the pointer passes `auto` explicitly (both pre-compact callers do). `/lets:end` default passes `off` when it folds the pointer into its own progress comment, `auto` otherwise.
+- `pointer` = `off` (default) | `auto` - whether the skill writes the standalone one-line task pointer. `off` is the SAFE default (a caller that forgets never double-writes a task comment); a caller that wants the skill to write the pointer passes `auto` explicitly (all four snapshot-only callers do). `/lets:end` default passes `off` when it folds the pointer into its own progress comment, `auto` otherwise.
 - `range` (optional) - a RANGE_DESC string (e.g. `session: <ref>..HEAD (N commits)`). A caller that passes one WINS - `/lets:end`'s default flow does, because it already read the boundary to gate its own offers. When it is absent and `kind` is NOT `precompact`, Step 2 resolves it through `session-boundary` rather than omitting the block, so `--session` on either command still records a qualified range. `kind=precompact` keeps its lean contract: no boundary read on the path taken right before a `/compact`, and no `### Range` block unless one was passed.
 - `task-id` (optional) - pre-resolved active task from the caller's own detect-task.
 
@@ -97,4 +97,11 @@ Otherwise (`pointer=off`, or no unambiguous task): write nothing to the task - t
 
 ## Return
 
-Report to the caller: the snapshot file path (the `SNAP_FILE` echoed in Step 3), and the task id if a pointer was written. The caller handles any further output.
+Report to the caller, and these ARE the contract - a caller renders only what this list names, never a value it improvised:
+
+- the snapshot file path (the `SNAP_FILE` echoed in Step 3)
+- the branch the snapshot was written on
+- the RANGE_DESC used, or `none` when no range was passed or resolved and the `### Range` block was therefore omitted
+- the task id, if a pointer was written
+
+The caller handles any further output. A caller that prints a range MUST print the `none` case as such - reconstructing a range of its own is the unqualified-number failure `session-boundary` exists to prevent.
