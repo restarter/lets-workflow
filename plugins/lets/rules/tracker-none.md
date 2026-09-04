@@ -1,6 +1,6 @@
 ---
 name: tracker-none
-version: 0.8.1
+version: 0.8.2
 ---
 
 <!-- DO NOT EDIT installed copies in .claude/rules/ - managed by `lets init` / `lets update`. Edit the source in plugins/lets/rules/. -->
