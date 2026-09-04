@@ -1,5 +1,5 @@
 ---
-description: Add a note to the active task - progress, decisions, context. --pre-compact writes a resume-grade session snapshot before /compact.
+description: Add a note to the active task - progress, decisions, context. --session and --pre-compact write a resume-grade session snapshot without ending the session.
 ---
 
 # Task Note
@@ -20,12 +20,13 @@ Use `/lets:note` when you want to add extra context that doesn't fit those flows
 ```
 /lets:note                  # interactive - pick a note type, add to the active task
 /lets:note <free text>      # use the text directly as the note (infer type)
-/lets:note --pre-compact    # RESUME snapshot of the whole session before /compact
+/lets:note --session        # RESUME snapshot of the whole session, banked on request
+/lets:note --pre-compact    # the same snapshot, branded as a record written before /compact
 ```
 
 ## Step 0: Argument Parsing
 
-**If `--pre-compact` (alias `--compact`) is passed** -> run **Pre-Compact Resume Mode** (below) INSTEAD of Steps 3-4: no type prompt, produce ONE recovery-grade snapshot. Do NOT run Step 1's interactive task prompt - the `session-snapshot` skill owns task detection (file-primary: ambiguity -> file only, no prompt), keeping this byte-identical to `/lets:end --pre-compact`. Then show the Pre-Compact output below, NOT the generic Output box (no separate verify - the skill returns the path + task id, and `/lets:end --pre-compact` likewise just delegates and stops).
+**If `--session` (alias `--snapshot`) or `--pre-compact` (alias `--compact`) is passed** -> run **Session Snapshot Mode** (below) INSTEAD of Steps 3-4: no type prompt, produce ONE recovery-grade snapshot. Do NOT run Step 1's interactive task prompt - the `session-snapshot` skill owns task detection (file-primary: ambiguity -> file only, no prompt), keeping each flag byte-identical to the same flag on `/lets:end`. Then show that flag's output below, NOT the generic Output box (no separate verify - the skill returns the path + task id, and `/lets:end` likewise just delegates and stops).
 
 **Otherwise** -> normal flow (Steps 1-6).
 
@@ -145,13 +146,26 @@ comment-add task=<task-id> body="[scope-change] <what changed and why>"
 show task=<task-id>
 ```
 
-## Pre-Compact Resume Mode (`--pre-compact`)
+## Session Snapshot Mode (`--session`, `--pre-compact`)
 
-Run this right before `/compact` (or when a long session is about to be auto-summarized). **Skip Step 3** (no type prompt) - delegate to the internal **session-snapshot** skill (`kind=precompact`), which ALWAYS writes the recovery-grade `## RESUME` snapshot to a `.lets/sessions/` file and adds a one-line pointer to the active task only when one is unambiguously active. Single source of truth, shared with `/lets:end --pre-compact` (now byte-identical to this), so the template never drifts:
+Both flags write the SAME recovery-grade `## RESUME` snapshot and differ only in what the record says it is for. Pick by what is actually about to happen: `--session` banks the state of a long session that continues; `--pre-compact` is for a record written immediately before a `/compact`. The file is permanent and `/lets:start` reads it back, so reaching for `--pre-compact` when no `/compact` follows writes a false note into the trail.
 
-`Skill(skill: "lets:session-snapshot", args: "kind=precompact pointer=auto")`
+**Skip Step 3** (no type prompt) - delegate to the internal **session-snapshot** skill with the matching `kind`, which ALWAYS writes the snapshot to a `.lets/sessions/` file and adds a one-line pointer to the active task only when one is unambiguously active. Single source of truth, shared with the same flag on `/lets:end` (byte-identical), so the template never drifts:
 
-The skill gathers session + git state, ALWAYS writes the snapshot to a `.lets/sessions/` file, and adds a one-line pointer to the active task only when one is unambiguously active. It returns the snapshot file path (and the task id if a pointer was written) - report directly from that return; no separate verify round-trip (this keeps the path symmetric with `/lets:end --pre-compact`, which also just delegates and stops). Then show the Pre-Compact output below - NOT the generic `## Output` box (this path has its own, identical to `/lets:end --pre-compact`):
+`Skill(skill: "lets:session-snapshot", args: "kind=session pointer=auto")` - or `kind=precompact` for `--pre-compact`.
+
+The skill gathers session + git state, writes the file, and returns the snapshot path (plus the task id if a pointer was written) - report directly from that return; no separate verify round-trip. `kind=session` additionally resolves the session range through `session-boundary`, so its snapshot carries a qualified `### Range` block; `kind=precompact` deliberately does not, keeping the pre-`/compact` path lean. Then show that flag's output below - NOT the generic `## Output` box:
+
+```
+## Session Snapshot
+
+Snapshot -> .lets/sessions/{date}-{HHMM}-{task-id}-snapshot.md
+Task pointer -> {task-id}  (only if a task is unambiguously active; else "none - file only")
+Branch: {branch}
+Range: {SESSION_RANGE_DESC resolved by the skill}
+
+Recorded - the session continues. Resume later: /lets:start reads the snapshot file.
+```
 
 ```
 ## Pre-Compact Snapshot
@@ -163,7 +177,7 @@ Branch: {branch}
 Safe to /compact now - same window continues. Resume: /lets:start reads the snapshot file (the tracked task holds task-level context).
 ```
 
-Then STOP - the session continues. (Identical output contract to `/lets:end --pre-compact`.)
+Then STOP - the session continues. (Identical output contract to the same flag on `/lets:end`.)
 
 ## Output
 
