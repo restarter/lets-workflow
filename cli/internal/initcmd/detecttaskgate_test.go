@@ -25,6 +25,10 @@ import (
 const (
 	detectTaskSkill = "skills/detect-task/SKILL.md"
 	idGateClass     = `*[!A-Za-z0-9._-]*`
+	// A leading hyphen clears the class - `-` is a legal id character - and then
+	// becomes an OPTION at the verb: `bd show --help` is not a lookup. The gate must
+	// judge position as well as alphabet.
+	idGateLeadingDash = `-*)`
 )
 
 // idEmit matches a line that PRODUCES the id, whatever the verb or quoting:
@@ -86,6 +90,12 @@ func TestDetectTaskIdGate(t *testing.T) {
 		t.Errorf("the id gate emits without checking %s.\n"+
 			"That class IS the gate - an id reaches a tracker verb as an unquoted value in a\n"+
 			"shell the model types, so an unchecked emit hands that shell whatever was on disk.", idGateClass)
+	}
+
+	if !strings.Contains(emitters[0], idGateLeadingDash) {
+		t.Errorf("the id gate does not reject a leading hyphen (%s).\n"+
+			"The class alone lets `--help` through, because `-` is a legal id character; at the\n"+
+			"verb it stops being a value and becomes a flag. Alphabet and position are two rules.", idGateLeadingDash)
 	}
 }
 

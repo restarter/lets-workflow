@@ -74,12 +74,20 @@ CANDIDATE="{the candidate from whichever step produced it}"
 # on checkout, so a candidate read off disk is third-party input, not our own writing.
 case "$CANDIDATE" in
   "") echo "TASK_ID=none" ;;
+  -*)
+    # A leading hyphen passes the class below - hyphen is a legal id character - and then becomes
+    # an OPTION at the verb: `bd show --help` is not a lookup. Position matters, not just the
+    # alphabet, and no tracker starts an id with a dash.
+    echo "NOTE: candidate '${CANDIDATE}' starts with a hyphen - a tracker verb would read it as an option, not an id. Refusing it." >&2
+    echo "TASK_ID=none" ;;
   *[!A-Za-z0-9._-]*)
     echo "NOTE: candidate '${CANDIDATE}' is outside the id character class - refusing it. The state file was edited or planted." >&2
     echo "TASK_ID=none" ;;
   *) echo "TASK_ID=$CANDIDATE" ;;
 esac
 ```
+
+**Two rules, not one:** the leading character and the alphabet. The class alone is not enough, because `-` is a legal id character everywhere except position one, where it stops being a value and becomes a flag.
 
 **The class is the tracker platform's contract on id shape**, not a beads detail: `[A-Za-z0-9._-]` covers beads (`lets-abc`, `lets-abc.1`) and a numeric-id tracker, and Step 1 is right that the id's *grammar* is adapter-specific while this is the outer bound every adapter must fit inside. An adapter whose ids need more must widen it here deliberately and say why in its `tracker-<name>.md`, because every character added is a character that reaches a shell the model types. Refusing is loud, so a too-narrow class shows up as a NOTE on every call rather than as silence.
 
