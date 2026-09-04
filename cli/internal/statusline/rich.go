@@ -520,7 +520,7 @@ var tips = []string{
 	"Need outside facts? /lets:research --project grounds web findings against your repo.",
 	"/lets:research cites every claim with sources + an as-of date — no fabricated URLs.",
 	"Statusline too busy? --no-task / --no-dir / --no-tip trim it (env LETS_STATUSLINE_*=off too).",
-	"About to /compact a long session? /lets:note --pre-compact snapshots it to the task first.",
+	"Long session? /lets:note --session banks a recovery snapshot without ending it.",
 }
 
 // tipOfMoment cycles tips sequentially, advancing one step every tipPeriod
