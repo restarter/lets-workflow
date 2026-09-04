@@ -33,6 +33,8 @@ The `<task-id>` shape is TRACKER-DEPENDENT (the id sits immediately after `featu
 - a numeric-id tracker: a pure-numeric id - e.g. `48647`, so `feature/48647-<slug>`
 - other adapters: the tracker's own id shape
 
+Whatever this parse yields is a CANDIDATE, not an answer: it goes to **the id gate** below, like every other path. On the `branch=<ref>` variant the name being parsed is a pull request's head, which its author chose.
+
 **Do NOT apply the beads `<prefix>-<alphanum>` regex on a non-beads project** - it false-positives on a slug word: `feature/48647-lifecycle-test` makes the beads regex capture `lifecycle-test`, NOT the numeric id `48647`. Match using the ACTIVE tracker's id shape (`{LETS_TRACKER}` from LETS Config). When the branch shape is ambiguous, the `.task-<slug>` file (Step 1.5, authoritative) and the Step 2 search-and-confirm fallback are safer than a branch-name guess.
 
 ### Step 1.5: Task-State File (fills the gap when the branch name carries no id)
@@ -43,20 +45,53 @@ The `.task-<branch-slug>` file (written by `take-task`) records the CURRENT task
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 BRANCH=$(git branch --show-current); BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
 TASK_FILE="$LETS_PROJECT_ROOT/.lets/sessions/.task-${BRANCH_SLUG}"
-FILE_TASK=$(sed -n 's/^task: //p' "$TASK_FILE" 2>/dev/null | head -1)
-[ -n "$FILE_TASK" ] && printf 'task=%s on_merge_branch=%s\n' "$FILE_TASK" \
+CANDIDATE=$(sed -n 's/^task: //p' "$TASK_FILE" 2>/dev/null | head -1)
+[ -n "$CANDIDATE" ] && printf 'candidate=%s on_merge_branch=%s\n' "$CANDIDATE" \
   "$([ "$BRANCH" = "{LETS_MERGE_BRANCH}" ] && echo yes || echo no)"
 ```
 
-**`on_merge_branch=no`** - trust `task=` directly and stop here. The branch corroborates the file, and a just-closed id in a worktree is low-severity (the next claim overwrites it).
+This prints a CANDIDATE, not an answer - it is a value read off disk, and nothing may use it before **the id gate** below. `on_merge_branch` only decides whether the liveness probe runs.
 
-**`on_merge_branch=yes`** - the file alone cannot tell a live trunk claim from a stale `.task-main` left by a closed task or a main-mode session, so verify it:
+**`on_merge_branch=no`** - take this candidate to the gate and stop looking. The branch corroborates the file, and a just-closed id in a worktree is low-severity (the next claim overwrites it).
+
+**`on_merge_branch=yes`** - the file alone cannot tell a live trunk claim from a stale `.task-main` left by a closed task or a main-mode session, so verify it. Run the candidate through **the id gate FIRST**: this probe is itself a tracker verb, so a raw candidate here would cross the boundary before anything checked it - which is exactly the hole the gate exists to close, and the reason the gate is not merely a final step.
 
 ```lets-tracker
-show task=<FILE_TASK>   # returns {id,title,status,url}; read status
+show task=<TASK_ID from the gate>   # returns {id,title,status,url}; read status
 ```
 
 `status` is `in_progress` -> use the id. Any other neutral status -> the claim is stale; fall through to the branch-name parse. `show` unsupported (`LETS_TRACKER=none`) or failing -> trust the file and say in one line that liveness could not be checked.
+
+### The id gate (every candidate, exactly once, before any use)
+
+Steps 1, 1.5, the explicit-argument path and a confirmed Step 2 hit all produce a CANDIDATE. None of them returns it. Each hands it here, and this block is the only place that turns a candidate into an id:
+
+```bash
+CANDIDATE="{the candidate from whichever step produced it}"
+# One class, one place. A tracker verb resolves to a command the MODEL types - on beads a second
+# shell hop, `bd show <id>` - so an id crossing that boundary is an unquoted value in someone
+# else's shell. `.lets/` is shared by every worktree AND a tracked `.task-<slug>` file materialises
+# on checkout, so a candidate read off disk is third-party input, not our own writing.
+case "$CANDIDATE" in
+  "") echo "TASK_ID=none" ;;
+  -*)
+    # A leading hyphen passes the class below - hyphen is a legal id character - and then becomes
+    # an OPTION at the verb: `bd show --help` is not a lookup. Position matters, not just the
+    # alphabet, and no tracker starts an id with a dash.
+    echo "NOTE: candidate '${CANDIDATE}' starts with a hyphen - a tracker verb would read it as an option, not an id. Refusing it." >&2
+    echo "TASK_ID=none" ;;
+  *[!A-Za-z0-9._-]*)
+    echo "NOTE: candidate '${CANDIDATE}' is outside the id character class - refusing it. The state file was edited or planted." >&2
+    echo "TASK_ID=none" ;;
+  *) echo "TASK_ID=$CANDIDATE" ;;
+esac
+```
+
+**Two rules, not one:** the leading character and the alphabet. The class alone is not enough, because `-` is a legal id character everywhere except position one, where it stops being a value and becomes a flag.
+
+**The class is the tracker platform's contract on id shape**, not a beads detail: `[A-Za-z0-9._-]` covers beads (`lets-abc`, `lets-abc.1`) and a numeric-id tracker, and Step 1 is right that the id's *grammar* is adapter-specific while this is the outer bound every adapter must fit inside. An adapter whose ids need more must widen it here deliberately and say why in its `tracker-<name>.md`, because every character added is a character that reaches a shell the model types. Refusing is loud, so a too-narrow class shows up as a NOTE on every call rather than as silence.
+
+**Why a gate and not a rule.** This used to be a sentence inside the `branch=<ref>` bullet telling every other path, and every consumer, to sanitize what it received. A rule addressed to N sites is followed by N-1 of them, and the one that did not was this skill's own Step 1.5 - the site the rule named by name. A single block with N references is a function call; N copies of a rule is a convention. `TestDetectTaskIdGate` pins the shape, so a path that grows its own `TASK_ID=` echo fails the build rather than the next reader's review.
 
 **Precedence (full):** explicit task-id arg -> `.task-<slug>` `task:` (liveness-validated on the merge-branch via the neutral `show`) -> branch-name id -> a CONFIRMED `search` hit (never an unconfirmed one; skipped entirely when the caller passes `fallback=no` - see Optional arguments). On id-carrying branches `take-task` writes branch + file together so they agree; the file fills the id-less gaps (trunk / custom worktree / attach) and, in a multi-task worktree, reflects the current (switched) task the frozen branch name can't.
 
@@ -84,6 +119,8 @@ Then judge, and say why: "this branch looks like **{title}** (`{id}`) - the bran
 
 ### Explicit task-id argument (resolve-and-claim)
 
+An explicit argument is authoritative about WHICH task, never about the id's SHAPE - it is a candidate like any other and reaches the caller through **the id gate**.
+
 When the **calling command was invoked with an explicit `<task-id>` argument** (e.g. a session spawned into a fresh worktree with `/lets:plan-workflow <id>`, where the branch is `worktree-<name>` and carries no id): treat that id as **authoritative** - do NOT parse the branch, skip Steps 1-2. The caller then ensures the task is claimed: if the tracker's `show` reports `<id>` not `in_progress`, invoke `Skill(skill: "lets:take-task", args: "<id>")` (in a worktree `take-task` claims + saves the per-branch session-ref without creating a branch). This is what makes an id-accepting command spawn-able into a fresh worktree.
 
 **AUTO MODE carve-out (entry claim only).** This spawn-time claim runs the `set-status=in_progress` verb - a tracker state change AUTO MODE normally gates. But the claim that *starts* an autonomous spawned session is the authorized **entry action** and is exempt (an unattended session cannot ask, and the claim IS the entry). The exemption covers ONLY this entry claim - every later tracker state change (`close`, status flips, `bd dolt push` on beads) stays gated per AUTO MODE.
@@ -98,16 +135,18 @@ Passed as space-separated `key=value` via the `Skill` invocation's `args`. Both 
   LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
   SLUG=$(printf '%s' "<ref>" | tr '/' '-')
   case "$SLUG" in ""|*[!A-Za-z0-9._-]*) echo "UNSAFE REF - no task"; exit 0 ;; esac
-  sed -n 's/^task: //p' "$LETS_PROJECT_ROOT/.lets/sessions/.task-$SLUG" 2>/dev/null | head -1
+  printf 'candidate=%s\n' "$(sed -n 's/^task: //p' "$LETS_PROJECT_ROOT/.lets/sessions/.task-$SLUG" 2>/dev/null | head -1)"
   ```
 
-  **ANY id must clear that character class before it crosses a tracker verb**, whatever its origin - on beads the verb resolves to a `bd` command, i.e. a second shell hop, and the value is typed by the model rather than quoted by a shell. That covers the id parsed out of a ref NAME (Step 1), the `task:` value lifted out of the `.task-<slug>` file (Step 1.5) - which used to be consumed inside the same shell and now crosses the boundary - and the query terms Step 2 derives from a branch slug. `take-task` writes the file, so a clean file is an invariant maintained on the write side; do not rely on it on the read side.
+  The guard above is about the REF, which reaches a filesystem path - a different value and a different reason from the id gate. The id this block reads is a candidate like any other and goes to the gate; this path has no sanitizing of its own to remember.
 
 - **`fallback=no`** - skip Step 2 entirely and return None rather than a searched-and-confirmed id.
 
 **Why `fallback=no` exists.** The reason is no longer "the fallback returns a colleague's task" - it now asks before it answers - but that a confirmation is a QUESTION, and a question is unacceptable mid-fan-out, in a `--json` run, or on a read-only orient surface. It also keeps provenance unambiguous at the call site *by construction*: fallback off + an id returned = the id came from the state file or the ref name, never from the board.
 
 ### Step 3: Confirming a searched id
+
+A confirmed hit is a candidate too, and leaves through **the id gate** like the rest. Nothing here returns an id directly.
 
 Step 2 always ends in a confirmation - not only when the result was ambiguous. What the confirmation looks like depends on the caller:
 - **commit**: AskUserQuestion to pick task or "None"
@@ -120,9 +159,16 @@ Step 2 always ends in a confirmation - not only when the result was ambiguous. W
 
 ## Output
 
-Returns one of:
-- Task ID (string) - found active task
-- None - no task detected, caller decides how to handle
+ONE echoed line, produced by the id gate and by nothing else:
+
+```
+TASK_ID=<id>     # an active task was resolved
+TASK_ID=none     # no task detected - the caller decides how to handle it
+```
+
+**The guarantee.** Every id this skill returns has cleared `[A-Za-z0-9._-]`. A candidate that has not is refused, loudly, and returned as `none`. This is a property of the skill, not an obligation on its callers: a consumer that passes `TASK_ID` into a tracker verb needs no check of its own, and `take-task` keeping the state file clean on the write side is a courtesy the read side does not depend on.
+
+`none` is a real answer, not an error. It means "no task", and it means the same whether nothing was recorded or what was recorded could not be trusted - the stderr NOTE says which.
 
 ## Integration
 
