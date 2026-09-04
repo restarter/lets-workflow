@@ -24,7 +24,7 @@ and a rotating tip:
 │ ✦ Opus 4.8 (1M context) high · window 42% (424k/1000k) · 5h 58% (2h 10m) …    │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ ✓ lets-ds6bc Statusline 2.0 · 3 comments (2h) ← /lets:note                    │
-│ * Quick sanity check before committing? Run /lets:check (~30s, no agents).    │
+│ * Quick sanity check before committing? /lets:check reviews inline.           │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 

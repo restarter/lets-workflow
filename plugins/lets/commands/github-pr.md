@@ -256,7 +256,7 @@ Write initial state to `.lets/execution/pr-{number}/review.json` with Phase 1 fi
 
 Invoke `/lets:review <PR> --json`.
 
-- `--json`: saves structured findings to `.lets/reviews/{date}-PR-{number}.json` and skips GitHub posting (pr controls all posting)
+- `--json`: saves structured findings under `.lets/reviews/` (path from the `artifact-path` skill, kind `review-pr-{number}`; review reports the exact file) and skips GitHub posting (pr controls all posting)
 
 After review completes, read the JSON file.
 Copy findings array into state file.

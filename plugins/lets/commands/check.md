@@ -83,11 +83,9 @@ if [ -z "$SLUG" ]; then
 else
   # Latest plan for THIS slug - matches date-prefixed (YYYY-MM-DD-HHMM-<slug>.md) and legacy bare
   # <slug>.md. Slug-scoped, NOT global `ls -t`: .lets/plans is shared across worktrees via symlink.
-  PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
-  # Fallback: glob match by task-id (catches trunk-mode plans + naming drift, e.g. plan-workflow output)
-  if [ -z "$PLAN" ] && [ -n "{task-id}" ]; then
-    PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"{task-id}"*.md 2>/dev/null | head -1)
-  fi
+  # task-id first (artifact-path naming, lets-05c4s); branch slug = legacy fallback
+  [ -n "{task-id}" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"{task-id}"*.md 2>/dev/null | head -1)
+  [ -z "$PLAN" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
 fi
 ```
 
@@ -101,7 +99,9 @@ Read the plan and review with 5 lenses (same confidence filter):
 - **[Scope]** Is the plan proportional to the problem? Overengineered? Underspecified?
 - **[Clarity]** Can a developer follow this without guessing? Ambiguous steps?
 
-Output same format as code check, then:
+REMEDY QUALITY: for each reported issue, ask whether the proposed fix removes the cause or only makes this instance pass - and hold the plan's own remedies to the same standard, since a step that patches a symptom where it surfaces rather than at the component that owns the behavior is itself an issue. Prefer the smallest fix at the owning boundary; do not propose broad refactoring in a quick check.
+
+Output same format as code check, then print: Plan check done. I will not implement it - run `/lets:execute` when ready. A plan-check verdict (any verdict) is about the document; NEVER start implementing, fixes go into the plan file only. Then:
 
 ```
 ┌─ LETS ────────────────────────────────────┐
@@ -164,7 +164,7 @@ bitbucket: fetch the same via `bbb` - the PR object for metadata (draft absent -
 
 - **Skip if** the PR is closed or draft (inform user, exit).
 - **If the PR is large** (rough heuristic: >400 changed lines or >15 files), warn: "This PR is large - `/lets:review <PR>` (full agent review) is a better fit. Running a quick inline pass anyway on the diff." Then proceed.
-- The working tree is the **base**, not the PR. Judge changed code from the diff; do not trust the on-disk contents of changed files. `/lets:review <PR>` offers a branch switch when the surrounding code matters - `/lets:check` never switches branches (a ~30-second pass should not move your HEAD).
+- The working tree is the **base**, not the PR. Judge changed code from the diff; do not trust the on-disk contents of changed files. `/lets:review <PR>` offers a branch switch when the surrounding code matters - `/lets:check` never switches branches (an inline pass should not move your HEAD).
 - The PR diff (github `gh pr diff`, bitbucket `bbb pr diff`) is the "diff" fed to Step 3.
 
 ### File mode (`--file <path>`):
@@ -195,11 +195,11 @@ Mode-specific extras:
 
 Same source matters as much as same task. On a PR there is no spec unless `--spec` gave one, so a local resolution must never be reused for a PR run: the ids can coincide while the provenance does not, and a task description resolved from your own branch says nothing about someone else's change. A local resolution is reusable only by another local-mode run; a `--spec` value only for the same argument.
 
-`/lets:check` is the 30-second path, run repeatedly while writing code, so a tracker `show` per invocation is a network round-trip on a hot path - and the tracker may be remote (beads on a Dolt server, an MCP adapter), where the call can be slow or simply fail. A spec already in context is more reliable than a re-fetch, not merely cheaper.
+`/lets:check` is run repeatedly while writing code, so a tracker `show` per invocation is a network round-trip on a hot path - and the tracker may be remote (beads on a Dolt server, an MCP adapter), where the call can be slow or simply fail. Reuse is a RELIABILITY property, not a speed one: a spec already in context cannot fail, whereas a re-fetch can, and a failed re-fetch blanks the very spec the review is judged against.
 
 Re-resolve when the active task changes; also re-resolve when the user says the description changed - an edit made outside this conversation is not observable from here, so their word is the only signal. No question to the user, ever: `/lets:check` is invoked to run, not to be asked whether it should.
 
-**Task SPEC (local modes only - PR and `--file` are covered below):** `Skill(skill: "lets:detect-task", args: "fallback=no")` - the active task for the current branch, which is what `/lets:check` normally reviews. `fallback=no` keeps the searched fallback out of the spec path: it now asks before it answers, and `/lets:check` is the 30-second pass with no question to spare - a wrong spec is worse than none. Then:
+**Task SPEC (local modes only - PR and `--file` are covered below):** `Skill(skill: "lets:detect-task", args: "fallback=no")` - the active task for the current branch, which is what `/lets:check` normally reviews. `fallback=no` keeps the searched fallback out of the spec path: it now asks before it answers, and `/lets:check` never asks - a wrong spec is worse than none. Then:
 
 ```lets-tracker
 show task=<task-id>   # returns {id, title, status, url, description}
@@ -312,6 +312,10 @@ Ask yourself:
 - Can this be exploited?
 - Does this violate project rules?
 - Will the next developer be confused?
+
+### Remedy Quality
+
+REMEDY QUALITY: for each reported issue, ask whether the proposed fix removes the cause or only makes this instance pass. Prefer the smallest fix at the owning boundary - the component that canonically owns the behavior, which is not always where the symptom surfaced; a fix that compensates inside a consumer for a defect owned elsewhere masks it for every other consumer. Do not propose broad refactoring in a quick check: when the systemic correction is disproportionate, say so and name it.
 
 ### Severity Filter
 

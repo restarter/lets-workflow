@@ -647,3 +647,70 @@ func TestReviewNeverCreatesWorktree(t *testing.T) {
 		t.Errorf("commands/review.md: expected exactly 1 worktree prohibition, found %d", n)
 	}
 }
+
+// TestRemedyQualityReachesEveryReviewerPrompt pins the REMEDY QUALITY rule
+// STRUCTURALLY - which prompts carry it and which must not - never by matching
+// its prose. This file's header records why: sentence-level needles were tried
+// in two earlier revisions and went green on real regressions.
+//
+// The asymmetry is the point. Every prompt that can RECOMMEND a fix gets the
+// rule; the skeptic does not. A skeptic returns {real, confidence, reason} and
+// cannot set a tier or propose a remedy, so an instruction about how a fix
+// ought to be shaped can only come out as a judgement on the finding, which
+// decide() turns into a DROP.
+func TestRemedyQualityReachesEveryReviewerPrompt(t *testing.T) {
+	const marker = "REMEDY QUALITY"
+
+	reviewMd := readPlugin(t, filepath.Join("commands", "review.md"))
+	checkMd := readPlugin(t, filepath.Join("commands", "check.md"))
+	js := readPlugin(t, filepath.Join("skills", "review-workflow", "review.workflow.js"))
+
+	// Every region that must CARRY the rule.
+	for _, c := range []struct{ file, what, start, end string }{
+		{"review.md", "standard reviewer template",
+			"SYSTEMIC PATTERN CHECK:", "--- BEGIN SPEC"},
+		// --file drops the systemic block; it must say in the same breath that this one stays,
+		// or the adjacency of the two blocks invites dropping both.
+		{"review.md", "--file mode adjustments",
+			"### 4.2.1 File Mode Adjustments", "### 4.3 Select Agents"},
+		// Plan review fans out through THREE independent Task() literals. Prose outside a literal
+		// never reaches a subagent, so one insertion would leave two reviewers without the rule.
+		{"review.md", "plan review: architect",
+			"PLAN REVIEW MODE. Review this implementation plan for quality and completeness.", "PROJECT CONTEXT:"},
+		{"review.md", "plan review: pragmatist",
+			"PLAN REVIEW MODE. Review this implementation plan for feasibility and proportionality.", "PROJECT CONTEXT:"},
+		{"review.md", "plan review: domain expert",
+			"PLAN REVIEW MODE. Review this implementation plan from your domain expertise.", "PROJECT CONTEXT:"},
+		{"check.md", "code lenses", "### [Docs] Documentation Sync", "### Severity Filter"},
+		{"check.md", "plan lenses",
+			"Read the plan and review with 5 lenses", "Output same format as code check"},
+	} {
+		src := reviewMd
+		if c.file == "check.md" {
+			src = checkMd
+		}
+		if !strings.Contains(region(t, src, c.file+" "+c.what, c.start, c.end), marker) {
+			t.Errorf("%s: %s does not carry %s - that reviewer cannot be asked for a root-cause fix", c.file, c.what, marker)
+		}
+	}
+
+	// The workflow's own copy: declared UNCONDITIONALLY (unlike systemicBlock it does not depend on
+	// a diff baseline, so --file keeps it), and wired into the reviewer but not the verifier.
+	decl := "const remedyQualityBlock = `"
+	if !strings.Contains(js, decl) {
+		t.Errorf("review.workflow.js: no unconditional %q - a ternary here would let --file or a flag drop the rule", decl)
+	}
+	if !strings.Contains(funcBody(t, js, "function reviewPrompt"), "${remedyQualityBlock}") {
+		t.Error("review.workflow.js: reviewPrompt does not interpolate ${remedyQualityBlock} - the --workflow path reviews without the rule")
+	}
+	skeptic := funcBody(t, js, "function skepticPrompt")
+	for _, leak := range []string{"remedyQualityBlock", marker} {
+		if strings.Contains(skeptic, leak) {
+			t.Errorf("review.workflow.js: skepticPrompt sees %q - its only lever is `real`, so a remedy instruction becomes a silent DROP", leak)
+		}
+	}
+	if strings.Contains(region(t, reviewMd, "review.md skeptic template",
+		"MODE: review (adversarial verification)", "**Asymmetric drop rule"), marker) {
+		t.Errorf("review.md: the skeptic template carries %s - see above, it can only express it as real=false", marker)
+	}
+}

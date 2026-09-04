@@ -156,7 +156,7 @@ The skill gathers session + git state, ALWAYS writes the snapshot to a `.lets/se
 ```
 ## Pre-Compact Snapshot
 
-Snapshot -> .lets/sessions/{dated}-precompact-{branch}.md
+Snapshot -> .lets/sessions/{date}-{HHMM}-{task-id}-snapshot-precompact.md
 Task pointer -> {task-id}  (only if a task is unambiguously active; else "none - file only")
 Branch: {branch}
 

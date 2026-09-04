@@ -1,6 +1,6 @@
 ---
 name: lets-rules
-version: 0.8.0
+version: 0.8.1
 ---
 
 <!-- DO NOT EDIT - managed by lets init / lets install. To add custom rules, create a sibling *.md file in this directory (e.g. .claude/rules/team-conventions.md). Files prefixed `lets-` are owned by the LETS plugin and overwritten on update. -->
@@ -96,6 +96,8 @@ AskUserQuestion(
 **One rule above all: transparency. User sees everything, decides everything.**
 
 - Never commit or push without explicit user approval
+- **NEVER start writing code without an explicit user approval to write code.** Presenting a plan, a diff proposal, or an analysis and getting "ok" / "good" / "+" back is approval of THAT TEXT, not of implementation. When code would follow such a text approval, ask in words "Start implementing?" first. A direct instruction to change a specific thing IS that approval; a command with its own code gate (`/lets:execute` after its plan-mode approval, `/lets:team run`, `/lets:review-round`'s final edit pass) needs no extra question.
+- **A plan is NEVER executed by itself.** After `/lets:plan` (any mode: full, `--fast`, `/lets:plan-workflow`) and after every plan-review round (`/lets:review --plan`, `/lets:check --plan`, APPROVED included) the ONLY way into code is the user typing `/lets:execute`. Any reaction to the plan - "ok", "approved", "looks good", a question, a requested edit - is a reaction to the DOCUMENT. Reply "Plan accepted - run `/lets:execute` when ready." and STOP. Plan files carry a `THIS PLAN IS NOT A GO` banner for this reason - obey it wherever you read one.
 - Never silently switch approaches when something fails - stop, explain, present options, wait
 - Don't touch code without explicit approval: no deleting, commenting out, or "simplifying" existing code user didn't ask about
 
@@ -157,18 +159,20 @@ AUTO MODE (autonomous execution: `/loop`, `/lets:execute --auto`, `/lets:team` p
 - Same tool / command fails 3+ times in a row → stop iterating, find root cause.
 - Detected fabrication (referring to nonexistent files / tasks / commits) → stop, verify with read/grep.
 - Scope drift outside the claimed task → ask whether to expand scope or create follow-up.
+- Mid-execution deviation from the approved plan → STOP before the next edit. A deviation is anything that changes the plan's APPROACH, not a line: a dependency/tool behaving differently than the plan assumed (other API, parameters, version), a step infeasible as written, a file/module the plan never names becoming necessary, a task's Verify not matching its Expected. A silently adapted plan is a new, unapproved plan. Surface expected-vs-actual and the options; under `--auto` write the `blocked` marker and notify. Cosmetic adaptation (a renamed variable, a moved line) is not a deviation.
 - Autonomous run (`--auto`) on `$LETS_MERGE_BRANCH` → REFUSE + halt. `--auto` never auto-enables trunk-mode: editing the merge-branch is a deliberate human opt-in (the take-task picker), not something an unattended session may self-authorize. Surface "needs a feature branch" and stop.
 
 **Soft stops** (pause and ask):
 - Decision point with 2+ viable approaches → use `AskUserQuestion`, don't pick autonomously.
 - New large scope proposed mid-task → pause: suggest finishing or parking the current task first (branch-focus hygiene — not session length).
-- Implementation about to start without an approved plan → present the plan, wait. Don't begin editing.
+- Implementation about to start without an approved plan → present the plan, wait. Don't begin editing. An approved PLAN is still not approved CODE: after `/lets:plan` the run enters code only through `/lets:execute`'s own approval.
 
 **Plan-visibility gate** (applies even in AUTO MODE):
 - Before editing code/files the user has not already seen and approved as a concrete plan — present the plan first: per task/file, what changes, in what order. Wait for "go". AUTO MODE speeds up execution of an *approved* plan; it never authorizes starting unseen work.
 - "Execute immediately" = run the next step of an already-approved plan without re-confirming each step. It does NOT mean "skip showing the plan".
 - "Let's think about how to do X" / "подумаємо як" / "проаналізуй" / "how to do X?" = request for a plan or analysis, NOT a green light to edit. Produce the plan/analysis, stop, wait.
 - Multi-task batches: show the full batch breakdown (per-task approach + files touched) before the first edit. One approval covers the whole batch — no need to re-ask per task — but the user must see it before any code changes.
+- Plan approval ≠ execution approval. A saved plan, a plan-review verdict (even APPROVED), or "ok" on either never starts implementation - `/lets:execute` does, and inside it the plan-mode approval is the gate. This holds after `/clear`, `/compact`, and in a new session that re-reads the plan.
 
 **Escape hatch:**
 - User interrupt = stop the current action, ack the interruption, await direction. Don't resume without explicit re-approval.
@@ -309,7 +313,7 @@ The skill walks the user through an `AskUserQuestion` for each kind — follow t
 - **Study codebase first.** Read existing patterns, tests, and docs before non-trivial work. Match what's there.
 - **Think in the stack's idioms.** Naming conventions, error handling, testing style — let the project's existing code be the guide.
 - **Reuse before reinventing.** If a helper / abstraction already exists, use it. Don't build a parallel version.
-- **Smallest change that solves the problem.** Avoid incidental refactoring "while we're here". Surgical changes are easier to review and easier to revert.
+- **Fix the cause at the owning boundary.** Before patching a symptom, identify the root cause and the component that canonically owns the behavior. Prefer the smallest coherent change at that boundary that prevents recurrence - the smallest *diff* at the wrong boundary is a workaround, and one that compensates inside a consumer for a defect owned elsewhere is worse than no fix, because it masks the defect for every other consumer. Avoid incidental refactoring "while we're here", and do not widen a local issue into speculative refactoring. Surgical changes are easier to review and easier to revert.
 - **Plan for breaking changes.** Data-shape changes, contract changes — propose migrations or back-compat path, don't break silently.
 - **Present trade-offs, not just choices.** When proposing approaches, name the alternatives and why you picked this one.
 
@@ -333,15 +337,15 @@ PR review:  /lets:github-pr <PR> -> discuss -> post -> /lets:github-pr --follow-
 PR respond: /lets:github-pr --respond <PR> -> triage -> fix -> reply
 ```
 
-If a plan exists from `/lets:plan`, use `/lets:execute` to implement it. Execute enters native plan mode; use `/lets:commit` at natural commit points.
+If a plan exists from `/lets:plan`, the user runs `/lets:execute` to implement it - nothing else starts implementation, and the model never starts it on its own. Execute enters native plan mode (its approval is the code-write gate); use `/lets:commit` at natural commit points.
 
 Two separate lifecycles:
 - **Session:** `/lets:start` ... `/lets:end` (one conversation)
 - **Task:** picked at start ... `/lets:done` (may span multiple sessions)
 
 **Review options:**
-- `/lets:check` - quick inline sanity check (~30 sec); same target flags as `/lets:review` but no subagents - before any commit, or a fast first pass on a PR
-- `/lets:review` - full deep review (~2-3 min), works locally OR on GitHub PR
+- `/lets:check` - the orchestrator reviews inline, no subagents; same target flags as `/lets:review` - before any commit, or a fast first pass on a PR
+- `/lets:review` - selected expert subagents review, then an adversarial verify pass; works locally OR on GitHub PR
 
 **When to use which:**
 - Small change -> `/lets:check` -> commit
@@ -447,10 +451,11 @@ Every response ends with exactly ONE footer - never mix two. Pick the type by wh
 | `/lets:end` | Session | End of session - settlement pass (commit / push / progress / snapshot, auto-skips when tidy); `--pre-compact` skips settlement and only writes the shared snapshot, keeping the session going |
 | `/lets:done` | Task | Task is complete |
 | `/lets:commit` | Code | Ready to commit (also auto-triggers on "commit", "закоміть") |
-| `/lets:check` | Code | Quick sanity check (~30s) - inline 6-lens; same targets as `/lets:review` (local/staged/last-commit/branch/PR/`--file`/`--plan`/`--json`), no subagents |
-| `/lets:review` | Code | Full deep review (~2-3 min); `<PR>` offers a `gh pr checkout` so agents read the real tree - it stashes on a dirty tree and restores the branch at the end |
+| `/lets:check` | Code | Inline 6-lens reviewed by the orchestrator alone, no subagents; same targets as `/lets:review` (local/staged/last-commit/branch/PR/`--file`/`--plan`/`--json`) |
+| `/lets:review` | Code | Expert subagents review, then an adversarial verify pass; `<PR>` offers a `gh pr checkout` so agents read the real tree - it stashes on a dirty tree and restores the branch at the end |
 | `/lets:github-pr` | Code | GitHub PR review lifecycle (review, respond, follow-up, approve) |
 | `/lets:review-round` | Code | Work through a RECEIVED review round - triage N comments, decisions->task, artifact FROZEN, one final edit-pass (inverse of `/lets:review`) |
+| `/lets:review-handoff` | Code | Hand the current state OUT - one self-contained brief another agent (fresh session, Codex, external reviewer) can act on with no context; same target selectors as `/lets:review`, plus handoff-only `--commits` / `--range` |
 | `/lets:opinion` | Expert | Technical decision (dynamic agent count; `--workflow` = off-context fan-out + adversarial challenge) |
 | `/lets:ask` | Expert | Quick expert consultation (1 agent) |
 | `/lets:research` | Expert | Web-sourced CITED answer to an external/technical question; cross-check pass flags single-source/contradicted/stale claims (`--workflow` = off-context; `--project` = repo-grounded) |

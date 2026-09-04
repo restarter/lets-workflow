@@ -136,6 +136,17 @@ const systemicBlock = systemicCheck
   ? `SYSTEMIC PATTERN CHECK:\nFor each finding, grep the codebase to check if the same pattern exists elsewhere. If it appears in 2+ other files, set systemic=true and systemic_count, frame it as project-wide tech debt, and downgrade the tier by one level.\n\n`
   : ''
 
+// KEEP IN SYNC with review.md Step 5 (REMEDY QUALITY). UNCONDITIONAL by design: unlike the systemic
+// check it does not depend on a diff baseline, so `--file` mode drops systemicBlock and keeps this
+// one - review.md's "4.2.1 File Mode Adjustments" says so in the same words. reviewspec_test.go pins
+// that this block EXISTS, is interpolated by reviewPrompt, and is NOT interpolated by skepticPrompt;
+// the WORDING is kept in sync by discipline, for the reason this file's specBlock comment gives.
+// There is deliberately NO skeptic counterpart. A skeptic returns {real, confidence, reason} and
+// cannot set a tier or propose a fix, so its only lever is `real` - and an instruction about how a
+// fix ought to be shaped comes out as a judgement on the finding, which decide() turns into a DROP.
+// Reviewers recommend remedies; a verifier only answers whether the finding is real.
+const remedyQualityBlock = `REMEDY QUALITY:\nFor every BLOCKER or SUGGESTION, distinguish the observed symptom from its root cause. Recommend the smallest coherent fix at the correct ownership boundary. A local workaround is acceptable only when the systemic correction is disproportionate; say why.\n\n`
+
 // KEEP IN SYNC with review.md Step 5 (BEGIN SPEC / SCOPE vs SPEC). reviewspec_test.go pins that
 // this block EXISTS and is interpolated (TestReviewSpecBlockExists, TestWorkflowPromptsAreWired) -
 // the WORDING is kept in sync by discipline, because sentence-level needles went green on real
@@ -201,7 +212,7 @@ PROJECT_ROOT: ${projectRoot}. Do NOT read or search files outside this directory
 
 MODE: review
 
-${systemicBlock}${specBlock}${prContextBlock}${treeBlock}CLAUDE.MD RULES:
+${systemicBlock}${remedyQualityBlock}${specBlock}${prContextBlock}${treeBlock}CLAUDE.MD RULES:
 ${claudeMd}
 
 CHANGED FILES:
