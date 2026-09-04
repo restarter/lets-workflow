@@ -33,6 +33,8 @@ The `<task-id>` shape is TRACKER-DEPENDENT (the id sits immediately after `featu
 - a numeric-id tracker: a pure-numeric id - e.g. `48647`, so `feature/48647-<slug>`
 - other adapters: the tracker's own id shape
 
+Whatever this parse yields is a CANDIDATE, not an answer: it goes to **the id gate** below, like every other path. On the `branch=<ref>` variant the name being parsed is a pull request's head, which its author chose.
+
 **Do NOT apply the beads `<prefix>-<alphanum>` regex on a non-beads project** - it false-positives on a slug word: `feature/48647-lifecycle-test` makes the beads regex capture `lifecycle-test`, NOT the numeric id `48647`. Match using the ACTIVE tracker's id shape (`{LETS_TRACKER}` from LETS Config). When the branch shape is ambiguous, the `.task-<slug>` file (Step 1.5, authoritative) and the Step 2 search-and-confirm fallback are safer than a branch-name guess.
 
 ### Step 1.5: Task-State File (fills the gap when the branch name carries no id)
@@ -79,6 +81,8 @@ case "$CANDIDATE" in
 esac
 ```
 
+**The class is the tracker platform's contract on id shape**, not a beads detail: `[A-Za-z0-9._-]` covers beads (`lets-abc`, `lets-abc.1`) and a numeric-id tracker, and Step 1 is right that the id's *grammar* is adapter-specific while this is the outer bound every adapter must fit inside. An adapter whose ids need more must widen it here deliberately and say why in its `tracker-<name>.md`, because every character added is a character that reaches a shell the model types. Refusing is loud, so a too-narrow class shows up as a NOTE on every call rather than as silence.
+
 **Why a gate and not a rule.** This used to be a sentence inside the `branch=<ref>` bullet telling every other path, and every consumer, to sanitize what it received. A rule addressed to N sites is followed by N-1 of them, and the one that did not was this skill's own Step 1.5 - the site the rule named by name. A single block with N references is a function call; N copies of a rule is a convention. `TestDetectTaskIdGate` pins the shape, so a path that grows its own `TASK_ID=` echo fails the build rather than the next reader's review.
 
 **Precedence (full):** explicit task-id arg -> `.task-<slug>` `task:` (liveness-validated on the merge-branch via the neutral `show`) -> branch-name id -> a CONFIRMED `search` hit (never an unconfirmed one; skipped entirely when the caller passes `fallback=no` - see Optional arguments). On id-carrying branches `take-task` writes branch + file together so they agree; the file fills the id-less gaps (trunk / custom worktree / attach) and, in a multi-task worktree, reflects the current (switched) task the frozen branch name can't.
@@ -107,6 +111,8 @@ Then judge, and say why: "this branch looks like **{title}** (`{id}`) - the bran
 
 ### Explicit task-id argument (resolve-and-claim)
 
+An explicit argument is authoritative about WHICH task, never about the id's SHAPE - it is a candidate like any other and reaches the caller through **the id gate**.
+
 When the **calling command was invoked with an explicit `<task-id>` argument** (e.g. a session spawned into a fresh worktree with `/lets:plan-workflow <id>`, where the branch is `worktree-<name>` and carries no id): treat that id as **authoritative** - do NOT parse the branch, skip Steps 1-2. The caller then ensures the task is claimed: if the tracker's `show` reports `<id>` not `in_progress`, invoke `Skill(skill: "lets:take-task", args: "<id>")` (in a worktree `take-task` claims + saves the per-branch session-ref without creating a branch). This is what makes an id-accepting command spawn-able into a fresh worktree.
 
 **AUTO MODE carve-out (entry claim only).** This spawn-time claim runs the `set-status=in_progress` verb - a tracker state change AUTO MODE normally gates. But the claim that *starts* an autonomous spawned session is the authorized **entry action** and is exempt (an unattended session cannot ask, and the claim IS the entry). The exemption covers ONLY this entry claim - every later tracker state change (`close`, status flips, `bd dolt push` on beads) stays gated per AUTO MODE.
@@ -131,6 +137,8 @@ Passed as space-separated `key=value` via the `Skill` invocation's `args`. Both 
 **Why `fallback=no` exists.** The reason is no longer "the fallback returns a colleague's task" - it now asks before it answers - but that a confirmation is a QUESTION, and a question is unacceptable mid-fan-out, in a `--json` run, or on a read-only orient surface. It also keeps provenance unambiguous at the call site *by construction*: fallback off + an id returned = the id came from the state file or the ref name, never from the board.
 
 ### Step 3: Confirming a searched id
+
+A confirmed hit is a candidate too, and leaves through **the id gate** like the rest. Nothing here returns an id directly.
 
 Step 2 always ends in a confirmation - not only when the result was ambiguous. What the confirmation looks like depends on the caller:
 - **commit**: AskUserQuestion to pick task or "None"

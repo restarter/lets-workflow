@@ -3,6 +3,7 @@ package initcmd
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -23,9 +24,16 @@ import (
 // convention.
 const (
 	detectTaskSkill = "skills/detect-task/SKILL.md"
-	idGateEmit      = `echo "TASK_ID=`
 	idGateClass     = `*[!A-Za-z0-9._-]*`
 )
+
+// idEmit matches a line that PRODUCES the id, whatever the verb or quoting:
+// `echo "TASK_ID=x"`, `echo TASK_ID=$x`, `printf 'TASK_ID=%s\n' "$x"`. Keying on
+// one spelling would let a second exit pass by being written differently, which
+// defeats the point - the test exists so a new exit fails the build, not so the
+// currently-written exit keeps passing. A reference like `task=<TASK_ID from the
+// gate>` does not match: there is no `=` directly after the name.
+var idEmit = regexp.MustCompile(`(?:echo|printf)[^\n]*TASK_ID=`)
 
 // fenceBodies returns the body of every fenced block in src, whatever the tag.
 // Tag-agnostic on purpose: an emit hidden in a ```sh or untagged fence would
@@ -62,7 +70,7 @@ func TestDetectTaskIdGate(t *testing.T) {
 
 	var emitters []string
 	for _, body := range fenceBodies(string(raw)) {
-		if strings.Contains(body, idGateEmit) {
+		if idEmit.MatchString(body) {
 			emitters = append(emitters, body)
 		}
 	}
@@ -71,7 +79,7 @@ func TestDetectTaskIdGate(t *testing.T) {
 		t.Fatalf("detect-task must have exactly ONE block that emits an id; found %d.\n"+
 			"A second exit is a second answer: it is how Step 1.5 came to return an unvalidated\n"+
 			"id while a rule three sections away said it must not. Route the new path through\n"+
-			"the id gate instead of giving it its own %s.", len(emitters), idGateEmit)
+			"the id gate instead of giving it its own emit.", len(emitters))
 	}
 
 	if !strings.Contains(emitters[0], idGateClass) {
@@ -102,7 +110,7 @@ func TestDetectTaskIsSoleIdSource(t *testing.T) {
 			return readErr
 		}
 		for _, body := range fenceBodies(string(raw)) {
-			if strings.Contains(body, idGateEmit) {
+			if idEmit.MatchString(body) {
 				t.Errorf("%s emits an id: callers READ detect-task's TASK_ID, they do not produce one.\n"+
 					"Producing it elsewhere reintroduces an unvalidated source and voids the guarantee\n"+
 					"detect-task's Output makes on behalf of every consumer.", filepath.ToSlash(rel))
