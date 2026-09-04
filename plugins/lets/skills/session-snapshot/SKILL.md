@@ -1,12 +1,12 @@
 ---
 name: session-snapshot
-description: Internal skill for commands. Write a recovery-grade session snapshot (file-primary) for /lets:end, and for the --session / --pre-compact flags of /lets:end and /lets:note. Always writes a .lets/sessions/ file; adds a one-line task pointer only when a task is unambiguously active. Do not trigger on user conversation - only when those commands need the snapshot.
+description: Internal skill for commands. Write a recovery-grade session snapshot (file-primary) for /lets:end and for the --session snapshot-only flag of /lets:end and /lets:note. Always writes a .lets/sessions/ file; adds a one-line task pointer only when a task is unambiguously active. Do not trigger on user conversation - only when those commands need the snapshot.
 user-invocable: false
 ---
 
 # Session Snapshot
 
-Shared snapshot primitive for `/lets:end` (settlement + snapshot) and for the snapshot-only flags `--session` and `--pre-compact` on both `/lets:end` and `/lets:note`. **Single source of truth** - every caller delegates here so the template and file/pointer behavior never drift.
+Shared snapshot primitive for `/lets:end` (settlement + snapshot) and for the `--session` snapshot-only flag on both `/lets:end` and `/lets:note`. **Single source of truth** - every caller delegates here so the template and file/pointer behavior never drift.
 
 Goal: ONE recovery-grade `## RESUME` snapshot, **file-primary** - it ALWAYS lands in a `.lets/sessions/` file (the single trail `/lets:start` reads), regardless of task state (feature / trunk / --main / no-task). The active task gets only a ONE-LINE pointer to that file, and only when a task is unambiguously active (via detect-task, NEVER a `list-by-status | head -1` guess).
 
@@ -16,7 +16,7 @@ Goal: ONE recovery-grade `## RESUME` snapshot, **file-primary** - it ALWAYS land
 
 Passed via the `Skill` invocation's `args` string as space-separated `key=value` pairs (e.g. `args: "kind=end pointer=off task-id=lets-abc range=session: X..HEAD (3 commits)"`). Put `range=` / `task-id=` LAST when the value contains spaces - each consumes the rest of the string. Any omitted key falls to its default.
 
-- `kind` = `precompact` (default) | `session` | `end` - selects the `artifact-path` kind and the `### Compaction` line. `precompact` -> `snapshot-precompact`; `session` and `end` BOTH -> `snapshot`, because a session record and a session-end record are the same artifact written at different moments, and a fourth filename shape would buy nothing. Step 3 owns the filename, never build it here.
+- `kind` = `session` (default) | `end` - selects the `### Record` line ONLY; both resolve to the same `artifact-path` kind (`snapshot`), because a mid-session record and a session-end record are the same artifact written at different moments. There is no `precompact` kind: a snapshot taken before a `/compact` is just a mid-session one, and naming the caller's next intention in a permanent file is what made the old flag dishonest. Step 3 owns the filename, never build it here.
 - `pointer` = `off` (default) | `auto` - whether the skill writes the standalone one-line task pointer. `off` is the SAFE default (a caller that forgets never double-writes a task comment); a caller that wants the skill to write the pointer passes `auto` explicitly (all four snapshot-only callers do). `/lets:end` default passes `off` when it folds the pointer into its own progress comment, `auto` otherwise.
 - `range` (optional) - a RANGE_DESC string (e.g. `session: <ref>..HEAD (N commits)`). A caller that passes one WINS - `/lets:end`'s default flow does, because it already read the boundary to gate its own offers. When it is absent, Step 2 resolves it through `session-boundary` rather than omitting the block, for EVERY kind. A pre-compaction snapshot is read back by the same consumer as any other, `/lets:start`, for the same purpose - where the work began - so the snapshot written specifically to survive a lossy summarization is the last one that should be missing its range (lets-yprsv).
 - `task-id` (optional) - pre-resolved active task from the caller's own detect-task.
@@ -48,9 +48,9 @@ If `range` was NOT passed, invoke `Skill(skill: "lets:session-boundary")` and us
 
 ## Step 3: Write the snapshot FILE (ALWAYS)
 
-Resolve the path via `Skill(skill: "lets:artifact-path", args: "kind=snapshot ext=md")` for `kind=end` AND `kind=session`, or `kind=snapshot-precompact` for `kind=precompact`; pass `task=<id>` when the caller already resolved one. The echoed `ARTIFACT_FILE` is `$SNAP_FILE` and its basename is `$SNAP_BASENAME` - reuse both VERBATIM in Step 4 + the Return, never recompute (a second `date` drifts the pointer off the file actually written). Shape: `.lets/sessions/{date}-{HHMM}-{task-id|branch-slug-6hex}-snapshot[-precompact][-vN].md` - task-scoped, `-vN` on collision, so parallel worktrees sharing `.lets/` never overwrite each other (lets-05c4s).
+Resolve the path via `Skill(skill: "lets:artifact-path", args: "kind=snapshot ext=md")` for both kinds; pass `task=<id>` when the caller already resolved one. The echoed `ARTIFACT_FILE` is `$SNAP_FILE` and its basename is `$SNAP_BASENAME` - reuse both VERBATIM in Step 4 + the Return, never recompute (a second `date` drifts the pointer off the file actually written). Shape: `.lets/sessions/{date}-{HHMM}-{task-id|branch-slug-6hex}-snapshot[-vN].md` - task-scoped, `-vN` on collision, so parallel worktrees sharing `.lets/` never overwrite each other (lets-05c4s).
 
-Write `$SNAP_FILE` (the echoed path) via the Write tool with the template below, substituting the bash-captured `$SID` / `$TRANSCRIPT_PATH` from Step 2 - and reuse `$SNAP_BASENAME` verbatim in Step 4 + the Return, never recomputing the minute-precise timestamp. Use ONLY that single bash session-id channel (`$CLAUDE_CODE_SESSION_ID`, captured as `$SID`) - do NOT use the command-load-time template channel (the `CLAUDE_SESSION_ID` template variable in `${...}` form), which is fragile inside a multiline Write arg (lets-bdkvd QA #13) and would itself be substituted here if written literally. English; one continuous line per paragraph - no hard wrap. For any section with nothing to record, write a single `- (none)` stub, never a blank block - EXCEPT `### Range`, which is OMITTED ENTIRELY (not stubbed) when no RANGE_DESC was passed or resolved: when one exists, insert a `### Range` block (`- {RANGE_DESC}`) between `### Remaining + NEXT STEP` and `### Compaction`. So the literal template below has no Range section. If a plan file exists for the task and `/lets:execute` has not approved implementation in this session, the `NEXT:` line MUST be `/lets:execute <plan or task>` - never "implement Task N" / "continue with the code"; a resumed session re-reads the plan, whose banner says the same.
+Write `$SNAP_FILE` (the echoed path) via the Write tool with the template below, substituting the bash-captured `$SID` / `$TRANSCRIPT_PATH` from Step 2 - and reuse `$SNAP_BASENAME` verbatim in Step 4 + the Return, never recomputing the minute-precise timestamp. Use ONLY that single bash session-id channel (`$CLAUDE_CODE_SESSION_ID`, captured as `$SID`) - do NOT use the command-load-time template channel (the `CLAUDE_SESSION_ID` template variable in `${...}` form), which is fragile inside a multiline Write arg (lets-bdkvd QA #13) and would itself be substituted here if written literally. English; one continuous line per paragraph - no hard wrap. For any section with nothing to record, write a single `- (none)` stub, never a blank block - EXCEPT `### Range`, which is OMITTED ENTIRELY (not stubbed) when no RANGE_DESC was passed or resolved: when one exists, insert a `### Range` block (`- {RANGE_DESC}`) between `### Remaining + NEXT STEP` and `### Record`. So the literal template below has no Range section. If a plan file exists for the task and `/lets:execute` has not approved implementation in this session, the `NEXT:` line MUST be `/lets:execute <plan or task>` - never "implement Task N" / "continue with the code"; a resumed session re-reads the plan, whose banner says the same.
 
     ## RESUME {YYYY-MM-DD HH:MM} - {short label}
 
@@ -73,9 +73,8 @@ Write `$SNAP_FILE` (the echoed path) via the Write tool with the template below,
     - {open items}
     - NEXT: {the single concrete next action + how to resume it; with an unexecuted plan this is `/lets:execute`, never "implement Task N"}
 
-    ### Compaction
-    - {precompact: snapshot before /compact; resume via /lets:start / --continue, which reads this file}
-      {session: session record written on request; the session continued past this point}
+    ### Record
+    - {session: snapshot written mid-session; the session continued past this point - resume via /lets:start or --continue, which read this file}
       {end: session-end snapshot}
 
 ## Step 4: One-line task pointer (conditional)

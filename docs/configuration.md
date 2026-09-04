@@ -61,7 +61,7 @@ Everything LETS generates lives under `.lets/` (gitignored):
 ```
 .lets/.env              Project settings (the keys above)
 .lets/.env.example      Reference defaults (regenerated each `lets init`)
-.lets/sessions/         Session snapshots ({date}-{HHMM}-{task-id}-snapshot[-precompact].md), start references, and PR-review restore state
+.lets/sessions/         Session snapshots ({date}-{HHMM}-{task-id}-snapshot.md), start references, and PR-review restore state
 .lets/reviews/          Saved review reports ({date}-{HHMM}-{task-id}-review-{local|branch|pr-N|plan}.md)
 .lets/plans/            Implementation plans from /lets:plan ({date}-{HHMM}-{task-id}-plan.md)
 .lets/execution/        PR review state and team records
