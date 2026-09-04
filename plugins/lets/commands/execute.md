@@ -132,14 +132,11 @@ echo "Plan: ${PLAN:-(none found)}"
 show task=<task-id>
 ```
 
+Resolve the session boundary through the shared reader - `Skill(skill: "lets:session-boundary")` - and read its echoed `SESSION_BOUNDARY` / `SESSION_RANGE_DESC`. Do NOT read the `session:` line here: this used to be a second, unvalidated copy of that read (no shape guard, no ancestor check, no floors), reporting an unqualified count of exactly the kind lets-370mx was filed about. Report the range with its qualifier, never a bare number.
+
 ```bash
-# Show commits since session start
-BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
-START_REF=$(sed -n 's/^session: //p' "$LETS_PROJECT_ROOT/.lets/sessions/.task-${BRANCH_SLUG}" 2>/dev/null | head -1 | awk '{print $1}')
-[ -z "$START_REF" ] && START_REF=$(cat "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}" 2>/dev/null)  # back-compat: legacy session ref
-if [ -n "$START_REF" ]; then
-  git log --oneline ${START_REF}..HEAD
-fi
+# {SESSION_BOUNDARY} is the ref the skill echoed; `none` means it resolved no boundary.
+git log --oneline {SESSION_BOUNDARY}..HEAD
 ```
 
 ```

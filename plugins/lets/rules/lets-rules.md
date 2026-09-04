@@ -467,7 +467,7 @@ Every response ends with exactly ONE footer - never mix two. Pick the type by wh
 | `/lets:worktree` | Utility | Create/manage interactive worktrees for parallel work |
 | `/lets:statusline` | Utility | Manage & persist statusline appearance - light/dark, compact, hidden rows (writes personal `.claude/settings.local.json`) |
 | `/lets:team` | Utility | Parallel implementation with Agent Teams (run, status, stop) |
-| `/lets:note` | Utility | Add note to active task (`--session` = resume snapshot on request, `--pre-compact` = the same snapshot branded for a following /compact) |
+| `/lets:note` | Utility | Add note to active task (`--session`, alias `--snapshot` = resume snapshot on request, `--pre-compact` = the same snapshot branded for a following /compact) |
 | `/lets:init`    | Setup | Per-project initialization. Re-run for self-heal (drift fix) or to change config; offers the user-scope global-rules install (`lets init --user`) when the plugin is user-scoped |
 | `/lets:update`  | Setup | Sync project with the current release - `.lets/.env` + rules self-heal, plus version status for the `lets` binary and the plugin, plus the user-level global rules when installed |
 
