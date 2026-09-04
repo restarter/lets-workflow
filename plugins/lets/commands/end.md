@@ -29,7 +29,7 @@ Read all state ONCE, compute which settlements are actionable, prompt nothing he
 
 First find the active task: use the **detect-task** skill - `Skill(skill: "lets:detect-task")`. (No task -> S2/S3 below auto-skip; main-mode `/lets:end` is a normal, mostly-silent settle.)
 
-Then one bash block (REUSE dsdmp's hardened `session:` reader verbatim - the staleness NOTE, the `.session-start-ref` back-compat back-fill, and the hex guard are load-bearing; do not re-derive):
+Then one bash block. The `session:` reader is dsdmp's, hardened further (lets-370mx): a recorded SHA is READ, then VALIDATED, and every fallback says so out loud. Do not re-derive it, and do not restore the NON-slugged `.session-start-ref` - one global file answering a per-branch question let any branch adopt another branch's months-old boundary and report it as fact (`done.md` refuses the same file for the same reason).
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
@@ -37,34 +37,70 @@ BRANCH=$(git branch --show-current); BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
 
 git status --short   # DIRTY if non-empty (S1)
 
-# --- session: boundary (dsdmp canonical reader) ---
+# --- boundary: READ (session: line, then the legacy SLUGGED ref - never a global one) ---
 TASK_FILE="$LETS_PROJECT_ROOT/.lets/sessions/.task-${BRANCH_SLUG}"
 SESSION_LINE=$(sed -n 's/^session: //p' "$TASK_FILE" 2>/dev/null | head -1)
 START_REF=$(echo "$SESSION_LINE" | awk '{print $1}')
 STORED_SID=$(echo "$SESSION_LINE" | awk '{print $2}')
-# Session-id staleness: a sid different from the current session means no /lets:start ran this
-# session (no take-task / hook refresh), so the boundary is from a PRIOR session. Degrade loudly.
-if [ -n "$STORED_SID" ] && [ "$STORED_SID" != "$CLAUDE_CODE_SESSION_ID" ]; then
-  echo "NOTE: session boundary is from a previous session (no /lets:start this session) - commit counts below are best-effort from ${START_REF}." >&2
+TRUST=exact
+# A sid other than this session's means no /lets:start ran here (no take-task / hook refresh), so
+# the boundary belongs to a PRIOR session - real and branch-scoped, but not this session's.
+[ -n "$START_REF" ] && [ "$STORED_SID" != "$CLAUDE_CODE_SESSION_ID" ] && TRUST=prior-session
+if [ -z "$START_REF" ]; then
+  START_REF=$(cat "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}" 2>/dev/null)
+  [ -n "$START_REF" ] && TRUST=prior-session
 fi
-# Back-compat: the legacy .session-start-ref IS a session boundary, so it may back-fill session:.
-[ -z "$START_REF" ] && START_REF=$(cat "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}" 2>/dev/null)
-[ -z "$START_REF" ] && START_REF=$(cat "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref" 2>/dev/null)  # oldest non-slug, deliberate one-release window
 # Defense-in-depth (N1): the boundary is a plugin-written SHA - blank anything non-hex before it
 # expands unquoted into the git range, so a hand-edited state file can't inject git option args.
 case "$START_REF" in *[!0-9a-f]*) START_REF="" ;; esac
 
-# Commits this session (0 => S2/S3 skip; empty START_REF => unknown, see Step 1 no-boundary rule).
-# RANGE_DESC is the human-readable range line the Step 3 templates use - stays tidy when the
-# boundary is unknown (no empty "session: ..HEAD ( commits)").
+# --- boundary: VALIDATE (a recorded SHA is a claim, not a fact) ---
+MERGE_BASE=$(git merge-base HEAD "origin/{LETS_MERGE_BRANCH}" 2>/dev/null || git merge-base HEAD "{LETS_MERGE_BRANCH}" 2>/dev/null)
+if [ -n "$START_REF" ]; then
+  REJECT=""
+  git rev-parse --verify --quiet "${START_REF}^{commit}" >/dev/null 2>&1 || REJECT="not a commit in this repo"
+  [ -z "$REJECT" ] && ! git merge-base --is-ancestor "$START_REF" HEAD 2>/dev/null && REJECT="not an ancestor of HEAD (rebase, reset, or another line of work)"
+  # Branch-point floor: a session on a feature branch cannot have started before the branch did.
+  # Does not apply on {LETS_MERGE_BRANCH}, where there is no branch point to floor against.
+  if [ -z "$REJECT" ] && [ "$BRANCH" != "{LETS_MERGE_BRANCH}" ] && [ -n "$MERGE_BASE" ] && [ "$START_REF" != "$MERGE_BASE" ] \
+     && git merge-base --is-ancestor "$START_REF" "$MERGE_BASE" 2>/dev/null; then
+    REJECT="predates this branch's point off {LETS_MERGE_BRANCH}"
+  fi
+  # Age floor: a session boundary is hours-to-days old. 14d is the generous outer edge of one
+  # session; past it the file is stale, not long-running. Catches the trunk case the floor cannot.
+  if [ -z "$REJECT" ]; then
+    AGE_D=$(( ( $(date +%s) - $(git show -s --format=%ct "$START_REF") ) / 86400 ))
+    [ "$AGE_D" -gt 14 ] && REJECT="${AGE_D} days old - older than any single session"
+  fi
+  [ -n "$REJECT" ] && { echo "NOTE: recorded boundary ${START_REF} REJECTED (${REJECT}) - not used." >&2; START_REF=""; TRUST=none; }
+fi
+# Nothing recorded: on a feature branch the branch point is a branch-SCOPED estimate of what this
+# branch added - an honest unknown-case answer, unlike a global file written by another branch.
+if [ -z "$START_REF" ] && [ "$BRANCH" != "{LETS_MERGE_BRANCH}" ] && [ -n "$MERGE_BASE" ]; then
+  START_REF="$MERGE_BASE"; TRUST=estimate
+fi
+
+# --- derive the range. RANGE_DESC carries the trust level everywhere it travels (chat, snapshot
+# ### Range, progress comment), so a number never appears without the qualifier that earned it. ---
 if [ -n "$START_REF" ]; then
   SESSION_COMMITS=$(git rev-list --count ${START_REF}..HEAD)
-  RANGE_DESC="session: ${START_REF}..HEAD (${SESSION_COMMITS} commits)"
+  case "$TRUST" in
+    exact)         RANGE_DESC="session: ${START_REF}..HEAD (${SESSION_COMMITS} commits)" ;;
+    prior-session) RANGE_DESC="approx: ${START_REF}..HEAD (${SESSION_COMMITS} commits) - boundary recorded by an earlier session" ;;
+    estimate)      RANGE_DESC="approx: ${START_REF}..HEAD (${SESSION_COMMITS} commits) - estimated from the branch point, no boundary was recorded" ;;
+  esac
 else
-  SESSION_COMMITS=""
-  RANGE_DESC="boundary unknown (no /lets:start this session)"
+  TRUST=none; SESSION_COMMITS=""
+  RANGE_DESC="boundary unknown - no valid session boundary for this branch"
 fi
-echo "START_REF=${START_REF:-<none>}  SESSION_COMMITS=${SESSION_COMMITS:-<unknown>}  RANGE_DESC=${RANGE_DESC}"
+# Warn on EVERY fallback, not only on a sid mismatch - a silent fallback is how a stale boundary
+# became a confident number (lets-370mx).
+case "$TRUST" in
+  prior-session) echo "NOTE: boundary is from a previous session (no /lets:start this session) - counts are best-effort." >&2 ;;
+  estimate)      echo "NOTE: no session boundary recorded - range estimated from the branch point off {LETS_MERGE_BRANCH}." >&2 ;;
+  none)          echo "NOTE: no usable session boundary - commit counts unknown; Finish task will not be offered." >&2 ;;
+esac
+echo "START_REF=${START_REF:-<none>}  TRUST=${TRUST}  SESSION_COMMITS=${SESSION_COMMITS:-<unknown>}  RANGE_DESC=${RANGE_DESC}"
 
 # Unpushed (S5), upstream-aware (mirrors /lets:done Step 8)
 if git rev-parse --abbrev-ref @{u} >/dev/null 2>&1; then
@@ -77,9 +113,18 @@ fi
 GIT_DIR=$(git rev-parse --git-dir 2>/dev/null); echo "GIT_DIR=$GIT_DIR"
 ```
 
-**Actionable set:** S1 if DIRTY; S2 if active task `in_progress` AND `SESSION_COMMITS > 0`; S3 same gate as S2; S5 if `AHEAD > 0` (or no-upstream + local commits exist). S4 always; S6 if `GIT_DIR` contains `worktrees/`. (No S7 - the pre-compact snapshot is the Step 1 early exit above, not a settlement step.)
+**Actionable set:** S1 if DIRTY; S2 if active task `in_progress` AND `SESSION_COMMITS > 0`; S3 same gate as S2 AND `TRUST` is `exact` or `prior-session`; S5 if `AHEAD > 0` (or no-upstream + local commits exist). S4 always; S6 if `GIT_DIR` contains `worktrees/`. (No S7 - the pre-compact snapshot is the Step 1 early exit above, not a settlement step.)
 
-**No-boundary rule:** when `START_REF` is empty (no `session:`, no back-compat ref) `SESSION_COMMITS` is unknown - **S3 SKIPS** (never offer to finish a task on a guess) and **S2 is a best-effort OFFER** carrying the staleness NOTE (range approximate). S1/S4/S5/S6 are unaffected.
+**Boundary-trust rule.** `TRUST` decides what may be claimed and what may be offered - a number is only as good as the boundary under it, so the level travels with `RANGE_DESC` into the chat, the snapshot's `### Range` block, and the progress comment:
+
+| `TRUST` | boundary | S2 Post progress | S3 Finish task |
+|---|---|---|---|
+| `exact` | this session's `session:` line | offer | offer |
+| `prior-session` | a `session:` line or legacy slugged ref recorded by an earlier session | offer, NOTE carried | offer, NOTE carried |
+| `estimate` | nothing recorded; derived from the branch point off `$LETS_MERGE_BRANCH` | best-effort offer, marked approx | **SKIP** - never finish a task on a guess |
+| `none` | nothing usable (rejected, or absent while HEAD is `$LETS_MERGE_BRANCH`) | best-effort offer, no number | **SKIP** |
+
+S1/S4/S5/S6 are unaffected by `TRUST`. A rejected boundary is never silently swapped for a plausible-looking one: rejection degrades to `estimate` only through the branch point, which is branch-scoped by construction, and on `$LETS_MERGE_BRANCH` it degrades to `none` rather than to a number.
 
 ## Step 2: Settle
 

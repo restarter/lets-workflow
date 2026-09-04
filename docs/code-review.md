@@ -1,12 +1,12 @@
 # Code review
 
-LETS has three levels of review, from a 30-second sanity check to a full PR lifecycle.
+LETS has three levels of review, separated by who does the looking - you, a band of expert agents, or a full PR lifecycle.
 
-| Need | Command | Time | What happens |
-|------|---------|------|--------------|
-| Quick pre-commit check | `/lets:check` | ~30s | Inline 6-lens review: bugs, security, performance, quality, project conventions, docs. No subagents. |
-| Full code review | `/lets:review` | ~2-3 min | Dynamic agent selection — only the experts relevant to your changes. |
-| Full PR lifecycle (GitHub) | `/lets:github-pr <PR>` | Interactive | Analyze, discuss, post inline comments, follow up on fixes, approve. |
+| Need | Command | Who reviews | What happens |
+|------|---------|-------------|--------------|
+| Quick pre-commit check | `/lets:check` | The orchestrator, inline | 6-lens review: bugs, security, performance, quality, project conventions, docs. No subagents. |
+| Full code review | `/lets:review` | Expert subagents, then a verify pass | Dynamic agent selection — only the experts relevant to your changes — and every finding refuted before it is reported. |
+| Full PR lifecycle (GitHub) | `/lets:github-pr <PR>` | Review's agents, then you | Analyze, discuss, post inline comments, follow up on fixes, approve. |
 
 Both `/lets:check` and `/lets:review` accept the same targets: working tree (default), staged changes, last commit, the full branch vs the merge branch (`--branch` — three-dot diff against `$LETS_MERGE_BRANCH`, the same shape GitHub renders for a PR), a PR, a specific file (`--file <path>`), or a plan (`--plan`).
 
@@ -14,7 +14,7 @@ Both `/lets:check` and `/lets:review` accept the same targets: working tree (def
 
 ## `/lets:check` — quick sanity check
 
-A fast inline pass before you commit. Six perspectives — bugs, security, performance, quality, project conventions, docs — no subagents, ~30 seconds. It's the lighter version of `/lets:review`, with the same target flags. Run it before any commit, or as a first pass on a PR.
+An inline pass before you commit, done by the orchestrator itself. Six perspectives — bugs, security, performance, quality, project conventions, docs — no subagents. It's the lighter version of `/lets:review`, with the same target flags. Run it before any commit, or as a first pass on a PR.
 
 ## `/lets:review` — full code review
 

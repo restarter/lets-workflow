@@ -37,7 +37,7 @@ AskUserQuestion(
     question: "What do you want to do with the backlog?",
     header: "Backlog",
     options: [
-      { label: "Review backlog", description: "Agents analyze project state, generate ideas and surface gaps (~2-3 min)" },
+      { label: "Review backlog", description: "Agents analyze project state, generate ideas and surface gaps" },
       { label: "Quick pulse", description: "No agents - fast orchestrator-only scan and conversation" },
       { label: "Cleanup", description: "Triage stale tasks - close, merge, reprioritize" }
     ],

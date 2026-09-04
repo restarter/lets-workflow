@@ -1429,8 +1429,8 @@ Work -> /lets:commit -> Push -> PR -> /lets:review <PR>
 
 ### Quick check vs Full review
 ```
-/lets:check  = Quick sanity check (~30 sec), before any commit
-/lets:review = Full deep review (~2-3 min), before PR or on PR
+/lets:check  = Inline sanity check by the orchestrator, before any commit
+/lets:review = Expert subagents + adversarial verify, before PR or on PR
 ```
 
 ## Rules

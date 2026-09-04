@@ -122,8 +122,8 @@ Then, inside the Claude Code session:
 
 | Command | Description |
 |---------|-------------|
-| `/lets:check` | Quick inline sanity check (~30s, 6-perspective review) |
-| `/lets:review` | Full code review with dynamic agent selection (~2-3 min) |
+| `/lets:check` | Inline 6-perspective sanity check, no subagents |
+| `/lets:review` | Full code review with dynamic agent selection + verify pass |
 | `/lets:github-pr` | GitHub PR review lifecycle - analyze, discuss, post inline, follow-up, approve |
 | `/lets:review-round` | Work through a received review round - triage comments, record decisions, one final edit-pass |
 | `/lets:review-handoff` | Hand-off brief so another agent (fresh session, Codex, external reviewer) can pick up the exact state and review it - same target selectors as `/lets:review`, plus `--commits` / `--range` |
@@ -192,8 +192,8 @@ A LETS session runs a loop: start, work, commit, finish.
 │  Write code with Claude. Use helpers along the way:                       │
 │  /lets:opinion   Technical decision with expert agents                    │
 │  /lets:ask       Quick question to a single expert                        │
-│  /lets:check     Quick sanity check (6 perspectives, ~30s)                │
-│  /lets:review    Full multi-agent code review (~2-3 min)                  │
+│  /lets:check     Inline sanity check (6 perspectives, no agents)          │
+│  /lets:review    Multi-agent review + adversarial verify pass             │
 │  /lets:research  Web-sourced cited answer to a question                   │
 │                                                                           │
 ├─ You plan, Claude builds ─────────────────────────────────────────────────┤
@@ -228,13 +228,13 @@ A LETS session runs a loop: start, work, commit, finish.
 
 → Full docs: [docs/code-review.md](docs/code-review.md)
 
-Three levels of review, from 30-second sanity check to full PR lifecycle:
+Three levels of review, separated by who does the looking:
 
-| Need | Command | Time | What happens |
-|------|---------|------|-------------|
-| Quick pre-commit check | `/lets:check` | ~30s | Inline 6-lens review: bugs, security, performance, quality, compliance, docs |
-| Full code review | `/lets:review` | ~2-3 min | Dynamic agent selection - only relevant experts for your changes |
-| Full PR lifecycle (GitHub) | `/lets:github-pr <PR>` | Interactive | Analyze, discuss, post inline comments, follow up on fixes, approve |
+| Need | Command | Who reviews | What happens |
+|------|---------|-------------|-------------|
+| Quick pre-commit check | `/lets:check` | The orchestrator, inline | 6-lens review: bugs, security, performance, quality, compliance, docs |
+| Full code review | `/lets:review` | Expert subagents, then a verify pass | Dynamic agent selection - only relevant experts for your changes |
+| Full PR lifecycle (GitHub) | `/lets:github-pr <PR>` | Review's agents, then you | Analyze, discuss, post inline comments, follow up on fixes, approve |
 
 #### GitHub PR Review Lifecycle (`/lets:github-pr`)
 

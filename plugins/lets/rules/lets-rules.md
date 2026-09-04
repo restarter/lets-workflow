@@ -344,8 +344,8 @@ Two separate lifecycles:
 - **Task:** picked at start ... `/lets:done` (may span multiple sessions)
 
 **Review options:**
-- `/lets:check` - quick inline sanity check (~30 sec); same target flags as `/lets:review` but no subagents - before any commit, or a fast first pass on a PR
-- `/lets:review` - full deep review (~2-3 min), works locally OR on GitHub PR
+- `/lets:check` - the orchestrator reviews inline, no subagents; same target flags as `/lets:review` - before any commit, or a fast first pass on a PR
+- `/lets:review` - selected expert subagents review, then an adversarial verify pass; works locally OR on GitHub PR
 
 **When to use which:**
 - Small change -> `/lets:check` -> commit
@@ -451,8 +451,8 @@ Every response ends with exactly ONE footer - never mix two. Pick the type by wh
 | `/lets:end` | Session | End of session - settlement pass (commit / push / progress / snapshot, auto-skips when tidy); `--pre-compact` skips settlement and only writes the shared snapshot, keeping the session going |
 | `/lets:done` | Task | Task is complete |
 | `/lets:commit` | Code | Ready to commit (also auto-triggers on "commit", "закоміть") |
-| `/lets:check` | Code | Quick sanity check (~30s) - inline 6-lens; same targets as `/lets:review` (local/staged/last-commit/branch/PR/`--file`/`--plan`/`--json`), no subagents |
-| `/lets:review` | Code | Full deep review (~2-3 min); `<PR>` offers a `gh pr checkout` so agents read the real tree - it stashes on a dirty tree and restores the branch at the end |
+| `/lets:check` | Code | Inline 6-lens reviewed by the orchestrator alone, no subagents; same targets as `/lets:review` (local/staged/last-commit/branch/PR/`--file`/`--plan`/`--json`) |
+| `/lets:review` | Code | Expert subagents review, then an adversarial verify pass; `<PR>` offers a `gh pr checkout` so agents read the real tree - it stashes on a dirty tree and restores the branch at the end |
 | `/lets:github-pr` | Code | GitHub PR review lifecycle (review, respond, follow-up, approve) |
 | `/lets:review-round` | Code | Work through a RECEIVED review round - triage N comments, decisions->task, artifact FROZEN, one final edit-pass (inverse of `/lets:review`) |
 | `/lets:review-handoff` | Code | Hand the current state OUT - one self-contained brief another agent (fresh session, Codex, external reviewer) can act on with no context; same target selectors as `/lets:review`, plus handoff-only `--commits` / `--range` |
