@@ -448,7 +448,7 @@ Every response ends with exactly ONE footer - never mix two. Pick the type by wh
 | Skill | Category | When |
 |-------|----------|------|
 | `/lets:start` | Session | Beginning of session |
-| `/lets:end` | Session | End of session - settlement pass (commit / push / progress / snapshot, auto-skips when tidy); `--session` (alias `--snapshot`) and `--pre-compact` skip settlement and only write the shared snapshot, keeping the session going |
+| `/lets:end` | Session | End of session - settlement pass (commit / push / progress / snapshot, auto-skips when tidy). It REFERS an open task to `/lets:done` and never finishes one itself. `--session` (alias `--snapshot`) and `--pre-compact` skip settlement and only write the shared snapshot, keeping the session going |
 | `/lets:done` | Task | Task is complete |
 | `/lets:commit` | Code | Ready to commit (also auto-triggers on "commit", "закоміть") |
 | `/lets:check` | Code | Inline 6-lens reviewed by the orchestrator alone, no subagents; same targets as `/lets:review` (local/staged/last-commit/branch/PR/`--file`/`--plan`/`--json`) |
