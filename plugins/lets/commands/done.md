@@ -452,6 +452,31 @@ EOF
 )"
 ```
 
+**Read back what was actually created (MANDATORY - never report a PR you have not looked at).** A URL from `gh pr create` proves the PR exists, not that it can be merged or even built: a PR born CONFLICTING gets no merge ref, `pull_request` workflows run against that ref, so **not one check ever starts** and `gh pr checks` answers "no checks reported" - indistinguishable from a repo with no CI. That state survived a full `/lets:done` and two more pushes before anyone noticed (lets-ufiam, PR #153).
+
+```bash
+PR=<number from the create output>
+# Mergeability is computed asynchronously - UNKNOWN right after create is normal, not clean.
+# Retry a couple of times; a persistent UNKNOWN is "could not determine", NEVER "fine".
+for i in 1 2 3; do
+  OUT=$(gh pr view "$PR" --json mergeable,mergeStateStatus --jq '.mergeable + " " + .mergeStateStatus' 2>/dev/null)
+  case "$OUT" in UNKNOWN*) sleep 2 ;; *) break ;; esac
+done
+echo "MERGEABLE=${OUT%% *}  STATE=${OUT##* }"
+```
+
+Report what came back. The clean case costs ONE line; every other case is stated out loud:
+
+| `mergeable` | `mergeStateStatus` | say |
+|---|---|---|
+| `MERGEABLE` | `CLEAN` / `HAS_HOOKS` | one line - PR #N is mergeable |
+| `MERGEABLE` | `UNSTABLE` | mergeable, but checks are still running or already failing - name which |
+| `MERGEABLE` | `BLOCKED` / `BEHIND` / `DIRTY` / `DRAFT` | name the state and what it blocks - never swallow it |
+| `CONFLICTING` | any | conflicts with `{LETS_MERGE_BRANCH}`, and **CI WILL NOT RUN AT ALL until they are resolved** - fix with `git merge {LETS_MERGE_BRANCH}` (or a rebase) and push. The second sentence is the load-bearing one: "there are conflicts" alone does not tell the user their checks are silently absent |
+| `UNKNOWN`, or the read failed / returned nothing | any | mergeability could not be determined - report it as **unverified**, never imply the PR is fine |
+
+This is an additive READ: no new gate, no branch switch, nothing is skipped on a bad result. The user is told; Step 9 proceeds as normal.
+
 After PR created:
 ```lets-tracker
 comment-add task=<task-id> body="PR #XX created: <PR URL>"
@@ -567,6 +592,7 @@ AskUserQuestion(
 ```
 Task: **{title}** ({task-id})
 PR: #{number} - {PR URL}
+Mergeable: {the read-back line from Step 8 - CONFLICTING also says CI will not run at all}
 Status: {in_review if the advance ran, else open} (close after PR merge)
 ```
 
@@ -605,6 +631,7 @@ AskUserQuestion(
 ```
 Task: **{title}** ({task-id})
 PR: #{number} - {PR URL}
+Mergeable: {the read-back line from Step 8 - CONFLICTING also says CI will not run at all}
 Status: {in_review if the advance ran, else open} (close after PR merge)
 Worktree: {worktree path}
 ```
@@ -760,6 +787,7 @@ AskUserQuestion(
 ## Rules
 
 - **NEVER push or create PR without user approval**
+- **NEVER report a created PR without reading it back** - a CONFLICTING PR runs no CI at all and looks identical to a passing one
 - **NEVER merge without user approval**
 - Document BEFORE finishing (Step 7 before Step 8)
 - If PR flow: task stays open, user closes after merge
