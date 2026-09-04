@@ -24,6 +24,9 @@ dolt-monitor.*
 
 # Beads / Dolt files (added by bd init)
 .beads-credential-key
+# bd leaves a zero-byte gate lock at the repo root; untracked and unignored it
+# fails the release script's clean-tree pre-check (hit at v0.8.2).
+.beads.gate.lock
 issues.jsonl
 
 # bv (beads viewer) local config and caches

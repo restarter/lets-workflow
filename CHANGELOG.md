@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-09-04
+
 ### Added
 - **Bank a session snapshot without ending anything, and stop asserting why (lets-ouy1l, lets-yprsv, lets-tgqlg).** `--pre-compact` was the only snapshot-only path, so recording the state of a long session meant writing a file that says it was made before a `/compact`. The file is permanent and `/lets:start` reads it back, so that was a small lie in a durable record. `/lets:end --session` and `/lets:note --session` write that snapshot with no settlement - no commit, push, progress or finish offers - and the session continues.
 
@@ -544,7 +546,8 @@ Initial release with expert agents team.
 - SessionStart hook injecting workflow rules
 - Plugin structure: commands, agents, hooks
 
-[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.8.2...HEAD
+[0.8.2]: https://github.com/restarter/lets-workflow/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/restarter/lets-workflow/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/restarter/lets-workflow/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/restarter/lets-workflow/compare/v0.6.4...v0.7.0
