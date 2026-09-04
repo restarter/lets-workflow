@@ -18,7 +18,7 @@ Passed via the `Skill` invocation's `args` string as space-separated `key=value`
 
 - `kind` = `precompact` (default) | `session` | `end` - selects the `artifact-path` kind and the `### Compaction` line. `precompact` -> `snapshot-precompact`; `session` and `end` BOTH -> `snapshot`, because a session record and a session-end record are the same artifact written at different moments, and a fourth filename shape would buy nothing. Step 3 owns the filename, never build it here.
 - `pointer` = `off` (default) | `auto` - whether the skill writes the standalone one-line task pointer. `off` is the SAFE default (a caller that forgets never double-writes a task comment); a caller that wants the skill to write the pointer passes `auto` explicitly (both pre-compact callers do). `/lets:end` default passes `off` when it folds the pointer into its own progress comment, `auto` otherwise.
-- `range` (optional) - a RANGE_DESC string (e.g. `session: <ref>..HEAD (N commits)`). A caller that passes one WINS - `/lets:end`'s default flow does, because it already read the boundary to gate its own offers. When it is absent and `kind` is NOT `precompact`, Step 2 resolves it through `session-boundary` rather than omitting the block, so `--session` on either command still records a qualified range. `kind=precompact` keeps its lean contract: no boundary read on the path taken right before a `/compact`, and no `### Range` block unless one was passed.
+- `range` (optional) - a RANGE_DESC string (e.g. `session: <ref>..HEAD (N commits)`). A caller that passes one WINS - `/lets:end`'s default flow does, because it already read the boundary to gate its own offers. When it is absent, Step 2 resolves it through `session-boundary` rather than omitting the block, for EVERY kind. A pre-compaction snapshot is read back by the same consumer as any other, `/lets:start`, for the same purpose - where the work began - so the snapshot written specifically to survive a lossy summarization is the last one that should be missing its range (lets-yprsv).
 - `task-id` (optional) - pre-resolved active task from the caller's own detect-task.
 
 ## Step 1: Active task
@@ -44,7 +44,7 @@ echo "TRANSCRIPT_PATH=$TRANSCRIPT_PATH"
 
 ### Range (when the caller passed none)
 
-If `range` was NOT passed AND `kind` is not `precompact`, invoke `Skill(skill: "lets:session-boundary")` and use its echoed `SESSION_RANGE_DESC` as the RANGE_DESC for Step 3's `### Range` block; surface its stderr NOTEs. Do NOT re-derive the boundary here - that ladder lives in `session-boundary` alone (lets-370mx). If the skill is unavailable, omit the `### Range` block rather than writing an unqualified number.
+If `range` was NOT passed, invoke `Skill(skill: "lets:session-boundary")` and use its echoed `SESSION_RANGE_DESC` as the RANGE_DESC for Step 3's `### Range` block; surface its stderr NOTEs. Do NOT re-derive the boundary here - that ladder lives in `session-boundary` alone (lets-370mx). If the skill is unavailable, omit the `### Range` block rather than writing an unqualified number.
 
 ## Step 3: Write the snapshot FILE (ALWAYS)
 

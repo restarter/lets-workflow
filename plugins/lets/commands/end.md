@@ -197,6 +197,7 @@ Then STOP - no AskUserQuestion, no settlement, no push, no `git checkout`. (Iden
 Snapshot -> .lets/sessions/{date}-{HHMM}-{task-id}-snapshot-precompact.md
 Task pointer -> {task-id}  (only if a task is unambiguously active; else "none - file only")
 Branch: {branch}
+Range: {SESSION_RANGE_DESC from the snapshot's own boundary read}
 
 Safe to /compact now - same window continues. Resume: /lets:start reads the snapshot file (the tracked task holds task-level context).
 ```
