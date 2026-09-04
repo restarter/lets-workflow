@@ -448,7 +448,7 @@ Every response ends with exactly ONE footer - never mix two. Pick the type by wh
 | Skill | Category | When |
 |-------|----------|------|
 | `/lets:start` | Session | Beginning of session |
-| `/lets:end` | Session | End of session - settlement pass (commit / push / progress / snapshot, auto-skips when tidy); `--pre-compact` skips settlement and only writes the shared snapshot, keeping the session going |
+| `/lets:end` | Session | End of session - settlement pass (commit / push / progress / snapshot, auto-skips when tidy). It REFERS an open task to `/lets:done` and never finishes one itself. `--session` (alias `--snapshot`) and `--pre-compact` skip settlement and only write the shared snapshot, keeping the session going |
 | `/lets:done` | Task | Task is complete |
 | `/lets:commit` | Code | Ready to commit (also auto-triggers on "commit", "закоміть") |
 | `/lets:check` | Code | Inline 6-lens reviewed by the orchestrator alone, no subagents; same targets as `/lets:review` (local/staged/last-commit/branch/PR/`--file`/`--plan`/`--json`) |
@@ -467,7 +467,7 @@ Every response ends with exactly ONE footer - never mix two. Pick the type by wh
 | `/lets:worktree` | Utility | Create/manage interactive worktrees for parallel work |
 | `/lets:statusline` | Utility | Manage & persist statusline appearance - light/dark, compact, hidden rows (writes personal `.claude/settings.local.json`) |
 | `/lets:team` | Utility | Parallel implementation with Agent Teams (run, status, stop) |
-| `/lets:note` | Utility | Add note to active task (`--pre-compact` = resume snapshot before /compact) |
+| `/lets:note` | Utility | Add note to active task (`--session`, alias `--snapshot` = resume snapshot on request, `--pre-compact` = the same snapshot branded for a following /compact) |
 | `/lets:init`    | Setup | Per-project initialization. Re-run for self-heal (drift fix) or to change config; offers the user-scope global-rules install (`lets init --user`) when the plugin is user-scoped |
 | `/lets:update`  | Setup | Sync project with the current release - `.lets/.env` + rules self-heal, plus version status for the `lets` binary and the plugin, plus the user-level global rules when installed |
 
