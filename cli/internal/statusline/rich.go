@@ -458,7 +458,7 @@ func limit(payloadPct float64, payloadReset string, cacheP int, cacheReset strin
 // so the bottom line cycles as you work. English-only (written artifact).
 var tips = []string{
 	"Need to save progress? Use /lets:note to record it on the active task.",
-	"Quick sanity check before committing? Run /lets:check (~30s, no agents).",
+	"Quick sanity check before committing? /lets:check reviews inline.",
 	"Want a deep multi-agent review? /lets:review pulls up to 12 experts.",
 	"Stuck on a decision? /lets:opinion gathers expert angles in parallel.",
 	"Just need one expert's take? /lets:ask is a quick ping to a colleague.",

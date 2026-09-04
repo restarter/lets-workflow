@@ -76,8 +76,8 @@ Team:     /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /le
 | `/lets:end` | Session | End of session |
 | `/lets:done` | Task | Task is complete (creates PR if LETS_PR_FLOW=github, or merges locally) |
 | `/lets:commit` | Code | Ready to commit (also triggers automatically on "commit") |
-| `/lets:check` | Code | Quick sanity check - code (~30s) or plan (--plan) |
-| `/lets:review` | Code | Full deep review (~2-3 min) |
+| `/lets:check` | Code | Inline sanity check, no subagents - code or plan (--plan) |
+| `/lets:review` | Code | Full review by expert subagents + a verify pass |
 | `/lets:github-pr` | Code | GitHub PR review lifecycle (review, respond, follow-up, approve) |
 | `/lets:review-round` | Code | Work through a received review round - triage, decisions->task, one final edit-pass |
 | `/lets:review-handoff` | Code | Hand-off brief for an external reviewer - same targets as `/lets:review`, plus `--commits` / `--range` |

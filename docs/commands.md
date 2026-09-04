@@ -32,8 +32,8 @@ See **[plan-execute.md](plan-execute.md)**, **[parallel-work.md](parallel-work.m
 
 | Command | What it does |
 |---------|--------------|
-| `/lets:check` | Quick inline sanity check (~30s) — 6 perspectives, no subagents. Targets: working tree, staged, last commit, full branch (`--branch`, three-dot vs `$LETS_MERGE_BRANCH`), a PR, `--file <path>`, `--plan`. |
-| `/lets:review` | Full code review (~2-3 min) — dynamic agent selection. Same targets as `/lets:check`; `--local` for local changes, `--branch` for the whole branch (PR-equivalent), `<PR>` for a PR, `--plan` for a plan. `--workflow` runs the fan-out off-context. |
+| `/lets:check` | Inline sanity check — 6 perspectives, the orchestrator alone, no subagents. Targets: working tree, staged, last commit, full branch (`--branch`, three-dot vs `$LETS_MERGE_BRANCH`), a PR, `--file <path>`, `--plan`. |
+| `/lets:review` | Full code review — dynamic expert-agent selection, then an adversarial verify pass. Same targets as `/lets:check`; `--local` for local changes, `--branch` for the whole branch (PR-equivalent), `<PR>` for a PR, `--plan` for a plan. `--workflow` runs the fan-out off-context. |
 | `/lets:github-pr` | GitHub PR review lifecycle — `<PR>` to analyze and discuss, then post inline; `--follow-up` to check fixes; `--approve` to approve; `--respond <PR>` for the PR author. |
 | `/lets:review-round` | Work through a RECEIVED review round — triage each comment (accept/reject/defer/done), record decisions to the task, keep the artifact frozen, then apply all edits in one final pass. The inverse of `/lets:review`. |
 | `/lets:review-handoff` | Hand the current state OUT — one self-contained brief for an agent with no context (a fresh session, Codex, any external reviewer), covering a plan, a branch, uncommitted or staged work, the last N commits, a range, a PR, or a file. Same target selectors as `/lets:review`, plus handoff-only `--commits <N>` / `--range <a>..<b>`; reviews nothing itself and writes no file. Works in a repo with no LETS installed. |

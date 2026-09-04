@@ -32,8 +32,8 @@ Write code with Claude in the conversation. Helpers along the way:
 |---------|--------------|
 | `/lets:opinion` | Technical decision analyzed by expert agents in parallel, with a recommendation |
 | `/lets:ask` | Quick question to a single expert agent |
-| `/lets:check` | Quick sanity check before a commit — 6 perspectives, inline, ~30s |
-| `/lets:review` | Full multi-agent code review (~2-3 min) |
+| `/lets:check` | Sanity check before a commit — 6 perspectives, inline, no subagents |
+| `/lets:review` | Full multi-agent code review + an adversarial verify pass |
 
 ### You plan, Claude builds
 
