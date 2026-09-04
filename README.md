@@ -101,11 +101,11 @@ Then, inside the Claude Code session:
 | Command | Description |
 |---------|-------------|
 | `/lets:start` | Start session - restore context, show tasks, create feature branch (`--main` = no-task project-assistant mode) |
-| `/lets:end` | End session - save progress, sync tasks, write snapshot (`--session` banks a snapshot without ending, `--pre-compact` does the same before /compact) |
+| `/lets:end` | End session - save progress, sync tasks, write snapshot (`--session`, aliases `--snapshot` / `--pre-compact`, banks a snapshot without ending) |
 | `/lets:commit` | Commit with review and conventional commit format |
 | `/lets:done` | Finish task - create PR (GitHub or Bitbucket) or merge locally |
 | `/lets:status` | Read-only orient snapshot — where you are, what's in flight, what's next (tracker-universal) |
-| `/lets:note` | Add note to active task (`--session` snapshots the session, `--pre-compact` does the same before /compact) |
+| `/lets:note` | Add note to active task (`--session`, aliases `--snapshot` / `--pre-compact`, snapshots the session) |
 
 ### Planning & Execution
 

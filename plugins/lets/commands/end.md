@@ -1,6 +1,6 @@
 ---
-description: End a work session - a settlement pass that reconciles uncommitted / unpushed work + session context into git, the tracker, and a session snapshot file. --session and --pre-compact skip settlement and only write the shared snapshot, keeping the session going.
-argument-hint: "[--session|--pre-compact]"
+description: End a work session - a settlement pass that reconciles uncommitted / unpushed work + session context into git, the tracker, and a session snapshot file. --session (aliases --snapshot, --pre-compact, --compact) skips settlement and only writes the shared snapshot, keeping the session going.
+argument-hint: "[--session]"
 ---
 
 # Session End
@@ -15,16 +15,17 @@ End a work session cleanly. `/lets:end` is a **settlement pass**: it reconciles 
 
 ## Modes
 
-One settlement core (the default flow); the flags below are separate paths, NOT modifiers of it. Two of them are snapshot-only and differ ONLY in what the record says it is for:
+One settlement core (the default flow); the flags below are separate paths, NOT modifiers of it:
 
 - **(default)** - full settlement pass (Steps 1-3) + worktree hint + a one-line terminal prose hint (Step 4 / Output). Auto-skip keeps it silent on a tidy session.
-- **`--session`** (alias `--snapshot`) - a session record on request, **NOT a session end and NOT a settlement pass**. It runs NO settlement (no commit / push / progress / finish offers) - it ONLY writes the shared session snapshot via `session-snapshot` (`kind=session`) and the session continues. Use it to bank the state of a long session without ending or compacting anything. **Identical to `/lets:note --session`.** See the early-exit at the top of Step 1.
-- **`--pre-compact`** (alias `--compact`) - the same snapshot, branded as a pre-compaction record (`kind=precompact`, a `-snapshot-precompact` filename, and a `### Compaction` line naming `/compact`). Use it only when a `/compact` actually follows; otherwise `--session` is the honest flag, since the file is a permanent record and `/lets:start` reads it back. **Identical to `/lets:note --pre-compact`.**
+- **`--session`** (aliases `--snapshot`, `--pre-compact`, `--compact` - one path, four spellings) - a session record on request, **NOT a session end and NOT a settlement pass**. It runs NO settlement (no commit / push / progress / finish offers) - it ONLY writes the shared session snapshot via `session-snapshot` (`kind=session`) and the session continues. Use it to bank the state of a long session, before a `/compact` or not. **Identical to `/lets:note --session`.** See the early-exit at the top of Step 1.
+
+  There is deliberately no second flag for the pre-compaction case. The record it writes is permanent and `/lets:start` reads it back, so the snapshot must describe what HAPPENED, not what the caller intended to do next - and "written mid-session, the session continued" is true whether or not a `/compact` follows. Two flags asserting two intents was the wrong shape for that problem: the honest sentence fixes it, a choice at the call site does not.
 - **`--fast`** - DEPRECATED. It now runs the default flow (which already stays silent when there is nothing to settle). Emit one line - `--fast is deprecated; running the unified /lets:end (it auto-skips when there's nothing to settle).` - then proceed as default. (Accepted for one release; removal is a follow-up.)
 
 ## Step 1: Detect (silent)
 
-**Snapshot-only early exit (runs BEFORE any settlement detection):** if invoked with `--session` / `--snapshot` or `--pre-compact` / `--compact`, do NOT run the settlement detect/settle steps. Delegate straight to the snapshot primitive with the matching `kind` - `Skill(skill: "lets:session-snapshot", args: "kind=session pointer=auto")` or `kind=precompact` - then show that flag's Output and STOP. Both paths are byte-identical to the same flag on `/lets:note`. Steps 1-3 below are the DEFAULT (settlement) flow only.
+**Snapshot-only early exit (runs BEFORE any settlement detection):** if invoked with `--session`, `--snapshot`, `--pre-compact` or `--compact`, do NOT run the settlement detect/settle steps. Delegate straight to the snapshot primitive - `Skill(skill: "lets:session-snapshot", args: "kind=session pointer=auto")` - then show the `--session` Output and STOP. Byte-identical to `/lets:note --session`. Steps 1-3 below are the DEFAULT (settlement) flow only.
 
 Read all state ONCE, compute which settlements are actionable, prompt nothing here.
 
@@ -115,7 +116,7 @@ Write the session-level snapshot that bootstraps the next `/lets:start`, via the
 
 - `pointer=off` (Post progress picked) -> the skill writes NO task comment; end folds the pointer into the progress comment's `### Snapshot` line (3b).
 - `pointer=auto` (Post progress NOT picked) -> the skill writes the standalone one-line pointer to its own file; 3b then does nothing task-side. Either way exactly ONE task comment, and the pointer string lives ONLY in the skill (Step 4) - no cross-file duplication.
-- `kind=end` -> the `snapshot` artifact kind (no `-precompact` suffix); the path comes from the skill's return, never rebuild it. `range` -> the skill includes the `### Range` block. Capture the returned `SNAP_FILE` path - used in 3b + the Output block.
+- `kind=end` -> the `snapshot` artifact kind; the path comes from the skill's return, never rebuild it. `range` -> the skill includes the `### Range` block. Capture the returned `SNAP_FILE` path - used in 3b + the Output block.
 
 ### 3b. Progress comment (only when "Post progress" was picked)
 
@@ -192,21 +193,7 @@ Range: {RANGE_DESC returned by the skill, or "none - no valid session boundary"}
 Recorded - the session continues. Resume later: /lets:start reads the snapshot file.
 ```
 
-Then STOP - no AskUserQuestion, no settlement, no push, no `git checkout`. (Identical output contract to `/lets:note --session`.)
-
-### --pre-compact
-
-```
-## Pre-Compact Snapshot
-
-Snapshot -> .lets/sessions/{date}-{HHMM}-{task-id}-snapshot-precompact.md
-Task pointer -> {task-id}  (only if a task is unambiguously active; else "none - file only")
-Branch: {branch}
-
-Safe to /compact now - same window continues. Resume: /lets:start reads the snapshot file (the tracked task holds task-level context).
-```
-
-Then STOP - no AskUserQuestion, no settlement, no push, no `git checkout`. The session continues. (Identical output contract to `/lets:note --pre-compact`.)
+Then STOP - no AskUserQuestion, no settlement, no push, no `git checkout`. The session continues, and a `/compact` may safely follow. (Identical output contract to `/lets:note --session`.)
 
 ## Rules
 
@@ -214,7 +201,7 @@ Then STOP - no AskUserQuestion, no settlement, no push, no `git checkout`. The s
 - **Tidy session = silent wrap** - when nothing is actionable, end produces zero prompts.
 - **NEVER push without explicit user approval** - the Step 2 multiSelect pick is that approval.
 - **Always write the session snapshot** via the shared `session-snapshot` primitive (except when Step 2 referred out and stopped - end wrote nothing because end did not run). The snapshot is file-primary; the task gets at most a one-line pointer.
-- **`--session` and `--pre-compact` run NO settlement** (snapshot-only; both early-exit at the top of Step 1). They differ only in what the written record says it is for - never reach for `--pre-compact` when no `/compact` follows.
+- **`--session` runs NO settlement** (snapshot-only; it early-exits at the top of Step 1). Its aliases are spellings of the same path, not variants - the snapshot states what happened, never what the caller planned to do next.
 - **End with a one-line compact/clear prose hint, never a wrap-up card.**
 - **Refer to `/lets:done`, never finish a task** - offer the hand-off only when the task is open AND this session touched it, and never judge whether the work is complete. `end` is a SESSION command; the task lifecycle is `done`'s.
 - Respond in user's language.

@@ -7,11 +7,11 @@ Every `/lets:*` command, grouped. For the day-to-day flow see **[workflow.md](wo
 | Command | What it does |
 |---------|--------------|
 | `/lets:start` | Start a session — restore context, show tasks, create a feature branch. `/lets:start <task-id>` jumps to a task; `/lets:start --continue` resumes the in-progress one. |
-| `/lets:end` | End the session — save progress, sync the task tracker, write a snapshot for next time. |
+| `/lets:end` | End the session — save progress, sync the task tracker, write a snapshot for next time. `--session` (aliases `--snapshot`, `--pre-compact`, `--compact`) writes only the snapshot and keeps the session going, whether or not a `/compact` follows. |
 | `/lets:commit` | Commit changes — review, conventional commit message, task ID in the scope and a `Task:` footer. Use this instead of `git commit`. Also auto-triggers on "commit" in conversation. |
 | `/lets:done` | Finish the task — push the branch and open a PR (GitHub mode), or merge locally and close the task (local/bitbucket). |
 | `/lets:status` | Read-only orient snapshot — where you are, what's in flight, what's next (tracker-universal). |
-| `/lets:note` | Add a note to the active task — a decision, gotcha, fact, or reference. |
+| `/lets:note` | Add a note to the active task — a decision, gotcha, fact, or reference. `--session` (same aliases) writes the same recovery snapshot `/lets:end` does, without ending anything. |
 
 See **[tasks.md](tasks.md)** for the task lifecycle.
 
