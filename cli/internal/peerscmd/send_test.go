@@ -114,7 +114,7 @@ func TestTell_OrcaNotReadyPassthrough(t *testing.T) {
 	}
 	_ = os.WriteFile(fr.HandoffPath, []byte(fr.Header+"\nq"), 0o600)
 	res, err := Tell(context.Background(), TellOptions{Cwd: repo, ToSession: sidFable, MsgID: fr.MsgID})
-	if err != nil || !res.OK || res.Delivered || res.Route != "orca" || res.Reason != "peer_not_ready" || res.State != "tool_running" || len(ops.sends) != 0 {
+	if err != nil || !res.OK || res.Delivered || res.Route != "orca" || res.Reason != "peer_not_ready" || res.State != "tool_running" || len(ops.sends) != 0 || !res.ClaudeFallbackAllowed {
 		t.Errorf("not ready: %+v %v", res, err)
 	}
 }

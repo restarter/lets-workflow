@@ -73,7 +73,10 @@ type TellResult struct {
 	Receipt   *ReceiptInfo `json:"receipt,omitempty"`
 	SentAt    string       `json:"sent_at,omitempty"`
 	Observed  bool         `json:"observed"`
-	Text      string       `json:"text,omitempty"` // the framed text for the skill's SendMessage (claude route)
+	// ClaudeFallbackAllowed: an Orca send was not safe, but the peer is also reachable
+	// over SendMessage (a Claude row with a name unique across the whole registry).
+	ClaudeFallbackAllowed bool   `json:"claude_fallback_allowed,omitempty"`
+	Text                  string `json:"text,omitempty"` // the framed text for the skill's SendMessage (claude route)
 }
 
 // WaitResult is a reply wait.

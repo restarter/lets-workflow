@@ -213,6 +213,18 @@ func Tell(ctx context.Context, o TellOptions) (*TellResult, error) {
 		}
 		out := orcaTell(ctx, rc.ops, *peer, path, o.MsgID, text)
 		res.Delivered, res.Reason, res.State, res.SentAt, res.Observed = out.Delivered, out.Reason, out.State, out.SentAt, out.Observed
+		if out.Reason == "peer_not_ready" && peer.Name != "" {
+			n := 0
+			for _, e := range rc.snap.Entries {
+				if e.NameOK && e.Name == peer.Name {
+					n++
+				}
+			}
+			if n == 1 {
+				res.ClaudeFallbackAllowed = true
+				res.Text = text
+			}
+		}
 		if out.Receipt.InputAccepted || out.Receipt.TurnStarted {
 			res.Receipt = &ReceiptInfo{InputAccepted: out.Receipt.InputAccepted, TurnStarted: out.Receipt.TurnStarted}
 		}

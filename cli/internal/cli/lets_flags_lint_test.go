@@ -16,9 +16,7 @@ import (
 // pendingSubcommands are `lets <sub>` commands a later unit of lets-ip06f builds; an
 // invocation of one is reported as pending (not failed) until that unit lands. The
 // task that wires a subcommand removes it from this list.
-var pendingSubcommands = map[string]string{
-	"peers": "U2 2.10",
-}
+var pendingSubcommands = map[string]string{}
 
 // TestLetsFlagsLint pins the markdown-to-CLI contract: every `lets <sub> ... --flag`
 // invocation in a command or skill file names a flag the resolved cobra command
