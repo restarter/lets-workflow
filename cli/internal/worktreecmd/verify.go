@@ -14,7 +14,7 @@ import (
 // VerifyCreate confirms post-add invariants: worktree's branch matches the
 // plan, and any LETS-managed symlinks resolve (no dangling pointer to a
 // missing main-side target).
-func VerifyCreate(ctx context.Context, projectRoot, wtPath string, plan BranchPlan) error {
+func VerifyCreate(ctx context.Context, projectRoot, wtPath string, plan BranchPlan, storeLinks []StoreLink) error {
 	_ = projectRoot
 	out, err := exec.CommandContext(ctx, "git", "-C", wtPath, "branch", "--show-current").Output()
 	if err != nil {
@@ -34,10 +34,12 @@ func VerifyCreate(ctx context.Context, projectRoot, wtPath string, plan BranchPl
 			return &Error{Code: ExitVerifyFailed, Kind: "lets_symlink_broken", Cause: err}
 		}
 	}
-	wtBeadsEnv := filepath.Join(wtPath, ".beads", ".env")
-	if fi, err := os.Lstat(wtBeadsEnv); err == nil && fi.Mode()&os.ModeSymlink != 0 {
-		if _, err := os.Stat(wtBeadsEnv); err != nil {
-			return &Error{Code: ExitVerifyFailed, Kind: "beads_env_symlink_broken", Cause: err}
+	for _, sl := range storeLinks {
+		p := filepath.Join(wtPath, filepath.FromSlash(sl.Path))
+		if fi, err := os.Lstat(p); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+			if _, err := os.Stat(p); err != nil {
+				return &Error{Code: ExitVerifyFailed, Kind: "store_link_broken", Message: sl.Path, Cause: err}
+			}
 		}
 	}
 	return nil

@@ -190,8 +190,9 @@ func Render(stdin io.Reader, w io.Writer, light, compact, showTip, showDir, show
 	// the cache entirely — so don't spawn the detached credential-read + HTTPS
 	// fetch on the modern path; it would do work whose result is dead on arrival.
 	payloadHasLimits := in.RateLimits.FiveHour.ResetsAt != "" || in.RateLimits.SevenDay.ResetsAt != ""
-	if !payloadHasLimits && !u.fresh(cacheTTL) {
-		spawnBackgroundFetch(cacheDir)
+	writable := cacheWritable(projectRoot)
+	if writable && !payloadHasLimits && !u.fresh(cacheTTL) {
+		spawnUsage(cacheDir)
 	}
 
 	// Legacy 2-line output, opt-in via --compact (kept as a fallback for
@@ -215,7 +216,11 @@ func Render(stdin io.Reader, w io.Writer, light, compact, showTip, showDir, show
 	// subprocess pattern as usage). Only the rich task line consumes it. The id is
 	// free (branch name); the bd call happens in the detached child, never inline.
 	// Skipped when the task line is hidden — no point spawning bd for nothing.
-	if id := taskIDFromBranch(branch); showTask && id != "" && !taskStatusFresh(cacheDir, id, taskStatusTTL) {
+	id := ""
+	if showTask {
+		id = taskIDFor(projectRoot, branch)
+	}
+	if writable && id != "" && trackerFetchable(projectRoot) && !taskStatusFresh(cacheDir, id, taskStatusTTL) {
 		// On a task SWITCH (cached id differs) the cache holds no data for this
 		// id, so without a debounce every render in the fetch window re-spawns
 		// bd. Write an id-only placeholder first: it renders immediately and
@@ -223,24 +228,51 @@ func Render(stdin io.Reader, w io.Writer, light, compact, showTip, showDir, show
 		// refresh we skip the placeholder to keep showing the stale-but-real
 		// title while bd refreshes.
 		if cachedTaskID(cacheDir) != id {
-			_ = writeTaskStatusPlaceholder(cacheDir, id)
+			_ = writePlaceholder(cacheDir, id)
 		}
-		spawnBackgroundTaskFetch(cacheDir, id)
+		spawnTask(cacheDir, id)
 	}
-	return renderRich(w, in, branch, folder, u, detectWidth(), cacheDir, light, showTip, showDir, showTask)
+	return renderRich(w, in, branch, id, folder, u, detectWidth(), cacheDir, light, showTip, showDir, showTask)
 }
 
 // RunFetchOnly is the entry point used by the background subprocess.
 // It fetches usage and writes cache, then returns. No stdin/stdout I/O.
 func RunFetchOnly(cacheDir string) error {
-	return fetchAndCacheUsage(cacheDir)
+	if !cacheWritable(filepath.Dir(filepath.Dir(cacheDir))) {
+		return nil
+	}
+	return usageFetcher(cacheDir)
 }
 
 // RunFetchTaskOnly is the entry point for the detached task-status refresh
 // (`lets statusline --fetch-task-only`). Queries bd for the task and writes the
 // task-status cache. No stdin/stdout I/O.
 func RunFetchTaskOnly(cacheDir, taskID string) error {
-	return fetchAndCacheTaskStatus(cacheDir, taskID)
+	if !cacheWritable(filepath.Dir(filepath.Dir(cacheDir))) {
+		return nil
+	}
+	return taskFetcher(cacheDir, taskID)
+}
+
+// Call-site seams (the functions themselves are unchanged): tests spy on them.
+var (
+	usageFetcher     = fetchAndCacheUsage
+	taskFetcher      = fetchAndCacheTaskStatus
+	writePlaceholder = writeTaskStatusPlaceholder
+	spawnUsage       = spawnBackgroundFetch
+	spawnTask        = spawnBackgroundTaskFetch
+)
+
+// cacheWritable is false inside a linked worktree whose .lets is not bootstrapped
+// yet, so the statusline never creates a real .lets that adopt would have to move
+// aside (the render runs before any hook or adopt in a worktree Orca just made).
+func cacheWritable(projectRoot string) bool {
+	fi, err := os.Lstat(filepath.Join(projectRoot, ".git"))
+	if err != nil || !fi.Mode().IsRegular() {
+		return true // main checkout or unknown: unchanged
+	}
+	_, err = os.Lstat(filepath.Join(projectRoot, ".lets"))
+	return err == nil
 }
 
 // detectProjectRoot wraps `git -C <dir> rev-parse --show-toplevel`.

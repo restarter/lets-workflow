@@ -364,12 +364,14 @@ func (p palette) modelName(lead, name string, showParen bool) string {
 
 var taskIDRe = regexp.MustCompile(`[a-z][a-z0-9]*-[a-z0-9]+(?:\.[0-9]+)?`)
 
-// taskIDFromBranch extracts a candidate beads task id from the branch name
+// legacyTaskID extracts a candidate beads task id from the branch name
 // (convention <prefix>-<alphanum>[.N]). Free — no bd call; the id is only
 // CANDIDATE here, the renderer shows the task line only once bd confirms it.
+// Kept byte-for-byte as the fallback of taskIDFor (taskid.go) for adapters that
+// predate the ## Worktree convention, and for hand-named beads branches.
 // Strips any "<word>/" prefix (feature/, bug/, fix/, bugfix-2/, ...) and the
 // "worktree-" prefix so the first match is the real id, not the prefix.
-func taskIDFromBranch(branch string) string {
+func legacyTaskID(branch string) string {
 	if i := strings.LastIndex(branch, "/"); i >= 0 {
 		branch = branch[i+1:]
 	}
@@ -536,7 +538,7 @@ func tipOfMoment(now time.Time) string {
 
 // renderRich draws the width-responsive Quiet Rails layout. Never calls
 // bd/network per render.
-func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int, cacheDir string, light, showTip, showDir, showTask bool) error {
+func renderRich(w io.Writer, in Input, branch, taskID, folder string, u usage, width int, cacheDir string, light, showTip, showDir, showTask bool) error {
 	p := paletteDark
 	if light {
 		p = paletteLight
@@ -642,7 +644,7 @@ func renderRich(w io.Writer, in Input, branch, folder string, u usage, width int
 	if bf != "" && bf != "." && bf != "/" {
 		branchSeg = p.clay + glyphBranch + " " + bf + R
 	}
-	id := taskIDFromBranch(branch)
+	id := taskID
 	title, notes, lastComment, taskOK := readTaskStatus(cacheDir, id)
 	winPct := int(in.ContextWindow.UsedPercentage + 0.5)
 	fiveP, fiveReset, fiveOK := limit(in.RateLimits.FiveHour.UsedPercentage, string(in.RateLimits.FiveHour.ResetsAt), u.fiveHour, u.fiveHourReset, u.fiveHourOK)

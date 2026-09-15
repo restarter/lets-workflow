@@ -31,6 +31,11 @@ func NewWorktreeCmd() *cobra.Command {
 		{"remove <name>", "Remove a worktree (Windows: not supported)"},
 		{"list", "List worktrees (Windows: not supported)"},
 		{"info", "Show worktree info (Windows: not supported)"},
+		{"adopt", "Adopt a worktree created elsewhere (Windows: not supported)"},
+		{"release", "Release a worktree before archiving (Windows: not supported)"},
+		{"task-state", "Read or write the task-state file (Windows: not supported)"},
+		{"branch-name", "Render a task branch name (Windows: not supported)"},
+		{"sweep", "Sweep merged task branches (Windows: not supported)"},
 	} {
 		sub := &cobra.Command{
 			Use:           use.name,

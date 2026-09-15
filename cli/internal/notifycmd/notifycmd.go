@@ -12,6 +12,10 @@
 //
 // Never hard-fails: an absent/unknown launcher, an absent launcher binary, or a
 // launcher error all return OK=true with Notified=false + a reason.
+//
+// Orca: the notification is the workspace card comment, the same field the U4 phase
+// card writes (`lets orca card`), so the last writer wins - a gate note can replace a
+// phase comment and vice versa. Documented, not reconciled.
 package notifycmd
 
 import (
@@ -19,6 +23,7 @@ import (
 
 	"github.com/restarter/lets-workflow/cli/internal/cmuxcmd"
 	"github.com/restarter/lets-workflow/cli/internal/letsconfig"
+	"github.com/restarter/lets-workflow/cli/internal/orcacmd"
 	"github.com/restarter/lets-workflow/cli/internal/tmuxcmd"
 )
 
@@ -133,6 +138,18 @@ func Notify(ctx context.Context, opts Options) (*Result, error) {
 		}
 		res.Notify = &Info{Notified: sub.Notify.Notified, Launcher: launcher, Target: sub.Notify.Target, Title: sub.Notify.Title, Reason: sub.Notify.Reason}
 		res.Steps = append(res.Steps, tmuxSteps(sub.Steps)...)
+	case "orca":
+		// The Orca card has one comment: `lets orca card` phase snippets write it too, so
+		// the last writer wins (a gate note may replace a phase comment and vice versa).
+		sub, _ := orcacmd.NotifyFunc(ctx, orcacmd.NotifyOptions{Title: opts.Title, Body: opts.Body, Cwd: opts.Cwd})
+		res.OK = true
+		if sub == nil || sub.Notify == nil {
+			res.Notify = &Info{Notified: false, Launcher: launcher, Reason: "launcher_error"}
+			addStep("warn", "orca notify returned no result")
+			return res, nil
+		}
+		res.Notify = &Info{Notified: sub.Notify.Notified, Launcher: launcher, Target: sub.Notify.Target, Title: sub.Notify.Title, Reason: sub.Notify.Reason}
+		res.Steps = append(res.Steps, orcaSteps(sub.Steps)...)
 	case "terminal":
 		res.OK = true
 		res.Notify = &Info{Notified: false, Launcher: launcher, Reason: "launcher_terminal"}
@@ -147,10 +164,18 @@ func Notify(ctx context.Context, opts Options) (*Result, error) {
 	return res, nil
 }
 
-// cmuxSteps / tmuxSteps convert a launcher's steps to notifycmd's. The two
-// launcher Step types are structurally identical but nominally distinct; two
-// tiny converters beat a generic helper for two call sites.
+// cmuxSteps / orcaSteps / tmuxSteps convert a launcher's steps to notifycmd's. The
+// launcher Step types are structurally identical but nominally distinct; tiny
+// converters beat a generic helper for three call sites.
 func cmuxSteps(in []cmuxcmd.Step) []Step {
+	out := make([]Step, len(in))
+	for i, s := range in {
+		out[i] = Step{Status: s.Status, Message: s.Message}
+	}
+	return out
+}
+
+func orcaSteps(in []orcacmd.Step) []Step {
 	out := make([]Step, len(in))
 	for i, s := range in {
 		out[i] = Step{Status: s.Status, Message: s.Message}

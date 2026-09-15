@@ -387,15 +387,22 @@ Then drop the closed task's boundary (the close is a state change - HARD-FAIL lo
 
 ```bash
 # Cleanup (B4): task closed, but the trunk branch lives on (it hosts more tasks). Drop the closed
-# task's task:/start:, KEEP session: so /lets:end still has a valid session boundary. Do NOT rm the
-# whole file — the next claim overwrites task:/start:, and a stray rm would strand /lets:end.
+# task's task:/start:/origin:, KEEP session: and every other line so /lets:end still has a valid
+# session boundary. Do NOT rm the whole file - the next claim overwrites task:/start:, and a stray
+# rm would strand /lets:end. `lets worktree task-state` owns the file (locked, validated); without
+# the binary, remove only this step's own keys.
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 BRANCH_SLUG=$(echo "$(git branch --show-current)" | tr '/' '-')
 TASK_FILE="$LETS_PROJECT_ROOT/.lets/sessions/.task-${BRANCH_SLUG}"
 if [ -f "$TASK_FILE" ]; then
-  SID_LINE=$(sed -n 's/^session: //p' "$TASK_FILE" | head -1)
-  [ -z "$SID_LINE" ] && SID_LINE="$(git rev-parse HEAD) $CLAUDE_CODE_SESSION_ID"
-  tmp=$(mktemp "${TASK_FILE}.XXXX"); printf 'session: %s\n' "$SID_LINE" > "$tmp" && mv -f "$tmp" "$TASK_FILE"
+  SESSION_ARGS=""
+  grep -q '^session: ' "$TASK_FILE" || SESSION_ARGS="--session-sha $(git rev-parse HEAD) --session-id $CLAUDE_CODE_SESSION_ID"
+  if command -v lets >/dev/null 2>&1; then
+    lets worktree task-state set --clear-task $SESSION_ARGS --json
+  else
+    tmp=$(mktemp "${TASK_FILE}.XXXX")
+    { grep -v -e '^task: ' -e '^start: ' -e '^origin: ' "$TASK_FILE"; grep -q '^session: ' "$TASK_FILE" || printf 'session: %s %s\n' "$(git rev-parse HEAD)" "$CLAUDE_CODE_SESSION_ID"; } > "$tmp"; mv -f "$tmp" "$TASK_FILE"
+  fi
 fi
 ```
 
@@ -476,6 +483,12 @@ Report what came back. The clean case costs ONE line; every other case is stated
 | `UNKNOWN`, or the read failed / returned nothing | any | mergeability could not be determined - report it as **unverified**, never imply the PR is fine |
 
 This is an additive READ: no new gate, no branch switch, nothing is skipped on a bad result. The user is told; Step 9 proceeds as normal.
+
+Orca card, best effort (single-quoted values):
+
+```bash
+[ "{LETS_LAUNCHER}" = "orca" ] && lets orca card --phase pr --comment 'PR #{number} {PR URL}' --json 2>/dev/null || true
+```
 
 After PR created:
 ```lets-tracker
@@ -561,6 +574,12 @@ Do NOT delete the branch or remove the worktree here - `/lets:worktree remove` h
 
 ## Step 9: Output
 
+**Orca card on a confirmed close.** Wherever a handler below (or the merged-PR shortcut) ran `close` and it returned `closed` - not an advance, not a failure:
+
+```bash
+[ "{LETS_LAUNCHER}" = "orca" ] && lets orca card --phase closed --comment 'task {task-id} closed' --json 2>/dev/null || true
+```
+
 ### After trunk-mode finish (HEAD == `$LETS_MERGE_BRANCH`):
 
 ```
@@ -586,6 +605,36 @@ AskUserQuestion(
 **Handle response:**
 - **Next task** -> show the tracker's `ready` view (top 5), ask user to pick. When picked: invoke `Skill(skill: "lets:take-task", args: "<task-id>")` for status update + branch setup. Do NOT inline take-task logic.
 - **End session** -> invoke `Skill(skill: "lets:end")`
+
+### Ping offer (every "After PR" variant below)
+
+Before the variant's "Next step" question, resolve this chat's orchestrator (skip entirely under AUTO MODE):
+
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+command -v lets >/dev/null 2>&1 && lets peers orchestrator --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" --json 2>/dev/null
+```
+
+When `source` is `bound` or `single` and `target.alive` is `alive`, ask the variant's question and this one in the SAME call (for `ambiguous`, `none`, `self`, a dead target or no binary: no Ping question - the orc skill's own ping asks which):
+
+```
+AskUserQuestion(
+  questions=[
+    { /* the variant's own "Next step" question, unchanged */ },
+    {
+      question: "Ping the orchestrator ({target.name}) about PR #{number}?",
+      header: "Ping",
+      options: [
+        { label: "Ping orchestrator", description: "Run /lets:orc ping PR #{number} {PR URL}" },
+        { label: "Skip", description: "Nothing is sent" }
+      ],
+      multiSelect: false
+    }
+  ]
+)
+```
+
+- **Ping orchestrator** -> `Skill(skill: "lets:orc", args: "verb=ping footer=none text=PR #{number} {PR URL}")`, then handle the "Next step" answer as usual.
 
 ### After PR ($LETS_PR_FLOW == github), NOT in worktree:
 

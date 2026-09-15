@@ -17,22 +17,34 @@ import (
 // Invoked by Claude Code via plugins/lets/hooks/hooks.json on SessionStart.
 // Body shared with `lets hook precompact` via runHookSessionPipeline.
 //
-// In addition to the shared body, this command proactively refreshes the
-// session boundary of the current branch's .task-<slug> file (lets-dsdmp) - but
-// ONLY on a genuinely new session (input source=startup), so /lets:end has a
-// fresh boundary even when /lets:start was skipped. PreCompact does NOT do this
-// (the same session continues there - moving the boundary would drop commits).
+// In addition to the shared body, this command:
+//   - reads the stdin payload FIRST, and on source startup|resume|clear self-heals
+//     an unlinked linked worktree of an initialized LETS project (selfHeal: an
+//     Orca worktree whose setup hook did not run) BEFORE LETS Config is built, so
+//     the Config comes from the linked main .lets/.env. compact never self-heals,
+//     and PreCompact never reads the payload at all;
+//   - proactively refreshes the session boundary of the current branch's
+//     .task-<slug> file (lets-dsdmp) - but ONLY on a genuinely new session
+//     (source=startup), so /lets:end has a fresh boundary even when /lets:start
+//     was skipped. PreCompact does NOT do this (the same session continues there -
+//     moving the boundary would drop commits).
 func NewHookSessionStartCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "session-start",
 		Short: "Emit LETS Config + drift check (SessionStart hook target)",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			rulesPath, _ := cmd.Flags().GetString("rules")
-			if err := runHookSessionPipeline(cmd, rulesPath); err != nil {
+			sid, source := readHookInput(cmd.InOrStdin())
+			var notices []string
+			switch source {
+			case "startup", "resume", "clear":
+				notices = append(notices, selfHealFn(sessionstart.DetectProjectRoot(), rulesPath))
+			}
+			if err := runHookSessionPipeline(cmd, rulesPath, notices); err != nil {
 				return err
 			}
 			// Best-effort, non-fatal: refresh the session boundary on a new session.
-			if sid, source := readHookInput(cmd.InOrStdin()); source == "startup" && sid != "" {
+			if source == "startup" && sid != "" {
 				_ = sessionstart.RefreshSessionBoundary(sessionstart.DetectProjectRoot(), sid)
 			}
 			return nil

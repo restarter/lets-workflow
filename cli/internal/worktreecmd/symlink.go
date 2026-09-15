@@ -48,3 +48,42 @@ func CreateRelativeSymlink(linkPath, targetAbs, projectRoot string) error {
 	}
 	return nil
 }
+
+// CreateSymlink makes link point at target, which must exist and live under
+// mainRoot. The target is relative when the link also sits under mainRoot (the
+// `.worktrees/` layout, where a relative link survives moving the whole repo), and
+// absolute otherwise (a worktree outside the repo, such as an Orca workspace).
+func CreateSymlink(link, target, mainRoot string) error {
+	rel, err := filepath.Rel(mainRoot, link)
+	if err == nil && !strings.HasPrefix(rel, "..") && !filepath.IsAbs(rel) {
+		return CreateRelativeSymlink(link, target, mainRoot)
+	}
+	if _, err := os.Lstat(target); err != nil {
+		if os.IsNotExist(err) {
+			return &Error{
+				Code:        ExitSymlinkSourceMissing,
+				Kind:        "symlink_source_missing",
+				Message:     fmt.Sprintf("symlink target %q does not exist", target),
+				Remediation: "ensure the main repo has this path before linking a worktree",
+				Cause:       err,
+			}
+		}
+		return &Error{Code: ExitFilesystem, Kind: "lstat_failed", Message: target, Cause: err}
+	}
+	if r, err := filepath.Rel(mainRoot, target); err != nil || strings.HasPrefix(r, "..") {
+		return &Error{
+			Code:    ExitFilesystem,
+			Kind:    "symlink_target_escapes_repo",
+			Message: fmt.Sprintf("symlink target %q is outside project root %q", target, mainRoot),
+		}
+	}
+	if err := os.Symlink(target, link); err != nil {
+		return &Error{
+			Code:    ExitFilesystem,
+			Kind:    "symlink_failed",
+			Message: fmt.Sprintf("symlink %q -> %q", link, target),
+			Cause:   err,
+		}
+	}
+	return nil
+}

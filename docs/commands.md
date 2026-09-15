@@ -10,7 +10,9 @@ Every `/lets:*` command, grouped. For the day-to-day flow see **[workflow.md](wo
 | `/lets:end` | End the session — save progress, sync the task tracker, write a snapshot for next time. `--session` (aliases `--snapshot`, `--pre-compact`, `--compact`) writes only the snapshot and keeps the session going, whether or not a `/compact` follows. |
 | `/lets:commit` | Commit changes — review, conventional commit message, task ID in the scope and a `Task:` footer. Use this instead of `git commit`. Also auto-triggers on "commit" in conversation. |
 | `/lets:done` | Finish the task — push the branch and open a PR (GitHub mode), or merge locally and close the task (local/bitbucket). |
-| `/lets:status` | Read-only orient snapshot — where you are, what's in flight, what's next (tracker-universal). |
+| `/lets:status` | Read-only orient snapshot — where you are, what's in flight, what's next (tracker-universal). Shows a Peers block when other sessions of the repo are live. |
+| `/lets:orc` | Talk to this chat's orchestrator or a named peer session — `ask`, `ping`, `read`, `tell`, `who`; the only sender of peer messages. `/lets:peer <name> <verb> [text]` is the alias with a target. See [commands/orc.md](commands/orc.md). |
+| `/lets:hub` | Orca addon (`LETS_LAUNCHER=orca`): lists the orchestrators of every project Orca knows, asks a stopped one a read-only question through a narrowed headless fork (plan mode, Read/Grep/Glob, no MCP), and wakes one in a visible Orca terminal for anything that needs its gates. |
 | `/lets:note` | Add a note to the active task — a decision, gotcha, fact, or reference. `--session` (same aliases) writes the same recovery snapshot `/lets:end` does, without ending anything. |
 
 See **[tasks.md](tasks.md)** for the task lifecycle.
@@ -20,11 +22,11 @@ See **[tasks.md](tasks.md)** for the task lifecycle.
 | Command | What it does |
 |---------|--------------|
 | `/lets:backlog` | Backlog management — multi-agent review (`review`), a quick no-agent pulse (`--fast`), or interactive cleanup triage (`cleanup`). The keyword/flag skips the menu; `review --workflow` runs the fan-out off-context. |
-| `/lets:plan` | Structured planning — codebase exploration with scaled explorer agents, then architecture design with expert evaluation, then a written plan in `.lets/plans/`. `--fast` skips the subagent phases and plans in-conversation. |
-| `/lets:plan-workflow` | PREVIEW — autonomous planning via a Dynamic Workflow (goal + rubric up front, off-context, approve at the end). `--fast` = lean budget (~7 agents, still off-context) — distinct from `/lets:plan --fast` (no subagents, in-conversation). |
+| `/lets:plan` | Structured planning — codebase exploration with scaled explorer agents, then architecture design with expert evaluation, then a written plan in `.lets/plans/`. `--fast` skips the subagent phases and plans in-conversation. `--idea` writes a concept document instead (the wish, triggers, constraints, open questions; no code) that `/lets:execute` never runs and a later `/lets:plan` reads as input. |
+| `/lets:plan-workflow` | PREVIEW — autonomous planning via a Dynamic Workflow (goal + rubric up front, off-context, approve at the end). `--fast` = lean budget (~7 agents, still off-context) — distinct from `/lets:plan --fast` (no subagents, in-conversation). Before launch a budget panel shows the agents per stage and the model; lower any stage or pick another model (cuts are listed with the plan). |
 | `/lets:execute` | Execute the plan from `/lets:plan` in native plan mode, with your approval at each step. `--auto` runs an approved plan without per-step gates (push/PR/`bd close`/external still gated). |
-| `/lets:team` | Parallel implementation with Agent Teams — `run` (pick tasks, spawn teammates), `status`, `stop`. |
-| `/lets:worktree` | Create and manage worktrees for parallel sessions — `create <name>`, `list`, `remove <name>`. `create <id> --flow plan-workflow --auto` spawns the autonomous task pipeline. |
+| `/lets:team` | Parallel implementation with Agent Teams — `run` (pick tasks, spawn teammates), `status`, `stop`. `--backend orca|agents`: `orca` (the Orca addon, offered only with `LETS_LAUNCHER=orca` and the app running) runs each task as a visible LETS session in an Orca child worktree under Orca's supervised orchestration. |
+| `/lets:worktree` | Create and manage worktrees for parallel sessions — `create <name>`, `list`, `remove <name>`. `create <id> --flow plan-workflow --auto` spawns the autonomous task pipeline. `--orca` / `--no-orca` (like `--cmux` / `--tmux`) override the launcher for one run; `remove` offers to sweep task branches already merged into `origin/<merge-branch>`. |
 
 See **[plan-execute.md](plan-execute.md)**, **[parallel-work.md](parallel-work.md)**, and **[autonomous.md](autonomous.md)**.
 

@@ -35,6 +35,18 @@ git status --short   # empty = clean; else count the lines
 
 Detect context (one compact line, only if applicable): worktree (git-dir contains `worktrees/`), trunk-mode (HEAD == `{LETS_MERGE_BRANCH}` AND an active task), or main-mode (HEAD == `{LETS_MERGE_BRANCH}`, no task).
 
+## Step 2.5: Peers
+
+The caller passes `caller=status|start|backlog` (default `status`).
+
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+ls "$LETS_PROJECT_ROOT/.lets/sessions/peers/"*.role >/dev/null 2>&1 && echo PEER_EVIDENCE=roles
+lets peers who --exclude-session "$CLAUDE_CODE_SESSION_ID" --timeout-ms 2500 --json 2>/dev/null || echo '{"ok":false}'
+```
+
+Evidence = `PEER_EVIDENCE=roles`, or at least one row in `peers`. With evidence: render `## Peers` (Step 6) plus one line per `degraded[]` entry. Without evidence: caller `status` prints only the degraded line(s) (nothing when every source is healthy); callers `start` / `backlog` omit the block. `{"ok":false}` (no binary, a stub) counts as no evidence and no degraded line.
+
 ## Step 3: In flight
 
 ```lets-tracker
@@ -89,6 +101,14 @@ Branch: `{branch}`  -  {Task: **{title}** (`{id}`) | no active task}  -  {clean 
 
 ## Project                                               {only if stats present}
 {open} open - {wip} in progress - {closed} closed
+
+## Peers                                                 {per Step 2.5}
+| role | name | scope / orchestrator | task | branch | state | last activity |
+|------|------|----------------------|------|--------|-------|---------------|
+| {role or -} | {name} ({session6}) | {an orchestrator's scope | -> {a worker's orc}} | {task} | {branch} | {state; "liveness unknown" when alive=unknown} | {last_activity} |
+via {orca | claude registry | orca + claude registry}
+{claude registry: <reason> (<detail>)  |  orca: <reason>   - one line per degraded source}
+{both sources down: "Peers: unavailable - <reason>; <reason>"}
 ```
 
 On the `none` tracker, In flight / Next up / Project have no data source - omit those three sections and show only `## Where you are` + the `Tracker: none` line.
@@ -99,3 +119,4 @@ On the `none` tracker, In flight / Next up / Project have no data source - omit 
 - Every task reference is `**Title** (`id`)`, never a bare id.
 - Respond in the user's language.
 - Degrade section-by-section; a missing capability drops its section, never the whole snapshot.
+- Peers is gated on evidence, and `/lets:status` always surfaces a degraded transport - a named exception to dropping a section silently. No per-peer tracker `show` (hot path).

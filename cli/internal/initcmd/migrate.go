@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/restarter/lets-workflow/cli/internal/fsutil"
 )
 
 // MigrateStatuslineSh deletes .lets/statusline.sh if it's our shim or legacy
@@ -172,10 +174,10 @@ func EnsureGitignore(projectRoot string, entries []string) error {
 		return fmt.Errorf("open lock: %w", err)
 	}
 	defer func() { _ = lock.Close() }()
-	if err := lockFile(lock); err != nil {
+	if err := fsutil.LockFile(lock); err != nil {
 		return fmt.Errorf("flock: %w", err)
 	}
-	defer func() { _ = unlockFile(lock) }()
+	defer func() { _ = fsutil.UnlockFile(lock) }()
 
 	// 2. Read-modify-write (shape unchanged from pre-hardening).
 	path := filepath.Join(projectRoot, ".gitignore")

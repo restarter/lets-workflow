@@ -146,6 +146,13 @@ func Run(ctx context.Context, prefs Prefs, projectRoot, pluginRoot string) (Resu
 		result.Add(Step{Status: StepOK, Message: msg})
 	}
 
+	// 5b. orca.yaml when the project selects the orca launcher (a no-op otherwise).
+	if step, err := EnsureOrcaYAML(projectRoot); err != nil {
+		return result, err
+	} else if step.Message != "" {
+		result.Add(step)
+	}
+
 	// 6. .env.example always refreshes from canonical letsconfig defaults
 	// (no plugin template file — Go is the single source of truth).
 	examplePath := filepath.Join(projectRoot, ".lets", ".env.example")

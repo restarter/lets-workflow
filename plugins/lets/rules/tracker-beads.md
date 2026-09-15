@@ -38,6 +38,16 @@ The reference adapter. Binds the neutral verbs to the `bd` CLI - the historical,
 
 beads supports every verb, so nothing degrades. A CORE verb that somehow fails (e.g. `bd` not on PATH) must HARD-FAIL loud (e.g. "close FAILED - task NOT closed"); never report a phantom success.
 
+## Worktree
+
+links: `.beads/.env` (0600).
+id: `[a-z][a-z0-9]*-[a-z0-9]+(\.[0-9]+)?`.
+branch: `feature/{id}-{slug}`.
+worktree-branch: `worktree-{id}-{slug}`.
+accept: `{id}-{slug}`.
+
+The store credential is shared by every worktree of the repo: each worktree gets a symlink to the main checkout's `.beads/.env`, and missing parent directories are created 0700. `branch:` / `worktree-branch:` are the names LETS creates, so a branch in one of those shapes is that task's branch; `accept:` is recognized only by `lets worktree adopt` (a worktree Orca or a teammate named `<id>-<slug>`), and that candidate is confirmed before use.
+
 ## Notes
 
 - `stats` (used by `/lets:backlog` + the orient snapshot's optional `## Project` counts): `bd stats` gives native status/priority totals (no jq); `bd blocked` gives the dep-graph tree (native, no jq). The old per-`epic:*` label-progress bars and the jq-based priority histogram were removed with the 5-view `/lets:status` dashboards (orient unification, lets-qsgmd) — no command renders them now, so the fragile jq-over-bd-JSON control-char path is gone from the adapter.

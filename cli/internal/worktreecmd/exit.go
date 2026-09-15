@@ -24,9 +24,12 @@ const (
 	ExitSymlinkSourceMissing = 19
 	ExitVerifyFailed         = 20
 	ExitUnpushedCommits      = 21
-	// Reserved 22..29 for future `lets worktree adopt` and related subcommands.
-	// Adopt would re-register an externally-created worktree path with LETS-managed
-	// symlinks. See lets-rqep4 backlog comment.
+	ExitLetsDirConflict      = 22 // adopt: a real .lets with non-cache content (never deleted)
+	ExitNotLinkedWorktree    = 23 // adopt / release: the directory is not a linked worktree
+	ExitStoreLinkFailed      = 24 // a declared store link could not be made (foreign file at the link path)
+	ExitTaskFileConflict     = 25 // adopt: .task-<slug> already names a different task
+	ExitTaskStateLockBusy    = 26 // task-state: the lock was still held at the --wait deadline
+	// 27..29 reserved.
 )
 
 // ExitCode maps an error to its numeric exit code via errors.As.

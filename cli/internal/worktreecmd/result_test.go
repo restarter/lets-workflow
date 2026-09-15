@@ -125,6 +125,72 @@ func TestResult_SchemaContract(t *testing.T) {
 		}
 	})
 
+	t.Run("adopt_success", func(t *testing.T) {
+		r := &AdoptResult{
+			Envelope:   Envelope{SchemaVersion: SchemaVersion, OK: true, Subcommand: "adopt", ProjectRoot: "/p", Steps: []Step{}},
+			MainRoot:   "/p",
+			Worktree:   &WorktreeInfo{Name: "w", Path: "/o/w", Branch: "b", StoreLinks: []StoreLink{{Path: ".beads/.env", Linked: true}}, StoreLinked: true},
+			Task:       &TaskInfo{ID: "lets-abc", Source: "branch", Origin: "branch"},
+			StoreLinks: []StoreLink{{Path: ".beads/.env", Linked: true}},
+			MovedAside: "/o/w/.lets.pre-adopt",
+		}
+		m := marshalToMap(t, r)
+		requireKeys(t, m, requiredCore...)
+		requireKeys(t, m, "main_root", "worktree", "task", "store_links", "moved_aside")
+		requireKeys(t, m["task"].(map[string]any), "id", "source", "origin")
+		requireKeys(t, m["worktree"].(map[string]any), "store_links", "store_linked", "beads_symlinked")
+		requireKeys(t, m["store_links"].([]any)[0].(map[string]any), "path", "linked")
+	})
+
+	t.Run("release_success", func(t *testing.T) {
+		r := &ReleaseResult{
+			Envelope: Envelope{SchemaVersion: SchemaVersion, OK: true, Subcommand: "release", ProjectRoot: "/p", Steps: []Step{}},
+			Released: &ReleasedInfo{Task: "lets-abc", Branch: "b", Marker: "/p/.lets/cache/released-lets-abc", Dirty: true, Unpushed: false},
+		}
+		m := marshalToMap(t, r)
+		requireKeys(t, m, requiredCore...)
+		requireKeys(t, m["released"].(map[string]any), "task", "branch", "marker", "dirty", "unpushed")
+	})
+
+	t.Run("branch_name_success", func(t *testing.T) {
+		r := &BranchNameResult{
+			Envelope: Envelope{SchemaVersion: SchemaVersion, OK: true, Subcommand: "branch-name", ProjectRoot: "/p", Steps: []Step{}},
+			Branch:   "feature/lets-abc-x", Slug: "x", Template: "feature/{id}-{slug}", Source: "installed",
+		}
+		requireKeys(t, marshalToMap(t, r), "branch", "slug", "template", "source")
+	})
+
+	t.Run("info_task_candidate_and_task_state", func(t *testing.T) {
+		r := &InfoResult{
+			Envelope:      Envelope{SchemaVersion: SchemaVersion, OK: true, Subcommand: "info", ProjectRoot: "/p", Steps: []Step{}},
+			MainRoot:      "/p",
+			Worktree:      &WorktreeInfo{Name: "w", Task: "lets-abc", OrcaWorktreeID: "repo::/o/w"},
+			TaskCandidate: &TaskCandidate{ID: "lets-abc", Template: "feature/{id}-{slug}", Source: "created", Branch: "feature/lets-abc-x", Reason: ""},
+		}
+		m := marshalToMap(t, r)
+		requireKeys(t, m["task_candidate"].(map[string]any), "id", "template", "source", "branch")
+		requireKeys(t, m["worktree"].(map[string]any), "task", "orca_worktree_id")
+
+		ts := &TaskStateResult{
+			Envelope:  Envelope{SchemaVersion: SchemaVersion, OK: true, Subcommand: "task-state", ProjectRoot: "/p", Steps: []Step{}},
+			TaskState: &TaskStateInfo{Written: false, Reason: "task_mismatch", Path: "/p/.lets/sessions/.task-b", Task: "a", Start: "abc1234", Origin: "branch", Orc: "MAIN", Rebound: &Rebound{From: "OLD"}},
+		}
+		requireKeys(t, marshalToMap(t, ts)["task_state"].(map[string]any), "written", "reason", "path", "task", "start", "origin", "orc", "rebound")
+	})
+
+	t.Run("sweep_and_already_gone", func(t *testing.T) {
+		s := &SweepResult{
+			Envelope: Envelope{SchemaVersion: SchemaVersion, OK: true, Subcommand: "sweep", ProjectRoot: "/p", Steps: []Step{}},
+			Merged:   []string{"feature/lets-a-x"}, Unmerged: []string{}, Deleted: []string{}, Applied: false,
+		}
+		requireKeys(t, marshalToMap(t, s), "merged", "unmerged", "deleted", "applied")
+		r := &RemoveResult{
+			Envelope: Envelope{SchemaVersion: SchemaVersion, OK: true, Subcommand: "remove", ProjectRoot: "/p", Steps: []Step{}},
+			Removed:  &RemovedInfo{Name: "gone", Branch: "worktree-gone", BranchDeleted: true, AlreadyGone: true},
+		}
+		requireKeys(t, marshalToMap(t, r)["removed"].(map[string]any), "already_gone")
+	})
+
 	t.Run("info_in_worktree", func(t *testing.T) {
 		r := &InfoResult{
 			Envelope: Envelope{

@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/restarter/lets-workflow/cli/internal/orcacmd"
 )
 
 // writeEnv creates <root>/.lets/.env with LETS_LAUNCHER=<launcher> (omitted when
@@ -91,5 +93,31 @@ func TestResult_SchemaContract(t *testing.T) {
 		if _, ok := got[k]; !ok {
 			t.Errorf("envelope missing key %q", k)
 		}
+	}
+}
+
+func TestNotify_OrcaDispatchesThroughSeam(t *testing.T) {
+	old := orcacmd.NotifyFunc
+	t.Cleanup(func() { orcacmd.NotifyFunc = old })
+	var got orcacmd.NotifyOptions
+	orcacmd.NotifyFunc = func(_ context.Context, o orcacmd.NotifyOptions) (*orcacmd.NotifyResult, error) {
+		got = o
+		return &orcacmd.NotifyResult{
+			Envelope: orcacmd.Envelope{OK: true, Steps: []orcacmd.Step{{Status: "ok", Message: "card comment set"}}},
+			Notify:   &orcacmd.NotifyInfo{Notified: true, Target: "r::/w", Title: o.Title},
+		}, nil
+	}
+	res, err := Notify(context.Background(), Options{Title: "Plan ready", Body: "b", Cwd: "/w", ProjectRoot: writeEnv(t, "orca")})
+	if err != nil || !res.OK || !res.Notify.Notified || res.Notify.Launcher != "orca" || res.Notify.Target != "r::/w" || got.Cwd != "/w" {
+		t.Fatalf("err=%v notify=%+v got=%+v", err, res.Notify, got)
+	}
+	if len(res.Steps) != 1 || res.Steps[0].Message != "card comment set" {
+		t.Errorf("steps not converted: %+v", res.Steps)
+	}
+
+	orcacmd.NotifyFunc = func(context.Context, orcacmd.NotifyOptions) (*orcacmd.NotifyResult, error) { return nil, nil }
+	res, _ = Notify(context.Background(), Options{Title: "t", ProjectRoot: writeEnv(t, "orca")})
+	if res.Notify.Notified || res.Notify.Reason != "launcher_error" {
+		t.Errorf("nil result must degrade to launcher_error: %+v", res.Notify)
 	}
 }

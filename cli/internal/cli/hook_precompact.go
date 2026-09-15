@@ -20,7 +20,7 @@ func NewHookPreCompactCmd() *cobra.Command {
 		Short: "Re-emit LETS Config + drift check (PreCompact hook target)",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			rulesPath, _ := cmd.Flags().GetString("rules")
-			return runHookSessionPipeline(cmd, rulesPath)
+			return runHookSessionPipeline(cmd, rulesPath, nil)
 		},
 	}
 	cmd.Flags().String("rules", "", "Path to plugin's rules/lets-rules.md (for drift check)")

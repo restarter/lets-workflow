@@ -13,7 +13,7 @@ Thin dispatcher for interactive parallel worktrees. All filesystem/git work live
 ## Step 1: Determine Subcommand
 
 **If argument provided** (e.g., `/lets:worktree create auth-feature`), parse it:
-- `create <name>` -> go to Create. **First strip any `--cmux` / `--no-cmux` / `--tmux` / `--no-tmux` / `--auto` / `--flow <value>` / `--branch <ref>` token** out of the argument and carry them as overrides (`--cmux`/`--no-cmux`/`--tmux`/`--no-tmux` = launcher; `--auto` = autonomous permission mode; `--flow plan|plan-workflow` = which command the launch lands in — all for Step C3.5; `--branch <ref>` decouples the attached/created branch from the dir name — Step C2). Bind the remainder as `<name>` (so `create auth --flow plan-workflow --auto` => name `auth`, not the flags; `create pwa-46696 --branch feature/pwa-46696` => name `pwa-46696`, branch `feature/pwa-46696`).
+- `create <name>` -> go to Create. **First strip any `--orca` / `--no-orca` / `--cmux` / `--no-cmux` / `--tmux` / `--no-tmux` / `--auto` / `--flow <value>` / `--branch <ref>` / `--title-file <path>` token** out of the argument and carry them as overrides (`--orca`/`--no-orca` = the Orca launcher, Step C0; `--cmux`/`--no-cmux`/`--tmux`/`--no-tmux` = launcher; `--auto` = autonomous permission mode; `--flow plan|plan-workflow` = which command the launch lands in — all for Steps C0 / C3.5; `--branch <ref>` decouples the attached/created branch from the dir name — Step C2; `--title-file <path>` = a file holding the task title, passed by `take-task` so the branch name is derived in Go — Step C1). Bind the remainder as `<name>` (so `create auth --flow plan-workflow --auto` => name `auth`, not the flags; `create pwa-46696 --branch feature/pwa-46696` => name `pwa-46696`, branch `feature/pwa-46696`). A `<name>` that is a bare task id (it passes the detect-task id gate and `take-task` sent it) means **From task** in Step C1 with that id.
 - `list` -> go to List
 - `remove <name>` -> go to Remove
 - `info` -> go to Info
@@ -40,13 +40,15 @@ AskUserQuestion(
 
 ## Create
 
-Create an interactive worktree. The Go subcommand owns the guard, name validation, `.gitignore` ensure, `git worktree add`, symlinks (`.lets/`, `.beads/.env`), verify, and rollback. The skill drives the user choices.
+Create an interactive worktree. The Go subcommand owns the guard, name validation, `.gitignore` ensure, `git worktree add`, symlinks (`.lets/` and the tracker adapter's declared store links), verify, and rollback. The skill drives the user choices.
 
-Optional launcher override on the argument: `--cmux` / `--no-cmux` / `--tmux` / `--no-tmux` force the launcher for this run (otherwise `$LETS_LAUNCHER` decides — see Step C3.5).
+Optional launcher override on the argument: `--orca` / `--no-orca` / `--cmux` / `--no-cmux` / `--tmux` / `--no-tmux` force the launcher for this run (otherwise `$LETS_LAUNCHER` decides — Orca in Step C0, the others in Step C3.5).
 
 Optional `--auto`: launch the session in `claude --permission-mode auto` (autonomous — auto-approves low-risk work, still gates push / PR / close / external per LETS AUTO MODE rules). Maps ONLY to `--permission-mode auto`, **never** `bypassPermissions`. Applies to the launcher paths in Step C3.5 / C4 (see Step C3.5).
 
 Optional `--flow plan|plan-workflow`: which `/lets:*` command the spawned session lands in. `--flow` ONLY swaps the launch `--command` string — all other steering stays in the tracker task (the launch stays uniform/reproducible). Default (no `--flow`) → `/lets:start <id>` (today's behavior). `--flow plan` → `/lets:plan <id>` (interactive planning in the worktree; the human drives). `--flow plan-workflow` → `/lets:plan-workflow <id>` (autonomous planning). Because only the command string changes, `--flow` is **launcher-agnostic** — the cmux (C3.5) and terminal (C4) paths both inherit it (so does the future tmux launcher). Composes orthogonally with `--auto`. Requires a known task id; on a **taskless** worktree, ignore `--flow` with a one-line note (and `taskless + --flow + --auto` collapses to the existing taskless `--auto` path, `claude --permission-mode auto`). **plan-workflow is PREVIEW** (needs Claude Code ≥ 2.1.154 / paid / Dynamic Workflows) — the launch string can't probe that, so the launched `/lets:plan-workflow` is responsible: if the Workflow tool is unavailable it prints the standard PREVIEW-unavailable message and the operator re-runs `--flow plan`.
+
+**Orchestrator binding.** When this session is a registered orchestrator, every worker it spawns is bound to it. Before building a launch prompt (C0's `--prompt`, C3.5's cmux / tmux `--command`, C4's printed terminal command), run `lets peers orchestrator --session "$CLAUDE_CODE_SESSION_ID" --json`; on `source=self` append ` --orc="<target.name>"` to the slash command of the first line - `/lets:start <id> --orc="<name>"`, and the `--flow` forms `/lets:plan <id> --orc="<name>"` / `/lets:plan-workflow <id> --orc="<name>"` (the spawned command strips it before its task-id test). The name comes from the registry through Go, so it already passed the name grammar; inside the single-quoted launch string it stays double-quoted, e.g. `claude --permission-mode auto '/lets:plan-workflow {task-id} --orc="MAIN PWA"'`. Any other `source`, a taskless worktree, or no binary -> the prompt is unchanged.
 
 ### Step C1: Get Name
 
@@ -66,23 +68,53 @@ AskUserQuestion(
 )
 ```
 
-**From task:** Show the tracker's `ready` view (top 5) and let user pick a task or use the current in-progress task. Generate name as `<task-id>-<slugified-title>` (e.g., `lets-hpi.3-worktree-start`).
+**From task:** Show the tracker's `ready` view (top 5) and let user pick a task or use the current in-progress task (skipped when `take-task` already passed the id). The id goes through the detect-task id gate. Go derives the names, markdown never slugifies by eye: write the task title with the Write tool to `.lets/cache/title-<session6>.txt` (6 = first chars of `$CLAUDE_CODE_SESSION_ID`; reuse a passed `--title-file`), then
+
+```bash
+lets worktree branch-name --task '<task-id>' --title-file '<title-file>' --worktree --plugin-root "${CLAUDE_PLUGIN_ROOT}" --json
+```
+
+Take `branch` (the adapter's `worktree-branch:` shape, default `worktree-<task-id>-<slug>`) as `$BRANCH_REF` and `<task-id>-<slug>` from `slug` as the dir `<name>` (e.g. `lets-hpi.3-worktree-start`). With the default templates these are exactly today's names. On `ok=false` surface `error.message` and stop.
 
 **Custom:** Use provided text. Slugify: lowercase, spaces to hyphens, remove special chars, max 50 chars (the Go validator allows up to 64; the skill pre-truncates to 50 to leave headroom for `worktree-` prefixes and tmux pane labels). `lets worktree create` will reject invalid names with exit 2.
 
 **Slash branch (git-flow / Bitbucket refs).** The dir NAME must not contain `/` (it's a directory + the validator forbids it). If the user names a branch ref that contains `/` (e.g. `feature/pwa-46696`, `bugfix/x`) — or passed `--branch <ref>` on the argument — **decouple the two**: derive a slash-free dir name (replace `/` with `-`, e.g. `feature/pwa-46696` -> `feature-pwa-46696`, or just the trailing segment `pwa-46696`) and pass the original ref via `--branch` in Step C2. The Go subcommand attaches to (or creates) that ref verbatim while the worktree dir keeps the sanitized name (lets-x5ucf).
+
+### Step C0: Orca launcher (after C1, before C2)
+
+Resolve the launcher: an explicit `--orca` / `--no-orca` override, else `$LETS_LAUNCHER`. Anything but orca -> go to C2 unchanged.
+
+**orca** (`$LETS_LAUNCHER=orca` or `--orca`): Orca creates the worktree itself and opens Claude in its own pane, so this session never moves into it - do NOT ask Step C3; "Switch to worktree" would behave exactly like "Stay on current branch".
+
+- **Name.** Orca turns `/` into `-` in `--name` and has no branch option (spike 1.0), so pass the `/`-free `<task-id>-<slug>` (same `lets worktree branch-name` call as C1, without `--worktree`; use its `slug`). Say in one line: "Orca names the branch after the worktree: `<task-id>-<slug>`; `lets worktree adopt` recognizes that shape". Taskless: the custom `<name>`.
+- **Prompt.** `/lets:start <task-id>`; `--flow plan` -> `/lets:plan <task-id>`, `--flow plan-workflow` -> `/lets:plan-workflow <task-id>`. Taskless: no `--prompt`.
+- **`--auto`.** Orca launches Claude with the user's configured Orca agent command and accepts no agent arguments (spike 1.0 item 5), so `--permission-mode auto` cannot reach it: print one line `orca_auto_unsupported - Orca cannot pass --permission-mode auto; opening without Orca` and go to C2 (the cmux / terminal paths honor `--auto`).
+
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+lets orca open --repo "$LETS_PROJECT_ROOT" --name '<task-id>-<slug>' --prompt '/lets:start <task-id>' --json
+```
+
+Parse the `launch` block:
+- `launched=true` -> Step C4 "orca" block. Done - no C2, C3 or C3.5.
+- `reason=already_open` -> an Orca worktree with this name is already open at `{launch.path}`: tell the user to switch to its card in Orca (or re-run with `--force` on `lets orca open`) and stop.
+- any other `reason` (`orca_not_found`, `orca_app_not_running`, `orca_capability_missing`, `orca_error`, ...) -> one line naming it, then continue at C2 with the non-orca chain: C3.5 uses **cmux** when `uname -s` is `Darwin` and `command -v cmux` succeeds, else **terminal**.
+
+`--no-orca` (the `fallback_command` Orca returns) skips this step and uses the same cmux-else-terminal chain.
+
+> **Keep in sync:** the launched/fallback contract mirrors `orcacmd.Open` (`cli/internal/orcacmd/open.go`). The Go layer never hard-fails - always render whatever `launch` reports.
 
 ### Step C2: Create
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 cd "$LETS_PROJECT_ROOT"
-lets worktree create "$NAME" --json
-# Slash branch ref decoupled from dir name (see Step C1 "Slash branch"):
-#   lets worktree create "$DIR_NAME" --branch "$BRANCH_REF" --json
+lets worktree create "$NAME" --plugin-root "${CLAUDE_PLUGIN_ROOT}" --json
+# From task (C1) or a slash branch ref decoupled from the dir name (Step C1 "Slash branch"):
+#   lets worktree create "$DIR_NAME" --branch "$BRANCH_REF" --plugin-root "${CLAUDE_PLUGIN_ROOT}" --json
 ```
 
-The Go subcommand auto-detects attach vs new-branch: if `refs/heads/<NAME>` exists, attaches to it; otherwise creates `worktree-<NAME>` from `LETS_MERGE_BRANCH`. Pass `--attach` or `--new-branch` to force a mode. **Pass `--branch <ref>`** to attach/create a branch whose ref differs from the dir `<NAME>` — required for git-flow refs containing `/` (e.g. `feature/x`), since the dir name can't hold a slash; the ref is used verbatim (no `worktree-` prefix) while the dir keeps `<NAME>`. Pass `--switch-main-if-needed` to auto-switch main when attaching its current branch (refuses on dirty/mid-rebase tree). Pass `--no-symlink-lets` or `--no-symlink-beads` to skip a specific symlink.
+The Go subcommand auto-detects attach vs new-branch: if `refs/heads/<NAME>` exists, attaches to it; otherwise creates `worktree-<NAME>` from `LETS_MERGE_BRANCH`. Pass `--attach` or `--new-branch` to force a mode. **Pass `--branch <ref>`** to attach/create a branch whose ref differs from the dir `<NAME>` — required for git-flow refs containing `/` (e.g. `feature/x`) and for the C1 task branch; the ref is used verbatim (no `worktree-` prefix) while the dir keeps `<NAME>`. Pass `--switch-main-if-needed` to auto-switch main when attaching its current branch (refuses on dirty/mid-rebase tree). Pass `--no-symlink-lets` or `--no-store-links` to skip `.lets` or the declared store links. `--plugin-root` lets Go read the tracker adapter from the plugin when the installed copy predates its `## Worktree` section.
 
 Parse the JSON. On `ok=false`, surface `error.message` and `error.remediation` to the user; if `rollback.residual` is non-empty, list the paths so the user can clean up.
 
@@ -110,8 +142,9 @@ AskUserQuestion(
 Decide how to open the worktree. Resolve in this order:
 
 1. Explicit override on the command argument: `--cmux`/`--tmux` force that launcher, `--no-cmux`/`--no-tmux` force terminal.
-2. Else `$LETS_LAUNCHER` from injected LETS Config (`terminal` default | `cmux` | `tmux`).
-3. An unrecognized `$LETS_LAUNCHER` value → use `terminal` and print one line naming the bad value (`lets init --launcher` rejects these, but `.lets/.env` is hand-editable).
+2. Else `$LETS_LAUNCHER` from injected LETS Config (`terminal` default | `cmux` | `tmux` | `orca`).
+3. `orca` reaches this step only after Step C0 fell back (or `--no-orca`): use `cmux` when `uname -s` is `Darwin` and `command -v cmux` succeeds, else `terminal`.
+4. An unrecognized `$LETS_LAUNCHER` value → use `terminal` and print one line naming the bad value (`lets init --launcher` rejects these, but `.lets/.env` is hand-editable).
 
 **terminal** (default / `--no-cmux` / `--no-tmux`): print the new-terminal command (Step C4 "terminal" block) — unchanged behavior.
 
@@ -158,14 +191,14 @@ Parse the `launch` block:
 
 ### Step C4: Output
 
-Use the JSON envelope's `worktree` block (`path`, `branch`, `branch_mode`, `lets_symlinked`, `beads_symlinked`).
+Use the JSON envelope's `worktree` block (`path`, `branch`, `branch_mode`, `lets_symlinked`, `store_linked`, `store_links[]` - each `{path, linked}`). Render `store_links[]` paths after `store=`; an adapter that declares no links (e.g. `none`) shows `store=-`.
 
 **If staying on current branch (terminal launcher):**
 
 ```
 Worktree created: {worktree.path}
 Branch: {worktree.branch} ({worktree.branch_mode})
-Symlinks: lets={worktree.lets_symlinked} beads={worktree.beads_symlinked}
+Symlinks: lets={worktree.lets_symlinked} store={worktree.store_linked} ({store_links[].path})
 
 Open a new terminal for the worktree:
 
@@ -186,7 +219,7 @@ cd {worktree.path} && claude
 ```
 Worktree created: {worktree.path}
 Branch: {worktree.branch} ({worktree.branch_mode})
-Symlinks: lets={worktree.lets_symlinked} beads={worktree.beads_symlinked}
+Symlinks: lets={worktree.lets_symlinked} store={worktree.store_linked} ({store_links[].path})
 
 Opened cmux workspace {launch.workspace_name} → it's running `claude '/lets:start {task-id}'`.
 
@@ -202,7 +235,7 @@ On `launched=false` (cmux absent / not macOS / cmux error), fall back to the ter
 ```
 Worktree created: {worktree.path}
 Branch: {worktree.branch} ({worktree.branch_mode})
-Symlinks: lets={worktree.lets_symlinked} beads={worktree.beads_symlinked}
+Symlinks: lets={worktree.lets_symlinked} store={worktree.store_linked} ({store_links[].path})
 
 Opened tmux session {launch.workspace_name} ({launch.target}) → running `claude '/lets:start {task-id}'`.
 Attach from a terminal:  {launch.attach_command}
@@ -222,12 +255,25 @@ WT=$(lets worktree create my-feature --print-cd) || exit 1
 cd "$WT" && claude
 ```
 
+**Orca launcher (Step C0, `launched=true`):**
+
+```
+Orca worktree created: {launch.path}
+Branch: {launch.branch}
+
+Orca opened Claude there with `{prompt}`. `orca.yaml` runs `lets worktree adopt` to link `.lets` and the tracker store; if that hook did not run, `/lets:start` in the new pane self-heals.
+
+┌─ LETS ──────────────────────────┐
+│  List?  /lets:worktree list     │
+└─────────────────────────────────┘
+```
+
 **If switching to worktree:**
 
 ```
 Worktree created: {worktree.path}
 Branch: {worktree.branch} ({worktree.branch_mode})
-Symlinks: lets={worktree.lets_symlinked} beads={worktree.beads_symlinked}
+Symlinks: lets={worktree.lets_symlinked} store={worktree.store_linked} ({store_links[].path})
 
 ┌─ LETS ──────────────────────────┐
 │  Start?  /lets:start            │
@@ -244,16 +290,16 @@ LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 lets worktree list --json --quiet
 ```
 
-Parse the JSON envelope's `worktrees[]` and `main` blocks. Each row exposes: `name`, `path`, `branch`, `kind` (`interactive` | `agent` | `other`), `lets_symlinked`, `beads_symlinked`, `changes_clean`, `changes_modified`, `changes_untracked`, optional `locked` / `prunable` / `detached`.
+Parse the JSON envelope's `worktrees[]` and `main` blocks. Each row exposes: `name`, `path`, `branch`, `kind` (`interactive` | `agent` | `other`), `lets_symlinked`, `store_linked`, `store_links[]`, `changes_clean`, `changes_modified`, `changes_untracked`, optional `task`, `locked` / `prunable` / `detached`.
 
 ### Output
 
 ```
 ## Worktrees
 
-| Path | Branch | Kind | LETS | Beads | Changes |
+| Path | Branch | Kind | LETS | Store | Changes |
 |------|--------|------|------|-------|---------|
-| {worktrees[i].path} | {worktrees[i].branch} | {worktrees[i].kind} | {symlinked / -} | {symlinked / -} | clean / N modified / M untracked |
+| {worktrees[i].path} | {worktrees[i].branch} | {worktrees[i].kind} | {symlinked / -} | {linked / - (none declared)} | clean / N modified / M untracked |
 
 {count} worktrees (main: {main.branch})
 
@@ -263,7 +309,7 @@ Parse the JSON envelope's `worktrees[]` and `main` blocks. Each row exposes: `na
 └─────────────────────────────────┘
 ```
 
-`.claude/worktrees/` rows are agent worktrees (native Claude Code) — surface with `kind=agent`. `.worktrees/` rows are interactive (this command) — `kind=interactive`.
+`.claude/worktrees/` rows are agent worktrees (native Claude Code) — surface with `kind=agent`. `.worktrees/` rows are interactive (this command) — `kind=interactive`. A worktree Orca or a teammate created elsewhere is `kind=other`; `lets worktree adopt` inside it links it without moving it.
 
 ---
 
@@ -315,7 +361,7 @@ AskUserQuestion(
 )
 ```
 
-On either **Force remove**, retry with `--force`. On `error.kind=worktree_not_found`, exit cleanly. Capture `removed.branch` from the success envelope for R3.
+On either **Force remove**, retry with `--force`. On `error.kind=worktree_not_found`, exit cleanly. On `error.kind=worktree_external`, the worktree lives outside `.worktrees/` (an Orca workspace): tell the user to archive it in Orca (which runs `lets worktree release`) or run `lets worktree release` inside it, and stop. When the success envelope carries `removed.already_gone=true`, say one line - "worktree already gone - finishing the branch step" - and continue. Capture `removed.branch` from the success envelope for R3.
 
 ### Step R3: Branch Cleanup (optional)
 
@@ -327,7 +373,7 @@ AskUserQuestion(
     question: "Delete branch {removed.branch} too?",
     header: "Branch",
     options: [
-      { label: "Delete", description: "Branch deletion (-d, refuses if unmerged)" },
+      { label: "Delete", description: "Branch deletion (merged into origin/{LETS_MERGE_BRANCH} is detected; squash merges need force)" },
       { label: "Keep", description: "Keep the branch for reference" }
     ],
     multiSelect: false
@@ -342,6 +388,26 @@ lets worktree remove "$NAME" --branch-only --branch "$BRANCH" --delete-branch --
 ```
 
 If response is `error.kind=branch_unmerged` (exit 15), ask user to confirm force delete; retry with `--force-branch`.
+
+### Step R5: Sweep merged branches (optional)
+
+Offer to clean up other task branches that are already merged. Run `lets worktree sweep --json` (a dry run: it lists `merged` and `unmerged`, deletes nothing). When `merged` is non-empty, list them and ask:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "{N} task branches are already merged into origin/{LETS_MERGE_BRANCH}. Delete them?",
+    header: "Sweep",
+    options: [
+      { label: "Delete merged", description: "Delete the listed merged branches; unmerged ones stay" },
+      { label: "Keep", description: "Leave every branch as it is" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Delete merged** -> `lets worktree sweep --apply --json`, then report `deleted`. `unmerged` branches are shown as "unmerged (maybe squashed)" and never deleted here - a squash merge is not detectable, so they need `--force-branch` one by one. With `merged` empty, say nothing.
 
 ### Step R4: Output
 
@@ -375,7 +441,7 @@ Location: {worktree.path}
 Main repo: {main_root}
 Branch: {worktree.branch}
 LETS: {symlinked / local}
-Beads: {shared / local}
+Store: {linked / local / - (none declared)}
 Changes: {clean / N modified, M untracked}
 
 ┌─ LETS ──────────────────────────┐
@@ -421,11 +487,11 @@ The new worktree gets the LETS-managed `.lets/` symlink and (if the main has `.b
 ## Rules
 
 - **Interactive worktrees only.** Agent worktrees (`isolation: worktree`) use native Claude Code behavior.
-- **Location:** `.worktrees/` at project root (NOT `.claude/worktrees/` — that's for agents).
+- **Location:** `.worktrees/` at project root is where lets creates worktrees (NOT `.claude/worktrees/` — that's for agents). A worktree Orca creates lives in Orca's workspace directory and is adopted there (`orca.yaml` setup hook, or `/lets:start` self-heal), never moved; `remove` refuses it (`worktree_external`) - archive it in Orca, which runs `lets worktree release`.
 - **`.gitignore` invariants:** `lets worktree create` calls `initcmd.EnsureGitignore` (race-safe via flock + integrity check). Both `.worktrees/` and `.lets` (no slash — matches dir AND symlink) are appended if absent.
-- **Worktree-effective ignores (`info/exclude`, lets-x5ucf):** the tracked `.gitignore` lives on a branch — a fresh worktree checks out its branch's committed copy, which can lack the LETS entry (or carry only a dir-only `/.lets/` that misses the `.lets` symlink), so `.lets` / `.beads/.env` would show as untracked inside the worktree. `create` therefore also writes the narrow entries `.lets` and `.beads/.env` to the shared `.git/info/exclude` (common git dir → effective in main + every worktree, untracked, never pushed). Only the actually-symlinked paths are added, and the patterns are narrow so other untracked `.beads/` content still surfaces in `git status`.
+- **Worktree-effective ignores (`info/exclude`, lets-x5ucf):** the tracked `.gitignore` lives on a branch — a fresh worktree checks out its branch's committed copy, which can lack the LETS entry (or carry only a dir-only `/.lets/` that misses the `.lets` symlink), so `.lets` and the declared store links (beads: `.beads/.env`) would show as untracked inside the worktree. `create` and `adopt` therefore also write the narrow entries `.lets`, `.lets.pre-adopt*` and each linked store path to the shared `.git/info/exclude` (common git dir → effective in main + every worktree, untracked, never pushed). Only the actually-linked paths are added, and the patterns are narrow so other untracked store content (e.g. the rest of `.beads/`) still surfaces in `git status`.
 - **Branch lifecycle:** worktrees attach to existing branches by default; new branches are prefixed `worktree-<name>`. Refuses to attach the branch currently checked out in main (override with `--switch-main-if-needed` + clean tree). **`--branch <ref>` decouples the branch from the dir name** — the dir keeps the slash-free `<name>` while the ref (which may contain `/`, e.g. `feature/x`) is attached/created verbatim with no `worktree-` prefix (lets-x5ucf).
 - **Never force-remove without user approval.** `--force` and `--force-branch` always pass through an AskUserQuestion gate.
 - **Each worktree = separate terminal = separate Claude Code session.**
-- **Credential threat model:** `.beads/.env` symlink means the same credential is shared across all worktrees. Don't store cross-context secrets there; the file is `chmod 0o600` on disk and main `.beads/` is `chmod 0o700` (hardened by Create).
+- **Credential threat model:** the tracker adapter's declared store links (beads: `.beads/.env`) share the same credential across all worktrees. Don't store cross-context secrets there; each link target is `chmod 0o600` and missing parents are created `0o700` (hardened by Create and adopt).
 - Respond in user's language.

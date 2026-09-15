@@ -61,7 +61,7 @@ No agents. The orchestrator gathers backlog context directly and enters conversa
 
 Start with the shared snapshot so the pulse builds on the same "where are we" view as `/lets:status`:
 
-Invoke `Skill(skill: "lets:orient")`.
+Invoke `Skill(skill: "lets:orient", args: "caller=backlog")`.
 
 Then gather the backlog-specific extras the snapshot doesn't cover:
 

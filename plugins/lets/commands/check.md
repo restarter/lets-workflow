@@ -84,12 +84,16 @@ else
   # Latest plan for THIS slug - matches date-prefixed (YYYY-MM-DD-HHMM-<slug>.md) and legacy bare
   # <slug>.md. Slug-scoped, NOT global `ls -t`: .lets/plans is shared across worktrees via symlink.
   # task-id first (artifact-path naming, lets-05c4s); branch slug = legacy fallback
-  [ -n "{task-id}" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"{task-id}"*.md 2>/dev/null | head -1)
-  [ -z "$PLAN" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
+  [ -n "{task-id}" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"{task-id}"*.md 2>/dev/null | grep -v -E -- '-idea(-v[0-9]+)?\.md$' | head -1)
+  [ -z "$PLAN" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | grep -v -E -- '-idea(-v[0-9]+)?\.md$' | head -1)
+  # an idea document only when no plan exists (it is reviewed with the concept lenses below)
+  [ -z "$PLAN" ] && [ -n "{task-id}" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"-{task-id}-idea"*.md 2>/dev/null | head -1)
 fi
 ```
 
 If no plan found: "No plan found for this branch in `.lets/plans/`. Run `/lets:plan` first, or pass a path: `/lets:check --plan <path>`."
+
+**Idea document** (the file name matches `-idea` or it carries `IDEA BANK ENTRY`): review it with the concept lenses instead - **[Clarity]** is the wish stated so someone else could build it? **[Scope]** is it one idea, with what is out named? **[Feasibility]** is anything asked for impossible or in conflict? **[Open questions]** which decisions are still missing? **[Handoff]** is it clear who takes it over and what they need? Then print "Idea check done - run /lets:plan to turn it into a plan." and the same box.
 
 Read the plan and review with 5 lenses (same confidence filter):
 
