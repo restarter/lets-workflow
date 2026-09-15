@@ -327,6 +327,30 @@ lets orca status [--json] [--quiet]
 - **`notify`** writes `worktree set --worktree id:<id> --comment "<title>: <body>"` on this worktree's card: the target comes from `ORCA_WORKTREE_ID` when it names this checkout, else a `worktree ps` row whose path is the same directory as `--cwd`.
 - **`orca.yaml`.** `lets init` writes it (marker-owned; a foreign file is left alone with a warning) only when the project `.lets/.env` has `LETS_LAUNCHER=orca`: `scripts.setup` runs `lets worktree adopt --quiet` and `scripts.archive` runs `lets worktree release --quiet`, both unable to fail the hook and with a GUI-safe PATH. Orca reads it from the main checkout and asks the user once to trust it.
 
+## lets peers
+
+The Go side of peer messaging between LETS sessions (`internal/peerscmd/`, `internal/ccregistry/`, `//go:build unix`; the Windows stub answers who / tail / orchestrator with a parseable `not_supported` envelope and hard-errors the rest). Used by the `/lets:orc` skill and the orient Peers block - the skill composes; Go reads, frames, addresses and sends.
+
+```bash
+lets peers who [--role R] [--orc NAME] [--session SID] [--exclude-session SID] [--prune] [--probe-orca] [--timeout-ms 2500] [--json]
+lets peers tail (--to-session SID | --to-terminal HANDLE) [--last 5] [--since-message ID --sent-at ISO] [--addressed-to-session SID [--count-only]] --json
+lets peers frame --to-session SID --kind ask|ping|tell|ask-ro [--session SID] --json
+lets peers tell --to-session SID --msgid ID --json
+lets peers wait --to-session SID --since-message ID --sent-at ISO [--timeout-ms N] --json
+lets peers role set orchestrator|worker|peer [--task ID] [--scope TEXT] [--takeover] [--session SID] [--cwd DIR] --json
+lets peers role clear [--session SID]
+lets peers orchestrator [--session SID] [--cwd DIR] --json
+```
+
+- **Sources.** The Claude Code session registry (`<claude config dir>/sessions/<pid>.json`, `$CLAUDE_CONFIG_DIR` honoured) is always read; each entry is judged on its own: the filename pid's liveness first (a stale file never degrades anything), then `peerProtocol: 1` and a valid session id. A live entry that cannot be read is counted in `registry_protocol_unknown` while the readable rows still come back. `<pid>.<hash>.key` peer-token files are never opened. Transcripts are read backward in 64 KiB chunks under an 8 MiB cap. Orca terminals are consulted only with `LETS_LAUNCHER=orca` or `--probe-orca` - `ORCA_WORKTREE_ID` alone never selects the source.
+- **The join rule.** A session and an Orca terminal are one peer only when the terminal handle equals the `orca_terminal:` the session reported about itself in its role file (from `ORCA_TERMINAL_HANDLE`) and the terminal's worktree is the session's worktree root; the pair must be unique. Titles are never identity. A joined row sends over Orca (`send=orca`); a Claude-only row whose name is unique across the whole registry sends over `SendMessage` (`send=claude`); an Orca-only non-Claude agent is read-only in v1 (`non_claude_send_unsupported_v1`).
+- **Liveness per holder.** Role files record the holder's pid. Dead pid, or a pid now owned by another session, is dead (pruned); a pid the registry cannot read, or a pid-less holder it does not show, is `unknown` - never treated as dead.
+- **Roles.** `.lets/sessions/peers/<session>.role` (dir 0700, file 0600, atomic, under `.lets/locks/peers.lock`). Several orchestrators may share a repo, each unique by its LIVE registry name, with an optional one-line `scope`; `name_held` unless `--takeover`, which demotes only that holder. A worker branch's `orc:` line in `.task-<slug>` binds it to one orchestrator; `orchestrator` resolves self | bound (never re-routed when dead) | single | ambiguous | none.
+- **Framing.** `frame` issues a 16-hex msgid from `crypto/rand` and the header `[lets-peer id=… kind=… from_sid=… to_sid=… from="<role>/<name>" to="<name>"]`; addressing compares session ids exactly, names are display only. The skill writes the whole message with the Write tool to `handoff_path` (`.lets/cache/peer-msg/<msgid>.txt`; `peer-msg/` must be a real 0700 directory). `tell` opens it `O_NOFOLLOW`, requires a regular file of at most 8 KiB that starts with the issued header, and deletes it.
+- **Sending.** Go sends only over Orca and only when the transcript ends a turn with no open tool call, the screen shows the idle `❯` prompt with no approval / trust dialog, and Orca reports the agent `done`, all under a machine-wide `~/.lets/locks/peer-send-<session>.lock`; a stale handle re-checks before one retry; `observed` means the target transcript shows the msgid, and nothing is resent. A Claude-routed peer gets `delivered=false reason=claude_transport_model_send` plus the framed text for the skill's `SendMessage`. `wait` is satisfied only by an end-of-turn record after the message.
+- **Exits.** 0 (degraded sources included), 1 generic, 2 usage, 10 not in a repo.
+- **Residual.** A same-user process that can write `.lets` could forge `orca_terminal:`; such a process can already type into terminals, so v1 accepts it.
+
 ## lets notify
 
 Launcher-neutral gate-notification sink (`internal/notifycmd/`, `internal/cli/notify.go`). Resolves `LETS_LAUNCHER` (project `.lets/.env` over `~/.lets/.env` via `letsconfig.MergedEnv` — the ONE precedence rule, shared with the SessionStart hook) and dispatches to `cmuxcmd.Notify` / `tmuxcmd.Notify` / `orcacmd.Notify`. Exists so the autonomous-pipeline gate snippets (`commands/plan-workflow.md`, `commands/execute.md`) never hardcode a launcher — a `lets cmux notify` snippet is silent for a tmux user, and interpolating the launcher name would need a `terminal`-guard replicated across command files.

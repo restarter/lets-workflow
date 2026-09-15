@@ -61,3 +61,4 @@ Return the echoed `ARTIFACT_FILE` to the caller. If the echo is missing or `exit
 - NEVER compute a second `date` in the caller - the stamp is captured here once.
 - Task id in the name is mandatory when a task is active.
 - No tracker calls here beyond `detect-task`.
+- Go-owned state files are NOT artifacts and never come through here: `.lets/sessions/.task-*` (`lets worktree task-state`), `.lets/sessions/peers/*.role` (`lets peers role`), `.lets/cache/released-*` (`lets worktree release`) - their owner writes them.

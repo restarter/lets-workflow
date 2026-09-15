@@ -25,7 +25,7 @@ Restore context and prepare for work. **User MUST select a task before working.*
 
 ### Step 0a: Parse
 
-Parse the arguments only - a task id (it goes through the detect-task id gate before any use), `--continue`, `--main` / `--assistant`. No tracker verb runs here. Every path below runs **Step 0.5 first**, then its own steps.
+Parse the arguments only - a task id (it goes through the detect-task id gate before any use), `--continue`, `--main` / `--assistant`, `--scope "<text>"` (main mode: the part of the repo this orchestrator owns). `--orc` is stripped per the detect-task explicit-argument convention before the task-id test and forwarded to take-task; with `--main` it is dropped with a one-line note (an orchestrator is never bound). No tracker verb runs here. Every path below runs **Step 0.5 first**, then its own steps.
 
 **If `<task-id>` provided** (e.g., `/lets:start lets-rmcwo`):
 - Step 0.5 (with `--task '<task-id>'`), then:
@@ -239,6 +239,35 @@ if [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ]; then
   fi
 fi
 ```
+
+**Register as an orchestrator (merge-branch only, after the boundary write).** `{SCOPE_FLAG}` is `--scope '<text>'` when `--scope` was given (single-quoted, `'\''` escaping), else empty:
+
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+command -v lets >/dev/null 2>&1 && lets peers role set orchestrator --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" {SCOPE_FLAG} --json || echo "LETS_BINARY_MISSING"
+```
+
+- `granted=true`: nothing to say.
+- `granted=false reason=name_held`: another live session already holds this name (name the holder's `alive` when it is `unknown`):
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Session {holder.name} ({holder.session6}, {holder.alive}) is already the orchestrator under this name. What now?",
+    header: "Role",
+    options: [
+      { label: "Rename this session (Recommended)", description: "/rename to another name, then /lets:start --main again; unregistered until then" },
+      { label: "Take over {holder.name}", description: "The other session becomes a plain peer; nothing is sent to it" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+  **Take over** -> rerun `lets peers role set orchestrator --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" {SCOPE_FLAG} --takeover --json`, then the prose hint `/lets:orc tell {holder.name} ...` (tell it, if it should know). **Rename** -> stop registering; main mode continues unregistered.
+- `orchestrator_needs_name`: one line `this session has no name - /rename <name>, then /lets:start --main again`; main mode continues unregistered.
+- `session_not_in_registry`: one line naming the registry reason; main mode continues unregistered.
+- `LETS_BINARY_MISSING` or a `not_supported` stub reason: one line, then continue.
 
 Invoke `Skill(skill: "lets:orient")` - with no active task it degrades to branch + no-task + In flight + Next up + Project, which IS the PM triage surface. Keep it short - if the tracker has a deeper native dashboard, point the user at it in one line.
 

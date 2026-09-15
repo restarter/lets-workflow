@@ -139,7 +139,9 @@ else
 fi
 
 if command -v lets >/dev/null 2>&1; then
-  lets worktree task-state set --task "$CLAIMED_ID" --start "$START" --session-sha "$HEAD_SHA" --session-id "$SID" --clear-origin --create --json
+  # {ORC_FLAG}: --orc '<name>' when args carried orc="<name>" and this is not the merge-branch (single-quoted, '\'' escaping); else empty
+  lets worktree task-state set --task "$CLAIMED_ID" --start "$START" --session-sha "$HEAD_SHA" --session-id "$SID" --clear-origin {ORC_FLAG} --create --json
+  lets peers role set worker --task "$CLAIMED_ID" --session "$SID" --cwd "$LETS_PROJECT_ROOT" --json
 else
   tmp=$(mktemp "${TASK_FILE}.XXXX")
   {
@@ -152,6 +154,9 @@ fi
 ```
 
 On `ok=false` surface `error.message` - the claim succeeded but the boundary file did not, so `/lets:done` cannot measure the task until it is fixed.
+
+- **Orchestrator binding (`orc="<name>"` in the args, from detect-task's `--orc` strip).** Pass it as `{ORC_FLAG}`; Go validates the name and a refusal is one line with nothing written. A trunk-mode claim (HEAD is `{LETS_MERGE_BRANCH}`) ignores it with one line - the merge-branch never carries a binding. When the envelope reports `rebound.from`, say in one line that this branch moved from that orchestrator to the new one.
+- **Worker role.** The second call registers this session as the task's worker so orchestrators see it in `lets peers who`. A non-ok envelope (e.g. `session_not_in_registry`) is one line - never hidden, a silent failure leaves the worker unregistered. Without the binary the no-binary branch skips it; say so in one line.
 
 ### Step 6: Context Recovery (existing branch)
 
