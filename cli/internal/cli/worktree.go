@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -28,7 +29,7 @@ func emitErrorEnvelope(w io.Writer, jsonOut bool, subcommand string, e *worktree
 	return e
 }
 
-// NewWorktreeCmd builds `lets worktree` with its 4 subcommand factories.
+// NewWorktreeCmd builds `lets worktree` with its subcommand factories.
 // Subcommands inherit SilenceUsage + SilenceErrors so cobra doesn't double-
 // print after a JSON envelope is emitted. Stream contract per subcommand:
 //
@@ -49,6 +50,11 @@ func NewWorktreeCmd() *cobra.Command {
 		newWorktreeRemoveCmd(),
 		newWorktreeListCmd(),
 		newWorktreeInfoCmd(),
+		newWorktreeAdoptCmd(),
+		newWorktreeReleaseCmd(),
+		newWorktreeTaskStateCmd(),
+		newWorktreeBranchNameCmd(),
+		newWorktreeSweepCmd(),
 	} {
 		sub.SilenceUsage = true
 		sub.SilenceErrors = true
@@ -62,7 +68,7 @@ func newWorktreeCreateCmd() *cobra.Command {
 		attach, newBranch, noSymLets, noSymBeads bool
 		printCD, switchMain, jsonOut, quiet      bool
 		verbose                                  bool
-		base, branch                             string
+		base, branch, pluginRoot                 string
 	)
 	cmd := &cobra.Command{
 		Use:   "create <name>",
@@ -104,7 +110,8 @@ func newWorktreeCreateCmd() *cobra.Command {
 				Mode:               mode,
 				Base:               base,
 				NoSymlinkLets:      noSymLets,
-				NoSymlinkBeads:     noSymBeads,
+				NoStoreLinks:       noSymBeads,
+				PluginRoot:         pluginRoot,
 				SwitchMainIfNeeded: switchMain,
 			})
 
@@ -134,7 +141,10 @@ func newWorktreeCreateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&base, "base", "", "Base ref for new branch (default: LETS_MERGE_BRANCH or main)")
 	cmd.Flags().StringVar(&branch, "branch", "", "Branch ref to attach/create, decoupled from <name> (allows '/', e.g. feature/x)")
 	cmd.Flags().BoolVar(&noSymLets, "no-symlink-lets", false, "Skip .lets/ symlink")
-	cmd.Flags().BoolVar(&noSymBeads, "no-symlink-beads", false, "Skip .beads/.env symlink")
+	cmd.Flags().BoolVar(&noSymBeads, "no-store-links", false, "Skip the tracker adapter's declared store links")
+	cmd.Flags().BoolVar(&noSymBeads, "no-symlink-beads", false, "Deprecated alias of --no-store-links")
+	_ = cmd.Flags().MarkHidden("no-symlink-beads")
+	cmd.Flags().StringVar(&pluginRoot, "plugin-root", "", "Plugin root for the tracker adapter fallback (default: $CLAUDE_PLUGIN_ROOT)")
 	cmd.Flags().BoolVar(&printCD, "print-cd", false, "Print worktree path to stdout (pair with --json or --verbose to also emit stderr); for $(...) substitution")
 	cmd.Flags().BoolVar(&switchMain, "switch-main-if-needed", false, "Auto-switch main repo if attaching its current branch (requires clean tree)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
@@ -220,13 +230,14 @@ func newWorktreeListCmd() *cobra.Command {
 }
 
 func newWorktreeInfoCmd() *cobra.Command {
-	var jsonOut, quiet bool
+	var jsonOut, quiet, taskCandidate bool
+	var dir, refFile string
 	cmd := &cobra.Command{
 		Use:   "info",
 		Short: "Show worktree status for the current directory",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cwd, err := os.Getwd()
+			target, err := dirOrCwd(dir)
 			if err != nil {
 				return emitErrorEnvelope(cmd.OutOrStdout(), jsonOut, "info", &worktreecmd.Error{
 					Code:    worktreecmd.ExitFilesystem,
@@ -235,7 +246,18 @@ func newWorktreeInfoCmd() *cobra.Command {
 					Cause:   err,
 				})
 			}
-			res, runErr := worktreecmd.Info(cmd.Context(), cwd)
+			if refFile != "" && !taskCandidate {
+				return emitErrorEnvelope(cmd.OutOrStdout(), jsonOut, "info", &worktreecmd.Error{
+					Code: worktreecmd.ExitUsage, Kind: "flag_conflict", Message: "--ref-file requires --task-candidate",
+				})
+			}
+			var res *worktreecmd.InfoResult
+			var runErr error
+			if taskCandidate {
+				res, runErr = worktreecmd.TaskCandidateFor(cmd.Context(), target, refFile)
+			} else {
+				res, runErr = worktreecmd.Info(cmd.Context(), target)
+			}
 			jsonBytes, _ := json.MarshalIndent(res, "", "  ")
 			if jsonOut {
 				fmt.Fprintln(cmd.OutOrStdout(), string(jsonBytes))
@@ -243,16 +265,186 @@ func newWorktreeInfoCmd() *cobra.Command {
 				// On error, skip the human renderer — main.go prints the
 				// error to stderr via err.Error(). Without this guard,
 				// RenderInfo's "Error: ..." line duplicates main.go's
-				// "kind: message" line. (Same issue would happen for
-				// remove/list, but those return early before reaching
-				// their renderers on the same not_in_repo path.)
+				// "kind: message" line.
 				worktreecmd.RenderInfo(cmd.OutOrStdout(), res)
 			}
 			return runErr
 		},
 	}
+	cmd.Flags().StringVar(&dir, "dir", "", "Directory to inspect (default: current directory)")
+	cmd.Flags().BoolVar(&taskCandidate, "task-candidate", false, "Return only the task id the active convention reads off the branch name (created shapes)")
+	cmd.Flags().StringVar(&refFile, "ref-file", "", "With --task-candidate: read the branch ref from this file instead of HEAD (an untrusted ref is never typed into a shell)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
 	cmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Suppress human-readable output")
+	return cmd
+}
+
+// dirOrCwd returns dir, or the current working directory when dir is empty.
+func dirOrCwd(dir string) (string, error) {
+	if dir != "" {
+		return dir, nil
+	}
+	return os.Getwd()
+}
+
+// emitJSONOrRender prints res as JSON (--json) or through render, and returns runErr.
+func emitJSONOrRender(cmd *cobra.Command, jsonOut, quiet bool, res any, render func(), runErr error) error {
+	if jsonOut {
+		b, _ := json.MarshalIndent(res, "", "  ")
+		fmt.Fprintln(cmd.OutOrStdout(), string(b))
+	} else if !quiet && render != nil {
+		render()
+	}
+	return runErr
+}
+
+func newWorktreeAdoptCmd() *cobra.Command {
+	var jsonOut, quiet, replaceTask, linksOnly bool
+	var dir, task, pluginRoot string
+	cmd := &cobra.Command{
+		Use:   "adopt",
+		Short: "Make a worktree created elsewhere (Orca, git worktree add) a LETS worktree",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			target, err := dirOrCwd(dir)
+			if err != nil {
+				return emitErrorEnvelope(cmd.OutOrStdout(), jsonOut, "adopt", &worktreecmd.Error{Code: worktreecmd.ExitFilesystem, Kind: "getwd_failed", Message: err.Error(), Cause: err})
+			}
+			res, runErr := worktreecmd.Adopt(cmd.Context(), target, worktreecmd.AdoptOptions{
+				Task: task, ReplaceTask: replaceTask, LinksOnly: linksOnly, PluginRoot: pluginRoot,
+			})
+			return emitJSONOrRender(cmd, jsonOut, quiet, res, func() { worktreecmd.RenderSteps(cmd.OutOrStdout(), res.Envelope) }, runErr)
+		},
+	}
+	cmd.Flags().StringVar(&dir, "dir", "", "Worktree directory (default: current directory)")
+	cmd.Flags().StringVar(&task, "task", "", "Task id to record (supersedes an id derived from the branch name)")
+	cmd.Flags().BoolVar(&replaceTask, "replace-task", false, "Replace a task-state file that names a different task (for a human at a terminal)")
+	cmd.Flags().BoolVar(&linksOnly, "links-only", false, "Link .lets and the store; skip the task step")
+	cmd.Flags().StringVar(&pluginRoot, "plugin-root", "", "Plugin root for the tracker adapter fallback (default: $CLAUDE_PLUGIN_ROOT)")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
+	cmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Suppress human-readable output")
+	return cmd
+}
+
+func newWorktreeReleaseCmd() *cobra.Command {
+	var jsonOut, quiet bool
+	var dir string
+	cmd := &cobra.Command{
+		Use:   "release",
+		Short: "Record a worktree's state before something else archives it (never refuses)",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			target, err := dirOrCwd(dir)
+			if err != nil {
+				return emitErrorEnvelope(cmd.OutOrStdout(), jsonOut, "release", &worktreecmd.Error{Code: worktreecmd.ExitFilesystem, Kind: "getwd_failed", Message: err.Error(), Cause: err})
+			}
+			res, runErr := worktreecmd.Release(cmd.Context(), target, worktreecmd.ReleaseOptions{})
+			return emitJSONOrRender(cmd, jsonOut, quiet, res, func() { worktreecmd.RenderSteps(cmd.OutOrStdout(), res.Envelope) }, runErr)
+		},
+	}
+	cmd.Flags().StringVar(&dir, "dir", "", "Worktree directory (default: current directory)")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
+	cmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Suppress human-readable output")
+	return cmd
+}
+
+func newWorktreeTaskStateCmd() *cobra.Command {
+	root := &cobra.Command{
+		Use:   "task-state",
+		Short: "Read or write this branch's task-state file (.lets/sessions/.task-<branch-slug>)",
+	}
+	var o worktreecmd.TaskStateOptions
+	var setJSON, showJSON bool
+	set := &cobra.Command{
+		Use:   "set",
+		Short: "Change only the given keys of the current branch's task-state file",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return emitErrorEnvelope(cmd.OutOrStdout(), setJSON, "task-state", &worktreecmd.Error{Code: worktreecmd.ExitFilesystem, Kind: "getwd_failed", Message: err.Error(), Cause: err})
+			}
+			res, runErr := worktreecmd.TaskStateSet(cmd.Context(), cwd, o)
+			return emitJSONOrRender(cmd, setJSON, false, res, func() { worktreecmd.RenderTaskState(cmd.OutOrStdout(), res) }, runErr)
+		},
+	}
+	set.Flags().StringVar(&o.Task, "task", "", "Task id")
+	set.Flags().StringVar(&o.Start, "start", "", "Task boundary commit (7-64 hex)")
+	set.Flags().StringVar(&o.SessionSHA, "session-sha", "", "Session boundary commit (with --session-id)")
+	set.Flags().StringVar(&o.SessionID, "session-id", "", "Claude Code session id (with --session-sha)")
+	set.Flags().StringVar(&o.Orc, "orc", "", "Bind this branch to an orchestrator name (never on the merge-branch)")
+	set.Flags().BoolVar(&o.ClearOrigin, "clear-origin", false, "Remove origin: (the id is confirmed)")
+	set.Flags().BoolVar(&o.ClearOrc, "clear-orc", false, "Remove orc:")
+	set.Flags().BoolVar(&o.ClearTask, "clear-task", false, "Remove task:, start: and origin: (keeps session: and every other line)")
+	set.Flags().BoolVar(&o.Create, "create", false, "Create the file when it is missing")
+	set.Flags().DurationVar(&o.Wait, "wait", 5*time.Second, "Lock deadline")
+	set.Flags().BoolVar(&setJSON, "json", false, "Emit JSON envelope")
+	show := &cobra.Command{
+		Use:   "show",
+		Short: "Print the current branch's task-state file",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return emitErrorEnvelope(cmd.OutOrStdout(), showJSON, "task-state", &worktreecmd.Error{Code: worktreecmd.ExitFilesystem, Kind: "getwd_failed", Message: err.Error(), Cause: err})
+			}
+			res, runErr := worktreecmd.TaskStateShow(cmd.Context(), cwd)
+			return emitJSONOrRender(cmd, showJSON, false, res, func() { worktreecmd.RenderTaskState(cmd.OutOrStdout(), res) }, runErr)
+		},
+	}
+	show.Flags().BoolVar(&showJSON, "json", false, "Emit JSON envelope")
+	for _, c := range []*cobra.Command{set, show} {
+		c.SilenceUsage, c.SilenceErrors = true, true
+		root.AddCommand(c)
+	}
+	return root
+}
+
+func newWorktreeSweepCmd() *cobra.Command {
+	var jsonOut, quiet, apply bool
+	cmd := &cobra.Command{
+		Use:   "sweep",
+		Short: "List (or with --apply delete) local task branches already merged upstream",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return emitErrorEnvelope(cmd.OutOrStdout(), jsonOut, "sweep", &worktreecmd.Error{Code: worktreecmd.ExitFilesystem, Kind: "getwd_failed", Message: err.Error(), Cause: err})
+			}
+			res, runErr := worktreecmd.Sweep(cmd.Context(), cwd, apply)
+			return emitJSONOrRender(cmd, jsonOut, quiet, res, func() { worktreecmd.RenderSweep(cmd.OutOrStdout(), res) }, runErr)
+		},
+	}
+	cmd.Flags().BoolVar(&apply, "apply", false, "Delete the merged branches (default: dry run)")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
+	cmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Suppress human-readable output")
+	return cmd
+}
+
+func newWorktreeBranchNameCmd() *cobra.Command {
+	var jsonOut, worktree bool
+	var task, titleFile string
+	cmd := &cobra.Command{
+		Use:   "branch-name",
+		Short: "Render the branch LETS creates for a task under the tracker's naming convention",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return emitErrorEnvelope(cmd.OutOrStdout(), jsonOut, "branch-name", &worktreecmd.Error{Code: worktreecmd.ExitFilesystem, Kind: "getwd_failed", Message: err.Error(), Cause: err})
+			}
+			res, runErr := worktreecmd.BranchName(cmd.Context(), cwd, worktreecmd.BranchNameOptions{Task: task, TitleFile: titleFile, Worktree: worktree})
+			return emitJSONOrRender(cmd, jsonOut, false, res, func() {
+				if res.OK {
+					fmt.Fprintln(cmd.OutOrStdout(), res.Branch)
+				}
+			}, runErr)
+		},
+	}
+	cmd.Flags().StringVar(&task, "task", "", "Task id")
+	cmd.Flags().StringVar(&titleFile, "title-file", "", "File holding the task title (the slug is derived from it)")
+	cmd.Flags().BoolVar(&worktree, "worktree", false, "Render the worktree-branch: template")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
 	return cmd
 }
 

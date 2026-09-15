@@ -98,9 +98,12 @@ func SweepCandidates(ctx context.Context, root, merge string, prefixes []string)
 	return merged, unmerged
 }
 
+// hasAnyPrefix: an empty prefix matches every branch (a convention template that
+// starts with {id} has no literal pre-filter; the caller then filters by the
+// convention itself).
 func hasAnyPrefix(s string, prefixes []string) bool {
 	for _, p := range prefixes {
-		if p != "" && strings.HasPrefix(s, p) {
+		if strings.HasPrefix(s, p) {
 			return true
 		}
 	}

@@ -315,7 +315,7 @@ AskUserQuestion(
 )
 ```
 
-On either **Force remove**, retry with `--force`. On `error.kind=worktree_not_found`, exit cleanly. Capture `removed.branch` from the success envelope for R3.
+On either **Force remove**, retry with `--force`. On `error.kind=worktree_not_found`, exit cleanly. On `error.kind=worktree_external`, the worktree lives outside `.worktrees/` (an Orca workspace): tell the user to archive it in Orca (which runs `lets worktree release`) or run `lets worktree release` inside it, and stop. When the success envelope carries `removed.already_gone=true`, say one line - "worktree already gone - finishing the branch step" - and continue. Capture `removed.branch` from the success envelope for R3.
 
 ### Step R3: Branch Cleanup (optional)
 
@@ -327,7 +327,7 @@ AskUserQuestion(
     question: "Delete branch {removed.branch} too?",
     header: "Branch",
     options: [
-      { label: "Delete", description: "Branch deletion (-d, refuses if unmerged)" },
+      { label: "Delete", description: "Branch deletion (merged into origin/{LETS_MERGE_BRANCH} is detected; squash merges need force)" },
       { label: "Keep", description: "Keep the branch for reference" }
     ],
     multiSelect: false
@@ -342,6 +342,26 @@ lets worktree remove "$NAME" --branch-only --branch "$BRANCH" --delete-branch --
 ```
 
 If response is `error.kind=branch_unmerged` (exit 15), ask user to confirm force delete; retry with `--force-branch`.
+
+### Step R5: Sweep merged branches (optional)
+
+Offer to clean up other task branches that are already merged. Run `lets worktree sweep --json` (a dry run: it lists `merged` and `unmerged`, deletes nothing). When `merged` is non-empty, list them and ask:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "{N} task branches are already merged into origin/{LETS_MERGE_BRANCH}. Delete them?",
+    header: "Sweep",
+    options: [
+      { label: "Delete merged", description: "Delete the listed merged branches; unmerged ones stay" },
+      { label: "Keep", description: "Leave every branch as it is" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Delete merged** -> `lets worktree sweep --apply --json`, then report `deleted`. `unmerged` branches are shown as "unmerged (maybe squashed)" and never deleted here - a squash merge is not detectable, so they need `--force-branch` one by one. With `merged` empty, say nothing.
 
 ### Step R4: Output
 

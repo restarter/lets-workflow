@@ -2,7 +2,7 @@
 
 // Package worktreecmd implements the `lets worktree` subcommand:
 // create/remove/list/info operations on git worktrees with LETS-managed
-// symlinks for .lets/ and .beads/.env, atomic operations with rollback,
+// symlinks for .lets/ and the tracker adapter's declared store links, atomic operations with rollback,
 // and a JSON envelope output for scripted callers.
 //
 // Mirrors the structure of cli/internal/initcmd/ and cli/internal/updatecmd/.

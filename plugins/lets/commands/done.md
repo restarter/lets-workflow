@@ -387,15 +387,22 @@ Then drop the closed task's boundary (the close is a state change - HARD-FAIL lo
 
 ```bash
 # Cleanup (B4): task closed, but the trunk branch lives on (it hosts more tasks). Drop the closed
-# task's task:/start:, KEEP session: so /lets:end still has a valid session boundary. Do NOT rm the
-# whole file — the next claim overwrites task:/start:, and a stray rm would strand /lets:end.
+# task's task:/start:/origin:, KEEP session: and every other line so /lets:end still has a valid
+# session boundary. Do NOT rm the whole file - the next claim overwrites task:/start:, and a stray
+# rm would strand /lets:end. `lets worktree task-state` owns the file (locked, validated); without
+# the binary, remove only this step's own keys.
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 BRANCH_SLUG=$(echo "$(git branch --show-current)" | tr '/' '-')
 TASK_FILE="$LETS_PROJECT_ROOT/.lets/sessions/.task-${BRANCH_SLUG}"
 if [ -f "$TASK_FILE" ]; then
-  SID_LINE=$(sed -n 's/^session: //p' "$TASK_FILE" | head -1)
-  [ -z "$SID_LINE" ] && SID_LINE="$(git rev-parse HEAD) $CLAUDE_CODE_SESSION_ID"
-  tmp=$(mktemp "${TASK_FILE}.XXXX"); printf 'session: %s\n' "$SID_LINE" > "$tmp" && mv -f "$tmp" "$TASK_FILE"
+  SESSION_ARGS=""
+  grep -q '^session: ' "$TASK_FILE" || SESSION_ARGS="--session-sha $(git rev-parse HEAD) --session-id $CLAUDE_CODE_SESSION_ID"
+  if command -v lets >/dev/null 2>&1; then
+    lets worktree task-state set --clear-task $SESSION_ARGS --json
+  else
+    tmp=$(mktemp "${TASK_FILE}.XXXX")
+    { grep -v -e '^task: ' -e '^start: ' -e '^origin: ' "$TASK_FILE"; grep -q '^session: ' "$TASK_FILE" || printf 'session: %s %s\n' "$(git rev-parse HEAD)" "$CLAUDE_CODE_SESSION_ID"; } > "$tmp"; mv -f "$tmp" "$TASK_FILE"
+  fi
 fi
 ```
 

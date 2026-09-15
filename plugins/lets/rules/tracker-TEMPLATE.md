@@ -51,6 +51,21 @@ Optional - list ONLY what this board really has, delete the rest: {`in_review`, 
 - **OPTIONAL verb absent** (`supported = no`) -> the calling command continues and tells the user the capability is unavailable for this tracker. Never crash.
 - **CORE verb unresolved at runtime** (binding can't be performed - e.g. an MCP tool is not connected) -> HARD-FAIL loud (e.g. "close FAILED - task NOT closed"); do NOT report success. This matters under AUTO MODE: a `/lets:done` must never claim it closed a task it did not.
 
+## Worktree
+
+Declares what a worktree needs from this tracker and how the tracker names tasks and branches. `lets worktree create` / `adopt` link the store, and every LETS path that creates or recognizes a task branch reads the same declaration (through `lets worktree info` / `lets worktree branch-name`, never by matching patterns in markdown). One declaration per line, each line starting with its key, the value in backticks, closed with a period.
+
+- **`links:`** - repo-relative files a worktree must share with the main checkout, each with a mode: e.g. a line `links:` followed by `` `.mytracker/token.json` (0600) `` and a period. Modes are 0600, 0640 or 0644; a credential declares 0600, and LETS only ever tightens an existing file. Never `.git*` or `.lets*`. Every link shares the main checkout's file with every worktree - that is the trust decision this line makes. Write `links: nothing.` when the tracker keeps no local store.
+- **`id:`** - one RE2 fragment matching a task id, with no anchors (`^`, `$`) and no named groups, or `nothing.` when names never carry an id. Every id it matches must also pass the detect-task id gate (class `[A-Za-z0-9._-]`, no leading `-`).
+- **`branch:`** / **`worktree-branch:`** - the branch templates LETS creates: the task branch (take-task, `lets orca open`) and the one `/lets:worktree create <id>` makes. A template holds exactly one `{id}` and at most one `{slug}`; its literal text uses only `[A-Za-z0-9/._-]`. Omitted, they default to `feature/{id}-{slug}` and `worktree-{id}-{slug}`.
+- **`accept:`** - a comma-separated list of extra shapes LETS never creates but `lets worktree adopt` recognizes (e.g. a worktree someone named `{id}-{slug}`). Optional.
+
+**Trust rule.** A branch in a `branch:` / `worktree-branch:` shape is that task's branch by construction. An `accept:` shape is only an unconfirmed candidate: adopt records it as `origin: branch`, and detect-task / take-task confirm it before anything acts on it.
+
+**Undeclared vs nothing.** No `id:` line at all means the adapter predates this section: every consumer keeps its previous behavior (`convention_undeclared`). `id: nothing.` is a declaration - names never yield an id.
+
+**Board override.** A project's user-owned `tracker-<name>.board.md` may carry its own `## Worktree` with any of `id:` / `branch:` / `worktree-branch:` / `accept:`; each key present there replaces this file's value (`links:` is ignored there - it stays this adapter's trust decision). It is read from the main checkout only. Example - a board whose tasks are `PWA-45122` and whose team names branches `feature/PWA-45122-short-title` declares `` id: `PWA-[0-9]+`. `` and `` branch: `feature/{id}-{slug}`. ``.
+
 ## Claim hygiene
 
 **Scope: claims you have NOT exercised against the running tracker.** A binding you have run, or one checkable from a local `--help`, needs no marker - the next reader verifies it in seconds. What needs one is everything taken from documentation, inferred, or guessed: a payload limit, a rendering quirk, a transition the board may or may not permit, a field name you have not seen in a response.

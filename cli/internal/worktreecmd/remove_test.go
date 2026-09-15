@@ -349,3 +349,62 @@ func TestRemove_ExternalWorktreeRefused(t *testing.T) {
 		t.Errorf("external worktree must be left alone: %v", statErr)
 	}
 }
+
+func TestRemove_LetsManagedEntriesAreNotDirty(t *testing.T) {
+	repo := initRepo(t)
+	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(repo, ".beads"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, ".beads", ".env"), []byte("X=1"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	installAdapter(t, repo, "beads", "links: `.beads/.env` (0600).")
+	cr, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{Name: "foo", Mode: worktreecmd.BranchAuto})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// adopt's moved-aside cache dir is LETS-managed too
+	if err := os.MkdirAll(filepath.Join(cr.Worktree.Path, ".lets.pre-adopt", "cache"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cr.Worktree.Path, ".lets.pre-adopt", "cache", "usage"), []byte("u"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := worktreecmd.Remove(context.Background(), repo, worktreecmd.RemoveOptions{Name: "foo"})
+	if err != nil || !res.OK || res.Removed.HadUncommittedChanges {
+		t.Fatalf("a worktree holding only LETS-managed entries must not be dirty: err=%v removed=%+v", err, res.Removed)
+	}
+}
+
+func TestList_StoreLinksFromAdapter(t *testing.T) {
+	repo := initRepo(t)
+	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(repo, ".beads"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, ".beads", ".env"), []byte("X=1"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	installAdapter(t, repo, "beads", "links: `.beads/.env` (0600).")
+	if _, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{Name: "foo", Mode: worktreecmd.BranchAuto}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := worktreecmd.List(context.Background(), repo)
+	if err != nil || len(res.Worktrees) != 1 {
+		t.Fatalf("err=%v worktrees=%+v", err, res.Worktrees)
+	}
+	w := res.Worktrees[0]
+	if !w.StoreLinked || !w.BeadsSymlinked || len(w.StoreLinks) != 1 || !w.StoreLinks[0].Linked {
+		t.Errorf("store links = %+v linked=%v", w.StoreLinks, w.StoreLinked)
+	}
+	var b strings.Builder
+	worktreecmd.RenderList(&b, res)
+	if !strings.Contains(b.String(), "STORE") || strings.Contains(b.String(), "BEADS") {
+		t.Errorf("list table must show STORE, not BEADS:\n%s", b.String())
+	}
+}

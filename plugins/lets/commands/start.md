@@ -191,7 +191,7 @@ You do **NOT** write or edit code in this mode. The moment the user wants to imp
 
 **Guard first.** Main mode expects `HEAD == $LETS_MERGE_BRANCH`. If on another branch (a worktree or feature branch - which are task-bound), say so in one line, suggest the normal task flow instead, and **skip the session-boundary write below** - stay strictly read-only if the user still wants the overview.
 
-Steps 1-2 already ran (sessions, git). Main mode skips `take-task`, so - **only when `HEAD == $LETS_MERGE_BRANCH`** - save the **session boundary** here (so `/lets:end` can still diff the session). Main mode claims no task, so it does NOT create a `task:`/`start:` (that would make `.task-main` mis-fire trunk-mode). But it must NOT destroy a live trunk claim either - so it **preserves** any existing `task:`/`start:` (merge-write, like the SessionStart hook) and refreshes only `session:`. A genuine main-mode file (no prior `task:`) stays `session:`-only; a preserved live claim then surfaces through orient below instead of being silently clobbered. Then add a one-line backlog pulse:
+Steps 1-2 already ran (sessions, git). Main mode skips `take-task`, so - **only when `HEAD == $LETS_MERGE_BRANCH`** - save the **session boundary** here (so `/lets:end` can still diff the session). Main mode claims no task, so it does NOT create a `task:`/`start:` (that would make `.task-main` mis-fire trunk-mode). But it must NOT destroy a live trunk claim either - so it **preserves** every existing line (`task:`, `start:`, lines a newer LETS added; merge-write, like the SessionStart hook), refreshes `session:`, and clears `orc:` (the merge-branch never carries an orchestrator binding). A genuine main-mode file (no prior `task:`) stays `session:`-only; a preserved live claim then surfaces through orient below instead of being silently clobbered. Then add a one-line backlog pulse:
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
@@ -202,18 +202,14 @@ if [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ]; then
   mkdir -p "$LETS_PROJECT_ROOT/.lets/sessions"
   TASK_FILE="$LETS_PROJECT_ROOT/.lets/sessions/.task-${BRANCH_SLUG}"
   # Preserve an existing live trunk claim (task:/start:) - a full-file session:-only write would
-  # destroy it, and its /lets:done would then hard-abort with no start:. Merge-write, like the hook.
-  PREV_TASK=""; PREV_START=""
-  if [ -f "$TASK_FILE" ]; then
-    PREV_TASK=$(sed -n 's/^task: //p' "$TASK_FILE" | head -1)
-    PREV_START=$(sed -n 's/^start: //p' "$TASK_FILE" | head -1)
+  # destroy it, and its /lets:done would then hard-abort with no start:. `lets worktree task-state`
+  # owns the file (merge-write under a lock); without the binary, replace only session: and orc:.
+  if command -v lets >/dev/null 2>&1; then
+    lets worktree task-state set --clear-orc --session-sha "$(git rev-parse HEAD)" --session-id "$CLAUDE_CODE_SESSION_ID" --create --json
+  else
+    tmp=$(mktemp "${TASK_FILE}.XXXX")
+    { [ -f "$TASK_FILE" ] && grep -v -e '^session: ' -e '^orc: ' "$TASK_FILE"; printf 'session: %s %s\n' "$(git rev-parse HEAD)" "$CLAUDE_CODE_SESSION_ID"; } > "$tmp" && mv -f "$tmp" "$TASK_FILE"
   fi
-  tmp=$(mktemp "${TASK_FILE}.XXXX")
-  {
-    [ -n "$PREV_TASK" ] && echo "task: $PREV_TASK"
-    [ -n "$PREV_START" ] && echo "start: $PREV_START"
-    printf 'session: %s %s\n' "$(git rev-parse HEAD)" "$CLAUDE_CODE_SESSION_ID"
-  } > "$tmp" && mv -f "$tmp" "$TASK_FILE"
 fi
 ```
 

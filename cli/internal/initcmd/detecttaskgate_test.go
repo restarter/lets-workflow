@@ -1,6 +1,7 @@
 package initcmd
 
 import (
+	"github.com/restarter/lets-workflow/cli/internal/taskid"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -130,5 +131,27 @@ func TestDetectTaskIsSoleIdSource(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("walk %s: %v", root, err)
+	}
+}
+
+// TestTaskIDMatchesGate: the Go gate (taskid.Valid) and the markdown gate in
+// detect-task agree. The SKILL gate must still carry both rules - the class and the
+// leading-hyphen refusal - and taskid.Valid must answer the same table the gate would.
+func TestTaskIDMatchesGate(t *testing.T) {
+	skill := readPlugin(t, detectTaskSkill)
+	for _, rule := range []string{idGateClass, idGateLeadingDash} {
+		if !strings.Contains(skill, rule) {
+			t.Errorf("detect-task gate lost %q - update taskid.Valid and this test together", rule)
+		}
+	}
+	for _, id := range []string{"lets-abc", "48647", "lets-abc.1"} {
+		if !taskid.Valid(id) {
+			t.Errorf("taskid.Valid(%q) = false; the detect-task gate accepts it", id)
+		}
+	}
+	for _, id := range []string{"-x", "a b", "a;b", "$(x)"} {
+		if taskid.Valid(id) {
+			t.Errorf("taskid.Valid(%q) = true; the detect-task gate refuses it", id)
+		}
 	}
 }

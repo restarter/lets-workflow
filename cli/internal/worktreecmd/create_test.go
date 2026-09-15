@@ -144,6 +144,7 @@ func TestCreate_WorktreeExcludesSymlinks(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(repo, ".beads", ".env"), []byte("X=1"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	installAdapter(t, repo, "beads", "links: `.beads/.env` (0600).")
 	res, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{
 		Name: "foo", Mode: worktreecmd.BranchAuto,
 	})
@@ -211,9 +212,10 @@ func TestCreate_NoSymlinkFlags(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(repo, ".beads", ".env"), []byte("X=1"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	installAdapter(t, repo, "beads", "links: `.beads/.env` (0600).")
 	res, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{
 		Name: "foo", Mode: worktreecmd.BranchAuto,
-		NoSymlinkLets: true, NoSymlinkBeads: true,
+		NoSymlinkLets: true, NoStoreLinks: true,
 	})
 	if err != nil || !res.OK {
 		t.Fatal(err)
@@ -444,5 +446,71 @@ func TestCreateRelativeSymlink_TargetEscapesRepo(t *testing.T) {
 	}
 	if e.Kind != "symlink_target_escapes_repo" {
 		t.Errorf("Kind=%q, want symlink_target_escapes_repo (Code=%d)", e.Kind, e.Code)
+	}
+}
+
+// installAdapter writes <repo>/.claude/rules/tracker-<name>.md with a ## Worktree
+// section, the way `lets init` installs the active adapter.
+func installAdapter(t *testing.T, repo, name, worktree string) {
+	t.Helper()
+	dir := filepath.Join(repo, ".claude", "rules")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	content := "# Tracker adapter: " + name + "\n\n## Worktree\n\n" + worktree + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "tracker-"+name+".md"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCreate_DeclaredStoreLinks(t *testing.T) {
+	repo := initRepo(t)
+	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(repo, ".beads"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, ".beads", ".env"), []byte("X=1"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	installAdapter(t, repo, "beads", "links: `.beads/.env` (0600).")
+	res, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{Name: "foo", Mode: worktreecmd.BranchAuto})
+	if err != nil || !res.OK {
+		t.Fatalf("Create: %v", err)
+	}
+	w := res.Worktree
+	if len(w.StoreLinks) != 1 || w.StoreLinks[0].Path != ".beads/.env" || !w.StoreLinks[0].Linked || !w.StoreLinked || !w.BeadsSymlinked {
+		t.Errorf("store links = %+v linked=%v beads=%v", w.StoreLinks, w.StoreLinked, w.BeadsSymlinked)
+	}
+	if fi, err := os.Lstat(filepath.Join(w.Path, ".beads", ".env")); err != nil || fi.Mode()&os.ModeSymlink == 0 {
+		t.Errorf(".beads/.env is not a symlink in the worktree: %v", err)
+	}
+}
+
+func TestCreate_NoneAdapterLinksNothing(t *testing.T) {
+	repo := initRepo(t)
+	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, ".lets", ".env"), []byte("LETS_TRACKER=none\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(repo, ".beads"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, ".beads", ".env"), []byte("X=1"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	installAdapter(t, repo, "none", "links: nothing.")
+	res, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{Name: "foo", Mode: worktreecmd.BranchAuto})
+	if err != nil || !res.OK {
+		t.Fatalf("Create: %v", err)
+	}
+	if len(res.Worktree.StoreLinks) != 0 || res.Worktree.StoreLinked {
+		t.Errorf("none adapter linked %+v", res.Worktree.StoreLinks)
+	}
+	if _, err := os.Lstat(filepath.Join(res.Worktree.Path, ".beads", ".env")); !os.IsNotExist(err) {
+		t.Error("the none adapter must not link .beads/.env even when it exists")
 	}
 }

@@ -9,10 +9,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/restarter/lets-workflow/cli/internal/trackeradapter"
 )
 
 // List enumerates git worktrees under projectRoot, annotating each row with
-// LETS-specific state (interactive vs agent vs other, symlink presence,
+// LETS-specific state (interactive vs agent vs other, .lets and declared store links,
 // uncommitted-changes counts).
 func List(ctx context.Context, projectRoot string) (*ListResult, error) {
 	res := &ListResult{
@@ -30,8 +32,9 @@ func List(ctx context.Context, projectRoot string) (*ListResult, error) {
 		return res, &Error{Code: ExitGitFailed, Kind: "git_worktree_list_failed", Cause: err}
 	}
 	entries := parsePorcelain(string(out))
+	links := loadStoreLinks(projectRoot, "", func(string, string) {}) // once per List; a load reason is create's to surface
 	for _, e := range entries {
-		wt := annotateWorktree(ctx, projectRoot, e)
+		wt := annotateWorktree(ctx, projectRoot, e, links)
 		if wt.IsMain {
 			tmp := wt
 			res.Main = &tmp
@@ -89,7 +92,7 @@ func parsePorcelain(s string) []porcelainEntry {
 	return entries
 }
 
-func annotateWorktree(ctx context.Context, projectRoot string, e porcelainEntry) WorktreeInfo {
+func annotateWorktree(ctx context.Context, projectRoot string, e porcelainEntry, links []trackeradapter.Link) WorktreeInfo {
 	wt := WorktreeInfo{
 		Path:     e.Path,
 		Branch:   e.Branch,
@@ -116,9 +119,12 @@ func annotateWorktree(ctx context.Context, projectRoot string, e porcelainEntry)
 	if fi, err := os.Lstat(filepath.Join(e.Path, ".lets")); err == nil && fi.Mode()&os.ModeSymlink != 0 {
 		wt.LetsSymlinked = true
 	}
-	if fi, err := os.Lstat(filepath.Join(e.Path, ".beads", ".env")); err == nil && fi.Mode()&os.ModeSymlink != 0 {
-		wt.BeadsSymlinked = true
+	for _, l := range links {
+		fi, err := os.Lstat(filepath.Join(e.Path, filepath.FromSlash(l.Path)))
+		wt.StoreLinks = append(wt.StoreLinks, StoreLink{Path: l.Path, Linked: err == nil && fi.Mode()&os.ModeSymlink != 0})
 	}
+	wt.StoreLinked = allLinked(wt.StoreLinks)
+	wt.BeadsSymlinked = wt.StoreLinked // deprecated alias, see result.go
 	statusOut, _ := exec.CommandContext(ctx, "git", "-C", e.Path, "status", "--porcelain").Output()
 	modified, untracked := 0, 0
 	for _, l := range strings.Split(string(statusOut), "\n") {

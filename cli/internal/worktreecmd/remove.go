@@ -11,14 +11,19 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
+
+	"github.com/restarter/lets-workflow/cli/internal/taskstate"
+	"github.com/restarter/lets-workflow/cli/internal/trackeradapter"
 )
 
-// hasUserChanges returns true if `git status --porcelain` output contains
-// any line that isn't a known LETS-managed symlink. The `.lets` and
-// `.beads/` paths are populated by Create after `git worktree add`, so
-// they are untracked relative to the worktree's branch HEAD and would
-// otherwise mask the "is this worktree dirty?" question.
-func hasUserChanges(porcelain string) bool {
+// hasUserChanges returns true if `git status --porcelain` output contains any line
+// that is not LETS-managed: `.lets`, a `.lets.pre-adopt*` directory adopt moved
+// aside, each declared store link, and each link's parent directory entry (git
+// shows an untracked `?? .beads/` for a parent create or adopt made). They are
+// untracked relative to the worktree's branch HEAD and would otherwise mask the
+// "is this worktree dirty?" question.
+func hasUserChanges(porcelain string, links []trackeradapter.Link) bool {
 	for _, l := range strings.Split(porcelain, "\n") {
 		if l == "" {
 			continue
@@ -27,11 +32,26 @@ func hasUserChanges(porcelain string) bool {
 		if len(l) < 4 {
 			return true
 		}
-		path := strings.TrimSpace(l[2:])
-		if path == ".lets" || path == ".lets/" || path == ".beads" || path == ".beads/" || strings.HasPrefix(path, ".beads/") {
+		path := strings.TrimSuffix(strings.TrimSpace(l[2:]), "/")
+		if path == ".lets" || strings.HasPrefix(path, ".lets.pre-adopt") || isDeclaredLink(path, links) {
 			continue
 		}
 		return true
+	}
+	return false
+}
+
+// isDeclaredLink reports whether path is a declared store link or one of its parents.
+func isDeclaredLink(path string, links []trackeradapter.Link) bool {
+	for _, l := range links {
+		if path == l.Path {
+			return true
+		}
+		for dir := filepath.ToSlash(filepath.Dir(l.Path)); dir != "." && dir != "/"; dir = filepath.ToSlash(filepath.Dir(dir)) {
+			if path == dir {
+				return true
+			}
+		}
 	}
 	return false
 }
@@ -91,7 +111,7 @@ func Remove(ctx context.Context, projectRoot string, opts RemoveOptions) (*Remov
 				Message: "--branch-only requires --delete-branch",
 			})
 		}
-		msg, e := deleteBranch(ctx, projectRoot, opts.Branch, opts.ForceBranch, resolveBaseFromEnv(projectRoot))
+		msg, e := deleteBranch(ctx, projectRoot, opts.Branch, opts.ForceBranch, mergeBranch(projectRoot))
 		if e != nil {
 			return fail(e)
 		}
@@ -125,12 +145,12 @@ func Remove(ctx context.Context, projectRoot string, opts RemoveOptions) (*Remov
 	branchOut, _ := exec.CommandContext(ctx, "git", "-C", wtPath, "branch", "--show-current").Output()
 	branch := strings.TrimSpace(string(branchOut))
 
-	// Safety check unless --force. The LETS-managed `.lets` and `.beads/`
+	// Safety check unless --force. The LETS-managed `.lets` and declared store
 	// symlinks always appear as untracked in the worktree (their branch HEAD
 	// commit doesn't carry these paths). Filter them out so a freshly-created
 	// worktree is not falsely classified as "dirty".
 	statusOut, _ := exec.CommandContext(ctx, "git", "-C", wtPath, "status", "--porcelain").Output()
-	dirty := hasUserChanges(string(statusOut))
+	dirty := hasUserChanges(string(statusOut), loadStoreLinks(projectRoot, "", func(string, string) {}))
 	if dirty && !opts.Force {
 		return fail(&Error{
 			Code:        ExitDirtyWorktree,
@@ -198,7 +218,7 @@ func Remove(ctx context.Context, projectRoot string, opts RemoveOptions) (*Remov
 	// Combined-mode: --delete-branch in same call also deletes the branch.
 	branchDeleted := false
 	if opts.DeleteBranch && branch != "" {
-		msg, e := deleteBranch(ctx, projectRoot, branch, opts.ForceBranch, resolveBaseFromEnv(projectRoot))
+		msg, e := deleteBranch(ctx, projectRoot, branch, opts.ForceBranch, mergeBranch(projectRoot))
 		if e != nil {
 			return fail(e)
 		}
@@ -273,20 +293,16 @@ func worktreePaths(ctx context.Context, root string) []string {
 	return paths
 }
 
-// cleanTaskState removes the per-branch task-state file, the legacy session ref and
-// any stranded atomic-write temp siblings (.task-<slug>.XXXX left if a bash writer
-// died between mktemp and mv).
+// cleanTaskState removes the per-branch task-state file (through taskstate, its one
+// owner, which also sweeps stranded atomic-write temps) and the legacy session ref.
 func cleanTaskState(projectRoot, branch string) {
-	slug := strings.ReplaceAll(branch, "/", "-")
-	sessionsDir := filepath.Join(projectRoot, ".lets", "sessions")
-	for _, name := range []string{".task-" + slug, ".session-start-ref-" + slug} {
-		_ = os.Remove(filepath.Join(sessionsDir, name))
+	slug, ok := taskstate.Slug(branch)
+	if !ok {
+		return
 	}
-	if temps, _ := filepath.Glob(filepath.Join(sessionsDir, ".task-"+slug+".*")); temps != nil {
-		for _, m := range temps {
-			_ = os.Remove(m)
-		}
-	}
+	letsDir := filepath.Join(projectRoot, ".lets")
+	_ = taskstate.Remove(letsDir, slug, time.Now().Add(3*time.Second))
+	_ = os.Remove(filepath.Join(letsDir, "sessions", ".session-start-ref-"+slug))
 }
 
 // removeAlreadyGone finishes the branch step for a worktree whose directory and git
@@ -296,7 +312,7 @@ func cleanTaskState(projectRoot, branch string) {
 func removeAlreadyGone(ctx context.Context, projectRoot string, opts RemoveOptions, res *RemoveResult,
 	addStep func(status, msg string), fail func(*Error) (*RemoveResult, error)) (*RemoveResult, error) {
 	var branch string
-	for _, c := range []string{opts.Branch, "worktree-" + opts.Name, opts.Name} {
+	for _, c := range []string{opts.Branch, conventionCandidate(ctx, projectRoot, opts.Name), "worktree-" + opts.Name, opts.Name} {
 		if c != "" && refExists(ctx, projectRoot, "refs/heads/"+c) {
 			branch = c
 			break
@@ -314,7 +330,7 @@ func removeAlreadyGone(ctx context.Context, projectRoot string, opts RemoveOptio
 	cleanTaskState(projectRoot, branch)
 	branchDeleted := false
 	if opts.DeleteBranch {
-		msg, e := deleteBranch(ctx, projectRoot, branch, opts.ForceBranch, resolveBaseFromEnv(projectRoot))
+		msg, e := deleteBranch(ctx, projectRoot, branch, opts.ForceBranch, mergeBranch(projectRoot))
 		if e != nil {
 			return fail(e)
 		}

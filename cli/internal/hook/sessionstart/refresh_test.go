@@ -8,6 +8,9 @@ import (
 	"testing"
 )
 
+// newSID is a real session-id shape: taskstate refuses anything else.
+const newSID = "2f942be4-23e0-4b17-9eab-df0a4a7298f2"
+
 func gitInitRepo(t *testing.T) (dir, branch string) {
 	t.Helper()
 	dir = t.TempDir()
@@ -44,14 +47,14 @@ func TestRefreshSessionBoundary_RefreshesExisting(t *testing.T) {
 	dir, branch := gitInitRepo(t)
 	p := writeTaskFile(t, dir, branch, "task: lets-x\nstart: abc123\nsession: oldsha oldsid\n")
 
-	if err := RefreshSessionBoundary(dir, "newsid"); err != nil {
+	if err := RefreshSessionBoundary(dir, newSID); err != nil {
 		t.Fatalf("refresh: %v", err)
 	}
 	s := readFile(t, p)
 	if !strings.Contains(s, "task: lets-x") || !strings.Contains(s, "start: abc123") {
 		t.Errorf("task:/start: not preserved:\n%s", s)
 	}
-	if !strings.Contains(s, "newsid") {
+	if !strings.Contains(s, newSID) {
 		t.Errorf("session: not refreshed with new sid:\n%s", s)
 	}
 	if strings.Contains(s, "oldsid") {
@@ -61,7 +64,7 @@ func TestRefreshSessionBoundary_RefreshesExisting(t *testing.T) {
 
 func TestRefreshSessionBoundary_AbsentFileNotCreated(t *testing.T) {
 	dir, branch := gitInitRepo(t)
-	if err := RefreshSessionBoundary(dir, "sid"); err != nil {
+	if err := RefreshSessionBoundary(dir, newSID); err != nil {
 		t.Fatalf("refresh: %v", err)
 	}
 	p := filepath.Join(dir, ".lets", "sessions", ".task-"+branch)
@@ -73,14 +76,14 @@ func TestRefreshSessionBoundary_AbsentFileNotCreated(t *testing.T) {
 func TestRefreshSessionBoundary_AppendsWhenNoSessionLine(t *testing.T) {
 	dir, branch := gitInitRepo(t)
 	p := writeTaskFile(t, dir, branch, "task: lets-y\nstart: def456\n")
-	if err := RefreshSessionBoundary(dir, "sid2"); err != nil {
+	if err := RefreshSessionBoundary(dir, newSID); err != nil {
 		t.Fatalf("refresh: %v", err)
 	}
 	s := readFile(t, p)
 	if !strings.Contains(s, "task: lets-y") || !strings.Contains(s, "start: def456") {
 		t.Errorf("preserved lines missing:\n%s", s)
 	}
-	if !strings.Contains(s, "session: ") || !strings.Contains(s, "sid2") {
+	if !strings.Contains(s, "session: ") || !strings.Contains(s, newSID) {
 		t.Errorf("session line not appended:\n%s", s)
 	}
 }
@@ -104,7 +107,7 @@ func TestRefreshSessionBoundary_DetachedHeadNoOp(t *testing.T) {
 	if out, err := exec.Command("git", "-C", dir, "checkout", "--detach", "HEAD").CombinedOutput(); err != nil {
 		t.Fatalf("detach: %v\n%s", err, out)
 	}
-	if err := RefreshSessionBoundary(dir, "newsid"); err != nil {
+	if err := RefreshSessionBoundary(dir, newSID); err != nil {
 		t.Fatalf("refresh: %v", err)
 	}
 	if got := readFile(t, p); got != orig {
@@ -132,11 +135,11 @@ func TestRefreshSessionBoundary_ThroughLetsSymlink(t *testing.T) {
 	if err := os.WriteFile(p, []byte("task: lets-y\nstart: s2\nsession: oldsha oldsid\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := RefreshSessionBoundary(dir, "freshsid"); err != nil {
+	if err := RefreshSessionBoundary(dir, newSID); err != nil {
 		t.Fatalf("refresh: %v", err)
 	}
 	s := readFile(t, p)
-	if !strings.Contains(s, "freshsid") || strings.Contains(s, "oldsid") {
+	if !strings.Contains(s, newSID) || strings.Contains(s, "oldsid") {
 		t.Errorf("refresh through .lets symlink failed:\n%s", s)
 	}
 	if !strings.Contains(s, "task: lets-y") || !strings.Contains(s, "start: s2") {
@@ -151,4 +154,30 @@ func readFile(t *testing.T, p string) string {
 		t.Fatalf("read %s: %v", p, err)
 	}
 	return string(b)
+}
+
+func TestRefreshSessionBoundary_KeepsOrcAndUnknownLines(t *testing.T) {
+	dir, branch := gitInitRepo(t)
+	p := writeTaskFile(t, dir, branch, "task: lets-x\norc: MAIN-PWA\nfuture: kept\nsession: oldsha oldsid\n")
+	if err := RefreshSessionBoundary(dir, newSID); err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	s := readFile(t, p)
+	for _, want := range []string{"task: lets-x", "orc: MAIN-PWA", "future: kept", newSID} {
+		if !strings.Contains(s, want) {
+			t.Errorf("missing %q after refresh:\n%s", want, s)
+		}
+	}
+}
+
+func TestRefreshSessionBoundary_MalformedSIDNotWritten(t *testing.T) {
+	dir, branch := gitInitRepo(t)
+	orig := "task: lets-x\nsession: oldsha oldsid\n"
+	p := writeTaskFile(t, dir, branch, orig)
+	if err := RefreshSessionBoundary(dir, "not a session id"); err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	if got := readFile(t, p); got != orig {
+		t.Errorf("a malformed sid must not be written:\n%s", got)
+	}
 }

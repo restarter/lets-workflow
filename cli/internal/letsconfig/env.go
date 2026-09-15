@@ -52,3 +52,32 @@ func readEnvFile(path string) (map[string]string, error) {
 	defer func() { _ = f.Close() }()
 	return envfile.Parse(f)
 }
+
+// ResolvedEnv is MergedEnv plus the LETS_MERGE_BRANCH fallback: when neither file
+// supplies it, defaultBranch(projectRoot) (the repo's origin default branch) when
+// the function is non-nil and returns a name, else "main". A derived name is capped
+// at envfile.MaxValueLen like every parsed value (branch names are attacker-chosen
+// in cloned repos). This is the ONE resolver for callers that need the merge branch:
+// the SessionStart hook, worktree adopt/remove/sweep, the statusline. Callers on a
+// render path pass nil so they never fork git. letsconfig gains no gitutil import:
+// callers pass a closure such as
+//
+//	func(r string) string { return gitutil.DefaultBranch(r, 2*time.Second) }
+func ResolvedEnv(projectRoot, homeDir string, defaultBranch func(root string) string) map[string]string {
+	merged := MergedEnv(projectRoot, homeDir)
+	if merged["LETS_MERGE_BRANCH"] != "" {
+		return merged
+	}
+	b := ""
+	if defaultBranch != nil {
+		b = defaultBranch(projectRoot)
+	}
+	if b == "" {
+		b = "main"
+	}
+	if len(b) > envfile.MaxValueLen {
+		b = b[:envfile.MaxValueLen]
+	}
+	merged["LETS_MERGE_BRANCH"] = b
+	return merged
+}

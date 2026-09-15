@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/restarter/lets-workflow/cli/internal/drift"
-	"github.com/restarter/lets-workflow/cli/internal/envfile"
 	"github.com/restarter/lets-workflow/cli/internal/gitutil"
 	"github.com/restarter/lets-workflow/cli/internal/letsconfig"
 )
@@ -59,7 +58,7 @@ func Run(w io.Writer, rulesPath, projectRoot, homeDir string) error {
 	// Compute the merged env BEFORE the notice so driftCheck can read the
 	// resolved LETS_RULES_SCOPE. Output order is unchanged - the notice is still
 	// emitted first, the Config block second.
-	env := mergedEnv(projectRoot, homeDir)
+	env := letsconfig.ResolvedEnv(projectRoot, homeDir, func(r string) string { return gitutil.DefaultBranch(r, time.Second) })
 
 	if notice := driftCheck(rulesPath, projectRoot, homeDir, env["LETS_RULES_SCOPE"]); notice != "" {
 		if _, err := fmt.Fprintln(w, notice); err != nil {
@@ -149,38 +148,6 @@ func driftCheck(pluginRulesPath, projectRoot, homeDir, rulesScope string) string
 		return ""
 	}
 	return "## LETS Notice\n\n" + msg + "\n\n→ Surface this to the user at the start of your next response (one line), then continue - do not skip it."
-}
-
-// mergedEnv resolves LETS_* config for injection: letsconfig.MergedEnv does the
-// project-over-user overlay; this adds the hook-only LETS_MERGE_BRANCH fallback.
-// Whitelist filtering stays at emit time in Run, so foreign keys in either
-// file are consistently dropped from injection.
-//
-// LETS_MERGE_BRANCH git-fallback: when neither file supplies it, derive from
-// the repo's origin default branch (single git spawn, 1s timeout), else the
-// literal "main" - matching the model-side fallback in the explainer. Only
-// fires when the key is absent, so initialized projects (whose .env always
-// carries the key - RegenerateEnv restores hand-deleted keys) pay no extra
-// git call. Uninitialized repos DO pay one spawn per hook fire (SessionStart
-// AND PreCompact), bounded by the 1s timeout.
-func mergedEnv(projectRoot, homeDir string) map[string]string {
-	merged := letsconfig.MergedEnv(projectRoot, homeDir)
-	if merged["LETS_MERGE_BRANCH"] == "" {
-		if b := gitutil.DefaultBranch(projectRoot, time.Second); b != "" {
-			// Branch names are attacker-influenced in cloned repos, and this is
-			// the ONE .env-class value that does not pass through envfile.Parse -
-			// apply the same length cap before injection. Newlines/spaces are
-			// impossible in ref names (git rejects them); bloat is the residual
-			// vector.
-			if len(b) > envfile.MaxValueLen {
-				b = b[:envfile.MaxValueLen]
-			}
-			merged["LETS_MERGE_BRANCH"] = b
-		} else {
-			merged["LETS_MERGE_BRANCH"] = "main"
-		}
-	}
-	return merged
 }
 
 // DetectProjectRoot returns the git toplevel for the current working
