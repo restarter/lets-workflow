@@ -38,3 +38,75 @@ func TestCredsAndControl(t *testing.T) {
 		t.Errorf("Control = %q", got)
 	}
 }
+
+func TestText_MoreTokenShapes(t *testing.T) {
+	cases := map[string]string{
+		"openai sk-proj-abcdefghijklmnopqrstuvwxyz_123":             "[redacted:token]",
+		"stripe sk_live_abcdefghijklmnopqrstuvwx":                   "[redacted:token]",
+		"google AIzaSyA1234567890abcdefghijklmnopqrstuv":            "[redacted:token]",
+		"jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abcDEF123_-x":     "[redacted:jwt]",
+		"x-api-key: abc123def456":                                   "x-api-key: [redacted]",
+		"deploy key for prod: Zm9vYmFyYmF6cXV4MTIzNDU2Nzg5MGFiY2Rl": "[redacted:high-entropy]",
+	}
+	for in, want := range cases {
+		if got := Text(in); !strings.Contains(got, want) {
+			t.Errorf("Text(%q) = %q, want it to contain %q", in, got, want)
+		}
+	}
+	// a long hash on a line with no key-like word is left alone
+	commit := "commit 4f1c2a9b8e7d6c5b4a3928171615141312111009 merged"
+	if got := Text(commit); got != commit {
+		t.Errorf("benign hash changed: %q", got)
+	}
+}
+
+func TestToolResult(t *testing.T) {
+	bash := func(cmd string) map[string]any { return map[string]any{"command": cmd} }
+	read := func(p string) map[string]any { return map[string]any{"file_path": p} }
+	for _, c := range []struct {
+		tool  string
+		input map[string]any
+	}{
+		{"Bash", bash("env")},
+		{"Bash", bash("declare -p")},
+		{"Bash", bash("cat .env")},
+		{"Bash", bash("cat config/.env.local")},
+		{"Read", read("/repo/.beads/.env")},
+		{"Read", read("/home/u/.ssh/id_ed25519")},
+		{"Bash", bash("cat ~/.netrc")},
+	} {
+		if got := ToolResult(c.tool, c.input, "SECRET=1", 400); got != "[redacted:env-like source]" {
+			t.Errorf("%s %v: %q", c.tool, c.input, got)
+		}
+	}
+	dump := "declare -x HOME=/h\ndeclare -x PATH=/bin\ndeclare -x TOKENISH=x\n"
+	if got := ToolResult("Bash", bash("some-script"), dump, 400); got != "[redacted:env dump]" {
+		t.Errorf("dump: %q", got)
+	}
+	if got := ToolResult("Bash", bash("echo hi"), "token ghp_abcdefghijklmnopqrstuvwxyz0123", 400); !strings.Contains(got, "[redacted:token]") {
+		t.Errorf("token in result: %q", got)
+	}
+	if got := ToolResult("Bash", bash("ls"), "a\x1b[31mred", 400); strings.ContainsRune(got, 0x1b) {
+		t.Errorf("control byte kept: %q", got)
+	}
+	long := strings.Repeat("ж", 300) // 600 bytes
+	got := ToolResult("Bash", bash("cat notes.txt"), long, 401)
+	if !strings.Contains(got, "…[truncated 200 bytes]") {
+		t.Errorf("cap marker: %q", got[len(got)-40:])
+	}
+	if cut := got[:strings.Index(got, " …[truncated")]; !utf8ValidAndEven(cut) {
+		t.Errorf("cut mid-rune: %d bytes", len(cut))
+	}
+	if got := ToolResult("Grep", map[string]any{"pattern": "x"}, "fine", 400); got != "fine" {
+		t.Errorf("other tool: %q", got)
+	}
+}
+
+func utf8ValidAndEven(s string) bool {
+	for _, r := range s {
+		if r == '�' {
+			return false
+		}
+	}
+	return len(s)%2 == 0
+}

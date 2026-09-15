@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLookOrca_BundleWinsAndPathNeedsEnvelope(t *testing.T) {
@@ -40,6 +41,9 @@ func TestLookOrca_BundleWinsAndPathNeedsEnvelope(t *testing.T) {
 }
 
 func TestProbeOrca_RejectsNonOrcaBinary(t *testing.T) {
+	old := probeTimeout
+	probeTimeout = 20 * time.Second // exec of a fresh script can exceed 2s while the full suite runs in parallel
+	t.Cleanup(func() { probeTimeout = old })
 	dir := t.TempDir()
 	liar := filepath.Join(dir, "orca")
 	if err := os.WriteFile(liar, []byte("#!/bin/sh\necho ok\nexit 0\n"), 0o755); err != nil {

@@ -65,10 +65,13 @@ var lookOrca = func() (string, bool) {
 	return "", false
 }
 
+// probeTimeout bounds the PATH probe (a var: a loaded test machine needs longer).
+var probeTimeout = 2 * time.Second
+
 // probeOrca accepts a PATH hit only when `status --json` decodes into Orca's envelope
 // (`result.app` present); an exit-0 `--version` is not enough.
 var probeOrca = func(bin string) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), probeTimeout)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, bin, "status", "--json").Output()
 	if err != nil {

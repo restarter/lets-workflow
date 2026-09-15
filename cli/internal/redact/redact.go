@@ -5,8 +5,11 @@
 package redact
 
 import (
+	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 )
 
 // credURLRE matches the `scheme://[user[:password]]@` prefix of an HTTP(S)
@@ -69,9 +72,36 @@ var textRules = []struct {
 	repl string
 }{
 	{regexp.MustCompile(`(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----`), "[redacted:private-key]"},
-	{regexp.MustCompile(`\b(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-ant-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{20,}|xox[abprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16})\b`), "[redacted:token]"},
+	{regexp.MustCompile(`\b(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-ant-[A-Za-z0-9_-]{20,}|sk-proj-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{20,}|sk_live_[A-Za-z0-9]{20,}|xox[abprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35})`), "[redacted:token]"},
+	{regexp.MustCompile(`\beyJ[\w-]+\.[\w-]+\.[\w-]+`), "[redacted:jwt]"},
 	{regexp.MustCompile(`(?i)(authorization:\s*bearer\s+)\S+`), "${1}[redacted]"},
+	{regexp.MustCompile(`(?im)^([\w-]*(api-?key|token|secret)[\w-]*):[ \t]*\S+`), "${1}: [redacted]"},
 	{regexp.MustCompile(`(?i)\b([A-Z0-9_]*(PASSWORD|PASSWD|SECRET|TOKEN|API_?KEY|PRIVATE_KEY)[A-Z0-9_]*)\s*[=:]\s*\S+`), "${1}=[redacted]"},
+}
+
+// keyWordLine finds a line naming a key-like word; highEntropy is a long run of
+// token characters. Together they catch a secret no shape rule knows.
+var (
+	keyWordLine = regexp.MustCompile(`(?i)(key|token|secret|passw|credential|auth)`)
+	highEntropy = regexp.MustCompile(`[A-Za-z0-9+/_=-]{32,}`)
+)
+
+// highEntropyOnKeyLine redacts a 32+ character token-shaped run that mixes letters
+// and digits, on a line that also names a key-like word.
+func highEntropyOnKeyLine(s string) string {
+	lines := strings.Split(s, "\n")
+	for i, l := range lines {
+		if !keyWordLine.MatchString(l) {
+			continue
+		}
+		lines[i] = highEntropy.ReplaceAllStringFunc(l, func(m string) string {
+			if strings.ContainsAny(m, "0123456789") && strings.IndexFunc(m, func(r rune) bool { return r >= 'A' && r <= 'z' }) >= 0 {
+				return "[redacted:high-entropy]"
+			}
+			return m
+		})
+	}
+	return strings.Join(lines, "\n")
 }
 
 // Text redacts private keys, well-known token shapes, bearer headers and
@@ -81,5 +111,57 @@ func Text(s string) string {
 	for _, r := range textRules {
 		s = r.re.ReplaceAllString(s, r.repl)
 	}
-	return s
+	return highEntropyOnKeyLine(s)
+}
+
+var (
+	// envSource: a command or path that reads an env-like or credential file.
+	envSource = regexp.MustCompile(`(?i)(^|[\s/'"])(\.env(\.[\w-]+)?|[\w.-]*\.pem|id_(rsa|ed25519|ecdsa)|\.netrc|credentials(\.json)?)(\s|$|['"])`)
+	// envCommand: a Bash command that prints the whole environment.
+	envCommand = regexp.MustCompile(`^\s*(env|printenv|export -p|declare -p|declare -x|set)\s*$`)
+	// envLine: one `KEY=` assignment line; three of them make a dump.
+	envLine = regexp.MustCompile(`(?m)^\s*(export\s+|declare\s+-x\s+)?[A-Z_][A-Z0-9_]*=`)
+)
+
+// ToolResult redacts a tool result another session is about to read. It takes the
+// tool's STRUCTURED input (for Bash the `command` field, for Read / Edit / Write the
+// `file_path`): a result whose subject is an env-like source, or that looks like an
+// environment dump, is withheld whole; anything else goes through Creds, Text and
+// Control and is capped at capBytes (cut on a rune boundary, with a marker).
+func ToolResult(tool string, input map[string]any, output string, capBytes int) string {
+	subject := inputSubject(tool, input)
+	if envSource.MatchString(subject) || (tool == "Bash" && envCommand.MatchString(subject)) {
+		return "[redacted:env-like source]"
+	}
+	if len(envLine.FindAllStringIndex(output, 3)) >= 3 {
+		return "[redacted:env dump]"
+	}
+	return Cap(Control(Text(Creds(output))), capBytes)
+}
+
+// Cap cuts s to at most capBytes on a rune boundary and says how much it dropped.
+func Cap(s string, capBytes int) string {
+	if capBytes <= 0 || len(s) <= capBytes {
+		return s
+	}
+	cut := capBytes
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + fmt.Sprintf(" …[truncated %d bytes]", len(s)-cut)
+}
+
+func inputSubject(tool string, input map[string]any) string {
+	key := ""
+	switch tool {
+	case "Bash":
+		key = "command"
+	case "Read", "Edit", "Write", "NotebookEdit":
+		key = "file_path"
+	}
+	if v, ok := input[key].(string); ok && key != "" {
+		return v
+	}
+	b, _ := json.Marshal(input)
+	return string(b)
 }
