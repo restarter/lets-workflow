@@ -8,3 +8,5 @@ package worktreecmd
 var PerformRollbackForTesting = rollback
 
 var RedactCredsForTesting = redactCreds
+
+var MergedUpstreamForTesting = mergedUpstream

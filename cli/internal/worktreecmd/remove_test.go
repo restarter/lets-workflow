@@ -269,3 +269,83 @@ func TestRemove_DeletesTaskStateFile_AttachMode(t *testing.T) {
 		t.Errorf("attach-mode .task-feature-bar not cleaned (dir-name slug would miss it): %v", err)
 	}
 }
+
+func TestRemove_DeleteBranchMergedUpstreamWhileLocalMainLags(t *testing.T) {
+	repo := initRepoWithOrigin(t)
+	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cr, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{Name: "foo", Mode: worktreecmd.BranchAuto})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runIn(t, cr.Worktree.Path, "git", "commit", "-q", "--allow-empty", "-m", "work")
+	runIn(t, repo, "git", "push", "-q", "origin", "worktree-foo:main") // merged upstream; local main lags
+	runIn(t, repo, "git", "fetch", "-q", "origin")
+
+	res, err := worktreecmd.Remove(context.Background(), repo, worktreecmd.RemoveOptions{Name: "foo", DeleteBranch: true})
+	if err != nil || !res.OK {
+		t.Fatalf("err=%v ok=%v", err, res != nil && res.OK)
+	}
+	if !res.Removed.BranchDeleted {
+		t.Error("expected branch_deleted=true for a branch merged into origin/main")
+	}
+	var sawMergeBase bool
+	for _, s := range res.Steps {
+		if strings.Contains(s.Message, "merged into origin/main") {
+			sawMergeBase = true
+		}
+	}
+	if !sawMergeBase {
+		t.Errorf("steps do not name the merge-base decision: %+v", res.Steps)
+	}
+}
+
+func TestRemove_AlreadyGoneFinishesBranchStep(t *testing.T) {
+	repo := initRepo(t)
+	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cr, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{Name: "gone", Mode: worktreecmd.BranchAuto})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runIn(t, repo, "git", "worktree", "remove", "--force", cr.Worktree.Path)
+	runIn(t, repo, "git", "worktree", "prune")
+
+	res, err := worktreecmd.Remove(context.Background(), repo, worktreecmd.RemoveOptions{Name: "gone", DeleteBranch: true})
+	if err != nil || !res.OK {
+		t.Fatalf("err=%v", err)
+	}
+	if !res.Removed.AlreadyGone || !res.Removed.BranchDeleted || res.Removed.Branch != "worktree-gone" {
+		t.Errorf("removed = %+v, want already_gone + branch_deleted for worktree-gone", res.Removed)
+	}
+	if out, _ := exec.Command("git", "-C", repo, "branch", "--list", "worktree-gone").Output(); len(out) != 0 {
+		t.Errorf("branch still exists: %s", out)
+	}
+
+	// A second run has nothing left to finish: worktree_not_found.
+	_, err = worktreecmd.Remove(context.Background(), repo, worktreecmd.RemoveOptions{Name: "gone", DeleteBranch: true})
+	var e *worktreecmd.Error
+	if !errors.As(err, &e) || e.Kind != "worktree_not_found" {
+		t.Errorf("second run: want worktree_not_found, got %v", err)
+	}
+}
+
+func TestRemove_ExternalWorktreeRefused(t *testing.T) {
+	repo := initRepo(t)
+	ext := filepath.Join(realTempDir(t), "outside")
+	if err := os.MkdirAll(ext, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runIn(t, repo, "git", "worktree", "add", "-q", "-b", "bar-branch", filepath.Join(ext, "bar"))
+
+	_, err := worktreecmd.Remove(context.Background(), repo, worktreecmd.RemoveOptions{Name: "bar", DeleteBranch: true})
+	var e *worktreecmd.Error
+	if !errors.As(err, &e) || e.Kind != "worktree_external" {
+		t.Fatalf("want worktree_external, got %v", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(ext, "bar")); statErr != nil {
+		t.Errorf("external worktree must be left alone: %v", statErr)
+	}
+}

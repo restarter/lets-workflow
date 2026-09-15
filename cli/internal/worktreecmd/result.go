@@ -103,6 +103,7 @@ type RemovedInfo struct {
 	BranchDeleted         bool   `json:"branch_deleted"`
 	HadUncommittedChanges bool   `json:"had_uncommitted_changes"`
 	Forced                bool   `json:"forced"`
+	AlreadyGone           bool   `json:"already_gone,omitempty"`
 }
 
 // ListResult is the list-subcommand envelope.
