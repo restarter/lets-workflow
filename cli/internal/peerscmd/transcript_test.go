@@ -119,12 +119,12 @@ func TestTranscript_LargeTailUnderCap(t *testing.T) {
 		f.Write([]byte("\n"))
 	}
 	f.Close()
-	bytesRead = 0
+	bytesRead.Store(0)
 	turns, d := TailTurns(path, 5)
 	if d != nil || len(turns) != 5 || turns[4].Text != "turn 6" || turns[0].Text != "turn 2" {
 		t.Fatalf("tail: %+v %+v", turns, d)
 	}
-	if bytesRead > maxTailBytes+chunkSize {
-		t.Errorf("read %d bytes, cap is %d + one chunk", bytesRead, maxTailBytes)
+	if bytesRead.Load() > maxTailBytes+chunkSize {
+		t.Errorf("read %d bytes, cap is %d + one chunk", bytesRead.Load(), maxTailBytes)
 	}
 }

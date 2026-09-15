@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/restarter/lets-workflow/cli/internal/ccregistry"
@@ -71,7 +72,7 @@ func LocateTranscript(claudeDir, cwd, sid string) (string, *Degraded) {
 }
 
 // bytesRead counts what readBackward pulled from disk (a test seam for the cap).
-var bytesRead int64
+var bytesRead atomic.Int64
 
 // readBackward reads path from EOF in 64 KiB chunks and returns recognized records in
 // chronological order, stopping once stop reports true for the records collected so
@@ -108,7 +109,7 @@ func readBackward(path string, stop func(newestFirst []record) bool) ([]record, 
 			return nil, lines, &Degraded{Source: "transcript", Reason: "transcript_unreadable"}
 		}
 		read += n
-		bytesRead += n
+		bytesRead.Add(n)
 		data := append(buf, carry...)
 		parts := bytes.Split(data, []byte("\n"))
 		if offset > 0 {
