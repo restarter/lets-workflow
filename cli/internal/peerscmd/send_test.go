@@ -136,6 +136,48 @@ func TestTell_ForeignRepoTarget(t *testing.T) {
 	}
 }
 
+// Orca is the calling session's opt-in: reading or messaging another project consults
+// Orca exactly when THIS session selects it, whatever that project's LETS_LAUNCHER says.
+func TestForeignRepo_CallerDecidesOrca(t *testing.T) {
+	ctx := context.Background()
+	hub := repoWithLets(t, "terminal")
+	foreign := gitRepo(t)
+	setLauncher := func(repo, launcher string) {
+		_ = os.MkdirAll(filepath.Join(repo, ".lets"), 0o755)
+		_ = os.WriteFile(filepath.Join(repo, ".lets", ".env"), []byte("LETS_LAUNCHER="+launcher+"\n"), 0o644)
+	}
+	setLauncher(foreign, "orca")
+	claudeHome(t, []regRow{{101, sidMain, "HUB", hub}, {103, sidWork, "MAIN-PWA", foreign}})
+	calls := useOrca(t, &fakeOps{})
+
+	fr, err := Frame(ctx, FrameOptions{Cwd: hub, Session: sidMain, ToSession: sidWork, Kind: "tell"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(fr.HandoffPath, []byte(fr.Header+"\nq"), 0o600)
+	if res, err := Tell(ctx, TellOptions{Cwd: hub, ToSession: sidWork, MsgID: fr.MsgID, Repo: foreign}); err != nil || res.Route != "claude" {
+		t.Errorf("an opted-out caller routes a foreign peer over Claude: %+v %v", res, err)
+	}
+	if _, err := Tail(ctx, TailOptions{Cwd: hub, ToSession: sidWork, Repo: foreign}); err != nil {
+		t.Errorf("tail --repo: %v", err)
+	}
+	if _, err := Who(ctx, WhoOptions{Cwd: hub, Repo: foreign}); err != nil {
+		t.Errorf("who --repo: %v", err)
+	}
+	if *calls != 0 {
+		t.Errorf("a foreign LETS_LAUNCHER=orca must not switch Orca on for a terminal caller (%d lookups)", *calls)
+	}
+
+	setLauncher(hub, "orca")
+	setLauncher(foreign, "terminal")
+	if _, err := Who(ctx, WhoOptions{Cwd: hub, Repo: foreign}); err != nil {
+		t.Fatal(err)
+	}
+	if *calls == 0 {
+		t.Error("an Orca caller consults Orca for a project whose own launcher is terminal")
+	}
+}
+
 func TestTell_OrcaNotReadyPassthrough(t *testing.T) {
 	fastLoops(t)
 	repo := repoWithLets(t, "orca")

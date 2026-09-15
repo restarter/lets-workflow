@@ -68,6 +68,26 @@ type repoContext struct {
 }
 
 func loadRepo(ctx context.Context, cwd string, probeOrca bool) (*repoContext, error) {
+	return loadRepoFor(ctx, cwd, func(root string) bool { return orcaSelected(root, probeOrca) })
+}
+
+// callerSelectsOrca is the Orca decision of the session running the verb (its cwd's
+// checkout): a load of ANOTHER project passes it, so that project's own LETS_LAUNCHER
+// can neither switch Orca on for a session that opted out nor off for one that opted in.
+func callerSelectsOrca(cwd string, probe bool) func(string) bool {
+	if cwd == "" {
+		cwd, _ = os.Getwd()
+	}
+	sel := probe
+	if root := gitutil.ProjectRoot(cwd, 2*time.Second); root != "" {
+		sel = orcaSelected(root, probe)
+	}
+	return func(string) bool { return sel }
+}
+
+// loadRepoFor is loadRepo with the Orca decision supplied: useOrca gets the loaded
+// checkout's root.
+func loadRepoFor(ctx context.Context, cwd string, useOrca func(root string) bool) (*repoContext, error) {
 	if cwd == "" {
 		cwd, _ = os.Getwd()
 	}
@@ -88,7 +108,7 @@ func loadRepo(ctx context.Context, cwd string, probeOrca bool) (*repoContext, er
 	for _, name := range invalid {
 		rc.degraded = append(rc.degraded, Degraded{Source: "roles", Reason: "role_file_invalid", Detail: name})
 	}
-	if orcaSelected(root, probeOrca) {
+	if useOrca(root) {
 		ops, f := newOrcaOps()
 		if f != nil {
 			rc.degraded = append(rc.degraded, Degraded{Source: "orca", Reason: f.Reason, Detail: f.Detail})
@@ -134,7 +154,7 @@ func otherRepo(ctx context.Context, repo string, idx *int) (path string, given b
 // peerRepo is the repo a verb looks its target up in: rc (this checkout's), or the
 // project --repo / --repo-index names - a hub addressing another project's session.
 // A name matches only inside the repo it belongs to, so the target is never looked
-// up by name here; Orca is consulted there when this session's switch selects it.
+// up by name here; Orca is consulted there exactly when this session selects it.
 func peerRepo(ctx context.Context, rc *repoContext, repo string, idx *int, probe bool) (*repoContext, *Error) {
 	path, given, e := otherRepo(ctx, repo, idx)
 	if e != nil {
@@ -143,7 +163,7 @@ func peerRepo(ctx context.Context, rc *repoContext, repo string, idx *int, probe
 	if !given {
 		return rc, nil
 	}
-	prc, err := loadRepo(ctx, path, orcaSelected(rc.root, probe))
+	prc, err := loadRepoFor(ctx, path, callerSelectsOrca(rc.root, probe))
 	if err != nil {
 		return nil, err.(*Error)
 	}
@@ -282,6 +302,7 @@ func Who(ctx context.Context, o WhoOptions) (*WhoResult, error) {
 	}
 	ctx, cancel := context.WithTimeout(ctx, o.Timeout)
 	defer cancel()
+	useOrca := func(root string) bool { return orcaSelected(root, o.ProbeOrca) }
 	if o.Repo != "" {
 		if fi, err := os.Stat(o.Repo); err != nil || !fi.IsDir() {
 			return repoInvalid(res)
@@ -289,9 +310,10 @@ func Who(ctx context.Context, o WhoOptions) (*WhoResult, error) {
 		if inWt, main := gitutil.DetectInsideWorktreeAt(o.Repo); inWt || main == "" || !fsutil.SameDir(main, o.Repo) {
 			return repoInvalid(res)
 		}
+		useOrca = callerSelectsOrca(o.Cwd, o.ProbeOrca)
 		o.Cwd, o.Prune = o.Repo, false // another project is read, never written
 	}
-	rc, err := loadRepo(ctx, o.Cwd, o.ProbeOrca)
+	rc, err := loadRepoFor(ctx, o.Cwd, useOrca)
 	if err != nil {
 		e, _ := err.(*Error)
 		res.Error = &ErrorInfo{Kind: e.Kind, Message: e.Message}
@@ -393,7 +415,7 @@ func whoOrcaRepos(ctx context.Context, o WhoOptions) (*WhoResult, error) {
 	}
 	for _, r := range info.Repos {
 		idx := r.Index
-		sub, err := Who(ctx, WhoOptions{Repo: r.Path, Role: o.Role, Timeout: o.Timeout})
+		sub, err := Who(ctx, WhoOptions{Cwd: o.Cwd, Repo: r.Path, Role: o.Role, ProbeOrca: o.ProbeOrca, Timeout: o.Timeout})
 		if err != nil {
 			res.Degraded = append(res.Degraded, Degraded{Source: "repo", Reason: "repo_invalid", Detail: r.Name})
 			continue
