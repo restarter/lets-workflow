@@ -16,6 +16,8 @@
 
 - **`/lets:plan --idea`: write down the wish before the design (lets-ip06f).** A concept document - problem, what exists today, the behaviour wanted, triggers, constraints, open questions, handoff - with no codebase exploration and no code. It is saved beside plans as `…-<task-id>-idea.md`, `/lets:execute` never picks it up (and refuses it by path), `/lets:check --plan` reviews it with concept lenses, and a later `/lets:plan` on the task reads it as input.
 
+- **`/lets:hub`: orchestrators across projects (lets-ip06f, Orca addon).** With `LETS_LAUNCHER=orca`, one session lists the orchestrators of every project Orca knows and whether they are running. A read-only question to a stopped one is answered by a headless fork of its last session, launched with abilities narrowed rather than trusted: plan mode, only Read/Grep/Glob, no MCP servers, a filtered environment, and a refusal when `claude` cannot enforce that. Anything that would change something wakes the orchestrator in a visible Orca terminal, where you press its gates. The hub never starts a second process on a live orchestrator and never writes into another project. Scheduled digests were left out: an Orca automation cannot run in plan mode.
+
 ### Fixed
 - **`/lets:worktree remove` deletes branches already merged upstream (lets-ip06f).** `git branch -d` measured "merged" against the local merge-branch, which lags its origin in a worktree setup, so remove refused branches merged on GitHub. A branch that is an ancestor of `origin/<merge-branch>` is now deleted; removing a worktree that is already gone still finishes the branch step; and remove offers to sweep the other merged task branches.
 

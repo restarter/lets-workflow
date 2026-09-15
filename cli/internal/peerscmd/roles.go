@@ -3,6 +3,7 @@
 package peerscmd
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -217,12 +218,52 @@ func pruneRoles(files map[string]roleFile, snap ccregistry.Snapshot, self string
 			}
 		}
 		if dead {
+			if f.Role == "orchestrator" {
+				_ = writeLastSeen(filepath.Dir(f.path), f)
+			}
 			_ = os.Remove(f.path)
 			delete(files, sid)
 			n++
 		}
 	}
 	return n
+}
+
+// lastDir holds one last-seen file per orchestrator name.
+func lastDir(peers string) string { return filepath.Join(peers, "last") }
+
+// lastSeenFile names a name's file by the lowercase hex of its UTF-8 bytes, so
+// "MAIN PWA" and "MAIN_PWA" never share a file and no name reaches a path unescaped.
+func lastSeenFile(peers, name string) string {
+	return filepath.Join(lastDir(peers), hex.EncodeToString([]byte(name))+".last")
+}
+
+// writeLastSeen records a pruned orchestrator (so the hub can wake it later),
+// atomically, one file per name; a later prune of the same name overwrites only it.
+func writeLastSeen(peers string, f roleFile) error {
+	if !ccregistry.ValidName(f.Name) {
+		return nil
+	}
+	dir := lastDir(peers)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	body := fmt.Sprintf("session: %s\npid: %d\nname: %s\nscope: %s\ncwd: %s\nset: %s\n", f.Session, f.Pid, f.Name, f.Scope, f.Cwd, f.Set)
+	tmp, err := os.CreateTemp(dir, ".last-*")
+	if err != nil {
+		return err
+	}
+	if _, err := tmp.WriteString(body); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
+		return err
+	}
+	_ = tmp.Chmod(0o600)
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmp.Name())
+		return err
+	}
+	return os.Rename(tmp.Name(), lastSeenFile(peers, f.Name))
 }
 
 // cleanScope keeps one line of at most 120 bytes without control bytes.

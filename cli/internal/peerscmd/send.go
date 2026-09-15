@@ -26,6 +26,7 @@ type FrameOptions struct {
 	Session   string // the caller
 	ToSession string
 	Kind      string
+	ToName    string // ask-ro: the display name of an orchestrator that is not running (from who --repo)
 }
 
 // newMsgID is 16 hex chars from crypto/rand.
@@ -93,8 +94,12 @@ func Frame(ctx context.Context, o FrameOptions) (*FrameResult, error) {
 		return fail(err.(*Error))
 	}
 	res.Degraded = rc.degraded
-	to, ok := rc.snap.Find(o.ToSession)
-	if !ok || !to.NameOK {
+	toName := ""
+	if to, ok := rc.snap.Find(o.ToSession); ok && to.NameOK {
+		toName = to.Name
+	} else if o.Kind == "ask-ro" && ccregistry.ValidName(o.ToName) {
+		toName = o.ToName // ask-ro targets a session that is NOT running
+	} else {
 		return fail(&Error{Code: ExitGeneric, Kind: "peer_not_found", Message: "no live, named session " + session6(o.ToSession)})
 	}
 	from, ok := rc.snap.Find(o.Session)
@@ -115,7 +120,7 @@ func Frame(ctx context.Context, o FrameOptions) (*FrameResult, error) {
 	}
 	res.MsgID = id
 	res.SentAt = time.Now().UTC().Format(time.RFC3339Nano)
-	res.Header = fmt.Sprintf(`[lets-peer id=%s kind=%s from_sid=%s to_sid=%s from="%s/%s" to="%s"]`, id, o.Kind, o.Session, o.ToSession, role, from.Name, to.Name)
+	res.Header = fmt.Sprintf(`[lets-peer id=%s kind=%s from_sid=%s to_sid=%s from="%s/%s" to="%s"]`, id, o.Kind, o.Session, o.ToSession, role, from.Name, toName)
 	res.HandoffPath = filepath.Join(dir, id+".txt")
 	if err := os.WriteFile(filepath.Join(dir, id+".issued"), []byte(res.Header), 0o600); err != nil {
 		return fail(&Error{Code: ExitGeneric, Kind: "handoff_dir_refused", Message: err.Error()})

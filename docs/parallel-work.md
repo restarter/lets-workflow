@@ -47,6 +47,10 @@ A worktree made by another tool has no `.lets` link and no store link, so LETS i
 
 With `LETS_LAUNCHER=orca`, `/lets:worktree create <task-id>` asks Orca to create the worktree and open Claude there with `/lets:start <task-id>` — no second terminal. Finish with `/lets:done` inside it, then archive the workspace in Orca: its archive hook runs `lets worktree release`, and if the task was still in progress, the next `/lets:start --main` offers to set it back to open. `/lets:worktree remove` refuses an Orca workspace. `/lets:worktree remove` also offers to sweep other task branches already merged into `origin/<merge-branch>`.
 
+### Across projects: `/lets:hub` (Orca addon)
+
+With `LETS_LAUNCHER=orca`, one session can look across every project Orca knows. `/lets:hub` lists each project's orchestrators and whether they are running. A read-only question to a stopped orchestrator (what is in progress, what is next) is answered by a headless fork of its last session, launched in plan mode with only Read, Grep and Glob, no MCP servers and a filtered environment; anything that would change something wakes the orchestrator in a visible Orca terminal, so you press its gates yourself. The hub never runs a second process on an orchestrator that is alive, and never writes into the other project.
+
 ## See also
 
 - **[plan-execute.md](plan-execute.md)** — `/lets:team` runs this flow per task

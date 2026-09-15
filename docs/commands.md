@@ -12,6 +12,7 @@ Every `/lets:*` command, grouped. For the day-to-day flow see **[workflow.md](wo
 | `/lets:done` | Finish the task — push the branch and open a PR (GitHub mode), or merge locally and close the task (local/bitbucket). |
 | `/lets:status` | Read-only orient snapshot — where you are, what's in flight, what's next (tracker-universal). Shows a Peers block when other sessions of the repo are live. |
 | `/lets:orc` | Talk to this chat's orchestrator or a named peer session — `ask`, `ping`, `read`, `tell`, `who`; the only sender of peer messages. `/lets:peer <name> <verb> [text]` is the alias with a target. See [commands/orc.md](commands/orc.md). |
+| `/lets:hub` | Orca addon (`LETS_LAUNCHER=orca`): lists the orchestrators of every project Orca knows, asks a stopped one a read-only question through a narrowed headless fork (plan mode, Read/Grep/Glob, no MCP), and wakes one in a visible Orca terminal for anything that needs its gates. |
 | `/lets:note` | Add a note to the active task — a decision, gotcha, fact, or reference. `--session` (same aliases) writes the same recovery snapshot `/lets:end` does, without ending anything. |
 
 See **[tasks.md](tasks.md)** for the task lifecycle.

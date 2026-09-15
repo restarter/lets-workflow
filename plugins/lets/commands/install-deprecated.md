@@ -91,6 +91,7 @@ Team:     /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /le
 | `/lets:status` | Utility | Read-only orient snapshot — where you are, what's in flight, what's next |
 | `/lets:orc` | Utility | Talk to this chat's orchestrator or a named peer session - ask / ping / read / tell / who |
 | `/lets:peer` | Utility | Alias: `/lets:peer <name> <verb> [text]` |
+| `/lets:hub` | Utility | Orca addon: orchestrators across projects - ask a stopped one read-only, wake one for gated work |
 | `/lets:note` | Utility | Add note to active task |
 | `/lets:statusline` | Utility | Manage & persist statusline appearance - light/dark, compact, hidden rows |
 | `/lets:backlog` | Planning | Backlog review (multi-agent) + `--fast` quick no-agent pulse + interactive cleanup triage |

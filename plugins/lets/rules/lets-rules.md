@@ -33,6 +33,8 @@ If a `## LETS Notice` block appears in the injected context (sibling H2 of `## L
 - **Stay inside `$LETS_PROJECT_ROOT`.** Never read, search, or edit files outside the project directory. Never explore parent directories or other projects without explicit user request.
 
   **Carve-out - peers.** `lets peers` / `lets orca` (Go-side, redacted, truncated) may read the Claude session registry (`~/.claude/sessions`) and the transcripts of sessions whose cwd is a worktree of this repo (`~/.claude/projects`). The model never opens those files directly; it reads only the command output.
+
+  **Carve-out - hub.** Only on an explicit `/lets:hub` request, `lets peers who --repo` / `--orca-repos` may read another registered repo's `.lets/sessions/peers/`, and `lets peers ask-ro` / `lets orca wake` may run in that repo's main checkout. The hub never reads another project's files beyond that, never writes into it, and never resolves its tracker verbs.
 - **Never edit files on the merge-branch.** Every task gets its own branch named by the active tracker convention (default `feature/<task-id>-<slug>`; `worktree-<name>` in worktrees). Before any code edit - verify you're on a feature/worktree branch. If on `$LETS_MERGE_BRANCH`: create/switch to feature branch FIRST, then edit.
 
   **Exception — trunk-mode.** If `detect-task` returns an active task AND HEAD == `$LETS_MERGE_BRANCH`, trunk-mode is active (user opted in via the `take-task` picker option "Stay on current branch"). In trunk-mode: editing the merge-branch is allowed; `/lets:done` pushes + closes the task without creating a PR (same-source-target is not a valid PR); `/lets:plan` and `/lets:execute` derive plan filenames from task-id instead of branch slug. If HEAD == `$LETS_MERGE_BRANCH` AND `detect-task` returns None, the default rule applies — refuse edits, instruct user to run `/lets:start <id>` first.
@@ -156,6 +158,7 @@ AUTO MODE (autonomous execution: `/loop`, `/lets:execute --auto`, `/lets:team` p
 - Destructive ops: `rm`, `git reset --hard`, `git push --force`, `git branch -D`, worktree removal.
 - External-facing actions: Slack / email / posting to external services.
 - Peer sends: `/lets:orc ask` / `ping` / `tell`, `/lets:peer`, `lets peers tell`, `SendMessage` - only on the user's request in this turn.
+- Hub actions in another project: `lets orca wake` (a new Claude process) and `lets peers ask-ro` (a headless fork) - only on the user's `/lets:hub` request.
 - New task creation: must go via `create-task` skill (own approval gate).
 
 **Hard stops** (halt and surface to user):
@@ -487,6 +490,7 @@ Every response ends with exactly ONE footer - never mix two. Pick the type by wh
 | `/lets:worktree` | Utility | Create/manage interactive worktrees for parallel work |
 | `/lets:orc` | Utility | Talk to this chat's orchestrator or a named peer session - `ask` / `ping` / `read` / `tell` / `who`; the only sender of peer messages |
 | `/lets:peer` | Utility | Alias: `/lets:peer <name> <verb> [text]` = `/lets:orc` with a target |
+| `/lets:hub` | Utility | Orca addon (needs `LETS_LAUNCHER=orca`): every project's orchestrators, a read-only answer from a stopped one, wake one for gated work |
 | `/lets:statusline` | Utility | Manage & persist statusline appearance - light/dark, compact, hidden rows (writes personal `.claude/settings.local.json`) |
 | `/lets:team` | Utility | Parallel implementation with Agent Teams (run, status, stop) |
 | `/lets:note` | Utility | Add note to active task (`--session`, aliases `--snapshot` / `--pre-compact` / `--compact` = resume snapshot on request, one path) |

@@ -183,3 +183,34 @@ func TestRole_WorkerRecordsTerminal(t *testing.T) {
 		t.Errorf("mode %v", fi.Mode().Perm())
 	}
 }
+
+func TestRole_LastSeenOnPrune(t *testing.T) {
+	root := rolesRoot(t)
+	plantRole(t, root, sidM, "role: orchestrator\nname: A B\nscope: pwa\npid: 801\ncwd: /repo\nset: x\n")
+	plantRole(t, root, sidN, "role: orchestrator\nname: A_B\npid: 802\nset: x\n")
+	plantRole(t, root, sidO, "role: worker\ntask: lets-abc\nname: W\npid: 803\nset: x\n")
+	const self = "bbbbbbbb-0000-4000-8000-00000000000b"
+	registry(t, map[int][2]string{900: {self, "NEW"}}, nil, 900) // 801-803 are dead
+	if info, _ := SetRole(root, RoleOptions{Session: self, Role: "peer"}); info.Pruned != 3 {
+		t.Fatalf("prune: %+v", info)
+	}
+	files, _ := filepath.Glob(filepath.Join(peersDir(root), "last", "*.last"))
+	if len(files) != 2 {
+		t.Fatalf("two orchestrator names, two last-seen files (workers get none): %v", files)
+	}
+	a, _ := os.ReadFile(lastSeenFile(peersDir(root), "A B"))
+	if !strings.Contains(string(a), "session: "+sidM) || !strings.Contains(string(a), "pid: 801") || !strings.Contains(string(a), "scope: pwa") {
+		t.Errorf("A B last-seen:\n%s", a)
+	}
+	if lastSeenFile(peersDir(root), "A B") == lastSeenFile(peersDir(root), "A_B") {
+		t.Error("A B and A_B must not share a file")
+	}
+	// the same name pruned again overwrites only its own file
+	plantRole(t, root, sidN, "role: orchestrator\nname: A_B\npid: 804\nset: y\n")
+	_, _ = SetRole(root, RoleOptions{Session: self, Role: "peer"})
+	ab, _ := os.ReadFile(lastSeenFile(peersDir(root), "A_B"))
+	a2, _ := os.ReadFile(lastSeenFile(peersDir(root), "A B"))
+	if !strings.Contains(string(ab), "pid: 804") || string(a2) != string(a) {
+		t.Errorf("re-prune: A_B=%q A B changed=%v", ab, string(a2) != string(a))
+	}
+}

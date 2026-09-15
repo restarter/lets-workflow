@@ -22,7 +22,7 @@ func NewPeersCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(newPeersWhoCmd(), newPeersTailCmd(), newPeersFrameCmd(), newPeersTellCmd(), newPeersWaitCmd(), newPeersRoleCmd(), newPeersOrchestratorCmd())
+	root.AddCommand(newPeersWhoCmd(), newPeersTailCmd(), newPeersFrameCmd(), newPeersTellCmd(), newPeersWaitCmd(), newPeersRoleCmd(), newPeersOrchestratorCmd(), newPeersAskROCmd())
 	return root
 }
 
@@ -59,6 +59,8 @@ func newPeersWhoCmd() *cobra.Command {
 	f.StringVar(&o.Session, "session", "", "Also report this session as self")
 	f.BoolVar(&o.Prune, "prune", false, "Remove the role files of dead holders")
 	f.BoolVar(&o.ProbeOrca, "probe-orca", false, "Consult Orca even when LETS_LAUNCHER is not orca")
+	f.StringVar(&o.Repo, "repo", "", "Another registered repo's main checkout (read-only; adds last_orchestrators)")
+	f.BoolVar(&o.OrcaRepos, "orca-repos", false, "Every repo Orca knows (validated in Go); rows carry repo_index")
 	f.IntVar(&timeoutMs, "timeout-ms", 2500, "Total time budget")
 	f.BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
 	return cmd
@@ -108,6 +110,7 @@ func newPeersFrameCmd() *cobra.Command {
 	f.StringVar(&o.Session, "session", "", "This session's id (default: $CLAUDE_CODE_SESSION_ID)")
 	f.StringVar(&o.ToSession, "to-session", "", "Session id of the peer")
 	f.StringVar(&o.Kind, "kind", "", "ask | ping | tell | ask-ro")
+	f.StringVar(&o.ToName, "to-name", "", "ask-ro: the name of an orchestrator that is not running")
 	f.Bool("json", false, "Emit JSON envelope (always on)")
 	return cmd
 }
@@ -193,6 +196,28 @@ func newPeersRoleCmd() *cobra.Command {
 	clear.Flags().Bool("json", false, "Emit JSON envelope (always on)")
 	root.AddCommand(set, clear)
 	return root
+}
+
+func newPeersAskROCmd() *cobra.Command {
+	o := peerscmd.AskROOptions{RepoIndex: -1}
+	cmd := &cobra.Command{
+		Use: "ask-ro", Short: "Ask a stopped orchestrator a read-only question (forked, plan mode, Read/Grep/Glob only)",
+		Args: cobra.NoArgs, SilenceUsage: true, SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			res, err := peerscmd.AskRO(cmd.Context(), o)
+			printPeers(cmd, true, res, nil)
+			return err
+		},
+	}
+	f := cmd.Flags()
+	f.StringVar(&o.Cwd, "cwd", "", "This checkout (holds the handoff; default: current directory)")
+	f.StringVar(&o.Repo, "repo", "", "The other project's main checkout")
+	f.IntVar(&o.RepoIndex, "repo-index", -1, "An index from lets orca repos / who --orca-repos")
+	f.StringVar(&o.Session, "session", "", "The orchestrator's last-seen session id")
+	f.IntVar(&o.Pid, "pid", 0, "Its recorded pid")
+	f.StringVar(&o.MsgID, "msgid", "", "The msgid frame --kind ask-ro issued")
+	f.Bool("json", false, "Emit JSON envelope (always on)")
+	return cmd
 }
 
 func newPeersOrchestratorCmd() *cobra.Command {

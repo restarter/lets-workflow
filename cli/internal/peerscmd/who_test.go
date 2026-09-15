@@ -141,3 +141,43 @@ func TestWho_BothSourcesDegraded(t *testing.T) {
 		t.Errorf("two degraded reasons: %+v %v", res.Degraded, err)
 	}
 }
+
+func TestWho_ForeignRepoReadOnly(t *testing.T) {
+	_ = repoWithLets(t, "")
+	foreign := gitRepo(t)
+	peers := filepath.Join(foreign, ".lets", "sessions", "peers")
+	_ = os.MkdirAll(filepath.Join(peers, "last"), 0o700)
+	claudeHome(t, nil) // nobody alive
+	_ = os.WriteFile(lastSeenFile(peers, "MAIN-PWA"), []byte("session: "+sidMain+"\npid: 11\nname: MAIN-PWA\nscope: pwa\n"), 0o600)
+	_ = os.WriteFile(lastSeenFile(peers, "MAIN-LIC"), []byte("session: "+sidFable+"\npid: nope\nname: MAIN-LIC\n"), 0o600)
+	_ = os.WriteFile(filepath.Join(peers, sidWork+".role"), []byte("role: orchestrator\nname: MAIN-OLD\npid: 12\nset: x\n"), 0o600)
+	before, _ := os.ReadDir(peers)
+
+	res, err := Who(context.Background(), WhoOptions{Repo: foreign, Prune: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]LastOrchestrator{}
+	for _, lo := range res.LastOrchestrators {
+		got[lo.Name] = lo
+	}
+	if lo := got["MAIN-PWA"]; lo.Source != "last_seen" || lo.Session != sidMain || lo.Pid == nil || *lo.Pid != 11 {
+		t.Errorf("MAIN-PWA: %+v", lo)
+	}
+	if lo := got["MAIN-LIC"]; lo.Pid != nil || lo.Note == "" {
+		t.Errorf("a malformed pid is omitted with a note: %+v", lo)
+	}
+	if lo := got["MAIN-OLD"]; lo.Source != "role_file" || lo.Session != sidWork {
+		t.Errorf("dead unpruned role file: %+v", lo)
+	}
+	after, _ := os.ReadDir(peers)
+	if len(after) != len(before) {
+		t.Errorf("a foreign repo must not be written (--prune ignored): %d -> %d entries", len(before), len(after))
+	}
+	if _, err := os.Stat(filepath.Join(peers, sidWork+".role")); err != nil {
+		t.Error("the dead role file of a foreign repo must not be pruned")
+	}
+	if _, err := Who(context.Background(), WhoOptions{Repo: t.TempDir()}); err == nil || err.(*Error).Kind != "repo_invalid" {
+		t.Errorf("a non-checkout repo: %v", err)
+	}
+}

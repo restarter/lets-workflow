@@ -21,7 +21,7 @@ func NewOrcaCmd() *cobra.Command {
 		Use: "open", Short: "Open in Orca (not supported on this platform)", SilenceUsage: true, SilenceErrors: true,
 		RunE: func(_ *cobra.Command, _ []string) error { return errOrcaUnsupported },
 	})
-	for _, sub := range []struct{ use, key string }{{"notify", "notify"}, {"status", "status"}, {"card", "card"}} {
+	for _, sub := range []struct{ use, key string }{{"notify", "notify"}, {"status", "status"}, {"card", "card"}, {"repos", "repos"}, {"wake", "wake"}} {
 		sub := sub
 		var jsonOut, quiet bool
 		var title, body, cwd string
@@ -34,6 +34,8 @@ func NewOrcaCmd() *cobra.Command {
 					inner["notified"] = false
 				case "card":
 					inner["updated"] = false
+				case "wake":
+					inner["woken"] = false
 				default:
 					inner["running"] = false
 				}
@@ -50,6 +52,13 @@ func NewOrcaCmd() *cobra.Command {
 		}
 		c.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
 		c.Flags().BoolVarP(&quiet, "quiet", "q", false, "Suppress human-readable output")
+		if sub.key == "wake" {
+			c.Flags().String("repo", "", "Main checkout")
+			c.Flags().Int("repo-index", -1, "Repo index")
+			c.Flags().String("session", "", "Session id")
+			c.Flags().Int("pid", 0, "Pid")
+			c.Flags().String("title", "", "Title")
+		}
 		if sub.key == "card" {
 			c.Flags().String("phase", "", "LETS phase")
 			c.Flags().String("comment", "", "Card comment")

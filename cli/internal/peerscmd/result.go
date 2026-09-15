@@ -2,6 +2,8 @@
 
 package peerscmd
 
+import "github.com/restarter/lets-workflow/cli/internal/orcacmd"
+
 // ErrorInfo is the typed error of a failed envelope.
 type ErrorInfo struct {
 	Kind        string `json:"kind"`
@@ -26,8 +28,10 @@ func newEnvelope(sub string) Envelope {
 // WhoResult lists the repo's peers.
 type WhoResult struct {
 	Envelope
-	Peers []Peer `json:"peers"`
-	Self  *Peer  `json:"self,omitempty"`
+	Peers             []Peer             `json:"peers"`
+	Self              *Peer              `json:"self,omitempty"`
+	LastOrchestrators []LastOrchestrator `json:"last_orchestrators,omitempty"`
+	Repos             []orcacmd.RepoInfo `json:"repos,omitempty"`
 }
 
 // AddressedCount is `tail --count-only`: how many messages were addressed to a

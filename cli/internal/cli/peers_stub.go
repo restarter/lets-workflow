@@ -26,7 +26,7 @@ func NewPeersCmd() *cobra.Command {
 		c.FParseErrWhitelist.UnknownFlags = true
 		root.AddCommand(c)
 	}
-	for _, name := range []string{"frame", "tell", "wait", "role"} {
+	for _, name := range []string{"frame", "tell", "wait", "role", "ask-ro"} {
 		c := &cobra.Command{Use: name, SilenceUsage: true, SilenceErrors: true, RunE: func(*cobra.Command, []string) error { return errPeersUnsupported }}
 		c.FParseErrWhitelist.UnknownFlags = true
 		root.AddCommand(c)

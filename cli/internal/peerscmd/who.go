@@ -5,7 +5,10 @@ package peerscmd
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/restarter/lets-workflow/cli/internal/ccregistry"
@@ -13,6 +16,7 @@ import (
 	"github.com/restarter/lets-workflow/cli/internal/gitutil"
 	"github.com/restarter/lets-workflow/cli/internal/letsconfig"
 	"github.com/restarter/lets-workflow/cli/internal/orcacmd"
+	"github.com/restarter/lets-workflow/cli/internal/redact"
 )
 
 // WhoOptions configures Who.
@@ -24,6 +28,8 @@ type WhoOptions struct {
 	Session        string // self lookup
 	Prune          bool
 	ProbeOrca      bool
+	Repo           string        // another registered repo's main checkout (read-only: never pruned, never written)
+	OrcaRepos      bool          // every repo Orca knows, validated in Go; rows carry repo_index
 	Timeout        time.Duration // total budget (default 2500ms)
 }
 
@@ -230,8 +236,20 @@ func Who(ctx context.Context, o WhoOptions) (*WhoResult, error) {
 	if o.Timeout <= 0 {
 		o.Timeout = 2500 * time.Millisecond
 	}
+	if o.OrcaRepos {
+		return whoOrcaRepos(ctx, o)
+	}
 	ctx, cancel := context.WithTimeout(ctx, o.Timeout)
 	defer cancel()
+	if o.Repo != "" {
+		if fi, err := os.Stat(o.Repo); err != nil || !fi.IsDir() {
+			return repoInvalid(res)
+		}
+		if inWt, main := gitutil.DetectInsideWorktreeAt(o.Repo); inWt || main == "" || !fsutil.SameDir(main, o.Repo) {
+			return repoInvalid(res)
+		}
+		o.Cwd, o.Prune = o.Repo, false // another project is read, never written
+	}
 	rc, err := loadRepo(ctx, o.Cwd, o.ProbeOrca)
 	if err != nil {
 		e, _ := err.(*Error)
@@ -257,7 +275,101 @@ func Who(ctx context.Context, o WhoOptions) (*WhoResult, error) {
 		}
 		res.Peers = append(res.Peers, p)
 	}
+	if o.Repo != "" {
+		res.LastOrchestrators = lastOrchestrators(rc)
+	}
 	res.OK = true
+	return res, nil
+}
+
+func repoInvalid(res *WhoResult) (*WhoResult, error) {
+	e := &Error{Code: ExitNotInRepo, Kind: "repo_invalid", Message: "--repo is not a main checkout"}
+	res.Error = &ErrorInfo{Kind: e.Kind, Message: e.Message}
+	return res, e
+}
+
+// lastOrchestrators reads last-seen files and the dead orchestrator role files not
+// yet pruned. Read-only.
+func lastOrchestrators(rc *repoContext) []LastOrchestrator {
+	out := []LastOrchestrator{}
+	peers := peersDir(rc.root)
+	files, _ := filepath.Glob(filepath.Join(lastDir(peers), "*.last"))
+	sort.Strings(files)
+	for _, p := range files {
+		data, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		fields := map[string]string{}
+		for _, line := range strings.Split(string(data), "\n") {
+			if k, v, ok := strings.Cut(line, ": "); ok {
+				fields[k] = v
+			}
+		}
+		if !ccregistry.ValidName(fields["name"]) {
+			continue
+		}
+		out = append(out, lastOrch(fields["name"], fields["scope"], fields["session"], fields["pid"], "last_seen"))
+	}
+	for sid, f := range rc.roles {
+		if f.Role == "orchestrator" && rc.snap.Liveness(sid, f.Pid) == ccregistry.Dead {
+			out = append(out, lastOrch(f.Name, f.Scope, sid, strconv.Itoa(f.Pid), "role_file"))
+		}
+	}
+	return out
+}
+
+func lastOrch(name, scope, sid, pid, source string) LastOrchestrator {
+	lo := LastOrchestrator{Name: name, Scope: redact.Control(scope), Source: source}
+	var notes []string
+	if ccregistry.ValidSession(sid) {
+		lo.Session, lo.Session6 = sid, session6(sid)
+	} else {
+		notes = append(notes, "session invalid")
+	}
+	if n, err := strconv.Atoi(pid); err == nil && n >= 0 {
+		lo.Pid = &n
+	} else {
+		notes = append(notes, "pid invalid")
+	}
+	lo.Note = strings.Join(notes, "; ")
+	return lo
+}
+
+// whoOrcaRepos runs who over every repo Orca knows (validated in Go) and tags each
+// row with its repo_index, so the hub never types an Orca path into a shell.
+func whoOrcaRepos(ctx context.Context, o WhoOptions) (*WhoResult, error) {
+	res := &WhoResult{Envelope: newEnvelope("who"), Peers: []Peer{}, LastOrchestrators: []LastOrchestrator{}}
+	info, f := orcacmd.ListRepos(ctx)
+	res.OK = true
+	if f != nil {
+		res.Degraded = append(res.Degraded, Degraded{Source: "orca", Reason: nonEmpty(info.Reason, f.Reason), Detail: f.Detail})
+		return res, nil
+	}
+	res.Repos = info.Repos
+	for _, name := range info.Dropped {
+		res.Degraded = append(res.Degraded, Degraded{Source: "orca", Reason: "repo_not_a_checkout", Detail: name})
+	}
+	for _, r := range info.Repos {
+		idx := r.Index
+		sub, err := Who(ctx, WhoOptions{Repo: r.Path, Role: o.Role, Timeout: o.Timeout})
+		if err != nil {
+			res.Degraded = append(res.Degraded, Degraded{Source: "repo", Reason: "repo_invalid", Detail: r.Name})
+			continue
+		}
+		for _, p := range sub.Peers {
+			p.RepoIndex = &idx
+			res.Peers = append(res.Peers, p)
+		}
+		for _, lo := range sub.LastOrchestrators {
+			lo.RepoIndex = &idx
+			res.LastOrchestrators = append(res.LastOrchestrators, lo)
+		}
+		for _, d := range sub.Degraded {
+			d.Detail = strings.TrimSpace(r.Name + " " + d.Detail)
+			res.Degraded = append(res.Degraded, d)
+		}
+	}
 	return res, nil
 }
 

@@ -21,6 +21,7 @@ func TestResult_SchemaContract(t *testing.T) {
 		"frame":        {&FrameResult{Envelope: newEnvelope("frame")}, []string{"header", "msgid", "sent_at", "handoff_path"}},
 		"tell":         {&TellResult{Envelope: newEnvelope("tell")}, []string{"delivered", "route", "observed"}},
 		"wait":         {&WaitResult{Envelope: newEnvelope("wait")}, []string{"satisfied"}},
+		"ask-ro":       {&AskROResult{Envelope: newEnvelope("ask-ro")}, []string{"answered", "degraded"}},
 		"role":         {&RoleResult{Envelope: newEnvelope("role"), Role: &RoleInfo{}}, []string{"role"}},
 		"orchestrator": {&OrchestratorResult{Envelope: newEnvelope("orchestrator"), Candidates: []Candidate{}}, []string{"source", "scope", "candidates"}},
 	}

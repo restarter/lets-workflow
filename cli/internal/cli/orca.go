@@ -25,7 +25,7 @@ func NewOrcaCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(newOrcaOpenCmd(), newOrcaNotifyCmd(), newOrcaStatusCmd(), newOrcaCardCmd())
+	root.AddCommand(newOrcaOpenCmd(), newOrcaNotifyCmd(), newOrcaStatusCmd(), newOrcaCardCmd(), newOrcaReposCmd(), newOrcaWakeCmd())
 	return root
 }
 
@@ -121,6 +121,62 @@ func newOrcaCardCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&phase, "phase", "", "start | pr | closed | end | blocked | gate")
 	cmd.Flags().StringVar(&comment, "comment", "", "Card comment (redacted, at most 280 characters)")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
+	cmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Suppress human-readable output")
+	return cmd
+}
+
+func newOrcaReposCmd() *cobra.Command {
+	var jsonOut, quiet bool
+	cmd := &cobra.Command{
+		Use: "repos", Short: "List the repos Orca knows that are main checkouts (by index)", Args: cobra.NoArgs, SilenceUsage: true, SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			res, runErr := orcacmd.Repos(cmd.Context())
+			printOrca(cmd, jsonOut, quiet, res.OK, res, func() {
+				for _, r := range res.Repos.Repos {
+					fmt.Fprintf(cmd.OutOrStdout(), "%d  %s\n", r.Index, r.Name)
+				}
+			})
+			return runErr
+		},
+	}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
+	cmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Suppress human-readable output")
+	return cmd
+}
+
+func newOrcaWakeCmd() *cobra.Command {
+	var (
+		o              orcacmd.WakeOptions
+		repoIndex      int
+		jsonOut, quiet bool
+	)
+	cmd := &cobra.Command{
+		Use: "wake", Short: "Resume a stopped orchestrator in a visible Orca terminal (refuses a live or unknown one)", Args: cobra.NoArgs, SilenceUsage: true, SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if o.Repo == "" && repoIndex >= 0 {
+				p, f := orcacmd.RepoByIndex(cmd.Context(), repoIndex)
+				if f != nil {
+					res := &orcacmd.WakeResult{Envelope: orcacmd.Envelope{SchemaVersion: orcacmd.SchemaVersion, OK: true, Subcommand: "wake", Steps: []orcacmd.Step{}}, Wake: &orcacmd.WakeInfo{Reason: f.Reason}}
+					printOrca(cmd, jsonOut, quiet, true, res, func() { fmt.Fprintln(cmd.OutOrStdout(), "orca wake: "+f.Reason) })
+					return nil
+				}
+				o.Repo = p
+			}
+			res, runErr := orcacmd.Wake(cmd.Context(), o)
+			printOrca(cmd, jsonOut, quiet, res.OK, res, func() {
+				if res.Wake != nil {
+					fmt.Fprintf(cmd.OutOrStdout(), "orca wake: woken=%v %s\n", res.Wake.Woken, res.Wake.Reason)
+				}
+			})
+			return runErr
+		},
+	}
+	cmd.Flags().StringVar(&o.Repo, "repo", "", "The project's main checkout")
+	cmd.Flags().IntVar(&repoIndex, "repo-index", -1, "An index from lets orca repos")
+	cmd.Flags().StringVar(&o.Session, "session", "", "The orchestrator's last-seen session id")
+	cmd.Flags().IntVar(&o.Pid, "pid", 0, "Its recorded pid")
+	cmd.Flags().StringVar(&o.Title, "title", "", "The orchestrator name (terminal title)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
 	cmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Suppress human-readable output")
 	return cmd

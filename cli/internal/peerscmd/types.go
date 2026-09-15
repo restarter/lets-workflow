@@ -24,6 +24,20 @@ type Peer struct {
 	Via          []string `json:"via"`   // claude, orca
 	Send         string   `json:"send"`  // orca | claude | none
 	Reason       string   `json:"reason,omitempty"`
+	RepoIndex    *int     `json:"repo_index,omitempty"` // who --orca-repos: which Orca repo this row belongs to
+}
+
+// LastOrchestrator is an orchestrator that is not running, as the hub needs it to
+// wake or ask it: from a last-seen file, or a dead role file not yet pruned.
+type LastOrchestrator struct {
+	RepoIndex *int   `json:"repo_index,omitempty"`
+	Name      string `json:"name"`
+	Scope     string `json:"scope,omitempty"`
+	Session   string `json:"session,omitempty"`
+	Session6  string `json:"session6,omitempty"`
+	Pid       *int   `json:"pid,omitempty"`
+	Source    string `json:"source"` // last_seen | role_file
+	Note      string `json:"note,omitempty"`
 }
 
 // Degraded names a source that could not be read in full.

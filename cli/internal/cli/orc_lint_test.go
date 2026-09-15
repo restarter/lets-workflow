@@ -106,6 +106,14 @@ func TestOrcLint(t *testing.T) {
 	for _, v := range lintOrcFiles(files) {
 		t.Error(v)
 	}
+	// the hub is an Orca addon: its launcher guard runs before its first `lets` call
+	if hub, ok := files["commands/hub.md"]; ok {
+		guard := strings.Index(hub, `[ "{LETS_LAUNCHER}" = "orca" ]`)
+		first := regexp.MustCompile("(?m)^lets |`lets ").FindStringIndex(hub)
+		if guard < 0 || first == nil || guard > first[0] {
+			t.Errorf("commands/hub.md: the LETS_LAUNCHER=orca guard must precede the first lets call (guard=%d first=%v)", guard, first)
+		}
+	}
 
 	// mutation checks on scratch copies
 	mutate := func(rel, add string) []string {
