@@ -59,7 +59,9 @@ Runs on every path BEFORE any `show` / `comment-list` / `list-by-status`. The Se
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-if [ "$(git rev-parse --git-dir)" != "$(git rev-parse --git-common-dir)" ] && [ ! -L "$LETS_PROJECT_ROOT/.lets" ]; then
+# Absolute on both sides: from a subdirectory of the main checkout --git-dir is absolute and
+# --git-common-dir relative, so a plain comparison would "find" a worktree there.
+if [ "$(git rev-parse --path-format=absolute --git-dir)" != "$(git rev-parse --path-format=absolute --git-common-dir)" ] && [ ! -L "$LETS_PROJECT_ROOT/.lets" ]; then
   if command -v lets >/dev/null 2>&1; then
     lets worktree adopt --dir "$LETS_PROJECT_ROOT" --plugin-root "${CLAUDE_PLUGIN_ROOT}" {TASK_FLAG} --json
   else echo "LETS_BINARY_MISSING"; fi
@@ -115,7 +117,7 @@ done
 
 Report: branch, uncommitted changes, recent commits. **On a `STRAY REVIEW RESTORE` line**, tell the user in one line: a PR review did not finish restoring, `git checkout <ref>` returns them, and a listed `stash:` is still in `git stash list`. Report only - never act: `.lets/` is shared by every worktree of this repo, so the stray may belong to a session that is still running. **If the repo has no commits yet** (the `else` branch above fires), that's fine — say so in plain text; offer `git commit --allow-empty -m "chore: initial setup"` if the user wants an anchor for `git log` to work later. **Don't** raise `/lets:init` here (it's a separate concern) and **don't** treat the missing HEAD as a fatal error.
 
-**Orchestrator pointer (worktree only).** Only when `git rev-parse --git-dir` differs from `--git-common-dir`, and never in a spawned `--flow` / `--auto` run (a `.lets/cache/pipeline-state-<id>` marker exists, or AUTO MODE is active):
+**Orchestrator pointer (worktree only).** Only when `git rev-parse --path-format=absolute --git-dir` differs from `git rev-parse --path-format=absolute --git-common-dir`, and never in a spawned `--flow` / `--auto` run (a `.lets/cache/pipeline-state-<id>` marker exists, or AUTO MODE is active):
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)

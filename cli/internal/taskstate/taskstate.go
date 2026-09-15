@@ -189,13 +189,18 @@ func MergeWrite(letsDir, slug string, o WriteOpts) (State, error) {
 			return State{}, err
 		}
 	}
+	path := Path(letsDir, slug)
+	// Refresh-if-exists must not leave anything behind: without this check the lock
+	// below creates .lets/locks in every repo a SessionStart refresh runs in, LETS or not.
+	if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) && !o.Create {
+		return State{}, ErrFileAbsent
+	}
 	unlock, err := lock(letsDir, slug, o.Deadline)
 	if err != nil {
 		return State{}, err
 	}
 	defer unlock()
 
-	path := Path(letsDir, slug)
 	data, err := os.ReadFile(path)
 	switch {
 	case errors.Is(err, os.ErrNotExist) && !o.Create:
@@ -256,11 +261,11 @@ func Remove(letsDir, slug string, deadline time.Time) error {
 	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	if temps, _ := filepath.Glob(path + ".*"); temps != nil {
+	if temps, _ := filepath.Glob(path + ".*.tmp"); temps != nil {
 		for _, m := range temps {
-			// Only temp shapes: bash `mktemp .task-<slug>.XXXX` and atomicWrite's
-			// `.task-<slug>.<digits>.tmp`. A bare `.*` would also match the file of a
-			// branch whose slug extends this one (`a` vs `a.b`).
+			// Only atomicWrite's `.task-<slug>.<digits>.tmp`. A bash `mktemp` temp
+			// (`.task-<slug>.XXXX`) is renamed at once, and its shape is also the file
+			// of a branch whose slug extends this one (`lets-abc` vs `lets-abc.1234`).
 			if tempSuffixRe.MatchString(strings.TrimPrefix(m, path+".")) {
 				_ = os.Remove(m)
 			}
@@ -269,7 +274,7 @@ func Remove(letsDir, slug string, deadline time.Time) error {
 	return nil
 }
 
-var tempSuffixRe = regexp.MustCompile(`^([A-Za-z0-9]{4}|[0-9]+\.tmp)$`)
+var tempSuffixRe = regexp.MustCompile(`^[0-9]+\.tmp$`)
 
 // atomicWrite writes content via a same-dir temp file + rename, so it survives the
 // .lets symlink in worktrees (a cross-device rename would fail).

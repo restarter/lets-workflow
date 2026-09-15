@@ -181,3 +181,13 @@ func TestRefreshSessionBoundary_MalformedSIDNotWritten(t *testing.T) {
 		t.Errorf("a malformed sid must not be written:\n%s", got)
 	}
 }
+
+func TestRefreshSessionBoundary_NonLetsRepoUntouched(t *testing.T) {
+	dir, _ := gitInitRepo(t)
+	if err := RefreshSessionBoundary(dir, "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(filepath.Join(dir, ".lets")); !os.IsNotExist(err) {
+		t.Errorf("a new session in a repo without .lets must not create it (err=%v)", err)
+	}
+}

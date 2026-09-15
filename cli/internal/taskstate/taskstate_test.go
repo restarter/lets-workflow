@@ -140,12 +140,12 @@ func TestRemove_TempsOnly(t *testing.T) {
 	d := t.TempDir()
 	write(t, d, "a", "task: lets-a\n")
 	write(t, d, "a.b", "task: lets-ab\n")            // another branch whose slug extends "a"
-	write(t, d, "a.XyZ9", "stranded bash temp\n")    // mktemp .XXXX
+	write(t, d, "a.1234", "task: lets-a.1234\n")     // a sub-task branch: same shape as a bash mktemp temp, so never removed
 	write(t, d, "a.12345.tmp", "stranded go temp\n") // atomicWrite temp
 	if err := Remove(d, "a", time.Time{}); err != nil {
 		t.Fatal(err)
 	}
-	for slug, want := range map[string]bool{"a": false, "a.XyZ9": false, "a.12345.tmp": false, "a.b": true} {
+	for slug, want := range map[string]bool{"a": false, "a.12345.tmp": false, "a.b": true, "a.1234": true} {
 		if _, err := os.Stat(Path(d, slug)); (err == nil) != want {
 			t.Errorf("%s exists=%v, want %v", slug, err == nil, want)
 		}
@@ -158,5 +158,16 @@ func TestSlug(t *testing.T) {
 	}
 	if _, ok := Slug(""); ok {
 		t.Error("detached HEAD has no slug")
+	}
+}
+
+func TestMergeWrite_RefreshLeavesNoTrace(t *testing.T) {
+	root := t.TempDir()
+	letsDir := filepath.Join(root, ".lets")
+	if _, err := MergeWrite(letsDir, "main", WriteOpts{Set: map[string]string{"session": "0123456 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"}}); !errors.Is(err, ErrFileAbsent) {
+		t.Fatalf("err = %v, want ErrFileAbsent", err)
+	}
+	if _, err := os.Lstat(letsDir); !os.IsNotExist(err) {
+		t.Errorf("a refresh of a missing file must not create %s (err=%v)", letsDir, err)
 	}
 }

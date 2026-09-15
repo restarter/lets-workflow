@@ -116,7 +116,9 @@ Then, inside the Claude Code session:
 | `/lets:execute` | Execute plan from `/lets:plan` via native plan mode |
 | `/lets:team` | Parallel implementation with Agent Teams |
 | `/lets:worktree` | Create/manage worktrees for parallel sessions |
-| `/lets:orc` | Talk to the repo's orchestrator or a named peer session (`/lets:peer <name>` alias) |
+| `/lets:orc` | Talk to the repo's orchestrator or a named peer session |
+| `/lets:peer` | Alias: `/lets:peer <name> <verb> [text]` = `/lets:orc` with a target |
+| `/lets:hub` | Orca addon: orchestrators across projects - read-only ask to a stopped one, wake one for gated work |
 | `/lets:statusline` | Manage & persist statusline appearance - light/dark, compact, hidden rows |
 
 ### Review & Analysis
