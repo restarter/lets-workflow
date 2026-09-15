@@ -115,9 +115,20 @@ done
 
 Report: branch, uncommitted changes, recent commits. **On a `STRAY REVIEW RESTORE` line**, tell the user in one line: a PR review did not finish restoring, `git checkout <ref>` returns them, and a listed `stash:` is still in `git stash list`. Report only - never act: `.lets/` is shared by every worktree of this repo, so the stray may belong to a session that is still running. **If the repo has no commits yet** (the `else` branch above fires), that's fine — say so in plain text; offer `git commit --allow-empty -m "chore: initial setup"` if the user wants an anchor for `git log` to work later. **Don't** raise `/lets:init` here (it's a separate concern) and **don't** treat the missing HEAD as a fatal error.
 
+**Orchestrator pointer (worktree only).** Only when `git rev-parse --git-dir` differs from `--git-common-dir`, and never in a spawned `--flow` / `--auto` run (a `.lets/cache/pipeline-state-<id>` marker exists, or AUTO MODE is active):
+
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+command -v lets >/dev/null 2>&1 && lets peers orchestrator --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" --json 2>/dev/null
+```
+
+- `bound` / `single` with a live target: `lets peers tail --to-session <target.session> --addressed-to-session "$CLAUDE_CODE_SESSION_ID" --count-only --json 2>/dev/null` returns `addressed_to_me{count, last_at}` and no text. Render `Orchestrator: {name} ({bound | the only one alive}, {target.state})`, plus `{N} message(s) from {name} - /lets:orc read` when the count is non-zero. No peer text enters this session unless the user asks.
+- `ambiguous`: `Orchestrators: {name (scope)}, ... - this branch is not bound; /lets:start <id> --orc="<name>" binds it`.
+- bound but not alive: `Orchestrator: {name} (bound, not alive)`. `none`: `no orchestrator alive`. No binary or a stub reason: say nothing.
+
 ## Step 3: Orient
 
-Invoke `Skill(skill: "lets:orient")` - it renders Where you are / In flight / Next up (and the Project counts if the tracker provides them). This is the same snapshot `/lets:status` shows; start reuses it, then drives task selection below.
+Invoke `Skill(skill: "lets:orient", args: "caller=start")` - it renders Where you are / In flight / Next up (and the Project counts if the tracker provides them). This is the same snapshot `/lets:status` shows; start reuses it, then drives task selection below.
 
 ## Step 4: Present
 
@@ -269,7 +280,7 @@ AskUserQuestion(
 - `session_not_in_registry`: one line naming the registry reason; main mode continues unregistered.
 - `LETS_BINARY_MISSING` or a `not_supported` stub reason: one line, then continue.
 
-Invoke `Skill(skill: "lets:orient")` - with no active task it degrades to branch + no-task + In flight + Next up + Project, which IS the PM triage surface. Keep it short - if the tracker has a deeper native dashboard, point the user at it in one line.
+Invoke `Skill(skill: "lets:orient", args: "caller=start")` - with no active task it degrades to branch + no-task + In flight + Next up + Project, which IS the PM triage surface. Keep it short - if the tracker has a deeper native dashboard, point the user at it in one line.
 
 **Reopen archived claims (merge-branch only).** `lets worktree release` (Orca's archive hook) leaves `.lets/cache/released-<task-id>` with one line `<id>|<branch>|<iso>|dirty=<bool>|unpushed=<bool>` when a worktree goes away while it still named a task. List those markers oldest first; an id outside the detect-task gate class (`[A-Za-z0-9._-]`, no leading `-`) -> delete that marker with a one-line note. Resolve each remaining id, one block per id:
 

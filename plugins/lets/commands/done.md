@@ -594,6 +594,36 @@ AskUserQuestion(
 - **Next task** -> show the tracker's `ready` view (top 5), ask user to pick. When picked: invoke `Skill(skill: "lets:take-task", args: "<task-id>")` for status update + branch setup. Do NOT inline take-task logic.
 - **End session** -> invoke `Skill(skill: "lets:end")`
 
+### Ping offer (every "After PR" variant below)
+
+Before the variant's "Next step" question, resolve this chat's orchestrator (skip entirely under AUTO MODE):
+
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+command -v lets >/dev/null 2>&1 && lets peers orchestrator --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" --json 2>/dev/null
+```
+
+When `source` is `bound` or `single` and `target.alive` is `alive`, ask the variant's question and this one in the SAME call (for `ambiguous`, `none`, `self`, a dead target or no binary: no Ping question - the orc skill's own ping asks which):
+
+```
+AskUserQuestion(
+  questions=[
+    { /* the variant's own "Next step" question, unchanged */ },
+    {
+      question: "Ping the orchestrator ({target.name}) about PR #{number}?",
+      header: "Ping",
+      options: [
+        { label: "Ping orchestrator", description: "Run /lets:orc ping PR #{number} {PR URL}" },
+        { label: "Skip", description: "Nothing is sent" }
+      ],
+      multiSelect: false
+    }
+  ]
+)
+```
+
+- **Ping orchestrator** -> `Skill(skill: "lets:orc", args: "verb=ping footer=none text=PR #{number} {PR URL}")`, then handle the "Next step" answer as usual.
+
 ### After PR ($LETS_PR_FLOW == github), NOT in worktree:
 
 ```

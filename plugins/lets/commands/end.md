@@ -153,6 +153,8 @@ comment-add task=<task-id> body-file=.lets/cache/progress-<task-id>.md
 
 **If "Post progress" was NOT picked:** do NOTHING here - 3a passed `pointer=auto`, so the skill already wrote the standalone pointer to its own file (the pointer string lives ONLY in the skill's Step 4 - no duplication).
 
+**Naming peers.** Whenever this command mentions another session (the snapshot's `### Peers`, a hint), name it by role / name plus its 6-character session prefix - never a full session id.
+
 ## Step 4: Worktree hint
 
 Output-time, never a prompt. If `GIT_DIR` contains `worktrees/`: extract the worktree name (last path segment), then pick by the status read in Step 1 - `closed` -> the cleanup line (`/lets:worktree remove {name}` from the main repo), anything else -> the resume line. A worktree lets did not create (`lets worktree info --json` reports `worktree.kind=other`, e.g. one Orca made) cannot be removed with `/lets:worktree remove`: its cleanup line is "archive it in Orca (runs `lets worktree release`)".

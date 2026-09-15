@@ -40,6 +40,9 @@ TRANSCRIPT_PATH=${TRANSCRIPT_PATH:-"(not found)"}
 # ECHO both - a bash var is invisible to the Write tool; the model needs the printed values for the template.
 echo "SID=$SID"
 echo "TRANSCRIPT_PATH=$TRANSCRIPT_PATH"
+# Peers of this repo + this chat's own binding (roles / names only, never another session's full id).
+command -v lets >/dev/null 2>&1 && lets peers who --json 2>/dev/null
+sed -n 's/^orc: //p' "$(git rev-parse --show-toplevel)/.lets/sessions/.task-$(git branch --show-current | tr '/' '-')" 2>/dev/null | head -1
 ```
 
 ### Range (when the caller passed none)
@@ -68,6 +71,10 @@ Write `$SNAP_FILE` (the echoed path) via the Write tool with the template below,
     ### Decided (do NOT re-litigate)
     - {decision -> reasoning}
     - verified vs code: {claim -> file:line}
+
+    ### Peers
+    - {role}: {name} ({scope} | -> {bound orchestrator}) (sid {session6}, {state})   - one line per `lets peers who` row, or `- (none)`
+    - this chat: {bound to <orc> | not bound}
 
     ### Remaining + NEXT STEP
     - {open items}
