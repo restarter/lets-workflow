@@ -21,7 +21,7 @@ See **[tasks.md](tasks.md)** for the task lifecycle.
 | Command | What it does |
 |---------|--------------|
 | `/lets:backlog` | Backlog management — multi-agent review (`review`), a quick no-agent pulse (`--fast`), or interactive cleanup triage (`cleanup`). The keyword/flag skips the menu; `review --workflow` runs the fan-out off-context. |
-| `/lets:plan` | Structured planning — codebase exploration with scaled explorer agents, then architecture design with expert evaluation, then a written plan in `.lets/plans/`. `--fast` skips the subagent phases and plans in-conversation. |
+| `/lets:plan` | Structured planning — codebase exploration with scaled explorer agents, then architecture design with expert evaluation, then a written plan in `.lets/plans/`. `--fast` skips the subagent phases and plans in-conversation. `--idea` writes a concept document instead (the wish, triggers, constraints, open questions; no code) that `/lets:execute` never runs and a later `/lets:plan` reads as input. |
 | `/lets:plan-workflow` | PREVIEW — autonomous planning via a Dynamic Workflow (goal + rubric up front, off-context, approve at the end). `--fast` = lean budget (~7 agents, still off-context) — distinct from `/lets:plan --fast` (no subagents, in-conversation). Before launch a budget panel shows the agents per stage and the model; lower any stage or pick another model (cuts are listed with the plan). |
 | `/lets:execute` | Execute the plan from `/lets:plan` in native plan mode, with your approval at each step. `--auto` runs an approved plan without per-step gates (push/PR/`bd close`/external still gated). |
 | `/lets:team` | Parallel implementation with Agent Teams — `run` (pick tasks, spawn teammates), `status`, `stop`. |

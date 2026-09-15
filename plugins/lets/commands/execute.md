@@ -76,16 +76,20 @@ AskUserQuestion(
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 BRANCH=$(git branch --show-current)
-PLAN=""
+PLAN=""; IDEA_REFUSED=""
 
 # Explicit plan-path argument wins: `/lets:execute <path-to-plan>.md` skips slug derivation
 # entirely (the escape hatch for detached HEAD / unresolved task-id / cross-worktree cases).
 # {PLAN_ARG} = the orchestrator-substituted path argument, empty when none was passed.
 if [ -n "{PLAN_ARG}" ] && [ -f "{PLAN_ARG}" ]; then
   PLAN="{PLAN_ARG}"
+  # An idea document is not a plan: never execute one, even by explicit path.
+  if printf '%s' "$PLAN" | grep -q -E -- '-idea(-v[0-9]+)?\.md$'; then
+    echo "This is an idea document - run /lets:plan to turn it into a plan."; PLAN=""; IDEA_REFUSED=1
+  fi
 fi
 
-if [ -z "$PLAN" ]; then
+if [ -z "$PLAN" ] && [ -z "$IDEA_REFUSED" ]; then
   # Derive slug: trunk-mode uses task-id (plan.md saves <date>-<task-id>.md on the merge-branch);
   # otherwise the branch slug (covers feature/* and worktree-* branches).
   # ${TASK_ID} is substituted by the orchestrator from the Step 1 detect-task result.
@@ -103,13 +107,15 @@ if [ -z "$PLAN" ]; then
     # Latest plan for this slug - matches date-prefixed (YYYY-MM-DD-HHMM-<slug>.md) AND legacy bare
     # <slug>.md. Slug-scoped, NOT global latest: .lets/plans is shared across worktrees via symlink.
     # task-id first (artifact-path naming, lets-05c4s); branch slug = legacy fallback
-    [ -n "${TASK_ID}" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${TASK_ID}"*.md 2>/dev/null | head -1)
-    [ -z "$PLAN" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
+    [ -n "${TASK_ID}" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${TASK_ID}"*.md 2>/dev/null | grep -v -E -- '-idea(-v[0-9]+)?\.md$' | head -1)
+    [ -z "$PLAN" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | grep -v -E -- '-idea(-v[0-9]+)?\.md$' | head -1)
   fi
 fi
 
 [ -n "$PLAN" ] && cat "$PLAN"
 ```
+
+If the explicit path was an idea document (`IDEA_REFUSED`), stop after that one line.
 
 If no plan found:
 > "No plan found for this task. Run `/lets:plan` first to create one."
@@ -127,8 +133,8 @@ BRANCH=$(git branch --show-current)
 SLUG=${BRANCH#feature/}; [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ] && SLUG="${TASK_ID}"
 PLAN=""
 # task-id first (artifact-path naming, lets-05c4s); branch slug = legacy fallback
-[ -n "${TASK_ID}" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${TASK_ID}"*.md 2>/dev/null | head -1)
-[ -z "$PLAN" ] && [ -n "$SLUG" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
+[ -n "${TASK_ID}" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${TASK_ID}"*.md 2>/dev/null | grep -v -E -- '-idea(-v[0-9]+)?\.md$' | head -1)
+[ -z "$PLAN" ] && [ -n "$SLUG" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | grep -v -E -- '-idea(-v[0-9]+)?\.md$' | head -1)
 echo "Plan: ${PLAN:-(none found)}"
 ```
 
@@ -298,8 +304,8 @@ LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 BRANCH=$(git branch --show-current)
 SLUG=${BRANCH#feature/}; [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ] && SLUG="${TASK_ID}"
 PLAN=""  # task-id first (artifact-path naming, lets-05c4s); branch slug = legacy fallback
-[ -n "${TASK_ID}" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${TASK_ID}"*.md 2>/dev/null | head -1)
-[ -z "$PLAN" ] && [ -n "$SLUG" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
+[ -n "${TASK_ID}" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${TASK_ID}"*.md 2>/dev/null | grep -v -E -- '-idea(-v[0-9]+)?\.md$' | head -1)
+[ -z "$PLAN" ] && [ -n "$SLUG" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | grep -v -E -- '-idea(-v[0-9]+)?\.md$' | head -1)
 BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
 # Plan execution is TASK-scoped (a plan can run across sessions), so anchor on the task boundary
 # start:, NOT session: - session: would under-report every prior session's commits.

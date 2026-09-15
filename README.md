@@ -112,7 +112,7 @@ Then, inside the Claude Code session:
 | Command | Description |
 |---------|-------------|
 | `/lets:backlog` | Backlog review (multi-agent, `--workflow` = off-context) + `--fast` quick no-agent pulse + interactive cleanup triage |
-| `/lets:plan` | Structured planning - explore codebase, design architecture, write plan (`--fast` = orchestrator-only, no subagents) |
+| `/lets:plan` | Structured planning - explore codebase, design architecture, write plan (`--fast` = orchestrator-only, no subagents; `--idea` = concept document, no code) |
 | `/lets:execute` | Execute plan from `/lets:plan` via native plan mode |
 | `/lets:team` | Parallel implementation with Agent Teams |
 | `/lets:worktree` | Create/manage worktrees for parallel sessions |

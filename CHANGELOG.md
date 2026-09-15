@@ -14,6 +14,8 @@
 
 - **The Orca card follows the task (lets-ip06f).** With `LETS_LAUNCHER=orca`, `lets orca card` mirrors LETS phases onto the worktree's Orca card: `/lets:start` sets it in progress with the task title, a PR moves it to in review, a confirmed close completes it, and `/lets:end`, a blocked execute and the plan-workflow gates leave a comment. Every snippet is guarded on the launcher, so without Orca nothing runs, and inside an Orca terminal with another launcher the card is left alone.
 
+- **`/lets:plan --idea`: write down the wish before the design (lets-ip06f).** A concept document - problem, what exists today, the behaviour wanted, triggers, constraints, open questions, handoff - with no codebase exploration and no code. It is saved beside plans as `…-<task-id>-idea.md`, `/lets:execute` never picks it up (and refuses it by path), `/lets:check --plan` reviews it with concept lenses, and a later `/lets:plan` on the task reads it as input.
+
 ### Fixed
 - **`/lets:worktree remove` deletes branches already merged upstream (lets-ip06f).** `git branch -d` measured "merged" against the local merge-branch, which lags its origin in a worktree setup, so remove refused branches merged on GitHub. A branch that is an ancestor of `origin/<merge-branch>` is now deleted; removing a worktree that is already gone still finishes the branch step; and remove offers to sweep the other merged task branches.
 

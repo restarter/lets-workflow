@@ -17,6 +17,7 @@ user-invocable: false
 | kind | directory |
 |------|-----------|
 | `plan` | `.lets/plans/` |
+| `idea` | `.lets/plans/` |
 | `review-local`, `review-branch`, `review-pr-<n>`, `review-plan` | `.lets/reviews/` |
 | `snapshot` | `.lets/sessions/` |
 
@@ -32,7 +33,7 @@ If the caller passed `task=`, use it. Otherwise invoke `Skill(skill: "lets:detec
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 KIND="{kind}"; EXT="{ext}"; TASK_ID="{task-id or empty}"
 case "$KIND" in
-  plan) DIR=plans ;;
+  plan|idea) DIR=plans ;;
   review-*) DIR=reviews ;;
   snapshot*) DIR=sessions ;;
   *) echo "artifact-path: unknown kind '$KIND'"; exit 1 ;;

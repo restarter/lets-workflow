@@ -1,6 +1,6 @@
 ---
 description: Structured planning - explore codebase, design architecture, evaluate options, produce detailed implementation plan
-argument-hint: "[feature description] [--fast]"
+argument-hint: "[feature description] [--fast] [--idea]"
 ---
 
 # Plan
@@ -17,9 +17,48 @@ Turn a task or idea into a detailed implementation plan. Clarifies scope, explor
 
 When `--fast` is **not** set, run the full flow exactly as written.
 
+## --idea mode
+
+`/lets:plan --idea` (combinable with a task-id; `--fast` is a no-op here, no agents run anyway) writes a **concept document**, not a plan: the wish, captured before anyone decides how to build it. `/lets:execute` never picks it up and refuses it by path; a later `/lets:plan` on the same task reads it as input.
+
+| Step | In `--idea` mode |
+|---|---|
+| 3 | Questions about the wish: who wants it, why, how it should feel, what triggers it, what is out of scope, who takes it over (the handoff target) |
+| 4, 6, 7 | SKIPPED - no codebase exploration, no architecture, no experts; no code snippets or file paths anywhere in the document |
+| 5 | Discuss behaviour variants the user would notice, not implementations |
+| 9 | The idea template below - NO `STOP` banner (there is nothing to execute) |
+| 10 | Save via `Skill(skill: "lets:artifact-path", args: "kind=idea ext=md task={TASK_ID}")` and record it (below) |
+
+Idea template:
+
+```markdown
+# {Idea name}
+
+> **IDEA BANK ENTRY - NOT A PLAN.** Nothing here is executable; /lets:execute refuses this file.
+
+**Task:** {task-id or none}
+**Date:** {YYYY-MM-DD}
+
+## Problem
+## What exists today
+## The wish (user-visible behaviour)
+## Triggers
+## Constraints
+## Open questions
+## Handoff
+```
+
+When a task is active:
+
+```lets-tracker
+comment-add task=<task-id> body="Idea document: .lets/plans/<ARTIFACT basename>"
+```
+
+Output: the saved path and one line - "Idea saved - run `/lets:plan` on this task to turn it into a plan."
+
 ## Step 1: Capture the Goal
 
-**Parse the argument:** strip a `--fast` token if present (sets fast mode); the rest is the feature goal.
+**Parse the argument:** strip a `--fast` token if present (sets fast mode) and an `--idea` token (sets idea mode, `## --idea mode`); the rest is the feature goal.
 
 **If a feature goal was provided:** use it.
 
@@ -42,6 +81,13 @@ comment-list task=<task-id>  # existing comments; absent -> continue with the de
 ```
 
 Load: title, description, existing comments, plus any further field the adapter's `show` declares in `returns:` (beads declares `design`).
+
+**Idea input (normal mode).** Look for an idea document on this task and, when one exists, Read it and treat it as input to Step 3:
+
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"-{task-id}-idea"*.md 2>/dev/null | head -1
+```
 
 If no task found, warn:
 > "No active task detected. Every session needs a task. Create one (the `create-task` skill) or pick from the tracker's `ready` view."

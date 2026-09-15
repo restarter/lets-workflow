@@ -18,6 +18,10 @@ For anything bigger than a quick fix, LETS splits the work in two: **`/lets:plan
 
 Not to be confused with `/lets:plan-workflow --fast` — THAT keeps the off-context workflow but runs it lean (~7 agents); this `/lets:plan --fast` runs no subagents at all.
 
+### `--idea` — capture the wish first
+
+When it is too early to design anything, `/lets:plan --idea` writes a concept document instead of a plan: the problem, what exists today, the behaviour you want, what triggers it, constraints, open questions, and who takes it over. It asks about the wish, not the code, and never explores the codebase. The file lands in `.lets/plans/` as `…-<task-id>-idea.md` with an "IDEA BANK ENTRY - NOT A PLAN" header: `/lets:execute` refuses it, `/lets:check --plan` reviews it with concept lenses, and running `/lets:plan` on the same task later picks it up as input.
+
 ## `/lets:execute` — build it
 
 `/lets:execute` loads the plan from `/lets:plan` and implements it in Claude Code's native plan mode. You approve the execution strategy before any code is written, and pick how it runs (step-by-step with a pause after each task, straight-through, or unattended `--auto`). If reality diverges from the plan's approach mid-run — a tool behaving differently than assumed, a step that can't be done as written — Claude stops and asks instead of quietly re-planning in place (under `--auto` that is a hard stop). Use `/lets:commit` at natural commit points along the way.
