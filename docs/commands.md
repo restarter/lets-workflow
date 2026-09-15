@@ -24,7 +24,7 @@ See **[tasks.md](tasks.md)** for the task lifecycle.
 | `/lets:plan-workflow` | PREVIEW — autonomous planning via a Dynamic Workflow (goal + rubric up front, off-context, approve at the end). `--fast` = lean budget (~7 agents, still off-context) — distinct from `/lets:plan --fast` (no subagents, in-conversation). Before launch a budget panel shows the agents per stage and the model; lower any stage or pick another model (cuts are listed with the plan). |
 | `/lets:execute` | Execute the plan from `/lets:plan` in native plan mode, with your approval at each step. `--auto` runs an approved plan without per-step gates (push/PR/`bd close`/external still gated). |
 | `/lets:team` | Parallel implementation with Agent Teams — `run` (pick tasks, spawn teammates), `status`, `stop`. |
-| `/lets:worktree` | Create and manage worktrees for parallel sessions — `create <name>`, `list`, `remove <name>`. `create <id> --flow plan-workflow --auto` spawns the autonomous task pipeline. |
+| `/lets:worktree` | Create and manage worktrees for parallel sessions — `create <name>`, `list`, `remove <name>`. `create <id> --flow plan-workflow --auto` spawns the autonomous task pipeline. `--orca` / `--no-orca` (like `--cmux` / `--tmux`) override the launcher for one run; `remove` offers to sweep task branches already merged into `origin/<merge-branch>`. |
 
 See **[plan-execute.md](plan-execute.md)**, **[parallel-work.md](parallel-work.md)**, and **[autonomous.md](autonomous.md)**.
 

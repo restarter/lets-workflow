@@ -155,7 +155,7 @@ comment-add task=<task-id> body-file=.lets/cache/progress-<task-id>.md
 
 ## Step 4: Worktree hint
 
-Output-time, never a prompt. If `GIT_DIR` contains `worktrees/`: extract the worktree name (last path segment), then pick by the status read in Step 1 - `closed` -> the cleanup line (`/lets:worktree remove {name}` from the main repo), anything else -> the resume line.
+Output-time, never a prompt. If `GIT_DIR` contains `worktrees/`: extract the worktree name (last path segment), then pick by the status read in Step 1 - `closed` -> the cleanup line (`/lets:worktree remove {name}` from the main repo), anything else -> the resume line. A worktree lets did not create (`lets worktree info --json` reports `worktree.kind=other`, e.g. one Orca made) cannot be removed with `/lets:worktree remove`: its cleanup line is "archive it in Orca (runs `lets worktree release`)".
 
 Both branches are reachable, and not through Step 2: the referral stops end before Step 4, so this is never the hand-off path. The cleanup branch exists for the INDEPENDENT route - `/lets:done` runs on its own, closes the task, and its worktree menu offers "End session", which lands here with a closed task. Printing a resume hint there contradicts what `done` just said. If the status is UNKNOWN (no task, or the read failed), show the resume line: it is the safe default, since it points at work rather than at deletion.
 

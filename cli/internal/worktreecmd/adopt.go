@@ -275,7 +275,11 @@ func adoptTask(ctx context.Context, mainRoot, wtRoot, branch, tracker, pluginRoo
 	default:
 		set["origin"] = info.Origin
 	}
-	if _, err := taskstate.MergeWrite(letsDir, slug, taskstate.WriteOpts{Set: set, Create: true, Deadline: time.Now().Add(5 * time.Second)}); err != nil {
+	wait := 5 * time.Second
+	if o.LockDeadline > 0 {
+		wait = o.LockDeadline // the SessionStart self-heal bounds both locks
+	}
+	if _, err := taskstate.MergeWrite(letsDir, slug, taskstate.WriteOpts{Set: set, Create: true, Deadline: time.Now().Add(wait)}); err != nil {
 		if errors.Is(err, taskstate.ErrLockBusy) {
 			return nil, &Error{Code: ExitTaskStateLockBusy, Kind: "task_state_lock_busy", Message: err.Error(), Cause: err}
 		}

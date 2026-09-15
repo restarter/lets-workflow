@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/restarter/lets-workflow/cli/internal/drift"
@@ -33,7 +34,8 @@ import (
 var localConfigExplainer string
 
 // Run writes the SessionStart hook output to w:
-//  1. Optional ## LETS Notice block (scope-aware drift check, see driftCheck)
+//  1. Optional ## LETS Notice block (scope-aware drift check, see driftCheck,
+//     followed by every non-empty extraNotices entry - the cli layer's self-heal)
 //  2. Blank line
 //  3. ## LETS Config block (LETS_PROJECT_ROOT + whitelisted keys from the
 //     merged project-over-user env, see mergedEnv)
@@ -50,7 +52,10 @@ var localConfigExplainer string
 //
 // projectRoot empty -> emit nothing (matches bash behavior when git rev-parse
 // returns nothing). User scope alone does not create output in non-git dirs.
-func Run(w io.Writer, rulesPath, projectRoot, homeDir string) error {
+//
+// extraNotices are messages another layer needs surfaced in the same Notice block
+// (the SessionStart self-heal's adopt outcome); PreCompact passes nil.
+func Run(w io.Writer, rulesPath, projectRoot, homeDir string, extraNotices []string) error {
 	if projectRoot == "" {
 		return nil
 	}
@@ -60,7 +65,17 @@ func Run(w io.Writer, rulesPath, projectRoot, homeDir string) error {
 	// emitted first, the Config block second.
 	env := letsconfig.ResolvedEnv(projectRoot, homeDir, func(r string) string { return gitutil.DefaultBranch(r, time.Second) })
 
-	if notice := driftCheck(rulesPath, projectRoot, homeDir, env["LETS_RULES_SCOPE"]); notice != "" {
+	var msgs []string
+	if msg := driftCheck(rulesPath, projectRoot, homeDir, env["LETS_RULES_SCOPE"]); msg != "" {
+		msgs = append(msgs, msg)
+	}
+	for _, m := range extraNotices {
+		if m != "" {
+			msgs = append(msgs, m)
+		}
+	}
+	if len(msgs) > 0 {
+		notice := "## LETS Notice\n\n" + strings.Join(msgs, "\n\n") + "\n\n→ Surface this to the user at the start of your next response (one line), then continue - do not skip it."
 		if _, err := fmt.Fprintln(w, notice); err != nil {
 			return err
 		}
@@ -94,7 +109,7 @@ func Run(w io.Writer, rulesPath, projectRoot, homeDir string) error {
 	return nil
 }
 
-// driftCheck returns a "## LETS Notice" block when rules drift requires user
+// driftCheck returns the "## LETS Notice" message (Run wraps it) when rules drift requires user
 // action, considering BOTH installed scopes:
 //
 //   - project rules present (any non-missing state) -> existing single-scope
@@ -144,10 +159,7 @@ func driftCheck(pluginRulesPath, projectRoot, homeDir, rulesScope string) string
 		msg = drift.Message(r)
 	}
 
-	if msg == "" {
-		return ""
-	}
-	return "## LETS Notice\n\n" + msg + "\n\n→ Surface this to the user at the start of your next response (one line), then continue - do not skip it."
+	return msg
 }
 
 // DetectProjectRoot returns the git toplevel for the current working

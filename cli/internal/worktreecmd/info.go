@@ -85,7 +85,8 @@ func Info(ctx context.Context, dir string) (*InfoResult, error) {
 // branch (or, with refFile, for the ref written in that file - the route for an
 // untrusted ref such as a pull request head, which is never typed into a shell).
 // No annotateWorktree, no git status: detect-task calls this on its hot path.
-func TaskCandidateFor(ctx context.Context, dir, refFile string) (*InfoResult, error) {
+// pluginRoot is the adapter fallback ("" reads $CLAUDE_PLUGIN_ROOT).
+func TaskCandidateFor(ctx context.Context, dir, refFile, pluginRoot string) (*InfoResult, error) {
 	res := &InfoResult{Envelope: Envelope{SchemaVersion: SchemaVersion, Subcommand: "info", Steps: []Step{}}}
 	inWt, mainRoot := gitutil.DetectInsideWorktreeAt(dir)
 	if mainRoot == "" {
@@ -123,7 +124,7 @@ func TaskCandidateFor(ctx context.Context, dir, refFile string) (*InfoResult, er
 	if tracker == "" {
 		tracker = "beads"
 	}
-	pluginRoot, err := initcmd.DetectPluginRoot("")
+	pluginRoot, err := initcmd.DetectPluginRoot(pluginRoot)
 	if err != nil {
 		pluginRoot = ""
 	}

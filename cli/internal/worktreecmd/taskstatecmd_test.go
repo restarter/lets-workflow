@@ -149,28 +149,48 @@ func TestSlugify(t *testing.T) {
 
 func TestTaskCandidateFor(t *testing.T) {
 	repo, wt := adoptRepo(t, "feature/lets-abc-fix-login")
-	res, err := worktreecmd.TaskCandidateFor(context.Background(), wt, "")
+	res, err := worktreecmd.TaskCandidateFor(context.Background(), wt, "", "")
 	if err != nil || res.TaskCandidate.ID != "lets-abc" || res.TaskCandidate.Source != "created" {
 		t.Fatalf("created shape: err=%v cand=%+v", err, res.TaskCandidate)
 	}
 	// accept shapes are adopt-only
 	_, wt2 := adoptRepo(t, "lets-ip06f-peer-messaging-orca")
-	if res, _ := worktreecmd.TaskCandidateFor(context.Background(), wt2, ""); res.TaskCandidate.ID != "" || res.TaskCandidate.Reason != "no_match" {
+	if res, _ := worktreecmd.TaskCandidateFor(context.Background(), wt2, "", ""); res.TaskCandidate.ID != "" || res.TaskCandidate.Reason != "no_match" {
 		t.Errorf("accept shape: %+v", res.TaskCandidate)
 	}
 	// an untrusted ref through a file
 	ref := filepath.Join(realTempDir(t), "ref.txt")
 	mustWrite(t, ref, "worktree-lets-xyz-thing\n", 0o644)
-	if res, _ := worktreecmd.TaskCandidateFor(context.Background(), repo, ref); res.TaskCandidate.ID != "lets-xyz" {
+	if res, _ := worktreecmd.TaskCandidateFor(context.Background(), repo, ref, ""); res.TaskCandidate.ID != "lets-xyz" {
 		t.Errorf("ref-file: %+v", res.TaskCandidate)
 	}
 	mustWrite(t, ref, "bad ref $(x)\n", 0o644)
-	if res, _ := worktreecmd.TaskCandidateFor(context.Background(), repo, ref); res.TaskCandidate.Reason != "ref_invalid" {
+	if res, _ := worktreecmd.TaskCandidateFor(context.Background(), repo, ref, ""); res.TaskCandidate.Reason != "ref_invalid" {
 		t.Errorf("bad ref: %+v", res.TaskCandidate)
 	}
 	// undeclared convention
 	installAdapter(t, repo, "beads", "links: `.beads/.env` (0600).")
-	if res, _ := worktreecmd.TaskCandidateFor(context.Background(), wt, ""); res.TaskCandidate.Reason != "convention_undeclared" {
+	if res, _ := worktreecmd.TaskCandidateFor(context.Background(), wt, "", ""); res.TaskCandidate.Reason != "convention_undeclared" {
 		t.Errorf("undeclared: %+v", res.TaskCandidate)
 	}
+	// an installed copy that predates ## Worktree falls back to the plugin's adapter
+	plugin := fakePluginRoot(t, beadsConvention)
+	if res, _ := worktreecmd.TaskCandidateFor(context.Background(), wt, "", plugin); res.TaskCandidate.ID != "lets-abc" {
+		t.Errorf("plugin fallback: %+v", res.TaskCandidate)
+	}
+	title := filepath.Join(realTempDir(t), "title.txt")
+	mustWrite(t, title, "Fix login", 0o644)
+	installAdapter(t, repo, "beads", "links: `.beads/.env` (0600).\nid: `[a-z]+-[a-z0-9]+`.\nbranch: `bug/{id}-{slug}`.")
+	if res, err := worktreecmd.BranchName(context.Background(), repo, worktreecmd.BranchNameOptions{Task: "lets-abc", TitleFile: title, PluginRoot: plugin}); err != nil || res.Branch != "bug/lets-abc-fix-login" {
+		t.Errorf("branch-name with a declared installed copy must ignore the plugin: err=%v res=%+v", err, res)
+	}
+}
+
+// fakePluginRoot is a minimal LETS plugin install holding one beads adapter.
+func fakePluginRoot(t *testing.T, worktree string) string {
+	t.Helper()
+	root := realTempDir(t)
+	mustWrite(t, filepath.Join(root, ".claude-plugin", "plugin.json"), `{"name":"lets"}`, 0o644)
+	mustWrite(t, filepath.Join(root, "rules", "tracker-beads.md"), "# Tracker adapter: beads\n\n## Worktree\n\n"+worktree+"\n", 0o644)
+	return root
 }

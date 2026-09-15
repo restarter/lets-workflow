@@ -18,11 +18,15 @@ Parse the task-state file / current git branch to find the active task ID (track
 
 ### Step 1: Parse Branch Name
 
+Go reads the branch against the active tracker's convention (the adapter's `## Worktree` `id:` / `branch:` / `worktree-branch:`, overridable per key by the user's board file) - markdown never matches an id regex by eye:
+
 ```bash
-BRANCH=$(git branch --show-current)
+lets worktree info --json --task-candidate --plugin-root "${CLAUDE_PLUGIN_ROOT}"
 ```
 
-Extract the task ID from the branch name. Formats:
+Take `task_candidate.id` when `task_candidate.source` is `created` - a `branch:` / `worktree-branch:` match is this branch's task by construction. `reason=no_match` or `detached_head` -> the name carries no id; go on (Step 2 fallback). For the `branch=<ref>` variant, add `--ref-file` (see Optional arguments) - Go reads the ref from that file, so an untrusted ref is never typed into a shell.
+
+**`reason=convention_undeclared` / `convention_declaration_invalid`, or no `lets` binary** - parse the branch name (`git branch --show-current`) by the shapes below, unchanged. Formats:
 - `feature/<task-id>-<slug>` - standard LETS branches (main repo)
 - `worktree-<task-id>-<slug>` - worktree branches created via `/lets:worktree create` in new-branch mode (the LETS convention)
 - `worktree-<custom-name>` - worktree branch without an embedded task ID; use fallback
@@ -46,11 +50,22 @@ LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 BRANCH=$(git branch --show-current); BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
 TASK_FILE="$LETS_PROJECT_ROOT/.lets/sessions/.task-${BRANCH_SLUG}"
 CANDIDATE=$(sed -n 's/^task: //p' "$TASK_FILE" 2>/dev/null | head -1)
-[ -n "$CANDIDATE" ] && printf 'candidate=%s on_merge_branch=%s\n' "$CANDIDATE" \
-  "$([ "$BRANCH" = "{LETS_MERGE_BRANCH}" ] && echo yes || echo no)"
+ORIGIN=$(sed -n 's/^origin: //p' "$TASK_FILE" 2>/dev/null | head -1)
+[ -n "$CANDIDATE" ] && printf 'candidate=%s on_merge_branch=%s origin=%s\n' "$CANDIDATE" \
+  "$([ "$BRANCH" = "{LETS_MERGE_BRANCH}" ] && echo yes || echo no)" "${ORIGIN:-none}"
 ```
 
-This prints a CANDIDATE, not an answer - it is a value read off disk, and nothing may use it before **the id gate** below. `on_merge_branch` only decides whether the liveness probe runs.
+This prints a CANDIDATE, not an answer - it is a value read off disk, and nothing may use it before **the id gate** below. `on_merge_branch` only decides whether the liveness probe runs; `origin` says whether a person or a guess wrote it.
+
+**`origin=branch` or `origin=dir`** (checked first) - `lets worktree adopt` derived this id from an `accept:` branch shape or the directory name of a worktree Orca or a teammate created; nobody confirmed it. Gate it, then probe once:
+
+```lets-tracker
+show task=<TASK_ID from the gate>   # returns {id,title,status,url}; read status
+```
+
+- `in_progress` or `open` -> use the id and add one line: "task <id> was derived from the branch name - `/lets:start <id>` confirms it".
+- `closed`, any other status, a failed lookup, or `show` absent (the none adapter) -> discard the candidate, do NOT re-parse the branch name, and continue at Step 2 (search-and-confirm for picker callers, None for the no-picker callers in Step 3).
+- Cost bound: `take-task` rewrites the file without `origin:`, so a claimed worktree never pays this probe.
 
 **`on_merge_branch=no`** - take this candidate to the gate and stop looking. The branch corroborates the file, and a just-closed id in a worktree is low-severity (the next claim overwrites it).
 
@@ -93,7 +108,7 @@ esac
 
 **Why a gate and not a rule.** This used to be a sentence inside the `branch=<ref>` bullet telling every other path, and every consumer, to sanitize what it received. A rule addressed to N sites is followed by N-1 of them, and the one that did not was this skill's own Step 1.5 - the site the rule named by name. A single block with N references is a function call; N copies of a rule is a convention. `TestDetectTaskIdGate` pins the shape, so a path that grows its own `TASK_ID=` echo fails the build rather than the next reader's review.
 
-**Precedence (full):** explicit task-id arg -> `.task-<slug>` `task:` (liveness-validated on the merge-branch via the neutral `show`) -> branch-name id -> a CONFIRMED `search` hit (never an unconfirmed one; skipped entirely when the caller passes `fallback=no` - see Optional arguments). On id-carrying branches `take-task` writes branch + file together so they agree; the file fills the id-less gaps (trunk / custom worktree / attach) and, in a multi-task worktree, reflects the current (switched) task the frozen branch name can't.
+**Precedence (full):** explicit task-id arg -> `.task-<slug>` `task:` (liveness-validated on the merge-branch, and when `origin:` marks it derived, via the neutral `show`) -> branch-name id (Go's created-shape candidate) -> a CONFIRMED `search` hit (never an unconfirmed one; skipped entirely when the caller passes `fallback=no` - see Optional arguments). On id-carrying branches `take-task` writes branch + file together so they agree; the file fills the id-less gaps (trunk / custom worktree / attach) and, in a multi-task worktree, reflects the current (switched) task the frozen branch name can't.
 
 **Liveness scope (hot path).** The `show` probe runs ONLY on `{LETS_MERGE_BRANCH}`, the sole place a stale `.task-main` is indistinguishable from a live trunk claim. Off the merge-branch it does NOT run - detect-task is on the hot path of 10+ commands. This IS a cost change for non-beads adapters, which previously skipped the probe entirely: an MCP `show` is a network round-trip, and there is no portable `timeout` on macOS to bound it. We accept that on the merge-branch only, and unmitigated: the alternative is a non-beads project trusting a possibly-stale file forever. (An earlier draft promised an opt-out marker an adapter could set; no such marker was ever defined, and an escape hatch that does not exist is worse than none because it reads as coverage.) Trusting the file elsewhere is safe: `feature/<id>` corroborates via the branch, and a just-closed `task:` in a worktree is low-severity (the next claim overwrites).
 
@@ -131,9 +146,12 @@ Passed as space-separated `key=value` via the `Skill` invocation's `args`. Both 
 
 - **`branch=<ref>`** - resolve for THAT ref instead of the checked-out one. It substitutes for `$(git branch --show-current)` in Step 1 and Step 1.5; nothing else changes. **Treat the value as UNTRUSTED**: the caller's ref may be a pull request's head, which its author names, and git permits `` $ ` ; | & ( ) `` in a ref. It reaches a filesystem path here, so derive the slug in-shell and pass only this block's OUTPUT downstream - never substitute the raw value into a path or into a tracker verb:
 
+  First write the ref, verbatim, with the Write tool to `.lets/cache/ref-<session6>.txt` (6 = first chars of `$CLAUDE_CODE_SESSION_ID`) - the ref reaches the shell only as file content, never as typed text. Step 1 passes that file as `--ref-file`; Step 1.5 reads the slug from it:
+
   ```bash
   LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-  SLUG=$(printf '%s' "<ref>" | tr '/' '-')
+  REF_FILE="$LETS_PROJECT_ROOT/.lets/cache/ref-<session6>.txt"
+  SLUG=$(head -1 "$REF_FILE" 2>/dev/null | tr '/' '-')
   case "$SLUG" in ""|*[!A-Za-z0-9._-]*) echo "UNSAFE REF - no task"; exit 0 ;; esac
   printf 'candidate=%s\n' "$(sed -n 's/^task: //p' "$LETS_PROJECT_ROOT/.lets/sessions/.task-$SLUG" 2>/dev/null | head -1)"
   ```

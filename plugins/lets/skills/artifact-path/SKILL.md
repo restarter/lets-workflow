@@ -20,7 +20,7 @@ user-invocable: false
 | `review-local`, `review-branch`, `review-pr-<n>`, `review-plan` | `.lets/reviews/` |
 | `snapshot` | `.lets/sessions/` |
 
-`ID` is the task id when one is active (MANDATORY whenever a task exists - same rule as `feature/<task-id>-...` branches). With no task: `{branch-slug}-{6hex}`, 6hex = first 6 chars of `$CLAUDE_CODE_SESSION_ID`, so two taskless sessions on `main` still get distinct names. `-vN` (v2, v3, ...) is appended whenever the path already exists - for task and taskless alike.
+`ID` is the task id when one is active (MANDATORY whenever a task exists - same rule as the branch named by the active tracker convention). With no task: `{branch-slug}-{6hex}`, 6hex = first 6 chars of `$CLAUDE_CODE_SESSION_ID`, so two taskless sessions on `main` still get distinct names. `-vN` (v2, v3, ...) is appended whenever the path already exists - for task and taskless alike.
 
 ## Step 1: Resolve the task id
 

@@ -150,6 +150,9 @@ func shellTokens(s string) []string {
 			depth--
 			cur.WriteByte(c)
 		case depth == 0 && (c == '|' || c == ';' || c == '&' || c == '>' || c == ')' || c == '#' || c == '\\'):
+			if c == '>' && cur.Len() > 0 && strings.Trim(cur.String(), "0123456789") == "" {
+				cur.Reset() // `2>/dev/null`: the fd number belongs to the redirect, not the command
+			}
 			flush()
 			return toks
 		case depth == 0 && (c == ' ' || c == '\t'):

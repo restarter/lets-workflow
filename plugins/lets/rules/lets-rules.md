@@ -31,7 +31,7 @@ If a `## LETS Notice` block appears in the injected context (sibling H2 of `## L
 ## Boundaries
 
 - **Stay inside `$LETS_PROJECT_ROOT`.** Never read, search, or edit files outside the project directory. Never explore parent directories or other projects without explicit user request.
-- **Never edit files on the merge-branch.** Every task gets its own `feature/<task-id>-<slug>` branch (or `worktree-<name>` in worktrees). Before any code edit - verify you're on a feature/worktree branch. If on `$LETS_MERGE_BRANCH`: create/switch to feature branch FIRST, then edit.
+- **Never edit files on the merge-branch.** Every task gets its own branch named by the active tracker convention (default `feature/<task-id>-<slug>`; `worktree-<name>` in worktrees). Before any code edit - verify you're on a feature/worktree branch. If on `$LETS_MERGE_BRANCH`: create/switch to feature branch FIRST, then edit.
 
   **Exception — trunk-mode.** If `detect-task` returns an active task AND HEAD == `$LETS_MERGE_BRANCH`, trunk-mode is active (user opted in via the `take-task` picker option "Stay on current branch"). In trunk-mode: editing the merge-branch is allowed; `/lets:done` pushes + closes the task without creating a PR (same-source-target is not a valid PR); `/lets:plan` and `/lets:execute` derive plan filenames from task-id instead of branch slug. If HEAD == `$LETS_MERGE_BRANCH` AND `detect-task` returns None, the default rule applies — refuse edits, instruct user to run `/lets:start <id>` first.
 
@@ -277,7 +277,7 @@ Use the `create-task` skill (auto-triggers on "create task", "new task", "bd cre
 
 ## Worktrees
 
-Interactive worktrees allow parallel Claude Code sessions on different tasks.
+Interactive worktrees allow parallel Claude Code sessions on different tasks. A worktree may live anywhere: `lets worktree create` puts it in `.worktrees/`, Orca in its own workspace directory; the main checkout always comes from git common-dir.
 
 **Detection:**
 ```bash
@@ -289,16 +289,18 @@ GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
 
 **Key differences when in a worktree:**
 - Branch is `worktree-<name>` (new) OR an attached existing branch (auto-detected by `/lets:worktree create`) - use as-is, do NOT create a `feature/` branch
+- Task ids and branch names come from the tracker adapter's `## Worktree` convention (`id:` / `branch:` / `worktree-branch:` / `accept:`), overridden per key by the user-owned `tracker-<name>.board.md`; Go parses and renders them (`lets worktree info --task-candidate`, `lets worktree branch-name`)
 - `.lets/` is a symlink to main repo's `.lets/` - config, sessions, plans all shared
-- `.beads/.env` is a symlink to main repo's `.beads/.env` so `bd` discovers the same database via git common-dir; no `.beads/redirect` file (legacy bd-worktree mechanism, removed in lets-rqep4)
-- Per-branch task-state file: `.task-worktree-<name>` (fields `task:`/`start:`/`session: <sha> <sid>`, keyed by branch-slug so parallel sessions don't collide). It's a validated cache: detect-task is file-first (file `task:` outranks the frozen branch name, so several tasks can share one worktree), `/lets:done` reads `start:`, `/lets:end` reads `session:` - each reader cross-checks against a live anchor (bd status on the merge-branch, git ancestry, the session-id) and degrades loudly. `/lets:start` rewrites it; the SessionStart hook refreshes `session:` on a new session
+- The tracker store is reached through the links the adapter's `## Worktree` `links:` declares (beads: `.beads/.env` -> the main repo's, so `bd` finds the same database)
+- **Adopt / release.** A worktree LETS did not create (Orca, a teammate, `git worktree add`) becomes a LETS worktree through `lets worktree adopt`: Orca's `orca.yaml` setup hook runs it, and the SessionStart hook adopts an unlinked worktree of an initialized project before LETS Config is built (never without `<main>/.lets/.env`, never under `.claude/worktrees/`); `/lets:start` Step 0.5 is only the fallback. Adopt never deletes a pre-existing `.lets`: a cache-only one moves to `.lets.pre-adopt[-N]` (safe to delete by hand), anything else stops with exit 22. `lets worktree release` (Orca's archive hook) removes the task-state file and leaves a `released-<task-id>` marker for `/lets:start --main` Reopen
+- Per-branch task-state file: `.task-worktree-<name>` (fields `task:` / `start:` / `session: <sha> <sid>` / `origin:` (adopt derived the id from the branch or directory name; cleared on claim) / `orc:` (worker binding, never on the merge-branch); keyed by branch-slug so parallel sessions don't collide). It's a validated cache: detect-task is file-first (file `task:` outranks the frozen branch name, so several tasks can share one worktree; an `origin:` id is probed once before use), `/lets:done` reads `start:`, `/lets:end` reads `session:` - each reader cross-checks against a live anchor (tracker status on the merge-branch, git ancestry, the session-id) and degrades loudly. Written through `lets worktree task-state` (merge-write under a lock); a writer without the binary replaces only the keys it owns and keeps every other line. `/lets:start` rewrites it; the SessionStart hook refreshes `session:` on a new session
 - `$LETS_PROJECT_ROOT` is the worktree path (not main repo)
 - **Glob tool does NOT follow symlinks.** Always use Bash (`ls`, `cat`) to find/read files in `.lets/` and `.beads/` - never use Glob for symlinked paths
 
 **What NOT to do in a worktree:**
 - Don't create additional `feature/` branches - the worktree's branch IS the working branch
 - Don't run `/lets:worktree create` from inside a worktree
-- Don't modify `.lets/` (whole-dir symlink) or `.beads/.env` (targeted symlink) — both are LETS-managed, shared with main
+- Don't modify `.lets/` (whole-dir symlink) or the declared store links (beads: `.beads/.env`) — LETS-managed, shared with main
 
 **Remove safety nets.** `/lets:worktree remove` blocks on two conditions, each surfaced as a distinct `error.kind` in the JSON envelope — don't treat them as the same problem:
 - `dirty_worktree` (exit 14) — uncommitted changes in the working tree. Fix: commit/stash first, or pass `--force` to discard.
@@ -307,6 +309,8 @@ GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
 The skill walks the user through an `AskUserQuestion` for each kind — follow that prompt, don't fall through to generic error-handling.
 
 **Lifecycle:** `/lets:worktree create <name>` (from main repo) -> new terminal: `cd .worktrees/<name>/ && claude` -> `/lets:start` -> work -> `/lets:done` -> `/lets:worktree remove <name>` (from main repo)
+
+**Orca lifecycle** (`LETS_LAUNCHER=orca`): `/lets:worktree create` -> Orca creates the worktree and runs `lets worktree adopt` (the SessionStart hook adopts if it did not) -> `/lets:start <id>` -> work -> `/lets:done` -> archive in Orca (`lets worktree release`; `/lets:worktree remove` refuses it with `worktree_external`) -> `/lets:start --main` offers Reopen for archived tasks still `in_progress`
 
 ## Architecture Mindset
 
@@ -328,6 +332,7 @@ Trunk-mode (any $LETS_PR_FLOW): /lets:start (pick "Stay on current branch") -> W
 Main mode (no task):  /lets:start --main -> triage / groom / route (no edits) -> /lets:start <id> when coding starts -> /lets:end
 
 Worktree:  /lets:worktree create -> `cd .worktrees/<name>/ && claude` -> /lets:start -> Work -> /lets:done -> /lets:end -> /lets:worktree remove (main repo)
+Orca:      /lets:worktree create (LETS_LAUNCHER=orca) -> Orca pane runs /lets:start <id> (adopt already linked it) -> Work -> /lets:done -> /lets:end -> archive in Orca (lets worktree release)
 
 Team:      /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /lets:done
 

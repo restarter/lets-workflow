@@ -275,7 +275,7 @@ cd .worktrees/auth-feature && claude  # Terminal 2 - start new session
 
 Each worktree gets its own branch, shares the task database and config via symlinks. Full LETS workflow in each terminal.
 
-On Linux or macOS with [tmux](https://github.com/tmux/tmux) installed, set `LETS_LAUNCHER=tmux` (or run `/lets:init` and pick tmux) and `/lets:worktree create` opens the session in a tmux window/session automatically — no second terminal. On macOS, [cmux](https://github.com/manaflow-ai/cmux) is a GUI alternative (`LETS_LAUNCHER=cmux`). Both stay optional: without the launcher's binary (or on Windows) it falls back to the `cd … && claude` command above.
+On Linux or macOS with [tmux](https://github.com/tmux/tmux) installed, set `LETS_LAUNCHER=tmux` (or run `/lets:init` and pick tmux) and `/lets:worktree create` opens the session in a tmux window/session automatically — no second terminal. On macOS, [cmux](https://github.com/manaflow-ai/cmux) is a GUI alternative (`LETS_LAUNCHER=cmux`). Both stay optional: without the launcher's binary (or on Windows) it falls back to the `cd … && claude` command above. If you run parallel agents in the [Orca](https://github.com/stablyai/orca) desktop app, `LETS_LAUNCHER=orca` opens each task worktree as an Orca workspace and links it back to LETS automatically. Orca is an opt-in addon: nothing Orca-related runs unless you pick it, and without the app it falls back to cmux, then the terminal command.
 
 ### LETS Help Boxes
 

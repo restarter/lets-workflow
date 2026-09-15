@@ -7,6 +7,8 @@ argument-hint: "[task-id|--continue|--main]"
 
 Restore context and prepare for work. **User MUST select a task before working.**
 
+> **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
+
 > **LETS Notice — surface it.** If a `## LETS Notice` block is present in the injected context (a one-time message the SessionStart hook emits — e.g. workflow rules outdated/missing, a migration result), it MUST be the **first line of your output** for `/lets:start` (`⚠️ <notice text>`), before the session summary. Don't omit it — it tells the user a `/lets:update` or `/lets:init` is needed. Mention it once, then continue with the steps below; don't repeat it in later turns.
 
 ## Usage
@@ -21,13 +23,19 @@ Restore context and prepare for work. **User MUST select a task before working.*
 
 ## Step 0: Argument Parsing
 
+### Step 0a: Parse
+
+Parse the arguments only - a task id (it goes through the detect-task id gate before any use), `--continue`, `--main` / `--assistant`. No tracker verb runs here. Every path below runs **Step 0.5 first**, then its own steps.
+
 **If `<task-id>` provided** (e.g., `/lets:start lets-rmcwo`):
+- Step 0.5 (with `--task '<task-id>'`), then:
 - Skip Steps 1, 3, 5 (session history, orient, task selection)
 - Run Step 2 (git state) briefly
 - the tracker's `show` + `comment-list` for `<task-id>` — read the FULL description and ALL comments, never truncate
 - Jump to Step 6 (branch) with this task
 
 **If `--continue`:**
+- Step 0.5, then:
 - Run Step 1 (session history) - important for context recovery
 - Run Step 2 (git state) briefly
 - the tracker's `list-by-status` (in_progress) - find task(s)
@@ -36,13 +44,32 @@ Restore context and prepare for work. **User MUST select a task before working.*
 - If none -> fall through to full flow
 
 **If `--main` or `--assistant` provided** (project-assistant / PM mode):
+- Step 0.5, then:
 - Deliberate **NO-TASK** session stance. Do NOT select, claim, or auto-create a task.
 - **Precedence:** mutually exclusive with `<task-id>` and `--continue`. If an explicit task-id or `--continue` is ALSO present, the explicit task **wins** (run the normal task flow) and `--main` is ignored - tell the user it was dropped because a task was specified.
 - **Skip** Step 5 (Task Selection), Step 6 (Take Task), Step 8 (Task Size Assessment) - all task-bound.
 - **Run** Step 1 (session history), Step 2 (git state). The orient snapshot is rendered once by Main Mode M1 (below), AFTER the session-boundary write - do NOT also run Step 3 (that would render orient twice).
 - Then go to `## Main Mode` (below) instead of Steps 4-9.
 
-**If no arguments** -> full flow (Steps 1-9 as below)
+**If no arguments** -> Step 0.5, then the full flow (Steps 1-9 as below)
+
+### Step 0.5: Link an unlinked worktree (fallback self-heal)
+
+Runs on every path BEFORE any `show` / `comment-list` / `list-by-status`. The SessionStart hook normally adopts a worktree someone else created (Orca, a teammate) before this session's LETS Config is built; this is the fallback for a session whose hook could not (a `lets` binary older than the self-heal, a disabled hook). `{TASK_FLAG}` is `--task '<task-id>'` when an explicit id was given (after the id gate), else empty:
+
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+if [ "$(git rev-parse --git-dir)" != "$(git rev-parse --git-common-dir)" ] && [ ! -L "$LETS_PROJECT_ROOT/.lets" ]; then
+  if command -v lets >/dev/null 2>&1; then
+    lets worktree adopt --dir "$LETS_PROJECT_ROOT" --plugin-root "${CLAUDE_PLUGIN_ROOT}" {TASK_FLAG} --json
+  else echo "LETS_BINARY_MISSING"; fi
+fi
+```
+
+No output -> a main checkout or an already linked worktree; continue silently. Otherwise:
+- **`ok=true`:** when `moved_aside` is set, one line naming the moved directory (safe to delete by hand); when `task.origin` is `branch` or `dir`, one line `task <id> derived from the <branch|directory> name - take-task confirms it`; a step warning `adapter_not_in_checkout` / `board_not_in_checkout` -> one line each (this session did not load that file: commit `.claude/rules` or restart). Then one line: this session's LETS Config was computed before the worktree was linked - `/clear` re-injects it.
+- **Any error envelope** (exit 22, 23, 24, 25, 17, 19 or anything else): print `error.kind` + `error.remediation` and STOP. Never retry with a force flag - adopt deletes nothing and the conflict is the user's to resolve.
+- **`LETS_BINARY_MISSING`:** STOP and print the manual steps: symlink `.lets` to the main checkout's `.lets`, then create each link the active tracker adapter's `## Worktree` `links:` declares (beads: `.beads/.env` -> the main checkout's, mode 0600).
 
 ## Step 1: Previous Session Context
 
@@ -214,6 +241,39 @@ fi
 ```
 
 Invoke `Skill(skill: "lets:orient")` - with no active task it degrades to branch + no-task + In flight + Next up + Project, which IS the PM triage surface. Keep it short - if the tracker has a deeper native dashboard, point the user at it in one line.
+
+**Reopen archived claims (merge-branch only).** `lets worktree release` (Orca's archive hook) leaves `.lets/cache/released-<task-id>` with one line `<id>|<branch>|<iso>|dirty=<bool>|unpushed=<bool>` when a worktree goes away while it still named a task. List those markers oldest first; an id outside the detect-task gate class (`[A-Za-z0-9._-]`, no leading `-`) -> delete that marker with a one-line note. Resolve each remaining id, one block per id:
+
+```lets-tracker
+show task=<id>   # returns {id,title,status}
+```
+
+- `show` absent or a no-op (the none adapter): delete every marker, print one line `tracker keeps no task status - nothing to reopen`, ask nothing.
+- `show` FAILED at runtime: keep that id's marker and print one line naming the failure (retried at the next main start).
+- `closed`, or any status other than `in_progress`: delete the marker silently - nothing is claimed.
+- `in_progress`: a candidate. No candidates -> ask nothing. Otherwise ask, offering at most 3 ids (the rest keep their markers):
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "These tasks are still in progress but their worktree was archived{, with uncommitted or unpushed work when the marker says so}. A task with an open PR is in progress too - pick only abandoned work. Set which back to open?",
+    header: "Reopen",
+    options: [
+      { label: "<id>", description: "Branch {branch} archived{; dirty/unpushed}; picking sets the task back to open" },
+      { label: "Keep all", description: "Nothing changes; this list is not shown again" }
+    ],
+    multiSelect: true
+  }]
+)
+```
+
+For each picked id (`Keep all` picks none):
+
+```lets-tracker
+set-status task=<id> status=open
+```
+
+`set-status` absent -> print the degradation line (nothing changed); failed -> say so loudly, never report it reopened. Then delete the markers of every offered id, picked or not.
 
 
 ### Step M2: Set the stance

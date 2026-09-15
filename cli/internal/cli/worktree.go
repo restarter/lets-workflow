@@ -231,7 +231,7 @@ func newWorktreeListCmd() *cobra.Command {
 
 func newWorktreeInfoCmd() *cobra.Command {
 	var jsonOut, quiet, taskCandidate bool
-	var dir, refFile string
+	var dir, refFile, pluginRoot string
 	cmd := &cobra.Command{
 		Use:   "info",
 		Short: "Show worktree status for the current directory",
@@ -254,7 +254,7 @@ func newWorktreeInfoCmd() *cobra.Command {
 			var res *worktreecmd.InfoResult
 			var runErr error
 			if taskCandidate {
-				res, runErr = worktreecmd.TaskCandidateFor(cmd.Context(), target, refFile)
+				res, runErr = worktreecmd.TaskCandidateFor(cmd.Context(), target, refFile, pluginRoot)
 			} else {
 				res, runErr = worktreecmd.Info(cmd.Context(), target)
 			}
@@ -274,6 +274,7 @@ func newWorktreeInfoCmd() *cobra.Command {
 	cmd.Flags().StringVar(&dir, "dir", "", "Directory to inspect (default: current directory)")
 	cmd.Flags().BoolVar(&taskCandidate, "task-candidate", false, "Return only the task id the active convention reads off the branch name (created shapes)")
 	cmd.Flags().StringVar(&refFile, "ref-file", "", "With --task-candidate: read the branch ref from this file instead of HEAD (an untrusted ref is never typed into a shell)")
+	cmd.Flags().StringVar(&pluginRoot, "plugin-root", "", "With --task-candidate: plugin root for the tracker adapter fallback (default: $CLAUDE_PLUGIN_ROOT)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
 	cmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Suppress human-readable output")
 	return cmd
@@ -423,7 +424,7 @@ func newWorktreeSweepCmd() *cobra.Command {
 
 func newWorktreeBranchNameCmd() *cobra.Command {
 	var jsonOut, worktree bool
-	var task, titleFile string
+	var task, titleFile, pluginRoot string
 	cmd := &cobra.Command{
 		Use:   "branch-name",
 		Short: "Render the branch LETS creates for a task under the tracker's naming convention",
@@ -433,7 +434,7 @@ func newWorktreeBranchNameCmd() *cobra.Command {
 			if err != nil {
 				return emitErrorEnvelope(cmd.OutOrStdout(), jsonOut, "branch-name", &worktreecmd.Error{Code: worktreecmd.ExitFilesystem, Kind: "getwd_failed", Message: err.Error(), Cause: err})
 			}
-			res, runErr := worktreecmd.BranchName(cmd.Context(), cwd, worktreecmd.BranchNameOptions{Task: task, TitleFile: titleFile, Worktree: worktree})
+			res, runErr := worktreecmd.BranchName(cmd.Context(), cwd, worktreecmd.BranchNameOptions{Task: task, TitleFile: titleFile, Worktree: worktree, PluginRoot: pluginRoot})
 			return emitJSONOrRender(cmd, jsonOut, false, res, func() {
 				if res.OK {
 					fmt.Fprintln(cmd.OutOrStdout(), res.Branch)
@@ -444,6 +445,7 @@ func newWorktreeBranchNameCmd() *cobra.Command {
 	cmd.Flags().StringVar(&task, "task", "", "Task id")
 	cmd.Flags().StringVar(&titleFile, "title-file", "", "File holding the task title (the slug is derived from it)")
 	cmd.Flags().BoolVar(&worktree, "worktree", false, "Render the worktree-branch: template")
+	cmd.Flags().StringVar(&pluginRoot, "plugin-root", "", "Plugin root for the tracker adapter fallback (default: $CLAUDE_PLUGIN_ROOT)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
 	return cmd
 }

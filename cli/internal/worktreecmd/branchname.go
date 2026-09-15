@@ -21,6 +21,9 @@ type BranchNameOptions struct {
 	Task      string // task id (validated with taskid.Valid)
 	TitleFile string // file holding the untrusted tracker title (written by the Write tool)
 	Worktree  bool   // render worktree-branch: instead of branch:
+	// PluginRoot is the adapter fallback when the installed copy predates `## Worktree`
+	// ("" reads $CLAUDE_PLUGIN_ROOT, which a Bash tool call does not carry).
+	PluginRoot string
 }
 
 // maxSlug bounds the derived slug (Convention.Render refuses longer ones).
@@ -88,7 +91,7 @@ func BranchName(ctx context.Context, dir string, o BranchNameOptions) (*BranchNa
 	if tracker == "" {
 		tracker = "beads"
 	}
-	pluginRoot, err := initcmd.DetectPluginRoot("")
+	pluginRoot, err := initcmd.DetectPluginRoot(o.PluginRoot)
 	if err != nil {
 		pluginRoot = ""
 	}

@@ -690,3 +690,40 @@ func TestTrackerRules_WorktreeConvention(t *testing.T) {
 		}
 	}
 }
+
+// TestConventionConsumersUseGo pins that the markdown consumers of the task id /
+// branch convention ask Go (`lets worktree info --task-candidate`, `lets worktree
+// branch-name`) instead of matching a regex or rendering a template by eye, and that
+// the historical `feature/<task-id>-<slug>` shape survives only as the no-binary default.
+func TestConventionConsumersUseGo(t *testing.T) {
+	const legacyShape = "feature/<task-id>-<slug>"
+	cases := []struct{ file, heading, call, fallback string }{
+		{"skills/detect-task/SKILL.md", "### Step 1: Parse Branch Name", "lets worktree info --json --task-candidate", "or no `lets` binary"},
+		{"skills/take-task/SKILL.md", "### Step 4: Branch Logic", "lets worktree branch-name --task", "No `lets` binary"},
+	}
+	for _, c := range cases {
+		raw, err := os.ReadFile(filepath.Join(pluginDir(t), c.file))
+		if err != nil {
+			t.Fatal(err)
+		}
+		sec := sectionSpan(string(raw), c.heading)
+		if sec == "" {
+			t.Fatalf("%s: section %q not found", c.file, c.heading)
+		}
+		call := strings.Index(sec, c.call)
+		if call < 0 {
+			t.Errorf("%s %s: must call %q", c.file, c.heading, c.call)
+		}
+		fb := strings.Index(sec, c.fallback)
+		if fb < 0 {
+			t.Errorf("%s %s: must name the no-binary fallback (%q)", c.file, c.heading, c.fallback)
+			continue
+		}
+		if call > fb {
+			t.Errorf("%s %s: the Go call must come before the no-binary fallback", c.file, c.heading)
+		}
+		if i := strings.Index(sec, legacyShape); i >= 0 && i < fb {
+			t.Errorf("%s %s: %s is presented before the no-binary fallback - only the fallback may name it", c.file, c.heading, legacyShape)
+		}
+	}
+}

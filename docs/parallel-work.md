@@ -29,7 +29,7 @@ cd .worktrees/auth-feature && claude     # new terminal — fresh session
 /lets:start                              # pick the task, start working
 ```
 
-Each worktree gets its own branch (`worktree-<name>` for new branches; or an existing branch if you pass an existing branch name and the auto-detect resolves to attach). The `.lets/` config, sessions, and plans are shared via a symlink; the task database is shared via a targeted `.beads/.env` symlink so `bd` finds the same database via git's common-dir — both terminals see the same backlog and the same config. You get the full LETS workflow in each one. **Credential threat-model:** `.beads/.env` is shared, so don't store cross-context secrets there.
+Each worktree gets its own branch (`worktree-<name>` for new branches; or an existing branch if you pass an existing branch name and the auto-detect resolves to attach). The `.lets/` config, sessions, and plans are shared via a symlink; the task store is shared through the links your tracker adapter declares (beads: a targeted `.beads/.env` symlink, so `bd` finds the same database via git's common-dir) — both terminals see the same backlog and the same config. You get the full LETS workflow in each one. **Credential threat-model:** the linked store credential (beads: `.beads/.env`) is shared, so don't store cross-context secrets there.
 
 When you're done with a worktree: `/lets:done` (and `/lets:end`) inside it, then `/lets:worktree remove <name>` from the main repo.
 
@@ -40,6 +40,12 @@ A few things not to do inside a worktree:
 - Don't restructure `.lets/` or `.beads/` — they're shared with the main repo.
 
 Worktrees live in `.worktrees/` at the project root (gitignored).
+
+### Worktrees LETS did not create (Orca, a teammate, `git worktree add`)
+
+A worktree made by another tool has no `.lets` link and no store link, so LETS in it would read an empty config. `lets worktree adopt` links it in place (it is never moved) and records the task when the branch name carries an id. You rarely run it yourself: the SessionStart hook adopts an unlinked worktree of an initialized project before the session's config is built, Orca's `orca.yaml` setup hook runs it when you use `LETS_LAUNCHER=orca`, and `/lets:start` falls back to it. An id guessed from a name like `lets-abc-fix-login` is marked unconfirmed until `/lets:start` claims it. Adopt never deletes: a `.lets` directory that only holds a statusline cache is moved to `.lets.pre-adopt` (safe to delete by hand), anything else stops with an explanation.
+
+With `LETS_LAUNCHER=orca`, `/lets:worktree create <task-id>` asks Orca to create the worktree and open Claude there with `/lets:start <task-id>` — no second terminal. Finish with `/lets:done` inside it, then archive the workspace in Orca: its archive hook runs `lets worktree release`, and if the task was still in progress, the next `/lets:start --main` offers to set it back to open. `/lets:worktree remove` refuses an Orca workspace. `/lets:worktree remove` also offers to sweep other task branches already merged into `origin/<merge-branch>`.
 
 ## See also
 
