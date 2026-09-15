@@ -31,6 +31,7 @@ func NewRootCmd() *cobra.Command {
 	cmd.AddCommand(NewWorktreeCmd())
 	cmd.AddCommand(NewCmuxCmd())
 	cmd.AddCommand(NewTmuxCmd())
+	cmd.AddCommand(NewOrcaCmd())
 	cmd.AddCommand(NewNotifyCmd())
 	return cmd
 }

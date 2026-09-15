@@ -4,6 +4,7 @@ package worktreecmd
 
 import (
 	"context"
+	"github.com/restarter/lets-workflow/cli/internal/fsutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -72,7 +73,7 @@ func Info(ctx context.Context, dir string) (*InfoResult, error) {
 			wt.Task = st.Task
 		}
 	}
-	if cwd, err := os.Getwd(); err == nil && sameDir(gitutil.ProjectRoot(cwd, 2*time.Second), probeRoot) {
+	if cwd, err := os.Getwd(); err == nil && fsutil.SameDir(gitutil.ProjectRoot(cwd, 2*time.Second), probeRoot) {
 		wt.OrcaWorktreeID = stripControl(os.Getenv("ORCA_WORKTREE_ID"))
 	}
 	res.Worktree = &wt

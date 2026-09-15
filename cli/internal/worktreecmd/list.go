@@ -5,6 +5,7 @@ package worktreecmd
 import (
 	"context"
 	"fmt"
+	"github.com/restarter/lets-workflow/cli/internal/fsutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -97,7 +98,7 @@ func annotateWorktree(ctx context.Context, projectRoot string, e porcelainEntry,
 		Path:     e.Path,
 		Branch:   e.Branch,
 		Head:     shortSHA(e.HEAD),
-		IsMain:   sameDir(e.Path, projectRoot),
+		IsMain:   fsutil.SameDir(e.Path, projectRoot),
 		Locked:   e.Locked,
 		Prunable: e.Prunable,
 		Detached: e.Detached,
@@ -148,20 +149,4 @@ func shortSHA(sha string) string {
 		return sha[:7]
 	}
 	return sha
-}
-
-// sameDir compares two paths after symlink resolution + Abs normalization.
-// macOS /var/folders vs /private/var/folders mismatch (initRepo uses
-// realTempDir to dodge this, but porcelain output is raw git data).
-func sameDir(a, b string) bool {
-	resolve := func(p string) string {
-		if abs, err := filepath.Abs(p); err == nil {
-			p = abs
-		}
-		if real, err := filepath.EvalSymlinks(p); err == nil {
-			return real
-		}
-		return p
-	}
-	return resolve(a) == resolve(b)
 }

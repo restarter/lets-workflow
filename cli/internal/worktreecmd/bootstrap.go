@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/restarter/lets-workflow/cli/internal/fsutil"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -78,7 +79,7 @@ func linkLets(mainRoot, wtRoot string, mode linkMode, add func(status, msg strin
 		fi, err := os.Lstat(wtLets)
 		switch {
 		case err == nil && fi.Mode()&os.ModeSymlink != 0:
-			if sameDir(wtLets, mainLets) {
+			if fsutil.SameDir(wtLets, mainLets) {
 				add(StepOK, ".lets/ already linked")
 				return moved, nil
 			}

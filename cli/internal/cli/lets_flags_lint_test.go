@@ -17,7 +17,6 @@ import (
 // invocation of one is reported as pending (not failed) until that unit lands. The
 // task that wires a subcommand removes it from this list.
 var pendingSubcommands = map[string]string{
-	"orca":  "U1 1.13",
 	"peers": "U2 2.10",
 }
 
