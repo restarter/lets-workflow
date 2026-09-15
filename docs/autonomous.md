@@ -41,6 +41,7 @@ The pipeline turns one well-described task into a spawn → plan → execute run
 - **`--flow`** selects what the spawned session lands in: `plan-workflow` = autonomous planning (PREVIEW; falls back to interactive `--flow plan` when unavailable), `plan` = interactive `/lets:plan`, omitted = plain `/lets:start`. It only changes the launch command — terminal, cmux, and tmux launchers all inherit it.
 - **`--auto`** maps to `claude --permission-mode auto`. It speeds up *approved* work; it never bypasses the gates below.
 - **Execution** runs the approved plan without per-step prompts and commits at each plan point without re-asking.
+- **Budget.** Run by hand, `/lets:plan-workflow` shows a budget panel before launch: agents per stage (explorers, approaches, judges, evaluators, plan reviewers, plan checker), the total, and the model. You can lower any stage or run every agent on another model; whatever was cut is listed with the finished plan. A spawned autonomous run skips the panel and uses the defaults.
 
 ### What still stops it (even in `--auto`)
 

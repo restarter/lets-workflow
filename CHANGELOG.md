@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **`/lets:plan-workflow` shows what a run will spend, and lets you cut it or change the model (lets-ip06f).** The autonomous planning chain launched a fixed panel - an explorer per focus area, up to four architects, three judges, two plan reviewers - on whatever model each agent type defaults to, and the only lever was `--fast`. A budget panel now appears before launch: agents per stage, the estimated total, and the model. Lower any stage (`judges=1`, `plan_reviewers=0`) or run every agent on one model. The script can only lower a stage, never raise it, and every cut is reported with the finished plan (`counts.budget.drops`: which approaches, judges or reviewers were dropped, and any out-of-range value it clamped); a skipped review or check pass is named as a budget skip, not a failure. A run launched as shown is unchanged, and a spawned autonomous run skips the panel. `planbudget_test.go` pins the wiring so a new agent or fan-out cannot silently ignore the budget or the model.
+
 ## [0.8.2] - 2026-09-04
 
 ### Added

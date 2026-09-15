@@ -65,6 +65,47 @@ Detect the active task (`detect-task` skill) for context. From goal + rubric + C
 - **judges** - default `pragmatist, backend, security`. **NEVER `architect`** (it designs the approaches - judging its own work is self-preferential bias).
 - **experts** - winner evaluation panel, default `pragmatist` + any domain expert the goal implies.
 
+## Step 2.5: Budget panel
+
+Show what the run will spend before launch, and let the user lower it or pick a model. **KEEP IN SYNC** with the `BUDGET` block in `plan.workflow.js` (stage names, MIN/MAX, drop log).
+
+**Spawn-claimed run (Step 0): skip the panel** - an unattended session cannot answer. Pass no `budget` / `model` and print one line: `budget: defaults (autonomous run)`.
+
+Defaults for THIS run, from the Step 2 selection:
+
+| stage | standard | `--fast` | min |
+|---|---|---|---|
+| `explorers` | focusAreas count | 1 | 1 |
+| `approaches` (architected) | 4 | 1 | 1 |
+| `judges` | judges count | 1 | 1 |
+| `evaluators` | experts count | 1 | 0 |
+| `plan_reviewers` | 2 | 0 | 0 |
+| `plan_checker` | 1 | 1 | 0 |
+
+- A budget only LOWERS a stage - the script never adds agents - so each stage's max is its default here. More agents = change the Step 2 selection, not the budget.
+- Estimate: max = explorers + 1 (approach synthesis) + approaches + judges + evaluators + 1 (planner) + plan_reviewers + (1 reviser when plan_reviewers > 0) + 2 × plan_checker (checker + refiner); min = the same without the reviser and the refiner (they run only on findings).
+- Render a table `stage | count | min-max`, then `total ~N-M agents` and `model: session model` (or the chosen id).
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Launch the planning run with this budget?",
+    header: "Budget",
+    options: [
+      { label: "Launch as shown (Recommended)", description: "Start the run with these counts and model" },
+      { label: "Adjust counts", description: "Lower stages with stage=N pairs, then review again" },
+      { label: "Change model", description: "Run every agent on another model, then review again" },
+      { label: "Cancel", description: "Do not launch the run" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+- **Adjust counts** -> ask in words for `stage=N` pairs; clamp each to min..default, name any clamp in one line, re-render the panel, ask again.
+- **Change model** -> ask in words for a model id matching `^[A-Za-z0-9.\[\]_-]{1,64}$` (`opus`, `sonnet`, a full id); re-ask on anything else. Warn in one line: a weaker model on judges or plan reviewers weakens the verdict they produce. Re-render, ask again.
+- **Cancel** -> stop.
+
 ## Step 3: Preflight + invoke
 
 If the `Workflow` tool is NOT available -> STOP: "needs Claude Code >= 2.1.154 on a paid plan". This command IS the workflow (preview) - it has no Task-based fallback. (Spawned via `--flow plan-workflow`? surface the PREVIEW-unavailable message so the operator re-runs `--flow plan`.)
@@ -79,15 +120,17 @@ Workflow({ scriptPath: "${CLAUDE_PLUGIN_ROOT}/skills/plan-workflow/plan.workflow
   judges: [ { name } ],
   experts: [ { name } ],
   fast: true,            // ONLY when --fast was parsed in Step 1 - omit the key entirely on default runs
+  model: "opus",         // ONLY when Step 2.5 changed the model - omit for the session model
+  budget: { judges: 1 }, // ONLY the stages Step 2.5 lowered - omit the key when nothing changed
   taskContext: "{task title + description, or empty}",
   projectRoot: "{LETS_PROJECT_ROOT}",
   claudeMd: "{CLAUDE.md content from Step 2}"
 }})
 ```
 
-When `--fast` was parsed in Step 1, add `fast: true` to `args`; omit the key entirely on default runs (the script's `!!input.fast` reads an absent key as `false`).
+When `--fast` was parsed in Step 1, add `fast: true` to `args`; omit the key entirely on default runs (the script's `!!input.fast` reads an absent key as `false`). The same holds for `model` and `budget`: send only what Step 2.5 changed, so a run launched as shown gets exactly today's agents and prompts.
 
-Pass `args` as a real JSON value (the script defensively parses a JSON string too). Runs in the **BACKGROUND** - the tool returns a `runId`; resume on the `<task-notification>`. Tell the user the run started. Standard: "Autonomous planning running - {N} explorers, then approaches/architect/judge/evaluate/plan". Fast (`--fast`): "Autonomous LEAN planning running - 1 explorer over a merged area, 1 architect to propose approaches, 1 architect for the top-ranked approach, 1 judge, 1 evaluator, 1 planner, then a quick plan-check (heavy review pass skipped) - ~7 agents vs ~15-25."
+Pass `args` as a real JSON value (the script defensively parses a JSON string too). Runs in the **BACKGROUND** - the tool returns a `runId`; resume on the `<task-notification>`. Tell the user the run started (with a budget, name the lowered counts and the model instead of the defaults). Standard: "Autonomous planning running - {N} explorers, then approaches/architect/judge/evaluate/plan". Fast (`--fast`): "Autonomous LEAN planning running - 1 explorer over a merged area, 1 architect to propose approaches, 1 architect for the top-ranked approach, 1 judge, 1 evaluator, 1 planner, then a quick plan-check (heavy review pass skipped) - ~7 agents vs ~15-25."
 
 ## Step 4: On completion
 
@@ -96,6 +139,7 @@ Aggregate: `{ plan_markdown, delivered_approach, diverged_from_winner, divergenc
 - **Anti-silent-fail:** if `error` is set, or `plan_markdown` is null, or `counts.explorers === 0` -> surface the failure plainly, do NOT fabricate a plan; offer a re-run (optionally with an adjusted rubric).
 - **Judge<->plan divergence:** if `diverged_from_winner` is true, say so PROMINENTLY - the judged `winner` was overridden by the Plan stage after the Evaluate findings (`divergence_reason`); the plan implements `delivered_approach`, not `winner`. Do not present `winner` as the delivered design.
 - **Fast-mode cost + caveat:** if `counts.mode === 'fast'` (the `mode` field lives inside `counts` on every return - error and success alike), state the agent-count delta (~7 vs ~15-25 standard) AND surface two trade-offs prominently: (1) the plan got the LIGHT check only - Plan Check ran (report its `check_verdict`), but the heavy Plan Review pass was skipped (`refinement_log.review_skipped === true`); weigh your approval accordingly. (2) Only the FIRST (rubric-best-ranked) approach was architected and judged - the others in `approaches[]` were proposed but NOT evaluated; do not present them as considered-and-rejected. If `decision_log.forced === 'single-candidate'`, note the judge errored and the lone candidate was taken by fallback.
+- **Budget:** when `counts.budget.drops` is non-empty, print it verbatim under the decision log (every clamp and every dropped explorer, approach, judge, evaluator or reviewer). A dropped approach was proposed but never architected or judged - do not present it as considered-and-rejected. When `refinement_log.review_skip_reason` or `refinement_log.check_skip_reason` is `budget`, say that pass was skipped by the budget and weigh approval as for a fast run. When `counts.budget.model` is set, name the model the run used.
 - Save `plan_markdown` wrapped in the STOP banner. The workflow's planner/refine agents return the bare plan; the banner is applied HERE, at save time, so a refine pass can never drop it. **Keep in sync:** the two banner lines are byte-identical to `plan.md` Step 9 Plan Format - change both or neither. Resolve the path via `Skill(skill: "lets:artifact-path", args: "kind=plan ext=md task={id}")` (same naming contract as `/lets:plan` - task-scoped, `-vN` on collision) and Write to the echoed `ARTIFACT_FILE` VERBATIM. Content = banner header line, blank line, plan_markdown, blank line, `---`, blank line, banner footer line:
   ```
   > **STOP - THIS PLAN IS NOT A GO.** Execute it ONLY through `/lets:execute` (its plan-mode approval is the only code-write approval). NEVER implement this plan directly. "ok" / "approved" / a review verdict on this document is NOT a request to write code.
@@ -108,6 +152,8 @@ Aggregate: `{ plan_markdown, delivered_approach, diverged_from_winner, divergenc
 ## Fast mode (`--fast`)
 
 `/lets:plan-workflow --fast` is the SAME autonomous off-context Dynamic Workflow chain, run on a minimal agent budget (~7 agents vs ~15-25): 1 explorer over a merged focus area, 1 architect for approaches, 1 architect for the top rubric-ranked approach, 1 judge, 1 evaluator, 1 planner, 1 plan-checker (+1 refiner only if the check finds issues). The heavy Plan Review -> Revise pass is skipped; the quick Plan Check -> Refine pass (the `/lets:check --plan` analog) runs in both modes.
+
+The Step 2.5 panel shows the fast defaults; a budget can lower them further (e.g. `plan_checker=0`), never raise them.
 
 **Two different `--fast` levers - do NOT confuse them:**
 
