@@ -110,15 +110,15 @@ func TestTranscript_LargeTailUnderCap(t *testing.T) {
 	f, _ := os.Create(path)
 	filler, _ := json.Marshal(map[string]any{"type": "progress", "data": strings.Repeat("x", 1000)})
 	for written := 0; written < 10<<20; written += len(filler) + 1 {
-		f.Write(filler)
-		f.Write([]byte("\n"))
+		_, _ = f.Write(filler)
+		_, _ = f.Write([]byte("\n"))
 	}
 	for i := 0; i < 7; i++ {
 		b, _ := json.Marshal(map[string]any{"type": "assistant", "timestamp": "2026-09-15T12:00:00Z", "message": map[string]any{"role": "assistant", "content": "turn " + itoaInt(i)}})
-		f.Write(b)
-		f.Write([]byte("\n"))
+		_, _ = f.Write(b)
+		_, _ = f.Write([]byte("\n"))
 	}
-	f.Close()
+	_ = f.Close()
 	bytesRead.Store(0)
 	turns, d := TailTurns(path, 5)
 	if d != nil || len(turns) != 5 || turns[4].Text != "turn 6" || turns[0].Text != "turn 2" {

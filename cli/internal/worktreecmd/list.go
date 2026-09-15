@@ -5,12 +5,12 @@ package worktreecmd
 import (
 	"context"
 	"fmt"
-	"github.com/restarter/lets-workflow/cli/internal/fsutil"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"github.com/restarter/lets-workflow/cli/internal/fsutil"
 	"github.com/restarter/lets-workflow/cli/internal/trackeradapter"
 )
 

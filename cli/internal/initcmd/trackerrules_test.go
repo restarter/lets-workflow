@@ -1,12 +1,13 @@
 package initcmd
 
 import (
-	"github.com/restarter/lets-workflow/cli/internal/trackeradapter"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/restarter/lets-workflow/cli/internal/trackeradapter"
 
 	"github.com/restarter/lets-workflow/cli/internal/frontmatter"
 )

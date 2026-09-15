@@ -37,7 +37,7 @@ type record struct {
 func transcriptSlug(cwd string) string {
 	b := []byte(cwd)
 	for i, c := range b {
-		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9') {
+		if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') {
 			b[i] = '-'
 		}
 	}
@@ -83,7 +83,7 @@ func readBackward(path string, stop func(newestFirst []record) bool) ([]record, 
 	if err != nil {
 		return nil, 0, &Degraded{Source: "transcript", Reason: "transcript_unreadable"}
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	fi, err := f.Stat()
 	if err != nil {
 		return nil, 0, &Degraded{Source: "transcript", Reason: "transcript_unreadable"}

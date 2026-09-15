@@ -73,8 +73,8 @@ func TestOrcaTell_SendsObservesAndSerializes(t *testing.T) {
 			<-release
 		}
 		f, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
-		defer f.Close()
-		f.WriteString(`{"type":"user","timestamp":"2026-09-15T10:01:00Z","message":{"role":"user","content":` + jsonString(text) + "}}\n")
+		defer func() { _ = f.Close() }()
+		_, _ = f.WriteString(`{"type":"user","timestamp":"2026-09-15T10:01:00Z","message":{"role":"user","content":` + jsonString(text) + "}}\n")
 	}
 	sends := func() int { ops.mu.Lock(); defer ops.mu.Unlock(); return len(ops.sends) }
 	sendLockWait = 100 * time.Millisecond
@@ -144,8 +144,8 @@ func TestOrcaWait_SatisfiedOnlyAfterEndOfTurn(t *testing.T) {
 		fake = fake.Add(d)
 		if steps == 2 {
 			f, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
-			f.WriteString(`{"type":"system","subtype":"turn_duration","timestamp":"2026-09-15T10:01:09Z"}` + "\n")
-			f.Close()
+			_, _ = f.WriteString(`{"type":"system","subtype":"turn_duration","timestamp":"2026-09-15T10:01:09Z"}` + "\n")
+			_ = f.Close()
 		}
 	}
 	statMtime = func(p string) (time.Time, error) { stats++; return fake, nil }

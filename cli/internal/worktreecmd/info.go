@@ -4,7 +4,6 @@ package worktreecmd
 
 import (
 	"context"
-	"github.com/restarter/lets-workflow/cli/internal/fsutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/restarter/lets-workflow/cli/internal/fsutil"
 	"github.com/restarter/lets-workflow/cli/internal/gitutil"
 	"github.com/restarter/lets-workflow/cli/internal/initcmd"
 	"github.com/restarter/lets-workflow/cli/internal/letsconfig"

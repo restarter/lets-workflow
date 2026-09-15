@@ -1,12 +1,13 @@
 package initcmd
 
 import (
-	"github.com/restarter/lets-workflow/cli/internal/taskid"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/restarter/lets-workflow/cli/internal/taskid"
 )
 
 // The invariant this pins (lets-2ntow):

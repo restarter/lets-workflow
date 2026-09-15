@@ -221,14 +221,14 @@ func orcaTell(ctx context.Context, ops orcaOps, target Peer, transcript, msgid, 
 	if err != nil {
 		return TellOutcome{Reason: "send_lock_failed", State: err.Error()}
 	}
-	defer lf.Close()
+	defer func() { _ = lf.Close() }()
 	if err := fsutil.TryLockFile(lf, time.Now().Add(sendLockWait)); err != nil {
 		if errors.Is(err, fsutil.ErrLockBusy) {
 			return TellOutcome{Reason: "peer_not_ready", State: "another_send_in_progress"}
 		}
 		return TellOutcome{Reason: "send_lock_failed", State: err.Error()}
 	}
-	defer fsutil.UnlockFile(lf)
+	defer func() { _ = fsutil.UnlockFile(lf) }()
 
 	handle := target.TerminalID
 	check := func() (bool, string) {

@@ -61,7 +61,7 @@ func TestOrcaYAML_OnlyForProjectOrcaLauncher(t *testing.T) {
 		t.Fatal(err)
 	}
 	bare := orcaProject(t, "")
-	EnsureOrcaYAML(bare)
+	_, _ = EnsureOrcaYAML(bare)
 	for _, r := range []string{root, bare} {
 		if _, err := os.Stat(filepath.Join(r, "orca.yaml")); !os.IsNotExist(err) {
 			t.Errorf("%s: no orca.yaml expected", r)

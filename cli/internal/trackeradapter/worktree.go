@@ -127,7 +127,7 @@ func ParseWorktree(content string) ([]Link, error) {
 		switch {
 		case filepath.IsAbs(m[1]), p == ".", p == "..", strings.HasPrefix(p, "../"), strings.Contains(p, "/../"),
 			strings.HasPrefix(p, ".git"), strings.HasPrefix(p, ".lets"),
-			!(mode == 0o600 || mode == 0o640 || mode == 0o644):
+			mode != 0o600 && mode != 0o640 && mode != 0o644:
 			return nil, fmt.Errorf("%w: %q (%s)", ErrInvalid, m[1], m[2])
 		}
 		out = append(out, Link{Path: p, Mode: os.FileMode(mode)})

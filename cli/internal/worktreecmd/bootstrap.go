@@ -6,12 +6,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/restarter/lets-workflow/cli/internal/fsutil"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"syscall"
+
+	"github.com/restarter/lets-workflow/cli/internal/fsutil"
 
 	"github.com/restarter/lets-workflow/cli/internal/trackeradapter"
 )

@@ -250,7 +250,7 @@ func adoptTask(ctx context.Context, mainRoot, wtRoot, branch, tracker, pluginRoo
 
 		if hasFile && existing.Task != "" && existing.Task != info.ID {
 			guess := existing.Origin == "branch" || existing.Origin == "dir"
-			if !o.ReplaceTask && !(guess && info.Source == "argument") {
+			if !o.ReplaceTask && (!guess || info.Source != "argument") {
 				return nil, &Error{Code: ExitTaskFileConflict, Kind: "task_file_conflict",
 					Message:     fmt.Sprintf("%s names task %s, not %s", taskstate.Path(letsDir, slug), existing.Task, info.ID),
 					Remediation: "claim the task you mean with /lets:start <id>, or pass --replace-task at a terminal"}
@@ -266,10 +266,10 @@ func adoptTask(ctx context.Context, mainRoot, wtRoot, branch, tracker, pluginRoo
 		if start != "" {
 			set["start"] = start
 		}
-		switch {
-		case info.Source == "argument":
+		switch info.Source {
+		case "argument":
 			set["origin"] = "" // an explicit id is confirmed
-		case info.Source == "task_file":
+		case "task_file":
 			// keep whatever origin the file already carries
 		default:
 			set["origin"] = info.Origin

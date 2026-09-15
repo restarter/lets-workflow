@@ -49,7 +49,7 @@ func peerMsgDir(root string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 	if err := r.Mkdir("peer-msg", 0o700); err != nil && !errors.Is(err, os.ErrExist) {
 		return "", err
 	}
@@ -145,13 +145,13 @@ func readHandoff(root, msgid string) (string, *Error) {
 		return "", &Error{Code: ExitGeneric, Kind: "handoff_refused", Message: "no header was issued for this msgid"}
 	}
 	path := filepath.Join(dir, msgid+".txt")
-	defer os.Remove(path)
-	defer os.Remove(filepath.Join(dir, msgid+".issued"))
+	defer func() { _ = os.Remove(path) }()
+	defer func() { _ = os.Remove(filepath.Join(dir, msgid+".issued")) }()
 	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
 	if err != nil {
 		return "", &Error{Code: ExitGeneric, Kind: "handoff_refused", Message: "handoff unreadable or a symlink"}
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	fi, err := f.Stat()
 	if err != nil || !fi.Mode().IsRegular() || fi.Size() > handoffMax {
 		return "", &Error{Code: ExitGeneric, Kind: "handoff_refused", Message: "handoff is not a regular file of at most 8 KiB"}
