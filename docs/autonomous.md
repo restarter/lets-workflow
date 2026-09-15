@@ -75,6 +75,7 @@ Gate notifications route through `lets notify`, which dispatches on `LETS_LAUNCH
 
 - `lets notify` needs the Go binary built (`make install`).
 - `--flow` / `execute --auto` need the released plugin (or `make dev` / `--plugin-dir`).
+- With `LETS_LAUNCHER=orca`, the worktree's Orca card mirrors the run: the gates write their title as the card comment, a blocked run writes its reason, `/lets:start` sets the card in progress, a PR sets it in review and a confirmed close completes it.
 - A notification channel needs `LETS_LAUNCHER=cmux` (macOS), `LETS_LAUNCHER=tmux` (Linux/macOS, with a client attached) or `LETS_LAUNCHER=orca` (Orca running); `terminal` surfaces gates in-band only. Orca cannot start Claude with `--permission-mode auto`, so `/lets:worktree create --auto` under orca opens the worktree through cmux or the terminal instead.
 - `plan-workflow` needs Claude Code ≥ 2.1.154 on a paid plan.
 

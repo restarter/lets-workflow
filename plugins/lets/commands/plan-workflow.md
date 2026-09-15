@@ -34,6 +34,7 @@ At a human gate, surface to the operator through the **active launcher** (`$LETS
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 if [ -f "$LETS_PROJECT_ROOT/.lets/cache/pipeline-state-{TASK_ID}" ]; then
   lets notify --cwd "$LETS_PROJECT_ROOT" --title '{gate title}' --body '{gate body}' --json 2>/dev/null || true
+  [ "{LETS_LAUNCHER}" = "orca" ] && lets orca card --phase gate --comment '{gate title}' --json 2>/dev/null || true
 fi
 ```
 

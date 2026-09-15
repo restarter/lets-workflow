@@ -139,6 +139,8 @@ func Notify(ctx context.Context, opts Options) (*Result, error) {
 		res.Notify = &Info{Notified: sub.Notify.Notified, Launcher: launcher, Target: sub.Notify.Target, Title: sub.Notify.Title, Reason: sub.Notify.Reason}
 		res.Steps = append(res.Steps, tmuxSteps(sub.Steps)...)
 	case "orca":
+		// The Orca card has one comment: `lets orca card` phase snippets write it too, so
+		// the last writer wins (a gate note may replace a phase comment and vice versa).
 		sub, _ := orcacmd.NotifyFunc(ctx, orcacmd.NotifyOptions{Title: opts.Title, Body: opts.Body, Cwd: opts.Cwd})
 		res.OK = true
 		if sub == nil || sub.Notify == nil {

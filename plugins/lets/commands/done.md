@@ -484,6 +484,12 @@ Report what came back. The clean case costs ONE line; every other case is stated
 
 This is an additive READ: no new gate, no branch switch, nothing is skipped on a bad result. The user is told; Step 9 proceeds as normal.
 
+Orca card, best effort (single-quoted values):
+
+```bash
+[ "{LETS_LAUNCHER}" = "orca" ] && lets orca card --phase pr --comment 'PR #{number} {PR URL}' --json 2>/dev/null || true
+```
+
 After PR created:
 ```lets-tracker
 comment-add task=<task-id> body="PR #XX created: <PR URL>"
@@ -567,6 +573,12 @@ Read the status `close` returned. `closed` -> report the task closed. Another st
 Do NOT delete the branch or remove the worktree here - `/lets:worktree remove` handles cleanup.
 
 ## Step 9: Output
+
+**Orca card on a confirmed close.** Wherever a handler below (or the merged-PR shortcut) ran `close` and it returned `closed` - not an advance, not a failure:
+
+```bash
+[ "{LETS_LAUNCHER}" = "orca" ] && lets orca card --phase closed --comment 'task {task-id} closed' --json 2>/dev/null || true
+```
 
 ### After trunk-mode finish (HEAD == `$LETS_MERGE_BRANCH`):
 

@@ -164,6 +164,18 @@ After task is selected, delegate to the **take-task** skill to claim it and prep
 
 The take-task skill handles: setting task to `in_progress`, uncommitted changes check, worktree detection, branch creation/switching, offering worktree option, context recovery, saving session start ref.
 
+**Orca card (only when `{LETS_LAUNCHER}` is `orca`; otherwise skip this whole paragraph - no `lets` call, no `show`).** Reuse the title take-task already resolved. Only when that title is not in context:
+
+```lets-tracker
+show task=<id>   # returns {id,title,status}; <id> already passed the detect-task gate
+```
+
+```bash
+[ "{LETS_LAUNCHER}" = "orca" ] && lets orca card --phase start --comment 'task {id}: {title}' --json 2>/dev/null || true
+```
+
+The `none` adapter, or a `show` that is absent or failed: comment `'task {id}'` (never an improvised title). Single-quote the values (`'\''` for a quote inside). No id: skip.
+
 ## Step 7: Suggest Session Rename
 
 After the task is claimed, suggest renaming the Claude Code session so the statusline reflects the active task. `/rename` is a built-in slash command the **user** invokes — the assistant cannot run it — so present it as a ready-to-paste suggestion, not an action:

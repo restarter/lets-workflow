@@ -39,6 +39,8 @@ func TestResult_SchemaContract(t *testing.T) {
 	}
 	check("open", &OpenResult{Envelope: env("open"), Launch: &LaunchInfo{Launched: false, WorkspaceName: "n", Path: "/p", Reason: "orca_not_found", FallbackCommand: "x", Branch: "b", OrcaWorktreeID: "r::/p"}},
 		"launch", "launched", "workspace_name", "path", "reason", "fallback_command", "created", "branch", "orca_worktree_id")
+	check("card", &CardResult{Envelope: env("card"), Card: &CardInfo{Updated: true, Phase: "start", Status: "in-progress", Target: "r::/p", Reason: "x"}},
+		"card", "updated", "phase", "status", "target", "reason")
 	check("notify", &NotifyResult{Envelope: env("notify"), Notify: &NotifyInfo{Notified: true, Target: "r::/p", Title: "t", Reason: "x"}},
 		"notify", "notified", "target", "title", "reason")
 	check("status", &StatusResult{Envelope: env("status"), Status: &StatusInfo{Bin: "/b", Running: true, Version: "1", Reason: "x"}},

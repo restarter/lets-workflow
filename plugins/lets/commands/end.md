@@ -106,6 +106,12 @@ AskUserQuestion(
 
 ## Step 3: Write artifacts
 
+Orca card, best effort, after 3a (the last progress line, single-quoted):
+
+```bash
+[ "{LETS_LAUNCHER}" = "orca" ] && lets orca card --phase end --comment '{last progress line}' --json 2>/dev/null || true
+```
+
 (Reached in the DEFAULT flow only; the snapshot-only early exit in Step 1 handled those paths. On the Finish-task referral Step 2 already ran 3a and stopped, so only 3b is skipped there.)
 
 ### 3a. Session snapshot (ALWAYS, written FIRST)

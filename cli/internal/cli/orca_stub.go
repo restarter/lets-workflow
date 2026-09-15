@@ -21,7 +21,7 @@ func NewOrcaCmd() *cobra.Command {
 		Use: "open", Short: "Open in Orca (not supported on this platform)", SilenceUsage: true, SilenceErrors: true,
 		RunE: func(_ *cobra.Command, _ []string) error { return errOrcaUnsupported },
 	})
-	for _, sub := range []struct{ use, key string }{{"notify", "notify"}, {"status", "status"}} {
+	for _, sub := range []struct{ use, key string }{{"notify", "notify"}, {"status", "status"}, {"card", "card"}} {
 		sub := sub
 		var jsonOut, quiet bool
 		var title, body, cwd string
@@ -29,9 +29,12 @@ func NewOrcaCmd() *cobra.Command {
 			Use: sub.use, Short: "Orca " + sub.use + " (no-op on this platform)", SilenceUsage: true, SilenceErrors: true,
 			RunE: func(cmd *cobra.Command, _ []string) error {
 				inner := map[string]any{"reason": "not_supported"}
-				if sub.key == "notify" {
+				switch sub.key {
+				case "notify":
 					inner["notified"] = false
-				} else {
+				case "card":
+					inner["updated"] = false
+				default:
 					inner["running"] = false
 				}
 				env := map[string]any{"schema_version": 1, "ok": true, "subcommand": sub.use,
@@ -47,6 +50,10 @@ func NewOrcaCmd() *cobra.Command {
 		}
 		c.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
 		c.Flags().BoolVarP(&quiet, "quiet", "q", false, "Suppress human-readable output")
+		if sub.key == "card" {
+			c.Flags().String("phase", "", "LETS phase")
+			c.Flags().String("comment", "", "Card comment")
+		}
 		if sub.key == "notify" {
 			c.Flags().StringVar(&title, "title", "", "Note title")
 			c.Flags().StringVar(&body, "body", "", "Note body")
