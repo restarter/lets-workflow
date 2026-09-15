@@ -122,6 +122,12 @@ type WriteOpts struct {
 	Set      map[string]string // only these keys change; an empty value deletes the key
 	Create   bool              // false: a missing file is left missing (refresh-if-exists)
 	Deadline time.Time         // zero: block; else TryLockFile until the deadline
+	// Derive runs under the lock with the state MergeWrite just read (exists=false for
+	// a missing file) and returns more keys to change, merged over Set. A writer whose
+	// update depends on the current task - a conflict check, a start: kept for the same
+	// task - decides here, on what it will overwrite, never on an earlier Read. A
+	// non-nil error writes nothing and is returned as is.
+	Derive func(cur State, exists bool) (map[string]string, error)
 }
 
 // ErrFileAbsent: the file does not exist and WriteOpts.Create was false.
@@ -177,9 +183,13 @@ func lock(letsDir, slug string, deadline time.Time) (func(), error) {
 	return func() { _ = fsutil.UnlockFile(f); _ = f.Close() }, nil
 }
 
-// MergeWrite takes .lets/locks/task-<slug>.lock, re-reads, validates every value in
-// Set, applies it, keeps every other line (in its original order), and writes
-// atomically (tmp + rename in the same directory, 0600). It returns the new state.
+// acquire is the lock MergeWrite takes (a seam: a test writes the file while a writer
+// waits for it).
+var acquire = lock
+
+// MergeWrite takes .lets/locks/task-<slug>.lock, re-reads, runs Derive, validates
+// every value to set, applies it, keeps every other line (in its original order), and
+// writes atomically (tmp + rename in the same directory, 0600). It returns the new state.
 func MergeWrite(letsDir, slug string, o WriteOpts) (State, error) {
 	if slug == "" {
 		return State{}, ErrEmptySlug
@@ -195,18 +205,37 @@ func MergeWrite(letsDir, slug string, o WriteOpts) (State, error) {
 	if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) && !o.Create {
 		return State{}, ErrFileAbsent
 	}
-	unlock, err := lock(letsDir, slug, o.Deadline)
+	unlock, err := acquire(letsDir, slug, o.Deadline)
 	if err != nil {
 		return State{}, err
 	}
 	defer unlock()
 
 	data, err := os.ReadFile(path)
+	exists := err == nil
 	switch {
 	case errors.Is(err, os.ErrNotExist) && !o.Create:
 		return State{}, ErrFileAbsent
 	case err != nil && !errors.Is(err, os.ErrNotExist):
 		return State{}, err
+	}
+
+	set := o.Set
+	if o.Derive != nil {
+		more, err := o.Derive(parse(string(data)), exists)
+		if err != nil {
+			return State{}, err
+		}
+		set = map[string]string{}
+		for k, v := range o.Set {
+			set[k] = v
+		}
+		for k, v := range more {
+			if err := Validate(k, v); err != nil {
+				return State{}, err
+			}
+			set[k] = v
+		}
 	}
 
 	var out []string
@@ -216,7 +245,7 @@ func MergeWrite(letsDir, slug string, o WriteOpts) (State, error) {
 			continue
 		}
 		k, _, known := splitLine(line)
-		v, inSet := o.Set[k]
+		v, inSet := set[k]
 		switch {
 		case !known || !inSet:
 			out = append(out, line)
@@ -230,7 +259,7 @@ func MergeWrite(letsDir, slug string, o WriteOpts) (State, error) {
 		}
 	}
 	for _, k := range Keys {
-		if v, ok := o.Set[k]; ok && v != "" && !applied[k] {
+		if v, ok := set[k]; ok && v != "" && !applied[k] {
 			out = append(out, k+": "+v)
 		}
 	}

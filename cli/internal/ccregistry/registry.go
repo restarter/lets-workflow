@@ -164,6 +164,12 @@ func (s Snapshot) Liveness(sid string, pid int) Liveness {
 	if s.Degraded != nil && s.Degraded.Reason == "registry_absent" {
 		return Unknown
 	}
+	// Entries hold live pids only, so the session id found under ANY of them proves the
+	// session runs: `claude -r <sid>` resumes the same id under a new pid, and the
+	// recorded pid is then dead while the session is not.
+	if _, ok := s.Find(sid); ok {
+		return Alive
+	}
 	if pid > 0 {
 		if !ProcAlive(pid) {
 			return Dead
@@ -180,9 +186,6 @@ func (s Snapshot) Liveness(sid string, pid int) Liveness {
 			return Unknown
 		}
 		return Dead // a live pid without a registry file: the session exited, the pid was reused
-	}
-	if _, ok := s.Find(sid); ok {
-		return Alive
 	}
 	return Unknown
 }

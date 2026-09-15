@@ -14,13 +14,19 @@ type TailOptions struct {
 	Cwd                string
 	ToSession          string
 	ToTerminal         string
-	Last               int
+	Last               int // 0: 5 turns, or the whole reply (up to replyTurnsMax) with SinceMessage
 	SinceMessage       string
 	SentAt             string
 	AddressedToSession string
 	CountOnly          bool
 	ProbeOrca          bool
+	Repo               string // the peer's project, when it is not this one (the hub), or
+	RepoIndex          *int   // an index from `lets orca repos` (nil = unset)
 }
+
+// replyTurnsMax bounds a reply read with --since-message and no --last: the reply is
+// relayed whole, so the default five would cut its beginning off.
+const replyTurnsMax = 100
 
 // Tail reads a peer's recent output: transcript turns (plus the screen of a joined
 // Orca terminal) for a session, the screen only for a terminal. There is no
@@ -44,12 +50,20 @@ func Tail(ctx context.Context, o TailOptions) (*TailResult, error) {
 	if o.CountOnly && o.AddressedToSession == "" {
 		return fail(&Error{Code: ExitUsage, Kind: "usage", Message: "--count-only needs --addressed-to-session"})
 	}
-	if o.Last <= 0 {
-		o.Last = 5
+	limit := o.Last
+	if limit <= 0 {
+		limit = 5
+		if o.SinceMessage != "" {
+			limit = replyTurnsMax
+		}
 	}
 	rc, err := loadRepo(ctx, o.Cwd, o.ProbeOrca)
 	if err != nil {
 		return fail(err.(*Error))
+	}
+	rc, e := peerRepo(ctx, rc, o.Repo, o.RepoIndex, o.ProbeOrca)
+	if e != nil {
+		return fail(e)
 	}
 	res.Degraded = rc.degraded
 	res.OK = true
@@ -111,8 +125,9 @@ func Tail(ctx context.Context, o TailOptions) (*TailResult, error) {
 				recs = after
 			}
 			turns := turnsOf(recs)
-			if len(turns) > o.Last {
-				turns = turns[len(turns)-o.Last:]
+			if len(turns) > limit {
+				res.Omitted = len(turns) - limit
+				turns = turns[len(turns)-limit:]
 			}
 			res.Turns = turns
 		}

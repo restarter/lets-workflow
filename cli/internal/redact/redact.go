@@ -67,11 +67,69 @@ func Control(s string) string {
 	}, s)
 }
 
+const privateKeyMark = "[redacted:private-key]"
+
+var (
+	pemBlock = regexp.MustCompile(`(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----`)
+	pemBegin = regexp.MustCompile(`-----BEGIN [A-Z ]*PRIVATE KEY-----`)
+	pemEnd   = regexp.MustCompile(`-----END [A-Z ]*PRIVATE KEY-----`)
+	// pemBody is a line a key body can hold next to a delimiter; pemBodyFull a full-width
+	// body line (PEM wraps at 64, some tools at 76).
+	pemBody     = regexp.MustCompile(`^\s*[A-Za-z0-9+/]{1,76}={0,2}\s*$`)
+	pemBodyFull = regexp.MustCompile(`^\s*[A-Za-z0-9+/]{60,76}={0,2}\s*$`)
+)
+
+// privateKeys redacts every PEM private key, including the visible part of one that
+// the edge of the input cuts (a terminal screen shorter than the key, a scrolled
+// view): a BEGIN line and the body lines after it, an END line and the body lines
+// before it, and a run of two or more full-width body lines with neither delimiter
+// in view. Each redacted run becomes one marker line.
+func privateKeys(s string) string {
+	s = pemBlock.ReplaceAllString(s, privateKeyMark)
+	lines := strings.Split(s, "\n")
+	drop := make([]bool, len(lines))
+	for i, l := range lines {
+		switch {
+		case pemBegin.MatchString(l):
+			drop[i] = true
+			for j := i + 1; j < len(lines) && pemBody.MatchString(lines[j]); j++ {
+				drop[j] = true
+			}
+		case pemEnd.MatchString(l):
+			drop[i] = true
+			for j := i - 1; j >= 0 && pemBody.MatchString(lines[j]); j-- {
+				drop[j] = true
+			}
+		}
+	}
+	for i := 0; i < len(lines); {
+		j := i
+		for j < len(lines) && pemBodyFull.MatchString(lines[j]) {
+			j++
+		}
+		if j-i >= 2 {
+			for k := i; k < j; k++ {
+				drop[k] = true
+			}
+		}
+		i = max(j, i+1)
+	}
+	out := make([]string, 0, len(lines))
+	for i, l := range lines {
+		switch {
+		case !drop[i]:
+			out = append(out, l)
+		case i == 0 || !drop[i-1]:
+			out = append(out, privateKeyMark)
+		}
+	}
+	return strings.Join(out, "\n")
+}
+
 var textRules = []struct {
 	re   *regexp.Regexp
 	repl string
 }{
-	{regexp.MustCompile(`(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----`), "[redacted:private-key]"},
 	{regexp.MustCompile(`\b(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-ant-[A-Za-z0-9_-]{20,}|sk-proj-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{20,}|sk_live_[A-Za-z0-9]{20,}|xox[abprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35})`), "[redacted:token]"},
 	{regexp.MustCompile(`\beyJ[\w-]+\.[\w-]+\.[\w-]+`), "[redacted:jwt]"},
 	{regexp.MustCompile(`(?i)(authorization:\s*bearer\s+)\S+`), "${1}[redacted]"},
@@ -108,6 +166,7 @@ func highEntropyOnKeyLine(s string) string {
 // secret-looking assignments. Pattern-based: callers also cap length, which is the
 // real control against a secret no pattern knows.
 func Text(s string) string {
+	s = privateKeys(s)
 	for _, r := range textRules {
 		s = r.re.ReplaceAllString(s, r.repl)
 	}

@@ -14,9 +14,6 @@ import (
 	"time"
 
 	"github.com/restarter/lets-workflow/cli/internal/ccregistry"
-	"github.com/restarter/lets-workflow/cli/internal/fsutil"
-	"github.com/restarter/lets-workflow/cli/internal/gitutil"
-	"github.com/restarter/lets-workflow/cli/internal/orcacmd"
 	"github.com/restarter/lets-workflow/cli/internal/redact"
 )
 
@@ -24,7 +21,7 @@ import (
 type AskROOptions struct {
 	Cwd       string // the hub's own checkout (holds the handoff)
 	Repo      string // the other project's main checkout, or
-	RepoIndex int    // an index from `lets orca repos` (-1 = unset)
+	RepoIndex *int   // an index from `lets orca repos` (nil = unset)
 	Session   string // the orchestrator's last-seen session
 	Pid       int
 	MsgID     string // from `lets peers frame --kind ask-ro`
@@ -98,19 +95,12 @@ func AskRO(ctx context.Context, o AskROOptions) (*AskROResult, error) {
 	if !ccregistry.ValidSession(o.Session) || o.Pid < 0 {
 		return fail(&Error{Code: ExitUsage, Kind: "usage", Message: "ask-ro needs --session and a non-negative --pid"})
 	}
-	repo := o.Repo
-	if repo == "" && o.RepoIndex >= 0 {
-		p, f := orcacmd.RepoByIndex(ctx, o.RepoIndex)
-		if f != nil {
-			return fail(&Error{Code: ExitNotInRepo, Kind: "repo_invalid", Message: f.Error()})
-		}
-		repo = p
+	repo, given, e := otherRepo(ctx, o.Repo, o.RepoIndex)
+	if e == nil && !given {
+		e = &Error{Code: ExitNotInRepo, Kind: "repo_invalid", Message: "--repo is not a directory"}
 	}
-	if fi, err := os.Stat(repo); repo == "" || err != nil || !fi.IsDir() {
-		return fail(&Error{Code: ExitNotInRepo, Kind: "repo_invalid", Message: "--repo is not a directory"})
-	}
-	if inWt, main := gitutil.DetectInsideWorktreeAt(repo); inWt || main == "" || !fsutil.SameDir(main, repo) {
-		return fail(&Error{Code: ExitNotInRepo, Kind: "repo_invalid", Message: "--repo is not a main checkout"})
+	if e != nil {
+		return fail(e)
 	}
 	root, e := rootOf(o.Cwd)
 	if e != nil {

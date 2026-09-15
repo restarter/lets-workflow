@@ -61,30 +61,41 @@ func TestOrcaTell_SendsObservesAndSerializes(t *testing.T) {
 	path := settledTranscript(t, home, repo, sidFable)
 	ops := &fakeOps{terms: []orcaTerm{{Handle: "term_fable", Path: repo, State: "done"}}, screen: idleScreen}
 	var mu sync.Mutex
+	calls := 0
+	entered, release := make(chan struct{}), make(chan struct{})
 	ops.onSend = func(text string) { // the target records the inbound message, then starts a turn
 		mu.Lock()
-		defer mu.Unlock()
+		calls++
+		first := calls == 1
+		mu.Unlock()
+		if first { // the first sender stops inside the protected send, before the target reacts
+			close(entered)
+			<-release
+		}
 		f, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
 		defer f.Close()
 		f.WriteString(`{"type":"user","timestamp":"2026-09-15T10:01:00Z","message":{"role":"user","content":` + jsonString(text) + "}}\n")
 	}
-	out := orcaTell(context.Background(), ops, orcaPeer(repo), path, msg1, header(msg1, sidFable)+"\nq")
-	if !out.Delivered || !out.Observed || len(ops.sends) != 1 {
+	sends := func() int { ops.mu.Lock(); defer ops.mu.Unlock(); return len(ops.sends) }
+	sendLockWait = 100 * time.Millisecond
+	done := make(chan TellOutcome)
+	go func() {
+		done <- orcaTell(context.Background(), ops, orcaPeer(repo), path, msg1, header(msg1, sidFable)+"\nq")
+	}()
+	<-entered
+	// The transcript is still settled and the screen idle, so every safety check passes:
+	// only the send lock keeps this second sender from typing into the same prompt.
+	second := orcaTell(context.Background(), ops, orcaPeer(repo), path, "fedcba9876543210", header("fedcba9876543210", sidFable)+"\nq")
+	if second.Delivered || second.Reason != "peer_not_ready" || second.State != "another_send_in_progress" || sends() != 1 {
+		t.Errorf("a sender during another send must wait on the lock, not type: sends=%d %+v", sends(), second)
+	}
+	close(release)
+	if out := <-done; !out.Delivered || !out.Observed || sends() != 1 {
 		t.Fatalf("first send: %+v", out)
 	}
-	// the transcript now ends in a user record, so a second sender must re-check and refuse
-	var wg sync.WaitGroup
-	results := make([]TellOutcome, 2)
-	for i := range results {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			results[i] = orcaTell(context.Background(), ops, orcaPeer(repo), path, "fedcba9876543210", header("fedcba9876543210", sidFable)+"\nq")
-		}(i)
-	}
-	wg.Wait()
-	if len(ops.sends) != 1 || results[0].Reason != "peer_not_ready" || results[1].Reason != "peer_not_ready" {
-		t.Errorf("serialized senders re-check the target: sends=%d %+v", len(ops.sends), results)
+	// the transcript now ends in a user record, so a later sender must re-check and refuse
+	if later := orcaTell(context.Background(), ops, orcaPeer(repo), path, "fedcba9876543210", header("fedcba9876543210", sidFable)+"\nq"); later.Reason != "peer_not_ready" || sends() != 1 {
+		t.Errorf("a later sender re-checks the target: sends=%d %+v", sends(), later)
 	}
 }
 
@@ -107,6 +118,17 @@ func TestScreenTail_RejectsStream(t *testing.T) {
 	lines, d := ScreenTail(context.Background(), &fakeOps{screen: []string{"a\x1b[31mb", "token ghp_abcdefghijklmnopqrstuvwxyz0123"}}, "term_x")
 	if d != nil || strings.ContainsRune(lines[0], 0x1b) || strings.Contains(lines[1], "ghp_") {
 		t.Errorf("screen lines are redacted: %q %+v", lines, d)
+	}
+	// a key spans screen lines: redacted as one text, whole or cut by the screen edge
+	body := "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKj"
+	for name, screen := range map[string][]string{
+		"whole": {"⏺ Bash(cat k.pem)", "  ⎿  -----BEGIN PRIVATE KEY-----", "     " + body, "     " + body, "     -----END PRIVATE KEY-----", "❯"},
+		"cut":   {"     " + body, "     " + body, "     -----END PRIVATE KEY-----", "❯"},
+	} {
+		lines, d := ScreenTail(context.Background(), &fakeOps{screen: screen}, "term_x")
+		if d != nil || strings.Contains(strings.Join(lines, "\n"), body) || lines[len(lines)-1] != "❯" {
+			t.Errorf("%s key on screen: %q %+v", name, lines, d)
+		}
 	}
 }
 

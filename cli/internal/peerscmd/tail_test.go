@@ -54,3 +54,27 @@ func TestTail_TranscriptOnlyAndCountOnly(t *testing.T) {
 		t.Errorf("transcript only: %+v", res)
 	}
 }
+
+// A reply read after a message is relayed whole: the default five turns would cut its
+// beginning off, and whatever a limit leaves out is counted, never silent.
+func TestTail_SinceMessageReadsTheWholeReply(t *testing.T) {
+	repo := repoWithLets(t, "")
+	home := claudeHome(t, []regRow{{101, sidMain, "MAIN", repo}, {103, sidWork, "W1", repo}})
+	lines := []map[string]any{userText("2026-09-15T10:00:00Z", header(msg1, sidWork)+"\nq")}
+	for i := 0; i < 7; i++ {
+		lines = append(lines, assistantText("2026-09-15T10:00:0"+string(rune('1'+i))+"Z", "part "+string(rune('1'+i))))
+	}
+	writeTranscript(t, home, repo, sidWork, append(lines, turnEnd("2026-09-15T10:00:09Z"))...)
+	res, err := Tail(context.Background(), TailOptions{Cwd: repo, ToSession: sidWork, SinceMessage: msg1, SentAt: "2026-09-15T09:59:59Z"})
+	if err != nil || len(res.Turns) != 7 || res.Omitted != 0 || res.Turns[0].Text != "part 1" {
+		t.Errorf("--since-message without --last returns the whole reply: %+v %v", res, err)
+	}
+	res, _ = Tail(context.Background(), TailOptions{Cwd: repo, ToSession: sidWork, SinceMessage: msg1, SentAt: "2026-09-15T09:59:59Z", Last: 3})
+	if len(res.Turns) != 3 || res.Omitted != 4 || res.Turns[2].Text != "part 7" {
+		t.Errorf("an explicit --last keeps the newest and counts the rest: %+v", res)
+	}
+	res, _ = Tail(context.Background(), TailOptions{Cwd: repo, ToSession: sidWork})
+	if len(res.Turns) != 5 || res.Omitted != 3 {
+		t.Errorf("plain tail: five turns, the older ones counted: %+v", res)
+	}
+}

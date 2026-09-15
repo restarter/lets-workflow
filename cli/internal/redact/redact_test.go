@@ -30,6 +30,33 @@ func TestText(t *testing.T) {
 	}
 }
 
+// A key the edge of the input cuts (a terminal screen, a scrolled view) is still a
+// key: its visible part is redacted, and the text around it is kept.
+func TestText_PartialPrivateKeys(t *testing.T) {
+	body1 := "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKj"
+	body2 := "MzEfYyjiWA4R4/M2bS1GB4t7NXp98C3SC6dVMvDuictGeurT8jNbvJZHtCSuYEvu"
+	cases := map[string]string{
+		"complete, indented":          "$ cat k.pem\n  -----BEGIN PRIVATE KEY-----\n  " + body1 + "\n  " + body2 + "\n  -----END PRIVATE KEY-----\nok",
+		"BEGIN only (END scrolled)":   "$ cat k.pem\n-----BEGIN PRIVATE KEY-----\n" + body1 + "\n" + body2,
+		"END only (BEGIN scrolled)":   body1 + "\n" + body2 + "\nNNNN==\n-----END EC PRIVATE KEY-----\n❯",
+		"body only (both off-screen)": "⏺ reading\n    " + body1 + "\n    " + body2 + "\n❯",
+	}
+	for name, in := range cases {
+		got := Text(in)
+		if strings.Contains(got, body1) || strings.Contains(got, body2) || strings.Contains(got, "NNNN==") || !strings.Contains(got, "[redacted:private-key]") {
+			t.Errorf("%s: key material left in %q", name, got)
+		}
+	}
+	if got := Text("$ cat k.pem\n-----BEGIN PRIVATE KEY-----\n" + body1 + "\nnext command"); !strings.HasPrefix(got, "$ cat k.pem\n") || !strings.HasSuffix(got, "\nnext command") {
+		t.Errorf("text around a cut key is kept: %q", got)
+	}
+	for _, benign := range []string{"one line of sixty-four base64 characters is not a key:\n" + body1, "short\nlines\nstay"} {
+		if got := Text(benign); got != benign {
+			t.Errorf("benign %q changed to %q", benign, got)
+		}
+	}
+}
+
 func TestCredsAndControl(t *testing.T) {
 	if got := Creds("fatal: https://user:pass@github.com/x.git"); got != "fatal: https://<redacted>@github.com/x.git" {
 		t.Errorf("Creds = %q", got)

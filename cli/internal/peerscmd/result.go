@@ -47,6 +47,7 @@ type TailResult struct {
 	Session       string          `json:"session,omitempty"`
 	TerminalID    string          `json:"terminal_id,omitempty"`
 	Turns         []Turn          `json:"turns"`
+	Omitted       int             `json:"omitted,omitempty"` // earlier turns the limit left out
 	Screen        []string        `json:"screen,omitempty"`
 	Note          string          `json:"note,omitempty"`
 	AddressedToMe *AddressedCount `json:"addressed_to_me,omitempty"`

@@ -128,7 +128,6 @@ func TaskStateSet(ctx context.Context, dir string, o TaskStateOptions) (*TaskSta
 
 	info := &TaskStateInfo{Path: path}
 	res.TaskState = info
-	current, readErr := taskstate.Read(letsDir, slug)
 	if o.Orc != "" {
 		home, _ := os.UserHomeDir()
 		merge := letsconfig.ResolvedEnv(root, home, func(r string) string { return gitutil.DefaultBranch(r, 2*time.Second) })["LETS_MERGE_BRANCH"]
@@ -138,19 +137,31 @@ func TaskStateSet(ctx context.Context, dir string, o TaskStateOptions) (*TaskSta
 			return res, nil
 		}
 	}
-	if readErr == nil && o.Task != "" && current.Task != "" && current.Task != o.Task && o.Start == "" {
-		info.Reason = "task_mismatch"
-		fillFrom(info, current)
-		res.OK = true
-		return res, nil
-	}
 
 	wait := o.Wait
 	if wait == 0 {
 		wait = 5 * time.Second
 	}
-	st, err := taskstate.MergeWrite(letsDir, slug, taskstate.WriteOpts{Set: set, Create: o.Create, Deadline: time.Now().Add(wait)})
+	// The mismatch guard and the rebound report read the file under the write's lock:
+	// checked before it, a writer recording task B/start B in between would pair this
+	// --task with B's start.
+	var current taskstate.State
+	var existed bool
+	errMismatch := errors.New("task_mismatch")
+	derive := func(cur taskstate.State, exists bool) (map[string]string, error) {
+		current, existed = cur, exists
+		if exists && o.Task != "" && cur.Task != "" && cur.Task != o.Task && o.Start == "" {
+			return nil, errMismatch
+		}
+		return nil, nil
+	}
+	st, err := taskstate.MergeWrite(letsDir, slug, taskstate.WriteOpts{Set: set, Create: o.Create, Deadline: time.Now().Add(wait), Derive: derive})
 	switch {
+	case errors.Is(err, errMismatch):
+		info.Reason = "task_mismatch"
+		fillFrom(info, current)
+		res.OK = true
+		return res, nil
 	case errors.Is(err, taskstate.ErrFileAbsent):
 		info.Reason = "file_absent"
 		res.OK = true
@@ -163,7 +174,7 @@ func TaskStateSet(ctx context.Context, dir string, o TaskStateOptions) (*TaskSta
 	}
 	info.Written = true
 	fillFrom(info, st)
-	if o.Orc != "" && readErr == nil && current.Orc != "" && current.Orc != o.Orc {
+	if o.Orc != "" && existed && current.Orc != "" && current.Orc != o.Orc {
 		info.Rebound = &Rebound{From: current.Orc}
 	}
 	res.OK = true

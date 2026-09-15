@@ -106,7 +106,7 @@ func (o clientOps) Send(ctx context.Context, handle, text string) (orcacmd.Recei
 	return orcacmd.ParseReceipt(out)
 }
 
-// screenLines caps a screen read at 40 lines, each redacted.
+// screenLines caps a screen read at 40 lines.
 const screenLines = 40
 
 // ScreenTail reads a terminal's current screen. The read must report source=screen
@@ -122,12 +122,15 @@ func ScreenTail(ctx context.Context, ops orcaOps, handle string) ([]string, *Deg
 	if source != "screen" {
 		return nil, &Degraded{Source: "orca", Reason: orcacmd.ReasonOutputUnrecognized, Detail: "terminal read source=" + redact.Control(source)}
 	}
+	// Redact the screen as one text, before the cap: a secret spans lines (a private
+	// key), and a cut made first could leave a fragment no rule recognizes.
+	lines = strings.Split(redact.Text(strings.Join(lines, "\n")), "\n")
 	if len(lines) > screenLines {
 		lines = lines[len(lines)-screenLines:]
 	}
 	out := make([]string, len(lines))
 	for i, l := range lines {
-		out[i] = redact.Control(redact.Text(l))
+		out[i] = redact.Control(l)
 	}
 	return out, nil
 }

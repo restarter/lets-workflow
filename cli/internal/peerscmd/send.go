@@ -169,10 +169,12 @@ func readHandoff(root, msgid string) (string, *Error) {
 
 // TellOptions configures Tell.
 type TellOptions struct {
-	Cwd       string
+	Cwd       string // this checkout: holds the handoff
 	ToSession string
 	MsgID     string
 	ProbeOrca bool
+	Repo      string // the target's project, when it is not this one (the hub), or
+	RepoIndex *int   // an index from `lets orca repos` (nil = unset)
 }
 
 // Tell delivers a framed message. Go sends only over Orca, and only when the target
@@ -191,7 +193,12 @@ func Tell(ctx context.Context, o TellOptions) (*TellResult, error) {
 	if err != nil {
 		return fail(err.(*Error))
 	}
-	res.Degraded = rc.degraded
+	// The handoff stays in this checkout; the target is looked up in its own repo.
+	prc, e := peerRepo(ctx, rc, o.Repo, o.RepoIndex, o.ProbeOrca)
+	if e != nil {
+		return fail(e)
+	}
+	res.Degraded = prc.degraded
 	text, e := readHandoff(rc.root, o.MsgID)
 	if e != nil {
 		return fail(e)
@@ -199,7 +206,7 @@ func Tell(ctx context.Context, o TellOptions) (*TellResult, error) {
 	if h, ok := leadingHeader(text); !ok || h.ToSID != o.ToSession || h.ID != o.MsgID {
 		return fail(&Error{Code: ExitGeneric, Kind: "handoff_refused", Message: "the header does not address this session and msgid"})
 	}
-	peer := findPeer(rc, ctx, o.ToSession)
+	peer := findPeer(prc, ctx, o.ToSession)
 	res.OK = true
 	switch {
 	case peer == nil || peer.Send == "none":
@@ -216,11 +223,11 @@ func Tell(ctx context.Context, o TellOptions) (*TellResult, error) {
 			res.Reason, res.State = "peer_not_ready", d.Reason
 			return res, nil
 		}
-		out := orcaTell(ctx, rc.ops, *peer, path, o.MsgID, text)
+		out := orcaTell(ctx, prc.ops, *peer, path, o.MsgID, text)
 		res.Delivered, res.Reason, res.State, res.SentAt, res.Observed = out.Delivered, out.Reason, out.State, out.SentAt, out.Observed
 		if out.Reason == "peer_not_ready" && peer.Name != "" {
 			n := 0
-			for _, e := range rc.snap.Entries {
+			for _, e := range prc.snap.Entries {
 				if e.NameOK && e.Name == peer.Name {
 					n++
 				}

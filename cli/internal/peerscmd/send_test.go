@@ -100,6 +100,42 @@ func TestFrameAndTell_Handoff(t *testing.T) {
 	}
 }
 
+// The hub addresses another project's session by id AND repo: looked up in the hub's
+// own repo the target is not a peer there, and a name would match the wrong session.
+func TestTell_ForeignRepoTarget(t *testing.T) {
+	ctx := context.Background()
+	hub := repoWithLets(t, "")
+	foreign := gitRepo(t)
+	claudeHome(t, []regRow{{101, sidMain, "HUB", hub}, {103, sidWork, "MAIN-PWA", foreign}})
+	frame := func() *FrameResult {
+		t.Helper()
+		fr, err := Frame(ctx, FrameOptions{Cwd: hub, Session: sidMain, ToSession: sidWork, Kind: "tell"})
+		if err != nil {
+			t.Fatalf("frame a foreign live session: %v", err)
+		}
+		_ = os.WriteFile(fr.HandoffPath, []byte(fr.Header+"\nplease check"), 0o600)
+		return fr
+	}
+	if res, err := Tell(ctx, TellOptions{Cwd: hub, ToSession: sidWork, MsgID: frame().MsgID}); err != nil || res.Reason != "peer_unreachable" {
+		t.Errorf("without a repo the foreign session is no peer of the hub's repo: %+v %v", res, err)
+	}
+	fr := frame()
+	res, err := Tell(ctx, TellOptions{Cwd: hub, ToSession: sidWork, MsgID: fr.MsgID, Repo: foreign})
+	if err != nil || res.Route != "claude" || res.Reason != "claude_transport_model_send" || !strings.HasSuffix(res.Text, "please check") {
+		t.Errorf("with --repo the target is looked up in its own repo: %+v %v", res, err)
+	}
+	if _, err := os.Stat(fr.HandoffPath); !os.IsNotExist(err) {
+		t.Error("the handoff in the hub's checkout is consumed")
+	}
+	fr = frame()
+	if _, err := Tell(ctx, TellOptions{Cwd: hub, ToSession: sidWork, MsgID: fr.MsgID, Repo: filepath.Join(foreign, "missing")}); err == nil || err.(*Error).Kind != "repo_invalid" {
+		t.Errorf("an invalid repo is refused: %v", err)
+	}
+	if _, err := os.Stat(fr.HandoffPath); err != nil {
+		t.Error("a refused target leaves the handoff unread")
+	}
+}
+
 func TestTell_OrcaNotReadyPassthrough(t *testing.T) {
 	fastLoops(t)
 	repo := repoWithLets(t, "orca")

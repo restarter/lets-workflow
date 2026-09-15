@@ -50,12 +50,12 @@ AskUserQuestion(
 )
 ```
 
-Classify the request, and when unsure treat it as gated:
+Classify the request, and when unsure treat it as gated. Every message to an orchestrator passes its row's `session` and `repo_index`: the orc skill resolves a bare name only inside the hub's own repo, where another project's orchestrator is missing or a same-named session is the wrong one.
 
 | request | target alive | target stopped |
 |---|---|---|
-| read-only (status, backlog, "what is X doing") | `Skill(skill: "lets:orc", args: "target=\"<name>\" verb=ask footer=none text=<question>")` | Step 4 ask-ro |
-| gated (tracker write, commit, PR, anything else) | `Skill(skill: "lets:orc", args: "target=\"<name>\" verb=tell footer=none text=<request>")` | wake, then the same tell |
+| read-only (status, backlog, "what is X doing") | `Skill(skill: "lets:orc", args: "target=\"<name>\" session=<session> repo_index=<n> verb=ask footer=none text=<question>")` | Step 4 ask-ro |
+| gated (tracker write, commit, PR, anything else) | `Skill(skill: "lets:orc", args: "target=\"<name>\" session=<session> repo_index=<n> verb=tell footer=none text=<request>")` | wake, then the same tell |
 
 Wake (stopped target, gated request), with the session and pid from its `last_orchestrators[]` row:
 
@@ -63,7 +63,7 @@ Wake (stopped target, gated request), with the session and pid from its `last_or
 lets orca wake --repo-index <n> --session '<session>' --pid <pid> --title '<name>' --json
 ```
 
-`woken=true` -> the tell above, then tell the user the gates are pressed in `<name>`'s Orca terminal. `main_alive` -> it is running after all: use the alive column. `liveness_unknown` from wake or ask-ro -> say so and stop for that project; never retry around it.
+`woken=true` -> the tell above with that row's `session` (a resume keeps the session id), then tell the user the gates are pressed in `<name>`'s Orca terminal. `main_alive` -> it is running after all: use the alive column. `liveness_unknown` from wake or ask-ro -> say so and stop for that project; never retry around it.
 
 ## Step 4: ask-ro (stopped target, read-only request)
 

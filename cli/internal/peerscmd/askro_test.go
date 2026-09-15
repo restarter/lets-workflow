@@ -54,12 +54,12 @@ func TestAskRO_RunsNarrowed(t *testing.T) {
 	t.Setenv("ORCA_WORKTREE_ID", "r::x")
 	t.Setenv("CLAUDE_CODE_SESSION_ID", sidMain)
 	t.Setenv("LETS_LAUNCHER", "orca")
-	res, err := AskRO(context.Background(), AskROOptions{Cwd: hub, Repo: foreign, RepoIndex: -1, Session: sidWork, Pid: 0, MsgID: fr.MsgID})
+	res, err := AskRO(context.Background(), AskROOptions{Cwd: hub, Repo: foreign, Session: sidWork, Pid: 0, MsgID: fr.MsgID})
 	// pid 0 + session not in registry = unknown -> refused; a recorded dead pid proceeds
 	if err != nil || res.Reason != "liveness_unknown" {
 		t.Fatalf("pid-less unknown holder must be refused: %+v %v", res, err)
 	}
-	res, err = AskRO(context.Background(), AskROOptions{Cwd: hub, Repo: foreign, RepoIndex: -1, Session: sidWork, Pid: 4242, MsgID: fr.MsgID})
+	res, err = AskRO(context.Background(), AskROOptions{Cwd: hub, Repo: foreign, Session: sidWork, Pid: 4242, MsgID: fr.MsgID})
 	if err != nil || !res.Answered || strings.Contains(res.Answer, "ghp_") {
 		t.Fatalf("ask-ro: %+v %v", res, err)
 	}
@@ -97,7 +97,7 @@ func TestAskRO_RunsNarrowed(t *testing.T) {
 func TestAskRO_Refusals(t *testing.T) {
 	hub, foreign, fr := askROSetup(t)
 	stubClaude(t, "--fork-session --permission-mode --tools --strict-mcp-config --mcp-config") // no --disallowedTools
-	if res, _ := AskRO(context.Background(), AskROOptions{Cwd: hub, Repo: foreign, RepoIndex: -1, Session: sidWork, Pid: 4242, MsgID: fr.MsgID}); res.Reason != "headless_readonly_unenforceable" {
+	if res, _ := AskRO(context.Background(), AskROOptions{Cwd: hub, Repo: foreign, Session: sidWork, Pid: 4242, MsgID: fr.MsgID}); res.Reason != "headless_readonly_unenforceable" {
 		t.Errorf("missing flag: %+v", res)
 	}
 	if _, err := os.Stat(fr.HandoffPath); err != nil {
@@ -105,11 +105,11 @@ func TestAskRO_Refusals(t *testing.T) {
 	}
 	claudeHome(t, []regRow{{101, sidMain, "HUB", hub}, {4243, sidWork, "MAIN-PWA", foreign}})
 	stubClaude(t, fullHelp)
-	if res, _ := AskRO(context.Background(), AskROOptions{Cwd: hub, Repo: foreign, RepoIndex: -1, Session: sidWork, Pid: 4243, MsgID: fr.MsgID}); res.Reason != "main_alive" {
+	if res, _ := AskRO(context.Background(), AskROOptions{Cwd: hub, Repo: foreign, Session: sidWork, Pid: 4243, MsgID: fr.MsgID}); res.Reason != "main_alive" {
 		t.Errorf("alive MAIN: %+v", res)
 	}
 	claudeHome(t, []regRow{{101, sidMain, "HUB", hub}}, 4244)
-	if res, _ := AskRO(context.Background(), AskROOptions{Cwd: hub, Repo: foreign, RepoIndex: -1, Session: sidWork, Pid: 4244, MsgID: fr.MsgID}); res.Reason != "liveness_unknown" {
+	if res, _ := AskRO(context.Background(), AskROOptions{Cwd: hub, Repo: foreign, Session: sidWork, Pid: 4244, MsgID: fr.MsgID}); res.Reason != "liveness_unknown" {
 		t.Errorf("recorded pid on an unrecognized live entry: %+v", res)
 	}
 }

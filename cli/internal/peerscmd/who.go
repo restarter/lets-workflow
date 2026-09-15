@@ -109,6 +109,47 @@ func loadRepo(ctx context.Context, cwd string, probeOrca bool) (*repoContext, er
 	return rc, nil
 }
 
+// otherRepo resolves --repo / --repo-index to another project's main checkout;
+// given=false when the caller named neither (its own repo is meant).
+func otherRepo(ctx context.Context, repo string, idx *int) (path string, given bool, e *Error) {
+	if repo == "" && idx == nil {
+		return "", false, nil
+	}
+	if repo == "" {
+		p, f := orcacmd.RepoByIndex(ctx, *idx)
+		if f != nil {
+			return "", true, &Error{Code: ExitNotInRepo, Kind: "repo_invalid", Message: f.Error()}
+		}
+		repo = p
+	}
+	if fi, err := os.Stat(repo); err != nil || !fi.IsDir() {
+		return "", true, &Error{Code: ExitNotInRepo, Kind: "repo_invalid", Message: "--repo is not a directory"}
+	}
+	if inWt, main := gitutil.DetectInsideWorktreeAt(repo); inWt || main == "" || !fsutil.SameDir(main, repo) {
+		return "", true, &Error{Code: ExitNotInRepo, Kind: "repo_invalid", Message: "--repo is not a main checkout"}
+	}
+	return repo, true, nil
+}
+
+// peerRepo is the repo a verb looks its target up in: rc (this checkout's), or the
+// project --repo / --repo-index names - a hub addressing another project's session.
+// A name matches only inside the repo it belongs to, so the target is never looked
+// up by name here; Orca is consulted there when this session's switch selects it.
+func peerRepo(ctx context.Context, rc *repoContext, repo string, idx *int, probe bool) (*repoContext, *Error) {
+	path, given, e := otherRepo(ctx, repo, idx)
+	if e != nil {
+		return nil, e
+	}
+	if !given {
+		return rc, nil
+	}
+	prc, err := loadRepo(ctx, path, orcaSelected(rc.root, probe))
+	if err != nil {
+		return nil, err.(*Error)
+	}
+	return prc, nil
+}
+
 // peers merges the sources. A registry session and an Orca terminal are one peer
 // only when the terminal handle equals the `orca_terminal:` the session reported
 // about itself in its role file AND the terminal's worktree is the session's

@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -213,74 +212,83 @@ func adoptTask(ctx context.Context, mainRoot, wtRoot, branch, tracker, pluginRoo
 		return nil, nil
 	}
 	letsDir := filepath.Join(mainRoot, ".lets")
-	existing, rerr := taskstate.Read(letsDir, slug)
-	hasFile := rerr == nil
-	if rerr != nil && !errors.Is(rerr, fs.ErrNotExist) {
-		add(StepWarn, fmt.Sprintf("could not read %s: %v", taskstate.Path(letsDir, slug), rerr))
-	}
-	if hasFile && existing.Task != "" && !taskid.Valid(existing.Task) {
-		add(StepWarn, "the task-state file names an invalid id; ignoring it")
-		existing.Task = ""
-	}
 
+	// Everything that depends on the file is decided under its lock (Derive): decided on
+	// an earlier read, a /lets:start claim recorded in between would be overwritten by a
+	// guess from the branch name.
 	var info *TaskInfo
-	switch {
-	case o.Task != "":
-		info = &TaskInfo{ID: o.Task, Source: "argument"}
-	case hasFile && existing.Task != "":
-		info = &TaskInfo{ID: existing.Task, Source: "task_file", Origin: existing.Origin}
-	default:
-		conv, _ := trackeradapter.LoadConvention(mainRoot, tracker, pluginRoot)
-		if !conv.Declared {
-			add(StepSkip, "convention_undeclared: no task id derived from the branch name")
-			return nil, nil
+	var skipStatus, skipMsg string
+	errSkip := errors.New("no task to record")
+	derive := func(existing taskstate.State, hasFile bool) (map[string]string, error) {
+		if hasFile && existing.Task != "" && !taskid.Valid(existing.Task) {
+			add(StepWarn, "the task-state file names an invalid id; ignoring it")
+			existing.Task = ""
 		}
-		if id, tmpl, ok := conv.ParseBranch(branch, trackeradapter.CreatedAndAccepted); ok && taskid.Valid(id) {
-			info = &TaskInfo{ID: id, Source: "branch"}
-			if slices.Contains(conv.Accept, tmpl) {
-				info.Origin = "branch"
+		switch {
+		case o.Task != "":
+			info = &TaskInfo{ID: o.Task, Source: "argument"}
+		case hasFile && existing.Task != "":
+			info = &TaskInfo{ID: existing.Task, Source: "task_file", Origin: existing.Origin}
+		default:
+			conv, _ := trackeradapter.LoadConvention(mainRoot, tracker, pluginRoot)
+			if !conv.Declared {
+				skipStatus, skipMsg = StepSkip, "convention_undeclared: no task id derived from the branch name"
+				return nil, errSkip
 			}
-		} else if id, _, ok := conv.ParseBranch(filepath.Base(wtRoot), trackeradapter.CreatedAndAccepted); ok && taskid.Valid(id) {
-			info = &TaskInfo{ID: id, Source: "dir", Origin: "dir"}
-		} else {
-			add(StepWarn, fmt.Sprintf("task_unresolved: %q matches no task branch shape; no task-state written", branch))
-			return nil, nil
+			if id, tmpl, ok := conv.ParseBranch(branch, trackeradapter.CreatedAndAccepted); ok && taskid.Valid(id) {
+				info = &TaskInfo{ID: id, Source: "branch"}
+				if slices.Contains(conv.Accept, tmpl) {
+					info.Origin = "branch"
+				}
+			} else if id, _, ok := conv.ParseBranch(filepath.Base(wtRoot), trackeradapter.CreatedAndAccepted); ok && taskid.Valid(id) {
+				info = &TaskInfo{ID: id, Source: "dir", Origin: "dir"}
+			} else {
+				skipStatus, skipMsg = StepWarn, fmt.Sprintf("task_unresolved: %q matches no task branch shape; no task-state written", branch)
+				return nil, errSkip
+			}
 		}
-	}
 
-	if hasFile && existing.Task != "" && existing.Task != info.ID {
-		guess := existing.Origin == "branch" || existing.Origin == "dir"
-		if !o.ReplaceTask && !(guess && info.Source == "argument") {
-			return nil, &Error{Code: ExitTaskFileConflict, Kind: "task_file_conflict",
-				Message:     fmt.Sprintf("%s names task %s, not %s", taskstate.Path(letsDir, slug), existing.Task, info.ID),
-				Remediation: "claim the task you mean with /lets:start <id>, or pass --replace-task at a terminal"}
+		if hasFile && existing.Task != "" && existing.Task != info.ID {
+			guess := existing.Origin == "branch" || existing.Origin == "dir"
+			if !o.ReplaceTask && !(guess && info.Source == "argument") {
+				return nil, &Error{Code: ExitTaskFileConflict, Kind: "task_file_conflict",
+					Message:     fmt.Sprintf("%s names task %s, not %s", taskstate.Path(letsDir, slug), existing.Task, info.ID),
+					Remediation: "claim the task you mean with /lets:start <id>, or pass --replace-task at a terminal"}
+			}
 		}
-	}
 
-	head := headOf(ctx, wtRoot)
-	start := head
-	if hasFile && existing.Task == info.ID && existing.Start != "" &&
-		exec.CommandContext(ctx, "git", "-C", wtRoot, "merge-base", "--is-ancestor", existing.Start, "HEAD").Run() == nil {
-		start = existing.Start
-	}
-	set := map[string]string{"task": info.ID}
-	if start != "" {
-		set["start"] = start
-	}
-	switch {
-	case info.Source == "argument":
-		set["origin"] = "" // an explicit id is confirmed
-	case info.Source == "task_file":
-		// keep whatever origin the file already carries
-	default:
-		set["origin"] = info.Origin
+		start := headOf(ctx, wtRoot)
+		if hasFile && existing.Task == info.ID && existing.Start != "" &&
+			exec.CommandContext(ctx, "git", "-C", wtRoot, "merge-base", "--is-ancestor", existing.Start, "HEAD").Run() == nil {
+			start = existing.Start
+		}
+		set := map[string]string{"task": info.ID}
+		if start != "" {
+			set["start"] = start
+		}
+		switch {
+		case info.Source == "argument":
+			set["origin"] = "" // an explicit id is confirmed
+		case info.Source == "task_file":
+			// keep whatever origin the file already carries
+		default:
+			set["origin"] = info.Origin
+		}
+		return set, nil
 	}
 	wait := 5 * time.Second
 	if o.LockDeadline > 0 {
 		wait = o.LockDeadline // the SessionStart self-heal bounds both locks
 	}
-	if _, err := taskstate.MergeWrite(letsDir, slug, taskstate.WriteOpts{Set: set, Create: true, Deadline: time.Now().Add(wait)}); err != nil {
-		if errors.Is(err, taskstate.ErrLockBusy) {
+	if _, err := taskstate.MergeWrite(letsDir, slug, taskstate.WriteOpts{Create: true, Deadline: time.Now().Add(wait), Derive: derive}); err != nil {
+		var conflict *Error
+		switch {
+		case errors.Is(err, errSkip):
+			add(skipStatus, skipMsg)
+			return nil, nil
+		case errors.As(err, &conflict):
+			return nil, conflict
+		case errors.Is(err, taskstate.ErrLockBusy):
 			return nil, &Error{Code: ExitTaskStateLockBusy, Kind: "task_state_lock_busy", Message: err.Error(), Cause: err}
 		}
 		return nil, &Error{Code: ExitFilesystem, Kind: "task_state_write_failed", Message: err.Error(), Cause: err}

@@ -55,6 +55,50 @@ func TestMergeWrite_KeepsUnknownLinesAndOrder(t *testing.T) {
 	}
 }
 
+// A writer that decides on the current task must see what another writer recorded
+// while it waited for the lock - not what it read before (codex review: A/start-B).
+func TestMergeWrite_DeriveSeesStateWrittenWhileWaiting(t *testing.T) {
+	d := t.TempDir()
+	write(t, d, "b", "task: lets-a\nstart: aaaaaaa\n")
+	old := acquire
+	t.Cleanup(func() { acquire = old })
+	acquire = func(letsDir, slug string, deadline time.Time) (func(), error) {
+		unlock, err := lock(letsDir, slug, deadline)
+		if err == nil { // the other writer held the lock first
+			write(t, d, "b", "task: lets-b\nstart: bbbbbbb\n")
+		}
+		return unlock, err
+	}
+	errMismatch := errors.New("task mismatch")
+	var seen State
+	_, err := MergeWrite(d, "b", WriteOpts{Set: map[string]string{"task": "lets-a"}, Derive: func(cur State, exists bool) (map[string]string, error) {
+		seen = cur
+		if exists && cur.Task != "lets-a" {
+			return nil, errMismatch
+		}
+		return nil, nil
+	}})
+	if !errors.Is(err, errMismatch) || seen.Task != "lets-b" || seen.Start != "bbbbbbb" {
+		t.Fatalf("derive must run on the state under the lock: err=%v seen=%+v", err, seen)
+	}
+	if got := read(t, d, "b"); got != "task: lets-b\nstart: bbbbbbb\n" {
+		t.Errorf("a refused derive writes nothing:\n%s", got)
+	}
+	// derived keys are validated and merged over Set
+	if _, err := MergeWrite(d, "b", WriteOpts{Set: map[string]string{"orc": "MAIN"}, Derive: func(State, bool) (map[string]string, error) {
+		return map[string]string{"start": "not a sha"}, nil
+	}}); !errors.Is(err, ErrInvalidValue) {
+		t.Errorf("an invalid derived value must be refused: %v", err)
+	}
+	acquire = old
+	st, err := MergeWrite(d, "b", WriteOpts{Set: map[string]string{"orc": "MAIN"}, Derive: func(cur State, _ bool) (map[string]string, error) {
+		return map[string]string{"start": "ccccccc"}, nil
+	}})
+	if err != nil || st.Start != "ccccccc" || st.Orc != "MAIN" || st.Task != "lets-b" {
+		t.Errorf("merged: %+v %v", st, err)
+	}
+}
+
 func TestMergeWrite_CreateFalseLeavesMissingFile(t *testing.T) {
 	d := t.TempDir()
 	if _, err := MergeWrite(d, "b", WriteOpts{Set: map[string]string{"session": "5b55fc9 " + sid}}); !errors.Is(err, ErrFileAbsent) {

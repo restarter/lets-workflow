@@ -11,7 +11,7 @@ Talk to the repo's orchestrator or a named peer session: `ask` / `ping` / `read`
 
 ## Args
 
-`verb=ask|ping|read|tell|who target="<name>" text=<rest> [footer=none]` - `target` optional (default: this chat's orchestrator), quoted. From natural language: map the request to a verb (a question for an answer -> `ask`; an FYI -> `ping` or `tell`; "what did X say" -> `read`; "who is working" -> `who`). Any other verb: say so and stop.
+`verb=ask|ping|read|tell|who target="<name>" [session=<sid> repo_index=<n>] text=<rest> [footer=none]` - `target` optional (default: this chat's orchestrator), quoted. `session` + `repo_index` name another project's session; only `/lets:hub` passes them. From natural language: map the request to a verb (a question for an answer -> `ask`; an FYI -> `ping` or `tell`; "what did X say" -> `read`; "who is working" -> `who`). Any other verb: say so and stop.
 
 | verb | sends | waits | target required |
 |---|---|---|---|
@@ -24,6 +24,8 @@ Talk to the repo's orchestrator or a named peer session: `ask` / `ping` / `read`
 ## Step 1: Resolve the target
 
 Every later call addresses the returned **session id** (`target.session`), never the name again.
+
+**Another project's session** (`session=` + `repo_index=` given) -> no resolution and no name match (a name matches only inside this repo): that session is the target, `target` its display name. Add `--repo-index <n>` to every `tell` and `tail` below; `frame` and `wait` take the session id as is.
 
 **No explicit name** -> `lets peers orchestrator --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" --json`:
 
@@ -71,7 +73,7 @@ Then, only when this branch's `.task` has a `task:` line and HEAD is not `{LETS_
 
 ## Step 3: read [N]
 
-`lets peers tail --to-session <sid> --last N --json` (an Orca-only agent: `--to-terminal <terminal_id>`; "what did they say to me": add `--addressed-to-session "$CLAUDE_CODE_SESSION_ID"`). Render the turns verbatim - they are already redacted and capped - labelled as the peer's words. Send nothing.
+`lets peers tail --to-session <sid> --last N --json` (an Orca-only agent: `--to-terminal <terminal_id>`; "what did they say to me": add `--addressed-to-session "$CLAUDE_CODE_SESSION_ID"`). Render the turns verbatim - they are already redacted and capped - labelled as the peer's words, and name a non-zero `omitted`. Send nothing.
 
 ## Step 4: Compose (ask / ping / tell)
 
@@ -88,7 +90,7 @@ show task=<TASK_ID from the gate>   # returns {id,title,status}; none/absent -> 
 
 ## Step 5: Send
 
-Write `header` + newline + the message with the Write tool to `handoff_path` (never a shell), then `lets peers tell --to-session <sid> --msgid <msgid> --json` (Go reads and deletes the file):
+Write `header` + newline + the message with the Write tool to `handoff_path` (never a shell), then `lets peers tell --to-session <sid> --msgid <msgid> [--repo-index <n>] --json` (Go reads and deletes the file):
 
 | result | do |
 |---|---|
@@ -102,7 +104,7 @@ Write `header` + newline + the message with the Write tool to `handoff_path` (ne
 
 - Orca route: `lets peers wait --to-session <sid> --since-message <msgid> --sent-at <sent_at> --timeout-ms 1800000 --json` with `run_in_background: true`; tell the user "waiting on <name> - I'll relay when it lands". `completion_unverifiable`: say so and offer `/lets:orc read`.
 - Claude route: the idle notice arrives as a turn.
-- On completion or the notice: `lets peers tail --to-session <sid> --since-message <msgid> --sent-at <sent_at> --json` and relay the WHOLE reply text, no summary.
+- On completion or the notice: `lets peers tail --to-session <sid> --since-message <msgid> --sent-at <sent_at> [--repo-index <n>] --json` (no `--last`: Go returns the whole reply) and relay the WHOLE reply text, no summary; `omitted > 0` -> say that many earlier entries were left out and offer `/lets:orc read`.
 - Timeout: "still waiting - /lets:orc read later".
 
 ## Receipt rules (MANDATORY - same as lets-rules `## Peer Messages`)

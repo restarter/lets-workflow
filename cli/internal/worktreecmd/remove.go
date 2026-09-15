@@ -242,8 +242,10 @@ func Remove(ctx context.Context, projectRoot string, opts RemoveOptions) (*Remov
 // remove, and the already-gone path. Unforced, a branch that is an ancestor of
 // origin/<merge> (or local <merge>) is deleted with -D: `git branch -d` measures
 // "merged" against the LOCAL merge-branch, which lags its origin in a worktree setup
-// and would refuse a branch that is merged upstream. Anything else keeps -d, so an
-// unmerged branch still fails with branch_unmerged.
+// and would refuse a branch that is merged upstream. Anything else keeps -d, which
+// git measures against the branch's own upstream when it has one (else HEAD): a
+// pushed branch is deleted - its commits live on the remote - and a branch with
+// commits nowhere else fails with branch_unmerged.
 func deleteBranch(ctx context.Context, root, branch string, force bool, merge string) (string, *Error) {
 	flag, note := "-d", ""
 	switch {
@@ -264,7 +266,7 @@ func deleteBranch(ctx context.Context, root, branch string, force bool, merge st
 				Code:        ExitBranchUnmerged,
 				Kind:        "branch_unmerged",
 				Message:     fmt.Sprintf("branch %q has unmerged commits", branch),
-				Remediation: fmt.Sprintf("not merged into origin/%s or %s; a squash/rebase merge is not detectable - pass --force-branch", merge, merge),
+				Remediation: fmt.Sprintf("not merged into origin/%s or %s, and not pushed to its upstream; a squash/rebase merge is not detectable - pass --force-branch", merge, merge),
 				Cause:       err,
 			}
 		}

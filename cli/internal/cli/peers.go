@@ -66,12 +66,26 @@ func newPeersWhoCmd() *cobra.Command {
 	return cmd
 }
 
+// repoIndexFlag registers --repo-index; the returned func yields nil when it was not given.
+func repoIndexFlag(cmd *cobra.Command, usage string) func() *int {
+	idx := -1
+	cmd.Flags().IntVar(&idx, "repo-index", -1, usage)
+	return func() *int {
+		if idx < 0 {
+			return nil
+		}
+		return &idx
+	}
+}
+
 func newPeersTailCmd() *cobra.Command {
 	var o peerscmd.TailOptions
+	var repoIndex func() *int
 	cmd := &cobra.Command{
 		Use: "tail", Short: "Read a peer's recent output (redacted, capped)",
 		Args: cobra.NoArgs, SilenceUsage: true, SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			o.RepoIndex = repoIndex()
 			res, err := peerscmd.Tail(cmd.Context(), o)
 			printPeers(cmd, true, res, nil)
 			return err
@@ -81,12 +95,14 @@ func newPeersTailCmd() *cobra.Command {
 	f.StringVar(&o.Cwd, "cwd", "", "Checkout (default: current directory)")
 	f.StringVar(&o.ToSession, "to-session", "", "Session id of the peer")
 	f.StringVar(&o.ToTerminal, "to-terminal", "", "Orca terminal handle of a non-Claude agent (screen only)")
-	f.IntVar(&o.Last, "last", 5, "Number of turns")
+	f.IntVar(&o.Last, "last", 0, "Number of turns (default 5; with --since-message the whole reply, up to 100)")
 	f.StringVar(&o.SinceMessage, "since-message", "", "Only the turns after this msgid reached the peer")
 	f.StringVar(&o.SentAt, "sent-at", "", "When that message was sent (RFC 3339)")
 	f.StringVar(&o.AddressedToSession, "addressed-to-session", "", "Only the peer's messages addressed to this session id")
 	f.BoolVar(&o.CountOnly, "count-only", false, "With --addressed-to-session: return the count, no text")
 	f.BoolVar(&o.ProbeOrca, "probe-orca", false, "Consult Orca even when LETS_LAUNCHER is not orca")
+	f.StringVar(&o.Repo, "repo", "", "The peer's project main checkout, when it is not this repo")
+	repoIndex = repoIndexFlag(cmd, "The peer's project: an index from lets orca repos / who --orca-repos")
 	f.Bool("json", false, "Emit JSON envelope (always on)")
 	return cmd
 }
@@ -117,20 +133,24 @@ func newPeersFrameCmd() *cobra.Command {
 
 func newPeersTellCmd() *cobra.Command {
 	var o peerscmd.TellOptions
+	var repoIndex func() *int
 	cmd := &cobra.Command{
 		Use: "tell", Short: "Deliver a framed message (Orca when send-safe; a Claude peer returns the text for SendMessage)",
 		Args: cobra.NoArgs, SilenceUsage: true, SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			o.RepoIndex = repoIndex()
 			res, err := peerscmd.Tell(cmd.Context(), o)
 			printPeers(cmd, true, res, nil)
 			return err
 		},
 	}
 	f := cmd.Flags()
-	f.StringVar(&o.Cwd, "cwd", "", "Checkout (default: current directory)")
+	f.StringVar(&o.Cwd, "cwd", "", "Checkout (default: current directory; holds the handoff)")
 	f.StringVar(&o.ToSession, "to-session", "", "Session id of the peer")
 	f.StringVar(&o.MsgID, "msgid", "", "The msgid frame issued")
 	f.BoolVar(&o.ProbeOrca, "probe-orca", false, "Consult Orca even when LETS_LAUNCHER is not orca")
+	f.StringVar(&o.Repo, "repo", "", "The peer's project main checkout, when it is not this repo")
+	repoIndex = repoIndexFlag(cmd, "The peer's project: an index from lets orca repos / who --orca-repos")
 	f.Bool("json", false, "Emit JSON envelope (always on)")
 	return cmd
 }
@@ -199,11 +219,13 @@ func newPeersRoleCmd() *cobra.Command {
 }
 
 func newPeersAskROCmd() *cobra.Command {
-	o := peerscmd.AskROOptions{RepoIndex: -1}
+	var o peerscmd.AskROOptions
+	var repoIndex func() *int
 	cmd := &cobra.Command{
 		Use: "ask-ro", Short: "Ask a stopped orchestrator a read-only question (forked, plan mode, Read/Grep/Glob only)",
 		Args: cobra.NoArgs, SilenceUsage: true, SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			o.RepoIndex = repoIndex()
 			res, err := peerscmd.AskRO(cmd.Context(), o)
 			printPeers(cmd, true, res, nil)
 			return err
@@ -212,7 +234,7 @@ func newPeersAskROCmd() *cobra.Command {
 	f := cmd.Flags()
 	f.StringVar(&o.Cwd, "cwd", "", "This checkout (holds the handoff; default: current directory)")
 	f.StringVar(&o.Repo, "repo", "", "The other project's main checkout")
-	f.IntVar(&o.RepoIndex, "repo-index", -1, "An index from lets orca repos / who --orca-repos")
+	repoIndex = repoIndexFlag(cmd, "An index from lets orca repos / who --orca-repos")
 	f.StringVar(&o.Session, "session", "", "The orchestrator's last-seen session id")
 	f.IntVar(&o.Pid, "pid", 0, "Its recorded pid")
 	f.StringVar(&o.MsgID, "msgid", "", "The msgid frame --kind ask-ro issued")

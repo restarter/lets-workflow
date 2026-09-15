@@ -79,7 +79,8 @@ func TestLiveness(t *testing.T) {
 		pid  int
 		want Liveness
 	}{
-		{"dead pid, unrecognized entries present", a, 1002, Dead},
+		{"recorded pid dead, session resumed under a live pid", a, 1002, Alive},
+		{"dead pid, session not in the registry", b, 1002, Dead},
 		{"live pid, same sid", a, 1001, Alive},
 		{"live pid, other sid (reuse)", b, 1001, Dead},
 		{"live pid in Unrecognized", b, 1003, Unknown},
