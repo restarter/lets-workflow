@@ -350,7 +350,7 @@ Main mode (no task):  /lets:start --main -> triage / groom / route (no edits) ->
 Worktree:  /lets:worktree create -> `cd .worktrees/<name>/ && claude` -> /lets:start -> Work -> /lets:done -> /lets:end -> /lets:worktree remove (main repo)
 Orca:      /lets:worktree create (LETS_LAUNCHER=orca) -> Orca pane runs /lets:start <id> (adopt already linked it) -> Work -> /lets:done -> /lets:end -> archive in Orca (lets worktree release)
 
-Team:      /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /lets:done
+Team:      /lets:plan -> /lets:team run [--backend orca|agents] -> monitor -> /lets:review --local -> /lets:done   (orca: each task a visible session in an Orca child worktree; never both backends over one task)
 
 Orchestrators:  /lets:start --main [--scope "<part>"] (several per repo, unique per session name) -> /lets:worktree create <id> binds each spawned worker (--orc) -> a worker chat opened by hand: /lets:start <id> --orc=<name> -> worker and orchestrator talk via /lets:orc
 

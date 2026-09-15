@@ -17,6 +17,8 @@ Pick a set of tasks; the system spawns one teammate per task (the count scales w
 
 Other subcommands: `/lets:team status` (how the teammates are doing), `/lets:team stop`.
 
+**Orca backend (addon).** With `LETS_LAUNCHER=orca` and Orca running, `/lets:team run` offers an Orca supervised run instead (`--backend orca` picks it directly): each task becomes a visible LETS session in its own Orca child worktree, you press that session's gates in its terminal, and this session coordinates - relaying every worker question to you whole and replying only with your words. A run never uses both backends for one task: a team record names its backend, and a run stops when another active record of the other backend already holds a selected task.
+
 This is the right tool when you have several independent, well-scoped tasks and want them done in parallel without babysitting each one. For a single task you're actively shaping, plain `/lets:plan` + `/lets:execute` is a better fit — see **[plan-execute.md](plan-execute.md)**.
 
 ## `/lets:worktree` — parallel terminals

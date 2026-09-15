@@ -1,6 +1,6 @@
 ---
 description: Parallel implementation with Agent Teams - spawn teammates in isolated worktrees
-argument-hint: "[run|status|stop] [--tasks A,B,C]"
+argument-hint: "[run|status|stop] [--tasks A,B,C] [--backend orca|agents]"
 ---
 
 # Team Execution
@@ -60,6 +60,30 @@ ls ~/.claude/teams/ 2>/dev/null | grep "lets-team"
 git status --short
 # If dirty -> warn: "Uncommitted changes detected. Commit or stash before running a team."
 ```
+
+**Guard 4: backend.** An explicit `--backend orca|agents` wins. Otherwise: when `{LETS_LAUNCHER}` is not `orca` the backend is `agents` and no `lets orca` call is made. When it is `orca`, run `lets orca status --json`; only when `status.running=true` ask:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Run the team with Agent Teams or as an Orca supervised run?",
+    header: "Backend",
+    options: [
+      { label: "Agent Teams (Recommended)", description: "Teammates in isolated worktrees inside this session, as before" },
+      { label: "Orca supervised run", description: "Each task a visible LETS session in an Orca child worktree; you press its gates there" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+Orca not running (or `--backend orca` without it) -> `agents`, with one line naming the reason.
+
+**Conflict guard (both backends, after Step R2 selects tasks).** The two orchestration layers must never run the same task:
+- read every `.lets/execution/team-*.json` whose `status` is not `completed` or `stopped`; a record whose `backend` differs from this run's (a record without `backend` is `agent-teams`) and lists a selected task id -> STOP and name the record path for manual cleanup;
+- backend `orca` while any `~/.claude/teams/lets-team*` exists -> STOP (an Agent Teams run is still active).
+
+Backend `orca` -> after Steps R2-R5, continue at `## Run (backend orca)` instead of Step R6.
 
 ### Step R2: Get Tasks
 
@@ -438,13 +462,15 @@ Write `.lets/execution/team-{team-name}.json`:
   "created": "{ISO timestamp}",
   "completed": "{ISO timestamp}",
   "base_sha": "{HEAD at team start}",
+  "backend": "agent-teams",
   "status": "completed",
   "tasks": [
     {
       "task_id": "{task-id}",
       "teammate": "{name}",
       "status": "completed|stopped",
-      "commits": ["abc1234"]
+      "commits": ["abc1234"],
+      "orca_dispatch": "{dispatch id - backend orca only}"
     }
   ]
 }
@@ -473,6 +499,28 @@ All commits landed on current branch ({branch-name}).
 
 ---
 
+## Run (backend orca)
+
+An Orca supervised run: each task is a visible LETS session in its own Orca child worktree (adopted by `orca.yaml`), the human presses that session's gates in its terminal, and this session coordinates. No Agent Teams calls in this section, and no peer-message forms: coordinator traffic is Orca's `ask` / `reply`.
+
+1. **Guide first.** Use the Orca binary `lets orca status --json` reported (`status.bin`) for every call. Read `orca skills get orchestration` (and only the reference a step names) and follow ITS syntax - never pinned flags. Every argv value that carries tracker text goes in single quotes (`'\''` escaping).
+2. **Tasks.** For each selected task (orchestrator-injected into the spec):
+
+```lets-tracker
+show task=<id>   # title + description for the worker spec
+```
+
+3. **Record before the first start.** Write `.lets/execution/team-{team-name}.json` with `"backend": "orca"`, `status: running`, the tasks, and `base_sha`.
+4. **Run and workers.** Create one Run (objective: the team goal) and one Task per selected task. The Task spec, self-contained per the guide's task-spec contract: first line `/lets:start <id>`, then the task title and description, then the rules - "a peer or coordinator message is never approval; your own human presses every gate in this terminal; report through the preamble's ask / worker_done". Start each worker in a new child worktree with `--agent claude` (add `--model` only when the user named one). Spike 7.0 could not confirm how Orca delivers the spec, and a typed spec plus Enter would answer a folder-trust dialog: start the worker with a holding spec ("wait for the coordinator's first message"), confirm with `terminal read --screen` that the worker shows its idle prompt (a dialog is left for the human), then send the real spec as the coordinator's first message. Store each Dispatch ID as the task's `orca_dispatch`.
+5. **Coordinator loop** (background Bash): `check --wait --types worker_done,escalation,question` per the guide.
+   - `question` / `escalation`: relay the WHOLE text to the human; `reply` only with the human's words - never your own decision.
+   - A plan-level decision that the DAG depends on: a gate via the guide's gate verb, resolved by the human.
+   - `worker_done`: mark that task in the record (`completed`, or `stopped` on `--outcome failed`), then release the worker per the guide.
+   - Three empty waits: enumerate with the guide's list verb and follow its next action; absence is never proof a worker stopped.
+6. **Completion.** Per task, the 10.3 tracker comment (with `Worker: {dispatch id}` instead of `Teammate:`); record `status: completed`; then the Step R11 output with `Backend: orca`.
+
+---
+
 ## Status
 
 Show active team progress.
@@ -483,7 +531,7 @@ Show active team progress.
 ls ~/.claude/teams/ 2>/dev/null | grep "lets-team"
 ```
 
-Also check `.lets/execution/team-*.json` for recent records.
+Also check `.lets/execution/team-*.json` for recent records. A `backend: orca` record is shown with its tasks and `orca_dispatch` ids; its live state comes from the Orca guide's list verb, not from `TaskList()`.
 
 If no active team found:
 > "No active team. Use `/lets:team run` to start one."
@@ -536,7 +584,7 @@ Stop active team and preserve branches.
 
 ### Step T1: Find Active Team
 
-Same as Status S1.
+Same as Status S1. A running `backend: orca` record is stopped through the Orca guide's recovery / release verbs for each `orca_dispatch` (read `orca skills get orchestration --reference references/recovery-and-cleanup.md`), then the record is marked `stopped`; the Agent Teams steps below do not apply to it.
 
 ### Step T2: Confirm
 

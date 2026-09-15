@@ -18,6 +18,8 @@
 
 - **`/lets:hub`: orchestrators across projects (lets-ip06f, Orca addon).** With `LETS_LAUNCHER=orca`, one session lists the orchestrators of every project Orca knows and whether they are running. A read-only question to a stopped one is answered by a headless fork of its last session, launched with abilities narrowed rather than trusted: plan mode, only Read/Grep/Glob, no MCP servers, a filtered environment, and a refusal when `claude` cannot enforce that. Anything that would change something wakes the orchestrator in a visible Orca terminal, where you press its gates. The hub never starts a second process on a live orchestrator and never writes into another project. Scheduled digests were left out: an Orca automation cannot run in plan mode.
 
+- **`/lets:team --backend orca` (lets-ip06f, Orca addon).** With `LETS_LAUNCHER=orca` and Orca running, `/lets:team run` can run each task as a visible LETS session in an Orca child worktree under Orca's supervised orchestration instead of Agent Teams: you press each session's gates in its own terminal, and the coordinator relays workers' questions to you whole and answers only with your words. Team records now name their backend, and a run refuses a task that an active record of the other backend still holds. The Agent Teams path is unchanged.
+
 ### Fixed
 - **`/lets:worktree remove` deletes branches already merged upstream (lets-ip06f).** `git branch -d` measured "merged" against the local merge-branch, which lags its origin in a worktree setup, so remove refused branches merged on GitHub. A branch that is an ancestor of `origin/<merge-branch>` is now deleted; removing a worktree that is already gone still finishes the branch step; and remove offers to sweep the other merged task branches.
 
