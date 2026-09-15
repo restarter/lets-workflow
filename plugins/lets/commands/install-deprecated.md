@@ -89,6 +89,8 @@ Team:     /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /le
 | `/lets:worktree` | Utility | Create/manage worktrees for parallel sessions |
 | `/lets:team` | Utility | Parallel implementation with Agent Teams |
 | `/lets:status` | Utility | Read-only orient snapshot — where you are, what's in flight, what's next |
+| `/lets:orc` | Utility | Talk to this chat's orchestrator or a named peer session - ask / ping / read / tell / who |
+| `/lets:peer` | Utility | Alias: `/lets:peer <name> <verb> [text]` |
 | `/lets:note` | Utility | Add note to active task |
 | `/lets:statusline` | Utility | Manage & persist statusline appearance - light/dark, compact, hidden rows |
 | `/lets:backlog` | Planning | Backlog review (multi-agent) + `--fast` quick no-agent pulse + interactive cleanup triage |
@@ -102,6 +104,7 @@ These fire automatically when you describe the action in conversation - no slash
 | `create-task` | "create task", "new task", "bd create" and variations |
 | `commit` | "commit", "закоміть", "git commit" and variations |
 | `take-task` | "take task X", "візьми таск", "work on X", "claim task" and variations |
+| `orc` | "ask the orchestrator", "спитай у оркестратора", "message <name>", "who is working" and variations |
 
 ### Planning Skills (for bigger tasks)
 

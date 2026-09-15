@@ -58,6 +58,10 @@ See **[parallel-work.md](parallel-work.md)**.
 
 For the hands-off version — autonomous spawn → plan → execute, and off-context `--workflow` runs — see **[autonomous.md](autonomous.md)**.
 
+### An orchestrator and its workers
+
+Several chats on one repo can coordinate without you carrying messages. Start one or more orchestrators with `/lets:start --main` (give each session a name with `/rename`, and optionally `--scope "<part of the repo>"`). Worker chats are bound to one of them: `/lets:worktree create <id>` run from an orchestrator binds every worker it spawns, and a chat you open by hand takes `/lets:start <id> --orc=<name>`. From then on a worker uses `/lets:orc ask` / `ping` / `read`, `/lets:done` offers to ping the orchestrator about the PR, and an execute deviation or an undecided `/lets:opinion` offers to ask it. See **[commands/orc.md](commands/orc.md)**.
+
 ## How LETS keeps Claude on track
 
 **SessionStart + PreCompact hooks.** On every Claude Code conversation, `lets hook session-start` (and `lets hook precompact`) runs and emits a small `## LETS Config` block — plus a notice if your rules file is out of date. The workflow rules themselves live in `<project>/.claude/rules/lets-rules.md` (copied there by `/lets:init`, re-synced by `/lets:update` when a new release ships), which Claude Code loads as project instructions. SessionStart fires on new, resumed, cleared, and compacted sessions; PreCompact makes sure the rules survive when a long session gets compacted. This is what makes Claude follow the workflow without you having to remind it.
