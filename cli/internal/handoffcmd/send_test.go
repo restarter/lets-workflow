@@ -132,6 +132,26 @@ func TestTargets_AgentsOnly(t *testing.T) {
 	}
 }
 
+// An agent name and a title fragment match independently: every tab either rule
+// takes is returned, and the command's picker decides - nothing is chosen for the
+// user when a query is ambiguous.
+func TestTargets_AgentOrTitleCollision(t *testing.T) {
+	ops := &fakeOps{}
+	root, _ := useFake(t, ops)
+	a, b := term(root, "term_codex_a", "codex", ""), term(root, "term_codex_b", "codex", "")
+	c := term(root, "term_claude", "claude", "")
+	c.Title = "codex review"
+	ops.terms = []orcacmd.Terminal{a, c, b, term(root, "term_ag", "antigravity", "")}
+	res, _ := Targets(context.Background(), TargetsOptions{Root: root, Match: "codex"})
+	got := map[string]bool{}
+	for _, tg := range res.Targets.Terminals {
+		got[tg.Handle] = true
+	}
+	if len(got) != 3 || !got["term_codex_a"] || !got["term_codex_b"] || !got["term_claude"] {
+		t.Errorf("codex must match both codex tabs and the claude tab titled with it: %v", got)
+	}
+}
+
 func TestTargets_OrcaAbsent(t *testing.T) {
 	useFake(t, &fakeOps{})
 	newOps = func(context.Context) (orcaOps, *orcacmd.Failure) {
