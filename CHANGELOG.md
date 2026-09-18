@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **Hand a brief to Codex or any agent's Orca tab, and get the report back verified (lets-w5tm5).** `/lets:review-handoff` is now `/lets:handoff` (the old name stays as an alias). `--codex` runs the brief through Codex headless in a read-only sandbox; `--send` types a one-line pointer to it into an agent tab of this worktree - Codex, Antigravity, Claude - never over a busy agent or half-typed text, and waits for its report: Codex's from its own end-of-turn record (never a subagent's message, never terminal output), any other agent's from a report file the brief asks it to write. The report is relayed whole as UNVERIFIED and checked finding by finding against the code. New `lets handoff targets|send|codex|await`; the runners live in `cli/internal/agentrun`, the seam external agent providers (lets-9yz68) build on.
+
 ## [0.9.0] - 2026-09-16
 
 ### Added
