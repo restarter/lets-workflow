@@ -214,6 +214,28 @@ func TestRun_ReportRedacted(t *testing.T) {
 	}
 }
 
+// A secret whose prefix falls just before the 2 KB tail must not survive: the tail
+// is cut after redaction, so `ghp_` is still seen (review of lets-w5tm5, C2).
+func TestRun_StderrTailRedactsAcrossTheCut(t *testing.T) {
+	fakeCodex(t, "{ head -c 3000 /dev/zero | tr '\\0' x; printf 'tok %s' '"+fakeToken+"'; head -c 2010 /dev/zero | tr '\\0' y; } >&2\nexit 3\n")
+	res := codex{}.Run(context.Background(), runRequest(t))
+	if res.Reason != ReasonExitNonZero || res.StderrTail == "" {
+		t.Fatalf("result: %+v", res)
+	}
+	if strings.Contains(res.StderrTail, fakeToken[4:]) || len(res.StderrTail) > stderrTailCap {
+		t.Errorf("stderr tail leaks the token or exceeds the cap (%d bytes)", len(res.StderrTail))
+	}
+}
+
+func TestRun_ReportControlBytesReplaced(t *testing.T) {
+	fakeCodex(t, "printf '\\033]0;pwned\\007OK' > \"$out\"\n")
+	res := codex{}.Run(context.Background(), runRequest(t))
+	b, _ := os.ReadFile(res.ReportPath)
+	if !res.Complete || strings.ContainsRune(string(b), '\x1b') || !strings.Contains(string(b), "OK") {
+		t.Errorf("result %+v report %q", res, b)
+	}
+}
+
 func TestRun_WorkspaceChangedWarns(t *testing.T) {
 	fakeCodex(t, "printf 'DONE' > \"$out\"\n")
 	n := 0

@@ -10,8 +10,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	"github.com/restarter/lets-workflow/cli/internal/redact"
 )
 
 // reportFile is the provider for an agent LETS has no transcript for (Antigravity,
@@ -51,14 +49,14 @@ func (p reportFile) Await(ctx context.Context, r AwaitRequest) Result {
 			text, err := readAgentReport(AgentReport(r.OutBase))
 			switch {
 			case err != nil:
-				res.Reason, res.StderrTail = ReasonReportUnreadable, redact.Control(err.Error())
+				res.Reason, res.StderrTail = ReasonReportUnreadable, clip(err.Error())
 				return res
 			case strings.TrimSpace(text) == "":
 				res.Reason = ReasonReportEmpty
 				return res
 			}
 			if err := writeNew(report, clean(text)); err != nil {
-				res.Reason, res.StderrTail = ReasonIO, redact.Control(err.Error())
+				res.Reason, res.StderrTail = ReasonIO, clip(err.Error())
 				return res
 			}
 			checkDrift(&res, r)
@@ -82,10 +80,12 @@ func (p reportFile) Await(ctx context.Context, r AwaitRequest) Result {
 }
 
 // readAgentReport opens the agent's report without following a symlink (the agent
-// chooses what it writes; a link could point at any file) and reads at most
-// 2 x ReportCap bytes; clean caps it again.
+// chooses what it writes; a link could point at any file) and without blocking (a
+// FIFO with no writer would hang a blocking open past any timeout), refuses
+// anything but a regular file, and reads at most 2 x ReportCap bytes; clean caps it
+// again.
 func readAgentReport(path string) (string, error) {
-	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return "", err
 	}

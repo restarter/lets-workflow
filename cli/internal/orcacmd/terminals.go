@@ -35,6 +35,16 @@ type Frame struct {
 // startupWait bounds a startup wait; Run's 15 s default would cut it short.
 const startupWait = 120 * time.Second
 
+// titleCap bounds a terminal title in bytes.
+const titleCap = 200
+
+// cleanTitle is a terminal title as LETS shows and matches it: an agent or a user
+// sets it, so URL credentials, secrets and control bytes are removed and it is
+// capped before it reaches an envelope.
+func cleanTitle(s string) string {
+	return redact.Cap(redact.Control(redact.Text(redact.Creds(s))), titleCap)
+}
+
 // Terminals lists live Orca terminals. peerscmd keeps its own copy of this join
 // until lets-cbmg7 moves the peers path onto this method.
 func (c *Client) Terminals(ctx context.Context) ([]Terminal, *Failure) {
@@ -85,7 +95,7 @@ func (c *Client) Terminals(ctx context.Context) ([]Terminal, *Failure) {
 			agent = t.AgentIdentity
 		}
 		terms = append(terms, Terminal{
-			Handle: t.Handle, Path: t.WorktreePath, Title: redact.Control(t.Title),
+			Handle: t.Handle, Path: t.WorktreePath, Title: cleanTitle(t.Title),
 			AgentType: agent, State: a.State, PaneKey: key, LastOutputAt: t.LastOutputAt,
 			Writable: t.Writable, Connected: t.Connected,
 		})

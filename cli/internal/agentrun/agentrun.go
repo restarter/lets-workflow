@@ -116,9 +116,11 @@ func Outputs(base string) (report, events, stderr string) {
 func AgentReport(base string) string { return base + "-agent-report.md" }
 func AgentDone(base string) string   { return base + "-agent-report.done" }
 
-// clean redacts and caps agent output before it is written where LETS reads it.
+// clean redacts and caps agent output before it is written where LETS reads it:
+// secrets and URL credentials, then control bytes (an escape sequence in a relayed
+// report would restyle or rewrite the reader's terminal), then the cap.
 func clean(text string) string {
-	return redact.Cap(redact.Text(redact.Creds(text)), ReportCap)
+	return redact.Cap(redact.Control(redact.Text(redact.Creds(text))), ReportCap)
 }
 
 // writeNew writes a file that must not exist yet, mode 0600.

@@ -12,8 +12,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/restarter/lets-workflow/cli/internal/redact"
 )
 
 type turnState int
@@ -195,7 +193,7 @@ func (codex) Await(ctx context.Context, r AwaitRequest) Result {
 					return res
 				}
 				if err := writeNew(report, clean(s.message)); err != nil {
-					res.Reason, res.StderrTail = ReasonIO, redact.Control(err.Error())
+					res.Reason, res.StderrTail = ReasonIO, clip(err.Error())
 					return res
 				}
 				checkDrift(&res, r)

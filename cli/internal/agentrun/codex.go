@@ -15,6 +15,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode/utf8"
 
 	"github.com/restarter/lets-workflow/cli/internal/redact"
 )
@@ -36,8 +37,12 @@ var (
 	sleep = time.Sleep
 )
 
-// stderrTailCap bounds the stderr tail a Result carries.
-const stderrTailCap = 2 << 10
+// stderrTailCap bounds the stderr tail a Result carries; stderrScan is how much of
+// the end of stderr is redacted before the tail is cut from it.
+const (
+	stderrTailCap = 2 << 10
+	stderrScan    = 64 << 10
+)
 
 var threadIDRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
@@ -56,7 +61,7 @@ func (codex) Run(ctx context.Context, r Request) Result {
 	report, events, stderr := Outputs(r.OutBase)
 	res := Result{Provider: "codex", ReportPath: report, EventsPath: events, StderrPath: stderr, Warnings: []string{}}
 	ioFail := func(err error) Result {
-		res.Reason, res.StderrTail = ReasonIO, redact.Control(err.Error())
+		res.Reason, res.StderrTail = ReasonIO, clip(err.Error())
 		return res
 	}
 	bin, ok := lookCodex()
@@ -223,16 +228,25 @@ func rolloutByThread(id string) string {
 	return ""
 }
 
-// tailOf returns the end of a file, redacted and capped.
+// tailOf returns the end of a file, redacted and capped. It redacts a wide window
+// first and cuts the tail from the result: cutting first could split a secret from
+// its key or prefix (`password=`, `ghp_`), and a recognizer never sees the rest.
 func tailOf(path string) string {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return ""
 	}
-	if len(b) > stderrTailCap {
-		b = b[len(b)-stderrTailCap:]
+	if len(b) > stderrScan {
+		b = b[len(b)-stderrScan:]
 	}
-	return strings.TrimSpace(redact.Control(redact.Text(redact.Creds(string(b)))))
+	s := redact.Control(redact.Text(redact.Creds(string(b))))
+	if len(s) > stderrTailCap {
+		s = s[len(s)-stderrTailCap:]
+		for len(s) > 0 && !utf8.RuneStart(s[0]) {
+			s = s[1:]
+		}
+	}
+	return strings.TrimSpace(s)
 }
 
 // clip redacts and caps one message.

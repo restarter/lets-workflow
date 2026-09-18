@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -19,14 +20,14 @@ func reportRequest(t *testing.T) AwaitRequest {
 func TestReportFile_Complete(t *testing.T) {
 	useClock(t)
 	r := reportRequest(t)
-	write(t, AgentReport(r.OutBase), "FINDINGS "+fakeToken+" see https://user:pw@example.com/x")
+	write(t, AgentReport(r.OutBase), "FINDINGS "+fakeToken+" see https://user:pw@example.com/x \x1b[2J")
 	write(t, AgentDone(r.OutBase), "")
 	res := reportFile{name: "antigravity"}.Await(context.Background(), r)
 	if !res.Complete || res.Provider != "antigravity" || !res.Ran {
 		t.Fatalf("result: %+v", res)
 	}
 	b, _ := os.ReadFile(res.ReportPath)
-	if !strings.Contains(string(b), "FINDINGS") || strings.Contains(string(b), fakeToken) || strings.Contains(string(b), "user:pw@") {
+	if !strings.Contains(string(b), "FINDINGS") || strings.Contains(string(b), fakeToken) || strings.Contains(string(b), "user:pw@") || strings.ContainsRune(string(b), '\x1b') {
 		t.Errorf("report not redacted: %q", b)
 	}
 }
@@ -46,6 +47,27 @@ func TestReportFile_SymlinkRefused(t *testing.T) {
 	}
 	if _, err := os.Lstat(res.ReportPath); err == nil {
 		t.Error("no report may be written from a symlink")
+	}
+}
+
+// A FIFO in place of the report must not hang the wait: the open does not block
+// and anything but a regular file is refused (review of lets-w5tm5, C4).
+func TestReportFile_FIFORefused(t *testing.T) {
+	useClock(t)
+	r := reportRequest(t)
+	if err := syscall.Mkfifo(AgentReport(r.OutBase), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	write(t, AgentDone(r.OutBase), "")
+	done := make(chan Result, 1)
+	go func() { done <- reportFile{name: "antigravity"}.Await(context.Background(), r) }()
+	select {
+	case res := <-done:
+		if res.Complete || res.Reason != ReasonReportUnreadable {
+			t.Errorf("result: %+v", res)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the wait blocked on a FIFO")
 	}
 }
 

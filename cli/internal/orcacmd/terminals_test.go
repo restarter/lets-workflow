@@ -16,7 +16,7 @@ func TestTerminals_JoinAndFallback(t *testing.T) {
 			return `{"ok":true,"result":{"terminals":[
 				{"handle":"bad handle!","tabId":"t0","leafId":"l0"},
 				{"handle":"term_claude","worktreePath":"/w","title":"\u001b[31mred","tabId":"t1","leafId":"l1","agentIdentity":"claude","lastOutputAt":1789756557492,"writable":true,"connected":true},
-				{"handle":"term_ag","worktreePath":"/w","title":"ag","tabId":"t2","leafId":"l2","agentIdentity":"antigravity","lastOutputAt":5,"writable":true,"connected":false},
+				{"handle":"term_ag","worktreePath":"/w","title":"ag https://u:p@h/x ghp_abcdefghijklmnopqrstuvwxyz0123456789 ` + strings.Repeat("t", 400) + `","tabId":"t2","leafId":"l2","agentIdentity":"antigravity","lastOutputAt":5,"writable":true,"connected":false},
 				{"handle":"term_shell","worktreePath":"/w","title":"zsh","tabId":"t3","leafId":"l3","agentIdentity":null,"writable":false,"connected":true}]}}`, "", false
 		case "worktree ps":
 			return `{"ok":true,"result":{"worktrees":[{"path":"/w","agents":[{"paneKey":"t1:l1","state":"done","agentType":"claude"}]}]}}`, "", false
@@ -34,6 +34,9 @@ func TestTerminals_JoinAndFallback(t *testing.T) {
 	}
 	if strings.ContainsRune(cl.Title, '\x1b') || !strings.Contains(cl.Title, "red") {
 		t.Errorf("title not control-cleaned: %q", cl.Title)
+	}
+	if strings.Contains(ag.Title, "u:p@") || strings.Contains(ag.Title, "ghp_") || len(ag.Title) > titleCap+64 {
+		t.Errorf("title not redacted or capped: %q", ag.Title)
 	}
 	if ag.AgentType != "antigravity" || ag.State != "" || ag.PaneKey != "t2:l2" || ag.Connected {
 		t.Errorf("agentIdentity fallback: %+v", ag)
