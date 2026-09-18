@@ -132,9 +132,12 @@ func TestRun_ErrorEventIsWarning(t *testing.T) {
 }
 
 func TestRun_TimeoutKillsGroup(t *testing.T) {
-	dir := fakeCodex(t, "sh -c 'trap \"\" TERM; echo $$ > \"'\"$dir\"'/child\"; while :; do sleep 1; done' &\nsleep 30\n")
+	// The parent waits for the child's pid file before the timeout can fire, so a
+	// loaded machine cannot end the run before the SIGTERM-ignoring child exists.
+	dir := fakeCodex(t, "sh -c 'trap \"\" TERM; echo $$ > \"'\"$dir\"'/child\"; while :; do sleep 1; done' &\n"+
+		"while [ ! -s \"$dir/child\" ]; do sleep 0.05; done\nsleep 30\n")
 	req := runRequest(t)
-	req.Timeout = 300 * time.Millisecond
+	req.Timeout = 2 * time.Second
 	start := time.Now()
 	res := codex{}.Run(context.Background(), req)
 	if res.Reason != ReasonTimeout {
