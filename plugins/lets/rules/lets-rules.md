@@ -346,6 +346,7 @@ The skill walks the user through an `AskUserQuestion` for each kind — follow t
 ```
 $LETS_PR_FLOW=local   /lets:start -> Work -> /lets:check -> /lets:commit -> /lets:done (merge) -> /lets:end
 $LETS_PR_FLOW=github  /lets:start -> Work -> /lets:check -> /lets:commit -> /lets:done (push + PR) -> /lets:end
+$LETS_PR_FLOW=bitbucket  /lets:start -> Work -> /lets:check -> /lets:commit -> /lets:done (push + PR via bbb) -> /lets:end
 
 Trunk-mode (any $LETS_PR_FLOW): /lets:start (pick "Stay on current branch") -> Work -> /lets:check -> /lets:commit -> /lets:done (push + close, no PR) -> /lets:end
 
@@ -463,7 +464,8 @@ Every response ends with exactly ONE footer - never mix two. Pick the type by wh
 **Task done:**
 1. All code committed -> `/lets:done`
 2. If `$LETS_PR_FLOW == github`: pushes branch and creates PR on GitHub (task stays open until PR merge)
-3. If `$LETS_PR_FLOW != github` (local or bitbucket): merges to `$LETS_MERGE_BRANCH` locally, closes task
+3. If `$LETS_PR_FLOW == bitbucket`: pushes branch and creates PR on Bitbucket via `bbb` (task stays open until PR merge)
+4. If `$LETS_PR_FLOW == local` (or any unrecognized value): merges to `$LETS_MERGE_BRANCH` locally, closes task
 
 **Session end:**
 1. Check uncommitted changes -> suggest `/lets:commit`
