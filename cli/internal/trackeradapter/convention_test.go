@@ -151,3 +151,37 @@ func TestLoadConvention_Reasons(t *testing.T) {
 		t.Errorf("invalid: %+v %v", c, reasons)
 	}
 }
+
+// TestLoadConvention_KeysIgnoredNoID pins the silent-drop diagnosis: a board file
+// that declares branch: while nothing declares id: loses every naming key, and the
+// caller must be told why its template did not take effect.
+func TestLoadConvention_KeysIgnoredNoID(t *testing.T) {
+	main := t.TempDir()
+	// A user-authored adapter with no ## Worktree section at all.
+	writeFile(t, adapterFile(main, "planfix-mcp"), "# adapter\n\n## Capabilities\n\nnothing here.\n")
+	writeFile(t, boardFile(main, "planfix-mcp"), "# board\n\n## Worktree\n\nbranch: `feature/pwa-{id}`.\n")
+
+	c, reasons := LoadConvention(main, "planfix-mcp", "")
+	if c.Declared {
+		t.Fatalf("a convention without id: must stay undeclared: %+v", c)
+	}
+	if !slices.Contains(reasons, ReasonKeysIgnoredNoID) {
+		t.Errorf("reasons %v must name %s - otherwise the board file is ignored in silence", reasons, ReasonKeysIgnoredNoID)
+	}
+	if !slices.Contains(reasons, ReasonConventionUndeclared) {
+		t.Errorf("reasons %v must still name convention_undeclared", reasons)
+	}
+
+	// With id: added, the board's branch: takes effect and the reason is gone.
+	writeFile(t, boardFile(main, "planfix-mcp"), "# board\n\n## Worktree\n\nid: `[0-9]+`.\nbranch: `feature/pwa-{id}`.\n")
+	c, reasons = LoadConvention(main, "planfix-mcp", "")
+	if !c.Declared || c.Branch != "feature/pwa-{id}" || c.Source["branch"] != SourceBoard {
+		t.Fatalf("board branch must apply once id: is declared: %+v %v", c, reasons)
+	}
+	if slices.Contains(reasons, ReasonKeysIgnoredNoID) {
+		t.Errorf("reasons %v must not name %s once the keys are used", reasons, ReasonKeysIgnoredNoID)
+	}
+	if got, err := c.Render(c.Branch, "49514", "ignored"); err != nil || got != "feature/pwa-49514" {
+		t.Errorf("render = %q, %v; want feature/pwa-49514", got, err)
+	}
+}
