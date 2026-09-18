@@ -112,6 +112,18 @@ the reliable channel.)
 }
 ```
 
+## Persisting your choice
+
+You don't have to edit the `command` string by hand. `/lets:statusline` asks what you want - light or dark, the box or the compact bar, which rows to show - and saves it.
+
+| Command | What it does |
+|---------|--------------|
+| `/lets:statusline` | Shows what is set now, asks, and saves the answer |
+| `/lets:statusline show` | Prints the saved appearance, changes nothing |
+| `/lets:statusline reset` | Back to the defaults |
+
+It writes your **personal** `.claude/settings.local.json` (not the shared `settings.json`), so a teammate's terminal is unaffected. A statusline command in that file that is not LETS's is left alone unless you approve overwriting it (`--force` on the underlying `lets statusline config`). Restart Claude Code to apply the change.
+
 ## Where the data comes from
 
 Everything on the bar comes from the JSON Claude Code pipes in on each render —
@@ -133,6 +145,8 @@ under `.lets/cache/`:
   small right margin to absorb ambiguous-width edge cases; if a border still
   drifts, it's an ambiguous-width glyph rendering double in your font — hide the
   affected element (`--no-dir` / `--no-tip` / `--no-task`) or file an issue.
+- **A glyph your font lacks** is the usual cause: the terminal substitutes it from another font that draws it two cells wide while the renderer counts one - this is why the location pill is `»` and no longer `☰`. To check a glyph in your terminal, print it between bars under a reference line and see whether the bars line up: `printf '%s\n' 'ref |X|' 'g   |»|'`.
+- **Running `lets statusline` by hand** does not hang waiting for the JSON Claude Code normally pipes in: on a terminal it prints a short wiring hint and exits.
 
 ## See also
 

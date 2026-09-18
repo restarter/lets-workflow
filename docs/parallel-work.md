@@ -15,6 +15,8 @@ Pick a set of tasks; the system spawns one teammate per task (the count scales w
 3. Implements the task once you've approved the plan.
 4. Has its commits cherry-picked back.
 
+`/lets:team run --tasks A,B,C` names the tasks up front and skips the picker.
+
 Other subcommands: `/lets:team status` (how the teammates are doing), `/lets:team stop`.
 
 **Orca backend (addon).** With `LETS_LAUNCHER=orca` and Orca running, `/lets:team run` offers an Orca supervised run instead (`--backend orca` picks it directly): each task becomes a visible LETS session in its own Orca child worktree, you press that session's gates in its terminal, and this session coordinates - relaying every worker question to you whole and replying only with your words. A run never uses both backends for one task: a team record names its backend, and a run stops when another active record of the other backend already holds a selected task.
@@ -32,6 +34,14 @@ cd .worktrees/auth-feature && claude     # new terminal — fresh session
 ```
 
 Each worktree gets its own branch (`worktree-<name>` for new branches; or an existing branch if you pass an existing branch name and the auto-detect resolves to attach). The `.lets/` config, sessions, and plans are shared via a symlink; the task store is shared through the links your tracker adapter declares (beads: a targeted `.beads/.env` symlink, so `bd` finds the same database via git's common-dir) — both terminals see the same backlog and the same config. You get the full LETS workflow in each one. **Credential threat-model:** the linked store credential (beads: `.beads/.env`) is shared, so don't store cross-context secrets there.
+
+**Attaching an existing branch.** `/lets:worktree create <name> --branch <ref>` puts an existing branch into the worktree - slash refs such as `feature/login-fix` work, while the worktree directory keeps the slash-free `<name>`. Without `--branch`, attach vs new branch is auto-detected from whether a branch called `<name>` exists; `--attach` or `--new-branch` forces one. `/lets:worktree create <task-id>` names the branch by your tracker's convention, and `--flow plan|plan-workflow` / `--auto` choose what the new session starts in (see [autonomous.md](autonomous.md)).
+
+**One live session per worktree.** With a cmux, tmux or Orca launcher, opening a worktree that already has a session does not spawn a second one - it tells you to switch to the existing one (`already_open`).
+
+**`/lets:worktree info`** shows where you are: whether this checkout is a worktree, the main repo path, the branch, and whether the `.lets/` link is intact. `/lets:worktree list` shows them all.
+
+**Removing a worktree.** `/lets:worktree remove <name>` stops - and asks - on two different conditions: **uncommitted changes** (commit or stash first) and **commits not on the remote** (push the branch first - typical right after `/lets:done` opened a PR). Either can be forced, but only after you confirm, because forcing discards that work. A worktree Orca created is archived in Orca instead.
 
 When you're done with a worktree: `/lets:done` (and `/lets:end`) inside it, then `/lets:worktree remove <name>` from the main repo.
 

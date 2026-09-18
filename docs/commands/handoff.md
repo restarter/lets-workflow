@@ -25,7 +25,7 @@ The same selectors as `/lets:review`, so a flag reviews here or hands off there:
 | `--plan [<path>]` | a plan in `.lets/plans/` (the newest for this task when no path is given) |
 | `<PR>` / `--pr <id>` | a GitHub or Bitbucket pull request |
 | `--file <path>` | one file |
-| `--spec <path>\|none` | what the agent judges against; default: the active task's description |
+| `--spec <path>\|<task-id>\|none` | what the agent judges against - a file, a task by id, or deliberately nothing; default: the active task's description |
 
 No target: the command infers one from what you just said and did, and asks only when it cannot tell. There is no `--review` flag - every brief asks for a review.
 
@@ -34,6 +34,8 @@ No target: the command infers one from what you just said and did, and asks only
 Where the code is (repo, absolute path, branch and sha, whether it is pushed, the PR), what to review, the task's goal and the decisions not to re-open, the constraints that apply, commands that demonstrably exercise the change, and the verdict format: findings ranked BLOCKER / MAJOR / MINOR with `file:line` and a one-line overall verdict. Every brief also carries the **REMEDY QUALITY** ask - separate the symptom from its root cause and fix at the component that owns the behavior. Briefs are written in English, with absolute paths, and never paste the diff: the agent has the repo.
 
 ## Delivery
+
+`--codex` and `--send` are mutually exclusive - give both and the command stops and says so. Either one combines with any target.
 
 ### No flag
 
@@ -87,5 +89,11 @@ Files are never overwritten: a second run needs a new brief.
 | `codex_not_found` | Codex is not installed - `--send` or the printed brief still work |
 | `marker_not_found`, `timeout` | no finished turn for this brief was found in time |
 | `marker_ambiguous` | the same brief was sent twice - two sessions carry it |
+| `turn_aborted` | the agent's turn was interrupted before it finished - no partial report is shown |
+| `report_unreadable` | the agent finished, but its report file could not be read |
+| `headless_unsupported` | a headless run exists only for Codex - use `--send` for any other agent |
+| `await_unsupported_agent` | LETS cannot wait for this agent's report - read it in the agent's tab |
+| `orca_handle_stale` | the tab Orca named is gone - run again to pick a live one |
+| `not_supported` | the platform has no `lets handoff` (Windows) - the printed brief still works |
 
 Underneath is the `lets handoff targets|send|codex|await` CLI (see `cli/README.md`); the lanes and the shared safety model are in **[../messaging.md](../messaging.md)**, the Orca side in **[../orca.md](../orca.md)**.

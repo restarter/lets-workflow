@@ -13,10 +13,13 @@ Reference docs for the LETS Workflow plugin. If you haven't set it up yet, start
 | [parallel-work.md](parallel-work.md) | Working on several tasks at once — `/lets:team` (autonomous agents, one task each, isolated worktrees) and `/lets:worktree` (you, in parallel terminals). |
 | [orca.md](orca.md) | The Orca addon — what `LETS_LAUNCHER=orca` switches on (worktree launcher, the card, peer panes, `/lets:hub`, `/lets:team --backend orca`, `/lets:handoff --send`), how it degrades without Orca, and what is worth knowing. |
 | [autonomous.md](autonomous.md) | The hands-off flows — Dynamic Workflows (`--workflow`, off-context multi-agent), and the autonomous task pipeline (`--flow plan-workflow --auto`: spawn → plan → execute with two gates). Degradation and prerequisites. |
-| [tasks.md](tasks.md) | Task tracking with beads — why it's there, the task lifecycle, taking and creating tasks, notes, `/lets:backlog`, beads memory, and shared backlogs for teams. |
+| [sessions.md](sessions.md) | Session continuity — what `/lets:end` settles, snapshots (`--session`), trust-labelled commit ranges, `--continue`, and what `/lets:start` reads back. |
+| [tasks.md](tasks.md) | Task tracking (beads by default) — why it's there, the task lifecycle, taking and creating tasks, notes, `/lets:backlog`, beads memory, and shared backlogs for teams. |
+| [trackers.md](trackers.md) | Pluggable tracker adapters — `LETS_TRACKER` selects `beads` (default) or `none`, and how to write your own adapter. |
 | [commands.md](commands.md) | Full reference for every `/lets:*` command — flags, when to use which. |
 | [commands/](commands/README.md) | Per-command deep dives — one page per command with the full flag story and design guarantees. Growing over time. |
 | [configuration.md](configuration.md) | `.lets/.env` settings, the `.lets/` file layout, `lets init` vs `bd init` setup order, and dependencies. |
+| [cli.md](cli.md) | The `lets` CLI a user touches — a short index into `cli/README.md`. |
 | [statusline.md](statusline.md) | The bottom-bar box — what each line shows, width tiers, worktree behavior, and the `--light` / `--no-tip` / `--no-dir` / `--no-task` / `--compact` flags. |
 
 Building on the plugin itself? See [`CONTRIBUTING.md`](../CONTRIBUTING.md) and [`CLAUDE.md`](../CLAUDE.md) at the repo root.

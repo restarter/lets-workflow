@@ -106,6 +106,23 @@ Then inside the Claude Code session:
 
 This creates `.lets/` (gitignored), populates `.lets/.env` with sensible defaults, copies the workflow rules to `.claude/rules/lets-rules.md`, wires up the statusline, and runs `bd init` if beads is installed. Re-run anytime to self-heal drift or change config.
 
+| It asks | Detected / default |
+|---------|--------------------|
+| Response language | Taken from the language you write in; asked only when unclear |
+| PR flow | `github`, `bitbucket` or `local`; it checks `gh` auth and whether the repo has a remote, and warns about what is missing |
+| Merge branch | The branch merges and PRs target |
+| Worktree launcher | `terminal`; an installed cmux / tmux / Orca is marked `(detected)`, cmux is never offered on Linux |
+| Task tracker | `beads` or `none` |
+| Rules scope | Only with a user-scope plugin install: the project's own copy, or rely on the global rules |
+
+| It writes | When |
+|-----------|------|
+| `.lets/` layout, `.lets/.env`, LETS `.gitignore` entries, the statusline wiring | Always |
+| `.claude/rules/lets-rules.md` | Unless the project relies on the global rules |
+| `.claude/rules/tracker-<name>.md` (+ a `.board.md` you own) | For the tracker you picked |
+| `orca.yaml` | Only with `LETS_LAUNCHER=orca` - commit it |
+| `bd init` | Only with the beads tracker, and only when you accept the prompt |
+
 You're done — start working with `/lets:start`.
 
 ### Updating
@@ -114,6 +131,7 @@ With plugin auto-update enabled (above), staying current is a single self-drivin
 
 - Each run advances one step and shows exactly one next action (binary → plugin → reload → done).
 - If the binary is behind, `/lets:update` offers to run the installer in-session (approval-gated) — no terminal needed.
+- It also refreshes `.lets/.env` and the tracker adapter file. To switch trackers, edit `LETS_TRACKER` in `.lets/.env` and run `/lets:update` - it installs the new adapter and cleans up the old one.
 - It never syncs the workflow rules to a plugin that's still behind (the row shows `deferred`); it tells you to update the plugin first, so you never get stranded mid-upgrade.
 
 ---

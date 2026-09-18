@@ -36,7 +36,8 @@ Observed with Orca 1.4 (2026-09):
 - **Typed text is not always on screen.** In a Claude pane, text typed without Enter lives in Orca's draft, and the next send submits it together with the new text. `/lets:handoff --send` refuses on a draft.
 - **Tab titles rarely name the agent** (`lets-w5tm5 | …`, `t0 agy`). `/lets:handoff --send codex` matches the agent, not only the title.
 - **A scrolled pane reads as scrolled.** When you scroll a Claude tab up, Orca's screen read returns that part, not the bottom. Reports are read from files, not screens.
-- **`--auto` does not pass through Orca.** Orca starts Claude with your own agent command, so `/lets:worktree create --auto` cannot add `--permission-mode auto` there.
+- **`--auto` does not pass through Orca.** Orca starts Claude with your own agent command, so `/lets:worktree create --auto` cannot add `--permission-mode auto` there - it opens the worktree through cmux, or prints the terminal command, instead.
+- **Orca names the branch `<task-id>-<slug>`.** Not LETS's `worktree-<task-id>-<slug>`: Orca creates the worktree, so the `/`-free name is both the directory and the branch. LETS recognizes that shape when it adopts the worktree, and `/lets:start <id>` confirms the task.
 
 ## See also
 

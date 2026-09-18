@@ -13,6 +13,7 @@ Several fan-out commands take an opt-in `--workflow` flag that runs their multi-
 | `/lets:review --workflow` | Fan-out → dedupe → adversarial verify → aggregate, off-context |
 | `/lets:opinion --workflow` | Expert fan-out + a conditional adversarial-challenge round |
 | `/lets:backlog review --workflow` | Backlog review fan-out + aggregate |
+| `/lets:research --workflow` | Per-sub-question web research → per-claim `skeptic` cross-check → synthesis, off-context; the citations are the output |
 
 It's a pure performance lever — the standard (non-`--workflow`) path produces the same result, just with the intermediate agent output in your conversation. Worth it when the work is a multi-stage off-context chain with no checkpoint in the middle; if you want to steer each step, use the standard path. (`/lets:plan`'s equivalent is the standalone PREVIEW below.)
 

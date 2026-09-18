@@ -396,10 +396,14 @@ The README is the tour; **[docs/](docs/)** is the manual.
 | [parallel-work.md](docs/parallel-work.md) | Working on several tasks at once — `/lets:team` (autonomous agents) and `/lets:worktree` (parallel terminals). |
 | [orca.md](docs/orca.md) | The Orca addon — what `LETS_LAUNCHER=orca` switches on and how it degrades without Orca. |
 | [autonomous.md](docs/autonomous.md) | Hands-off flows — Dynamic Workflows (`--workflow`) and the autonomous task pipeline (spawn → plan → execute, two gates). |
+| [sessions.md](docs/sessions.md) | Session continuity — what `/lets:end` settles, snapshots, trust-labelled commit ranges, `--continue`. |
 | [tasks.md](docs/tasks.md) | Task tracking — the task lifecycle, taking and creating tasks, notes, `/lets:backlog`, beads memory, shared backlogs for teams. |
 | [trackers.md](docs/trackers.md) | Pluggable tracker adapters — `LETS_TRACKER` selects `beads` (default) \| `none`; one drift-tracked `tracker-<name>.md` per adapter, the neutral verb set, and how to add one. |
 | [commands.md](docs/commands.md) | Full reference for every `/lets:*` command. |
+| [commands/](docs/commands/README.md) | Per-command deep dives — `/lets:done`, `/lets:orc`, `/lets:handoff`, `/lets:research`. |
 | [configuration.md](docs/configuration.md) | `.lets/.env` settings, the `.lets/` file layout, `lets init` vs `bd init` setup order, and dependencies. |
+| [statusline.md](docs/statusline.md) | The statusline box — what each line shows, width tiers, flags, and `/lets:statusline` to persist your choice. |
+| [cli.md](docs/cli.md) | The `lets` CLI a user touches — an index into `cli/README.md`. |
 
 Building on the plugin itself? See [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`CLAUDE.md`](CLAUDE.md).
 

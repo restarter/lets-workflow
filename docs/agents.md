@@ -32,6 +32,10 @@ LETS ships 15 specialized agents. You don't have to pick them — the commands t
 
 **Agents respond in English.** Commands localize their output to your language (set by `LETS_LANGUAGE` — see [configuration.md](configuration.md)); the agents themselves always work in English.
 
+**Which model they run on.** Agents use the model of your session - no agent is pinned to a named model, so a newer model in your session is a newer model everywhere. The one exception is `explorer`, pinned *down* to Sonnet: mapping a codebase is mechanical work, and a cheaper model there costs nothing in quality. The verifier (`skeptic`) deliberately stays on the session model - a weaker verifier tends to answer "not real" when it cannot follow a deep finding, and that would drop genuine `[BLOCKER]`s.
+
+**Asking one expert.** `/lets:ask <expert> <question>` goes straight to the agent you name (`security`, `architect`, `docs`, `pragmatist`, ...); bare `/lets:ask` offers the four most relevant to the conversation.
+
 ## The actor agent
 
 `actor` is a meta-agent: give it a personality — a URL or a local file — and it adopts that persona, then operates with LETS's structured output. Want a senior iOS developer's take on your Swift code? A UX designer reviewing your components? Point it at their personality and get their domain-specific analysis.
