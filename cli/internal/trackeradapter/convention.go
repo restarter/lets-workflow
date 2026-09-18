@@ -17,6 +17,11 @@ const (
 	ReasonConventionUndeclared         = "convention_undeclared"
 	ReasonConventionDeclarationInvalid = "convention_declaration_invalid"
 	ReasonBoardLinksIgnored            = "board_links_ignored"
+	// ReasonKeysIgnoredNoID: branch: / worktree-branch: / accept: were declared
+	// (typically in a user-owned board file) but no id: is declared anywhere, so
+	// build() drops the whole convention. Without this reason the templates are
+	// discarded in silence and the caller renders the built-in default instead.
+	ReasonKeysIgnoredNoID = "convention_keys_ignored_no_id"
 )
 
 // Default templates for a declared convention that omits branch: / worktree-branch:.
@@ -292,8 +297,22 @@ func LoadConvention(mainRoot, tracker, pluginRoot string) (Convention, []string)
 	}
 	if !c.Declared {
 		reasons = append(reasons, ReasonConventionUndeclared)
+		if declaresWorktreeKeys(board) || declaresWorktreeKeys(base) {
+			reasons = append(reasons, ReasonKeysIgnoredNoID)
+		}
 	}
 	return c, reasons
+}
+
+// declaresWorktreeKeys reports whether raw carries a naming key that build()
+// discards when no id: is declared.
+func declaresWorktreeKeys(raw rawConvention) bool {
+	for _, k := range []string{"branch", "worktree-branch", "accept"} {
+		if _, ok := raw.keys[k]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // templateRegex compiles an anchored regex for tmpl and returns the capture index of {id}.

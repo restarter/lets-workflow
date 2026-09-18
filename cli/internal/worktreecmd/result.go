@@ -146,6 +146,10 @@ type BranchNameResult struct {
 	Slug     string `json:"slug,omitempty"`
 	Template string `json:"template,omitempty"`
 	Source   string `json:"source,omitempty"` // installed | board | plugin | default
+	// Reasons carries LoadConvention's diagnosis so a source of "default" is
+	// never unexplained: a board file whose keys were dropped says so here
+	// (convention_undeclared + convention_keys_ignored_no_id).
+	Reasons []string `json:"reasons,omitempty"`
 }
 
 // TaskStateInfo is the task-state file after (or instead of) a write.
