@@ -1,5 +1,6 @@
 ---
 description: Worktree lifecycle management - create, list, remove, info on interactive worktrees
+argument-hint: "[create <name|task-id> [--branch <ref>] [--attach|--new-branch] [--flow plan|plan-workflow] [--auto] [--orca|--cmux|--tmux]|list|info|remove <name>]"
 ---
 
 # Worktree Management

@@ -101,11 +101,11 @@ Then, inside the Claude Code session:
 | Command | Description |
 |---------|-------------|
 | `/lets:start` | Start session - restore context, show tasks, create feature branch (`--main` = no-task project-assistant mode) |
-| `/lets:end` | End session - save progress, sync tasks, write snapshot (`--session`, aliases `--snapshot` / `--pre-compact`, banks a snapshot without ending) |
+| `/lets:end` | End session - save progress, sync tasks, write snapshot (`--session`, aliases `--snapshot` / `--pre-compact` / `--compact`, banks a snapshot without ending) |
 | `/lets:commit` | Commit with review and conventional commit format |
 | `/lets:done` | Finish task - create PR (GitHub or Bitbucket) or merge locally |
 | `/lets:status` | Read-only orient snapshot — where you are, what's in flight, what's next (tracker-universal) |
-| `/lets:note` | Add note to active task (`--session`, aliases `--snapshot` / `--pre-compact`, snapshots the session) |
+| `/lets:note` | Add note to active task (`--session`, aliases `--snapshot` / `--pre-compact` / `--compact`, snapshots the session) |
 
 ### Planning & Execution
 
@@ -113,7 +113,8 @@ Then, inside the Claude Code session:
 |---------|-------------|
 | `/lets:backlog` | Backlog review (multi-agent, `--workflow` = off-context) + `--fast` quick no-agent pulse + interactive cleanup triage |
 | `/lets:plan` | Structured planning - explore codebase, design architecture, write plan (`--fast` = orchestrator-only, no subagents; `--idea` = concept document, no code) |
-| `/lets:execute` | Execute plan from `/lets:plan` via native plan mode |
+| `/lets:plan-workflow` | PREVIEW - autonomous planning via a Dynamic Workflow: goal + rubric up front, off-context, you approve at the end (`--fast` = lean budget) |
+| `/lets:execute` | Execute plan from `/lets:plan` via native plan mode - straight-through by default, or `--step` / `--auto` / `--team` |
 | `/lets:team` | Parallel implementation with Agent Teams |
 | `/lets:worktree` | Create/manage worktrees for parallel sessions |
 | `/lets:statusline` | Manage & persist statusline appearance - light/dark, compact, hidden rows |
@@ -138,7 +139,7 @@ Then, inside the Claude Code session:
 | `/lets:github-pr` | GitHub PR review lifecycle - analyze, discuss, post inline, follow-up, approve |
 | `/lets:review-round` | Work through a received review round - triage comments, record decisions, one final edit-pass |
 | `/lets:opinion` | Technical decision analysis (dynamic expert agents in parallel) |
-| `/lets:ask` | Quick expert consultation (single agent) |
+| `/lets:ask` | Quick expert consultation (single agent) - `/lets:ask <expert> <question>` |
 | `/lets:research` | Web-sourced cited answer to an external/technical question - cross-check flags weak/contradicted claims (`--workflow` off-context, `--project` repo-grounded) |
 
 ### Init & Update
