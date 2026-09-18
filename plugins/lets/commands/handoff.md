@@ -36,7 +36,7 @@ Produce ONE message the user copies into another agent. That agent has NO contex
 
 Selectors match `/lets:review`, with two deliberate differences: `--commits` / `--range` are **handoff-only** (review has no target for "the commits that answer a review round"), and `--pr` is kept as an alias because it is the spelling this tool shipped with. Review's output modifiers `--json` and `--workflow` are **not** implemented here.
 
-`--codex` and `--send [<tab>]` are delivery modifiers (Step 7), combinable with any target and mutually exclusive. `/lets:review-handoff` is an alias of this command (the old name).
+`--codex` and `--send [<tab>]` are delivery modifiers (Step 7), combinable with any target and mutually exclusive. `/lets:review-handoff` is a deprecated alias of this command (the old name), to be removed in a future release.
 
 ## Step 1: Determine the target
 

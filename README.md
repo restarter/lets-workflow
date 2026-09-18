@@ -129,7 +129,7 @@ Then, inside the Claude Code session:
 | `/lets:review` | Full code review with dynamic agent selection + verify pass |
 | `/lets:github-pr` | GitHub PR review lifecycle - analyze, discuss, post inline, follow-up, approve |
 | `/lets:review-round` | Work through a received review round - triage comments, record decisions, one final edit-pass |
-| `/lets:handoff` | Hand-off brief so another agent (fresh session, Codex, Antigravity, external reviewer) can pick up the exact state and review it - same target selectors as `/lets:review`, plus `--commits` / `--range`. `--codex` runs it through Codex headless, `--send` types it into an agent's Orca tab, and the report comes back verified against the code (old name `/lets:review-handoff` still works) |
+| `/lets:handoff` | Hand-off brief so another agent (fresh session, Codex, Antigravity, external reviewer) can pick up the exact state and review it - same target selectors as `/lets:review`, plus `--commits` / `--range`. `--codex` runs it through Codex headless, `--send` types it into an agent's Orca tab, and the report comes back verified against the code (old name `/lets:review-handoff` is a deprecated alias) |
 | `/lets:opinion` | Technical decision analysis (dynamic expert agents in parallel) |
 | `/lets:ask` | Quick expert consultation (single agent) |
 | `/lets:research` | Web-sourced cited answer to an external/technical question - cross-check flags weak/contradicted claims (`--workflow` off-context, `--project` repo-grounded) |
