@@ -95,7 +95,8 @@ func BranchName(ctx context.Context, dir string, o BranchNameOptions) (*BranchNa
 	if err != nil {
 		pluginRoot = ""
 	}
-	conv, _ := trackeradapter.LoadConvention(mainRoot, tracker, pluginRoot)
+	conv, reasons := trackeradapter.LoadConvention(mainRoot, tracker, pluginRoot)
+	res.Reasons = reasons
 	key, tmpl := "branch", trackeradapter.DefaultBranch
 	if o.Worktree {
 		key, tmpl = "worktree-branch", trackeradapter.DefaultWorktreeBranch

@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- **A board file that forgets `id:` is no longer ignored in silence.** A project whose tracker adapter declares no `## Worktree` section can put the whole convention in its board file - but a board declaring only `branch:` lost it: the convention is gated on `id:`, so every naming key was dropped and `lets worktree branch-name` rendered the built-in `feature/{id}-{slug}` with `source: default` and no explanation (the diagnosis was computed and discarded at the call site). `branch-name` now returns `reasons[]`, and a convention dropped for a missing `id:` is named by `convention_keys_ignored_no_id` alongside `convention_undeclared`. Declaring `id:` in the board file next to `branch:` is the fix on the project side.
+
 ## [0.9.0] - 2026-09-16
 
 ### Added
