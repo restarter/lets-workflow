@@ -1,0 +1,25 @@
+  delivers, forms a parabola. Real main cables sit between the two, close to the parabola. Having no bending stiffness, the cable settles into the one shape in which every part is in
+  pure tension, gathering the pull of the hangers into a large force running along the cable toward each end.
+  Where the cable meets a tower, that force has a vertical and a horizontal component. The towers take the vertical part. The cables pass over saddles at the tower tops, delivering the
+  downward force into the towers as compression, which travels to foundations on bedrock or deep caissons. Because the cable pulls roughly equally on both sides of each saddle, the
+  horizontal forces largely cancel, leaving the tower loaded mostly along its axis.
+  The horizontal component ends at the anchorages. At each end the main cables splay into strands tied into massive concrete blocks or rock tunnels, which resist the pull through sheer
+  weight, friction, and the passive resistance of the ground behind them. On a major bridge those forces run to tens of thousands of tonnes, which is why anchorages are often the
+  bulkiest structures on the site. Self-anchored designs, a rarer variant, tie the cables into the deck instead, which then carries the horizontal force as compression.
+  Dead load is steady; live load and wind are not. A single heavy truck would tend to pull a flexible cable into a local kink, so a stiffening girder or truss in the deck spreads
+  concentrated loads across many hangers. Aerodynamics matters just as much. The 1940 collapse of the Tacoma Narrows Bridge showed that a slender deck can twist in wind until it tears
+  itself apart; modern decks use streamlined box sections or open trusses that let air pass without feeding those oscillations.
+  The result is a clean division of labour: hangers and cables in tension, towers in compression, anchorages holding against the ground, and the deck distributing load and resisting
+  wind. By asking each element to do only what it does best, the suspension bridge reaches spans no other bridge form can match.
+✻ Baked for 44s · done 8:35 PM
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ ⚘ LETS Workflow v0.9.0 ·  » lets-w5tm5-run-review-handoff-briefs-through-codex-and-read-t  · ⎇ lets-w5tm5-run-review-ha… │
+  │ ✦ Opus 5 xhigh · window 11% (110k/1000k) · 5h 1% · 7d 9%                                               │
+  ├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ ✓ lets-w5tm5 Run review-handoff briefs through Codex and read the final report · ← /lets:note                            │
+  │ * Done in a worktree? /lets:done, then /lets:worktree remove from main.                                                  │
+  └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+  ⏵⏵ auto mode on (shift+tab to cycle)

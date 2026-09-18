@@ -40,7 +40,7 @@ func TestShippedLaunchers_MatchSubcommands(t *testing.T) {
 	// Hand-maintained because cobra cannot tell a launcher subcommand from any
 	// other (init, hook, …). Adding a launcher means adding it here AND to
 	// ShippedLaunchers - the test then enforces the subcommand exists.
-	for _, name := range []string{"cmux", "tmux"} {
+	for _, name := range []string{"cmux", "tmux", "orca"} {
 		if registered[name] && !whitelisted[name] {
 			t.Errorf("`lets %s` is registered but %q is missing from ShippedLaunchers (init would reject a working launcher)", name, name)
 		}

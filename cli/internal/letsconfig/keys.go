@@ -109,7 +109,7 @@ var Keys = []Key{
 	},
 	{
 		Name:      "LETS_LAUNCHER",
-		Comment:   "Worktree launcher: terminal (print the cd command) | cmux (cmux workspace, macOS only) | tmux (tmux window/session, Linux + macOS)",
+		Comment:   "Worktree launcher: terminal (print the cd command) | cmux (cmux workspace, macOS only) | tmux (tmux window/session, Linux + macOS) | orca (Orca app worktree + agent, falls back to cmux/terminal; also the one switch for every Orca integration: peer transport, card, /lets:hub, /lets:team orca backend)",
 		Default:   "terminal",
 		UserLevel: true,
 	},

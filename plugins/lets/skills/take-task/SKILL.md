@@ -67,12 +67,8 @@ GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
 
 **If in a worktree** (`$GIT_DIR` contains `worktrees/`):
 - Skip branch creation - use the current worktree branch as-is
-- Two branch shapes possible (`/lets:worktree create` supports both):
-  - `worktree-<task-id>-<slug>` — new-branch mode (the LETS convention); auto-detect task ID
-  - any other shape (e.g. `feature/foo`) — attached existing branch via `lets worktree create --attach`; no task ID in the name
-- Task-id pattern is TRACKER-DEPENDENT (see detect-task): beads `<prefix>-<alphanum>[.<number>]` (e.g. `lets-abc`, `lets-abc.1`); a numeric-id tracker uses a pure-numeric id
-- If task ID found in branch name: confirm with user via the tracker's `show` verb
-- If branch shape is "attached" (no matching task ID): rely on the task-id passed as the skill argument — don't try to extract from the branch name
+- Go reads the branch against the active tracker's convention: `lets worktree info --json --task-candidate --plugin-root "${CLAUDE_PLUGIN_ROOT}"`. `task_candidate.source=created` (the adapter's `branch:` / `worktree-branch:` shape, default `worktree-<task-id>-<slug>`) is this branch's task: confirm it with the user via the tracker's `show` verb. Any other result is an attached or externally named branch (e.g. `feature/foo`): rely on the task-id passed as the skill argument - never guess an id from the name by eye. No `lets` binary: the shapes are the ones detect-task Step 1 lists.
+- **Derived id (`.task` carries `origin: branch` or `origin: dir`).** `lets worktree adopt` guessed the id from the branch or directory name. When take-task did NOT receive the id as its argument, confirm with the user that the derived id is the task, and when Step 1's `show` returned `in_progress` (before this claim) warn in one line that it may already be claimed in another worktree. An explicit id argument supersedes the guess with no question, so unattended `--flow` / `--auto` spawns never stop here. Step 5 clears `origin:`.
 - Present: "In worktree, using branch: {branch}"
 - Jump to Step 5
 
@@ -81,9 +77,13 @@ GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
 
 ### Step 4: Branch Logic (main repo only)
 
-**Branch naming:** `feature/<task-id>-<slugified-title>`
-Slug rules: lowercase, spaces to hyphens, remove special chars, max 50 chars.
-Examples: `feature/proj-ch15-fix-proxy-config`, `feature/proj-ch5-add-mobile-api`
+**Branch naming:** the active tracker convention names the branch, and Go renders it. Write the task title with the Write tool to `.lets/cache/title-<session6>.txt` (6 = first chars of `$CLAUDE_CODE_SESSION_ID`; the title is untrusted text and never typed into a shell), then:
+
+```bash
+lets worktree branch-name --task '<task-id>' --title-file .lets/cache/title-<session6>.txt --plugin-root "${CLAUDE_PLUGIN_ROOT}" --json
+```
+
+Use `branch` (e.g. `feature/proj-ch15-fix-proxy-config`; a board file can declare `feature/PWA-45122-fix-login`). No `lets` binary: the documented default `feature/<task-id>-<slug>` (slug: lowercase, spaces to hyphens, special chars removed, max 50 chars).
 
 Check current state:
 - Already on correct branch -> do nothing, continue to Step 5
@@ -107,11 +107,8 @@ AskUserQuestion(
 
 Handle response:
 - **Branch** -> `git checkout -b <branch> {LETS_MERGE_BRANCH}` (from LETS Config)
-- **Worktree** -> invoke `Skill(skill: "lets:worktree", args: "create <task-id>-<slug>")`, then inform:
-  "Worktree created. Open a new terminal and run:"
-  `cd {absolute-worktree-path} && claude`
-  "Then use `/lets:start` to pick a task."
-  Stop here - the worktree session continues in a separate terminal.
+- **Worktree** -> invoke `Skill(skill: "lets:worktree", args: "create <task-id> --title-file .lets/cache/title-<session6>.txt")` (the id, not a name: the worktree command renders the adapter's `worktree-branch:` name from it), then relay how the new session opens - the worktree command's own output names it (a terminal command, or a cmux / tmux / Orca pane already running `/lets:start <task-id>`).
+  Stop here - the worktree session continues in a separate terminal or pane.
 - **Stay on current branch** -> skip `git checkout -b`; stay on the current branch (could be `$LETS_MERGE_BRANCH` or any pre-existing branch). Print one line:
   "Staying on `{current branch}`. No new branch created."
   If `HEAD == $LETS_MERGE_BRANCH`, append: " Trunk-mode: `/lets:done` will push + close (no PR — same-source-target)."
@@ -119,8 +116,7 @@ Handle response:
 
 ### Step 5: Save Task State File
 
-Write the per-branch task-state file `.lets/sessions/.task-<branch-slug>` with three fields:
-`task:` (identity), `start:` (task boundary - preserved across resume of the same task, reset on a new/changed task or when the recorded SHA is no longer an ancestor of HEAD), and `session: <sha> <session-id>` (this session's boundary, always refreshed). Atomic (`tmp`+`mv`) so a crash never leaves a half-written file. `<task-id>` is the claimed id; `{LETS_MERGE_BRANCH}` is from LETS Config.
+Write the per-branch task-state file `.lets/sessions/.task-<branch-slug>`: `task:` (identity), `start:` (task boundary - preserved across resume of the same task, reset on a new/changed task or when the recorded SHA is no longer an ancestor of HEAD), and `session: <sha> <session-id>` (this session's boundary, always refreshed); `origin:` is cleared (the id is now confirmed) and every other line - `orc:` included - is kept. `lets worktree task-state` owns the file (merge-write under a lock, validated values); without the binary, an atomic `tmp`+`mv` rewrite keeps the other lines too. `<task-id>` is the claimed id.
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
@@ -128,7 +124,7 @@ BRANCH=$(git branch --show-current); BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
 mkdir -p "$LETS_PROJECT_ROOT/.lets/sessions"
 TASK_FILE="$LETS_PROJECT_ROOT/.lets/sessions/.task-${BRANCH_SLUG}"
 HEAD_SHA=$(git rev-parse HEAD)
-MERGE_BRANCH="{LETS_MERGE_BRANCH}"; CLAIMED_ID="<task-id>"; SID="$CLAUDE_CODE_SESSION_ID"
+CLAIMED_ID="<task-id>"; SID="$CLAUDE_CODE_SESSION_ID"
 
 PREV_TASK=""; PREV_START=""
 if [ -f "$TASK_FILE" ]; then
@@ -142,13 +138,25 @@ else
   START="$HEAD_SHA"
 fi
 
-tmp=$(mktemp "${TASK_FILE}.XXXX")
-{
-  echo "task: $CLAIMED_ID"
-  echo "start: $START"
-  echo "session: $HEAD_SHA $SID"
-} > "$tmp" && mv -f "$tmp" "$TASK_FILE"
+if command -v lets >/dev/null 2>&1; then
+  # {ORC_FLAG}: --orc '<name>' when args carried orc="<name>" and this is not the merge-branch (single-quoted, '\'' escaping); else empty
+  lets worktree task-state set --task "$CLAIMED_ID" --start "$START" --session-sha "$HEAD_SHA" --session-id "$SID" --clear-origin {ORC_FLAG} --create --json
+  lets peers role set worker --task "$CLAIMED_ID" --session "$SID" --cwd "$LETS_PROJECT_ROOT" --json
+else
+  tmp=$(mktemp "${TASK_FILE}.XXXX")
+  {
+    [ -f "$TASK_FILE" ] && grep -v -e '^task: ' -e '^start: ' -e '^session: ' -e '^origin: ' "$TASK_FILE"
+    echo "task: $CLAIMED_ID"
+    echo "start: $START"
+    echo "session: $HEAD_SHA $SID"
+  } > "$tmp" && mv -f "$tmp" "$TASK_FILE"
+fi
 ```
+
+On `ok=false` surface `error.message` - the claim succeeded but the boundary file did not, so `/lets:done` cannot measure the task until it is fixed.
+
+- **Orchestrator binding (`orc="<name>"` in the args, from detect-task's `--orc` strip).** Pass it as `{ORC_FLAG}`; Go validates the name and a refusal is one line with nothing written. A trunk-mode claim (HEAD is `{LETS_MERGE_BRANCH}`) ignores it with one line - the merge-branch never carries a binding. When the envelope reports `rebound.from`, say in one line that this branch moved from that orchestrator to the new one.
+- **Worker role.** The second call registers this session as the task's worker so orchestrators see it in `lets peers who`. A non-ok envelope (e.g. `session_not_in_registry`) is one line - never hidden, a silent failure leaves the worker unregistered. Without the binary the no-binary branch skips it; say so in one line.
 
 ### Step 6: Context Recovery (existing branch)
 

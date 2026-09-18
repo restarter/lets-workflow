@@ -195,9 +195,9 @@ func TestHookSessionStart_SessionRefreshGating(t *testing.T) {
 		stdin     string
 		refreshed bool
 	}{
-		{"startup refreshes", `{"session_id":"NEWSID","source":"startup"}`, true},
-		{"resume untouched", `{"session_id":"NEWSID","source":"resume"}`, false},
-		{"compact untouched", `{"session_id":"NEWSID","source":"compact"}`, false},
+		{"startup refreshes", `{"session_id":"0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d","source":"startup"}`, true},
+		{"resume untouched", `{"session_id":"0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d","source":"resume"}`, false},
+		{"compact untouched", `{"session_id":"0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d","source":"compact"}`, false},
 		{"empty session_id no-op", `{"session_id":"","source":"startup"}`, false},
 		{"malformed stdin no-op", `not json at all`, false},
 		{"empty stdin no-op", ``, false},
@@ -241,8 +241,8 @@ func TestHookSessionStart_SessionRefreshGating(t *testing.T) {
 				t.Errorf("task:/start: not preserved:\n%s", s)
 			}
 			if tc.refreshed {
-				if !strings.Contains(s, "session: "+head+" NEWSID") {
-					t.Errorf("expected session refreshed to %q NEWSID, got:\n%s", head, s)
+				if !strings.Contains(s, "session: "+head+" 0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d") {
+					t.Errorf("expected session refreshed to %q with the new sid, got:\n%s", head, s)
 				}
 				if strings.Contains(s, "OLDSID") {
 					t.Errorf("old sid still present after refresh:\n%s", s)

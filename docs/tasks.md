@@ -14,7 +14,7 @@ LETS is task-driven: every session starts by picking a task, every commit links 
 /lets:start  ──►  in_progress  ──►  …work, commits…  ──►  /lets:done  ──►  closed (or PR merged)
 ```
 
-A task and a session aren't the same thing: a **session** is one conversation (`/lets:start` … `/lets:end`); a **task** is picked at start and finished with `/lets:done`, and may span several sessions. When you come back to an unfinished task, `/lets:start` restores its context from the task's comments.
+A task and a session aren't the same thing: a **session** is one conversation (`/lets:start` … `/lets:end`); a **task** is picked at start and finished with `/lets:done`, and may span several sessions. When you come back to an unfinished task, `/lets:start` restores its context from the latest session snapshot file first, then the task's comments. The snapshot is local (`.lets/sessions/`, gitignored), so a teammate on another machine gets the comments only.
 
 ## Taking a task
 
@@ -23,7 +23,19 @@ A task and a session aren't the same thing: a **session** is one conversation (`
 - `/lets:start <task-id>` — jump straight to a specific task.
 - `/lets:start --continue` — resume the task you had in progress.
 
-Picking a task sets it to `in_progress` and creates the feature branch (`feature/<task-id>-<slug>`). If you describe work without picking a task, one is created for you, so there's still a traceable record.
+Picking a task sets it to `in_progress` and asks where to work: **Branch** (a new `feature/<task-id>-<slug>`, the default), **Worktree** (a separate directory for parallel work) or **Stay on current branch** (on the merge branch this is trunk-mode - see below). Inside a worktree the current branch is used as-is. If you describe work without picking a task, one is created for you, so there's still a traceable record.
+
+### Where to work: branch, worktree, or trunk-mode
+
+| Pick | When it fits | What `/lets:done` does |
+|------|--------------|------------------------|
+| **Branch** (default) | Normal task work | PR (or a local merge) from `feature/<task-id>-<slug>` |
+| **Worktree** | You want this task in a separate directory and its own Claude session, in parallel with another - see [parallel-work.md](parallel-work.md) | The same, from the worktree's branch |
+| **Stay on current branch** | On the merge branch this is **trunk-mode**: quick docs, a spec, a small fix that is not worth a PR. On any other branch it is the normal PR flow from that branch | Trunk-mode: pushes the merge branch and closes the task - no PR, since source and target are the same |
+
+Trunk-mode is a per-task choice, detected from where HEAD is - there is no setting to flip. It is the one exception to "never edit the merge branch", and it excludes a worktree.
+
+**A branch with no task id in its name.** LETS does not guess. It searches the tracker with the words of the branch name, proposes the match and says why ("this branch looks like ... - the slug matches its title"), and asks you to confirm before the id is used for anything - even when there is exactly one candidate. With nothing found it shows the in-progress tasks to choose from; it never takes the first, because on a shared board that one may be a colleague's.
 
 In conversation, "take task X" / "work on X" / "switch to task X" triggers the same flow (the `take-task` skill) — it claims the task, handles any uncommitted changes, and prepares the branch.
 

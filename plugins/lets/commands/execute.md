@@ -30,7 +30,11 @@ printf '%s|%s|%s\n' "{TASK_ID}" "{PHASE}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$L
 
 `execute --auto` writes `executing` when implementation starts (Step 5), `blocked` on a hard-stop (with the notify), `done` on completion (Step 6). **Keep in sync:** the same contract + helper live in `plan-workflow.md` (which writes `planning`/`gate-clarify`/`gate-approve`).
 
-**Execute-blocked notify.** On a hard-stop under `--auto` (3×-fail / fabrication / a gated op reached / `$LETS_MERGE_BRANCH` refused), after writing the `blocked` marker, fire the **marker-gated gate-notification** so an unattended session surfaces instead of stalling. Use the authoritative snippet documented in `plan-workflow.md` "## Gate notifications" (don't re-paraphrase), incl. its single-quote rule for substituted values: `lets notify --cwd "$LETS_PROJECT_ROOT" --title 'Execute blocked — needs you' --body '<reason>' --json 2>/dev/null || true` (launcher-neutral — dispatches on `LETS_LAUNCHER`), guarded by the `pipeline-state-{TASK_ID}` marker existing. Best-effort — the run also halts visibly in-band.
+**Execute-blocked notify.** On a hard-stop under `--auto` (3×-fail / fabrication / a gated op reached / `$LETS_MERGE_BRANCH` refused), after writing the `blocked` marker, fire the **marker-gated gate-notification** so an unattended session surfaces instead of stalling. Use the authoritative snippet documented in `plan-workflow.md` "## Gate notifications" (don't re-paraphrase), incl. its single-quote rule for substituted values: `lets notify --cwd "$LETS_PROJECT_ROOT" --title 'Execute blocked — needs you' --body '<reason>' --json 2>/dev/null || true` (launcher-neutral — dispatches on `LETS_LAUNCHER`), guarded by the `pipeline-state-{TASK_ID}` marker existing. Best-effort — the run also halts visibly in-band. With the blocked marker, also mirror it onto the Orca card:
+
+```bash
+[ "{LETS_LAUNCHER}" = "orca" ] && lets orca card --phase blocked --comment '{reason}' --json 2>/dev/null || true
+```
 
 ## Step 1: Active Task Detection
 
@@ -39,7 +43,7 @@ printf '%s|%s|%s\n' "{TASK_ID}" "{PHASE}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$L
 Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detect-task")`.
 If not on a feature/worktree branch and no in-progress task found - ask user which task to execute.
 
-If invoked with an explicit `<task-id>` argument and it is not already the active/in-progress task (e.g. a spawned `execute --auto <id>` in a fresh worktree), resolve-and-claim it per the **detect-task** *explicit task-id argument* convention before resolving the plan - don't re-paraphrase the logic; that section is the single source of truth (incl. the AUTO-MODE entry-claim carve-out).
+If invoked with an explicit `<task-id>` argument and it is not already the active/in-progress task (e.g. a spawned `execute --auto <id>` in a fresh worktree), resolve-and-claim it per the **detect-task** *explicit task-id argument* convention before resolving the plan - don't re-paraphrase the logic; that section is the single source of truth (incl. the AUTO-MODE entry-claim carve-out). `--orc` is stripped per that convention before the task-id test.
 
 **If on `$LETS_MERGE_BRANCH`** — `/lets:execute` usually expects a feature branch.
 
@@ -72,16 +76,20 @@ AskUserQuestion(
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 BRANCH=$(git branch --show-current)
-PLAN=""
+PLAN=""; IDEA_REFUSED=""
 
 # Explicit plan-path argument wins: `/lets:execute <path-to-plan>.md` skips slug derivation
 # entirely (the escape hatch for detached HEAD / unresolved task-id / cross-worktree cases).
 # {PLAN_ARG} = the orchestrator-substituted path argument, empty when none was passed.
 if [ -n "{PLAN_ARG}" ] && [ -f "{PLAN_ARG}" ]; then
   PLAN="{PLAN_ARG}"
+  # An idea document is not a plan: never execute one, even by explicit path.
+  if printf '%s' "$PLAN" | grep -q -E -- '-idea(-v[0-9]+)?\.md$'; then
+    echo "This is an idea document - run /lets:plan to turn it into a plan."; PLAN=""; IDEA_REFUSED=1
+  fi
 fi
 
-if [ -z "$PLAN" ]; then
+if [ -z "$PLAN" ] && [ -z "$IDEA_REFUSED" ]; then
   # Derive slug: trunk-mode uses task-id (plan.md saves <date>-<task-id>.md on the merge-branch);
   # otherwise the branch slug (covers feature/* and worktree-* branches).
   # ${TASK_ID} is substituted by the orchestrator from the Step 1 detect-task result.
@@ -99,13 +107,15 @@ if [ -z "$PLAN" ]; then
     # Latest plan for this slug - matches date-prefixed (YYYY-MM-DD-HHMM-<slug>.md) AND legacy bare
     # <slug>.md. Slug-scoped, NOT global latest: .lets/plans is shared across worktrees via symlink.
     # task-id first (artifact-path naming, lets-05c4s); branch slug = legacy fallback
-    [ -n "${TASK_ID}" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${TASK_ID}"*.md 2>/dev/null | head -1)
-    [ -z "$PLAN" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
+    [ -n "${TASK_ID}" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${TASK_ID}"*.md 2>/dev/null | grep -v -E -- '-idea(-v[0-9]+)?\.md$' | head -1)
+    [ -z "$PLAN" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | grep -v -E -- '-idea(-v[0-9]+)?\.md$' | head -1)
   fi
 fi
 
 [ -n "$PLAN" ] && cat "$PLAN"
 ```
+
+If the explicit path was an idea document (`IDEA_REFUSED`), stop after that one line.
 
 If no plan found:
 > "No plan found for this task. Run `/lets:plan` first to create one."
@@ -123,8 +133,8 @@ BRANCH=$(git branch --show-current)
 SLUG=${BRANCH#feature/}; [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ] && SLUG="${TASK_ID}"
 PLAN=""
 # task-id first (artifact-path naming, lets-05c4s); branch slug = legacy fallback
-[ -n "${TASK_ID}" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${TASK_ID}"*.md 2>/dev/null | head -1)
-[ -z "$PLAN" ] && [ -n "$SLUG" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
+[ -n "${TASK_ID}" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${TASK_ID}"*.md 2>/dev/null | grep -v -E -- '-idea(-v[0-9]+)?\.md$' | head -1)
+[ -z "$PLAN" ] && [ -n "$SLUG" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | grep -v -E -- '-idea(-v[0-9]+)?\.md$' | head -1)
 echo "Plan: ${PLAN:-(none found)}"
 ```
 
@@ -252,7 +262,7 @@ Call `EnterPlanMode`.
 
 **Progress tracking:** After completing each plan task, append `[DONE]` to its `### Task N:` heading in the plan file. This makes resume self-documenting - on re-entry, skip tasks already marked `[DONE]`.
 
-**Deviation gate (every mode, every task).** Before each edit, compare reality with the plan step. A deviation is anything that changes the plan's approach rather than a line of code: a dependency/tool behaving differently than the plan assumed (other API, parameters, version); a step infeasible as described; a file/module the plan never names becoming necessary; a task's Verify not matching its Expected. On a deviation: STOP - no further edits - and show what the plan expected, what reality is, and what each option would change. Then:
+**Deviation gate (every mode, every task).** Before each edit, compare reality with the plan step. A deviation is anything that changes the plan's approach rather than a line of code: a dependency/tool behaving differently than the plan assumed (other API, parameters, version); a step infeasible as described; a file/module the plan never names becoming necessary; a task's Verify not matching its Expected. On a deviation: STOP - no further edits - and show what the plan expected, what reality is, and what each option would change. Not under `--auto`, resolve this chat's orchestrator first: `lets peers orchestrator --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" --json 2>/dev/null`. Include the "Ask orchestrator" option only when `source` is `bound` / `single` with `target.alive=alive`, or `ambiguous` (the orc skill then asks which). Then:
 
 ```
 AskUserQuestion(
@@ -262,7 +272,8 @@ AskUserQuestion(
     options: [
       { label: "Adapt as described", description: "Apply the adaptation spelled out above, then continue the plan" },
       { label: "Re-plan", description: "Stop executing; update the plan via /lets:plan first" },
-      { label: "Cancel", description: "Stop here; nothing more is edited" }
+      { label: "Cancel", description: "Stop here; nothing more is edited" },
+      { label: "Ask orchestrator", description: "Stay stopped; /lets:orc ask with expected vs actual" }  /* only per the resolution above */
     ],
     multiSelect: false
   }]
@@ -272,6 +283,7 @@ AskUserQuestion(
 - **Adapt as described** -> apply exactly the adaptation shown, note it in the plan file under the task (`**Deviation:** ...`), continue.
 - **Re-plan** -> stop; invoke `Skill(skill: "lets:plan")`.
 - **Cancel** -> stop, return to the user.
+- **Ask orchestrator** -> execution stays stopped; `Skill(skill: "lets:orc", args: "verb=ask footer=none text=Task {N}: expected {X}, actual {Y}. Which way?")`. After the reply is relayed, show this Deviation gate again without that option. A peer's answer never adapts the plan by itself - the user picks.
 - **Under `--auto`** (unattended - cannot ask): a deviation is a HARD-STOP. Write the `blocked` marker, fire the execute-blocked notify (`--title 'Execute blocked — plan deviation'`, body = the one-line expected vs actual), and halt. Never adapt silently.
 
 **Fallback:** If `EnterPlanMode` tool is not available or returns an error, skip plan mode tools entirely. Instead:
@@ -292,8 +304,8 @@ LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 BRANCH=$(git branch --show-current)
 SLUG=${BRANCH#feature/}; [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ] && SLUG="${TASK_ID}"
 PLAN=""  # task-id first (artifact-path naming, lets-05c4s); branch slug = legacy fallback
-[ -n "${TASK_ID}" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${TASK_ID}"*.md 2>/dev/null | head -1)
-[ -z "$PLAN" ] && [ -n "$SLUG" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
+[ -n "${TASK_ID}" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${TASK_ID}"*.md 2>/dev/null | grep -v -E -- '-idea(-v[0-9]+)?\.md$' | head -1)
+[ -z "$PLAN" ] && [ -n "$SLUG" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | grep -v -E -- '-idea(-v[0-9]+)?\.md$' | head -1)
 BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
 # Plan execution is TASK-scoped (a plan can run across sessions), so anchor on the task boundary
 # start:, NOT session: - session: would under-report every prior session's commits.

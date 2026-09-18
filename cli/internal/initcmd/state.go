@@ -2,12 +2,10 @@ package initcmd
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -41,63 +39,9 @@ func DetectProjectRoot() string {
 	return gitutil.ProjectRoot("", 2*time.Second)
 }
 
-// DetectInsideWorktreeAt returns (insideWorktree, mainRepoRoot) for the
-// given path; passing path=="" inspects the current working directory.
-// mainRepoRoot is empty when not inside any git repo. This is the single
-// canonical worktree detector used across the CLI — both cwd-based callers
-// (`lets init`, `lets update`) and path-anchored callers (`lets worktree
-// create/info`) route through it.
-//
-// Mechanism: `git rev-parse --git-dir` points at the worktree's
-// `<main>/.git/worktrees/<name>` when inside a worktree, while
-// `--git-common-dir` always points at the main repo's `.git`. They differ
-// iff we're inside a worktree. Normalize both paths via filepath.Abs before
-// comparing — git returns absolute when run from repo root and relative
-// (e.g. "../../.git") when run from a subdirectory, so without normalization
-// a subfolder of the main repo would be false-positively classified as a
-// worktree (Phase 4b smoke-test regression preserved here). Substring-match
-// on "/worktrees/" was tried and rejected (path could legitimately contain
-// that segment).
-func DetectInsideWorktreeAt(path string) (bool, string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	resolve := func(arg string) (string, bool) {
-		args := []string{"rev-parse", arg}
-		if path != "" {
-			args = []string{"-C", path, "rev-parse", arg}
-		}
-		out, err := exec.CommandContext(ctx, "git", args...).Output()
-		if err != nil {
-			return "", false
-		}
-		raw := strings.TrimSpace(string(out))
-		base := path
-		if base == "" {
-			base, _ = os.Getwd()
-		}
-		if !filepath.IsAbs(raw) && base != "" {
-			raw = filepath.Join(base, raw)
-		}
-		abs, err := filepath.Abs(raw)
-		if err != nil {
-			return "", false
-		}
-		return abs, true
-	}
-
-	gitDir, ok := resolve("--git-dir")
-	if !ok {
-		return false, ""
-	}
-	commonDir, ok := resolve("--git-common-dir")
-	if !ok {
-		return false, ""
-	}
-	// commonDir resolves to <main>/.git — parent is the main repo root.
-	mainRoot := filepath.Dir(commonDir)
-	return gitDir != commonDir, mainRoot
-}
+// DetectInsideWorktreeAt returns (insideWorktree, mainRepoRoot) for path; the
+// detector itself lives in gitutil (so orcacmd/peerscmd need no initcmd import).
+func DetectInsideWorktreeAt(path string) (bool, string) { return gitutil.DetectInsideWorktreeAt(path) }
 
 // DetectInsideWorktree returns just the boolean for cwd. DRY shim over
 // DetectInsideWorktreeAt.

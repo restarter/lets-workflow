@@ -1,6 +1,6 @@
 ---
 name: tracker-beads
-version: 0.8.0
+version: 0.9.0
 ---
 
 <!-- DO NOT EDIT installed copies in .claude/rules/ - managed by `lets init` / `lets update`. Edit the source in plugins/lets/rules/. -->
@@ -37,6 +37,16 @@ The reference adapter. Binds the neutral verbs to the `bd` CLI - the historical,
 ## Degradation
 
 beads supports every verb, so nothing degrades. A CORE verb that somehow fails (e.g. `bd` not on PATH) must HARD-FAIL loud (e.g. "close FAILED - task NOT closed"); never report a phantom success.
+
+## Worktree
+
+links: `.beads/.env` (0600).
+id: `[a-z][a-z0-9]*-[a-z0-9]+(\.[0-9]+)?`.
+branch: `feature/{id}-{slug}`.
+worktree-branch: `worktree-{id}-{slug}`.
+accept: `{id}-{slug}`.
+
+The store credential is shared by every worktree of the repo: each worktree gets a symlink to the main checkout's `.beads/.env`, and missing parent directories are created 0700. `branch:` / `worktree-branch:` are the names LETS creates, so a branch in one of those shapes is that task's branch; `accept:` is recognized only by `lets worktree adopt` (a worktree Orca or a teammate named `<id>-<slug>`), and that candidate is confirmed before use.
 
 ## Notes
 

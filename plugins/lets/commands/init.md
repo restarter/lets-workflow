@@ -178,23 +178,25 @@ Bind to `$BRANCH`. "Other" free-text → use as-is.
 uname -s                                                 # Darwin | Linux
 command -v tmux >/dev/null 2>&1 && echo TMUX_PRESENT || echo TMUX_ABSENT
 command -v cmux >/dev/null 2>&1 && echo CMUX_PRESENT || echo CMUX_ABSENT
+lets orca status --json 2>/dev/null || true               # status.bin set = Orca detected (app bundle or a verified PATH hit)
 ```
 
 Build the options from the probe:
 - **Terminal** (Recommended) — always offered: `"Print a cd command to run in a new terminal. Works everywhere."`
 - **tmux** — offer on any unix (`Darwin` or `Linux`). Append ` (detected)` to the label when `TMUX_PRESENT`; when `TMUX_ABSENT` the description reads `"Open in a tmux window/session. tmux is not installed — falls back to terminal until you install it."`, else `"Open in a tmux window/session automatically (Linux + macOS)."`
 - **cmux** — offer ONLY when `uname -s` is `Darwin`. Append ` (detected)` when `CMUX_PRESENT`. **Omit the option entirely on Linux** — cmux is macOS-only.
+- **Orca** — offer on any unix. Append ` (detected)` when `lets orca status --json` reports `status.bin` (the one detector: it also finds `~/Applications/Orca.app` and rejects a non-Orca `orca` on PATH, such as the GNOME screen reader). Description: `"Worktrees open in Orca; also enables Orca peer messaging, card status, /lets:hub and the team orca backend"`. Orca is an opt-in addon: without this choice LETS never looks up an Orca binary.
 
 AskUserQuestion(
   questions=[{
     question: "How should LETS open new worktree sessions?",
     header: "Launcher",
-    options: [ /* Terminal always; tmux on unix; cmux only on macOS — annotate (detected) per the probe */ ],
+    options: [ /* Terminal always; tmux and Orca on unix; cmux only on macOS — annotate (detected) per the probe */ ],
     multiSelect: false
   }]
 )
 
-Bind label (lowercased, first word, drop a trailing ` (detected)`) to `$LAUNCHER`: "Terminal"→"terminal", "cmux"→"cmux", "tmux"→"tmux". No launcher needs extra setup — each degrades to the terminal flow when its binary (or platform) is absent (the `lets cmux` / `lets tmux` launcher handles the fallback).
+Bind label (lowercased, first word, drop a trailing ` (detected)`) to `$LAUNCHER`: "Terminal"→"terminal", "cmux"→"cmux", "tmux"→"tmux", "Orca"→"orca". No launcher needs extra setup — each degrades to the terminal flow when its binary (or platform) is absent (the `lets cmux` / `lets tmux` / `lets orca` launcher handles the fallback; Orca falls back to cmux, then terminal). On **Orca**, tell the user in one line: `lets init` writes `orca.yaml` (its setup hook runs `lets worktree adopt`, its archive hook `lets worktree release`) - commit it, and approve it once in Orca when Orca asks to trust the file.
 
 ### 2c-quater. Task tracker adapter
 
@@ -360,7 +362,7 @@ AskUserQuestion(
 
 If "Keep current" picked, substitute `$LANG = $CURRENT_LANG`. Else use selected label. "Other" free-text (auto-added by tool) → use the **ENGLISH name** of the language (Chinese, Polish, German, Russian, Japanese, ...). If the user types a native-script name (`Русский`, `Українська`, `日本語`, `中文`, `Deutsch`, ...), **normalise it to the English name** before binding — same rule as Step 2a; every value in `.lets/.env` is in English.
 
-Repeat for MergeBranch (`$BRANCH`), PRFlow (`$FLOW`), and Launcher (`$LAUNCHER` — "Keep current" shows `$LETS_LAUNCHER` from LETS Config, plus options terminal / cmux / tmux — apply the same detection-aware filtering as 2c-ter: omit cmux off macOS, mark a launcher `(detected)` when its binary is on PATH).
+Repeat for MergeBranch (`$BRANCH`), PRFlow (`$FLOW`), and Launcher (`$LAUNCHER` — "Keep current" shows `$LETS_LAUNCHER` from LETS Config, plus options terminal / cmux / tmux / orca — apply the same detection-aware filtering as 2c-ter: omit cmux off macOS, mark a launcher `(detected)` when its binary is on PATH (Orca: when `lets orca status --json` reports `status.bin`); picking orca gets the same `orca.yaml` line).
 
 **Rules scope** — first run the **Global-rules check** from Step 2d (it computes `SCOPE`/`GLOBAL`/`PROJECT`; the change-config path does not otherwise set them). Then only ask when `GLOBAL=PRESENT` (otherwise there's nothing to rely on; bind `$RULES_SCOPE_FLAG=""`):
 

@@ -30,6 +30,34 @@ const EXPERTS = (input.experts && input.experts.length)
 const PLAN_REVIEWERS = (input.planReviewers && input.planReviewers.length) ? input.planReviewers : [{ name: 'architect' }, { name: 'pragmatist' }]
 const PLAN_CHECKER = input.planChecker || { name: 'pragmatist' }
 
+// ── BUDGET (KEEP IN SYNC with plan-workflow.md Step 2.5) ──
+// `model` overrides the model of every spawned agent (absent = each agent's own default).
+// `budget` caps per-stage agent counts; it can only LOWER a stage (never add agents), every
+// value is clamped to MIN/MAX, and every clamp or dropped item is logged in counts.budget.drops.
+// No budget and no model = every helper below is the identity, so a default run is unchanged.
+const MODEL = (typeof input.model === 'string' && /^[A-Za-z0-9.\[\]_-]{1,64}$/.test(input.model)) ? input.model : null
+const RAW_BUDGET = (input.budget && typeof input.budget === 'object') ? input.budget : null
+const MIN = { explorers: 1, approaches: 1, judges: 1, evaluators: 0, plan_reviewers: 0, plan_checker: 0 }
+const MAX = { explorers: 5, approaches: 4, judges: 5, evaluators: 5, plan_reviewers: 4, plan_checker: 1 }
+const CAPS = {}, DROPS = []
+if (RAW_BUDGET) for (const k of Object.keys(MIN)) {
+  if (RAW_BUDGET[k] == null) continue
+  const n = Math.trunc(Number(RAW_BUDGET[k]))
+  const c = Number.isFinite(n) ? Math.min(MAX[k], Math.max(MIN[k], n)) : null
+  if (c == null) continue
+  if (c !== n) DROPS.push({ stage: k, clamped: true, requested: RAW_BUDGET[k], applied: c })
+  CAPS[k] = c
+}
+function agentOpts(opts) { return MODEL ? { ...opts, model: MODEL } : opts }
+function capStage(stage, list, labelOf) {
+  const cap = CAPS[stage]
+  if (cap == null || list.length <= cap) return list
+  const kept = list.slice(0, cap), dropped = list.slice(cap)
+  DROPS.push({ stage, kept: kept.length, dropped: dropped.length, dropped_labels: dropped.map(labelOf) })
+  return kept
+}
+function budgetOut() { return { model: MODEL, caps: CAPS, drops: DROPS } }
+
 // ── SCHEMAS ──
 const EXPLORE_SCHEMA = {
   type: 'object', additionalProperties: false,
@@ -187,7 +215,7 @@ ${TASK_BLOCK}
 CODEBASE MAP (from explorers):
 ${JSON.stringify(map, null, 2)}
 
-Propose 2-4 CONCRETE, DISTINCT implementation approaches grounded in this codebase (not abstract labels). Give each a stable id (A, B, C, ...), a short name, a summary, the key tradeoff, and the files it would touch. Each approach must take a meaningfully different path.${FAST ? `\n\nORDER the approaches BEST-FIRST against the RUBRIC above (the strongest-fit approach as the FIRST array element). In fast mode ONLY the first approach is architected and judged, so its ordering is the actual selection - rank deliberately.` : ''}`
+Propose 2-4 CONCRETE, DISTINCT implementation approaches grounded in this codebase (not abstract labels). Give each a stable id (A, B, C, ...), a short name, a summary, the key tradeoff, and the files it would touch. Each approach must take a meaningfully different path.${FAST ? `\n\nORDER the approaches BEST-FIRST against the RUBRIC above (the strongest-fit approach as the FIRST array element). In fast mode ONLY the first approach is architected and judged, so its ordering is the actual selection - rank deliberately.` : (CAPS.approaches != null ? `\n\nORDER the approaches BEST-FIRST against the RUBRIC above (the strongest-fit approach as the FIRST array element). Only the first ${CAPS.approaches} will be architected and judged, so the ordering is the actual selection - rank deliberately.` : '')}`
 }
 
 function archPrompt(a, map) {
@@ -315,36 +343,39 @@ ${JSON.stringify(findings, null, 2)}`
 
 // ── ORCHESTRATION (autonomous multi-stage off-context chain, no user gate between stages) ──
 phase('Explore')
-const exploreRaw = await parallel(FOCUS.map(f => () =>
-  agent(explorePrompt(f), { agentType: 'lets:explorer', label: `explore:${f.name}`, schema: EXPLORE_SCHEMA })))
+const FOCUS_RUN = capStage('explorers', FOCUS, f => f.name)
+const exploreRaw = await parallel(FOCUS_RUN.map(f => () =>
+  agent(explorePrompt(f), agentOpts({ agentType: 'lets:explorer', label: `explore:${f.name}`, schema: EXPLORE_SCHEMA }))))
 const map = exploreRaw.filter(Boolean)
 if (map.length === 0) {
-  return { error: 'exploration_failed', plan_markdown: null, decision_log: null, winner: null, approaches: [], eval_findings: [], counts: { mode: MODE, explorers: 0 } }
+  return { error: 'exploration_failed', plan_markdown: null, decision_log: null, winner: null, approaches: [], eval_findings: [], counts: { mode: MODE, explorers: 0, budget: budgetOut() } }
 }
 
 phase('Approaches')
-const approachesRes = await agent(approachesPrompt(map), { agentType: 'lets:architect', label: 'approaches', schema: APPROACHES_SCHEMA })
+const approachesRes = await agent(approachesPrompt(map), agentOpts({ agentType: 'lets:architect', label: 'approaches', schema: APPROACHES_SCHEMA }))
 const approaches = (approachesRes && approachesRes.approaches) ? approachesRes.approaches : []
 if (approaches.length === 0) {
-  return { error: 'no_approaches', plan_markdown: null, decision_log: null, winner: null, approaches: [], eval_findings: [], counts: { mode: MODE, explorers: map.length, approaches: 0 } }
+  return { error: 'no_approaches', plan_markdown: null, decision_log: null, winner: null, approaches: [], eval_findings: [], counts: { mode: MODE, explorers: map.length, approaches: 0, budget: budgetOut() } }
 }
 
 phase('Architect')
 // Fast: architect only the top approach (best-first per the fast approachesPrompt ordering) -> 1 architect, not N.
-const archInput = FAST ? approaches.slice(0, 1) : approaches
+// A budget cap on `approaches` keeps the first N the same way (approachesPrompt asks for best-first order then).
+const archInput = capStage('approaches', FAST ? approaches.slice(0, 1) : approaches, a => a.id)
 const archRaw = await parallel(archInput.map(a => () =>
-  agent(archPrompt(a, map), { agentType: 'lets:architect', label: `arch:${a.id}`, schema: ARCH_SCHEMA })
+  agent(archPrompt(a, map), agentOpts({ agentType: 'lets:architect', label: `arch:${a.id}`, schema: ARCH_SCHEMA }))
     .then(r => (r ? { ...r, approach: a.id, name: a.name } : null))))
 const archs = archRaw.filter(Boolean)
 if (archs.length === 0) {
-  return { error: 'architecture_failed', plan_markdown: null, decision_log: null, winner: null, approaches, eval_findings: [], counts: { mode: MODE, explorers: map.length, approaches: approaches.length, architected: 0 } }
+  return { error: 'architecture_failed', plan_markdown: null, decision_log: null, winner: null, approaches, eval_findings: [], counts: { mode: MODE, explorers: map.length, approaches: approaches.length, architected: 0, budget: budgetOut() } }
 }
 const archIds = archs.map(a => a.approach)
 
 phase('Judge')
 const JUDGE_SCHEMA = buildJudgeSchema(archIds)
-const judgeRaw = await parallel(JUDGES.map(j => () =>
-  agent(judgePrompt(archs, archIds), { agentType: `lets:${j.name}`, label: `judge:${j.name}`, schema: JUDGE_SCHEMA })))
+const JUDGES_RUN = capStage('judges', JUDGES, j => j.name)
+const judgeRaw = await parallel(JUDGES_RUN.map(j => () =>
+  agent(judgePrompt(archs, archIds), agentOpts({ agentType: `lets:${j.name}`, label: `judge:${j.name}`, schema: JUDGE_SCHEMA }))))
 const judgeResults = judgeRaw.filter(Boolean)
 let { winner, decision_log } = aggregateJudges(judgeResults, archIds)
 if (winner == null && FAST && archIds.length === 1) {
@@ -355,31 +386,34 @@ if (winner == null && FAST && archIds.length === 1) {
 }
 if (winner == null) {
   // judges all errored AND >1 candidate -> do NOT silently pick; surface it (anti-silent-fail).
-  return { error: 'judge_failed', plan_markdown: null, decision_log, winner: null, approaches, eval_findings: [], counts: { mode: MODE, explorers: map.length, approaches: approaches.length, architected: archs.length, judges: 0 } }
+  return { error: 'judge_failed', plan_markdown: null, decision_log, winner: null, approaches, eval_findings: [], counts: { mode: MODE, explorers: map.length, approaches: approaches.length, architected: archs.length, judges: 0, budget: budgetOut() } }
 }
 const winnerArch = archs.find(a => a.approach === winner)
 
 phase('Evaluate')
-const evalRaw = await parallel(EXPERTS.map(e => () =>
-  agent(evalPrompt(winnerArch), { agentType: `lets:${e.name}`, label: `eval:${e.name}`, schema: EVAL_SCHEMA })))
+const EXPERTS_RUN = capStage('evaluators', EXPERTS, e => e.name)
+const evalRaw = await parallel(EXPERTS_RUN.map(e => () =>
+  agent(evalPrompt(winnerArch), agentOpts({ agentType: `lets:${e.name}`, label: `eval:${e.name}`, schema: EVAL_SCHEMA }))))
 const evalFindings = evalRaw.filter(Boolean).flatMap(r => r.findings || [])
 
 phase('Plan')
-const planRes = await agent(planPrompt(winnerArch, evalFindings), { agentType: 'lets:architect', label: 'plan', schema: PLAN_SCHEMA })
+const planRes = await agent(planPrompt(winnerArch, evalFindings), agentOpts({ agentType: 'lets:architect', label: 'plan', schema: PLAN_SCHEMA }))
 let planMd = planRes ? planRes.plan_markdown : null
 if (planMd == null) {
   // Plan synthesis itself wiped out (agent error / null plan_markdown). Surface a typed error like the
   // four upstream stages instead of falling through to the success return with a null plan (anti-silent-fail).
-  return { error: 'plan_synthesis_failed', plan_markdown: null, decision_log, winner, approaches, eval_findings: evalFindings, counts: { mode: MODE, explorers: map.length, approaches: approaches.length, architected: archs.length, judges: judgeResults.length } }
+  return { error: 'plan_synthesis_failed', plan_markdown: null, decision_log, winner, approaches, eval_findings: evalFindings, counts: { mode: MODE, explorers: map.length, approaches: approaches.length, architected: archs.length, judges: judgeResults.length, budget: budgetOut() } }
 }
 
 // Stage 7-8: review the WRITTEN plan (mirror /lets:review --plan) + revise. Never lose planMd on agent error.
 // Fast mode SKIPS this heavy pass only; the quick Plan Check/Refine below runs in BOTH modes.
+// A budget of plan_reviewers=0 skips it too - as a named skip, never as review_failed (an empty panel is not an error).
 phase('Plan Review')
-let reviewFindings = [], reviewVerdict = null, reviewFailed = false, reviewFixed = false, reviewSkipped = false
-if (!FAST && planMd) {
-  const prRaw = await parallel(PLAN_REVIEWERS.map(r => () =>
-    agent(planReviewPrompt(planMd), { agentType: `lets:${r.name}`, label: `planreview:${r.name}`, schema: PLAN_REVIEW_SCHEMA })
+let reviewFindings = [], reviewVerdict = null, reviewFailed = false, reviewFixed = false, reviewSkipped = false, reviewSkipReason = null
+const REVIEWERS_RUN = capStage('plan_reviewers', PLAN_REVIEWERS, r => r.name)
+if (!FAST && planMd && REVIEWERS_RUN.length > 0) {
+  const prRaw = await parallel(REVIEWERS_RUN.map(r => () =>
+    agent(planReviewPrompt(planMd), agentOpts({ agentType: `lets:${r.name}`, label: `planreview:${r.name}`, schema: PLAN_REVIEW_SCHEMA }))
       .then(x => (x ? { ...x, agent: r.name } : null))))
   const prRes = prRaw.filter(Boolean)
   reviewFailed = prRes.length === 0
@@ -387,23 +421,28 @@ if (!FAST && planMd) {
   reviewVerdict = prRes.length === 0 ? null : (prRes.some(r => r.verdict === 'NEEDS REVISION') ? 'NEEDS REVISION' : 'APPROVED')
   if (reviewFindings.length > 0) {
     phase('Revise')
-    const rev = await agent(revisePrompt(planMd, reviewFindings), { agentType: 'lets:architect', label: 'revise:review', schema: REVISE_SCHEMA })
+    const rev = await agent(revisePrompt(planMd, reviewFindings), agentOpts({ agentType: 'lets:architect', label: 'revise:review', schema: REVISE_SCHEMA }))
     if (rev && rev.plan_markdown) { planMd = rev.plan_markdown; reviewFixed = true }
   }
 } else if (FAST && planMd) {
   reviewSkipped = true  // deliberate fast-mode skip (NOT a silent skip / agent error)
+} else if (planMd) {
+  reviewSkipped = true; reviewSkipReason = 'budget'  // plan_reviewers capped to 0
 }
 
 // Stage 9-10: quick 5-lens check (mirror /lets:check --plan) + refine. Catches regressions the revise introduced.
+// A budget of plan_checker=0 skips it as a named skip (check_skipped + check_skip_reason), never as check_failed.
 phase('Plan Check')
-let checkFindings = [], checkVerdict = null, checkFailed = false, checkFixed = false
-if (planMd) {
-  const chk = await agent(planCheckPrompt(planMd), { agentType: `lets:${PLAN_CHECKER.name}`, label: 'plancheck', schema: PLAN_CHECK_SCHEMA })
+let checkFindings = [], checkVerdict = null, checkFailed = false, checkFixed = false, checkSkipped = false
+if (planMd && CAPS.plan_checker === 0) {
+  checkSkipped = true
+} else if (planMd) {
+  const chk = await agent(planCheckPrompt(planMd), agentOpts({ agentType: `lets:${PLAN_CHECKER.name}`, label: 'plancheck', schema: PLAN_CHECK_SCHEMA }))
   checkFailed = !chk
   if (chk) { checkFindings = chk.findings || []; checkVerdict = chk.verdict }
   if (checkFindings.length > 0) {
     phase('Refine')
-    const ref = await agent(revisePrompt(planMd, checkFindings), { agentType: 'lets:architect', label: 'refine:check', schema: REVISE_SCHEMA })
+    const ref = await agent(revisePrompt(planMd, checkFindings), agentOpts({ agentType: 'lets:architect', label: 'refine:check', schema: REVISE_SCHEMA }))
     if (ref && ref.plan_markdown) { planMd = ref.plan_markdown; checkFixed = true }
   }
 }
@@ -416,11 +455,12 @@ return {
   review_findings: reviewFindings,
   check_findings: checkFindings,
   // Self-repair audit: review pass skipped in fast (review_skipped says why); check pass runs in BOTH modes (real verdict).
-  refinement_log: { review_verdict: reviewVerdict, review_findings: reviewFindings.length, review_fixed: reviewFixed, review_failed: reviewFailed, review_skipped: reviewSkipped, check_verdict: checkVerdict, check_findings: checkFindings.length, check_fixed: checkFixed, check_failed: checkFailed },
+  // Budget skip keys are added only when set, so a run without `budget` returns today's refinement_log shape.
+  refinement_log: { review_verdict: reviewVerdict, review_findings: reviewFindings.length, review_fixed: reviewFixed, review_failed: reviewFailed, review_skipped: reviewSkipped, ...(reviewSkipReason ? { review_skip_reason: reviewSkipReason } : {}), check_verdict: checkVerdict, check_findings: checkFindings.length, check_fixed: checkFixed, check_failed: checkFailed, ...(checkSkipped ? { check_skipped: true, check_skip_reason: 'budget' } : {}) },
   decision_log,
   winner,
   winner_name: winnerArch ? winnerArch.name : null,
   approaches: approaches.map(a => ({ id: a.id, name: a.name, summary: a.summary })),
   eval_findings: evalFindings,
-  counts: { mode: MODE, explorers: map.length, approaches: approaches.length, architected: archs.length, judges: judgeResults.length, experts: evalRaw.filter(Boolean).length, eval_findings: evalFindings.length, review_findings: reviewFindings.length, check_findings: checkFindings.length },
+  counts: { mode: MODE, explorers: map.length, approaches: approaches.length, architected: archs.length, judges: judgeResults.length, experts: evalRaw.filter(Boolean).length, eval_findings: evalFindings.length, review_findings: reviewFindings.length, check_findings: checkFindings.length, budget: budgetOut() },
 }

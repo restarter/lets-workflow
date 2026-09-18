@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 
 	"github.com/restarter/lets-workflow/cli/internal/envfile"
+	"github.com/restarter/lets-workflow/cli/internal/trackeradapter"
 )
 
 // shippedTrackers is the set of plugin-shipped adapter names (the value of
@@ -18,15 +18,10 @@ import (
 // plugins/lets/rules/tracker-*.md files and the CONTRIBUTING recipe.
 var shippedTrackers = []string{"beads", "none"}
 
-// trackerNameRe constrains an adapter name to a branch/path-safe shape. The
-// value flows into filepath.Join for both the write target and the cleanup
-// glob, and reaches model context via the SessionStart hook - so a hand-edited
-// .env value like "../../etc/x" must never be used unvalidated.
-var trackerNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
-
 // ValidTrackerName reports whether s is a safe adapter name. Exported so
-// updatecmd can apply the same path guard before filepath.Join.
-func ValidTrackerName(s string) bool { return trackerNameRe.MatchString(s) }
+// updatecmd can apply the same path guard before filepath.Join. The ONE shape
+// (and its path-guard rationale) lives on trackeradapter.NameRe.
+func ValidTrackerName(s string) bool { return trackeradapter.NameRe.MatchString(s) }
 
 // resolvedTracker reads the resolved LETS_TRACKER from the project .env.
 // Callers run AFTER RegenerateEnv (init Step 5 precedes Step 8b), so the file

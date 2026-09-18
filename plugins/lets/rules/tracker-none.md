@@ -1,6 +1,6 @@
 ---
 name: tracker-none
-version: 0.8.2
+version: 0.9.0
 ---
 
 <!-- DO NOT EDIT installed copies in .claude/rules/ - managed by `lets init` / `lets update`. Edit the source in plugins/lets/rules/. -->
@@ -36,3 +36,12 @@ None tracked. `set-status` / `close` are no-ops.
 ## Degradation
 
 Every verb is unsupported, so every tracker action degrades: the command continues and states plainly that no task tracker is configured (`LETS_TRACKER=none`). Nothing crashes, nothing is silently dropped as if it had been recorded. A flow that requires a task (e.g. `/lets:start`'s task gate) tells the user there is no tracker rather than fabricating one.
+
+## Worktree
+
+links: nothing.
+id: nothing.
+branch: `feature/{id}-{slug}`.
+worktree-branch: `worktree-{id}-{slug}`.
+
+No local store to link, and no id is ever derived from a branch or directory name: an id comes only from an explicit argument or the `.task` file. The branch templates still name the branches LETS creates for an id you pass.

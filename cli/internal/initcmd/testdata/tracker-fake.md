@@ -35,3 +35,9 @@ A deliberately partial adapter. It supports the CORE verbs, marks three OPTIONAL
 ## Degradation
 
 `search`, `ready/stats` and `label` are absent: a caller continues and tells the user the capability is unavailable - `detect-task`'s fallback drops to `list-by-status` and confirms, `/lets:backlog` omits the totals line, `create-task` proposes a label by hand. A CORE verb that fails at runtime HARD-FAILs loud; `close` returning `in_review` is NOT a failure, it is the declared outcome, and the caller reports a handoff rather than a close.
+
+## Worktree
+
+links: `.fake/token.json` (0600).
+id: `FAKE-[0-9]+`.
+branch: `task/{id}`.

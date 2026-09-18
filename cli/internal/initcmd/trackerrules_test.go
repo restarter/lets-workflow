@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/restarter/lets-workflow/cli/internal/trackeradapter"
+
 	"github.com/restarter/lets-workflow/cli/internal/frontmatter"
 )
 
@@ -382,6 +384,20 @@ func TestTrackerBeads_BindsBdCommands(t *testing.T) {
 			}
 		}
 	}
+	// The ## Worktree declaration is part of what beads binds: the store link and the
+	// task id / branch convention every worktree and branch path reads (lets-ip06f).
+	worktree := sectionSpan(content, "## Worktree")
+	for _, line := range []string{
+		"links: `.beads/.env` (0600).",
+		"id: `[a-z][a-z0-9]*-[a-z0-9]+(\\.[0-9]+)?`.",
+		"branch: `feature/{id}-{slug}`.",
+		"worktree-branch: `worktree-{id}-{slug}`.",
+		"accept: `{id}-{slug}`.",
+	} {
+		if !strings.Contains(worktree, line) {
+			t.Errorf("tracker-beads.md ## Worktree must declare %q", line)
+		}
+	}
 	// (The label-group progress + priority-histogram Notes bindings were removed with the
 	// 5-view /lets:status dashboards in the orient unification (lets-qsgmd); no command
 	// renders the NN/MM bars now, so there is nothing left to pin here.)
@@ -587,6 +603,128 @@ func TestShippedTrackers_MatchOnDisk(t *testing.T) {
 	for n := range inSlice {
 		if !onDisk[n] {
 			t.Errorf("shippedTrackers lists %q but no tracker-%s.md on disk (broken whitelist)", n, n)
+		}
+	}
+}
+
+// TestTrackerRules_WorktreeLinks: every live adapter declares its store links in
+// `## Worktree`, and the declaration parses. worktreecmd links exactly what this
+// line says, so an adapter without it would silently link nothing (lets-ip06f 1.4).
+func TestTrackerRules_WorktreeLinks(t *testing.T) {
+	for _, path := range adapterPaths(t) {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if sectionSpan(string(data), "## Worktree") == "" {
+			t.Errorf("%s: no ## Worktree section", filepath.Base(path))
+			continue
+		}
+		if _, err := trackeradapter.ParseWorktree(string(data)); err != nil {
+			t.Errorf("%s: links declaration: %v", filepath.Base(path), err)
+		}
+	}
+}
+
+// TestTrackerRules_WorktreeConvention: every live adapter declares a task id and
+// branch convention that parses, and the declared shapes behave as documented for
+// that adapter (lets-ip06f 1.4b).
+func TestTrackerRules_WorktreeConvention(t *testing.T) {
+	type sample struct {
+		branch string
+		set    trackeradapter.ShapeSet
+		want   string // "" = must not parse
+	}
+	samples := map[string][]sample{
+		"tracker-beads.md": {
+			{"lets-ip06f-peer-messaging-orca", trackeradapter.CreatedAndAccepted, "lets-ip06f"},
+			{"lets-ip06f-peer-messaging-orca", trackeradapter.Created, ""},
+			{"feature/x", trackeradapter.CreatedAndAccepted, ""},
+			{"main", trackeradapter.CreatedAndAccepted, ""},
+		},
+		"tracker-none.md": {
+			{"feature/lets-abc-fix", trackeradapter.CreatedAndAccepted, ""},
+			{"worktree-48647-lifecycle", trackeradapter.CreatedAndAccepted, ""},
+		},
+		"tracker-fake.md": {
+			{"task/FAKE-12", trackeradapter.Created, "FAKE-12"},
+			{"feature/FAKE-12-x", trackeradapter.Created, ""},
+		},
+	}
+	for _, path := range adapterPaths(t) {
+		base := filepath.Base(path)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		c, err := trackeradapter.ParseConvention(string(data))
+		if err != nil {
+			t.Errorf("%s: %v", base, err)
+			continue
+		}
+		if !c.Declared {
+			t.Errorf("%s: no id: declaration (a shipped adapter must declare, `id: nothing.` included)", base)
+			continue
+		}
+		if base == "tracker-beads.md" {
+			for _, id := range []string{"lets-abc", "lets-ip06f", "lets-abc.1"} {
+				for _, tmpl := range []string{c.Branch, c.WorktreeBranch} {
+					name, err := c.Render(tmpl, id, "fix-login")
+					if err != nil {
+						t.Errorf("beads render %q with %q: %v", tmpl, id, err)
+						continue
+					}
+					if got, _, ok := c.ParseBranch(name, trackeradapter.Created); !ok || got != id {
+						t.Errorf("beads round trip %q: got %q %v", name, got, ok)
+					}
+				}
+			}
+		}
+		for _, s := range samples[base] {
+			got, _, ok := c.ParseBranch(s.branch, s.set)
+			if s.want == "" && ok {
+				t.Errorf("%s: %q must not parse, got %q", base, s.branch, got)
+			}
+			if s.want != "" && (!ok || got != s.want) {
+				t.Errorf("%s: %q parsed to %q %v, want %q", base, s.branch, got, ok, s.want)
+			}
+		}
+	}
+}
+
+// TestConventionConsumersUseGo pins that the markdown consumers of the task id /
+// branch convention ask Go (`lets worktree info --task-candidate`, `lets worktree
+// branch-name`) instead of matching a regex or rendering a template by eye, and that
+// the historical `feature/<task-id>-<slug>` shape survives only as the no-binary default.
+func TestConventionConsumersUseGo(t *testing.T) {
+	const legacyShape = "feature/<task-id>-<slug>"
+	cases := []struct{ file, heading, call, fallback string }{
+		{"skills/detect-task/SKILL.md", "### Step 1: Parse Branch Name", "lets worktree info --json --task-candidate", "or no `lets` binary"},
+		{"skills/take-task/SKILL.md", "### Step 4: Branch Logic", "lets worktree branch-name --task", "No `lets` binary"},
+	}
+	for _, c := range cases {
+		raw, err := os.ReadFile(filepath.Join(pluginDir(t), c.file))
+		if err != nil {
+			t.Fatal(err)
+		}
+		sec := sectionSpan(string(raw), c.heading)
+		if sec == "" {
+			t.Fatalf("%s: section %q not found", c.file, c.heading)
+		}
+		call := strings.Index(sec, c.call)
+		if call < 0 {
+			t.Errorf("%s %s: must call %q", c.file, c.heading, c.call)
+		}
+		fb := strings.Index(sec, c.fallback)
+		if fb < 0 {
+			t.Errorf("%s %s: must name the no-binary fallback (%q)", c.file, c.heading, c.fallback)
+			continue
+		}
+		if call > fb {
+			t.Errorf("%s %s: the Go call must come before the no-binary fallback", c.file, c.heading)
+		}
+		if i := strings.Index(sec, legacyShape); i >= 0 && i < fb {
+			t.Errorf("%s %s: %s is presented before the no-binary fallback - only the fallback may name it", c.file, c.heading, legacyShape)
 		}
 	}
 }

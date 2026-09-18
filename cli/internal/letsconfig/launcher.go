@@ -11,7 +11,7 @@ package letsconfig
 // launcher has no adapter file (it IS a Go package), so the pin targets the
 // registered subcommand instead. Same contract: a value the binary cannot serve
 // must never be accepted.
-var ShippedLaunchers = []string{"terminal", "cmux", "tmux"}
+var ShippedLaunchers = []string{"terminal", "cmux", "tmux", "orca"}
 
 // ValidLauncher reports whether s is an accepted LETS_LAUNCHER value.
 // The empty string is NOT valid here - callers treat "" as "not supplied" and

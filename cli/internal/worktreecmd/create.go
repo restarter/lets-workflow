@@ -11,9 +11,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
-	"github.com/restarter/lets-workflow/cli/internal/envfile"
+	"github.com/restarter/lets-workflow/cli/internal/gitutil"
 	"github.com/restarter/lets-workflow/cli/internal/initcmd"
+	"github.com/restarter/lets-workflow/cli/internal/letsconfig"
+	"github.com/restarter/lets-workflow/cli/internal/trackeradapter"
 )
 
 // CreateOptions configures the create flow.
@@ -23,7 +26,8 @@ type CreateOptions struct {
 	Mode               BranchMode
 	Base               string
 	NoSymlinkLets      bool
-	NoSymlinkBeads     bool
+	NoStoreLinks       bool   // skip the tracker adapter's declared store links (--no-store-links; --no-symlink-beads alias)
+	PluginRoot         string // plugin root for the adapter fallback (--plugin-root, else CLAUDE_PLUGIN_ROOT)
 	SwitchMainIfNeeded bool
 }
 
@@ -109,7 +113,7 @@ func Create(ctx context.Context, projectRoot string, opts CreateOptions) (*Creat
 	// Step 3: resolve base ref (LETS_MERGE_BRANCH from .lets/.env, fallback "main").
 	base := opts.Base
 	if base == "" {
-		base = resolveBaseFromEnv(projectRoot)
+		base = mergeBranch(projectRoot)
 	}
 	addStep(StepOK, "base ref: "+base)
 
@@ -143,7 +147,7 @@ func Create(ctx context.Context, projectRoot string, opts CreateOptions) (*Creat
 				return fail(&Error{Code: ExitDirtyWorktree, Kind: "main_repo_dirty", Cause: err})
 			}
 			prevMainBranch = cur // capture before switch
-			mergeBase := resolveBaseFromEnv(projectRoot)
+			mergeBase := mergeBranch(projectRoot)
 			if out, err := exec.CommandContext(ctx, "git", "-C", projectRoot, "switch", mergeBase).CombinedOutput(); err != nil {
 				return fail(&Error{
 					Code:    ExitGitFailed,
@@ -219,95 +223,65 @@ func Create(ctx context.Context, projectRoot string, opts CreateOptions) (*Creat
 	}
 	result.NextSteps = &NextSteps{AbsolutePath: wtPath}
 
-	// Step 8: symlink .lets/ (replace any pre-existing dir that statusline may have created).
+	// Step 8: symlink .lets/ (a pre-existing real dir can only be the statusline race
+	// in a worktree lets just made, so create mode replaces it).
+	addSteps := func(steps []Step) { result.Steps = append(result.Steps, steps...) }
 	letsSymlinked := false
-	defensiveRemove := false
 	if !opts.NoSymlinkLets {
-		mainLets := filepath.Join(projectRoot, ".lets")
-		wtLets := filepath.Join(wtPath, ".lets")
-		if fi, err := os.Lstat(wtLets); err == nil {
-			if fi.Mode()&os.ModeSymlink == 0 {
-				// Real dir present (statusline-race or otherwise). Remove and replace.
-				_ = os.RemoveAll(wtLets)
-				defensiveRemove = true
-			} else {
-				_ = os.Remove(wtLets) // stale symlink
-			}
-		}
-		if err := CreateRelativeSymlink(wtLets, mainLets, projectRoot); err != nil {
+		var letsSteps []Step
+		if _, err := linkLets(projectRoot, wtPath, modeCreate, func(s, m string) { letsSteps = append(letsSteps, Step{Status: s, Message: m}) }); err != nil {
+			addSteps(letsSteps)
 			return rollback(ctx, result, projectRoot, wtPath, plan, prevMainBranch, "symlink .lets/", err)
 		}
+		addSteps(letsSteps)
 		letsSymlinked = true
-		if defensiveRemove {
-			addStep(StepWarn, ".lets/ symlinked (defensive: pre-existing real dir removed; statusline race likely)")
-		} else {
-			addStep(StepOK, ".lets/ symlinked")
-		}
 	} else {
 		addStep(StepSkip, ".lets/ symlink disabled by flag")
 	}
 
-	// Step 9: symlink .beads/.env + chmod 700 (and hardenings).
-	beadsSymlinked := false
-	if !opts.NoSymlinkBeads {
-		mainBeadsEnv := filepath.Join(projectRoot, ".beads", ".env")
-		if _, err := os.Stat(mainBeadsEnv); err == nil {
-			wtBeads := filepath.Join(wtPath, ".beads")
-			// ORDER: MkdirAll → Chmod → Symlink (eliminate visibility window).
-			if err := os.MkdirAll(wtBeads, 0o700); err != nil {
-				return rollback(ctx, result, projectRoot, wtPath, plan, prevMainBranch, "mkdir .beads", err)
+	// Step 9: the tracker adapter's declared store links (tracker-<name>.md `## Worktree`
+	// `links:`), never a hardcoded store path.
+	var storeLinks []StoreLink
+	if !opts.NoStoreLinks {
+		links := loadStoreLinks(projectRoot, opts.PluginRoot, addStep)
+		for _, l := range links {
+			var linkSteps []Step
+			linked, err := linkStore(projectRoot, wtPath, l, func(s, m string) { linkSteps = append(linkSteps, Step{Status: s, Message: m}) })
+			addSteps(linkSteps)
+			storeLinks = append(storeLinks, StoreLink{Path: l.Path, Linked: linked})
+			if err != nil {
+				return rollback(ctx, result, projectRoot, wtPath, plan, prevMainBranch, "store link "+l.Path, err)
 			}
-			if err := os.Chmod(wtBeads, 0o700); err != nil {
-				return rollback(ctx, result, projectRoot, wtPath, plan, prevMainBranch, "chmod worktree .beads", err)
-			}
-			// Harden main side too (idempotent). Best-effort: surface a
-			// StepWarn on failure rather than block creation, but DON'T pretend
-			// the hardening succeeded — review S-10 caught silent swallows that
-			// contradicted the doc claim ("chmod 0o600 on disk"). Failures are
-			// rare in practice (foreign uid, SMB/NFS, immutable bit) but visible
-			// when they happen.
-			mainBeads := filepath.Join(projectRoot, ".beads")
-			if err := os.Chmod(mainBeads, 0o700); err != nil && !os.IsNotExist(err) {
-				addStep(StepWarn, fmt.Sprintf("could not chmod 0o700 %s: %v — main .beads/ may be group/other-readable", mainBeads, err))
-			}
-			if err := os.Chmod(mainBeadsEnv, 0o600); err != nil {
-				addStep(StepWarn, fmt.Sprintf("could not chmod 0o600 %s: %v — credential file may be group/other-readable", mainBeadsEnv, err))
-			}
-			if err := CreateRelativeSymlink(filepath.Join(wtBeads, ".env"), mainBeadsEnv, projectRoot); err != nil {
-				return rollback(ctx, result, projectRoot, wtPath, plan, prevMainBranch, "symlink .beads/.env", err)
-			}
-			beadsSymlinked = true
-			addStep(StepOK, ".beads/.env symlinked, chmod 700/600")
-		} else {
-			addStep(StepSkip, "no .beads/.env in main repo")
 		}
 	} else {
-		addStep(StepSkip, ".beads/.env symlink disabled by flag")
+		addStep(StepSkip, "store links disabled by flag")
 	}
 
 	// Step 9.5: ensure the LETS-managed symlinks are ignored INSIDE the worktree
 	// via the shared info/exclude (lets-x5ucf). EnsureGitignore (Step 6) only
 	// touches the main repo's working .gitignore; the worktree checks out its
 	// branch's committed copy, which can lack the entry (or carry a dir-only
-	// `/.lets/` that misses the `.lets` symlink) — leaving `.lets`/`.beads/.env`
-	// as untracked noise. Only ignore what we actually symlinked; best-effort.
+	// `/.lets/` that misses the `.lets` symlink) - leaving the links as untracked
+	// noise. Only ignore what we actually linked; best-effort.
 	var excludes []string
 	if letsSymlinked {
-		excludes = append(excludes, ".lets")
+		excludes = append(excludes, ".lets", ".lets.pre-adopt*")
 	}
-	if beadsSymlinked {
-		excludes = append(excludes, ".beads/.env")
+	for _, sl := range storeLinks {
+		if sl.Linked {
+			excludes = append(excludes, sl.Path)
+		}
 	}
 	if len(excludes) > 0 {
 		if err := ensureWorktreeExcludes(ctx, projectRoot, excludes); err != nil {
-			addStep(StepWarn, fmt.Sprintf("could not update .git/info/exclude (%s): %v — symlinks may show as untracked in the worktree", strings.Join(excludes, ", "), err))
+			addStep(StepWarn, fmt.Sprintf("could not update .git/info/exclude (%s): %v - symlinks may show as untracked in the worktree", strings.Join(excludes, ", "), err))
 		} else {
 			addStep(StepOK, "info/exclude ensured ("+strings.Join(excludes, ", ")+")")
 		}
 	}
 
 	// Step 10: verify.
-	if err := VerifyCreate(ctx, projectRoot, wtPath, plan); err != nil {
+	if err := VerifyCreate(ctx, projectRoot, wtPath, plan, storeLinks); err != nil {
 		return rollback(ctx, result, projectRoot, wtPath, plan, prevMainBranch, "verify failed", err)
 	}
 	addStep(StepOK, "verify: branch, symlinks, paths")
@@ -315,7 +289,9 @@ func Create(ctx context.Context, projectRoot string, opts CreateOptions) (*Creat
 	// Success.
 	result.OK = true
 	result.Worktree.LetsSymlinked = letsSymlinked
-	result.Worktree.BeadsSymlinked = beadsSymlinked
+	result.Worktree.StoreLinks = storeLinks
+	result.Worktree.StoreLinked = allLinked(storeLinks)
+	result.Worktree.BeadsSymlinked = result.Worktree.StoreLinked // deprecated alias, see result.go
 	// .lets ignore sanity: after Step 9.5 the symlink should be ignored in every
 	// worktree. If it still isn't (exclude write failed, or a genuinely tracked
 	// .lets), warn — it would surface as untracked. Check `.lets` (no slash) so a
@@ -329,7 +305,7 @@ func Create(ctx context.Context, projectRoot string, opts CreateOptions) (*Creat
 	// branch than user started on; surface explicit restore command.
 	if prevMainBranch != "" {
 		addStep(StepWarn, fmt.Sprintf("main repo left on %s (was on %s); restore with: git -C %s switch %s",
-			resolveBaseFromEnv(projectRoot), prevMainBranch, projectRoot, prevMainBranch))
+			mergeBranch(projectRoot), prevMainBranch, projectRoot, prevMainBranch))
 	}
 	return result, nil
 }
@@ -393,20 +369,44 @@ func compareSemver(a, b string) int {
 	return 0
 }
 
-func resolveBaseFromEnv(projectRoot string) string {
-	f, err := os.Open(filepath.Join(projectRoot, ".lets", ".env"))
+// loadStoreLinks reads the active tracker adapter's declared store links. A load
+// reason (missing adapter, undeclared links, an adapter older than the plugin) is a
+// warning naming /lets:update, never a failure.
+func loadStoreLinks(projectRoot, pluginFlag string, addStep func(status, msg string)) []trackeradapter.Link {
+	home, _ := os.UserHomeDir()
+	tracker := letsconfig.ResolvedEnv(projectRoot, home, nil)["LETS_TRACKER"]
+	if tracker == "" {
+		tracker = "beads"
+	}
+	pluginRoot, err := initcmd.DetectPluginRoot(pluginFlag)
 	if err != nil {
-		return "main"
+		pluginRoot = ""
 	}
-	defer func() { _ = f.Close() }()
-	vals, err := envfile.Parse(f)
-	if err != nil {
-		return "main"
+	wt, reason := trackeradapter.Load(projectRoot, tracker, pluginRoot)
+	if reason != "" {
+		addStep(StepWarn, fmt.Sprintf("tracker adapter %q: %s - run /lets:update so the installed adapter declares its ## Worktree links", tracker, reason))
 	}
-	if v, ok := vals["LETS_MERGE_BRANCH"]; ok && v != "" {
-		return v
+	return wt.Links
+}
+
+// allLinked reports whether every declared store link is a symlink (and there is at least one).
+func allLinked(links []StoreLink) bool {
+	if len(links) == 0 {
+		return false
 	}
-	return "main"
+	for _, l := range links {
+		if !l.Linked {
+			return false
+		}
+	}
+	return true
+}
+
+// mergeBranch resolves LETS_MERGE_BRANCH through the ONE resolver
+// (project .lets/.env over ~/.lets/.env, then the origin default branch, then main).
+func mergeBranch(projectRoot string) string {
+	home, _ := os.UserHomeDir()
+	return letsconfig.ResolvedEnv(projectRoot, home, func(r string) string { return gitutil.DefaultBranch(r, 2*time.Second) })["LETS_MERGE_BRANCH"]
 }
 
 func currentBranch(ctx context.Context, repo string) (string, error) {
@@ -419,13 +419,13 @@ func currentBranch(ctx context.Context, repo string) (string, error) {
 // EnsureGitignore writes the main repo's WORKING .gitignore, but a fresh worktree
 // checks out its branch's COMMITTED .gitignore — which may lack the LETS entries
 // (or carry only a directory-form `/.lets/` that can't match the `.lets` symlink),
-// leaving `.lets` / `.beads/.env` showing as untracked inside the worktree
+// leaving `.lets` / the declared store links showing as untracked inside the worktree
 // (lets-x5ucf, child-repo scenario). info/exclude lives in the common git dir,
 // so it is shared across main + every worktree, is untracked, and is never pushed
 // to collaborators — the right layer to ignore LETS-managed symlinks regardless of
 // the committed .gitignore. Best-effort: the caller surfaces failures as a StepWarn,
-// never blocks create. Entries are narrow (`.lets`, `.beads/.env`) so untracked
-// non-LETS content under `.beads/` still surfaces in `git status`.
+// never blocks create. Entries are narrow (`.lets`, each declared link path) so
+// untracked non-LETS content next to a link still surfaces in `git status`.
 func ensureWorktreeExcludes(ctx context.Context, projectRoot string, entries []string) error {
 	out, err := exec.CommandContext(ctx, "git", "-C", projectRoot, "rev-parse", "--git-path", "info/exclude").Output()
 	if err != nil {

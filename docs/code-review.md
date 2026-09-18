@@ -1,6 +1,6 @@
 # Code review
 
-LETS has three levels of review, separated by who does the looking - you, a band of expert agents, or a full PR lifecycle.
+LETS has three levels of review, separated by who does the looking - the orchestrator alone (the Claude session you are talking to), a band of expert agents, or a full PR lifecycle.
 
 | Need | Command | Who reviews | What happens |
 |------|---------|-------------|--------------|
@@ -8,7 +8,7 @@ LETS has three levels of review, separated by who does the looking - you, a band
 | Full code review | `/lets:review` | Expert subagents, then a verify pass | Dynamic agent selection — only the experts relevant to your changes — and every finding refuted before it is reported. |
 | Full PR lifecycle (GitHub) | `/lets:github-pr <PR>` | Review's agents, then you | Analyze, discuss, post inline comments, follow up on fixes, approve. |
 
-Both `/lets:check` and `/lets:review` accept the same targets: working tree (default), staged changes, last commit, the full branch vs the merge branch (`--branch` — three-dot diff against `$LETS_MERGE_BRANCH`, the same shape GitHub renders for a PR), a PR, a specific file (`--file <path>`), or a plan (`--plan`).
+Both `/lets:check` and `/lets:review` accept the same targets: working tree (default), staged changes, last commit, the full branch vs the merge branch (`--branch` — three-dot diff against `origin/<merge-branch>`, or the local merge branch when there is no origin copy - the same shape GitHub renders for a PR), a PR, a specific file (`--file <path>`), or a plan (`--plan`).
 
 **Rule of thumb:** small change → `/lets:check` → commit. Significant change → `/lets:check` → `/lets:review --local` → fix → commit → PR. Multi-commit branch heading for a push → add `/lets:review --branch` for a final PR-equivalent pass before pushing. PR already open → `/lets:review <PR>`, or the full `/lets:github-pr` lifecycle.
 
@@ -31,6 +31,25 @@ Agents are tuned to skip the obvious and focus on what matters — the goal is s
 For plan reviews (`/lets:review --plan`), agents are selected from signals in the plan content (mentions of migrations, API endpoints, Docker configs, …).
 
 See **[agents.md](agents.md)** for the agent roster and how selection works.
+
+### The verify pass
+
+Before anything is reported, every `[BLOCKER]` and `[SUGGESTION]` goes to `skeptic` agents whose only job is to refute it against the real code. The drop rule is deliberately asymmetric, so a real bug is hard to lose:
+
+| Finding | What the skeptics say | Result |
+|---------|-----------------------|--------|
+| `[SUGGESTION]` | a simple majority says "not real" | dropped |
+| `[BLOCKER]` | all say "not real", or a majority at high confidence | dropped |
+| `[BLOCKER]` | a simple majority says "not real" | downgraded to `[SUGGESTION]` |
+| `[BLOCKER]` | confirmed, or split | stays a `[BLOCKER]` |
+
+In the standard mode the pass checks every `[BLOCKER]` plus the top 5 `[SUGGESTION]`s (with more than ten findings the orchestrator re-checks them inline instead of spawning an agent per finding), and says so when the cap cut verification short. A finding the skeptics could not verify is kept and flagged, never treated as clean. The report shows how many findings the pass refuted.
+
+`--workflow` runs the same fan-out and the same verify pass off-context in a Dynamic Workflow - same verified findings, only the intermediate agent output stays out of your conversation (and the cap is not needed there). See **[autonomous.md](autonomous.md)**.
+
+### Every finding carries a remedy at the right place
+
+`/lets:check` and `/lets:review` hold every finding to the same REMEDY QUALITY rule: separate the symptom from its root cause, and propose the fix at the component that owns the behavior - not a workaround in whichever consumer happened to notice.
 
 ### The reviewers know what you were building
 
@@ -69,9 +88,13 @@ A spec is only used to decide whether a finding of the shape "dead / unrelated /
 
 It **never creates a worktree** — where you review is your call. Run it from your main checkout or from any worktree; the question is the same in both. `--json` never touches your working tree at all.
 
+### Bitbucket PRs
+
+`/lets:review <bitbucket-PR-url>` works the same way through `bbb`: it fetches the PR, diffs it, reads the discussion (general and inline comments arrive in one call) and posts the summary comment to the PR. A bare PR number resolves against the forge your project is configured for. What stays GitHub-only is the `/lets:github-pr` lifecycle - inline comments, follow-up, approve, merge. A PR from a fork (on either forge) cannot be checked out, so it is reviewed from the diff and the review says so.
+
 ## `/lets:github-pr` — the PR lifecycle
 
-This is where LETS shines: reviewing a PR from the terminal with expert agents instead of in a browser. GitHub only — Bitbucket and local flows finish tasks with `/lets:done` and don't have a PR review lifecycle.
+This is where LETS shines: reviewing a PR from the terminal with expert agents instead of in a browser. The inline-comment / approve / merge lifecycle is GitHub only. A Bitbucket PR still gets a full review through `/lets:review <bitbucket-PR>` (see [Bitbucket PRs](#bitbucket-prs) above); the local flow has no PR at all.
 
 ```
 /lets:github-pr https://github.com/owner/repo/pull/42
@@ -87,6 +110,12 @@ This is where LETS shines: reviewing a PR from the terminal with expert agents i
 
 If you're the PR author, `/lets:github-pr --respond <PR>` triages the comments on your PR, auto-fixes the mechanical ones, and posts replies.
 
+**Received a whole review round** - an annotated copy of your spec, a review file, a PR with many threads? `/lets:review-round` triages every comment first, records the decisions on the task, keeps the artifact frozen, and applies all edits in one final pass.
+
+## Handing the review to another agent - `/lets:handoff`
+
+When you want a second, independent reader - Codex, Antigravity, a fresh Claude session, a teammate's agent - `/lets:handoff` builds one self-contained brief for it with the same targets as `/lets:review` (`--branch`, `--last-commit`, `--plan`, a PR, ...), plus `--commits <N>` and `--range <a>..<b>` for the commits that answer a review round. On its own it prints the brief to paste. `--codex` runs it through Codex headless in a read-only sandbox, and `--send` types it into an agent's Orca tab; either way the agent's report comes back UNVERIFIED and every finding is checked against the code before it counts. The brief ranks findings on its own scale (BLOCKER / MAJOR / MINOR, not this page's `[BLOCKER]` / `[SUGGESTION]` / `[NIT]`); what it shares with every LETS review is the REMEDY QUALITY ask - separate the symptom from its root cause and fix at the component that owns the behavior. More in **[commands/handoff.md](commands/handoff.md)**.
+
 ## Dynamic agent selection
 
 Agents aren't hardcoded into a review. Each command looks at your changes and picks only the relevant experts:
@@ -99,6 +128,7 @@ The same idea applies to plan reviews — agents are chosen from signals in the 
 
 ## See also
 
-- **[agents.md](agents.md)** — the 14 agents and what triggers each
+- **[agents.md](agents.md)** — the 15 agents and what triggers each
 - **[plan-execute.md](plan-execute.md)** — reviewing a plan before executing it
 - **[commands.md](commands.md)** — `/lets:check`, `/lets:review`, `/lets:github-pr` flags
+- **[commands/handoff.md](commands/handoff.md)** — hand the review to another agent and get its report back verified

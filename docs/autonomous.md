@@ -13,6 +13,7 @@ Several fan-out commands take an opt-in `--workflow` flag that runs their multi-
 | `/lets:review --workflow` | Fan-out → dedupe → adversarial verify → aggregate, off-context |
 | `/lets:opinion --workflow` | Expert fan-out + a conditional adversarial-challenge round |
 | `/lets:backlog review --workflow` | Backlog review fan-out + aggregate |
+| `/lets:research --workflow` | Per-sub-question web research → per-claim `skeptic` cross-check → synthesis, off-context; the citations are the output |
 
 It's a pure performance lever — the standard (non-`--workflow`) path produces the same result, just with the intermediate agent output in your conversation. Worth it when the work is a multi-stage off-context chain with no checkpoint in the middle; if you want to steer each step, use the standard path. (`/lets:plan`'s equivalent is the standalone PREVIEW below.)
 
@@ -41,6 +42,7 @@ The pipeline turns one well-described task into a spawn → plan → execute run
 - **`--flow`** selects what the spawned session lands in: `plan-workflow` = autonomous planning (PREVIEW; falls back to interactive `--flow plan` when unavailable), `plan` = interactive `/lets:plan`, omitted = plain `/lets:start`. It only changes the launch command — terminal, cmux, and tmux launchers all inherit it.
 - **`--auto`** maps to `claude --permission-mode auto`. It speeds up *approved* work; it never bypasses the gates below.
 - **Execution** runs the approved plan without per-step prompts and commits at each plan point without re-asking.
+- **Budget.** Run by hand, `/lets:plan-workflow` shows a budget panel before launch: agents per stage (explorers, approaches, judges, evaluators, plan reviewers, plan checker), the total, and the model. You can lower any stage or run every agent on another model; whatever was cut is listed with the finished plan. A spawned autonomous run skips the panel and uses the defaults.
 
 ### What still stops it (even in `--auto`)
 
@@ -48,11 +50,11 @@ The pipeline turns one well-described task into a spawn → plan → execute run
 - Editing the merge-branch with `--auto` is refused outright.
 - A tool failing 3× in a row, or detected fabrication, halts the run.
 
-On any hard-stop the session writes a `blocked` marker and (on macOS + cmux) fires a "Execute blocked — needs you" notification.
+On any hard-stop the session writes a `blocked` marker and fires an "Execute blocked — needs you" notification through `lets notify` - to the cmux sidebar, the attached tmux clients or the Orca card, whichever `LETS_LAUNCHER` names (see the table below).
 
 ### Watching N parallel sessions
 
-Each spawned session writes a per-task marker at `.lets/cache/pipeline-state-<id>` (`<id>|<phase>|<iso>`, phases: `planning | gate-clarify | gate-approve | executing | blocked | done`). `cat` it, or watch the cmux sidebar. (The statusline row that renders this marker is a deferred follow-up.) Gate notifications are marker-gated, so only autonomous spawned runs notify — interactive sessions stay quiet.
+Each spawned session writes a per-task marker at `.lets/cache/pipeline-state-<id>` (`<id>|<phase>|<iso>`, phases: `planning | gate-clarify | gate-approve | executing | blocked | done`). `cat` it, or watch where your launcher shows gate notifications (the cmux sidebar, the tmux status line, the Orca card). (The statusline row that renders this marker is a deferred follow-up.) Gate notifications are marker-gated, so only autonomous spawned runs notify — interactive sessions stay quiet.
 
 ## When things aren't available (degradation)
 
@@ -64,6 +66,7 @@ Gate notifications route through `lets notify`, which dispatches on `LETS_LAUNCH
 |-----------|----------|
 | `LETS_LAUNCHER=terminal` (default) | `lets notify` is a no-op (`ok=true`, `reason=launcher_terminal`); the run continues without notifications |
 | `LETS_LAUNCHER=cmux`, not macOS / no cmux | no-op (`ok=true`); the run continues |
+| `LETS_LAUNCHER=orca`, Orca absent / not running | no-op (`ok=true`, a named `orca_*` reason); with Orca running the note lands as a comment on the worktree's Orca card |
 | `LETS_LAUNCHER=tmux`, nobody attached | `reason=no_client` — the run continues and the gate still halts in-band; the operator sees the notification the moment they attach to the tmux session (cmux's sidebar persists; tmux's status line needs an attached client, so this is the launcher's one real limitation vs cmux) |
 | `plan-workflow` unavailable | falls back to interactive `--flow plan` |
 | Interactive session (no spawn) | no marker is written → no notification noise |
@@ -71,9 +74,10 @@ Gate notifications route through `lets notify`, which dispatches on `LETS_LAUNCH
 
 ### Prerequisites
 
-- `lets notify` needs the Go binary built (`make install`).
-- `--flow` / `execute --auto` need the released plugin (or `make dev` / `--plugin-dir`).
-- A notification channel needs `LETS_LAUNCHER=cmux` (macOS) or `LETS_LAUNCHER=tmux` (Linux/macOS, with a client attached); `terminal` surfaces gates in-band only.
+- `lets notify` needs the `lets` binary on PATH (shipped since 0.8.0; `/lets:update` installs it).
+- `--flow` / `execute --auto` ship with the released plugin (0.6.3+) - nothing extra to build.
+- With `LETS_LAUNCHER=orca`, the worktree's Orca card mirrors the run: the gates write their title as the card comment, a blocked run writes its reason, `/lets:start` sets the card in progress, a PR sets it in review and a confirmed close completes it.
+- A notification channel needs `LETS_LAUNCHER=cmux` (macOS), `LETS_LAUNCHER=tmux` (Linux/macOS, with a client attached) or `LETS_LAUNCHER=orca` (Orca running); `terminal` surfaces gates in-band only. Orca cannot start Claude with `--permission-mode auto`, so `/lets:worktree create --auto` under orca opens the worktree through cmux or the terminal instead.
 - `plan-workflow` needs Claude Code ≥ 2.1.154 on a paid plan.
 
 > `/lets:plan-workflow` is a PREVIEW — dogfooded across projects before it folds into native `/lets:plan`.

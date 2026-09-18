@@ -18,6 +18,21 @@ LETS is **tracker-agnostic**. Instead of hardcoding beads (`bd`), a project bind
 | `beads` (default) | `bd` CLI | Reference adapter. Full capabilities. The `bd` bindings are golden-pinned, so beads runtime is unchanged. |
 | `none` | — | Null adapter. Every verb is a no-op; commands degrade to a no-tracker stance. The "no-beads" mode. |
 
+## Task ids and branch names
+
+Each adapter also declares, in its `## Worktree` section, what a task id looks like and how LETS names branches: `id:` (a regular expression), `branch:` and `worktree-branch:` (the names LETS creates, e.g. `feature/{id}-{slug}`), and optionally `accept:` (extra shapes `lets worktree adopt` recognizes in worktrees another tool created). Go parses and renders these, so commands, the statusline and adopt agree on one definition. `links:` in the same section names the store files every worktree shares (beads: `.beads/.env`).
+
+Your board file can override any of these per key except `links:`. A team whose tracker uses Planfix-style ids adds this to its user-owned `tracker-<name>.board.md`:
+
+```markdown
+## Worktree
+
+id: `PWA-[0-9]+`.
+branch: `feature/{id}-{slug}`.
+```
+
+`/lets:start PWA-45122` then creates `feature/PWA-45122-fix-login`, and detect-task and the statusline read `PWA-45122` back off that branch. Upgrading from an adapter copy without the section: run `/lets:update` so the installed file carries it (until then LETS keeps its old beads-shaped guess).
+
 ## Choosing a tracker
 
 `lets init` (via `/lets:init`) prompts for the tracker on a fresh project and installs the matching adapter file. To change it later, edit `LETS_TRACKER` in `.lets/.env` and run `/lets:update` (which re-syncs the adapter file). A non-beads tracker skips `bd init`.

@@ -1,6 +1,6 @@
 # Expert agents
 
-LETS ships 14 specialized agents. You don't pick them — the commands that use agents (`/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:backlog`, `/lets:research`, `/lets:team`) analyze the situation and select only the ones that fit.
+LETS ships 15 specialized agents. You don't have to pick them — the commands that use agents (`/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:backlog`, `/lets:research`, `/lets:team`) analyze the situation and select only the ones that fit. The one place you name an expert yourself is `/lets:ask <expert> <question>`.
 
 | Agent | Expertise | Example trigger |
 |-------|-----------|-----------------|
@@ -17,6 +17,7 @@ LETS ships 14 specialized agents. You don't pick them — the commands that use 
 | git-historian | Blame analysis, change patterns | Changes to existing code |
 | explorer | Codebase mapping, pattern discovery | Used during `/lets:plan` |
 | implementer | Full-stack implementation | Used by `/lets:team` |
+| skeptic | Verifier: tries to refute one finding or claim against the code / sources | The `/lets:review` verify pass and the `/lets:research` cross-check; never picked as a reviewer |
 | actor | Any personality from a URL or file | On explicit request |
 
 ## How agents work
@@ -30,6 +31,10 @@ LETS ships 14 specialized agents. You don't pick them — the commands that use 
 **Read-only by default.** Agents analyze; they never modify code. The one exception is `implementer`, which has write access for parallel implementation via `/lets:team`.
 
 **Agents respond in English.** Commands localize their output to your language (set by `LETS_LANGUAGE` — see [configuration.md](configuration.md)); the agents themselves always work in English.
+
+**Which model they run on.** Agents use the model of your session - no agent is pinned to a named model, so a newer model in your session is a newer model everywhere. The one exception is `explorer`, pinned *down* to Sonnet: mapping a codebase is mechanical work, and a cheaper model there costs nothing in quality. The verifier (`skeptic`) deliberately stays on the session model - a weaker verifier tends to answer "not real" when it cannot follow a deep finding, and that would drop genuine `[BLOCKER]`s.
+
+**Asking one expert.** `/lets:ask <expert> <question>` goes straight to the agent you name (`security`, `architect`, `docs`, `pragmatist`, ...); bare `/lets:ask` offers the four most relevant to the conversation.
 
 ## The actor agent
 

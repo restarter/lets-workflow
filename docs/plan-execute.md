@@ -1,15 +1,17 @@
 # Plan → Execute
 
-For anything bigger than a quick fix, LETS splits the work in two: **`/lets:plan`** works out *how* to build it, **`/lets:execute`** builds it — with you approving each step. You get a design you've reviewed before any code is written, and an implementation that doesn't surprise you.
+For anything bigger than a quick fix, LETS splits the work in two: **`/lets:plan`** works out *how* to build it, **`/lets:execute`** builds it — after one approval, at the pace you pick. You get a design you've reviewed before any code is written, and an implementation that doesn't surprise you.
 
+> `/lets:start` sizes the task for you: for a medium or large one it offers `/lets:plan`, `/lets:plan --fast`, `/lets:plan-workflow` (PREVIEW) or working directly.
+>
 > Rule of thumb: quick fix → just do it. Medium task (a few hours) → `/lets:plan` then `/lets:execute`. Large task → `/lets:plan`, and break it into subtasks.
 
 ## `/lets:plan` — design the change
 
 `/lets:plan` runs in stages:
 
-1. **Codebase exploration.** Explorer agents map the parts of the codebase the change touches — existing patterns, integration points, what's already there. The number of explorers scales with the project: a small repo gets one; a large monorepo gets up to ten, each mapping a different area.
-2. **Architecture design.** With the lay of the land in hand, the plan is designed — components, data flow, build order, trade-offs. Expert agents, selected by what the plan involves (migrations, API endpoints, Docker, …), evaluate it.
+1. **Codebase exploration.** Explorer agents map the parts of the codebase the change touches — existing patterns, integration points, what's already there. The number of explorers scales with the project: a small repo gets one; a large monorepo usually gets up to ten, each mapping a different area; more than ten asks you to confirm first.
+2. **Architecture design.** With the lay of the land in hand, the plan is designed — components, data flow, build order, trade-offs. Expert agents, selected by what the plan involves (migrations, API endpoints, Docker, …), evaluate it. You choose how hard it is evaluated at a checkpoint: **Full panel** (pragmatist + the domain experts the feature calls for), **Pragmatist only** (a quick overengineering check), **Self-evaluation** (no agents - the orchestrator critiques its own design) or **Skip evaluation**.
 3. **A written plan.** The result is saved to `.lets/plans/` — a step-by-step implementation plan you can read, edit, and hand to `/lets:execute`. Every plan opens with a STOP banner: approving the plan (or a plan review) approves the document, never the code — `/lets:execute` is the only way into implementation, and Claude will not start it on its own.
 
 ### `--fast` — skip the agents
@@ -18,9 +20,24 @@ For anything bigger than a quick fix, LETS splits the work in two: **`/lets:plan
 
 Not to be confused with `/lets:plan-workflow --fast` — THAT keeps the off-context workflow but runs it lean (~7 agents); this `/lets:plan --fast` runs no subagents at all.
 
+### `--idea` — capture the wish first
+
+When it is too early to design anything, `/lets:plan --idea` writes a concept document instead of a plan: the problem, what exists today, the behaviour you want, what triggers it, constraints, open questions, and who takes it over. It asks about the wish, not the code, and never explores the codebase. The file lands in `.lets/plans/` as `…-<task-id>-idea.md` with an "IDEA BANK ENTRY - NOT A PLAN" header: `/lets:execute` refuses it, `/lets:check --plan` reviews it with concept lenses, and running `/lets:plan` on the same task later picks it up as input.
+
 ## `/lets:execute` — build it
 
-`/lets:execute` loads the plan from `/lets:plan` and implements it in Claude Code's native plan mode. You approve the execution strategy before any code is written, and pick how it runs (step-by-step with a pause after each task, straight-through, or unattended `--auto`). If reality diverges from the plan's approach mid-run — a tool behaving differently than assumed, a step that can't be done as written — Claude stops and asks instead of quietly re-planning in place (under `--auto` that is a hard stop). Use `/lets:commit` at natural commit points along the way.
+`/lets:execute` loads the plan from `/lets:plan` and implements it in Claude Code's native plan mode. You approve the execution strategy before any code is written, then pick how it runs:
+
+| Run mode | Flag | What happens | Commits |
+|----------|------|--------------|---------|
+| Straight-through (default) | `--straight` | One approval, then every task with no pause | At each commit point the plan names, without re-asking |
+| Step-by-step | `--step` | A pause for your review after each task | Each one confirmed |
+| Auto | `--auto` | Unattended under AUTO MODE; push / PR / close / external actions stay gated, hard-stops still halt it, refused on the merge branch | At the plan's commit points |
+| Team | `--team` | Hands the ready tasks to `/lets:team` - parallel implementers in isolated worktrees | One per agent, at the end |
+
+A flag pre-answers the picker; bare `/lets:execute` asks once. `/lets:execute <task-id>` or `<plan-path>` picks the plan explicitly, and `--status` shows where the current plan stands.
+
+If reality diverges from the plan's approach mid-run — a tool behaving differently than assumed, a step that can't be done as written — Claude stops and asks instead of quietly re-planning in place (under `--auto` that is a hard stop). Use `/lets:commit` at natural commit points along the way.
 
 ## The full loop
 

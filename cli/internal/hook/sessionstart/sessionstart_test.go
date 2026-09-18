@@ -27,7 +27,7 @@ func TestRun_NoProjectRoot_SuppressesEverything(t *testing.T) {
 	writeFile(t, rulesPath, "---\nversion: 0.4.0\n---\n# Rules\n")
 
 	var buf bytes.Buffer
-	if err := sessionstart.Run(&buf, rulesPath, "", ""); err != nil {
+	if err := sessionstart.Run(&buf, rulesPath, "", "", nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if got := buf.String(); got != "" {
@@ -46,7 +46,7 @@ func TestRun_BasicConfigBlock(t *testing.T) {
 		"# Comment\nLETS_LANGUAGE=Ukrainian\nLETS_MERGE_BRANCH=develop\nLETS_PR_FLOW=github\nLETS_TRACKER=beads\n")
 
 	var buf bytes.Buffer
-	if err := sessionstart.Run(&buf, rulesPath, dir, ""); err != nil {
+	if err := sessionstart.Run(&buf, rulesPath, dir, "", nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 
@@ -81,7 +81,7 @@ func TestRun_ExplainerOrdering(t *testing.T) {
 	writeFile(t, filepath.Join(dir, ".lets", ".env"), "LETS_LANGUAGE=English\n")
 
 	var buf bytes.Buffer
-	if err := sessionstart.Run(&buf, rulesPath, dir, ""); err != nil {
+	if err := sessionstart.Run(&buf, rulesPath, dir, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -104,7 +104,7 @@ func TestRun_DriftMissing(t *testing.T) {
 	writeFile(t, filepath.Join(projectRoot, ".lets", ".env"), "LETS_LANGUAGE=English\n")
 
 	var buf bytes.Buffer
-	if err := sessionstart.Run(&buf, pluginRules, projectRoot, ""); err != nil {
+	if err := sessionstart.Run(&buf, pluginRules, projectRoot, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -127,7 +127,7 @@ func TestRun_DriftOutdated(t *testing.T) {
 		"---\nversion: 0.3.0\n---\n# old\n")
 
 	var buf bytes.Buffer
-	if err := sessionstart.Run(&buf, pluginRules, projectRoot, ""); err != nil {
+	if err := sessionstart.Run(&buf, pluginRules, projectRoot, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -152,7 +152,7 @@ func TestRun_DriftSilent_WhenSameVersion(t *testing.T) {
 		"---\nversion: 0.4.0\n---\n")
 
 	var buf bytes.Buffer
-	if err := sessionstart.Run(&buf, pluginRules, projectRoot, ""); err != nil {
+	if err := sessionstart.Run(&buf, pluginRules, projectRoot, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(buf.String(), "LETS Notice") {
@@ -174,7 +174,7 @@ func TestRun_DriftWarn_WhenInstalledAhead(t *testing.T) {
 		"---\nversion: 99.0.0\n---\n")
 
 	var buf bytes.Buffer
-	if err := sessionstart.Run(&buf, pluginRules, projectRoot, ""); err != nil {
+	if err := sessionstart.Run(&buf, pluginRules, projectRoot, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -194,7 +194,7 @@ func TestRun_DriftMalformedSemver_TreatsAsUnknown(t *testing.T) {
 		"---\nversion: not-a-version\n---\n")
 
 	var buf bytes.Buffer
-	if err := sessionstart.Run(&buf, pluginRules, projectRoot, ""); err != nil {
+	if err := sessionstart.Run(&buf, pluginRules, projectRoot, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	wantNotice := "## LETS Notice\n\nWorkflow rules version unknown - rules may be outdated. Run `/lets:update` to refresh."
@@ -210,7 +210,7 @@ func TestRun_PluginRulesMissing_NoNotice(t *testing.T) {
 	writeFile(t, filepath.Join(projectRoot, ".lets", ".env"), "LETS_LANGUAGE=English\n")
 
 	var buf bytes.Buffer
-	if err := sessionstart.Run(&buf, "/nonexistent/plugin-rules.md", projectRoot, ""); err != nil {
+	if err := sessionstart.Run(&buf, "/nonexistent/plugin-rules.md", projectRoot, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -233,7 +233,7 @@ func TestRun_OutputUnderSizeBudget(t *testing.T) {
 		"LETS_LANGUAGE=English\nLETS_MERGE_BRANCH=main\nLETS_PR_FLOW=local\nLETS_TRACKER=beads\n")
 
 	var buf bytes.Buffer
-	if err := sessionstart.Run(&buf, pluginRules, projectRoot, ""); err != nil {
+	if err := sessionstart.Run(&buf, pluginRules, projectRoot, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if buf.Len() >= 9000 {
@@ -251,7 +251,7 @@ func TestRun_EmptyEnvValues_Skipped(t *testing.T) {
 		"LETS_LANGUAGE=\nLETS_MERGE_BRANCH=main\n")
 
 	var buf bytes.Buffer
-	if err := sessionstart.Run(&buf, rulesPath, dir, ""); err != nil {
+	if err := sessionstart.Run(&buf, rulesPath, dir, "", nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 
@@ -320,7 +320,7 @@ func TestRun_UserScopeNoticeMatrix(t *testing.T) {
 			}
 
 			var buf bytes.Buffer
-			if err := sessionstart.Run(&buf, pluginRules, projectRoot, home); err != nil {
+			if err := sessionstart.Run(&buf, pluginRules, projectRoot, home, nil); err != nil {
 				t.Fatal(err)
 			}
 			out := buf.String()
@@ -351,7 +351,7 @@ func TestRun_PluginUnreadable_GlobalDrift_StaysSilent(t *testing.T) {
 		"---\nversion: 0.3.0\n---\n")
 
 	var buf bytes.Buffer
-	if err := sessionstart.Run(&buf, "/nonexistent/plugin-rules.md", projectRoot, home); err != nil {
+	if err := sessionstart.Run(&buf, "/nonexistent/plugin-rules.md", projectRoot, home, nil); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(buf.String(), "LETS Notice") {
@@ -376,7 +376,7 @@ func TestRun_GlobalRulesPresent_MinimalConfig(t *testing.T) {
 	writeFile(t, filepath.Join(home, ".lets", ".env"), "LETS_LANGUAGE=Ukrainian\n")
 
 	var buf bytes.Buffer
-	if err := sessionstart.Run(&buf, pluginRules, projectRoot, home); err != nil {
+	if err := sessionstart.Run(&buf, pluginRules, projectRoot, home, nil); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -433,7 +433,7 @@ func TestRun_EnvOverlay(t *testing.T) {
 			}
 
 			var buf bytes.Buffer
-			if err := sessionstart.Run(&buf, pluginRules, projectRoot, home); err != nil {
+			if err := sessionstart.Run(&buf, pluginRules, projectRoot, home, nil); err != nil {
 				t.Fatal(err)
 			}
 			out := buf.String()
@@ -479,7 +479,7 @@ func TestRun_MergeBranchFromGitOriginHead(t *testing.T) {
 		"---\nversion: 0.4.0\n---\n")
 
 	var buf bytes.Buffer
-	if err := sessionstart.Run(&buf, pluginRules, projectRoot, home); err != nil {
+	if err := sessionstart.Run(&buf, pluginRules, projectRoot, home, nil); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(buf.String(), "LETS_MERGE_BRANCH=master") {
@@ -498,7 +498,7 @@ func TestRun_NoProjectRoot_UserScopePresent_StaysSilent(t *testing.T) {
 	writeFile(t, rulesPath, "---\nversion: 0.4.0\n---\n")
 
 	var buf bytes.Buffer
-	if err := sessionstart.Run(&buf, rulesPath, "", home); err != nil {
+	if err := sessionstart.Run(&buf, rulesPath, "", home, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := buf.String(); got != "" {
@@ -516,7 +516,7 @@ func TestRun_NonWhitelistedKeys_Ignored(t *testing.T) {
 		"LETS_LANGUAGE=English\nMALICIOUS_KEY=evil\nGITHUB_TOKEN=secret\n")
 
 	var buf bytes.Buffer
-	if err := sessionstart.Run(&buf, rulesPath, dir, ""); err != nil {
+	if err := sessionstart.Run(&buf, rulesPath, dir, "", nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 
@@ -546,7 +546,7 @@ func TestRun_RulesScopeGuard(t *testing.T) {
 		writeFile(t, filepath.Join(project, ".lets", ".env"), "LETS_RULES_SCOPE=user\n")
 
 		var buf bytes.Buffer
-		if err := sessionstart.Run(&buf, pluginRules, project, home); err != nil {
+		if err := sessionstart.Run(&buf, pluginRules, project, home, nil); err != nil {
 			t.Fatal(err)
 		}
 		out := buf.String()
@@ -575,7 +575,7 @@ func TestRun_RulesScopeGuard(t *testing.T) {
 		writeFile(t, filepath.Join(home, ".claude", "rules", "lets-rules.md"), "---\nversion: 0.3.0\n---\n")
 
 		var buf bytes.Buffer
-		if err := sessionstart.Run(&buf, pluginRules, project, home); err != nil {
+		if err := sessionstart.Run(&buf, pluginRules, project, home, nil); err != nil {
 			t.Fatal(err)
 		}
 		if !strings.Contains(buf.String(), "Global workflow rules outdated") {
@@ -592,7 +592,7 @@ func TestRun_RulesScopeGuard(t *testing.T) {
 		writeFile(t, filepath.Join(project, ".claude", "rules", "lets-rules.md"), "---\nversion: 0.3.0\n---\n")
 
 		var buf bytes.Buffer
-		if err := sessionstart.Run(&buf, pluginRules, project, home); err != nil {
+		if err := sessionstart.Run(&buf, pluginRules, project, home, nil); err != nil {
 			t.Fatal(err)
 		}
 		if !strings.Contains(buf.String(), "Workflow rules outdated (installed v0.3.0 < plugin v0.4.0)") {

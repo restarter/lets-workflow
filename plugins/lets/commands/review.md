@@ -260,8 +260,8 @@ PLAN=""
 # .lets/plans is shared across worktrees through a symlink, so a global `ls -t` surfaces another
 # branch's plan. Slug-scoped, and an empty slug (detached HEAD) must not collapse the glob to *.md.
 # task-id first (artifact-path naming, lets-05c4s); branch slug = legacy fallback
-[ -n "{task-id}" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"{task-id}"*.md 2>/dev/null | head -1)
-[ -z "$PLAN" ] && [ -n "$SLUG" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
+[ -n "{task-id}" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"{task-id}"*.md 2>/dev/null | grep -v -E -- '-idea(-v[0-9]+)?\.md$' | head -1)
+[ -z "$PLAN" ] && [ -n "$SLUG" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | grep -v -E -- '-idea(-v[0-9]+)?\.md$' | head -1)
 [ -n "$PLAN" ] && echo "PLAN CANDIDATE: $PLAN"
 ```
 
@@ -1130,8 +1130,10 @@ else
   # Latest plan for this slug - date-prefixed or legacy bare name. Slug-scoped (shared .lets
   # across worktrees via symlink, so global latest would grab another branch's plan - lets-fe788).
   # task-id first (artifact-path naming, lets-05c4s); branch slug = legacy fallback
-  [ -n "{task-id}" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"{task-id}"*.md 2>/dev/null | head -1)
-  [ -z "$PLAN" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | head -1)
+  [ -n "{task-id}" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"{task-id}"*.md 2>/dev/null | grep -v -E -- '-idea(-v[0-9]+)?\.md$' | head -1)
+  [ -z "$PLAN" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | grep -v -E -- '-idea(-v[0-9]+)?\.md$' | head -1)
+  # an idea document only when no plan exists - reviewers are told it is one (P3)
+  [ -z "$PLAN" ] && [ -n "{task-id}" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"-{task-id}-idea"*.md 2>/dev/null | head -1)
 fi
 
 [ -n "$PLAN" ] && cat "$PLAN"
@@ -1140,7 +1142,7 @@ fi
 If no plan files found, inform user and exit:
 > "No plans found in `.lets/plans/`. Run `/lets:plan` first."
 
-Read the plan file and show title + task ID to user.
+Read the plan file and show title + task ID to user. When it is an idea document (the name matches `-idea` or it carries `IDEA BANK ENTRY`), say so, and inject this one line into every reviewer prompt: "This is an idea document; judge feasibility, clarity, scope and open questions, not implementation steps."
 
 ### P2: Gather Context
 

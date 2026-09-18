@@ -35,6 +35,11 @@ func TestExitCoder_AsMatchesWorktreeError(t *testing.T) {
 			err:  fmt.Errorf("wrap: %w", &worktreecmd.Error{Code: worktreecmd.ExitBranchUnmerged, Kind: "branch_unmerged"}),
 			want: worktreecmd.ExitBranchUnmerged,
 		},
+		{name: "lets_dir_conflict", err: &worktreecmd.Error{Code: worktreecmd.ExitLetsDirConflict, Kind: "lets_dir_conflict"}, want: 22},
+		{name: "not_linked_worktree", err: &worktreecmd.Error{Code: worktreecmd.ExitNotLinkedWorktree, Kind: "not_linked_worktree"}, want: 23},
+		{name: "store_link_conflict", err: &worktreecmd.Error{Code: worktreecmd.ExitStoreLinkFailed, Kind: "store_link_conflict"}, want: 24},
+		{name: "task_file_conflict", err: &worktreecmd.Error{Code: worktreecmd.ExitTaskFileConflict, Kind: "task_file_conflict"}, want: 25},
+		{name: "task_state_lock_busy", err: &worktreecmd.Error{Code: worktreecmd.ExitTaskStateLockBusy, Kind: "task_state_lock_busy"}, want: 26},
 		{
 			name: "zero-code-defaults-to-generic",
 			err:  &worktreecmd.Error{Kind: "broken"},
