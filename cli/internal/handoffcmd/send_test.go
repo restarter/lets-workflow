@@ -78,12 +78,13 @@ func useFake(t *testing.T, ops *fakeOps) (root, brief string) {
 	if ops.source == "" {
 		ops.source = "screen"
 	}
-	oldOps, oldLock, oldFP := newOps, sendLockDir, fingerprint
+	oldOps, oldLock, oldFP, oldPause := newOps, sendLockDir, fingerprint, pause
 	newOps = func(context.Context) (orcaOps, *orcacmd.Failure) { return ops, nil }
 	lockDir := t.TempDir()
 	sendLockDir = func() string { return lockDir }
 	fingerprint = func(string) string { return "fp" }
-	t.Cleanup(func() { newOps, sendLockDir, fingerprint = oldOps, oldLock, oldFP })
+	pause = func(time.Duration) {}
+	t.Cleanup(func() { newOps, sendLockDir, fingerprint, pause = oldOps, oldLock, oldFP, oldPause })
 	return root, brief
 }
 
@@ -123,6 +124,10 @@ func TestTargets_AgentsOnly(t *testing.T) {
 	}
 	if res, _ := Targets(context.Background(), TargetsOptions{Root: root, Match: "peer-messaging"}); len(res.Targets.Terminals) != 1 || res.Targets.Terminals[0].Handle != "term_peer" {
 		t.Errorf("title match: %+v", res.Targets.Terminals)
+	}
+	// A query of only symbols matches nothing (review of lets-w5tm5, A6).
+	if res, _ := Targets(context.Background(), TargetsOptions{Root: root, Match: "---"}); len(res.Targets.Terminals) != 0 {
+		t.Errorf("symbol-only match: %+v", res.Targets.Terminals)
 	}
 	// An agent name matches the agent, not the title: live tab titles do not carry it.
 	for q, want := range map[string]string{"antigravity": "term_new", "Codex": "term_old"} {
@@ -340,11 +345,54 @@ func TestSend_NewCodex(t *testing.T) {
 	}
 }
 
+// A new tab is sent to only as the agent Orca reports in it: a Codex that failed to
+// start leaves a shell (review of lets-w5tm5, C1).
+func TestSend_NewTabMustBeAnAgent(t *testing.T) {
+	ops := &fakeOps{receipt: proven, up: true}
+	root, brief := useFake(t, ops)
+	ops.screen = frame(t, "codex-empty")
+	ops.terms = []orcacmd.Terminal{term(root, "term_new", "", "")}
+	res, _ := Send(context.Background(), SendOptions{Root: root, Brief: brief, New: "codex"})
+	if res.Send.Reason != "not_an_agent" || len(ops.sentTo) != 0 || !res.Send.Created || ops.listed != identifyTries {
+		t.Errorf("shell in a new tab: %+v listed=%d", res.Send, ops.listed)
+	}
+	ops2 := &fakeOps{receipt: proven, up: true}
+	root, brief = useFake(t, ops2)
+	ops2.terms = []orcacmd.Terminal{term(root, "term_other", "codex", "")}
+	res, _ = Send(context.Background(), SendOptions{Root: root, Brief: brief, New: "codex"})
+	if res.Send.Reason != "terminal_not_found" || len(ops2.sentTo) != 0 {
+		t.Errorf("new tab missing from the list: %+v", res.Send)
+	}
+	// Named late: the first reads have no agent yet, a later one does.
+	ops3 := &fakeOps{receipt: proven, up: true}
+	root, brief = useFake(t, ops3)
+	ops3.screen = frame(t, "codex-empty")
+	ops3.terms = []orcacmd.Terminal{term(root, "term_new", "", "")}
+	ops3.relist = []orcacmd.Terminal{term(root, "term_new", "codex", "")}
+	res, _ = Send(context.Background(), SendOptions{Root: root, Brief: brief, New: "codex"})
+	if res.Send.Delivery != DeliveryProven || res.Send.Agent != "codex" {
+		t.Errorf("late-named new tab: %+v", res.Send)
+	}
+}
+
+// The lock follows the pane: a sender that re-joined a stale handle and one aimed
+// at the new handle wait for each other (review of lets-w5tm5, A5).
+func TestLockName_ByPane(t *testing.T) {
+	a := orcacmd.Terminal{Handle: "term_a", PaneKey: "t1:l1"}
+	b := orcacmd.Terminal{Handle: "term_b", PaneKey: "t1:l1"}
+	if lockName(a) != lockName(b) || lockName(a) != "handoff-send-pane-t1_l1.lock" {
+		t.Errorf("lock names %q %q", lockName(a), lockName(b))
+	}
+	if got := lockName(orcacmd.Terminal{Handle: "term_c"}); got != "handoff-send-term_c.lock" {
+		t.Errorf("no pane key: %q", got)
+	}
+}
+
 func TestSend_LockBusy(t *testing.T) {
 	ops := &fakeOps{receipt: proven}
 	root, brief := useFake(t, ops)
 	ops.terms, ops.screen = []orcacmd.Terminal{term(root, "term_a", "codex", "")}, frame(t, "codex-empty")
-	lf, err := os.OpenFile(filepath.Join(sendLockDir(), "handoff-send-term_a.lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	lf, err := os.OpenFile(filepath.Join(sendLockDir(), lockName(term(root, "term_a", "codex", ""))), os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		t.Fatal(err)
 	}

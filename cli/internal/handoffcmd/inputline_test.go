@@ -53,6 +53,25 @@ func TestInputLine(t *testing.T) {
 	if got := inputLine("antigravity", ag); got != lineUnknown {
 		t.Errorf("antigravity mode echo: %s", got)
 	}
+	// Dialog words and busy words in history above a ready composer are history: an
+	// idle tab that just reviewed this code is not refused (review of lets-w5tm5, A2).
+	quoted := append([]string{
+		"• The dialog reads \"Press enter to continue\" and \"Do you trust the contents\".",
+		"• Codex prints \"esc to interrupt\" while it works.",
+		"", "", "", "", "",
+	}, frame(t, "codex-empty")...)
+	if got := inputLine("codex", quoted); got != lineReady {
+		t.Errorf("codex idle with quoted dialog and busy words: %s", got)
+	}
+	// Without a recognizer only the bottom of the frame is read, in any letter case.
+	agFar := append([]string{"> Do you trust the contents of this project?"}, make([]string, 20)...)
+	agFar = append(agFar, "> /plan ", "  plan · Gemini 3.8 Flash · high")
+	if got := inputLine("antigravity", agFar); got != lineUnknown {
+		t.Errorf("antigravity with a dialog far up in history: %s", got)
+	}
+	if got := inputLine("antigravity", []string{"  update ready", "  PRESS ENTER TO CONTINUE"}); got != lineBusy {
+		t.Errorf("antigravity dialog in capitals: %s", got)
+	}
 	// History above the composer repeats the glyph; the lowest prompt line wins.
 	lines := frame(t, "codex-empty")
 	history := append([]string{"› Read the hand-off brief at /w/.lets/handoffs/b.md and follow it exactly.", "• Reviewed."}, lines...)

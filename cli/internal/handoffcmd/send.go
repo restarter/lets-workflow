@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -39,7 +40,15 @@ var (
 	sendLockWait = 15 * time.Second
 	clock        = time.Now
 	fingerprint  = agentrun.Fingerprint
+	pause        = time.Sleep
 )
+
+// identifyTries bounds how often a new tab's record is read while Orca has not
+// named its agent yet (one read a second).
+const identifyTries = 5
+
+// unsafeLockChars are replaced in a lock file name.
+var unsafeLockChars = regexp.MustCompile(`[^A-Za-z0-9._-]`)
 
 // SendOptions configures Send. Exactly one of Terminal and New.
 type SendOptions struct {
@@ -77,7 +86,7 @@ func Send(ctx context.Context, o SendOptions) (*SendResult, error) {
 		return res, nil
 	}
 	fresh := o.New == "codex"
-	target := orcacmd.Terminal{Handle: o.Terminal}
+	handle := o.Terminal
 	if fresh {
 		title := "handoff " + filepath.Base(OutBase(o.Brief))
 		h, f := ops.CreateTerminal(ctx, o.Root, title, newCodexCommand)
@@ -87,49 +96,31 @@ func Send(ctx context.Context, o SendOptions) (*SendResult, error) {
 		}
 		info.Created = true
 		h, up, f := ops.WaitStartup(ctx, h, o.Root, title)
-		target = orcacmd.Terminal{Handle: h, Title: title, AgentType: "codex"}
-		info.Handle, info.Title, info.Agent = h, title, "codex"
+		info.Handle, info.Title = h, title
 		if f != nil || !up {
 			info.Reason = "startup_not_idle"
 			return res, nil
 		}
-		// Learn the new tab's pane key, so a stale handle can be re-joined.
-		if terms, f := ops.Terminals(ctx); f == nil {
-			for _, t := range terms {
-				if t.Handle == h {
-					target.PaneKey = t.PaneKey
-				}
-			}
-		}
+		handle = h
 	}
-	unlock, reason := lockTarget(target.Handle)
+	// The target is the terminal's own record, a new tab's too - never an assumed
+	// one: a Codex that failed to start leaves a shell, and a shell is not an agent.
+	target, why := findTarget(ctx, ops, handle, fresh)
+	if why != "" {
+		info.Reason = why
+		return res, nil
+	}
+	info.Handle, info.Title, info.Agent = target.Handle, target.Title, target.AgentType
+	if why := ineligible(target, o.Root, o.Self); why != "" {
+		info.Reason = why
+		return res, nil
+	}
+	unlock, reason := lockTarget(target)
 	if reason != "" {
 		info.Reason = reason
 		return res, nil
 	}
 	defer unlock()
-	if !fresh {
-		terms, f := ops.Terminals(ctx)
-		if f != nil {
-			info.Reason = f.Reason
-			return res, nil
-		}
-		found := false
-		for _, t := range terms {
-			if t.Handle == o.Terminal {
-				target, found = t, true
-			}
-		}
-		if !found {
-			info.Reason = "terminal_not_found"
-			return res, nil
-		}
-		info.Handle, info.Title, info.Agent = target.Handle, target.Title, target.AgentType
-		if why := ineligible(target, o.Root, o.Self); why != "" {
-			info.Reason = why
-			return res, nil
-		}
-	}
 	if why := gate(ctx, ops, target, info); why != "" {
 		info.Reason = why
 		return res, nil
@@ -141,9 +132,6 @@ func Send(ctx context.Context, o SendOptions) (*SendResult, error) {
 		// Orca rejected the handle before typing anything: re-join the same pane and
 		// send once to its replacement - never to both.
 		next, why := rejoin(ctx, ops, target)
-		if why == "" && fresh && next.AgentType == "" {
-			next.AgentType = "codex" // this tab was opened with codex; Orca may not have named it yet
-		}
 		if why == "" {
 			why = ineligible(next, o.Root, o.Self)
 		}
@@ -221,14 +209,57 @@ func rejoin(ctx context.Context, ops orcaOps, old orcacmd.Terminal) (orcacmd.Ter
 	return old, orcacmd.ReasonHandleStale
 }
 
-// lockTarget holds a machine-wide per-terminal lock from the readiness check through
+// findTarget reads the terminal's own record. A new tab is re-read a few times
+// while Orca has not named its agent yet; a record that stays without an agent is
+// returned as it is, and ineligible() refuses it.
+func findTarget(ctx context.Context, ops orcaOps, handle string, fresh bool) (orcacmd.Terminal, string) {
+	tries := 1
+	if fresh {
+		tries = identifyTries
+	}
+	var rec orcacmd.Terminal
+	found := false
+	for i := 0; i < tries; i++ {
+		if i > 0 {
+			pause(time.Second)
+		}
+		terms, f := ops.Terminals(ctx)
+		if f != nil {
+			return orcacmd.Terminal{Handle: handle}, f.Reason
+		}
+		for _, t := range terms {
+			if t.Handle == handle {
+				rec, found = t, true
+			}
+		}
+		if found && rec.AgentType != "" {
+			return rec, ""
+		}
+	}
+	if !found {
+		return orcacmd.Terminal{Handle: handle}, "terminal_not_found"
+	}
+	return rec, ""
+}
+
+// lockName keys the send lock by pane (`tabId:leafId`), which outlives a handle, so
+// a sender that re-joined a stale handle and one that targets the new handle share
+// one lock; a terminal without a pane key falls back to its handle.
+func lockName(t orcacmd.Terminal) string {
+	if t.PaneKey != "" {
+		return "handoff-send-pane-" + unsafeLockChars.ReplaceAllString(t.PaneKey, "_") + ".lock"
+	}
+	return "handoff-send-" + t.Handle + ".lock"
+}
+
+// lockTarget holds a machine-wide per-pane lock from the readiness check through
 // the send: two handoff senders typing into one terminal interleave their text. It
-// is keyed by the first handle and held across a stale-handle re-join.
-func lockTarget(handle string) (func(), string) {
+// is held across a stale-handle re-join, which keeps the pane.
+func lockTarget(t orcacmd.Terminal) (func(), string) {
 	if err := os.MkdirAll(sendLockDir(), 0o700); err != nil {
 		return nil, "send_lock_failed"
 	}
-	lf, err := os.OpenFile(filepath.Join(sendLockDir(), "handoff-send-"+handle+".lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	lf, err := os.OpenFile(filepath.Join(sendLockDir(), lockName(t)), os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, "send_lock_failed"
 	}

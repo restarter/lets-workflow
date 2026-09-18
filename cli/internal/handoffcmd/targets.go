@@ -75,7 +75,9 @@ func matches(t orcacmd.Terminal, q string) bool {
 	if t.AgentType != "" && strings.EqualFold(q, t.AgentType) {
 		return true
 	}
-	return strings.Contains(normTitle(t.Title), normTitle(q))
+	// A query of only symbols normalizes to "", which every title would contain.
+	nq := normTitle(q)
+	return nq != "" && strings.Contains(normTitle(t.Title), nq)
 }
 
 func normTitle(s string) string {
