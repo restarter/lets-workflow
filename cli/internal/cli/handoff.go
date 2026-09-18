@@ -26,7 +26,44 @@ func NewHandoffCmd() *cobra.Command {
 		SilenceErrors: true,
 	}
 	root.AddCommand(newHandoffTargetsCmd(), newHandoffSendCmd(), newHandoffCodexCmd(), newHandoffAwaitCmd())
+	root.SetFlagErrorFunc(handoffParseError)
 	return root
+}
+
+// handoffArgs is the command line the parse-error path scans for --json (a seam):
+// cobra hands over a flag error before every flag is parsed, so --json after the
+// bad flag is not set yet.
+var handoffArgs = func() []string { return os.Args[1:] }
+
+// handoffParseError turns what cobra rejects before RunE runs - a bad flag value,
+// an unknown flag, a stray argument - into the usage envelope RunE emits for its
+// own usage errors, with exit code 2, so a --json caller always gets one envelope.
+func handoffParseError(cmd *cobra.Command, err error) error {
+	msg := err.Error()
+	if handoffWantsJSON(cmd) {
+		printHandoff(cmd, true, handoffcmd.NewErrorEnvelope(cmd.Name(), "usage", msg), func() {})
+	}
+	return &handoffcmd.Error{Code: handoffcmd.ExitUsage, Kind: "usage", Message: msg}
+}
+
+// handoffNoArgs rejects positional arguments through handoffParseError.
+func handoffNoArgs(cmd *cobra.Command, args []string) error {
+	if len(args) > 0 {
+		return handoffParseError(cmd, fmt.Errorf("unexpected argument %q", args[0]))
+	}
+	return nil
+}
+
+func handoffWantsJSON(cmd *cobra.Command) bool {
+	if f := cmd.Flags().Lookup("json"); f != nil && f.Changed {
+		return true
+	}
+	for _, a := range handoffArgs() {
+		if a == "--json" || a == "--json=true" {
+			return true
+		}
+	}
+	return false
 }
 
 // handoffRoot is this checkout's toplevel.
@@ -52,7 +89,7 @@ func newHandoffTargetsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "targets",
 		Short:         "List the agent terminals of this checkout a brief can go to",
-		Args:          cobra.NoArgs,
+		Args:          handoffNoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -74,7 +111,7 @@ func newHandoffSendCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "send",
 		Short:         "Type a one-line pointer to the brief into an agent terminal of this checkout",
-		Args:          cobra.NoArgs,
+		Args:          handoffNoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -99,7 +136,7 @@ func newHandoffCodexCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "codex",
 		Short:         "Run the brief through Codex headless (read-only) and write its final report",
-		Args:          cobra.NoArgs,
+		Args:          handoffNoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -123,7 +160,7 @@ func newHandoffAwaitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "await",
 		Short:         "Wait for the final report of a brief sent to an agent's tab",
-		Args:          cobra.NoArgs,
+		Args:          handoffNoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {

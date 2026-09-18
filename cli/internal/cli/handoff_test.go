@@ -70,6 +70,41 @@ func TestHandoff_SendBriefInvalid(t *testing.T) {
 	}
 }
 
+// What cobra rejects before RunE - a bad flag value, a stray argument, an unknown
+// flag (--json after it included) - is a usage envelope with exit 2, not a bare
+// exit 1 (review of lets-w5tm5, C6).
+func TestHandoff_ParseErrorsAreEnvelopes(t *testing.T) {
+	for _, args := range [][]string{
+		{"codex", "--json", "--timeout", "nonsense"},
+		{"targets", "extra", "--json"},
+		{"send", "--bogus", "--json"},
+	} {
+		old := handoffArgs
+		handoffArgs = func() []string { return append([]string{"handoff"}, args...) }
+		env, err := runHandoff(t, args...)
+		handoffArgs = old
+		var ec exitCoder
+		e, _ := env["error"].(map[string]any)
+		if !errors.As(err, &ec) || ec.ExitCode() != 2 || env["ok"] != false || e["kind"] != "usage" {
+			t.Errorf("%v: exit %v envelope %v", args, err, env)
+		}
+	}
+	old := handoffArgs
+	handoffArgs = func() []string { return []string{"handoff", "send", "--bogus"} }
+	defer func() { handoffArgs = old }()
+	dir := t.TempDir()
+	t.Chdir(dir)
+	root := NewRootCmd()
+	root.SetArgs([]string{"handoff", "send", "--bogus"})
+	var out bytes.Buffer
+	root.SetOut(&out)
+	err := root.Execute()
+	var ec exitCoder
+	if !errors.As(err, &ec) || ec.ExitCode() != 2 || out.Len() != 0 {
+		t.Errorf("without --json: exit %v, stdout %q", err, out.String())
+	}
+}
+
 func TestHandoff_AwaitBadSince(t *testing.T) {
 	env, err := runHandoff(t, "await", "--brief", "x", "--since", "yesterday", "--json")
 	var ec exitCoder
