@@ -1,5 +1,6 @@
 ---
 description: Add a note to the active task - progress, decisions, context. --session (aliases --snapshot, --pre-compact, --compact) writes a resume-grade session snapshot without ending the session.
+argument-hint: "[free text|--session]"
 ---
 
 # Task Note

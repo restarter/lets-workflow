@@ -1,5 +1,6 @@
 ---
 description: Manage & persist statusline appearance - light/dark, compact, and which rows to show
+argument-hint: "[show|reset]"
 ---
 
 # Statusline Appearance

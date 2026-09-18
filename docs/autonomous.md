@@ -13,6 +13,7 @@ Several fan-out commands take an opt-in `--workflow` flag that runs their multi-
 | `/lets:review --workflow` | Fan-out → dedupe → adversarial verify → aggregate, off-context |
 | `/lets:opinion --workflow` | Expert fan-out + a conditional adversarial-challenge round |
 | `/lets:backlog review --workflow` | Backlog review fan-out + aggregate |
+| `/lets:research --workflow` | Per-sub-question web research → per-claim `skeptic` cross-check → synthesis, off-context; the citations are the output |
 
 It's a pure performance lever — the standard (non-`--workflow`) path produces the same result, just with the intermediate agent output in your conversation. Worth it when the work is a multi-stage off-context chain with no checkpoint in the middle; if you want to steer each step, use the standard path. (`/lets:plan`'s equivalent is the standalone PREVIEW below.)
 
@@ -49,11 +50,11 @@ The pipeline turns one well-described task into a spawn → plan → execute run
 - Editing the merge-branch with `--auto` is refused outright.
 - A tool failing 3× in a row, or detected fabrication, halts the run.
 
-On any hard-stop the session writes a `blocked` marker and (on macOS + cmux) fires a "Execute blocked — needs you" notification.
+On any hard-stop the session writes a `blocked` marker and fires an "Execute blocked — needs you" notification through `lets notify` - to the cmux sidebar, the attached tmux clients or the Orca card, whichever `LETS_LAUNCHER` names (see the table below).
 
 ### Watching N parallel sessions
 
-Each spawned session writes a per-task marker at `.lets/cache/pipeline-state-<id>` (`<id>|<phase>|<iso>`, phases: `planning | gate-clarify | gate-approve | executing | blocked | done`). `cat` it, or watch the cmux sidebar. (The statusline row that renders this marker is a deferred follow-up.) Gate notifications are marker-gated, so only autonomous spawned runs notify — interactive sessions stay quiet.
+Each spawned session writes a per-task marker at `.lets/cache/pipeline-state-<id>` (`<id>|<phase>|<iso>`, phases: `planning | gate-clarify | gate-approve | executing | blocked | done`). `cat` it, or watch where your launcher shows gate notifications (the cmux sidebar, the tmux status line, the Orca card). (The statusline row that renders this marker is a deferred follow-up.) Gate notifications are marker-gated, so only autonomous spawned runs notify — interactive sessions stay quiet.
 
 ## When things aren't available (degradation)
 
@@ -73,8 +74,8 @@ Gate notifications route through `lets notify`, which dispatches on `LETS_LAUNCH
 
 ### Prerequisites
 
-- `lets notify` needs the Go binary built (`make install`).
-- `--flow` / `execute --auto` need the released plugin (or `make dev` / `--plugin-dir`).
+- `lets notify` needs the `lets` binary on PATH (shipped since 0.8.0; `/lets:update` installs it).
+- `--flow` / `execute --auto` ship with the released plugin (0.6.3+) - nothing extra to build.
 - With `LETS_LAUNCHER=orca`, the worktree's Orca card mirrors the run: the gates write their title as the card comment, a blocked run writes its reason, `/lets:start` sets the card in progress, a PR sets it in review and a confirmed close completes it.
 - A notification channel needs `LETS_LAUNCHER=cmux` (macOS), `LETS_LAUNCHER=tmux` (Linux/macOS, with a client attached) or `LETS_LAUNCHER=orca` (Orca running); `terminal` surfaces gates in-band only. Orca cannot start Claude with `--permission-mode auto`, so `/lets:worktree create --auto` under orca opens the worktree through cmux or the terminal instead.
 - `plan-workflow` needs Claude Code ≥ 2.1.154 on a paid plan.

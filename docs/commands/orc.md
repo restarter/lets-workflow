@@ -26,6 +26,7 @@ You can also just say it: "ask the orchestrator …", "what did the orchestrator
 
 - **Orchestrators.** `/lets:start --main` registers the session as an orchestrator under its `/rename` name, optionally with `--scope "<part>"`. A repo can have several; a name belongs to one live session, and taking it over is a question, never automatic.
 - **Workers are bound.** `/lets:worktree create <id>` run from an orchestrator binds every worker it spawns; a chat you open yourself takes `/lets:start <id> --orc=<name>`. The binding lives with the branch, so it survives `/clear` and restarts.
+- **A worker sees its orchestrator at start.** In a worktree, `/lets:start` prints one line - the bound orchestrator, whether it is alive, and how many messages it has addressed to this session (`N message(s) from <name> - /lets:orc read`). Only the count: no peer text enters the session until you ask for it. An unbound branch with several orchestrators alive lists them and how to bind.
 - **No guessing.** `/lets:orc` without a name talks to the bound orchestrator. If that session is gone it says so and sends nothing - it never quietly picks another. With no binding it uses the only live orchestrator, or asks which one.
 
 ## How a message travels

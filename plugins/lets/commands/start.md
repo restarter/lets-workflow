@@ -1,6 +1,6 @@
 ---
 description: Start session - restore context, show tasks, select work item
-argument-hint: "[task-id|--continue|--main]"
+argument-hint: '[task-id|--continue|--main|--assistant] [--scope "<part>"] [--orc=<name>]'
 ---
 
 # Session Start
