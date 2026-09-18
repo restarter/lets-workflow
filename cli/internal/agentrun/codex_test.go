@@ -131,28 +131,53 @@ func TestRun_ErrorEventIsWarning(t *testing.T) {
 	}
 }
 
-func TestRun_TimeoutKillsGroup(t *testing.T) {
-	// The parent waits for the child's pid file before the timeout can fire, so a
-	// loaded machine cannot end the run before the SIGTERM-ignoring child exists.
-	dir := fakeCodex(t, "sh -c 'trap \"\" TERM; echo $$ > \"'\"$dir\"'/child\"; while :; do sleep 1; done' &\n"+
-		"while [ ! -s \"$dir/child\" ]; do sleep 0.05; done\nsleep 30\n")
+func TestRun_Timeout(t *testing.T) {
+	fakeCodex(t, "sleep 30\n")
 	req := runRequest(t)
-	req.Timeout = 2 * time.Second
+	req.Timeout = 300 * time.Millisecond
 	start := time.Now()
 	res := codex{}.Run(context.Background(), req)
-	if res.Reason != ReasonTimeout {
+	if res.Reason != ReasonTimeout || !res.Ran || res.Complete {
 		t.Fatalf("result: %+v", res)
 	}
 	if d := time.Since(start); d > 15*time.Second {
 		t.Errorf("Run took %v", d)
 	}
-	b, err := os.ReadFile(filepath.Join(dir, "child"))
-	if err != nil {
-		t.Fatalf("child pid: %v", err)
+}
+
+// TestRun_KillsGroup cancels a run only after its SIGTERM-ignoring child has
+// written its pid, so a loaded machine cannot end the run before the child
+// exists; then the child must be gone (os/exec's WaitDelay kills only the leader).
+func TestRun_KillsGroup(t *testing.T) {
+	dir := fakeCodex(t, "sh -c 'trap \"\" TERM; echo $$ > \"'\"$dir\"'/child\"; while :; do sleep 1; done' &\nsleep 60\n")
+	req := runRequest(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan Result, 1)
+	go func() { done <- codex{}.Run(ctx, req) }()
+	pidFile := filepath.Join(dir, "child")
+	var b []byte
+	for deadline := time.Now().Add(20 * time.Second); ; {
+		if b, _ = os.ReadFile(pidFile); len(strings.TrimSpace(string(b))) > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the child never wrote its pid")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	cancel()
+	var res Result
+	select {
+	case res = <-done:
+	case <-time.After(20 * time.Second):
+		t.Fatal("Run did not return after cancel")
+	}
+	if res.Reason != ReasonCanceled {
+		t.Errorf("result: %+v", res)
 	}
 	pid, _ := strconv.Atoi(strings.TrimSpace(string(b)))
-	deadline := time.Now().Add(2 * time.Second)
-	for {
+	for deadline := time.Now().Add(2 * time.Second); ; {
 		if err := syscall.Kill(pid, 0); errors.Is(err, syscall.ESRCH) {
 			return
 		}
