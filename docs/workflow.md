@@ -60,7 +60,7 @@ For the hands-off version — autonomous spawn → plan → execute, and off-con
 
 ### An orchestrator and its workers
 
-Several chats on one repo can coordinate without you carrying messages. Start one or more orchestrators with `/lets:start --main` (give each session a name with `/rename`, and optionally `--scope "<part of the repo>"`). Worker chats are bound to one of them: `/lets:worktree create <id>` run from an orchestrator binds every worker it spawns, and a chat you open by hand takes `/lets:start <id> --orc=<name>`. From then on a worker uses `/lets:orc ask` / `ping` / `read`, `/lets:done` offers to ping the orchestrator about the PR, and an execute deviation or an undecided `/lets:opinion` offers to ask it. See **[commands/orc.md](commands/orc.md)**.
+Several chats on one repo can coordinate without you carrying messages. Start one or more orchestrators with `/lets:start --main` (give each session a name with `/rename`, and optionally `--scope "<part of the repo>"`). Worker chats are bound to one of them: `/lets:worktree create <id>` run from an orchestrator binds every worker it spawns, and a chat you open by hand takes `/lets:start <id> --orc=<name>`. From then on a worker uses `/lets:orc ask` / `ping` / `read`, `/lets:done` offers to ping the orchestrator about the PR, and an execute deviation or an undecided `/lets:opinion` offers to ask it. See **[commands/orc.md](commands/orc.md)**, and **[messaging.md](messaging.md)** for all three ways to reach another session or agent - peers, other projects' orchestrators, and hand-off briefs for Codex or Antigravity.
 
 ## How LETS keeps Claude on track
 
@@ -92,3 +92,4 @@ More in **[code-review.md](code-review.md)**.
 - **[tasks.md](tasks.md)** — how task tracking works
 - **[plan-execute.md](plan-execute.md)** — the plan → execute flow
 - **[configuration.md](configuration.md)** — settings and file layout
+- **[messaging.md](messaging.md)** — talking to other sessions and agents

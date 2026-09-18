@@ -45,4 +45,4 @@ Go (`lets peers`) finds the peer, frames the message with a header that addresse
 
 ## When it cannot reach anyone
 
-`who` names every source it could not read (`claude registry: registry_protocol_unknown …`, `orca: orca_app_not_running`) and still lists what it could. A non-Claude agent in an Orca pane (for example Codex) can be read but not messaged in this version.
+`who` names every source it could not read (`claude registry: registry_protocol_unknown …`, `orca: orca_app_not_running`) and still lists what it could. A non-Claude agent in an Orca pane (for example Codex or Antigravity) can be read but not messaged in this version. To give it work, hand it a brief instead: `/lets:handoff --send` types the brief into its tab and brings its report back - see **[handoff.md](handoff.md)**, and **[../messaging.md](../messaging.md)** for when to use which.

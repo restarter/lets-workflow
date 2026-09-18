@@ -87,6 +87,10 @@ This is where LETS shines: reviewing a PR from the terminal with expert agents i
 
 If you're the PR author, `/lets:github-pr --respond <PR>` triages the comments on your PR, auto-fixes the mechanical ones, and posts replies.
 
+## Handing the review to another agent - `/lets:handoff`
+
+When you want a second, independent reader - Codex, Antigravity, a fresh Claude session, a teammate's agent - `/lets:handoff` builds one self-contained brief for it with the same targets as `/lets:review` (`--branch`, `--last-commit`, `--plan`, a PR, ...), plus `--commits <N>` and `--range <a>..<b>` for the commits that answer a review round. On its own it prints the brief to paste. `--codex` runs it through Codex headless in a read-only sandbox, and `--send` types it into an agent's Orca tab; either way the agent's report comes back UNVERIFIED and every finding is checked against the code before it counts. Every brief asks for the same thing this page does: findings ranked BLOCKER / MAJOR / MINOR, and remedies at the component that owns the behavior. More in **[commands/handoff.md](commands/handoff.md)**.
+
 ## Dynamic agent selection
 
 Agents aren't hardcoded into a review. Each command looks at your changes and picks only the relevant experts:
@@ -102,3 +106,4 @@ The same idea applies to plan reviews — agents are chosen from signals in the 
 - **[agents.md](agents.md)** — the 14 agents and what triggers each
 - **[plan-execute.md](plan-execute.md)** — reviewing a plan before executing it
 - **[commands.md](commands.md)** — `/lets:check`, `/lets:review`, `/lets:github-pr` flags
+- **[commands/handoff.md](commands/handoff.md)** — hand the review to another agent and get its report back verified

@@ -1,0 +1,6 @@
+{"timestamp":"2026-09-18T14:00:00.000Z","type":"session_meta","payload":{"id":"03a0b4e3-d92f-7671-899b-87e658914765","cwd":"/w","originator":"codex-tui","source":"cli","thread_source":"user"}}
+{"timestamp":"2026-09-18T14:00:01.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"T0"}}
+{"timestamp":"2026-09-18T14:05:00.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"T0","last_agent_message":"OLD"}}
+{"timestamp":"2026-09-18T14:33:51.776Z","type":"event_msg","payload":{"type":"task_started","turn_id":"T1"}}
+{"timestamp":"2026-09-18T14:33:52.443Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Read the hand-off brief at /w/.lets/handoffs/b.md and follow it exactly."}]}}
+{"timestamp":"2026-09-18T14:36:00.000Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"T9","last_agent_message":"WRONG"}}

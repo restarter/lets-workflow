@@ -34,5 +34,6 @@ func NewRootCmd() *cobra.Command {
 	cmd.AddCommand(NewOrcaCmd())
 	cmd.AddCommand(NewPeersCmd())
 	cmd.AddCommand(NewNotifyCmd())
+	cmd.AddCommand(NewHandoffCmd())
 	return cmd
 }

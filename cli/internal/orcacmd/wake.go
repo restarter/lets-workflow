@@ -4,7 +4,6 @@ package orcacmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 
@@ -75,74 +74,15 @@ func Wake(ctx context.Context, o WakeOptions) (*WakeResult, error) {
 		info.Reason = f.Reason
 		return res, nil
 	}
-	out, f := c.Run(ctx, "terminal create", "terminal", "create", "--worktree", "path:"+o.Repo, "--title", o.Title, "--command", "claude -r "+o.Session, "--json")
+	h, f := c.CreateTerminal(ctx, o.Repo, o.Title, "claude -r "+o.Session)
 	if f != nil {
 		info.Reason = f.Reason
 		return res, nil
 	}
-	var env struct {
-		Result *struct {
-			Terminal *struct {
-				Handle string `json:"handle"`
-			} `json:"terminal"`
-		} `json:"result"`
-	}
-	if json.Unmarshal(out, &env) != nil || env.Result == nil || env.Result.Terminal == nil || !ValidHandle(env.Result.Terminal.Handle) {
-		info.Reason = ReasonOutputUnrecognized
-		return res, nil
-	}
-	info.Woken, info.Handle = true, env.Result.Terminal.Handle
+	info.Woken, info.Handle = true, h
 	res.Steps = append(res.Steps, Step{Status: StepOK, Message: fmt.Sprintf("resumed %s in a new Orca terminal", o.Title)})
-	// Startup only: tui-idle is a verified startup signal (it also fires mid-turn, so
-	// no later reply is ever judged by it).
-	relist := func() (string, error) { // right after create, the one terminal with this title in this checkout
-		out, f := c.Run(ctx, "terminal list", "terminal", "list", "--worktree", "path:"+o.Repo, "--json")
-		if f != nil {
-			return "", f
-		}
-		var l struct {
-			Result *struct {
-				Terminals []struct {
-					Handle string `json:"handle"`
-					Title  string `json:"title"`
-				} `json:"terminals"`
-			} `json:"result"`
-		}
-		if json.Unmarshal(out, &l) != nil || l.Result == nil {
-			return "", &Failure{Reason: ReasonOutputUnrecognized, Verb: "terminal list"}
-		}
-		found := ""
-		for _, term := range l.Result.Terminals {
-			if term.Title == o.Title && ValidHandle(term.Handle) {
-				if found != "" {
-					return "", &Failure{Reason: ReasonHandleStale, Verb: "terminal list", Detail: "several terminals carry this title"}
-				}
-				found = term.Handle
-			}
-		}
-		if found == "" {
-			return "", &Failure{Reason: ReasonHandleStale, Verb: "terminal list"}
-		}
-		info.Handle = found
-		return found, nil
-	}
-	f = WithHandleRetry(ctx, info.Handle, relist, func(h string) *Failure {
-		out, f := c.Run(ctx, "terminal wait", "terminal", "wait", "--terminal", h, "--for", "tui-idle", "--timeout-ms", "120000", "--json")
-		if f != nil {
-			return f
-		}
-		var w struct {
-			Result *struct {
-				Wait *struct {
-					Satisfied bool `json:"satisfied"`
-				} `json:"wait"`
-			} `json:"result"`
-		}
-		if json.Unmarshal(out, &w) == nil && w.Result != nil && w.Result.Wait != nil {
-			info.Satisfied = w.Result.Wait.Satisfied
-		}
-		return nil
-	})
+	h, up, f := c.WaitStartup(ctx, h, o.Repo, o.Title)
+	info.Handle, info.Satisfied = h, up
 	if f != nil {
 		res.Steps = append(res.Steps, Step{Status: StepWarn, Message: "startup wait: " + f.Error()})
 	}

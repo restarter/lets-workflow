@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+- **Hand a brief to Codex or any agent's Orca tab, and get the report back verified (lets-w5tm5).** `/lets:review-handoff` is now `/lets:handoff` (the old name stays as a deprecated alias). `--codex` runs the brief through Codex headless in a read-only sandbox; `--send` types a one-line pointer to it into an agent tab of this worktree - Codex, Antigravity, Claude - never over a busy agent or half-typed text, and waits for its report: Codex's from its own end-of-turn record (never a subagent's message, never terminal output), any other agent's from a report file the brief asks it to write. The report is relayed whole as UNVERIFIED and checked finding by finding against the code. New `lets handoff targets|send|codex|await`; the runners live in `cli/internal/agentrun`, the seam external agent providers (lets-9yz68) build on. Two new docs pages: [docs/messaging.md](docs/messaging.md) puts the three ways to reach another session or agent - `/lets:orc`, `/lets:hub`, `/lets:handoff` - on one page with one safety model, and [docs/orca.md](docs/orca.md) gathers everything `LETS_LAUNCHER=orca` switches on.
+
+### Deprecated
+- **`/lets:review-handoff` (lets-w5tm5).** Use `/lets:handoff`; the old name only forwards to it and will be removed in a future release.
+
 ### Fixed
 - **A board file that forgets `id:` is no longer ignored in silence.** A project whose tracker adapter declares no `## Worktree` section can put the whole convention in its board file - but a board declaring only `branch:` lost it: the convention is gated on `id:`, so every naming key was dropped and `lets worktree branch-name` rendered the built-in `feature/{id}-{slug}` with `source: default` and no explanation (the diagnosis was computed and discarded at the call site). `branch-name` now returns `reasons[]`, and a convention dropped for a missing `id:` is named by `convention_keys_ignored_no_id` alongside `convention_undeclared`. Declaring `id:` in the board file next to `branch:` is the fix on the project side.
 

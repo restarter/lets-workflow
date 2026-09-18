@@ -13,7 +13,7 @@ import (
 // direction in plan lets-ip06f section 4). A leaf must never import a package that
 // imports it back, and the easiest way to guarantee that is to allow no non-leaf
 // import at all. Append a directory when a leaf lands.
-var leafPackages = []string{"trackeradapter", "taskid", "fsutil", "peername", "taskstate", "redact", "ccregistry"}
+var leafPackages = []string{"trackeradapter", "taskid", "fsutil", "peername", "taskstate", "redact", "ccregistry", "agentrun"}
 
 const modulePrefix = "github.com/restarter/lets-workflow/cli/internal/"
 
@@ -23,6 +23,7 @@ const modulePrefix = "github.com/restarter/lets-workflow/cli/internal/"
 var deniedEdges = map[string][]string{
 	"worktreecmd": {"peerscmd", "orcacmd"},
 	"orcacmd":     {"peerscmd"},
+	"handoffcmd":  {"peerscmd"}, // the handoff lane never routes through the peer lane (lets-w5tm5)
 }
 
 func TestDeniedImports(t *testing.T) {

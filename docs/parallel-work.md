@@ -51,7 +51,7 @@ With `LETS_LAUNCHER=orca`, `/lets:worktree create <task-id>` asks Orca to create
 
 ### Across projects: `/lets:hub` (Orca addon)
 
-With `LETS_LAUNCHER=orca`, one session can look across every project Orca knows. `/lets:hub` lists each project's orchestrators and whether they are running. A read-only question to a stopped orchestrator (what is in progress, what is next) is answered by a headless fork of its last session, launched in plan mode with only Read, Grep and Glob, no MCP servers and a filtered environment; anything that would change something wakes the orchestrator in a visible Orca terminal, so you press its gates yourself. The hub never runs a second process on an orchestrator that is alive, and never writes into the other project.
+With `LETS_LAUNCHER=orca`, one session can look across every project Orca knows. `/lets:hub` lists each project's orchestrators and whether they are running. A read-only question to a stopped orchestrator (what is in progress, what is next) is answered by a headless fork of its last session, launched in plan mode with only Read, Grep and Glob, no MCP servers and a filtered environment; anything that would change something wakes the orchestrator in a visible Orca terminal, so you press its gates yourself. The hub never runs a second process on an orchestrator that is alive, and never writes into the other project. How the hub, `/lets:orc` and `/lets:handoff` fit together: **[messaging.md](messaging.md)**; everything Orca changes: **[orca.md](orca.md)**.
 
 ## See also
 
@@ -59,3 +59,5 @@ With `LETS_LAUNCHER=orca`, one session can look across every project Orca knows.
 - **[workflow.md](workflow.md)** — where parallel work fits the overall loop
 - **[autonomous.md](autonomous.md)** — the autonomous pipeline that automates this with `--flow plan-workflow --auto`
 - **[commands.md](commands.md)** — `/lets:team` and `/lets:worktree` subcommands
+- **[messaging.md](messaging.md)** — orchestrators, workers and hand-offs: talking to other sessions and agents
+- **[orca.md](orca.md)** — the Orca addon

@@ -8,3 +8,4 @@ Pages are added over time. Commands without a page here are covered by the quick
 |---------|------|--------|
 | `/lets:research` | [research.md](research.md) | Shipped (v0.6.4) |
 | `/lets:orc` | [orc.md](orc.md) | Stable |
+| `/lets:handoff` | [handoff.md](handoff.md) | New (merged; ships next release) |
