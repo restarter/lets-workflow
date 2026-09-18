@@ -124,6 +124,12 @@ func TestTargets_AgentsOnly(t *testing.T) {
 	if res, _ := Targets(context.Background(), TargetsOptions{Root: root, Match: "peer-messaging"}); len(res.Targets.Terminals) != 1 || res.Targets.Terminals[0].Handle != "term_peer" {
 		t.Errorf("title match: %+v", res.Targets.Terminals)
 	}
+	// An agent name matches the agent, not the title: live tab titles do not carry it.
+	for q, want := range map[string]string{"antigravity": "term_new", "Codex": "term_old"} {
+		if res, _ := Targets(context.Background(), TargetsOptions{Root: root, Match: q}); len(res.Targets.Terminals) != 1 || res.Targets.Terminals[0].Handle != want {
+			t.Errorf("agent match %q: %+v", q, res.Targets.Terminals)
+		}
+	}
 }
 
 func TestTargets_OrcaAbsent(t *testing.T) {

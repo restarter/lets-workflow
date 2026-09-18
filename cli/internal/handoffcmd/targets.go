@@ -16,7 +16,7 @@ import (
 type TargetsOptions struct {
 	Root  string // this checkout
 	Self  string // this session's own terminal ($ORCA_TERMINAL_HANDLE): never a target
-	Match string // optional: a term_ handle (exact) or a title fragment
+	Match string // optional: a term_ handle or an agent name (exact), or a title fragment
 }
 
 // Targets lists the agent terminals a brief can go to, newest output first. Orca
@@ -64,11 +64,16 @@ func ineligible(t orcacmd.Terminal, root, self string) string {
 	return ""
 }
 
-// matches: a term_ handle matches exactly; anything else is a case-insensitive
+// matches: a term_ handle matches exactly; an agent name (codex, antigravity)
+// matches the terminal's agent exactly - an Orca tab title rarely carries it
+// (2026-09-18: "lets-w5tm5 | ...", "t0 agy"); anything else is a case-insensitive
 // fragment of the title with Orca's leading status glyphs ("✳ ", "◑ ") ignored.
 func matches(t orcacmd.Terminal, q string) bool {
 	if strings.HasPrefix(q, "term_") {
 		return t.Handle == q
+	}
+	if t.AgentType != "" && strings.EqualFold(q, t.AgentType) {
+		return true
 	}
 	return strings.Contains(normTitle(t.Title), normTitle(q))
 }

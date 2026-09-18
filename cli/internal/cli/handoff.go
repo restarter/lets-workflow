@@ -61,7 +61,7 @@ func newHandoffTargetsCmd() *cobra.Command {
 			return err
 		},
 	}
-	cmd.Flags().StringVar(&match, "match", "", "A term_ handle, or a fragment of the tab title")
+	cmd.Flags().StringVar(&match, "match", "", "A term_ handle, an agent name (codex, antigravity), or a fragment of the tab title")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
 	return cmd
 }

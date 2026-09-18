@@ -31,7 +31,7 @@ Produce ONE message the user copies into another agent. That agent has NO contex
 /lets:handoff --spec none          # deliberately no spec - no spec line, no caveat
 /lets:handoff --plan --codex              # run the brief through Codex headless (read-only), relay + verify its report
 /lets:handoff --branch --send             # type the brief into an agent tab of this worktree (pick one)
-/lets:handoff --branch --send antigravity # ... the tab whose title contains "antigravity"
+/lets:handoff --branch --send antigravity # ... the Antigravity tab (an agent name, or a fragment of the tab title)
 ```
 
 Selectors match `/lets:review`, with two deliberate differences: `--commits` / `--range` are **handoff-only** (review has no target for "the commits that answer a review round"), and `--pr` is kept as an alias because it is the spelling this tool shipped with. Review's output modifiers `--json` and `--workflow` are **not** implemented here.
@@ -40,7 +40,7 @@ Selectors match `/lets:review`, with two deliberate differences: `--commits` / `
 
 ## Step 1: Determine the target
 
-- Delivery modifiers first: `--codex`, `--send [<tab>]` (`<tab>` = the next token when it does not start with `--`). Strip them, then apply the target rules to the rest.
+- Delivery modifiers first: `--codex`, `--send [<tab>]` (`<tab>` = the next token when it does not start with `--`: a `term_` handle, an agent name such as `codex` / `antigravity`, or a fragment of the tab title). Strip them, then apply the target rules to the rest.
 - PR URL/number, or `--pr <id-or-url>` -> **PR mode**. `--local` / `--staged` / `--last-commit` / `--branch` / `--commits N` / `--range a..b` -> **local mode**. `--plan [path]` -> **plan mode**. `--file <path>` -> **file mode**.
 - **Host resolution.** A `github.com` URL -> `gh`; a `bitbucket.org` URL -> `bbb`, whose PR number sits in the `/pull-requests/<n>` segment, not github's `/pull/<n>`; a bare number -> `{LETS_PR_FLOW}`. **When `{LETS_PR_FLOW}` is empty** - the normal state outside a LETS project, where the hook emits only four keys - fall through to the forge named by the `origin` URL Step 2 prints. Only when neither names a github or bitbucket host: stop and say a PR hand-off needs one.
 - **No argument -> infer, do not ask by default.** Take the target from the user's sentence next to the command ("цих правок" -> the just-committed fixes; "цієї гілки" -> `--branch`; "план" -> `--plan`; "коміта" -> `--last-commit`) and from what just happened in the session. Only when genuinely ambiguous, ask **one** `AskUserQuestion` (header `Target`, `multiSelect: false`) offering Local changes / Branch / Plan / Last commit. Otherwise decide, and name the choice in the closing line.

@@ -383,7 +383,7 @@ lets notify --title <text> [--subtitle <text>] [--body <text>] [--ref <ref> | --
 Delivery of a hand-off brief (`internal/handoffcmd/`, `internal/agentrun/`, `internal/cli/handoff.go`, `//go:build unix`; the Windows stub answers every subcommand with a parseable `not_supported` envelope, exit 0). Used by `/lets:handoff --codex | --send` - the command composes and saves the brief (artifact-path kind `handoff`), Go runs the agent, types into Orca and reads the report back.
 
 ```bash
-lets handoff targets [--match <term_handle | title fragment>] [--json]
+lets handoff targets [--match <term_handle | agent name | title fragment>] [--json]
 lets handoff send --brief <abs path> (--terminal <handle> | --new codex) [--json]
 lets handoff codex --brief <abs path> [--timeout 30m] [--json]
 lets handoff await --brief <abs path> --agent <send.agent> --since <send.sent_at> [--fingerprint <send.fingerprint>] [--timeout 30m] [--json]
