@@ -15,15 +15,15 @@
 
 Claude Code is powerful, but without structure it drifts - forgets context between sessions, silently changes approach when something fails, reviews its own code with no outside perspective, and loses track of what was decided and why.
 
-**LETS fix this.** You get a team of 14 specialized AI agents, a structured development workflow, and a PR review system that posts inline comments directly to GitHub - all from the terminal. Every session has a task. Every commit links to it. Context survives across sessions and conversation compaction.
+**LETS fix this.** You get a team of 15 specialized AI agents, a structured development workflow, and a PR review system that posts inline comments directly to GitHub - all from the terminal. Every session has a task. Every commit links to it. Context survives across sessions and conversation compaction.
 
 ## Why LETS?
 
-**You don't just chat with AI. You run a process** — `/lets:*` commands and 14 expert agents cover the whole development cycle, every change is reviewed by the right specialists, and every decision is made deliberately, with you in the loop.
+**You don't just chat with AI. You run a process** — `/lets:*` commands and 15 expert agents cover the whole development cycle, every change is reviewed by the right specialists, and every decision is made deliberately, with you in the loop.
 
 - **A complete workflow, not a chat box.** One loop from start to ship — restore context and pick a task, plan the work, build it, review it, open a PR, close the task. The plugin keeps Claude on the rails the whole way; nothing falls through the cracks.
 - **Plan before you build.** Pulse and clean up the backlog, design the architecture with real codebase exploration and expert review, then execute step by step behind approval gates. Choices are made on purpose, not improvised.
-- **Every change reviewed by the right experts.** 14 specialized agents select themselves based on what changed - security for auth code, database for migrations, architect for structure. Findings come tiered by severity, so you act on what matters. Plus an *actor* agent — point it at a senior iOS dev's profile, a UX designer's, anyone — and get their take.
+- **Every change reviewed by the right experts.** 15 specialized agents - the relevant ones select themselves based on what changed - security for auth code, database for migrations, architect for structure. Findings come tiered by severity, so you act on what matters. Plus an *actor* agent — point it at a senior iOS dev's profile, a UX designer's, anyone — and get their take.
 - **You decide, always.** Commit, push, PR, merge - every state-changing step waits for your "go". The AI proposes and explains its reasoning; it never silently switches approach. Transparency by design.
 - **Context that survives.** Tasks, decisions, and discovery notes live in [beads](https://github.com/steveyegge/beads) and outlast conversation compaction and new sessions - pick up exactly where you left off.
 - **Built for teams.** Shared task database via [Dolt](https://github.com/dolthub/dolt), Agent Teams that implement multiple tasks in parallel (each in its own worktree, plan approved by the lead), and worktrees for hands-on parallel sessions.
@@ -152,7 +152,7 @@ Then, inside the Claude Code session:
 
 → Full docs: [docs/agents.md](docs/agents.md)
 
-LETS ships **14 specialized agents**. You never pick them by hand — the commands that use agents (`/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:backlog`, `/lets:research`, `/lets:team`) look at what you're doing and bring in only the ones that fit.
+LETS ships **15 specialized agents**. You don't have to pick them by hand — the commands that use agents (`/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:backlog`, `/lets:research`, `/lets:team`) look at what you're doing and bring in only the ones that fit. When you want one specific colleague, `/lets:ask <expert> <question>` goes straight to them.
 
 | Agent | Expertise |
 |-------|-----------|
@@ -169,6 +169,7 @@ LETS ships **14 specialized agents**. You never pick them by hand — the comman
 | git-historian | Blame analysis, past-decision context, change patterns |
 | explorer | Codebase mapping, pattern discovery (used in `/lets:plan`) |
 | implementer | Full-stack implementation (used by `/lets:team`) |
+| skeptic | Verifier, never a reviewer: tries to refute each `/lets:review` finding and cross-checks each `/lets:research` claim |
 | actor | Any expert personality loaded from a URL or local file |
 
 **Dynamic selection.** Each command analyzes the change (or the plan, or the question) and selects only the experts that matter — touch auth code and security, backend, and architect join; a pure docs update gets docs + compliance and nothing else; a full-stack feature can pull in up to 12, each focused on its domain. (`compliance` and `docs` always join a review. For plan reviews, the picks come from signals in the plan text — migrations, API endpoints, Docker configs, ….)
@@ -193,7 +194,7 @@ A LETS session runs a loop: start, work, commit, finish.
 /lets:start ─── choose how to work ─── /lets:commit ─── /lets:done ─── /lets:end
 ```
 
-**Start** - `/lets:start` restores context from the previous session, shows available tasks, and creates a feature branch. Context survives conversation compaction via beads task comments.
+**Start** - `/lets:start` restores context from the previous session, shows available tasks, and creates a feature branch. Context survives conversation compaction: `/lets:start` reads the latest session snapshot first, then the task's comments.
 
 **Choose how to work** - depending on the task, you pick the approach:
 
@@ -231,7 +232,7 @@ A LETS session runs a loop: start, work, commit, finish.
 
 **Plan** (`/lets:plan`) - codebase exploration with dynamically-scaled explorer agents, then architecture design with expert evaluation. Small project? One explorer. Large monorepo? Up to 10, each mapping a different area. Want a quick talk-through instead? `/lets:plan --fast` skips the subagent phases and plans collaboratively in-session.
 
-**Execute** (`/lets:execute`) - implements the plan step by step in native plan mode. You approve each step before Claude proceeds. No surprises.
+**Execute** (`/lets:execute`) - implements the plan in native plan mode. You approve the execution once, then pick how it runs: straight-through (the default - all tasks, commits at the plan's commit points), step-by-step (a pause after each task), auto (unattended) or team (parallel). No surprises.
 
 **Research** (`/lets:research`) - unlike `/lets:opinion` (project-grounded judgment, no web) or `/lets:ask` (a quick model-knowledge consult), this answers an external or technical question with a CITED synthesis: it searches the web, fetches the best sources, and a cross-check pass flags single-source, contradicted, or stale claims before presenting. The deliverable is a sourced answer with a Sources list and an as-of date. `--workflow` runs it off-context; `--project` grounds findings against this repo.
 ### Code review
@@ -293,7 +294,7 @@ On Linux or macOS with [tmux](https://github.com/tmux/tmux) installed, set `LETS
 
 **Sessions that talk to each other.** Run a `/lets:start --main` orchestrator next to your worktree sessions and stop copying decisions between chats: a worker asks its orchestrator with `/lets:orc ask`, pings it about a PR, or reads what it said; `/lets:peer <name>` reaches any named session. Nothing is sent without your request in that chat, a peer's words arrive as data rather than instructions, and a message goes out through Claude's own session messaging - or, with Orca, straight into the peer's pane when it is provably idle. With Orca, `/lets:hub` looks across projects: it asks a stopped orchestrator a read-only question, or wakes it in a visible terminal when the work needs its gates.
 
-**Hand the work to another agent.** When you want a second reader with no stake in this chat - Codex, Antigravity, a fresh Claude session - `/lets:handoff --branch` (or `--last-commit`, `--plan`, a PR, ...) builds one self-contained brief. On its own it prints the brief to paste anywhere; `--codex` runs it through Codex headless in a read-only sandbox, and with Orca `--send` types it into an agent's tab. Either way the report comes back UNVERIFIED, and every finding is checked against the code before it counts. Briefs and reports live in `.lets/handoffs/`.
+**Hand the work to another agent.** When you want a second reader with no stake in this chat - Codex, Antigravity, a fresh Claude session - `/lets:handoff --branch` (or `--last-commit`, `--plan`, a PR, ...) builds one self-contained brief. On its own it prints the brief to paste anywhere; `--codex` runs it through Codex headless in a read-only sandbox, and with Orca `--send` types it into an agent's tab. Either way the report comes back UNVERIFIED, and every finding is checked against the code before it counts. The printed brief writes nothing; with `--codex` / `--send` the brief and the agent's report are saved under `.lets/handoffs/`.
 
 All three lanes share one safety model: nothing goes out without your request, whatever comes back is data rather than instructions, nothing is sent twice or typed over someone's half-written line, and anything read from another session is redacted. The Orca side is in [docs/orca.md](docs/orca.md).
 
@@ -389,7 +390,7 @@ The README is the tour; **[docs/](docs/)** is the manual.
 | [workflow.md](docs/workflow.md) | The day-to-day loop — session lifecycle, the three ways to work, LETS boxes, how the hooks keep Claude on track. |
 | [plan-execute.md](docs/plan-execute.md) | The plan → execute flow — `/lets:plan` designs the change with codebase exploration and expert review, `/lets:execute` implements it behind approval gates. |
 | [code-review.md](docs/code-review.md) | Three levels of review — `/lets:check`, `/lets:review`, and `/lets:github-pr` (analyze, post inline, follow up, approve). Dynamic agent selection. |
-| [agents.md](docs/agents.md) | The 14 expert agents, what triggers each, tiered scoring, agent modes, and the actor agent. |
+| [agents.md](docs/agents.md) | The 15 expert agents, what triggers each, tiered scoring, agent modes, and the actor agent. |
 | [messaging.md](docs/messaging.md) | Talking to other sessions and agents — `/lets:orc` (the repo's orchestrator and peers), `/lets:hub` (other projects), `/lets:handoff` (a brief for Codex, Antigravity or any agent, report brought back and verified). |
 | [parallel-work.md](docs/parallel-work.md) | Working on several tasks at once — `/lets:team` (autonomous agents) and `/lets:worktree` (parallel terminals). |
 | [orca.md](docs/orca.md) | The Orca addon — what `LETS_LAUNCHER=orca` switches on and how it degrades without Orca. |

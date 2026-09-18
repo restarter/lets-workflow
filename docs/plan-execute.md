@@ -1,6 +1,6 @@
 # Plan → Execute
 
-For anything bigger than a quick fix, LETS splits the work in two: **`/lets:plan`** works out *how* to build it, **`/lets:execute`** builds it — with you approving each step. You get a design you've reviewed before any code is written, and an implementation that doesn't surprise you.
+For anything bigger than a quick fix, LETS splits the work in two: **`/lets:plan`** works out *how* to build it, **`/lets:execute`** builds it — after one approval, at the pace you pick. You get a design you've reviewed before any code is written, and an implementation that doesn't surprise you.
 
 > Rule of thumb: quick fix → just do it. Medium task (a few hours) → `/lets:plan` then `/lets:execute`. Large task → `/lets:plan`, and break it into subtasks.
 

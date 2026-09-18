@@ -14,11 +14,11 @@ LETS gives Claude Code a structure to work inside: every session starts with a t
 
 **`/lets:commit`** — reviews your changes and creates a conventional commit (`feat:`, `fix:`, `docs:`, …) with the task ID in the scope and a `Task:` footer. Use this instead of `git commit` directly — it keeps the format consistent and links the commit to the task.
 
-**`/lets:done`** — finishes the task. In GitHub mode it pushes the branch and opens a PR (the task stays open until the PR merges). In local/bitbucket mode it merges to your merge branch and closes the task.
+**`/lets:done`** — finishes the task. In GitHub or Bitbucket mode it pushes the branch and opens a PR - via `gh` or `bbb` - and the task stays open until the PR merges. In local mode it merges to your merge branch and closes the task.
 
 **`/lets:end`** — saves a session snapshot so the next conversation picks up where you left off.
 
-> Two separate lifecycles: a **session** is one conversation (`/lets:start` … `/lets:end`); a **task** is picked at start and finished with `/lets:done` — it can span several sessions. When you return to an unfinished task, `/lets:start` restores its context from the task's comments.
+> Two separate lifecycles: a **session** is one conversation (`/lets:start` … `/lets:end`); a **task** is picked at start and finished with `/lets:done` — it can span several sessions. When you return to an unfinished task, `/lets:start` restores its context from the latest session snapshot file first, then the task's comments. The snapshot is local (`.lets/sessions/`, gitignored), so a teammate on another machine gets the comments only.
 
 ## Three ways to work
 
@@ -43,7 +43,7 @@ For anything non-trivial — design first, then implement:
 |---------|--------------|
 | `/lets:backlog` | Backlog review (multi-agent), `--fast` quick no-agent pulse, + cleanup triage |
 | `/lets:plan` | Design how to build it — codebase exploration, architecture, a written plan |
-| `/lets:execute` | Claude implements the plan, with your approval at each step |
+| `/lets:execute` | Claude implements the plan after your approval - straight through by default, or pausing after each task if you pick step-by-step |
 
 See **[plan-execute.md](plan-execute.md)** for the full flow.
 

@@ -1,6 +1,6 @@
 # Expert agents
 
-LETS ships 14 specialized agents. You don't pick them — the commands that use agents (`/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:backlog`, `/lets:research`, `/lets:team`) analyze the situation and select only the ones that fit.
+LETS ships 15 specialized agents. You don't have to pick them — the commands that use agents (`/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:backlog`, `/lets:research`, `/lets:team`) analyze the situation and select only the ones that fit. The one place you name an expert yourself is `/lets:ask <expert> <question>`.
 
 | Agent | Expertise | Example trigger |
 |-------|-----------|-----------------|
@@ -17,6 +17,7 @@ LETS ships 14 specialized agents. You don't pick them — the commands that use 
 | git-historian | Blame analysis, change patterns | Changes to existing code |
 | explorer | Codebase mapping, pattern discovery | Used during `/lets:plan` |
 | implementer | Full-stack implementation | Used by `/lets:team` |
+| skeptic | Verifier: tries to refute one finding or claim against the code / sources | The `/lets:review` verify pass and the `/lets:research` cross-check; never picked as a reviewer |
 | actor | Any personality from a URL or file | On explicit request |
 
 ## How agents work

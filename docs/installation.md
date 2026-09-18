@@ -66,7 +66,7 @@ This is a one-time setup per machine. When Claude Code asks who to install for, 
 
 > **Do this once — it removes the manual plugin update forever:** in `/plugin` → **Marketplaces** → `lets-workflow`, **Enable auto-update**. The plugin then tracks every LETS release on its own, so staying current later collapses to a single `/lets:update` loop (see [Updating](#updating) below) instead of a manual `/plugin marketplace update`. Claude Code has no setting the `lets` binary can flip — this UI toggle is the one step only you can do.
 
-> Verify the plugin loaded: `/lets:` commands should now autocomplete in Claude Code. (The `🌱 LETS Workflow vX.Y.Z » <branch>` statusline appears once you've run `/lets:init` in a project — see step 3.)
+> Verify the plugin loaded: `/lets:` commands should now autocomplete in Claude Code. (The LETS statusline - a multi-line box with the version, branch, budget and active task, see [statusline.md](statusline.md) - appears once you've run `/lets:init` in a project — see step 3.)
 
 ### User-scope install (global rules)
 

@@ -23,7 +23,7 @@ LETS_TRACKER=beads
 |-----|---------|
 | `LETS_LANGUAGE` | The language Claude responds in when it isn't clear from your message. An English language name (`English`, `Ukrainian`, `Japanese`, …) regardless of the script it's written in. |
 | `LETS_MERGE_BRANCH` | The branch tasks merge into and PRs target. Used wherever LETS would otherwise assume `main`. |
-| `LETS_PR_FLOW` | `github` — `/lets:done` pushes and opens a PR via `gh`. `bitbucket` — planned. `local` — no PR; `/lets:done` merges locally. |
+| `LETS_PR_FLOW` | `github` — `/lets:done` pushes and opens a PR via `gh`. `bitbucket` — `/lets:done` pushes and opens a PR via `bbb`; the task stays open until the reviewer merges. `local` — no PR; `/lets:done` merges locally. |
 | `LETS_TRACKER` | The task tracker **adapter**: `beads` (default) or `none`. Selects the `.claude/rules/tracker-<name>.md` that `lets init` installs; commands resolve verbs through it. See [trackers.md](trackers.md). |
 | `LETS_LAUNCHER` | How `/lets:worktree create` opens a new worktree session: `terminal` (default — prints a `cd … && claude` command), `cmux` (a cmux workspace, macOS only), `tmux` (a tmux window/session, Linux + macOS), or `orca` (an [Orca](https://github.com/stablyai/orca) workspace). A preference, not a guarantee: each falls back to `terminal` when its binary/platform is absent (orca falls back to cmux, then terminal). `orca` is an opt-in addon and the one switch for everything Orca-related — the launcher, Orca peer messaging, card status, `/lets:hub`, the team orca backend and `/lets:handoff --send`; with any other value LETS never looks for an Orca binary. Picking it makes `lets init` write `orca.yaml` (commit it). See [orca.md](orca.md). |
 | `LETS_RULES_SCOPE` | Where this project's workflow rules come from: `project` (its own `.claude/rules/lets-rules.md` copy — the default) or `user` (deliberately no project copy; rules come from the global `~/.claude/rules/lets-rules.md`). Set automatically by `/lets:init` when you pick "Rely on global"; `/lets:update` then leaves the project copy uncreated (`delegated`) instead of restoring it. Any value other than `user` behaves as `project`. |
@@ -61,7 +61,7 @@ Everything LETS generates lives under `.lets/` (gitignored):
 ```
 .lets/.env              Project settings (the keys above)
 .lets/.env.example      Reference defaults (regenerated each `lets init`)
-.lets/sessions/         Session snapshots ({date}-{HHMM}-{task-id}-snapshot.md), start references, and PR-review restore state
+.lets/sessions/         Session snapshots ({date}-{HHMM}-{task-id}-snapshot.md), per-branch task-state files (`.task-<slug>`), and PR-review restore state
 .lets/reviews/          Saved review reports ({date}-{HHMM}-{task-id}-review-{local|branch|pr-N|plan}.md)
 .lets/plans/            Implementation plans from /lets:plan ({date}-{HHMM}-{task-id}-plan.md)
 .lets/execution/        PR review state and team records

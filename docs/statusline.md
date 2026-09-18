@@ -20,7 +20,7 @@ and a rotating tip:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ ⚘ LETS Workflow dev · ☰ lets-workflow · ⎇ main · +120 -30 · ⇄ #94 approved    │
+│ ⚘ LETS Workflow dev · » lets-workflow · ⎇ main · +120 -30 · ⇄ #94 approved    │
 │ ✦ Opus 4.8 (1M context) high · window 42% (424k/1000k) · 5h 58% (2h 10m) …    │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ ✓ lets-ds6bc Statusline 2.0 · 3 comments (2h) ← /lets:note                    │
@@ -28,7 +28,7 @@ and a rotating tip:
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Line 1 — identity.** Brand + `lets` version, a `☰` location pill, the branch,
+**Line 1 — identity.** Brand + `lets` version, a `»` location pill, the branch,
 the session diff (`+added -removed`), and the PR (`⇄ #94` + review state) when
 one is open.
 
@@ -53,7 +53,7 @@ as a "tofu" box on a bare terminal.
 | Glyph | Means |
 |---|---|
 | `⚘` | LETS brand |
-| `☰` | location (folder / worktree) |
+| `»` | location (folder / worktree) |
 | `⎇` | git branch |
 | `⇄` | pull request |
 | `✦` | model |

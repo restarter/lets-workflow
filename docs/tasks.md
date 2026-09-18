@@ -14,7 +14,7 @@ LETS is task-driven: every session starts by picking a task, every commit links 
 /lets:start  ──►  in_progress  ──►  …work, commits…  ──►  /lets:done  ──►  closed (or PR merged)
 ```
 
-A task and a session aren't the same thing: a **session** is one conversation (`/lets:start` … `/lets:end`); a **task** is picked at start and finished with `/lets:done`, and may span several sessions. When you come back to an unfinished task, `/lets:start` restores its context from the task's comments.
+A task and a session aren't the same thing: a **session** is one conversation (`/lets:start` … `/lets:end`); a **task** is picked at start and finished with `/lets:done`, and may span several sessions. When you come back to an unfinished task, `/lets:start` restores its context from the latest session snapshot file first, then the task's comments. The snapshot is local (`.lets/sessions/`, gitignored), so a teammate on another machine gets the comments only.
 
 ## Taking a task
 
@@ -23,7 +23,7 @@ A task and a session aren't the same thing: a **session** is one conversation (`
 - `/lets:start <task-id>` — jump straight to a specific task.
 - `/lets:start --continue` — resume the task you had in progress.
 
-Picking a task sets it to `in_progress` and creates the feature branch (`feature/<task-id>-<slug>`). If you describe work without picking a task, one is created for you, so there's still a traceable record.
+Picking a task sets it to `in_progress` and asks where to work: **Branch** (a new `feature/<task-id>-<slug>`, the default), **Worktree** (a separate directory for parallel work) or **Stay on current branch** (on the merge branch this is trunk-mode - see below). Inside a worktree the current branch is used as-is. If you describe work without picking a task, one is created for you, so there's still a traceable record.
 
 In conversation, "take task X" / "work on X" / "switch to task X" triggers the same flow (the `take-task` skill) — it claims the task, handles any uncommitted changes, and prepares the branch.
 
