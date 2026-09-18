@@ -32,6 +32,25 @@ For plan reviews (`/lets:review --plan`), agents are selected from signals in th
 
 See **[agents.md](agents.md)** for the agent roster and how selection works.
 
+### The verify pass
+
+Before anything is reported, every `[BLOCKER]` and `[SUGGESTION]` goes to `skeptic` agents whose only job is to refute it against the real code. The drop rule is deliberately asymmetric, so a real bug is hard to lose:
+
+| Finding | What the skeptics say | Result |
+|---------|-----------------------|--------|
+| `[SUGGESTION]` | a simple majority says "not real" | dropped |
+| `[BLOCKER]` | all say "not real", or a majority at high confidence | dropped |
+| `[BLOCKER]` | a simple majority says "not real" | downgraded to `[SUGGESTION]` |
+| `[BLOCKER]` | confirmed, or split | stays a `[BLOCKER]` |
+
+In the standard mode the pass checks every `[BLOCKER]` plus the top 5 `[SUGGESTION]`s (with more than ten findings the orchestrator re-checks them inline instead of spawning an agent per finding), and says so when the cap cut verification short. A finding the skeptics could not verify is kept and flagged, never treated as clean. The report shows how many findings the pass refuted.
+
+`--workflow` runs the same fan-out and the same verify pass off-context in a Dynamic Workflow - same verified findings, only the intermediate agent output stays out of your conversation (and the cap is not needed there). See **[autonomous.md](autonomous.md)**.
+
+### Every finding carries a remedy at the right place
+
+`/lets:check` and `/lets:review` hold every finding to the same REMEDY QUALITY rule: separate the symptom from its root cause, and propose the fix at the component that owns the behavior - not a workaround in whichever consumer happened to notice.
+
 ### The reviewers know what you were building
 
 Both `/lets:check` and `/lets:review` pull the task's description and put it in front of the reviewers — the expert agents for `/lets:review`, the inline pass for `/lets:check`. Without it a reviewer sees code that nothing calls yet and confidently reports it as dead — when the wiring may simply be the next PR. Work the spec describes is planned work, not scope creep. When no spec can be resolved the review still runs and says so on any scope finding — but it does **not** downgrade that finding. A missing spec is missing information about intent, not evidence that the code is fine, so the severity stays whatever the reviewer judges it to be. That matters most if you work without a task tracker at all: your reviews are exactly as sharp as everyone else's.
@@ -69,9 +88,13 @@ A spec is only used to decide whether a finding of the shape "dead / unrelated /
 
 It **never creates a worktree** — where you review is your call. Run it from your main checkout or from any worktree; the question is the same in both. `--json` never touches your working tree at all.
 
+### Bitbucket PRs
+
+`/lets:review <bitbucket-PR-url>` works the same way through `bbb`: it fetches the PR, diffs it, reads the discussion (general and inline comments arrive in one call) and posts the summary comment to the PR. A bare PR number resolves against the forge your project is configured for. What stays GitHub-only is the `/lets:github-pr` lifecycle - inline comments, follow-up, approve, merge. A PR from a fork (on either forge) cannot be checked out, so it is reviewed from the diff and the review says so.
+
 ## `/lets:github-pr` — the PR lifecycle
 
-This is where LETS shines: reviewing a PR from the terminal with expert agents instead of in a browser. The inline-comment / approve / merge lifecycle is GitHub only. A Bitbucket PR still gets a full review through `/lets:review <bitbucket-PR>` (see below); the local flow has no PR at all.
+This is where LETS shines: reviewing a PR from the terminal with expert agents instead of in a browser. The inline-comment / approve / merge lifecycle is GitHub only. A Bitbucket PR still gets a full review through `/lets:review <bitbucket-PR>` (see [Bitbucket PRs](#bitbucket-prs) above); the local flow has no PR at all.
 
 ```
 /lets:github-pr https://github.com/owner/repo/pull/42
@@ -86,6 +109,8 @@ This is where LETS shines: reviewing a PR from the terminal with expert agents i
 ### Responding to a review
 
 If you're the PR author, `/lets:github-pr --respond <PR>` triages the comments on your PR, auto-fixes the mechanical ones, and posts replies.
+
+**Received a whole review round** - an annotated copy of your spec, a review file, a PR with many threads? `/lets:review-round` triages every comment first, records the decisions on the task, keeps the artifact frozen, and applies all edits in one final pass.
 
 ## Handing the review to another agent - `/lets:handoff`
 

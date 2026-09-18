@@ -231,7 +231,7 @@ A LETS session runs a loop: start, work, commit, finish.
 
 **Backlog** (`/lets:backlog`) - manage the task backlog in three modes: *Review backlog* (agents analyze your task list, find patterns, suggest priorities), *`--fast`* (a quick no-agent pulse - fast context scan, then a direct conversation), and *Cleanup* (find stale tasks, broken dependencies, forgotten work). `/lets:backlog review`, `/lets:backlog --fast`, and `/lets:backlog cleanup` skip the menu. `/lets:backlog review --workflow` runs the Review fan-out off-context.
 
-**Plan** (`/lets:plan`) - codebase exploration with dynamically-scaled explorer agents, then architecture design with expert evaluation. Small project? One explorer. Large monorepo? Up to 10, each mapping a different area. Want a quick talk-through instead? `/lets:plan --fast` skips the subagent phases and plans collaboratively in-session.
+**Plan** (`/lets:plan`) - codebase exploration with dynamically-scaled explorer agents, then architecture design with expert evaluation. Small project? One explorer. Large monorepo? Usually up to 10, each mapping a different area (more asks you to confirm). Want a quick talk-through instead? `/lets:plan --fast` skips the subagent phases and plans collaboratively in-session.
 
 **Execute** (`/lets:execute`) - implements the plan in native plan mode. You approve the execution once, then pick how it runs: straight-through (the default - all tasks, commits at the plan's commit points), step-by-step (a pause after each task), auto (unattended) or team (parallel). No surprises.
 
