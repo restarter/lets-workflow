@@ -166,6 +166,7 @@ lets handoff targets --match '<tab>' --json
 
 - `targets.available=false` -> one line with `targets.reason`, stop.
 - A `<tab>` matched exactly one terminal -> take it, ask nothing.
+- A `<tab>` matched no terminal -> one line `no agent tab matched '<tab>'`, then list every tab (`lets handoff targets --json`, no `--match`) and ask below; none at all -> offer only the new Codex tab.
 - Otherwise ask - the first three terminals (newest output first) plus a new Codex tab:
 
 ```
