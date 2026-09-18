@@ -1,6 +1,6 @@
 ---
 name: artifact-path
-description: Internal skill for commands. Resolve a unique, task-scoped, collision-safe path for an artifact written under .lets/ (plans, reviews, session snapshots). Do not trigger on user conversation - only when a command is about to write an artifact.
+description: Internal skill for commands. Resolve a unique, task-scoped, collision-safe path for an artifact written under .lets/ (plans, reviews, session snapshots, hand-off briefs). Do not trigger on user conversation - only when a command is about to write an artifact.
 user-invocable: false
 ---
 
@@ -20,6 +20,7 @@ user-invocable: false
 | `idea` | `.lets/plans/` |
 | `review-local`, `review-branch`, `review-pr-<n>`, `review-plan` | `.lets/reviews/` |
 | `snapshot` | `.lets/sessions/` |
+| `handoff` | `.lets/handoffs/` |
 
 `ID` is the task id when one is active (MANDATORY whenever a task exists - same rule as the branch named by the active tracker convention). With no task: `{branch-slug}-{6hex}`, 6hex = first 6 chars of `$CLAUDE_CODE_SESSION_ID`, so two taskless sessions on `main` still get distinct names. `-vN` (v2, v3, ...) is appended whenever the path already exists - for task and taskless alike.
 
@@ -36,6 +37,7 @@ case "$KIND" in
   plan|idea) DIR=plans ;;
   review-*) DIR=reviews ;;
   snapshot*) DIR=sessions ;;
+  handoff) DIR=handoffs ;;
   *) echo "artifact-path: unknown kind '$KIND'"; exit 1 ;;
 esac
 mkdir -p "$LETS_PROJECT_ROOT/.lets/$DIR"
