@@ -35,6 +35,11 @@ func TestInputLine(t *testing.T) {
 		{"claude", "claude-typed", lineReady},
 		{"antigravity", "codex-empty", lineUnknown},
 		{"gemini", "claude-idle", lineUnknown},
+		// A dialog is busy for every agent, known or not (the pointer plus Enter
+		// would answer it; Antigravity's default answer is "trust").
+		{"antigravity", "antigravity-trust", lineBusy},
+		{"gemini", "antigravity-trust", lineBusy},
+		{"codex", "codex-update", lineBusy},
 	} {
 		if got := inputLine(tc.agent, frame(t, tc.fixture)); got != tc.want {
 			t.Errorf("%s / %s: %s, want %s", tc.agent, tc.fixture, got, tc.want)

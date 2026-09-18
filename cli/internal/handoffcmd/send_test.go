@@ -234,6 +234,18 @@ func TestSend_AntigravitySentUnknown(t *testing.T) {
 	}
 }
 
+func TestSend_DialogRefusedForAnyAgent(t *testing.T) {
+	for agent, fixture := range map[string]string{"antigravity": "antigravity-trust", "codex": "codex-update"} {
+		ops := &fakeOps{receipt: accepted}
+		root, brief := useFake(t, ops)
+		ops.terms, ops.screen = []orcacmd.Terminal{term(root, "term_a", agent, "")}, frame(t, fixture)
+		res, _ := Send(context.Background(), SendOptions{Root: root, Brief: brief, Terminal: "term_a"})
+		if res.Send.Reason != "target_busy" || res.Send.InputLine != lineBusy || len(ops.sentTo) != 0 {
+			t.Errorf("%s at a dialog: %+v", agent, res.Send)
+		}
+	}
+}
+
 func TestSend_ScreenUnavailable(t *testing.T) {
 	ops := &fakeOps{receipt: proven, source: "stream"}
 	root, brief := useFake(t, ops)
