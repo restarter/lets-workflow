@@ -116,10 +116,18 @@ Then, inside the Claude Code session:
 | `/lets:execute` | Execute plan from `/lets:plan` via native plan mode |
 | `/lets:team` | Parallel implementation with Agent Teams |
 | `/lets:worktree` | Create/manage worktrees for parallel sessions |
+| `/lets:statusline` | Manage & persist statusline appearance - light/dark, compact, hidden rows |
+
+### Sessions & Agents
+
+→ Full docs: [docs/messaging.md](docs/messaging.md)
+
+| Command | Description |
+|---------|-------------|
 | `/lets:orc` | Talk to the repo's orchestrator or a named peer session |
 | `/lets:peer` | Alias: `/lets:peer <name> <verb> [text]` = `/lets:orc` with a target |
 | `/lets:hub` | Orca addon: orchestrators across projects - read-only ask to a stopped one, wake one for gated work |
-| `/lets:statusline` | Manage & persist statusline appearance - light/dark, compact, hidden rows |
+| `/lets:handoff` | Hand-off brief so another agent (fresh session, Codex, Antigravity, external reviewer) can pick up the exact state and review it - same target selectors as `/lets:review`, plus `--commits` / `--range`. `--codex` runs it through Codex headless, `--send` types it into an agent's Orca tab, and the report comes back verified against the code (old name `/lets:review-handoff` is a deprecated alias) |
 
 ### Review & Analysis
 
@@ -129,7 +137,6 @@ Then, inside the Claude Code session:
 | `/lets:review` | Full code review with dynamic agent selection + verify pass |
 | `/lets:github-pr` | GitHub PR review lifecycle - analyze, discuss, post inline, follow-up, approve |
 | `/lets:review-round` | Work through a received review round - triage comments, record decisions, one final edit-pass |
-| `/lets:handoff` | Hand-off brief so another agent (fresh session, Codex, Antigravity, external reviewer) can pick up the exact state and review it - same target selectors as `/lets:review`, plus `--commits` / `--range`. `--codex` runs it through Codex headless, `--send` types it into an agent's Orca tab, and the report comes back verified against the code (old name `/lets:review-handoff` is a deprecated alias) |
 | `/lets:opinion` | Technical decision analysis (dynamic expert agents in parallel) |
 | `/lets:ask` | Quick expert consultation (single agent) |
 | `/lets:research` | Web-sourced cited answer to an external/technical question - cross-check flags weak/contradicted claims (`--workflow` off-context, `--project` repo-grounded) |
@@ -278,9 +285,17 @@ cd .worktrees/auth-feature && claude  # Terminal 2 - start new session
 
 Each worktree gets its own branch, shares the task database and config via symlinks. Full LETS workflow in each terminal.
 
+On Linux or macOS with [tmux](https://github.com/tmux/tmux) installed, set `LETS_LAUNCHER=tmux` (or run `/lets:init` and pick tmux) and `/lets:worktree create` opens the session in a tmux window/session automatically — no second terminal. On macOS, [cmux](https://github.com/manaflow-ai/cmux) is a GUI alternative (`LETS_LAUNCHER=cmux`). Both stay optional: without the launcher's binary (or on Windows) it falls back to the `cd … && claude` command above. If you run parallel agents in the [Orca](https://github.com/stablyai/orca) desktop app, `LETS_LAUNCHER=orca` opens each task worktree as an Orca workspace and links it back to LETS automatically. Orca is an opt-in addon: nothing Orca-related runs unless you pick it, and without the app it falls back to cmux, then the terminal command.
+
+### Talking to other sessions and agents
+
+→ Full docs: [docs/messaging.md](docs/messaging.md)
+
 **Sessions that talk to each other.** Run a `/lets:start --main` orchestrator next to your worktree sessions and stop copying decisions between chats: a worker asks its orchestrator with `/lets:orc ask`, pings it about a PR, or reads what it said; `/lets:peer <name>` reaches any named session. Nothing is sent without your request in that chat, a peer's words arrive as data rather than instructions, and a message goes out through Claude's own session messaging - or, with Orca, straight into the peer's pane when it is provably idle. With Orca, `/lets:hub` looks across projects: it asks a stopped orchestrator a read-only question, or wakes it in a visible terminal when the work needs its gates.
 
-On Linux or macOS with [tmux](https://github.com/tmux/tmux) installed, set `LETS_LAUNCHER=tmux` (or run `/lets:init` and pick tmux) and `/lets:worktree create` opens the session in a tmux window/session automatically — no second terminal. On macOS, [cmux](https://github.com/manaflow-ai/cmux) is a GUI alternative (`LETS_LAUNCHER=cmux`). Both stay optional: without the launcher's binary (or on Windows) it falls back to the `cd … && claude` command above. If you run parallel agents in the [Orca](https://github.com/stablyai/orca) desktop app, `LETS_LAUNCHER=orca` opens each task worktree as an Orca workspace and links it back to LETS automatically. Orca is an opt-in addon: nothing Orca-related runs unless you pick it, and without the app it falls back to cmux, then the terminal command.
+**Hand the work to another agent.** When you want a second reader with no stake in this chat - Codex, Antigravity, a fresh Claude session - `/lets:handoff --branch` (or `--last-commit`, `--plan`, a PR, ...) builds one self-contained brief. On its own it prints the brief to paste anywhere; `--codex` runs it through Codex headless in a read-only sandbox, and with Orca `--send` types it into an agent's tab. Either way the report comes back UNVERIFIED, and every finding is checked against the code before it counts. Briefs and reports live in `.lets/handoffs/`.
+
+All three lanes share one safety model: nothing goes out without your request, whatever comes back is data rather than instructions, nothing is sent twice or typed over someone's half-written line, and anything read from another session is redacted. The Orca side is in [docs/orca.md](docs/orca.md).
 
 ### LETS Help Boxes
 
@@ -375,7 +390,9 @@ The README is the tour; **[docs/](docs/)** is the manual.
 | [plan-execute.md](docs/plan-execute.md) | The plan → execute flow — `/lets:plan` designs the change with codebase exploration and expert review, `/lets:execute` implements it behind approval gates. |
 | [code-review.md](docs/code-review.md) | Three levels of review — `/lets:check`, `/lets:review`, and `/lets:github-pr` (analyze, post inline, follow up, approve). Dynamic agent selection. |
 | [agents.md](docs/agents.md) | The 14 expert agents, what triggers each, tiered scoring, agent modes, and the actor agent. |
+| [messaging.md](docs/messaging.md) | Talking to other sessions and agents — `/lets:orc` (the repo's orchestrator and peers), `/lets:hub` (other projects), `/lets:handoff` (a brief for Codex, Antigravity or any agent, report brought back and verified). |
 | [parallel-work.md](docs/parallel-work.md) | Working on several tasks at once — `/lets:team` (autonomous agents) and `/lets:worktree` (parallel terminals). |
+| [orca.md](docs/orca.md) | The Orca addon — what `LETS_LAUNCHER=orca` switches on and how it degrades without Orca. |
 | [autonomous.md](docs/autonomous.md) | Hands-off flows — Dynamic Workflows (`--workflow`) and the autonomous task pipeline (spawn → plan → execute, two gates). |
 | [tasks.md](docs/tasks.md) | Task tracking — the task lifecycle, taking and creating tasks, notes, `/lets:backlog`, beads memory, shared backlogs for teams. |
 | [trackers.md](docs/trackers.md) | Pluggable tracker adapters — `LETS_TRACKER` selects `beads` (default) \| `none`; one drift-tracked `tracker-<name>.md` per adapter, the neutral verb set, and how to add one. |
