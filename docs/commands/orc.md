@@ -4,6 +4,7 @@ When several Claude sessions work on one repo - an orchestrator planning and rou
 
 ```
 /lets:orc ask should the migration keep the old column for one release?
+/lets:orc ask --yes should we cut 0.9.2 before the docs pass?
 /lets:orc ping PR #212 is up
 /lets:orc read
 /lets:peer "MAIN PWA" tell the auth refactor landed on main
@@ -21,6 +22,12 @@ You can also just say it: "ask the orchestrator …", "what did the orchestrator
 | `tell` | yes | a message to a named peer |
 | `read [N]` | no | the peer's last turns, secrets withheld |
 | `who` | no | the live sessions of the repo: role, name, scope or orchestrator, task, branch, state |
+
+## `--yes` - send without the confirmation
+
+A message the model composed is shown to you and waits for a "Send?" answer, so nothing goes out in your name that you have not read. Add `--yes` and the waiting stops: the exact message is still printed, as a statement of what was sent rather than a question, and it goes immediately. Use it when you rarely edit the draft anyway - the reading stays, only the extra turn disappears.
+
+It changes one thing and nothing else. A send still has to be something you asked for in that turn: `--yes` is not an autopilot, and no command passes it on your behalf - `/lets:hub`, which reaches another project's orchestrator, never does.
 
 ## Who you are talking to
 
