@@ -19,7 +19,7 @@ When the project's `.lets/.env` names Orca, `lets init` also writes `orca.yaml`:
 | Peer messages | `/lets:orc` can type straight into a peer's pane when its transcript, screen and Orca all show it idle ([commands/orc.md](commands/orc.md)) |
 | Across projects | `/lets:hub` lists every project's orchestrators, asks a stopped one read-only, or wakes it in a visible terminal ([messaging.md](messaging.md)) |
 | Parallel runs | `/lets:team run --backend orca` runs each task as a visible LETS session in an Orca child worktree ([parallel-work.md](parallel-work.md)) |
-| Hand-offs | `/lets:handoff --send` types a brief into a Codex, Antigravity or Claude tab of this worktree and brings the report back ([commands/handoff.md](commands/handoff.md)) |
+| Hand-offs | `/lets:handoff --send` types a brief into a Codex, Antigravity or Claude tab of this worktree and brings the report back; `--open` opens a new Codex tab for it, and `--execute` hands an open tab an approved plan to implement ([commands/handoff.md](commands/handoff.md)) |
 
 ## When Orca is not there
 
