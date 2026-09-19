@@ -1397,6 +1397,8 @@ Whatever the verdict, this command ends here. **A plan-review verdict - APPROVED
 
 **If needs revision:** No box. List action items to fix in the plan file (and only there) first. Do not touch code.
 
+- **Orchestrator offer (Nav)** -> per lets-rules `### Orchestrator offer` (rule not loaded -> no offer): on NEEDS REVISION add one prose line "Disagree with the verdict? `/lets:orc ask`".
+
 ---
 
 ## Notes
@@ -1450,3 +1452,13 @@ Work -> /lets:commit -> Push -> PR -> /lets:review <PR>
 ```
 
 **If changes requested:** No box. List issues to fix first.
+
+- **Orchestrator offer (Nav)** -> per lets-rules `### Orchestrator offer` (rule not loaded -> no offer), local modes only - never PR mode, `--file` or `--json`: on APPROVED WITH SUGGESTIONS add a third box line; on CHANGES REQUESTED add one prose line "Disagree with a finding? `/lets:orc ask`". Never on a clean APPROVED.
+
+```
+┌─ LETS ───────────────────────┐
+│  Commit?    /lets:commit     │
+│  Check?     /lets:check      │
+│  Disagree?  /lets:orc ask    │
+└──────────────────────────────┘
+```
