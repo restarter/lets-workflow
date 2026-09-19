@@ -80,7 +80,7 @@ Team:     /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /le
 | `/lets:review` | Code | Full review by expert subagents + a verify pass |
 | `/lets:github-pr` | Code | GitHub PR review lifecycle (review, respond, follow-up, approve) |
 | `/lets:review-round` | Code | Work through a received review round - triage, decisions->task, one final edit-pass |
-| `/lets:handoff` | Code | Hand-off brief for another agent - same targets as `/lets:review`, plus `--commits` / `--range`; `--codex` / `--send` deliver it and bring the report back verified (old name `/lets:review-handoff` is a deprecated alias) |
+| `/lets:handoff` | Code | Hand-off brief for another agent - same targets as `/lets:review`, plus `--commits` / `--range`; `--send` / `--open` / `--codex` deliver it and bring the report back verified; `--execute --send` hands an approved plan to an open agent tab to implement (old name `/lets:review-handoff` is a deprecated alias) |
 | `/lets:opinion` | Expert | Technical decision needed |
 | `/lets:ask` | Expert | Quick question to one expert |
 | `/lets:research` | Expert | Web-sourced cited answer to an external/technical question (`--workflow` off-context) |
