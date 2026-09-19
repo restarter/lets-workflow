@@ -4,6 +4,7 @@ package peerscmd
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -194,6 +195,125 @@ func TestTell_OrcaNotReadyPassthrough(t *testing.T) {
 	res, err := Tell(context.Background(), TellOptions{Cwd: repo, ToSession: sidFable, MsgID: fr.MsgID})
 	if err != nil || !res.OK || res.Delivered || res.Route != "orca" || res.Reason != "peer_not_ready" || res.State != "tool_running" || len(ops.sends) != 0 || !res.ClaudeFallbackAllowed {
 		t.Errorf("not ready: %+v %v", res, err)
+	}
+}
+
+// TestTell_NotDeliveredKeepsHandoff: nothing was typed (the target is unreachable),
+// so the handoff and its issued header stay on disk, Note names the retry, and the
+// returned error is exit 11 - never a silent (res, nil).
+func TestTell_NotDeliveredKeepsHandoff(t *testing.T) {
+	ctx := context.Background()
+	hub := repoWithLets(t, "")
+	foreign := gitRepo(t)
+	claudeHome(t, []regRow{{101, sidMain, "HUB", hub}, {103, sidWork, "MAIN-PWA", foreign}})
+	fr, err := Frame(ctx, FrameOptions{Cwd: hub, Session: sidMain, ToSession: sidWork, Kind: "tell"})
+	if err != nil {
+		t.Fatalf("frame: %v", err)
+	}
+	_ = os.WriteFile(fr.HandoffPath, []byte(fr.Header+"\nplease check"), 0o600)
+	res, err := Tell(ctx, TellOptions{Cwd: hub, ToSession: sidWork, MsgID: fr.MsgID})
+	if res.Delivered || res.Reason != "peer_unreachable" {
+		t.Fatalf("expected an unreachable, undelivered result: %+v %v", res, err)
+	}
+	var pe *Error
+	if !errors.As(err, &pe) || pe.ExitCode() != ExitNotDelivered {
+		t.Fatalf("a non-delivery must carry exit 11: %v", err)
+	}
+	if res.Note == "" || !strings.Contains(res.Note, fr.MsgID) {
+		t.Errorf("Note must name the same msgid to retry with: %q", res.Note)
+	}
+	if _, err := os.Stat(fr.HandoffPath); err != nil {
+		t.Error("nothing was typed: the handoff must stay")
+	}
+	issued := strings.TrimSuffix(fr.HandoffPath, ".txt") + ".issued"
+	if _, err := os.Stat(issued); err != nil {
+		t.Error("nothing was typed: the issued header must stay too")
+	}
+}
+
+// TestTell_RetrySameMsgID: after the failure above, a second Tell with the SAME
+// msgid succeeds once the target becomes reachable - no new Frame needed.
+func TestTell_RetrySameMsgID(t *testing.T) {
+	ctx := context.Background()
+	hub := repoWithLets(t, "")
+	foreign := gitRepo(t)
+	claudeHome(t, []regRow{{101, sidMain, "HUB", hub}, {103, sidWork, "MAIN-PWA", foreign}})
+	fr, err := Frame(ctx, FrameOptions{Cwd: hub, Session: sidMain, ToSession: sidWork, Kind: "tell"})
+	if err != nil {
+		t.Fatalf("frame: %v", err)
+	}
+	_ = os.WriteFile(fr.HandoffPath, []byte(fr.Header+"\nplease check"), 0o600)
+	if _, err := Tell(ctx, TellOptions{Cwd: hub, ToSession: sidWork, MsgID: fr.MsgID}); err == nil {
+		t.Fatal("expected the first attempt, with no --repo, to fail as unreachable")
+	}
+	res, err := Tell(ctx, TellOptions{Cwd: hub, ToSession: sidWork, MsgID: fr.MsgID, Repo: foreign})
+	if err != nil || res.Route != "claude" || !strings.HasSuffix(res.Text, "please check") {
+		t.Fatalf("a retry with the same msgid must succeed once the target is reachable: %+v %v", res, err)
+	}
+	if _, err := os.Stat(fr.HandoffPath); !os.IsNotExist(err) {
+		t.Error("a delivered retry must consume the handoff")
+	}
+}
+
+// TestTell_DeliveredConsumesHandoff: an Orca delivery consumes the handoff and
+// returns no error.
+func TestTell_DeliveredConsumesHandoff(t *testing.T) {
+	fastLoops(t)
+	repo := repoWithLets(t, "orca")
+	home := claudeHome(t, []regRow{{101, sidMain, "MAIN", repo}, {102, sidFable, "MAIN-FABLE", repo}})
+	writeTranscript(t, home, repo, sidFable, userText("2026-09-15T10:00:00Z", "go"), turnEnd("2026-09-15T10:00:01Z"))
+	plantRole(t, repo, sidFable, "role: peer\npid: 102\norca_terminal: term_fable\nset: x\n")
+	ops := &fakeOps{terms: []orcaTerm{{Handle: "term_fable", Path: repo, AgentType: "claude", State: "idle"}}, screen: idleScreen}
+	useOrca(t, ops)
+	fr, err := Frame(context.Background(), FrameOptions{Cwd: repo, Session: sidMain, ToSession: sidFable, Kind: "ask"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(fr.HandoffPath, []byte(fr.Header+"\nq"), 0o600)
+	res, err := Tell(context.Background(), TellOptions{Cwd: repo, ToSession: sidFable, MsgID: fr.MsgID})
+	if err != nil || !res.Delivered || res.Route != "orca" {
+		t.Fatalf("delivered: %+v %v", res, err)
+	}
+	if _, err := os.Stat(fr.HandoffPath); !os.IsNotExist(err) {
+		t.Error("a delivered send must consume the handoff")
+	}
+}
+
+// TestTell_ClaudeRouteConsumes: the claude route returns nil error (not exit 11) and
+// consumes the handoff - the skill already holds the text for SendMessage.
+func TestTell_ClaudeRouteConsumes(t *testing.T) {
+	ctx := context.Background()
+	repo := repoWithLets(t, "")
+	claudeHome(t, []regRow{{101, sidMain, "MAIN", repo}, {103, sidWork, "MAIN-PWA", repo}})
+	fr, err := Frame(ctx, FrameOptions{Cwd: repo, Session: sidMain, ToSession: sidWork, Kind: "tell"})
+	if err != nil {
+		t.Fatalf("frame: %v", err)
+	}
+	_ = os.WriteFile(fr.HandoffPath, []byte(fr.Header+"\nplease check"), 0o600)
+	res, err := Tell(ctx, TellOptions{Cwd: repo, ToSession: sidWork, MsgID: fr.MsgID})
+	if err != nil || res.Route != "claude" || res.Delivered {
+		t.Fatalf("the claude route must return a nil error, never exit 11: %+v %v", res, err)
+	}
+	if _, err := os.Stat(fr.HandoffPath); !os.IsNotExist(err) {
+		t.Error("the claude route must consume the handoff")
+	}
+}
+
+// TestFrame_SelfSendRefused: a session cannot address itself, and no .issued header
+// is left behind for a refusal that never should have been framed.
+func TestFrame_SelfSendRefused(t *testing.T) {
+	ctx := context.Background()
+	repo := repoWithLets(t, "")
+	claudeHome(t, []regRow{{101, sidMain, "MAIN", repo}})
+	if _, err := Frame(ctx, FrameOptions{Cwd: repo, Session: sidMain, ToSession: sidMain, Kind: "tell"}); err == nil || err.(*Error).Kind != "self_send" {
+		t.Fatalf("a session addressing itself must be refused at usage: %v", err)
+	}
+	dir, derr := peerMsgDir(repo)
+	if derr != nil {
+		t.Fatal(derr)
+	}
+	if matches, _ := filepath.Glob(filepath.Join(dir, "*.issued")); len(matches) != 0 {
+		t.Errorf("a self-send refusal must not issue a header: %v", matches)
 	}
 }
 
