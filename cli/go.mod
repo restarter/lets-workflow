@@ -1,10 +1,10 @@
 module github.com/restarter/lets-workflow/cli
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/spf13/cobra v1.10.2
-	golang.org/x/mod v0.40.0
+	golang.org/x/mod v0.41.0
 )
 
 require (
