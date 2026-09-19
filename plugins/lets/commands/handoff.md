@@ -1,13 +1,14 @@
 ---
-description: Generate a self-contained hand-off brief so ANOTHER agent (a fresh session, Codex, Antigravity, any external reviewer) can pick up the exact state and review it - a plan, a branch, the last commits, a PR, or one file. Prints one pasteable brief, or delivers it (--codex runs it through Codex headless, --send types it into an agent's Orca tab) and brings the report back, verified against the code.
-argument-hint: "[PR-url-or-number|--pr <id>|--local|--staged|--last-commit|--branch|--plan [<path>]|--file <path>|--commits <N>|--range <a>..<b>] [--spec <path>|none] [--codex|--send [<tab>]]"
+description: Generate a self-contained hand-off brief so ANOTHER agent (a fresh session, Codex, Antigravity, any external reviewer) can pick up the exact state and review it - a plan, a branch, the last commits, a PR, or one file - or implement an approved plan (--execute). Prints one pasteable brief, or delivers it (--send types it into an agent's Orca tab, --open opens a new Codex tab for it, --codex runs it through Codex headless) and brings the report back, verified against the code.
+argument-hint: "[PR-url-or-number|--pr <id>|--local|--staged|--last-commit|--branch|--plan [<path>]|--file <path>|--commits <N>|--range <a>..<b>] [--spec <path>|none] [--execute] [--send [<tab>]|--open [<agent>]|--codex]"
 ---
 
 # Handoff - Brief for Another Agent
 
 Produce ONE message the user copies into another agent. That agent has NO context: not this conversation, not the task, not even which repo. The brief must be complete on its own.
 
-- The brief is the deliverable - review nothing yourself and edit no file of the repository; `--codex` / `--send` hand it on and bring the report back (Step 7)
+- The brief is the deliverable - review nothing yourself and edit no file of the repository; `--send` / `--open` / `--codex` hand it on and bring the report back (Step 7)
+- `--execute` turns a plan's brief from "review this" into "implement this": the receiving agent writes code and commits, this session still edits nothing (Step 5b)
 - Target selectors mirror `/lets:review`, so the same flag reviews here or hands off there; works in any git repo, with or without LETS
 
 > **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
@@ -32,19 +33,29 @@ Produce ONE message the user copies into another agent. That agent has NO contex
 /lets:handoff --plan --codex              # run the brief through Codex headless (read-only), relay + verify its report
 /lets:handoff --branch --send             # type the brief into an agent tab of this worktree (pick one)
 /lets:handoff --branch --send antigravity # ... the Antigravity tab (an agent name, or a fragment of the tab title)
+/lets:handoff --plan --open               # a new Codex tab (read-only) in this worktree gets the brief
+/lets:handoff --execute --send codex      # the open Codex tab implements the newest plan of this task
+/lets:handoff --execute --plan <path> --send   # ... a specific plan; pick the tab
 ```
 
 Selectors match `/lets:review`, with two deliberate differences: `--commits` / `--range` are **handoff-only** (review has no target for "the commits that answer a review round"), and `--pr` is kept as an alias because it is the spelling this tool shipped with. Review's output modifiers `--json` and `--workflow` are **not** implemented here.
 
-`--codex` and `--send [<tab>]` are delivery modifiers (Step 7), combinable with any target and mutually exclusive. `/lets:review-handoff` is a deprecated alias of this command (the old name), to be removed in a future release.
+`--send [<tab>]`, `--open [<agent>]` and `--codex` are the three delivery lanes (Step 7) - an open agent tab, a new visible session, a headless background run - combinable with any target and mutually exclusive. `--execute` is a brief kind, not a lane: it takes only a plan and goes only through `--send` (Step 1). `/lets:review-handoff` is a deprecated alias of this command (the old name), to be removed in a future release.
 
 ## Step 1: Determine the target
 
-- Delivery modifiers first: `--codex`, `--send [<tab>]` (`<tab>` = the next token when it does not start with `--`: a `term_` handle, an agent name such as `codex` / `antigravity`, or a fragment of the tab title). Strip them, then apply the target rules to the rest.
+- Delivery modifiers first: `--codex`, `--send [<tab>]` (`<tab>` = the next token when it does not start with `--`: a `term_` handle, an agent name such as `codex` / `antigravity`, or a fragment of the tab title), `--open [<agent>]` (`<agent>` = the next token when it does not start with `--`; default `codex`), and the brief kind `--execute`. Strip them, then apply the target rules to the rest.
 - PR URL/number, or `--pr <id-or-url>` -> **PR mode**. `--local` / `--staged` / `--last-commit` / `--branch` / `--commits N` / `--range a..b` -> **local mode**. `--plan [path]` -> **plan mode**. `--file <path>` -> **file mode**.
 - **Host resolution.** A `github.com` URL -> `gh`; a `bitbucket.org` URL -> `bbb`, whose PR number sits in the `/pull-requests/<n>` segment, not github's `/pull/<n>`; a bare number -> `{LETS_PR_FLOW}`. **When `{LETS_PR_FLOW}` is empty** - the normal state outside a LETS project, where the hook emits only four keys - fall through to the forge named by the `origin` URL Step 2 prints. Only when neither names a github or bitbucket host: stop and say a PR hand-off needs one.
 - **No argument -> infer, do not ask by default.** Take the target from the user's sentence next to the command ("цих правок" -> the just-committed fixes; "цієї гілки" -> `--branch`; "план" -> `--plan`; "коміта" -> `--last-commit`) and from what just happened in the session. Only when genuinely ambiguous, ask **one** `AskUserQuestion` (header `Target`, `multiSelect: false`) offering Local changes / Branch / Plan / Last commit. Otherwise decide, and name the choice in the closing line.
 - The flag-only targets (`--staged`, `--commits`, `--range`, `--file`) are not in the interactive menu.
+- **`--execute`**, once the target is known. Each refusal is its one line, then stop:
+  - no target -> plan mode, as if `--plan` was given; `--plan [<path>]` -> that plan
+  - any other target -> `` `--execute` hands over a plan - <target> is not one; use --plan [<path>] ``
+  - `--codex` -> `headless execution needs a writable sandbox - not in this release; use --send with an open agent tab`
+  - `--open` -> `a new session opens read-only (codex --sandbox read-only) - open the agent in this worktree yourself, then --send`
+  - no delivery flag -> `` `--execute` goes to an open agent tab - add --send [<tab>] ``
+  - `--spec` -> dropped, with one line: the plan is an execution brief's contract
 
 ## Step 2: Locate
 
@@ -72,6 +83,7 @@ git log --oneline "$BASE"..HEAD 2>/dev/null | head -30
 | Mode | Gather |
 |---|---|
 | `--plan` | absolute path, title line, task count, `[DONE]` markers, which code it will touch, whether execution started (commits since the plan's date). An unspecified path resolves task-id-first (`*<task-id>*.md`), then `*<branch-slug>*.md`, both scoped - `.lets/plans` is shared across worktrees. **Name the file taken**; it may be a superseded revision |
+| `--plan --execute` | what `--plan` gathers, plus: an idea document (`-idea[-vN].md`, the `/lets:execute` regex) -> one line `This is an idea document - run /lets:plan to turn it into a plan.`, stop; the tasks whose heading does not end in `[DONE]` (none -> `every task is [DONE] - nothing to hand over`, stop); the files their `Create:` / `Modify:` lines name - the scope; the dirty files Step 2 listed, which are not the agent's to commit |
 | `--branch` | `git diff --stat <base>...HEAD`, base sha, whether pushed (`git rev-parse origin/<branch>`), open PR id if any, and the commit list with **each commit's own `git show --stat`** - the range stat says which files the branch touched, never which commit touched them, and attributing them by inference is how a brief claims a file landed two commits before it did |
 | `--local` / `--staged` | `git diff --stat` (or `--staged`), the file list, and that the work is uncommitted - the reviewer reads the working tree, not a ref |
 | `--last-commit` / `--commits N` / `--range` | exact shas, `git show --stat` per commit, and **why** they exist - which findings they answer, quoting the finding ids or the reviewer's wording |
@@ -89,6 +101,8 @@ git log --oneline "$BASE"..HEAD 2>/dev/null | head -30
 | None | not called | the `Task:` line is **omitted entirely**. Never emit a guessed or fabricated id |
 
 Never render a `url` - beads returns none; include a link only when the adapter's `show` declares it. `--spec <path>` is named in the brief as an absolute path, a bare task id resolves through the tracker, `none` means no spec line and no caveat; with no `--spec` the active task's description is the spec. A spec that is a **file** is named by path - the external agent opens it; a spec that is the **tracker task** is inlined, because that agent cannot reach the tracker.
+
+With `--execute`, compare the plan's `**Task:**` line with the id resolved here: a mismatch is one warning line, never a refusal - one worktree can host several tasks.
 
 ## Step 5: Compose the brief
 
@@ -126,6 +140,71 @@ Never render a `url` - beads returns none; include a link only when the adapter'
 The `REMEDY QUALITY` line is **standing text, not a per-run judgement call** - every brief, every mode; the hand-off is the only moment this command gets to set the external reviewer's contract. `How to verify locally` carries commands that **demonstrably exercise the change**, not plausible-looking ones. Name a test by its actual function name rather than a guessed `-run` filter - a filter that matches nothing exits 0, so the reviewer is handed a green run that never touched the thing under review. Carry any caveat the repo documents for those commands (this repo: `-count=1` on Go tests that read `plugins/`, or the cache serves a stale PASS).
 
 Composition rules, stated here and nowhere else in this file: the brief is in **English** regardless of conversation language; paths absolute; shas full or 12+ chars; no "as discussed"; under ~80 lines; drop any section that has nothing; **never paste the diff** - the reviewer has the repo, so pointers and verification commands beat a dump.
+
+## Step 5b: Compose an execution brief (`--execute` only)
+
+An execution brief is the plan, cleaned, followed by the contract the agent works under. The plan is never re-typed: the model writes only the contract, and a shell block strips the plan and joins the parts.
+
+**Path first.** Resolve `ARTIFACT_FILE` here, not in 7.1: `Skill(skill: "lets:artifact-path", args: "kind=handoff ext=md task=<id from Step 4>")` (omit `task=` when Step 4 found none). `<base>` = `ARTIFACT_FILE` without `.md` - the contract names it, so it must exist before the contract is written.
+
+**Contract.** Write it with the Write tool to `.lets/cache/handoff-contract-<session6>.md` (6 = first chars of `$CLAUDE_CODE_SESSION_ID`): English, under ~60 lines, every section below, nothing the agent cannot resolve on its own - no `/lets:*` step, no tracker, no "as discussed".
+
+```
+## Where the code is
+- Repo, Path, Branch @ sha (base), Task - as Step 5 renders them
+- Working tree: clean | the dirty files - they were there before you and are not yours to commit
+
+## Your job
+Implement the plan above, task by task, in order. Skip a task whose heading ends in [DONE] - it is done. After each task run its Verify and compare the output with its Expected. Commit at the plan's commit points and nowhere else.
+
+## Commit convention
+Subject `<type>(<task-id>): <subject>` - type one of feat, fix, refactor, docs, chore, test; imperative; under 50 characters. Optional body: why, not what. Last line `Task: <task-id>`. Stage the files the commit point names - never `git add -A` or `git add .`.
+
+## Scope
+Change only these files: <the Step 3 scope>. Everything else is out of scope, .lets/ included.
+
+## If reality differs from the plan
+A file the plan does not name becomes necessary, a dependency or tool behaves differently than the plan assumes, a step cannot be done as written, a Verify does not match its Expected, a file in scope cannot be written or a commit fails: STOP and write the reason to the report - what the plan expected, what you found. Do not adapt. A silently adapted plan is a new plan nobody approved.
+
+## Never
+Never push, open or update a pull request, merge, rebase, or touch the task tracker. <For each step of the plan that runs a /lets:* command: one line naming the plain action instead. Omit when there is none.>
+
+## When you finish
+Write your complete final report to <base>-agent-report.md, then create the empty file <base>-agent-report.done - the only files you may write outside the scope above. If you cannot write these two files, print the report as your final message instead. Report each task as done, skipped or stopped, with its commit sha and its Verify result; every deviation; anything left uncommitted.
+```
+
+**Assemble**, right after the contract is written. Substitute the plan path from Step 3, `ARTIFACT_FILE`, the session prefix and the plan's title - single-quoted, `'\''` for a quote inside:
+
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+PLAN='<plan path>'; OUT='<ARTIFACT_FILE>'; TITLE='<plan title>'
+CONTRACT="$LETS_PROJECT_ROOT/.lets/cache/handoff-contract-<session6>.md"
+CLEAN="$LETS_PROJECT_ROOT/.lets/cache/handoff-plan-<session6>.md"
+# The STOP banner is the first one above the first `## ` and the REMINDER the last line - plan.md
+# Step 9, plan-workflow.md Step 4. Position, not wording alone: a plan that edits plan.md quotes the
+# same words inside its snippets, and those stay. TestHandoffPlanFilter runs this program.
+awk '
+  /^## / { body = 1 }
+  !body && !stop && /^> \*\*STOP - THIS PLAN IS NOT A GO\./ { stop = 1; next }
+  { line[++n] = $0 }
+  END {
+    while (n > 0 && line[n] ~ /^[ \t]*$/) n--
+    if (n > 0 && line[n] ~ /^> \*\*REMINDER: do not start writing code/) {
+      rem = 1; n--
+      while (n > 0 && (line[n] ~ /^[ \t]*$/ || line[n] == "---")) n--
+    }
+    for (i = 1; i <= n; i++) print line[i]
+    printf "stop_removed=%d reminder_removed=%d\n", stop, rem > "/dev/stderr"
+  }' "$PLAN" > "$CLEAN"
+echo "title_block_go=$(awk '/^## /{exit} /NOT A GO/{c++} END{print c+0}' "$CLEAN") plan_lines=$(wc -l < "$CLEAN" | tr -d ' ')"
+```
+
+`title_block_go` above 0 -> the banner's wording no longer matches plan.md: stop, quote that line, send nothing. Otherwise:
+
+```bash
+{ printf '# Execution hand-off: %s\n\n%s\n\n' "$TITLE" 'The plan below is approved and is your work order. The sections after it are the rules you work under - read both before the first edit.'
+  cat "$CLEAN"; printf '\n---\n\n'; cat "$CONTRACT"; } > "$OUT"
+```
 
 ## Step 6: Deliver
 
