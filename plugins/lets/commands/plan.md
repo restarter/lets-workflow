@@ -327,6 +327,8 @@ AskUserQuestion(
 **Handle response:**
 - **1+ approaches selected** -> proceed to Step 6 with selected approaches
 - **Discuss first** -> open discussion, user asks questions or suggests modifications, then present updated approaches and ask again
+- **Orchestrator offer (Act)** -> per lets-rules `### Orchestrator offer` (rule not loaded -> no offer): while the offer is shown, the last slot is `{ label: "Ask orchestrator", description: "Stay at this gate; /lets:orc ask which approaches to develop" }` instead of "Discuss first" - **Other** (free text) already opens the same discussion.
+- **Ask orchestrator** (alone or with approaches picked) -> `Skill(skill: "lets:orc", args: "verb=ask footer=none text=Planning {goal}. Approaches: {names with one-line trade-offs}. Which would you develop?")` first. After the reply is relayed, show this gate again without that option ("Discuss first" is back) - the user picks.
 - **Other** (free text) -> treat as new approach idea or modification, incorporate and re-present
 
 ## Step 6: Architecture Design
@@ -437,6 +439,9 @@ AskUserQuestion(
 - **Approach selected** -> proceed to Step 7 with chosen architecture
 - **Combine** -> discuss which parts to take from each, create merged brief, re-run single architect
 - **Adjust** -> discuss what to change, loop back to relevant step
+- **Orchestrator offer (Act)** -> per lets-rules `### Orchestrator offer` (rule not loaded -> no offer): while the offer is shown, "Combine" and "Adjust" merge into one slot `{ label: "Combine / adjust", description: "Mix approaches or change requirements, then re-design" }` and the last slot is `{ label: "Ask orchestrator", description: "Stay at this gate; /lets:orc ask which architecture to take" }`.
+- **Combine / adjust** -> ask which of the two the user means, then follow that handler above.
+- **Ask orchestrator** -> `Skill(skill: "lets:orc", args: "verb=ask footer=none text=Planning {goal}. Designs: {names with the key trade-off each}. Which one?")`. After the reply is relayed, show this gate again without that option (the original four) - the user picks.
 - **Other** (free text) -> treat as modification request, adapt
 
 **If only 1 approach was developed:**
