@@ -10,17 +10,25 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"github.com/restarter/lets-workflow/cli/internal/ccregistry"
 	"github.com/restarter/lets-workflow/cli/internal/redact"
 )
 
 const (
-	chunkSize     = 64 << 10
-	maxTailBytes  = 8 << 20
-	textCap       = 2 << 10
-	toolInputCap  = 200
-	toolResultCap = 400
+	chunkSize    = 64 << 10
+	maxTailBytes = 8 << 20
+	// textCapDefault, textCapMessage and callCapBytes together bound one tail call:
+	// a per-turn cap (which one depends on why the caller is reading), and a ceiling
+	// on the sum of the turns returned. textCapMessage must stay well under
+	// callCapBytes so the newest turn alone can never overflow the ceiling - see
+	// tail.go's byte-ceiling trim, which relies on that relationship.
+	textCapDefault = 2 << 10  // a glance at what a peer is doing
+	textCapMessage = 16 << 10 // an addressed message or a relayed reply: the payload IS the point
+	callCapBytes   = 64 << 10 // a whole tail call, so N large turns cannot flood a reader
+	toolInputCap   = 200
+	toolResultCap  = 400
 )
 
 // record is one recognized transcript line, before it becomes a Turn.
@@ -242,6 +250,10 @@ func parseLine(line []byte) ([]record, bool) {
 	return recs, true
 }
 
+// textRecord redacts but does NOT cap: a TEXT/INBOUND turn is capped exactly once,
+// in turnsOf, which is also where its TruncatedBytes is counted. Capping here too
+// would let redact.Cap cut its own marker and measure the count against the wrong
+// baseline.
 func textRecord(typ, ts, text string) record {
 	r := record{turn: Turn{TS: ts, Kind: "TEXT", Role: typ}}
 	if typ == "user" {
@@ -250,7 +262,7 @@ func textRecord(typ, ts, text string) record {
 			r.header = &h
 		}
 	}
-	r.turn.Text = redact.Cap(redact.Control(redact.Text(text)), textCap)
+	r.turn.Text = redact.Control(redact.Text(text))
 	return r
 }
 
@@ -275,18 +287,42 @@ func resultText(raw json.RawMessage) string {
 	return ""
 }
 
-// turnsOf returns the Turns of recs (END markers are internal).
-func turnsOf(recs []record) []Turn {
+// keptLen is how many bytes of s a cap of n leaves, cut on a rune boundary - the
+// same cut redact.Cap makes, without its marker. It exists so the marker stays
+// redact's to own while the counter below is measured on the text, not on the text
+// plus the marker.
+func keptLen(s string, n int) int {
+	if n <= 0 || len(s) <= n {
+		return len(s)
+	}
+	cut := n
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return cut
+}
+
+// turnsOf returns the Turns of recs (END markers are internal), capping each turn's
+// text at perTurn and recording how many bytes that cut - a reader must never see a
+// truncated answer next to a zero counter.
+func turnsOf(recs []record, perTurn int) []Turn {
 	out := []Turn{}
 	for _, r := range recs {
-		if !r.end {
-			out = append(out, r.turn)
+		if r.end {
+			continue
 		}
+		t := r.turn
+		if kept := keptLen(t.Text, perTurn); kept < len(t.Text) {
+			t.TruncatedBytes = len(t.Text) - kept
+			t.Text = redact.Cap(t.Text, perTurn)
+		}
+		out = append(out, t)
 	}
 	return out
 }
 
-// TailTurns returns the last n turns of a transcript.
+// TailTurns returns the last n turns of a transcript (the glance path: the default
+// per-turn cap).
 func TailTurns(path string, n int) ([]Turn, *Degraded) {
 	recs, _, d := readBackward(path, func(newest []record) bool {
 		c := 0
@@ -300,7 +336,7 @@ func TailTurns(path string, n int) ([]Turn, *Degraded) {
 	if d != nil {
 		return nil, d
 	}
-	turns := turnsOf(recs)
+	turns := turnsOf(recs, textCapDefault)
 	if len(turns) > n {
 		turns = turns[len(turns)-n:]
 	}

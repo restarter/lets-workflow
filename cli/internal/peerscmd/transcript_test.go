@@ -64,7 +64,7 @@ func TestTranscript_Secrets(t *testing.T) {
 	if d != nil {
 		t.Fatal(d)
 	}
-	all, _ := json.Marshal(turnsOf(recs))
+	all, _ := json.Marshal(turnsOf(recs, textCapDefault))
 	for _, leak := range []string{"hunter2", "ghp_abcdefghijklmnopqrstuvwxyz0123", "MIIE"} {
 		if strings.Contains(string(all), leak) {
 			t.Errorf("leaked %q: %s", leak, all)

@@ -51,6 +51,11 @@ type TailResult struct {
 	Screen        []string        `json:"screen,omitempty"`
 	Note          string          `json:"note,omitempty"`
 	AddressedToMe *AddressedCount `json:"addressed_to_me,omitempty"`
+	// TruncatedBytes counts SOURCE bytes lost to either cut: bytes removed inside a
+	// turn that was kept, plus the full text of turns the call ceiling dropped. So a
+	// whole-turn drop moves both Omitted and this counter - omitted: 0 no longer
+	// implies a complete answer on its own.
+	TruncatedBytes int `json:"truncated_bytes,omitempty"`
 }
 
 // FrameResult is a framed, addressed message slot.

@@ -49,9 +49,10 @@ type Degraded struct {
 
 // Turn is one recognized transcript record, already redacted and capped.
 type Turn struct {
-	TS   string `json:"ts,omitempty"`
-	Kind string `json:"kind"` // TEXT | INBOUND | TOOL | RESULT | SCREEN
-	Role string `json:"role,omitempty"`
-	Tool string `json:"tool,omitempty"`
-	Text string `json:"text"`
+	TS             string `json:"ts,omitempty"`
+	Kind           string `json:"kind"` // TEXT | INBOUND | TOOL | RESULT | SCREEN
+	Role           string `json:"role,omitempty"`
+	Tool           string `json:"tool,omitempty"`
+	Text           string `json:"text"`
+	TruncatedBytes int    `json:"truncated_bytes,omitempty"` // bytes this turn's text lost to the per-turn cap
 }
