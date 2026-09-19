@@ -123,8 +123,10 @@ func ScreenTail(ctx context.Context, ops orcaOps, handle string) ([]string, *Deg
 		return nil, &Degraded{Source: "orca", Reason: orcacmd.ReasonOutputUnrecognized, Detail: "terminal read source=" + redact.Control(source)}
 	}
 	// Redact the screen as one text, before the cap: a secret spans lines (a private
-	// key), and a cut made first could leave a fragment no rule recognizes.
-	lines = strings.Split(redact.Text(strings.Join(lines, "\n")), "\n")
+	// key), and a cut made first could leave a fragment no rule recognizes. Both
+	// Text (secrets, high-entropy tokens) and Creds (URL user:password@host) run here
+	// - a screen can carry either.
+	lines = strings.Split(redact.Creds(redact.Text(strings.Join(lines, "\n"))), "\n")
 	if len(lines) > screenLines {
 		lines = lines[len(lines)-screenLines:]
 	}

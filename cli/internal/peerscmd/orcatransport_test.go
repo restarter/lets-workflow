@@ -132,6 +132,13 @@ func TestScreenTail_RejectsStream(t *testing.T) {
 	}
 }
 
+func TestScreenTail_RedactsURLCredentials(t *testing.T) {
+	lines, d := ScreenTail(context.Background(), &fakeOps{screen: []string{"remote: https://user:hunter2@github.com/x/y.git"}}, "term_x")
+	if d != nil || strings.Contains(lines[0], "hunter2") || !strings.Contains(lines[0], "https://<redacted>@github.com") {
+		t.Errorf("URL credentials must be redacted: %q %+v", lines, d)
+	}
+}
+
 func TestOrcaWait_SatisfiedOnlyAfterEndOfTurn(t *testing.T) {
 	home, repo := t.TempDir(), t.TempDir()
 	path := writeTranscript(t, home, repo, sidFable, userText("2026-09-15T10:01:00Z", header(msg1, sidFable)+"\nq"), assistantText("2026-09-15T10:01:05Z", "thinking about it"))
