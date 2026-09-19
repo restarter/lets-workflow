@@ -37,7 +37,19 @@ type Resolution struct {
 	Target     *Peer       `json:"target,omitempty"`
 	Candidates []Candidate `json:"candidates"`
 	Reason     string      `json:"reason,omitempty"`
+	Refused    []Refused   `json:"refused,omitempty"`
 	Degraded   []Degraded  `json:"degraded"`
+}
+
+// Refused is an orchestrator this caller cannot address, with the reason a human
+// can act on. It never carries a session id a sender could try anyway.
+type Refused struct {
+	Name     string `json:"name"`
+	Scope    string `json:"scope,omitempty"`
+	Session6 string `json:"session6,omitempty"`
+	Reason   string `json:"reason"` // target_in_other_repo | target_not_alive | target_unsendable
+	Detail   string `json:"detail,omitempty"`
+	Hint     string `json:"hint,omitempty"`
 }
 
 // branchOf is the checked-out branch of cwd ("" when detached or unreadable).
@@ -77,20 +89,52 @@ func orchestratorPeer(snap ccregistry.Snapshot, f roleFile) *Peer {
 		Cwd: f.Cwd, TerminalID: f.OrcaTerminal, Alive: snap.Liveness(f.Session, f.Pid).String(), Via: []string{"claude"}}
 }
 
+// addressable answers the sender's question with the sender's own computation: the
+// target must be a row of THIS repo's peer set with a usable Send. Anything else is
+// refused by name rather than returned as a target the send path cannot reach.
+func addressable(ctx context.Context, rc *repoContext, f roleFile) (*Peer, *Refused) {
+	name := liveName(rc.snap, f)
+	ref := &Refused{Name: name, Scope: f.Scope, Session6: session6(f.Session)}
+	for _, p := range rc.peers(ctx) {
+		if p.Session != f.Session {
+			continue
+		}
+		if p.Send == "none" || p.Send == "" {
+			ref.Reason, ref.Detail = "target_unsendable", p.Reason
+			return nil, ref
+		}
+		out := p
+		out.Role, out.Scope = "orchestrator", f.Scope
+		return &out, nil
+	}
+	if _, ok := rc.snap.Find(f.Session); ok {
+		ref.Reason = "target_in_other_repo"
+		ref.Detail = "its cwd is outside this repo"
+		if orcaSelected(rc.root, false) {
+			ref.Hint = "cross-repo messaging goes through /lets:hub"
+		}
+		return nil, ref
+	}
+	ref.Reason = "target_not_alive"
+	return nil, ref
+}
+
+// candidate pairs a live orchestrator's role file with its already-resolved,
+// addressable Peer, so ResolveOrchestrator never rebuilds it.
+type candidate struct {
+	f roleFile
+	p *Peer
+}
+
 // ResolveOrchestrator decides the caller's orchestrator: its own role first (self),
 // then the branch binding (bound; never re-routed to another orchestrator when the
 // bound one is gone), then the only live orchestrator (single); several, or any whose
-// liveness is unknown, is ambiguous; nothing is none.
-func ResolveOrchestrator(ctx context.Context, root string, o ResolveOptions) *Resolution {
-	res := &Resolution{Scope: "branch", Candidates: []Candidate{}, Degraded: []Degraded{}}
-	files, invalid := loadRoles(root)
-	for _, name := range invalid {
-		res.Degraded = append(res.Degraded, Degraded{Source: "roles", Reason: "role_file_invalid", Detail: name})
-	}
-	snap := ccregistry.Read(ccregistry.HomeDir())
-	if snap.Degraded != nil {
-		res.Degraded = append(res.Degraded, Degraded{Source: "claude", Reason: snap.Degraded.Reason, Detail: snap.Degraded.Detail})
-	}
+// liveness is unknown, is ambiguous; nothing is none. A candidate this repo cannot
+// address (cross-repo, dead, or present but unsendable) is refused by name, never
+// returned as a target.
+func ResolveOrchestrator(ctx context.Context, rc *repoContext, o ResolveOptions) *Resolution {
+	res := &Resolution{Scope: "branch", Candidates: []Candidate{}, Degraded: rc.degraded, Refused: []Refused{}}
+	files, snap := rc.roles, rc.snap
 	if self, ok := files[o.Session]; ok && self.Role == "orchestrator" {
 		res.Source, res.Target = "self", orchestratorPeer(snap, self)
 		if !ccregistry.ValidName(res.Target.Name) {
@@ -105,41 +149,50 @@ func ResolveOrchestrator(ctx context.Context, root string, o ResolveOptions) *Re
 		}
 	}
 	sort.Slice(orchs, func(i, j int) bool { return liveName(snap, orchs[i]) < liveName(snap, orchs[j]) })
-	if name, ok := readBinding(root, branchOf(ctx, o.Cwd)); ok {
+	if name, ok := readBinding(rc.root, branchOf(ctx, o.Cwd)); ok {
 		res.Source = "bound"
 		for _, f := range orchs {
 			if liveName(snap, f) == name {
-				res.Target = orchestratorPeer(snap, f)
-				if res.Target.Alive == "dead" {
-					res.Reason = "orchestrator_dead"
+				if p, ref := addressable(ctx, rc, f); p != nil {
+					res.Target = p
+				} else {
+					res.Reason, res.Refused = ref.Reason, append(res.Refused, *ref)
 				}
 				return res
 			}
 		}
-		res.Target = &Peer{Role: "orchestrator", Name: name, Alive: "dead", Via: []string{}, Send: "none"}
 		res.Reason = "orchestrator_not_registered"
+		res.Refused = append(res.Refused, Refused{Name: name, Reason: "target_not_alive", Detail: "bound orchestrator has no role file"})
 		return res
 	}
-	var live []roleFile
+	var live []candidate
 	unknown := false
 	for _, f := range orchs {
 		l := snap.Liveness(f.Session, f.Pid)
 		if l == ccregistry.Dead {
 			continue
 		}
+		p, ref := addressable(ctx, rc, f)
+		if p == nil {
+			res.Refused = append(res.Refused, *ref)
+			continue
+		}
 		if l == ccregistry.Unknown {
 			unknown = true
 		}
-		live = append(live, f)
+		live = append(live, candidate{f: f, p: p})
 		res.Candidates = append(res.Candidates, Candidate{Name: liveName(snap, f), Scope: f.Scope, Alive: l.String(), Session: f.Session})
 	}
 	switch {
 	case len(live) == 1 && !unknown:
-		res.Source, res.Target = "single", orchestratorPeer(snap, live[0])
+		res.Source, res.Target = "single", live[0].p
 	case len(live) > 0:
 		res.Source = "ambiguous"
 	default:
 		res.Source = "none"
+		if len(res.Refused) > 0 {
+			res.Reason = res.Refused[0].Reason
+		}
 	}
 	return res
 }

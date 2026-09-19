@@ -20,9 +20,9 @@ type Peer struct {
 	State        string   `json:"state,omitempty"` // registry status, or the Orca agent state
 	AgentType    string   `json:"agent_type,omitempty"`
 	LastActivity string   `json:"last_activity,omitempty"`
-	Alive        string   `json:"alive"` // alive | dead | unknown
-	Via          []string `json:"via"`   // claude, orca
-	Send         string   `json:"send"`  // orca | claude | none
+	Alive        string   `json:"alive"`          // alive | dead | unknown
+	Via          []string `json:"via"`            // claude, orca
+	Send         string   `json:"send,omitempty"` // orca | claude | none (computed in who/peers; absent when not computed)
 	Reason       string   `json:"reason,omitempty"`
 	RepoIndex    *int     `json:"repo_index,omitempty"` // who --orca-repos: which Orca repo this row belongs to
 }

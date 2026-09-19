@@ -105,4 +105,5 @@ type OrchestratorResult struct {
 	Target     *Peer       `json:"target,omitempty"`
 	Candidates []Candidate `json:"candidates"`
 	Reason     string      `json:"reason,omitempty"`
+	Refused    []Refused   `json:"refused,omitempty"`
 }
