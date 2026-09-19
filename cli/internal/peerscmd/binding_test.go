@@ -104,6 +104,52 @@ func TestResolveOrchestrator_Unbound(t *testing.T) {
 	}
 }
 
+// TestResolveOrchestrator_ExhaustedBudgetNeverRebinds is the regression for the
+// silent re-route FIX A closes: Orchestrator()'s resolution budget spending itself
+// before the branch is read must degrade loudly, never fall through to the unbound
+// path and pick a DIFFERENT live orchestrator than the one this branch is bound to.
+func TestResolveOrchestrator_ExhaustedBudgetNeverRebinds(t *testing.T) {
+	root := repoWithLets(t, "")
+	plantRole(t, root, sidA, "role: orchestrator\nname: ORC-A\npid: 101\nset: x\n")
+	plantRole(t, root, sidO, "role: orchestrator\nname: ORC-B\npid: 102\nset: x\n")
+	bindBranch(t, root, "feature/x", "ORC-A")
+	claudeHome(t, []regRow{{101, sidA, "ORC-A", root}, {102, sidO, "ORC-B", root}})
+
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel() // exactly what Orchestrator()'s 2500ms budget leaves behind once exhausted
+
+	// The branch is supplied (read outside the budget, as Orchestrator() now does):
+	// the binding to ORC-A must survive an already-exhausted ctx.
+	rc, err := loadRepo(cancelled, root, false)
+	if err != nil {
+		t.Fatalf("loadRepo: %v", err)
+	}
+	if r := ResolveOrchestrator(cancelled, rc, ResolveOptions{Session: sidB, Cwd: root, Branch: "feature/x"}); r.Source != "bound" || r.Target == nil || r.Target.Session != sidA {
+		t.Fatalf("a supplied Branch must resolve the binding even under an exhausted ctx: %+v", r)
+	}
+
+	// No Branch supplied: ResolveOrchestrator must read it itself under the SAME
+	// exhausted ctx, fail, and degrade loudly - never silently fall through to the
+	// unbound path and pick the other live orchestrator, ORC-B.
+	rc2, err := loadRepo(cancelled, root, false)
+	if err != nil {
+		t.Fatalf("loadRepo: %v", err)
+	}
+	r2 := ResolveOrchestrator(cancelled, rc2, ResolveOptions{Session: sidB, Cwd: root})
+	if r2.Source != "none" || r2.Reason != "branch_unreadable" || r2.Target != nil {
+		t.Fatalf("an exhausted budget with no Branch must degrade loudly, not silently resolve to ORC-B: %+v", r2)
+	}
+	found := false
+	for _, d := range r2.Degraded {
+		if d.Source == "git" && d.Reason == "branch_unreadable" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("a git-degraded entry must be recorded: %+v", r2.Degraded)
+	}
+}
+
 // TestResolveOrchestrator_BoundSameRepoIsAddressable is the regression case that
 // must NOT break: a bound orchestrator of this same repo resolves with a computed
 // send, never the uncomputed "" the live bug reported (see the plan's Context).

@@ -20,6 +20,13 @@ import (
 type ResolveOptions struct {
 	Session string // the caller
 	Cwd     string // the caller's checkout (its branch carries the binding)
+	// Branch: the caller's checked-out branch, read OUTSIDE the resolution budget;
+	// empty means resolve it here (branchOf(ctx, Cwd), inside whatever budget ctx
+	// carries). A caller under its own timeout (Orchestrator's 2500ms) must read the
+	// branch before that timeout starts - git exec fails instantly on an expired
+	// context, and an unreadable branch is unbound, which re-routes to a DIFFERENT
+	// orchestrator than the one this branch is actually bound to.
+	Branch string
 }
 
 // Candidate is one orchestrator an unbound caller could mean.
@@ -149,7 +156,11 @@ func ResolveOrchestrator(ctx context.Context, rc *repoContext, o ResolveOptions)
 		}
 	}
 	sort.Slice(orchs, func(i, j int) bool { return liveName(snap, orchs[i]) < liveName(snap, orchs[j]) })
-	if name, ok := readBinding(rc.root, branchOf(ctx, o.Cwd)); ok {
+	branch := o.Branch
+	if branch == "" {
+		branch = branchOf(ctx, o.Cwd)
+	}
+	if name, ok := readBinding(rc.root, branch); ok {
 		res.Source = "bound"
 		for _, f := range orchs {
 			if liveName(snap, f) == name {
@@ -163,6 +174,16 @@ func ResolveOrchestrator(ctx context.Context, rc *repoContext, o ResolveOptions)
 		}
 		res.Reason = "orchestrator_not_registered"
 		res.Refused = append(res.Refused, Refused{Name: name, Reason: "target_not_alive", Detail: "bound orchestrator has no role file"})
+		return res
+	}
+	// An exhausted budget must degrade loudly, never silently re-route to a different
+	// orchestrator: branchOf(ctx, ...) fails instantly once ctx is done, which looks
+	// exactly like a detached HEAD (also "") to readBinding above. Tell them apart by
+	// ctx.Err() - a genuinely detached HEAD with a healthy ctx still falls through.
+	if branch == "" && ctx.Err() != nil {
+		res.Source = "none"
+		res.Reason = "branch_unreadable"
+		res.Degraded = append(res.Degraded, Degraded{Source: "git", Reason: "branch_unreadable"})
 		return res
 	}
 	var live []candidate
