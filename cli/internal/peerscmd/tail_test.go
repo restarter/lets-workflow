@@ -159,6 +159,38 @@ func TestTail_CallCeiling(t *testing.T) {
 	}
 }
 
+// TestTail_CallCeilingCountsDroppedTurnsOwnTruncation: a turn the call ceiling drops
+// may have ALSO lost bytes to the per-turn cap before it ever got there - both losses
+// must be counted, or a heavily-capped dropped turn is under-reported (FIX B).
+func TestTail_CallCeilingCountsDroppedTurnsOwnTruncation(t *testing.T) {
+	repo := repoWithLets(t, "")
+	home := claudeHome(t, []regRow{{101, sidMain, "MAIN", repo}, {103, sidWork, "W1", repo}})
+	lines := []map[string]any{userText("2026-09-15T10:00:00Z", header(msg1, sidWork)+"\nq")}
+	const oldestSize = 40 << 10 // well over the 16 KiB per-turn message cap
+	lines = append(lines, assistantText("2026-09-15T10:00:01Z", strings.Repeat("o", oldestSize)))
+	for i := 0; i < 4; i++ {
+		// under the per-turn cap: these four alone (64000 B) plus the oldest turn's
+		// capped remainder push the running sum past the 64 KiB ceiling.
+		lines = append(lines, assistantText(fmt.Sprintf("2026-09-15T10:00:%02dZ", i+2), strings.Repeat("n", 16000)))
+	}
+	writeTranscript(t, home, repo, sidWork, append(lines, turnEnd("2026-09-15T10:00:10Z"))...)
+	res, err := Tail(context.Background(), TailOptions{Cwd: repo, ToSession: sidWork, SinceMessage: msg1, SentAt: "2026-09-15T09:59:59Z"})
+	if err != nil {
+		t.Fatalf("tail: %v", err)
+	}
+	if res.Omitted == 0 {
+		t.Fatalf("the oldest, largest turn must be dropped by the call ceiling: %+v", res)
+	}
+	for _, tn := range res.Turns {
+		if strings.HasPrefix(tn.Text, "oooo") {
+			t.Fatalf("the dropped turn must not be among those returned: %+v", res.Turns)
+		}
+	}
+	if res.TruncatedBytes < oldestSize {
+		t.Errorf("a dropped turn's own per-turn truncation must still be counted, not just its kept remainder: truncated_bytes=%d, want at least %d", res.TruncatedBytes, oldestSize)
+	}
+}
+
 // TestTail_OmittedStillCountsDroppedTurns: the pre-existing whole-turn --last
 // behaviour is unchanged by the byte-ceiling addition, and short turns under both
 // caps report no truncated_bytes.

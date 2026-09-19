@@ -149,7 +149,11 @@ func Tail(ctx context.Context, o TailOptions) (*TailResult, error) {
 			if keep < len(turns) {
 				dropped := turns[:len(turns)-keep]
 				for _, t := range dropped {
-					res.TruncatedBytes += len(t.Text)
+					// len(t.Text) is what the ceiling dropped (what the reader would have
+					// received); t.TruncatedBytes is what the per-turn cap had ALREADY cut
+					// from that same turn before it ever got here - both are source bytes
+					// lost, so both count, or a heavily-capped dropped turn under-reports.
+					res.TruncatedBytes += len(t.Text) + t.TruncatedBytes
 				}
 				res.Omitted += len(dropped)
 				turns = turns[len(turns)-keep:]

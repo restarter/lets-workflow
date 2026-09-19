@@ -52,7 +52,9 @@ type TailResult struct {
 	Note          string          `json:"note,omitempty"`
 	AddressedToMe *AddressedCount `json:"addressed_to_me,omitempty"`
 	// TruncatedBytes counts SOURCE bytes lost to either cut: bytes removed inside a
-	// turn that was kept, plus the full text of turns the call ceiling dropped. So a
+	// turn that was kept, plus the full SOURCE size of a turn the call ceiling
+	// dropped - its kept text AND whatever the per-turn cap had already cut from
+	// that same turn, so a heavily-capped dropped turn is not under-reported. So a
 	// whole-turn drop moves both Omitted and this counter - omitted: 0 no longer
 	// implies a complete answer on its own.
 	TruncatedBytes int `json:"truncated_bytes,omitempty"`
