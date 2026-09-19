@@ -118,4 +118,4 @@ Write `header` + newline + the message with the Write tool to `handoff_path` (ne
 
 ## Footer
 
-Close type: one prose line - what was sent, relayed, or is still waiting; nothing after `who` / `read`. Emit it only when `footer=none` is absent (the outermost invocation: `/lets:orc`, or the `/lets:peer` alias, whose own body emits nothing). Touchpoints (done / execute / opinion, the hub) pass `footer=none`.
+Close type: one prose line - what was sent, relayed, or is still waiting; nothing after `who` / `read`. Emit it only when `footer=none` is absent (the outermost invocation: `/lets:orc`, or the `/lets:peer` alias, whose own body emits nothing). Every touchpoint (lets-rules `### Orchestrator offer`, the `/lets:done` ping) and the hub pass `footer=none`.

@@ -213,6 +213,10 @@ func TestOrcLint(t *testing.T) {
 	if len(mutate("commands/note.md", "```\nAskUserQuestion(\n    options: [\n      { label: \"Ask orchestrator\", description: \"x\" }\n    ]\n```")) == 0 {
 		t.Error("mutation: an Ask orchestrator option with no rule pointer and no handler must fail the lint")
 	}
+	// execute.md already points at the rule, so only the one-handler-per-offer count can catch this
+	if len(mutate("commands/execute.md", "```\nAskUserQuestion(\n    options: [\n      { label: \"Ask orchestrator\", description: \"x\" }\n    ]\n```")) == 0 {
+		t.Error("mutation: an Ask orchestrator offer without its own verb=ask handler must fail the lint")
+	}
 	if len(mutate("commands/note.md", "```\nAskUserQuestion(\n    options: [\n      { label: \"Consult orchestrator\", description: \"x\" }\n    ]\n```")) == 0 {
 		t.Error("mutation: a second orchestrator label must fail the lint")
 	}
