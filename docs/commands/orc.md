@@ -51,7 +51,7 @@ Three guarantees hold everywhere:
 - **The answer informs, you decide.** The reply is relayed whole, then the same question comes back without the orchestrator option. A peer's answer never adapts a plan or counts as approval.
 - **Silent when there is nobody to ask.** No live orchestrator, this session is the orchestrator, or you are on the merge branch - the question looks exactly as it did before, with no note about it.
 
-A gate never grows past four options: where one was full, two near-identical options merge while the offer is shown. The ping `/lets:done` offers after a PR is a notification, not one of these decisions.
+A gate never grows past four options: where one was full, two near-identical options merge while the offer is shown. Two more offers are notifications, not decisions, so they are pings and follow none of the above: `/lets:done` offers to ping the orchestrator with the PR link, and `/lets:end` - when the session leaves something behind (an untracked bug, a check nobody ran) - prints one line, `Leftovers for <name>?  /lets:orc ping`. Type it and the message is built from the session snapshot that was just written, then shown to you before it goes. A session with nothing left over ends as quietly as before.
 
 ## Safety
 

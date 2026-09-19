@@ -15,6 +15,8 @@ A **session** is one conversation (`/lets:start` … `/lets:end`); a **task** us
 
 The picks run in a fixed order: commit → finish-task hand-off → push → snapshot → progress comment. The snapshot is always written, picks or no picks; the progress comment comes last because it points at the snapshot file.
 
+**Leftovers for your orchestrator.** A worker session can be tidy in git and still leave something behind - a bug it found and did not file, a check nobody ran. When the snapshot's `Remaining` holds such items and the session has a live orchestrator, `/lets:end` adds one line to its output: `Leftovers for <name>?  /lets:orc ping`. It is a line you may type, not a question: the message is built from the snapshot and shown before it is sent, and a session with nothing left over - or nobody to tell - ends exactly as quietly as before. More: **[commands/orc.md](commands/orc.md#where-lets-offers-it)**.
+
 ## Snapshots
 
 A snapshot is a recovery-grade record of the session: what was done, what remains, the next step, decisions, and the commit range. It is a file in `.lets/sessions/`, named `{date}-{HHMM}-{task-id}-snapshot.md` (a session with no task uses `{branch}-{6hex}` in place of the id; a name collision adds `-vN`). When a task is unambiguously active, the task also gets a one-line pointer to the file.

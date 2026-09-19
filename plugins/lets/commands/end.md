@@ -17,7 +17,7 @@ End a work session cleanly. `/lets:end` is a **settlement pass**: it reconciles 
 
 One settlement core (the default flow); the flags below are separate paths, NOT modifiers of it:
 
-- **(default)** - full settlement pass (Steps 1-3) + worktree hint + a one-line terminal prose hint (Step 4 / Output). Auto-skip keeps it silent on a tidy session.
+- **(default)** - full settlement pass (Steps 1-3) + worktree hint (Step 4) + the orchestrator leftovers line (Step 5) + a one-line terminal prose hint (Output). Auto-skip keeps it silent on a tidy session.
 - **`--session`** (aliases `--snapshot`, `--pre-compact`, `--compact` - one path, four spellings) - a session record on request, **NOT a session end and NOT a settlement pass**. It runs NO settlement (no commit / push / progress / finish offers) - it ONLY writes the shared session snapshot via `session-snapshot` (`kind=session`) and the session continues. Use it to bank the state of a long session, before a `/compact` or not. **Identical to `/lets:note --session`.** See the early-exit at the top of Step 1.
 
   There is deliberately no second flag for the pre-compaction case. The record it writes is permanent and `/lets:start` reads it back, so the snapshot must describe what HAPPENED, not what the caller intended to do next - and "written mid-session, the session continued" is true whether or not a `/compact` follows. Two flags asserting two intents was the wrong shape for that problem: the honest sentence fixes it, a choice at the call site does not.
@@ -167,6 +167,18 @@ Output-time, never a prompt. If `GIT_DIR` contains `worktrees/`: extract the wor
 
 Both branches are reachable, and not through Step 2: the referral stops end before Step 4, so this is never the hand-off path. The cleanup branch exists for the INDEPENDENT route - `/lets:done` runs on its own, closes the task, and its worktree menu offers "End session", which lands here with a closed task. Printing a resume hint there contradicts what `done` just said. If the status is UNKNOWN (no task, or the read failed), show the resume line: it is the safe default, since it points at work rather than at deletion.
 
+## Step 5: Leftovers for the orchestrator
+
+Output-time, never a prompt - a session tidy in git can still end with leftovers, and "tidy session = zero prompts" holds either way. A worker's results and leftovers otherwise stay where only the next session of the same task looks (the snapshot, the task); its orchestrator learns of them only if the human carries them over.
+
+Offer only when BOTH hold, otherwise say nothing:
+- 3a's snapshot has real items under `### Remaining + NEXT STEP` - not the `- (none)` stub, and not only a `NEXT:` line that says the work is finished.
+- a live orchestrator resolves, per the resolution and silence conditions of lets-rules `### Orchestrator offer` (rule not loaded -> no offer). This is a `ping` - a notification - so that rule's selection test does not apply, exactly as for the `/lets:done` PR ping.
+
+- **Orchestrator ping (Nav)** -> one Output line right after `Snapshot:` - `Leftovers for {target.name}?  /lets:orc ping`. The name appears only when `source` is `bound` / `single`; on `ambiguous` there is no single target, so the line reads `Leftovers for an orchestrator?  /lets:orc ping` and the orc skill asks which - never print a guessed name. The user types it; the orc skill builds the message from the snapshot just written and previews it. This command sends nothing and asks nothing.
+
+Never on the snapshot-only paths (the session continues - nothing to hand over yet) and never on the Finish-task referral (end has stopped there; `/lets:done` owns the output and has its own PR ping).
+
 ## Output
 
 ### Default
@@ -181,7 +193,7 @@ Settled: {e.g. "committed; pushed 3" / "nothing - tidy session"}
 Snapshot: .lets/sessions/{date}-{HHMM}-{task-id}-snapshot.md
 ```
 
-If in a worktree, append the resume line (`cd {LETS_PROJECT_ROOT from LETS Config} && claude -> /lets:start`).
+If in a worktree, append the resume line (`cd {LETS_PROJECT_ROOT from LETS Config} && claude -> /lets:start`). When Step 5 applies, its one line follows `Snapshot:`.
 
 Then a SINGLE prose line (no AskUserQuestion, no wrap-up card):
 
@@ -212,5 +224,6 @@ Then STOP - no AskUserQuestion, no settlement, no push, no `git checkout`. The s
 - **Always write the session snapshot** via the shared `session-snapshot` primitive - on EVERY path that reaches Step 2, the Finish-task referral included, where 3a runs before the hand-off while the branch is still this session's. No exceptions: a session that ends by finishing a task is the one whose record is worth the most. The snapshot is file-primary; the task gets at most a one-line pointer, and none on the referral, where `/lets:done` writes the task-side record.
 - **`--session` runs NO settlement** (snapshot-only; it early-exits at the top of Step 1). Its aliases are spellings of the same path, not variants - the snapshot states what happened, never what the caller planned to do next.
 - **End with a one-line compact/clear prose hint, never a wrap-up card.**
+- **The orchestrator ping is an Output line, never a Settle option** - Settle already holds four options, and a leftover is not something to settle before the window closes.
 - **Refer to `/lets:done`, never finish a task** - offer the hand-off only when the task is open AND this session touched it, and never judge whether the work is complete. `end` is a SESSION command; the task lifecycle is `done`'s.
 - Respond in user's language.
