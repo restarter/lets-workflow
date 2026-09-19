@@ -116,7 +116,7 @@ func TestTell_ForeignRepoTarget(t *testing.T) {
 		_ = os.WriteFile(fr.HandoffPath, []byte(fr.Header+"\nplease check"), 0o600)
 		return fr
 	}
-	if res, err := Tell(ctx, TellOptions{Cwd: hub, ToSession: sidWork, MsgID: frame().MsgID}); err != nil || res.Reason != "peer_unreachable" {
+	if res, err := Tell(ctx, TellOptions{Cwd: hub, ToSession: sidWork, MsgID: frame().MsgID}); err == nil || err.(*Error).Kind != "not_delivered" || res.Reason != "peer_unreachable" {
 		t.Errorf("without a repo the foreign session is no peer of the hub's repo: %+v %v", res, err)
 	}
 	fr := frame()

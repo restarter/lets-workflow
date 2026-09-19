@@ -89,6 +89,9 @@ func Frame(ctx context.Context, o FrameOptions) (*FrameResult, error) {
 	if !ccregistry.ValidSession(o.Session) || !ccregistry.ValidSession(o.ToSession) || !ValidKind(o.Kind) {
 		return fail(&Error{Code: ExitUsage, Kind: "usage", Message: "frame needs --session and --to-session (session ids) and --kind ask|ping|tell|ask-ro"})
 	}
+	if o.Session == o.ToSession {
+		return fail(&Error{Code: ExitUsage, Kind: "self_send", Message: "a session cannot send to itself", Remediation: "address another session, or say it in this chat"})
+	}
 	rc, err := loadRepo(ctx, o.Cwd, false)
 	if err != nil {
 		return fail(err.(*Error))
@@ -118,6 +121,7 @@ func Frame(ctx context.Context, o FrameOptions) (*FrameResult, error) {
 	if err != nil {
 		return fail(&Error{Code: ExitGeneric, Kind: "handoff_dir_refused", Message: err.Error()})
 	}
+	pruneHandoffs(dir) // a handoff kept for retry (Tell never deletes an untyped one) must not accumulate
 	res.MsgID = id
 	res.SentAt = time.Now().UTC().Format(time.RFC3339Nano)
 	res.Header = fmt.Sprintf(`[lets-peer id=%s kind=%s from_sid=%s to_sid=%s from="%s/%s" to="%s"]`, id, o.Kind, o.Session, o.ToSession, role, from.Name, toName)
@@ -129,9 +133,10 @@ func Frame(ctx context.Context, o FrameOptions) (*FrameResult, error) {
 	return res, nil
 }
 
-// readHandoff opens <peer-msg>/<msgid>.txt without following a symlink, requires a
-// regular file of at most 8 KiB that starts with the header Frame issued, and
-// deletes the handoff and its issued header.
+// readHandoff opens <peer-msg>/<msgid>.txt without following a symlink and requires
+// a regular file of at most 8 KiB that starts with the header Frame issued. It never
+// deletes: the caller decides, via consumeHandoff, once it knows whether anything was
+// typed.
 func readHandoff(root, msgid string) (string, *Error) {
 	if !msgIDRe.MatchString(msgid) {
 		return "", &Error{Code: ExitUsage, Kind: "usage", Message: "--msgid is not a msgid"}
@@ -145,8 +150,6 @@ func readHandoff(root, msgid string) (string, *Error) {
 		return "", &Error{Code: ExitGeneric, Kind: "handoff_refused", Message: "no header was issued for this msgid"}
 	}
 	path := filepath.Join(dir, msgid+".txt")
-	defer func() { _ = os.Remove(path) }()
-	defer func() { _ = os.Remove(filepath.Join(dir, msgid+".issued")) }()
 	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
 	if err != nil {
 		return "", &Error{Code: ExitGeneric, Kind: "handoff_refused", Message: "handoff unreadable or a symlink"}
@@ -165,6 +168,44 @@ func readHandoff(root, msgid string) (string, *Error) {
 		return "", &Error{Code: ExitGeneric, Kind: "handoff_refused", Message: "handoff does not start with the issued header"}
 	}
 	return text, nil
+}
+
+// consumeHandoff removes a handoff and its issued header. Called only once the
+// message was delivered, handed to the skill, or typed into the peer: a message
+// that was never typed keeps its file so the SAME msgid can be retried.
+func consumeHandoff(root, msgid string) {
+	dir, err := peerMsgDir(root)
+	if err != nil {
+		return
+	}
+	_ = os.Remove(filepath.Join(dir, msgid+".txt"))
+	_ = os.Remove(filepath.Join(dir, msgid+".issued"))
+}
+
+// handoffMaxAge is how long a kept handoff (nothing was ever typed) survives before
+// Frame prunes it: a refused or abandoned send must not accumulate files forever.
+const handoffMaxAge = 24 * time.Hour
+
+// pruneHandoffs removes *.txt / *.issued older than handoffMaxAge, ignoring errors -
+// best-effort housekeeping, never a reason to fail a frame.
+func pruneHandoffs(dir string) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	cutoff := time.Now().Add(-handoffMaxAge)
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if !strings.HasSuffix(name, ".txt") && !strings.HasSuffix(name, ".issued") {
+			continue
+		}
+		if fi, err := e.Info(); err == nil && fi.ModTime().Before(cutoff) {
+			_ = os.Remove(filepath.Join(dir, name))
+		}
+	}
 }
 
 // TellOptions configures Tell.
@@ -201,13 +242,18 @@ func Tell(ctx context.Context, o TellOptions) (*TellResult, error) {
 	res.Degraded = prc.degraded
 	text, e := readHandoff(rc.root, o.MsgID)
 	if e != nil {
+		if e.Kind == "handoff_refused" { // a malformed handoff is not retryable; usage errors touch nothing
+			consumeHandoff(rc.root, o.MsgID)
+		}
 		return fail(e)
 	}
 	if h, ok := leadingHeader(text); !ok || h.ToSID != o.ToSession || h.ID != o.MsgID {
+		consumeHandoff(rc.root, o.MsgID)
 		return fail(&Error{Code: ExitGeneric, Kind: "handoff_refused", Message: "the header does not address this session and msgid"})
 	}
 	peer := findPeer(prc, ctx, o.ToSession)
 	res.OK = true
+	attempted := false
 	switch {
 	case peer == nil || peer.Send == "none":
 		res.Reason = "peer_unreachable"
@@ -218,28 +264,39 @@ func Tell(ctx context.Context, o TellOptions) (*TellResult, error) {
 		res.Route, res.Reason, res.Text = "claude", "claude_transport_model_send", text
 	case peer.Send == "orca":
 		res.Route = "orca"
-		path, d := LocateTranscript(ccregistry.HomeDir(), peer.Cwd, peer.Session)
-		if d != nil {
+		if path, d := LocateTranscript(ccregistry.HomeDir(), peer.Cwd, peer.Session); d != nil {
 			res.Reason, res.State = "peer_not_ready", d.Reason
-			return res, nil
-		}
-		out := orcaTell(ctx, prc.ops, *peer, path, o.MsgID, text)
-		res.Delivered, res.Reason, res.State, res.SentAt, res.Observed = out.Delivered, out.Reason, out.State, out.SentAt, out.Observed
-		if out.Reason == "peer_not_ready" && peer.Name != "" {
-			n := 0
-			for _, e := range prc.snap.Entries {
-				if e.NameOK && e.Name == peer.Name {
-					n++
+		} else {
+			out := orcaTell(ctx, prc.ops, *peer, path, o.MsgID, text)
+			res.Delivered, res.Reason, res.State, res.SentAt, res.Observed = out.Delivered, out.Reason, out.State, out.SentAt, out.Observed
+			attempted = out.Attempted
+			if out.Reason == "peer_not_ready" && peer.Name != "" {
+				n := 0
+				for _, e := range prc.snap.Entries {
+					if e.NameOK && e.Name == peer.Name {
+						n++
+					}
+				}
+				if n == 1 {
+					res.ClaudeFallbackAllowed = true
+					res.Text = text
 				}
 			}
-			if n == 1 {
-				res.ClaudeFallbackAllowed = true
-				res.Text = text
+			if out.Receipt.InputAccepted || out.Receipt.TurnStarted {
+				res.Receipt = &ReceiptInfo{InputAccepted: out.Receipt.InputAccepted, TurnStarted: out.Receipt.TurnStarted}
 			}
 		}
-		if out.Receipt.InputAccepted || out.Receipt.TurnStarted {
-			res.Receipt = &ReceiptInfo{InputAccepted: out.Receipt.InputAccepted, TurnStarted: out.Receipt.TurnStarted}
-		}
+	}
+	// res.Text != "" covers both the claude route and the peer_not_ready fallback: the
+	// skill has the text, so the file must not be retried.
+	consumed := res.Delivered || res.Text != "" || attempted
+	if consumed {
+		consumeHandoff(rc.root, o.MsgID)
+	} else {
+		res.Note = "handoff kept - retry with the same msgid: lets peers tell --to-session " + o.ToSession + " --msgid " + o.MsgID
+	}
+	if !res.Delivered && res.Text == "" {
+		return res, &Error{Code: ExitNotDelivered, Kind: "not_delivered", Message: nonEmpty(res.Reason, "not delivered"), Remediation: res.Note}
 	}
 	return res, nil
 }

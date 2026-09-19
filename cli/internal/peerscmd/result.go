@@ -78,6 +78,10 @@ type TellResult struct {
 	Receipt   *ReceiptInfo `json:"receipt,omitempty"`
 	SentAt    string       `json:"sent_at,omitempty"`
 	Observed  bool         `json:"observed"`
+	// Note: set on a non-delivery that kept its handoff - names the same msgid to
+	// retry with. Absent when the handoff was consumed (delivered, claude route, or a
+	// refused-before-typing malformed handoff).
+	Note string `json:"note,omitempty"`
 	// ClaudeFallbackAllowed: an Orca send was not safe, but the peer is also reachable
 	// over SendMessage (a Claude row with a name unique across the whole registry).
 	ClaudeFallbackAllowed bool   `json:"claude_fallback_allowed,omitempty"`

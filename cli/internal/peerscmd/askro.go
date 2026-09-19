@@ -132,12 +132,19 @@ func AskRO(ctx context.Context, o AskROOptions) (*AskROResult, error) {
 	prompt, pe := readHandoff(root, o.MsgID)
 	if pe != nil {
 		res.OK = false
+		if pe.Kind == "handoff_refused" { // a malformed handoff is not retryable; usage errors touch nothing
+			consumeHandoff(root, o.MsgID)
+		}
 		return fail(pe)
 	}
 	if h, ok := leadingHeader(prompt); !ok || h.Kind != "ask-ro" || h.ToSID != o.Session {
 		res.OK = false
+		consumeHandoff(root, o.MsgID)
 		return fail(&Error{Code: ExitGeneric, Kind: "handoff_refused", Message: "the handoff is not an ask-ro message to this session"})
 	}
+	// ask-ro is one-shot: the prompt becomes the forked process's stdin next, and there
+	// is no separate "nothing was typed" case to keep it retryable for.
+	consumeHandoff(root, o.MsgID)
 	emptyMCP := filepath.Join(root, ".lets", "cache", "ask-ro-mcp-empty.json")
 	if err := os.WriteFile(emptyMCP, []byte(`{"mcpServers":{}}`+"\n"), 0o600); err != nil {
 		res.OK = false

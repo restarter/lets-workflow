@@ -206,6 +206,10 @@ type TellOutcome struct {
 	Reason    string // peer_not_ready | orca_handle_stale | an orca_* failure
 	State     string // why not ready
 	SentAt    string
+	// Attempted is true once ops.Send was called at least once (the first try, or the
+	// one retry after a stale handle) - the only thing that separates "refused before
+	// typing" (a check() failure: false) from "typed, delivery unproven" (true).
+	Attempted bool
 }
 
 // orcaTell sends text to target's Orca terminal, under a machine-wide per-target
@@ -265,19 +269,21 @@ func orcaTell(ctx context.Context, ops orcaOps, target Peer, transcript, msgid, 
 		return TellOutcome{Reason: "peer_not_ready", State: why}
 	}
 	sentAt := time.Now().UTC().Format(time.RFC3339Nano)
+	attempted := true // set immediately before ops.Send: past this point, delivery is unproven, never "nothing was typed"
 	rcpt, f := ops.Send(ctx, handle, text)
 	if f != nil && f.Reason == orcacmd.ReasonHandleStale {
 		// Re-join by terminal id (never by title) and re-check before the one retry.
 		if ok, why := check(); !ok {
-			return TellOutcome{Reason: "peer_not_ready", State: "after_stale_handle: " + why}
+			return TellOutcome{Reason: "peer_not_ready", State: "after_stale_handle: " + why, Attempted: attempted}
 		}
 		sentAt = time.Now().UTC().Format(time.RFC3339Nano)
+		attempted = true
 		rcpt, f = ops.Send(ctx, handle, text)
 	}
 	if f != nil {
-		return TellOutcome{Reason: f.Reason, State: f.Detail, SentAt: sentAt}
+		return TellOutcome{Reason: f.Reason, State: f.Detail, SentAt: sentAt, Attempted: attempted}
 	}
-	out := TellOutcome{Delivered: rcpt.InputAccepted, Receipt: rcpt, SentAt: sentAt}
+	out := TellOutcome{Delivered: rcpt.InputAccepted, Receipt: rcpt, SentAt: sentAt, Attempted: attempted}
 	deadline := time.Now().Add(observeTimeout)
 	for {
 		if recs, d := readAll(transcript); d == nil {
