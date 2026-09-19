@@ -11,7 +11,7 @@ Talk to the repo's orchestrator or a named peer session: `ask` / `ping` / `read`
 
 ## Args
 
-`verb=ask|ping|read|tell|who target="<name>" [session=<sid> repo_index=<n>] text=<rest> [footer=none] [--yes]` - `target` optional (default: this chat's orchestrator), quoted. `--yes` (the user typed it) skips the Send? question in Step 4, not the message itself - see the Preview gate. `session` + `repo_index` name another project's session; only `/lets:hub` passes them. From natural language: map the request to a verb (a question for an answer -> `ask`; an FYI -> `ping` or `tell`; "what did X say" -> `read`; "who is working" -> `who`). Any other verb: say so and stop.
+`verb=ask|ping|read|tell|who target="<name>" [session=<sid> repo_index=<n>] text=<rest> [footer=none] [--yes]` - `target` is optional for `ask` / `ping` (default: this chat's orchestrator) and REQUIRED for `tell`, quoted. `--yes` (the user typed it) skips the Send? question in Step 4, not the message itself - see the Preview gate. `session` + `repo_index` name another project's session; only `/lets:hub` passes them. From natural language: map the request to a verb (a question for an answer -> `ask`; an FYI -> `ping` or `tell`; "what did X say" -> `read`; "who is working" -> `who`). Any other verb: say so and stop.
 
 | verb | sends | waits | target required |
 |---|---|---|---|
@@ -32,10 +32,12 @@ Every later call addresses the returned **session id** (`target.session`), never
 | `source` | do |
 |---|---|
 | `bound` / `single`, `target.alive=alive` | that is the target |
-| `bound`, `alive=dead` or `reason=orchestrator_not_registered` | say `<name> (bound to this branch) is not alive` and send NOTHING - never re-route to another orchestrator |
+| `bound` with `refused[]` and no `target` | say `<name> cannot be addressed from this repo - <refused[0].reason>; <hint>` (when present) and send NOTHING - never re-route to another orchestrator |
 | `ambiguous` | ask which (below) |
 | `self` | this session IS an orchestrator: `ask` / `ping` need an explicit target; `who` lists its workers first |
-| `none` | say no orchestrator is alive, with each `degraded[]` reason |
+| `none` | say no orchestrator is alive, with each `degraded[]` reason - and, when `refused[]` is non-empty, name those `reason`s too |
+
+A `refused[].reason` of `target_in_other_repo` / `target_not_alive` / `target_unsendable` is final - never fall back to another orchestrator, never retry with a different verb.
 
 `ambiguous`:
 
@@ -73,7 +75,7 @@ Then, only when this branch's `.task` has a `task:` line and HEAD is not `{LETS_
 
 ## Step 3: read [N]
 
-`lets peers tail --to-session <sid> --last N --json` (an Orca-only agent: `--to-terminal <terminal_id>`; "what did they say to me": add `--addressed-to-session "$CLAUDE_CODE_SESSION_ID"`). Render the turns verbatim - they are already redacted and capped - labelled as the peer's words, and name a non-zero `omitted`. Send nothing.
+`lets peers tail --to-session <sid> --last N --json` (an Orca-only agent: `--to-terminal <terminal_id>`; "what did they say to me": add `--addressed-to-session "$CLAUDE_CODE_SESSION_ID"`). Render the turns verbatim - they are already redacted and capped - labelled as the peer's words, and name a non-zero `omitted`. A non-zero `truncated_bytes` means text inside the KEPT turns was cut too - say so, and offer `/lets:orc read` for the rest; `omitted: 0` no longer implies a complete answer on its own. Send nothing.
 
 ## Step 4: Compose (ask / ping / tell)
 
@@ -91,21 +93,22 @@ show task=<TASK_ID from the gate>   # returns {id,title,status}; none/absent -> 
 
 ## Step 5: Send
 
-Write `header` + newline + the message with the Write tool to `handoff_path` (never a shell), then `lets peers tell --to-session <sid> --msgid <msgid> [--repo-index <n>] --json` (Go reads and deletes the file):
+Write `header` + newline + the message with the Write tool to `handoff_path` (never a shell), then `lets peers tell --to-session <sid> --msgid <msgid> [--repo-index <n>] --json`. Go consumes the handoff only once something was typed, handed to the skill, or the handoff proved unusable; a non-delivery where nothing was typed KEEPS the handoff, named for retry (same msgid) in the envelope's `note`.
+
+**Exit 11 from `lets peers tell` is a RESULT, not a tool failure:** `ok=true` and the envelope on stdout are authoritative, and `reason` / `note` say what happened. Read the envelope and print the NOT DELIVERED line below. Do NOT re-run the command because the exit was non-zero - the handoff is kept precisely so the USER can decide to retry, and an automatic retry is a resend the receipt rules forbid.
 
 | result | do |
 |---|---|
 | `delivered=true` (route orca) | report `receipt` and `observed` honestly; `observed=false` = "input accepted, not seen in the peer's transcript". Never resend |
 | `reason=claude_transport_model_send` | `SendMessage({to: "<name>", message: <text from the envelope>, notify_when_idle: <true for ask, false for ping/tell>})` - Go already guaranteed the name is unique across the whole registry |
 | `reason=peer_not_ready`, `claude_fallback_allowed=true` | nothing was typed; send the envelope's `text` with the `SendMessage` form above |
-| `reason=peer_not_ready` otherwise | nothing was sent; tell the user the peer's `state` and stop |
-| `reason=peer_unreachable` / an error | say so with the reason; nothing was sent |
+| any other `delivered=false` with no `text` | **MANDATORY:** print, as its own line, `NOT DELIVERED - <reason> (<state>) - nothing was typed. Retry with the same msgid: /lets:orc <verb> ...`. This line is printed even under `footer=none` - it is not a footer, it is the result. Never resend by yourself; never report a send that did not happen |
 
 ## Step 6: ask follow-up
 
 - Orca route: `lets peers wait --to-session <sid> --since-message <msgid> --sent-at <sent_at> --timeout-ms 1800000 --json` with `run_in_background: true`; tell the user "waiting on <name> - I'll relay when it lands". `completion_unverifiable`: say so and offer `/lets:orc read`.
 - Claude route: the idle notice arrives as a turn.
-- On completion or the notice: `lets peers tail --to-session <sid> --since-message <msgid> --sent-at <sent_at> [--repo-index <n>] --json` (no `--last`: Go returns the whole reply) and relay the WHOLE reply text, no summary; `omitted > 0` -> say that many earlier entries were left out and offer `/lets:orc read`.
+- On completion or the notice: `lets peers tail --to-session <sid> --since-message <msgid> --sent-at <sent_at> [--repo-index <n>] --json` (no `--last`: Go returns the whole reply) and relay the WHOLE reply text, no summary; `omitted > 0` -> say that many earlier entries were left out and offer `/lets:orc read`. A non-zero `truncated_bytes` (even with `omitted: 0`) means the reply itself was cut - say so too.
 - Timeout: "still waiting - /lets:orc read later".
 
 ## Receipt rules (MANDATORY - same as lets-rules `## Peer Messages`)
