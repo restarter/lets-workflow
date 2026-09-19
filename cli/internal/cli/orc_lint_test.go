@@ -1,6 +1,7 @@
 package cli_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -13,6 +14,18 @@ var (
 	orcVerbArg   = regexp.MustCompile(`\bverb=([a-z-]+|<verb>)`)
 	peerSendSM   = regexp.MustCompile(`SendMessage\(\s*\{?\s*to\s*[:=]`)
 	peerSendLits = []string{"lets peers tell", "terminal send", "notify_when_idle"}
+
+	orcOfferLabel  = regexp.MustCompile(`label:\s*"([^"]*[Oo]rchestrator[^"]*)"`)
+	orcOptionsOpen = regexp.MustCompile(`options:\s*\[`)
+	// orcOfferExempt lists files where /lets:orc is reference text, not a touchpoint.
+	// A new file that mentions /lets:orc fails rule 3 until it is a touchpoint or listed here.
+	orcOfferExempt = map[string]bool{
+		"skills/orc/SKILL.md":            true,
+		"commands/peer.md":               true,
+		"commands/start.md":              true,
+		"commands/handoff.md":            true,
+		"commands/install-deprecated.md": true,
+	}
 )
 
 // orcLintFiles returns commands/*.md and skills/*/SKILL.md, keyed by the path
@@ -60,13 +73,13 @@ func lintOrcFiles(files map[string]string) []string {
 				bad = append(bad, rel+": peer SendMessage outside skills/orc/SKILL.md")
 			}
 		}
-		// 3: touchpoints only OFFER /lets:orc (inside an AskUserQuestion fence or on a handle line)
-		if rel == "commands/done.md" || rel == "commands/execute.md" || rel == "commands/opinion.md" {
+		// 3: touchpoints only OFFER /lets:orc (inside an AskUserQuestion fence, a LETS box, or on a handle line)
+		if !orcOfferExempt[rel] {
 			inFence, fence := false, []string{}
 			flush := func() {
 				text := strings.Join(fence, "\n")
-				if strings.Contains(text, "/lets:orc") && !strings.Contains(text, "AskUserQuestion(") {
-					bad = append(bad, rel+": /lets:orc in a fence without AskUserQuestion(")
+				if strings.Contains(text, "/lets:orc") && !strings.Contains(text, "AskUserQuestion(") && !strings.Contains(text, "┌─ LETS") {
+					bad = append(bad, rel+": /lets:orc in a fence that is neither an AskUserQuestion nor a LETS box")
 				}
 				fence = fence[:0]
 			}
@@ -92,11 +105,75 @@ func lintOrcFiles(files map[string]string) []string {
 			bad = append(bad, rel+": the alias delegates to the orc skill and sends nothing itself")
 		}
 	}
+	return append(bad, lintOrcOffers(files)...)
+}
+
+// optionCounts returns the number of labels in every multi-line `options: [` block.
+func optionCounts(body string) []int {
+	var counts []int
+	lines := strings.Split(body, "\n")
+	for i := 0; i < len(lines); i++ {
+		loc := orcOptionsOpen.FindStringIndex(lines[i])
+		if loc == nil || strings.Contains(lines[i][loc[1]:], "]") { // one-line placeholder block
+			continue
+		}
+		n := 0
+		for j := i + 1; j < len(lines); j++ {
+			t := strings.TrimSpace(lines[j])
+			if strings.HasPrefix(t, "]") {
+				break
+			}
+			if strings.Contains(t, "label:") {
+				n++
+			}
+			i = j
+		}
+		counts = append(counts, n)
+	}
+	return counts
+}
+
+// lintOrcOffers pins the orchestrator offer (lets-rules "Orchestrator offer"): one label,
+// a pointer at the rule instead of a restated rule, an ask that goes through the orc skill,
+// and no gate above four options. A ping is a notification and needs no pointer.
+func lintOrcOffers(files map[string]string) []string {
+	var bad []string
+	for rel, body := range files {
+		for _, n := range optionCounts(body) {
+			if n > 4 {
+				bad = append(bad, rel+": an AskUserQuestion options block has more than four labels")
+			}
+		}
+		if orcOfferExempt[rel] {
+			continue
+		}
+		for _, m := range orcOfferLabel.FindAllStringSubmatch(body, -1) {
+			if m[1] != "Ask orchestrator" && m[1] != "Ping orchestrator" {
+				bad = append(bad, rel+": orchestrator option label must be \"Ask orchestrator\" (or \"Ping orchestrator\" for a notification): "+m[1])
+			}
+		}
+		labels := strings.Count(body, `label: "Ask orchestrator"`)
+		if (labels > 0 || strings.Contains(body, "/lets:orc ask")) && !strings.Contains(body, "Orchestrator offer") {
+			bad = append(bad, rel+": an orchestrator offer must point at lets-rules \"Orchestrator offer\"")
+		}
+		// one handler per offer: a file-level "some verb=ask exists" would let a gate lose its handler
+		// while another gate in the same file still has one (execute.md carries two, plan.md three)
+		asks := 0
+		for _, m := range orcSkillCall.FindAllStringSubmatch(body, -1) {
+			if v := orcVerbArg.FindStringSubmatch(m[1]); v != nil && v[1] == "ask" {
+				asks++
+			}
+		}
+		if asks < labels {
+			bad = append(bad, fmt.Sprintf("%s: %d \"Ask orchestrator\" offers but %d Skill(lets:orc) verb=ask handlers", rel, labels, asks))
+		}
+	}
 	return bad
 }
 
 // TestOrcLint pins where peer messages may be sent from: only the orc skill sends,
-// touchpoints only offer, and a delegated orc run never adds a second footer.
+// touchpoints only offer, and a delegated orc run never adds a second footer. An offer
+// points at the rule, uses one label, and no gate exceeds four options.
 func TestOrcLint(t *testing.T) {
 	pluginDir := filepath.Join("..", "..", "..", "plugins", "lets")
 	files := orcLintFiles(t, pluginDir)
@@ -132,5 +209,17 @@ func TestOrcLint(t *testing.T) {
 	}
 	if len(mutate("commands/done.md", "```\nAskUserQuestion(\n```\n- **Ping** -> `Skill(skill: \"lets:orc\", args: \"verb=ping text=x\")`")) == 0 {
 		t.Error("mutation: an orc call without footer=none must fail the lint")
+	}
+	if len(mutate("commands/note.md", "```\nAskUserQuestion(\n    options: [\n      { label: \"Ask orchestrator\", description: \"x\" }\n    ]\n```")) == 0 {
+		t.Error("mutation: an Ask orchestrator option with no rule pointer and no handler must fail the lint")
+	}
+	if len(mutate("commands/note.md", "```\nAskUserQuestion(\n    options: [\n      { label: \"Consult orchestrator\", description: \"x\" }\n    ]\n```")) == 0 {
+		t.Error("mutation: a second orchestrator label must fail the lint")
+	}
+	if len(mutate("commands/note.md", "```\nAskUserQuestion(\n    options: [\n      { label: \"a\" },\n      { label: \"b\" },\n      { label: \"c\" },\n      { label: \"d\" },\n      { label: \"e\" }\n    ]\n```")) == 0 {
+		t.Error("mutation: a five-option gate must fail the lint")
+	}
+	if len(mutate("commands/check.md", "Then run /lets:orc ask yourself.")) == 0 {
+		t.Error("mutation: /lets:orc in plain prose must fail the lint")
 	}
 }
