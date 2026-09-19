@@ -81,8 +81,8 @@ func TestResolveOrchestrator_Unbound(t *testing.T) {
 		t.Errorf("single: %+v", r)
 	}
 	plantRole(t, root, sidN, "role: orchestrator\nname: MAIN-LIC\nscope: lic\nset: x\n") // pid-less: liveness unknown, so unaddressable
-	if r := resolveIn(t, root, sidW); r.Source != "single" || r.Target.Session != sidM || len(r.Refused) != 1 || r.Refused[0].Reason != "target_unsendable" {
-		t.Errorf("an unaddressable unknown-liveness candidate is refused by name, not counted toward ambiguity: %+v", r)
+	if r := resolveIn(t, root, sidW); r.Source != "ambiguous" || len(r.Candidates) != 1 || r.Candidates[0].Session != sidM || len(r.Refused) != 1 || r.Refused[0].Name != "MAIN-LIC" || r.Refused[0].Reason != "target_unsendable" {
+		t.Errorf("one live plus one unknown-liveness orchestrator must stay ambiguous, not silently single: %+v", r)
 	}
 	plantRole(t, root, sidN, "role: orchestrator\nname: MAIN-LIC\nscope: lic\npid: 2\nset: x\n")
 	claudeHome(t, []regRow{{1, sidM, "MAIN-PWA", root}, {2, sidN, "MAIN-LIC", root}})

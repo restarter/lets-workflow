@@ -172,13 +172,18 @@ func ResolveOrchestrator(ctx context.Context, rc *repoContext, o ResolveOptions)
 		if l == ccregistry.Dead {
 			continue
 		}
+		// Uncertainty counts toward ambiguity BEFORE addressability is even asked:
+		// an unknown-liveness orchestrator is always unaddressable today (peers()
+		// reports it Send=none), so testing addressable() first would make `unknown`
+		// dead and let a single addressable candidate silently outrank one this repo
+		// genuinely cannot vouch for.
+		if l == ccregistry.Unknown {
+			unknown = true
+		}
 		p, ref := addressable(ctx, rc, f)
 		if p == nil {
 			res.Refused = append(res.Refused, *ref)
 			continue
-		}
-		if l == ccregistry.Unknown {
-			unknown = true
 		}
 		live = append(live, candidate{f: f, p: p})
 		res.Candidates = append(res.Candidates, Candidate{Name: liveName(snap, f), Scope: f.Scope, Alive: l.String(), Session: f.Session})
