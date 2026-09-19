@@ -554,7 +554,7 @@ After all experts respond, present findings:
 {consolidated list of actionable items from all experts}
 ```
 
-Then:
+Then (add the "Ask orchestrator" option per lets-rules `### Orchestrator offer` - Act shape; rule not loaded -> no offer):
 
 ```
 AskUserQuestion(
@@ -564,7 +564,8 @@ AskUserQuestion(
     options: [
       { label: "Discuss", description: "Explore trade-offs, challenge assumptions, probe deeper" },
       { label: "Generate plan", description: "Architecture approved, write the implementation plan" },
-      { label: "Adjust architecture", description: "Incorporate expert feedback first" }
+      { label: "Adjust architecture", description: "Incorporate expert feedback first" },
+      { label: "Ask orchestrator", description: "Stay at this gate; /lets:orc ask with the evaluation's top risks" }  /* only per Orchestrator offer */
     ],
     multiSelect: false
   }]
@@ -575,6 +576,7 @@ AskUserQuestion(
 - **Discuss** -> proceed to Step 8 (Interactive Exploration)
 - **Generate plan** -> skip to Step 9 (Plan Generation)
 - **Adjust architecture** -> discuss changes, update architecture, ask again
+- **Ask orchestrator** -> `Skill(skill: "lets:orc", args: "verb=ask footer=none text=Planning {goal}. The evaluation raised: {top risks}. Adjust the architecture or go to the plan?")`. After the reply is relayed, show this gate again without that option - the user picks.
 - **Other** (free text) -> treat as adjustment request
 
 ## Step 8: Interactive Exploration

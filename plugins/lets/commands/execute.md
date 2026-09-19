@@ -179,7 +179,7 @@ Quick check before entering plan mode:
 **If all OK:**
 Present plan summary (title, task count, key files), then proceed to Step 4.5.
 
-**If drift detected** (files missing, already created, etc.), use AskUserQuestion:
+**If drift detected** (files missing, already created, etc.), use AskUserQuestion. Not under `--auto`, add the "Ask orchestrator" option per lets-rules `### Orchestrator offer` (Act shape; rule not loaded -> no offer).
 
 ```
 AskUserQuestion(
@@ -189,7 +189,8 @@ AskUserQuestion(
     options: [
       { label: "Execute anyway", description: "Adapt implementation to current state" },
       { label: "Re-plan", description: "Run /lets:plan to update the plan" },
-      { label: "Cancel", description: "Don't execute" }
+      { label: "Cancel", description: "Don't execute" },
+      { label: "Ask orchestrator", description: "Stay at this gate; /lets:orc ask with the drift details" }  /* only per Orchestrator offer */
     ],
     multiSelect: false
   }]
@@ -200,6 +201,7 @@ AskUserQuestion(
 - **Execute anyway** -> proceed to Step 4.5
 - **Re-plan** -> invoke `Skill(skill: "lets:plan")`
 - **Cancel** -> stop, return to the user
+- **Ask orchestrator** -> `Skill(skill: "lets:orc", args: "verb=ask footer=none text=Plan drift before executing: {details}. Execute anyway or re-plan?")`. After the reply is relayed, show this gate again without that option - the user picks.
 
 ## Step 4.5: Choose Execution Mode
 

@@ -521,7 +521,7 @@ If backlog is clean, say so and suggest `/lets:backlog review` or `/lets:backlog
 
 ### Step C3: Interactive Triage
 
-For each group, walk through items and ask:
+For each group, walk through items and ask. Add the "Ask orchestrator" option per lets-rules `### Orchestrator offer` (Act shape; rule not loaded -> no offer). Resolved once for the whole triage run, not per item.
 
 ```
 AskUserQuestion(
@@ -531,12 +531,15 @@ AskUserQuestion(
     options: [
       { label: "Close", description: "No longer needed" },
       { label: "Keep", description: "Still relevant, skip" },
-      { label: "Reprioritize", description: "Change priority" }
+      { label: "Reprioritize", description: "Change priority" },
+      { label: "Ask orchestrator", description: "Stay on this item; /lets:orc ask whether to close, keep or reprioritize" }  /* only per Orchestrator offer */
     ],
     multiSelect: false
   }]
 )
 ```
+
+- **Ask orchestrator** -> `Skill(skill: "lets:orc", args: "verb=ask footer=none text=Backlog triage: {task title} ({task-id}) - {why it was flagged}. Close, keep or reprioritize?")`. After the reply is relayed, show this item's gate again without that option - the user picks.
 
 For closing (tracker `close` - a state change, HARD-FAIL loud if it can't run):
 - close the task
