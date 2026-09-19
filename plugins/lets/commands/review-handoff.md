@@ -1,5 +1,5 @@
 ---
-description: (deprecated) Alias of /lets:handoff - the old name, removed in a future release; self-contained hand-off brief for another agent, optionally delivered with --codex or --send
+description: (deprecated) Alias of /lets:handoff - the old name, removed in a future release; self-contained hand-off brief for another agent, optionally delivered with --send, --open or --codex
 argument-hint: "(same as /lets:handoff)"
 ---
 
