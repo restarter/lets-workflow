@@ -137,6 +137,48 @@ func TestTell_ForeignRepoTarget(t *testing.T) {
 	}
 }
 
+// TestRetryHint_CarriesRepoAddress: the retry hint on a kept handoff reproduces the
+// --repo-index / --repo the target was looked up with - a retry must land in the
+// same repo, or it fails peer_unreachable against the caller's own repo instead.
+func TestRetryHint_CarriesRepoAddress(t *testing.T) {
+	idx := 2
+	if got := retryHint(sidWork, msg1, &idx, ""); !strings.Contains(got, "--repo-index 2") {
+		t.Errorf("a repo index must be carried in the retry hint: %q", got)
+	}
+	if got := retryHint(sidWork, msg1, nil, "/some/repo"); !strings.Contains(got, "--repo '/some/repo'") {
+		t.Errorf("a repo path must be carried in the retry hint, quoted: %q", got)
+	}
+	if got := retryHint(sidWork, msg1, nil, ""); strings.Contains(got, "--repo") {
+		t.Errorf("no repo flag belongs in the hint for this checkout's own target: %q", got)
+	}
+}
+
+// TestTell_NotDeliveredNoteCarriesRepo: end to end - a kept, unreachable send made
+// with --repo produces a Note that repeats it, not just the msgid.
+func TestTell_NotDeliveredNoteCarriesRepo(t *testing.T) {
+	ctx := context.Background()
+	hub := repoWithLets(t, "")
+	foreign := gitRepo(t)
+	// sidWork and sidO share one name inside foreign, so who/peers marks sidWork
+	// Send=none (name_not_unique) there - present, but unreachable, with --repo set.
+	claudeHome(t, []regRow{{101, sidMain, "HUB", hub}, {103, sidWork, "DUP", foreign}, {104, sidO, "DUP", foreign}})
+	fr, err := Frame(ctx, FrameOptions{Cwd: hub, Session: sidMain, ToSession: sidWork, Kind: "tell"})
+	if err != nil {
+		t.Fatalf("frame: %v", err)
+	}
+	_ = os.WriteFile(fr.HandoffPath, []byte(fr.Header+"\nplease check"), 0o600)
+	res, err := Tell(ctx, TellOptions{Cwd: hub, ToSession: sidWork, MsgID: fr.MsgID, Repo: foreign})
+	if res.Delivered || res.Reason != "peer_unreachable" || err == nil {
+		t.Fatalf("expected a kept, unreachable result via --repo: %+v %v", res, err)
+	}
+	if !strings.Contains(res.Note, "--repo '"+foreign+"'") {
+		t.Errorf("the retry hint must carry the same --repo: %q", res.Note)
+	}
+	if _, err := os.Stat(fr.HandoffPath); err != nil {
+		t.Error("nothing was typed: the handoff must stay")
+	}
+}
+
 // Orca is the calling session's opt-in: reading or messaging another project consults
 // Orca exactly when THIS session selects it, whatever that project's LETS_LAUNCHER says.
 func TestForeignRepo_CallerDecidesOrca(t *testing.T) {

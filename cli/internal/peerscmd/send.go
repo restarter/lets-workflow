@@ -170,6 +170,21 @@ func readHandoff(root, msgid string) (string, *Error) {
 	return text, nil
 }
 
+// retryHint is the Note printed on a kept (never-typed) handoff, pointing at the
+// SAME msgid. It carries --repo-index / --repo when the target was looked up
+// outside this checkout (the hub) - the retry must land in the same repo the
+// target was resolved in, or it fails peer_unreachable against the wrong one.
+func retryHint(toSession, msgid string, repoIndex *int, repo string) string {
+	hint := "handoff kept - retry with the same msgid: lets peers tell --to-session " + toSession + " --msgid " + msgid
+	switch {
+	case repoIndex != nil:
+		hint += fmt.Sprintf(" --repo-index %d", *repoIndex)
+	case repo != "":
+		hint += " --repo '" + repo + "'" // a path is data, never interpolated unquoted
+	}
+	return hint
+}
+
 // consumeHandoff removes a handoff and its issued header. Called only once the
 // message was delivered, handed to the skill, or typed into the peer: a message
 // that was never typed keeps its file so the SAME msgid can be retried.
@@ -293,7 +308,7 @@ func Tell(ctx context.Context, o TellOptions) (*TellResult, error) {
 	if consumed {
 		consumeHandoff(rc.root, o.MsgID)
 	} else {
-		res.Note = "handoff kept - retry with the same msgid: lets peers tell --to-session " + o.ToSession + " --msgid " + o.MsgID
+		res.Note = retryHint(o.ToSession, o.MsgID, o.RepoIndex, o.Repo)
 	}
 	if !res.Delivered && res.Text == "" {
 		return res, &Error{Code: ExitNotDelivered, Kind: "not_delivered", Message: nonEmpty(res.Reason, "not delivered"), Remediation: res.Note}
