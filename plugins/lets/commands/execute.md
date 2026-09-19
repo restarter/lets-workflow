@@ -179,7 +179,7 @@ Quick check before entering plan mode:
 **If all OK:**
 Present plan summary (title, task count, key files), then proceed to Step 4.5.
 
-**If drift detected** (files missing, already created, etc.), use AskUserQuestion:
+**If drift detected** (files missing, already created, etc.), use AskUserQuestion. Not under `--auto`, add the "Ask orchestrator" option per lets-rules `### Orchestrator offer` (Act shape; rule not loaded -> no offer).
 
 ```
 AskUserQuestion(
@@ -189,7 +189,8 @@ AskUserQuestion(
     options: [
       { label: "Execute anyway", description: "Adapt implementation to current state" },
       { label: "Re-plan", description: "Run /lets:plan to update the plan" },
-      { label: "Cancel", description: "Don't execute" }
+      { label: "Cancel", description: "Don't execute" },
+      { label: "Ask orchestrator", description: "Stay at this gate; /lets:orc ask with the drift details" }  /* only per Orchestrator offer */
     ],
     multiSelect: false
   }]
@@ -200,6 +201,7 @@ AskUserQuestion(
 - **Execute anyway** -> proceed to Step 4.5
 - **Re-plan** -> invoke `Skill(skill: "lets:plan")`
 - **Cancel** -> stop, return to the user
+- **Ask orchestrator** -> `Skill(skill: "lets:orc", args: "verb=ask footer=none text=Plan drift before executing: {details}. Execute anyway or re-plan?")`. After the reply is relayed, show this gate again without that option - the user picks.
 
 ## Step 4.5: Choose Execution Mode
 
@@ -262,7 +264,7 @@ Call `EnterPlanMode`.
 
 **Progress tracking:** After completing each plan task, append `[DONE]` to its `### Task N:` heading in the plan file. This makes resume self-documenting - on re-entry, skip tasks already marked `[DONE]`.
 
-**Deviation gate (every mode, every task).** Before each edit, compare reality with the plan step. A deviation is anything that changes the plan's approach rather than a line of code: a dependency/tool behaving differently than the plan assumed (other API, parameters, version); a step infeasible as described; a file/module the plan never names becoming necessary; a task's Verify not matching its Expected. On a deviation: STOP - no further edits - and show what the plan expected, what reality is, and what each option would change. Not under `--auto`, resolve this chat's orchestrator first: `lets peers orchestrator --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" --json 2>/dev/null`. Include the "Ask orchestrator" option only when `source` is `bound` / `single` with `target.alive=alive`, or `ambiguous` (the orc skill then asks which). Then:
+**Deviation gate (every mode, every task).** Before each edit, compare reality with the plan step. A deviation is anything that changes the plan's approach rather than a line of code: a dependency/tool behaving differently than the plan assumed (other API, parameters, version); a step infeasible as described; a file/module the plan never names becoming necessary; a task's Verify not matching its Expected. On a deviation: STOP - no further edits - and show what the plan expected, what reality is, and what each option would change. Not under `--auto`, add the "Ask orchestrator" option per lets-rules `### Orchestrator offer` (Act shape; rule not loaded -> no offer). Then:
 
 ```
 AskUserQuestion(
@@ -273,7 +275,7 @@ AskUserQuestion(
       { label: "Adapt as described", description: "Apply the adaptation spelled out above, then continue the plan" },
       { label: "Re-plan", description: "Stop executing; update the plan via /lets:plan first" },
       { label: "Cancel", description: "Stop here; nothing more is edited" },
-      { label: "Ask orchestrator", description: "Stay stopped; /lets:orc ask with expected vs actual" }  /* only per the resolution above */
+      { label: "Ask orchestrator", description: "Stay stopped; /lets:orc ask with expected vs actual" }  /* only per Orchestrator offer */
     ],
     multiSelect: false
   }]

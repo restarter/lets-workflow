@@ -50,6 +50,9 @@ Per comment decide exactly one:
 
 2+ viable approaches -> `AskUserQuestion` (header chip 4-12 chars naming the theme, `multiSelect: false`, recommended option first with `(Recommended)` in its label - per AskUserQuestion Conventions in the rules) or `/lets:opinion` for hard ones. The user is the architect; record their call - never auto-accept a premise change.
 
+- **Orchestrator offer (Act)** -> per lets-rules `### Orchestrator offer` (rule not loaded -> no offer): that gate carries `{ label: "Ask orchestrator", description: "Stay on this item; /lets:orc ask with the premise and the options" }` as its last option, within four.
+- **Ask orchestrator** -> `Skill(skill: "lets:orc", args: "verb=ask footer=none text=Review item {N}: {premise}. Options: {options}. Which way?")`. After the reply is relayed, show the gate again without that option - the user is the architect.
+
 ## Step 5: Record resolutions into the task (artifact stays FROZEN)
 Do NOT touch spec/doc/PR files during triage. Append to the task. Templates:
 

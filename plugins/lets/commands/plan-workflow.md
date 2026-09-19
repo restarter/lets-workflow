@@ -54,6 +54,8 @@ Gather the **RUBRIC** - the steering criteria that REPLACE the interactive picks
 
 **GATE 1 (spawn-claimed runs - the bounded up-front clarify gate).** For a spawn-claimed task (Step 0), the rubric is derived from the task's description + comments (the PM principle: steering lives in the tracker task). If the task already carries enough steering, build the rubric from it and proceed with NO questions. Only if it is **insufficient** for a rubric: write the `gate-clarify` marker, fire the GATE 1 notify ("Plan needs your answers"), ask a SHORT bounded clarify set, record the answers to the task (tracker `comment-add`), then build the rubric and proceed. This is up-front gathering of the rubric (consistent with steer-by-rubric) — NOT a per-step interactive gate.
 
+- **Orchestrator offer (Nav)** -> per lets-rules `### Orchestrator offer` (rule not loaded -> no offer): under the clarify questions add one prose line "Want the orchestrator's view first? `/lets:orc ask`". An offer only - this command never sends, a spawn-claimed `--auto` run included.
+
 ## Step 2: Context + selection
 
 ```bash
@@ -149,6 +151,7 @@ Aggregate: `{ plan_markdown, delivered_approach, diverged_from_winner, divergenc
 - Spawn-claimed run: after the plan file is saved, write the `gate-approve` pipeline-state marker and fire the GATE 2 notify (see the gate-notification block) - the plan is ready for human approval.
 - Show the **decision log** (winner + judge votes/totals + rationale), the approach list, the eval findings, and the plan summary.
 - User approves -> reply "Plan accepted - run `/lets:execute` when ready." and STOP - approval of the plan is not a go for code; this command never implements. Wants changes -> adjust the rubric and re-run (`Workflow` `resumeFromRunId` caches completed stages while you iterate the script).
+- **Orchestrator offer (Nav)** -> per lets-rules `### Orchestrator offer` (rule not loaded -> no offer): with the approve prompt add one prose line "Want the orchestrator's view on this plan? `/lets:orc ask`". An offer only - the answer informs, approval stays the user's.
 
 ## Fast mode (`--fast`)
 

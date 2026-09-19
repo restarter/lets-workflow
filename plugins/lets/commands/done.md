@@ -113,7 +113,7 @@ All requirements met. Proceeding.
 Missing: {list}. Fix first or update task scope?
 ```
 
-**If any requirement is missing**, use **AskUserQuestion**:
+**If any requirement is missing**, use **AskUserQuestion**. Add the "Ask orchestrator" option per lets-rules `### Orchestrator offer` (Act shape; rule not loaded -> no offer).
 
 ```
 AskUserQuestion(
@@ -123,7 +123,8 @@ AskUserQuestion(
     options: [
       { label: "Fix first", description: "Stop closing - go back and implement missing items" },
       { label: "Update scope", description: "Adjust task description to match what was actually done" },
-      { label: "PR only, keep open", description: "Create PR but keep task open - remaining work tracked in task" }
+      { label: "PR only, keep open", description: "Create PR but keep task open - remaining work tracked in task" },
+      { label: "Ask orchestrator", description: "Stay at this gate; /lets:orc ask with the missing requirements" }  /* only per Orchestrator offer */
     ],
     multiSelect: false
   }]
@@ -134,6 +135,7 @@ AskUserQuestion(
 - **Fix first** -> stop, do NOT proceed to closing
 - **Update scope** -> update the task description via the tracker's `set-field` verb, then proceed
 - **PR only, keep open** -> proceed to Step 4. In Step 8, create PR but do NOT close the task. In Step 9, skip "Merge & close" option - user explicitly chose to keep the task open for remaining work.
+- **Ask orchestrator** -> `Skill(skill: "lets:orc", args: "verb=ask footer=none text=Closing {task-id} with requirements missing: {list}. Fix first, update the scope, or PR and keep open?")`. After the reply is relayed, show this gate again without that option - the user picks.
 
 **Only continue to Step 4 when all requirements are verified OR user chose "PR only, keep open".**
 

@@ -114,6 +114,8 @@ Output same format as code check, then print: Plan check done. I will not implem
 └───────────────────────────────────────────┘
 ```
 
+- **Orchestrator offer (Nav)** -> per lets-rules `### Orchestrator offer` (rule not loaded -> no offer): on a non-clean plan verdict add the box line `│  Disagree?     /lets:orc ask              │` (same width as the box above).
+
 ---
 
 ## Step 1: Get Target
@@ -430,6 +432,16 @@ Skip the box entirely when `--json` was set. Otherwise the box offers the `/lets
 ```
 
 **If FIX (any mode):** No box. Say "Fix the issues above, then run `/lets:check` again." (or `/lets:review --<same-flag>` for a deeper look).
+
+- **Orchestrator offer (Nav)** -> per lets-rules `### Orchestrator offer` (rule not loaded -> no offer), local modes only - never PR mode, `--file` or `--json`: on REVIEW add a third box line, on FIX add one prose line "Disagree with a finding? `/lets:orc ask`". Never on GOOD.
+
+```
+┌─ LETS ────────────────────────────────────┐
+│  Commit?       /lets:commit               │
+│  Deep review?  /lets:review --local       │
+│  Disagree?     /lets:orc ask              │
+└───────────────────────────────────────────┘
+```
 
 ## Rules
 

@@ -304,7 +304,7 @@ comment-add task=<task-id> body="Decision: {topic}. Chose: {recommended option}.
 
 ## Step 7: Discuss (opt-in)
 
-After presenting the recommendation, offer to explore it deeper. When there is no clear answer (workflow `outcome` is `no_clear_winner` or `challenge_failed`, or the standard panel has no majority), resolve this chat's orchestrator: `lets peers orchestrator --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" --json 2>/dev/null`, and add the "Ask orchestrator" option only when `source` is `bound` / `single` with `target.alive=alive`, or `ambiguous`:
+After presenting the recommendation, offer to explore it deeper. When there is no clear answer (workflow `outcome` is `no_clear_winner` or `challenge_failed`, or the standard panel has no majority), add the "Ask orchestrator" option per lets-rules `### Orchestrator offer` (Act shape; rule not loaded -> no offer):
 
 ```
 AskUserQuestion(
@@ -314,7 +314,7 @@ AskUserQuestion(
     options: [
       { label: "Discuss", description: "Explore the recommendation - questions, trade-offs, assumptions" },
       { label: "Accept", description: "Recommendation is clear, move on" },
-      { label: "Ask orchestrator", description: "Send the options and the split to /lets:orc ask" }  /* only per the rule above */
+      { label: "Ask orchestrator", description: "Send the options and the split to /lets:orc ask" }  /* only per Orchestrator offer */
     ],
     multiSelect: false
   }]
@@ -324,7 +324,7 @@ AskUserQuestion(
 **Handle response:**
 - **Discuss** -> enter exploration loop (see below)
 - **Accept** -> proceed to Output
-- **Ask orchestrator** -> `Skill(skill: "lets:orc", args: "verb=ask footer=none text=Decision: {question}. Options: {options with the split}. Which way?")`, then proceed to Output; the relayed answer informs the user, it does not decide
+- **Ask orchestrator** -> `Skill(skill: "lets:orc", args: "verb=ask footer=none text=Decision: {question}. Options: {options with the split}. Which way?")`. After the reply is relayed, show this gate again without that option; the relayed answer informs the user, it does not decide
 - **Other** (free text) -> treat as question about the recommendation
 
 ### Exploration Loop
