@@ -103,3 +103,66 @@ func TestResolveOrchestrator_Unbound(t *testing.T) {
 		t.Errorf("none: %+v", r)
 	}
 }
+
+// TestResolveOrchestrator_BoundSameRepoIsAddressable is the regression case that
+// must NOT break: a bound orchestrator of this same repo resolves with a computed
+// send, never the uncomputed "" the live bug reported (see the plan's Context).
+func TestResolveOrchestrator_BoundSameRepoIsAddressable(t *testing.T) {
+	root := repoWithLets(t, "terminal")
+	withBranch(t, "feature/x")
+	bindBranch(t, root, "feature/x", "MAIN")
+	plantRole(t, root, sidA, "role: orchestrator\nname: MAIN\npid: 101\nset: x\n")
+	claudeHome(t, []regRow{{101, sidA, "MAIN", root}, {102, sidB, "WORKER", root}})
+	res := resolveIn(t, root, sidB)
+	if res.Target == nil || res.Target.Send == "" {
+		t.Fatalf("same-repo orchestrator must resolve with a computed send: %+v", res)
+	}
+}
+
+// TestResolveOrchestrator_CrossRepoRefused: a bound orchestrator's role file lives in
+// this repo's peers dir, but its session currently registers a cwd outside it (the
+// stale-role shape) - refused by name, never returned as an unreachable target.
+func TestResolveOrchestrator_CrossRepoRefused(t *testing.T) {
+	root := repoWithLets(t, "")
+	foreign := gitRepo(t)
+	withBranch(t, "feature/x")
+	bindBranch(t, root, "feature/x", "FOREIGN")
+	plantRole(t, root, sidA, "role: orchestrator\nname: FOREIGN\npid: 101\nset: x\n")
+	claudeHome(t, []regRow{{101, sidA, "FOREIGN", foreign}})
+	res := resolveIn(t, root, sidB)
+	if res.Target != nil || res.Reason != "target_in_other_repo" || len(res.Refused) != 1 || res.Refused[0].Name != "FOREIGN" {
+		t.Fatalf("cross-repo orchestrator must be refused, not returned: %+v", res)
+	}
+	if res.Refused[0].Session6 == "" {
+		t.Errorf("a refusal names the target without a full session id: %+v", res.Refused[0])
+	}
+}
+
+// TestResolveOrchestrator_DeadRoleFileRefused: a bound orchestrator whose session is
+// not in the registry at all (its pid is not alive) is refused, not returned.
+func TestResolveOrchestrator_DeadRoleFileRefused(t *testing.T) {
+	root := repoWithLets(t, "")
+	withBranch(t, "feature/x")
+	bindBranch(t, root, "feature/x", "GONE")
+	plantRole(t, root, sidA, "role: orchestrator\nname: GONE\npid: 101\nset: x\n")
+	claudeHome(t, nil) // a present, empty registry: pid 101 reads as not alive, not unknown
+	res := resolveIn(t, root, sidB)
+	if res.Target != nil || res.Reason != "target_not_alive" || len(res.Refused) != 1 {
+		t.Errorf("a role file with no live session must be refused, not returned: %+v", res)
+	}
+}
+
+// TestResolveOrchestrator_UnsendableNameCollisionRefused: the row is present and
+// alive, but who computes Send=none (a name shared by two live sessions) - a third
+// refusal reason beyond cross-repo and dead.
+func TestResolveOrchestrator_UnsendableNameCollisionRefused(t *testing.T) {
+	root := repoWithLets(t, "")
+	withBranch(t, "feature/x")
+	bindBranch(t, root, "feature/x", "DUP")
+	plantRole(t, root, sidA, "role: orchestrator\nname: DUP\npid: 101\nset: x\n")
+	claudeHome(t, []regRow{{101, sidA, "DUP", root}, {102, sidO, "DUP", root}})
+	res := resolveIn(t, root, sidB)
+	if res.Target != nil || res.Reason != "target_unsendable" || len(res.Refused) != 1 || res.Refused[0].Detail != "name_not_unique" {
+		t.Errorf("a present-but-unsendable orchestrator must be refused with its reason: %+v", res)
+	}
+}
