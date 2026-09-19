@@ -85,6 +85,7 @@ show task=<TASK_ID from the gate>   # returns {id,title,status}; none/absent -> 
 ```
 
    `ask` with no text: the question is the user's last message + your last reply; when that holds no question or choice, ask "what exactly should I ask?" and stop.
+   `ping` with no text: the FYI is THIS session's latest snapshot - the newest `.lets/sessions/*-snapshot*.md` whose `### Claude Session` ID is this session's. Build it from that file, composing nothing new: the task line, the outcome in one line (from `### State`), the `### Remaining + NEXT STEP` items, the snapshot path. Keep it short enough to take in at a glance (~1.5 KB). No snapshot from this session -> ask "what should the ping say?" and stop.
 3. **Preview gate.** The user typed the whole text verbatim in this turn -> send. Any part you composed -> show the exact message and ask in words "Send?"; send only on yes.
 4. **AUTO MODE:** a peer send is external-facing. Never send unless the user asked for it in this turn.
 
