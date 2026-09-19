@@ -10,7 +10,7 @@ The `lets` binary does the filesystem, git and process work behind the `/lets:*`
 | `lets cmux` / `lets tmux` / `lets orca` | The worktree launchers behind `LETS_LAUNCHER` - `open` a session, `notify` a gate. None of them hard-fails: an absent binary falls back to the terminal flow | [lets cmux](../cli/README.md#lets-cmux) · [lets tmux](../cli/README.md#lets-tmux) · [lets orca](../cli/README.md#lets-orca) |
 | `lets notify` | The launcher-neutral gate notification the autonomous pipeline sends | [lets notify](../cli/README.md#lets-notify) |
 | `lets peers` | Underneath `/lets:orc` and `/lets:hub` - who is live, role registry, message delivery | [lets peers](../cli/README.md#lets-peers) |
-| `lets handoff` | Underneath `/lets:handoff --codex` / `--send` - `targets`, `send`, `codex`, `await` (ships next release) | [lets handoff](../cli/README.md#lets-handoff) |
+| `lets handoff` | Underneath `/lets:handoff --codex` / `--send` - `targets`, `send`, `codex`, `await` | [lets handoff](../cli/README.md#lets-handoff) |
 | `lets statusline` | Claude Code runs it on every render; `lets statusline config` is what `/lets:statusline` saves through | [lets statusline](../cli/README.md#lets-statusline) · [config](../cli/README.md#lets-statusline-config) |
 | `lets hook` | The SessionStart / PreCompact hooks that inject `## LETS Config` | [lets hook](../cli/README.md#lets-hook) |
 | `lets version` | Checking what is installed | - |

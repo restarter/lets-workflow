@@ -86,7 +86,7 @@ Everything LETS generates lives under `.lets/` (gitignored):
 .lets/sessions/         Session snapshots ({date}-{HHMM}-{task-id}-snapshot.md), per-branch task-state files (`.task-<slug>`), and PR-review restore state
 .lets/reviews/          Saved review reports ({date}-{HHMM}-{task-id}-review-{local|branch|pr-N|plan}.md)
 .lets/plans/            Implementation plans from /lets:plan ({date}-{HHMM}-{task-id}-plan.md) and idea documents from /lets:plan --idea (...-idea.md, never executed)
-.lets/handoffs/         Hand-off briefs and the agents' reports - written only by /lets:handoff --codex / --send (ships next release)
+.lets/handoffs/         Hand-off briefs and the agents' reports - written only by /lets:handoff --codex / --send
 .lets/execution/        PR review state and team records
 .lets/cache/            Usage stats and cached data
 ```
@@ -128,7 +128,7 @@ For a shared task database across a team, `bd init --server --database=<name>` c
 | [beads](https://github.com/steveyegge/beads) | Default tracker | Task tracking (Claude Code plugin / `bd` CLI); not needed with `LETS_TRACKER=none` or your own adapter |
 | [gh](https://cli.github.com/) | Optional | GitHub PR workflow (`LETS_PR_FLOW=github`) and `/lets:github-pr` |
 | [bb-bash](https://github.com/restarter/bb-bash) (`bbb`) | Optional | Bitbucket PR workflow (`LETS_PR_FLOW=bitbucket`) and Bitbucket PR review |
-| [Codex CLI](https://github.com/openai/codex) (`codex`) | Optional | `/lets:handoff --codex` (ships next release) |
+| [Codex CLI](https://github.com/openai/codex) (`codex`) | Optional | `/lets:handoff --codex` |
 | cmux / tmux / [Orca](https://github.com/stablyai/orca) | Optional | The worktree launcher you name in `LETS_LAUNCHER`; each falls back to the terminal when absent |
 
 Installing the `lets` binary itself: see **[installation.md](installation.md)**.
