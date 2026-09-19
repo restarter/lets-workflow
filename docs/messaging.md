@@ -37,7 +37,7 @@ Rule of thumb: a **peer** knows the project and speaks LETS - talk to it with `/
 | `read [N]` | no | the peer's last turns, secrets withheld |
 | `who` | no | the live sessions of the repo: role, name, scope or orchestrator, task, branch, state |
 
-Without a name `/lets:orc` talks to the bound orchestrator; when that session is gone it says so and sends nothing - it never quietly picks another. LETS also offers it where it fits: `/lets:done` offers to ping the orchestrator about the PR, and a plan deviation in `/lets:execute` or an undecided `/lets:opinion` offers to ask it.
+Without a name `/lets:orc` talks to the bound orchestrator; when that session is gone it says so and sends nothing - it never quietly picks another. LETS also offers it where it fits: `/lets:done` offers to ping the orchestrator about the PR, and a worker with a live orchestrator is offered "Ask orchestrator" at the decisions it should not settle alone - scope, plan drift and deviations, approach and architecture picks, backlog triage, an undecided `/lets:opinion` - or one line `/lets:orc ask` under a `/lets:check` / `/lets:review` verdict it disagrees with. The list and the guarantees: **[commands/orc.md](commands/orc.md#where-lets-offers-it)**.
 
 A message goes out through Claude's own session messaging, or - with `LETS_LAUNCHER=orca` - straight into the peer's Orca pane, only when its transcript, its screen and Orca all show it idle. Full page: **[commands/orc.md](commands/orc.md)**.
 

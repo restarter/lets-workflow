@@ -36,6 +36,23 @@ Go (`lets peers`) finds the peer, frames the message with a header that addresse
 - **Claude's session messaging** by default - the model sends the framed text with `SendMessage`, and an `ask` gets an idle notice when the peer has answered.
 - **Orca** when `LETS_LAUNCHER=orca` and the peer runs in an Orca pane: Go types the message into that pane only when the peer's transcript shows a finished turn, its screen shows the empty prompt (no permission dialog a keystroke could answer), and Orca reports it idle. It never resends.
 
+## Where LETS offers it
+
+A worker session with a live orchestrator does not have to remember `/lets:orc`: at the decisions a worker should not settle alone, the command offers it.
+
+| Shape | Where |
+|-------|-------|
+| An **"Ask orchestrator"** option in the question | `/lets:done` when requirements are missing · `/lets:execute` on plan drift and on a deviation · `/lets:plan` at the approach, architecture and evaluation gates · `/lets:backlog` triage · `/lets:review-round` when a comment has 2+ viable answers · `/lets:opinion` when the panel does not converge |
+| One line **`/lets:orc ask`** to type yourself | under a `/lets:check` or `/lets:review` verdict that is not clean (your own work only - never a PR or `--file`) · the `/lets:plan-workflow` clarify and approve gates |
+
+Three guarantees hold everywhere:
+
+- **It only offers.** Nothing is sent until you pick the option or type the line, and what the model composed is shown first with "Send?". An unattended `--auto` run never asks on its own.
+- **The answer informs, you decide.** The reply is relayed whole, then the same question comes back without the orchestrator option. A peer's answer never adapts a plan or counts as approval.
+- **Silent when there is nobody to ask.** No live orchestrator, this session is the orchestrator, or you are on the merge branch - the question looks exactly as it did before, with no note about it.
+
+A gate never grows past four options: where one was full, two near-identical options merge while the offer is shown. The ping `/lets:done` offers after a PR is a notification, not one of these decisions.
+
 ## Safety
 
 - Nothing is sent unless you asked for it in that chat; anything the model wrote is shown first with "Send?".
