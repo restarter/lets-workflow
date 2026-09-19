@@ -11,7 +11,7 @@ Talk to the repo's orchestrator or a named peer session: `ask` / `ping` / `read`
 
 ## Args
 
-`verb=ask|ping|read|tell|who target="<name>" [session=<sid> repo_index=<n>] text=<rest> [footer=none]` - `target` optional (default: this chat's orchestrator), quoted. `session` + `repo_index` name another project's session; only `/lets:hub` passes them. From natural language: map the request to a verb (a question for an answer -> `ask`; an FYI -> `ping` or `tell`; "what did X say" -> `read`; "who is working" -> `who`). Any other verb: say so and stop.
+`verb=ask|ping|read|tell|who target="<name>" [session=<sid> repo_index=<n>] text=<rest> [footer=none] [--yes]` - `target` optional (default: this chat's orchestrator), quoted. `--yes` (the user typed it) skips the Send? question in Step 4, not the message itself - see the Preview gate. `session` + `repo_index` name another project's session; only `/lets:hub` passes them. From natural language: map the request to a verb (a question for an answer -> `ask`; an FYI -> `ping` or `tell`; "what did X say" -> `read`; "who is working" -> `who`). Any other verb: say so and stop.
 
 | verb | sends | waits | target required |
 |---|---|---|---|
@@ -86,8 +86,8 @@ show task=<TASK_ID from the gate>   # returns {id,title,status}; none/absent -> 
 
    `ask` with no text: the question is the user's last message + your last reply; when that holds no question or choice, ask "what exactly should I ask?" and stop.
    `ping` with no text: the FYI is THIS session's latest snapshot - the newest `.lets/sessions/*-snapshot*.md` whose `### Claude Session` ID is this session's. Build it from that file, composing nothing new: the task line, the outcome in one line (from `### State`), the `### Remaining + NEXT STEP` items, the snapshot path. Keep it short enough to take in at a glance (~1.5 KB). No snapshot from this session -> ask "what should the ping say?" and stop.
-3. **Preview gate.** The user typed the whole text verbatim in this turn -> send. Any part you composed -> show the exact message and ask in words "Send?"; send only on yes.
-4. **AUTO MODE:** a peer send is external-facing. Never send unless the user asked for it in this turn.
+3. **Preview gate.** The user typed the whole text verbatim in this turn -> send. Any part you composed -> show the exact message and ask in words "Send?"; send only on yes. **With `--yes`** the question is skipped, NOT the preview: print the exact message as a statement of what is being sent, then send. The user still reads what went out in their name; they just do not spend a turn approving it. `--yes` counts only when the user typed it in this turn - never inferred from a previous message, a habit, or another command passing it through (`/lets:hub` does not).
+4. **AUTO MODE:** a peer send is external-facing. Never send unless the user asked for it in this turn - `--yes` drops the confirmation of the TEXT, never the requirement that the user asked for a send.
 
 ## Step 5: Send
 

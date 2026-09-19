@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **`/lets:orc ask --yes` sends without asking you to confirm the text.** A message the model composed used to be shown and then wait for a "Send?" answer - correct when the draft needs a look, a wasted turn when you approve it every time. `--yes` keeps the preview and drops the wait: the exact message is printed as what was sent, and it goes immediately. It relaxes nothing else - a send still has to be something you asked for in that turn, and no command passes `--yes` for you (`/lets:hub`, which reaches another project, never does).
+
 ## [0.9.1] - 2026-09-19
 
 ### Added
