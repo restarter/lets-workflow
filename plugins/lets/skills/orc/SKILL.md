@@ -105,6 +105,8 @@ Write `header` + newline + the message with the Write tool to `handoff_path` (ne
 | `delivered=false`, no `text`, `note` present | **MANDATORY:** nothing was typed - the handoff is kept. Print, as its own line, `NOT DELIVERED - <reason> (<state>) - nothing was typed. Retry with the same msgid: /lets:orc <verb> ...` |
 | `delivered=false`, no `text`, `note` absent | **MANDATORY:** something WAS typed but delivery could not be proven - the handoff is consumed, so this is NOT retryable with the same msgid. Print, as its own line, `NOT DELIVERED - <reason> (<state>) - delivery unproven, the text may have reached the peer. Not retried - never resend.` |
 
+In both lines, `state` is empty whenever there was no peer at all (`reason=peer_unreachable` with an unknown target) - omit the parenthetical AND its leading space in that case (`NOT DELIVERED - <reason> - ...`), never print a bare `()`.
+
 Both MANDATORY lines are printed even under `footer=none` - they are not a footer, they are the result. Never resend by yourself; never report a send that did not happen.
 
 ## Step 6: ask follow-up
