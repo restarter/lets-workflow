@@ -35,7 +35,8 @@ Every later call addresses the returned **session id** (`target.session`), never
 | `bound` with `refused[]` and no `target` | say `<name> cannot be addressed from this repo - <refused[0].reason>; <hint>` (when present) and send NOTHING - never re-route to another orchestrator |
 | `ambiguous` | ask which (below) |
 | `self` | this session IS an orchestrator: `ask` / `ping` need an explicit target; `who` lists its workers first |
-| `none` | say no orchestrator is alive, with each `degraded[]` reason - and, when `refused[]` is non-empty, name those `reason`s too |
+| `none`, no `reason` (or one not listed below) | say no orchestrator is alive, with each `degraded[]` reason - and, when `refused[]` is non-empty, name those `reason`s too |
+| `none` with `reason` `budget_exhausted` / `branch_unreadable` | resolution did NOT complete - this is NOT "no orchestrator is alive", it is "nothing is known yet". Say so with the reason and the `degraded[]` entry (`context`/`deadline_exceeded` or `git`/`branch_unreadable`), send NOTHING, and note that retrying may resolve it |
 
 A `refused[].reason` of `target_in_other_repo` / `target_not_alive` / `target_unsendable` is final - never fall back to another orchestrator, never retry with a different verb.
 

@@ -42,7 +42,7 @@ type LastOrchestrator struct {
 
 // Degraded names a source that could not be read in full.
 type Degraded struct {
-	Source string `json:"source"` // claude | orca | transcript | roles
+	Source string `json:"source"` // claude | orca | transcript | roles | git | context | repo
 	Reason string `json:"reason"`
 	Detail string `json:"detail,omitempty"`
 }

@@ -128,6 +128,7 @@ command -v lets >/dev/null 2>&1 && lets peers orchestrator --session "$CLAUDE_CO
 - `ambiguous`: `Orchestrators: {name (scope)}, ... - this branch is not bound; /lets:start <id> --orc="<name>" binds it`.
 - bound but not alive: `Orchestrator: {name} (bound, not alive)`. `none`: `no orchestrator alive`. No binary or a stub reason: say nothing.
 - a `refused[]` entry with no `target`: `Orchestrator: {name} ({reason})` plus the `hint` when present. Nothing is sent and no offer is shown.
+- `source=none` with `reason=budget_exhausted` or `reason=branch_unreadable`: resolution did not complete (not the same as no orchestrator being alive). Render `Orchestrator: resolution did not complete ({reason})`. Nothing is sent and no offer is shown.
 
 ## Step 3: Orient
 
