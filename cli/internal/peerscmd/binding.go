@@ -176,14 +176,22 @@ func ResolveOrchestrator(ctx context.Context, rc *repoContext, o ResolveOptions)
 		res.Refused = append(res.Refused, Refused{Name: name, Reason: "target_not_alive", Detail: "bound orchestrator has no role file"})
 		return res
 	}
-	// An exhausted budget must degrade loudly, never silently re-route to a different
-	// orchestrator: branchOf(ctx, ...) fails instantly once ctx is done, which looks
-	// exactly like a detached HEAD (also "") to readBinding above. Tell them apart by
-	// ctx.Err() - a genuinely detached HEAD with a healthy ctx still falls through.
-	if branch == "" && ctx.Err() != nil {
+	// An exhausted budget must degrade loudly, never silently fall through to the
+	// unbound path below and pick a DIFFERENT live orchestrator - whether the branch
+	// itself came back unreadable, or the branch is perfectly readable but the budget
+	// was already spent inside loadRepo (a failed worktree list narrows the peer set
+	// the unbound loop reads from addressable()/rc.peers(), the same silent-misroute
+	// risk reached through a different door). A genuinely detached HEAD or a
+	// genuinely unbound branch, both with a healthy ctx, still fall through unchanged.
+	if ctx.Err() != nil {
 		res.Source = "none"
-		res.Reason = "branch_unreadable"
-		res.Degraded = append(res.Degraded, Degraded{Source: "git", Reason: "branch_unreadable"})
+		if branch == "" {
+			res.Reason = "branch_unreadable"
+			res.Degraded = append(res.Degraded, Degraded{Source: "git", Reason: "branch_unreadable"})
+		} else {
+			res.Reason = "budget_exhausted"
+			res.Degraded = append(res.Degraded, Degraded{Source: "context", Reason: "deadline_exceeded"})
+		}
 		return res
 	}
 	var live []candidate

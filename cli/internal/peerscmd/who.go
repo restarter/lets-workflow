@@ -98,12 +98,9 @@ func loadRepoFor(ctx context.Context, cwd string, useOrca func(root string) bool
 		return nil, &Error{Code: ExitNotInRepo, Kind: "not_in_repo", Message: "not inside a git repository"}
 	}
 	rc := &repoContext{root: root, mainRoot: mainRoot, degraded: []Degraded{}}
-	var d *Degraded
-	rc.entries, rc.rootOf, rc.snap, d = registryPeers(ctx, mainRoot)
-	if d != nil {
-		rc.degraded = append(rc.degraded, *d)
-	}
-	rc.roots = repoWorktrees(ctx, mainRoot)
+	var regDegraded []Degraded
+	rc.entries, rc.rootOf, rc.roots, rc.snap, regDegraded = registryPeers(ctx, mainRoot)
+	rc.degraded = append(rc.degraded, regDegraded...)
 	var invalid []string
 	rc.roles, invalid = loadRoles(root)
 	for _, name := range invalid {

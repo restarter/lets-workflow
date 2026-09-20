@@ -150,6 +150,38 @@ func TestResolveOrchestrator_ExhaustedBudgetNeverRebinds(t *testing.T) {
 	}
 }
 
+// TestResolveOrchestrator_ExhaustedBudgetOnNamedBranchNeverResolvesSingle is FIX C:
+// the guard must fire even when the branch itself is perfectly readable and simply
+// has no binding - an exhausted ctx by the time resolution runs must still degrade
+// loudly rather than let the unbound path resolve a guess.
+func TestResolveOrchestrator_ExhaustedBudgetOnNamedBranchNeverResolvesSingle(t *testing.T) {
+	root := repoWithLets(t, "")
+	plantRole(t, root, sidA, "role: orchestrator\nname: ORC-A\npid: 101\nset: x\n")
+	claudeHome(t, []regRow{{101, sidA, "ORC-A", root}})
+	// no bindBranch: "feature/y" is a genuinely readable, genuinely unbound branch
+
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	rc, err := loadRepo(cancelled, root, false)
+	if err != nil {
+		t.Fatalf("loadRepo: %v", err)
+	}
+	r := ResolveOrchestrator(cancelled, rc, ResolveOptions{Session: sidB, Cwd: root, Branch: "feature/y"})
+	if r.Source != "none" || r.Reason != "budget_exhausted" || r.Target != nil {
+		t.Fatalf("an exhausted budget on a readable-but-unbound branch must degrade loudly, never resolve single: %+v", r)
+	}
+	found := false
+	for _, d := range r.Degraded {
+		if d.Source == "context" && d.Reason == "deadline_exceeded" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("a context-degraded entry must be recorded: %+v", r.Degraded)
+	}
+}
+
 // TestResolveOrchestrator_BoundSameRepoIsAddressable is the regression case that
 // must NOT break: a bound orchestrator of this same repo resolves with a computed
 // send, never the uncomputed "" the live bug reported (see the plan's Context).
