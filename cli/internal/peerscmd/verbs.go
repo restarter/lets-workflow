@@ -71,19 +71,30 @@ func RoleClear(ctx context.Context, cwd, session string) (*RoleResult, error) {
 	return res, nil
 }
 
-// Orchestrator is `lets peers orchestrator`.
+// Orchestrator is `lets peers orchestrator`. Bound like Who: it now pays peers()'s
+// cost (a git subprocess and a transcript stat per registry row) on the hot path of
+// every session start, done, end and Orchestrator offer.
 func Orchestrator(ctx context.Context, cwd, session string) (*OrchestratorResult, error) {
 	res := &OrchestratorResult{Envelope: newEnvelope("orchestrator"), Candidates: []Candidate{}}
-	root, e := rootOf(cwd)
-	if e != nil {
+	if cwd == "" {
+		cwd, _ = os.Getwd()
+	}
+	// Read the branch on the INCOMING, unbounded ctx, before the budget below starts.
+	// exec.CommandContext fails instantly on an expired context, and an unreadable
+	// branch looks unbound to ResolveOrchestrator - which re-routes to a DIFFERENT
+	// live orchestrator instead of the one this branch is actually bound to. Reading
+	// it here means the budget can never cause that silent re-route (lets-cbmg7).
+	branch := branchOf(ctx, cwd)
+	ctx, cancel := context.WithTimeout(ctx, 2500*time.Millisecond)
+	defer cancel()
+	rc, err := loadRepo(ctx, cwd, false)
+	if err != nil {
+		e := err.(*Error)
 		res.Error = &ErrorInfo{Kind: e.Kind, Message: e.Message}
 		return res, e
 	}
-	if cwd == "" {
-		cwd = root
-	}
-	r := ResolveOrchestrator(ctx, root, ResolveOptions{Session: session, Cwd: cwd})
+	r := ResolveOrchestrator(ctx, rc, ResolveOptions{Session: session, Cwd: cwd, Branch: branch})
 	res.OK = true
-	res.Source, res.Scope, res.Target, res.Candidates, res.Reason, res.Degraded = r.Source, r.Scope, r.Target, r.Candidates, r.Reason, r.Degraded
+	res.Source, res.Scope, res.Target, res.Candidates, res.Reason, res.Refused, res.Degraded = r.Source, r.Scope, r.Target, r.Candidates, r.Reason, r.Refused, r.Degraded
 	return res, nil
 }

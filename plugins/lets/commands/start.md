@@ -127,6 +127,8 @@ command -v lets >/dev/null 2>&1 && lets peers orchestrator --session "$CLAUDE_CO
 - `bound` / `single` with a live target: `lets peers tail --to-session <target.session> --addressed-to-session "$CLAUDE_CODE_SESSION_ID" --count-only --json 2>/dev/null` returns `addressed_to_me{count, last_at}` and no text. Render `Orchestrator: {name} ({bound | the only one alive}, {target.state})`, plus `{N} message(s) from {name} - /lets:orc read` when the count is non-zero. No peer text enters this session unless the user asks.
 - `ambiguous`: `Orchestrators: {name (scope)}, ... - this branch is not bound; /lets:start <id> --orc="<name>" binds it`.
 - bound but not alive: `Orchestrator: {name} (bound, not alive)`. `none`: `no orchestrator alive`. No binary or a stub reason: say nothing.
+- a `refused[]` entry with no `target`: `Orchestrator: {name} ({reason})` plus the `hint` when present. Nothing is sent and no offer is shown.
+- `source=none` with `reason=budget_exhausted` or `reason=branch_unreadable`: resolution did not complete (not the same as no orchestrator being alive). Render `Orchestrator: resolution did not complete ({reason})`. Nothing is sent and no offer is shown.
 
 ## Step 3: Orient
 

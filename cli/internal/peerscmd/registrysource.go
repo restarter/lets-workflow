@@ -13,8 +13,11 @@ import (
 )
 
 // repoWorktrees lists the resolved root of every worktree of the repo whose main
-// checkout is mainRoot (the main checkout first). Resolved once per call site.
-func repoWorktrees(ctx context.Context, mainRoot string) []string {
+// checkout is mainRoot (the main checkout first). Resolved once per call site. On a
+// git failure it still returns the [mainRoot] fallback (never nothing), but names the
+// failure: silently narrowing the worktree set to one is what makes every OTHER live
+// worktree's session look foreign (lets-cbmg7 FIX D).
+func repoWorktrees(ctx context.Context, mainRoot string) ([]string, *Degraded) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, "git", "-C", mainRoot, "worktree", "list", "--porcelain").Output()
@@ -23,7 +26,7 @@ func repoWorktrees(ctx context.Context, mainRoot string) []string {
 		if r, err := filepath.EvalSymlinks(mainRoot); err == nil {
 			roots = append(roots, r)
 		}
-		return roots
+		return roots, &Degraded{Source: "git", Reason: "worktrees_unreadable", Detail: err.Error()}
 	}
 	for _, line := range strings.Split(string(out), "\n") {
 		if p, ok := strings.CutPrefix(line, "worktree "); ok {
@@ -32,7 +35,7 @@ func repoWorktrees(ctx context.Context, mainRoot string) []string {
 			}
 		}
 	}
-	return roots
+	return roots, nil
 }
 
 // worktreeOf returns the worktree root that contains cwd (cwd is that root or below
@@ -54,10 +57,15 @@ func worktreeOf(cwd string, roots []string) string {
 }
 
 // registryPeers reads the registry and keeps the entries whose cwd lies in a
-// worktree of this repo. A degraded registry still contributes its readable rows.
-func registryPeers(ctx context.Context, mainRoot string) ([]ccregistry.Entry, map[string]string, ccregistry.Snapshot, *Degraded) {
+// worktree of this repo. A degraded registry, or a worktree list this repo could not
+// read (repoWorktrees then falls back to just mainRoot), still contributes its
+// readable rows - never silently, so a narrowed worktree set is named in degraded[]
+// rather than making every other worktree's session look like a foreign repo. The
+// resolved roots are returned too, so a caller never re-derives them with a second
+// `git worktree list` call of its own.
+func registryPeers(ctx context.Context, mainRoot string) ([]ccregistry.Entry, map[string]string, []string, ccregistry.Snapshot, []Degraded) {
 	snap := ccregistry.Read(ccregistry.HomeDir())
-	roots := repoWorktrees(ctx, mainRoot)
+	roots, wtd := repoWorktrees(ctx, mainRoot)
 	var kept []ccregistry.Entry
 	rootOf := map[string]string{}
 	for _, e := range snap.Entries {
@@ -66,9 +74,12 @@ func registryPeers(ctx context.Context, mainRoot string) ([]ccregistry.Entry, ma
 			rootOf[e.SessionID] = wt
 		}
 	}
-	var d *Degraded
+	var degraded []Degraded
 	if snap.Degraded != nil {
-		d = &Degraded{Source: "claude", Reason: snap.Degraded.Reason, Detail: snap.Degraded.Detail}
+		degraded = append(degraded, Degraded{Source: "claude", Reason: snap.Degraded.Reason, Detail: snap.Degraded.Detail})
 	}
-	return kept, rootOf, snap, d
+	if wtd != nil {
+		degraded = append(degraded, *wtd)
+	}
+	return kept, rootOf, roots, snap, degraded
 }

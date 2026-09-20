@@ -51,6 +51,13 @@ type TailResult struct {
 	Screen        []string        `json:"screen,omitempty"`
 	Note          string          `json:"note,omitempty"`
 	AddressedToMe *AddressedCount `json:"addressed_to_me,omitempty"`
+	// TruncatedBytes counts SOURCE bytes lost to either cut: bytes removed inside a
+	// turn that was kept, plus the full SOURCE size of a turn the call ceiling
+	// dropped - its kept text AND whatever the per-turn cap had already cut from
+	// that same turn, so a heavily-capped dropped turn is not under-reported. So a
+	// whole-turn drop moves both Omitted and this counter - omitted: 0 no longer
+	// implies a complete answer on its own.
+	TruncatedBytes int `json:"truncated_bytes,omitempty"`
 }
 
 // FrameResult is a framed, addressed message slot.
@@ -78,6 +85,10 @@ type TellResult struct {
 	Receipt   *ReceiptInfo `json:"receipt,omitempty"`
 	SentAt    string       `json:"sent_at,omitempty"`
 	Observed  bool         `json:"observed"`
+	// Note: set on a non-delivery that kept its handoff - names the same msgid to
+	// retry with. Absent when the handoff was consumed (delivered, claude route, or a
+	// refused-before-typing malformed handoff).
+	Note string `json:"note,omitempty"`
 	// ClaudeFallbackAllowed: an Orca send was not safe, but the peer is also reachable
 	// over SendMessage (a Claude row with a name unique across the whole registry).
 	ClaudeFallbackAllowed bool   `json:"claude_fallback_allowed,omitempty"`
@@ -105,4 +116,5 @@ type OrchestratorResult struct {
 	Target     *Peer       `json:"target,omitempty"`
 	Candidates []Candidate `json:"candidates"`
 	Reason     string      `json:"reason,omitempty"`
+	Refused    []Refused   `json:"refused,omitempty"`
 }

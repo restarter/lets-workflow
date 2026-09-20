@@ -65,6 +65,7 @@ type repoContext struct {
 	ops            orcaOps
 	terms          []orcaTerm
 	degraded       []Degraded
+	peersCache     []Peer // peers() is deterministic for one context; see peers()
 }
 
 func loadRepo(ctx context.Context, cwd string, probeOrca bool) (*repoContext, error) {
@@ -97,12 +98,9 @@ func loadRepoFor(ctx context.Context, cwd string, useOrca func(root string) bool
 		return nil, &Error{Code: ExitNotInRepo, Kind: "not_in_repo", Message: "not inside a git repository"}
 	}
 	rc := &repoContext{root: root, mainRoot: mainRoot, degraded: []Degraded{}}
-	var d *Degraded
-	rc.entries, rc.rootOf, rc.snap, d = registryPeers(ctx, mainRoot)
-	if d != nil {
-		rc.degraded = append(rc.degraded, *d)
-	}
-	rc.roots = repoWorktrees(ctx, mainRoot)
+	var regDegraded []Degraded
+	rc.entries, rc.rootOf, rc.roots, rc.snap, regDegraded = registryPeers(ctx, mainRoot)
+	rc.degraded = append(rc.degraded, regDegraded...)
 	var invalid []string
 	rc.roles, invalid = loadRoles(root)
 	for _, name := range invalid {
@@ -174,7 +172,14 @@ func peerRepo(ctx context.Context, rc *repoContext, repo string, idx *int, probe
 // only when the terminal handle equals the `orca_terminal:` the session reported
 // about itself in its role file AND the terminal's worktree is the session's
 // worktree root; the pair must be unique on both sides. Titles are never identity.
+//
+// The result is cached: it costs a git subprocess and a transcript stat per registry
+// row, and a resolution tests one candidate after another. Any mutation of rc.roles
+// (Who's prune) must therefore happen BEFORE the first call - it does.
 func (rc *repoContext) peers(ctx context.Context) []Peer {
+	if rc.peersCache != nil {
+		return rc.peersCache
+	}
 	joinedTerm := map[string]string{} // handle -> sid
 	termsByHandle := map[string][]orcaTerm{}
 	for _, t := range rc.terms {
@@ -276,6 +281,7 @@ func (rc *repoContext) peers(ctx context.Context) []Peer {
 		}
 		return out[i].Name < out[j].Name
 	})
+	rc.peersCache = out
 	return out
 }
 

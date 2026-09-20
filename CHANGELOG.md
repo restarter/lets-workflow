@@ -5,6 +5,12 @@
 ### Added
 - **`/lets:orc ask --yes` sends without asking you to confirm the text.** A message the model composed used to be shown and then wait for a "Send?" answer - correct when the draft needs a look, a wasted turn when you approve it every time. `--yes` keeps the preview and drops the wait: the exact message is printed as what was sent, and it goes immediately. It relaxes nothing else - a send still has to be something you asked for in that turn, and no command passes `--yes` for you (`/lets:hub`, which reaches another project, never does).
 
+### Fixed
+- **Peer messaging: a resolved orchestrator is now one you can actually reach (lets-cbmg7).** `lets peers orchestrator` used to report a bound or single orchestrator as the target even when it lived in another project, was no longer alive, or was otherwise unreachable - `send` came back as an empty string rather than a computed value, so nothing actually went out. The resolver now runs the same reachability check `who` does: an unreachable candidate is refused by name with why (in another repo, not alive, or present but unsendable), and `send` is left out of the envelope rather than reported empty when it was never computed.
+- **A `lets peers tell` that reached nobody used to report success and delete the message (lets-cbmg7).** It now exits non-zero while `ok` stays true, keeps the message so the SAME send can be retried, and the orc skill prints a `NOT DELIVERED` line instead of staying quiet about it. A session addressing itself is refused up front, and old, never-typed messages are cleaned up after 24 hours.
+- **A long reply read with `/lets:orc read` (`--since-message`) used to be cut to 2 KB with no way to tell it happened (lets-cbmg7).** It now keeps up to 16 KB, a whole read stays under a 64 KB ceiling, and the envelope reports exactly how many bytes were cut - `omitted: 0` no longer implies a complete answer.
+- **A terminal screen read by `/lets:orc` could still show a URL's embedded credentials (lets-cbmg7).** It is now redacted the same way tokens and secrets already were.
+
 ## [0.9.1] - 2026-09-19
 
 ### Added

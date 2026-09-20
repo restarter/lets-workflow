@@ -124,10 +124,43 @@ func Tail(ctx context.Context, o TailOptions) (*TailResult, error) {
 				}
 				recs = after
 			}
-			turns := turnsOf(recs)
+			perTurn := textCapDefault
+			if o.SinceMessage != "" || o.AddressedToSession != "" {
+				perTurn = textCapMessage // the reply to an ask, or a message addressed to the reader
+			}
+			turns := turnsOf(recs, perTurn)
 			if len(turns) > limit {
 				res.Omitted = len(turns) - limit
 				turns = turns[len(turns)-limit:]
+			}
+			// The call ceiling: drop the oldest turns once their sum would exceed
+			// callCapBytes. The turn that breaks the budget is dropped, not kept -
+			// keeping it would let the reply exceed the ceiling by a whole turn. The
+			// newest turn is never dropped (i < len(turns)-1): the per-turn cap is
+			// well under callCapBytes, so one turn alone can never overflow it.
+			total, keep := 0, len(turns)
+			for i := len(turns) - 1; i >= 0; i-- { // newest first
+				if total+len(turns[i].Text) > callCapBytes && i < len(turns)-1 {
+					keep = len(turns) - 1 - i // turns[i] broke the budget: drop it and everything older
+					break
+				}
+				total += len(turns[i].Text)
+			}
+			if keep < len(turns) {
+				dropped := turns[:len(turns)-keep]
+				for _, t := range dropped {
+					// srcLen is the turn's true pre-cap source size. len(t.Text) would
+					// undercount a turn the per-turn cap already shortened (missing what
+					// that cap cut), and len(t.Text)+t.TruncatedBytes would OVERcount by
+					// redact.Cap's own marker, which len(t.Text) already includes once
+					// a turn has been capped. srcLen carries neither error.
+					res.TruncatedBytes += t.srcLen
+				}
+				res.Omitted += len(dropped)
+				turns = turns[len(turns)-keep:]
+			}
+			for _, t := range turns {
+				res.TruncatedBytes += t.TruncatedBytes
 			}
 			res.Turns = turns
 		}

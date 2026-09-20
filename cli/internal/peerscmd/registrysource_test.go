@@ -61,11 +61,43 @@ func TestRegistry_RepoFilter(t *testing.T) {
 		2002: {"sessionId": "22222222-2222-4222-8222-222222222222", "cwd": sub, "peerProtocol": 1, "name": "SUB"},
 		2003: {"sessionId": "33333333-3333-4333-8333-333333333333", "cwd": outside, "peerProtocol": 1, "name": "ELSEWHERE"},
 	})
-	kept, rootOf, _, d := registryPeers(context.Background(), repo)
-	if d != nil || len(kept) != 2 {
-		t.Fatalf("kept %d (%+v), degraded %+v", len(kept), kept, d)
+	kept, rootOf, roots, _, degraded := registryPeers(context.Background(), repo)
+	if len(degraded) != 0 || len(kept) != 2 {
+		t.Fatalf("kept %d (%+v), degraded %+v", len(kept), kept, degraded)
+	}
+	if len(roots) != 1 || roots[0] != repo {
+		t.Errorf("a single-worktree repo has one root: %+v", roots)
 	}
 	if rootOf["22222222-2222-4222-8222-222222222222"] != repo {
 		t.Errorf("a session in a subdirectory must map to the worktree root: %q", rootOf["22222222-2222-4222-8222-222222222222"])
+	}
+}
+
+// TestRegistryPeers_WorktreesFailureSurfacesDegraded is FIX D: a failed `git
+// worktree list` must never silently narrow the peer set to [mainRoot] - it names
+// itself in degraded[], and the row still reachable under the fallback root stays.
+func TestRegistryPeers_WorktreesFailureSurfacesDegraded(t *testing.T) {
+	notAGitRepo, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	fakeRegistry(t, map[int]map[string]any{
+		3001: {"sessionId": "44444444-4444-4444-8444-444444444444", "cwd": notAGitRepo, "peerProtocol": 1, "name": "SOLO"},
+	})
+	kept, _, roots, _, degraded := registryPeers(context.Background(), notAGitRepo)
+	found := false
+	for _, d := range degraded {
+		if d.Source == "git" && d.Reason == "worktrees_unreadable" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("a failed worktree list must surface worktrees_unreadable in degraded[], not silence: %+v", degraded)
+	}
+	if len(roots) != 1 || roots[0] != notAGitRepo {
+		t.Errorf("the [mainRoot] fallback must still be usable: %+v", roots)
+	}
+	if len(kept) != 1 {
+		t.Errorf("the row still under the fallback root must still be kept, not dropped: %+v", kept)
 	}
 }

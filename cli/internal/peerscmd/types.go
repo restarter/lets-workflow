@@ -20,9 +20,9 @@ type Peer struct {
 	State        string   `json:"state,omitempty"` // registry status, or the Orca agent state
 	AgentType    string   `json:"agent_type,omitempty"`
 	LastActivity string   `json:"last_activity,omitempty"`
-	Alive        string   `json:"alive"` // alive | dead | unknown
-	Via          []string `json:"via"`   // claude, orca
-	Send         string   `json:"send"`  // orca | claude | none
+	Alive        string   `json:"alive"`          // alive | dead | unknown
+	Via          []string `json:"via"`            // claude, orca
+	Send         string   `json:"send,omitempty"` // orca | claude | none (computed in who/peers; absent when not computed)
 	Reason       string   `json:"reason,omitempty"`
 	RepoIndex    *int     `json:"repo_index,omitempty"` // who --orca-repos: which Orca repo this row belongs to
 }
@@ -42,16 +42,23 @@ type LastOrchestrator struct {
 
 // Degraded names a source that could not be read in full.
 type Degraded struct {
-	Source string `json:"source"` // claude | orca | transcript | roles
+	Source string `json:"source"` // claude | orca | transcript | roles | git | context | repo
 	Reason string `json:"reason"`
 	Detail string `json:"detail,omitempty"`
 }
 
 // Turn is one recognized transcript record, already redacted and capped.
 type Turn struct {
-	TS   string `json:"ts,omitempty"`
-	Kind string `json:"kind"` // TEXT | INBOUND | TOOL | RESULT | SCREEN
-	Role string `json:"role,omitempty"`
-	Tool string `json:"tool,omitempty"`
-	Text string `json:"text"`
+	TS             string `json:"ts,omitempty"`
+	Kind           string `json:"kind"` // TEXT | INBOUND | TOOL | RESULT | SCREEN
+	Role           string `json:"role,omitempty"`
+	Tool           string `json:"tool,omitempty"`
+	Text           string `json:"text"`
+	TruncatedBytes int    `json:"truncated_bytes,omitempty"` // bytes this turn's text lost to the per-turn cap
+	// srcLen is Text's length BEFORE any cap or marker - unexported, never marshaled
+	// (no JSON surface change). tail.go's call ceiling uses it to count a dropped
+	// turn's true source size; len(Text) alone would include redact.Cap's own
+	// "…[truncated N bytes]" marker on an already-per-turn-capped turn, overcounting
+	// truncated_bytes by the marker's length (lets-cbmg7 FIX E).
+	srcLen int
 }
