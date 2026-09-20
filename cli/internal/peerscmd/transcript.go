@@ -312,6 +312,7 @@ func turnsOf(recs []record, perTurn int) []Turn {
 			continue
 		}
 		t := r.turn
+		t.srcLen = len(t.Text) // captured before any cap or marker (FIX E)
 		if kept := keptLen(t.Text, perTurn); kept < len(t.Text) {
 			t.TruncatedBytes = len(t.Text) - kept
 			t.Text = redact.Cap(t.Text, perTurn)

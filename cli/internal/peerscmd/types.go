@@ -55,4 +55,10 @@ type Turn struct {
 	Tool           string `json:"tool,omitempty"`
 	Text           string `json:"text"`
 	TruncatedBytes int    `json:"truncated_bytes,omitempty"` // bytes this turn's text lost to the per-turn cap
+	// srcLen is Text's length BEFORE any cap or marker - unexported, never marshaled
+	// (no JSON surface change). tail.go's call ceiling uses it to count a dropped
+	// turn's true source size; len(Text) alone would include redact.Cap's own
+	// "…[truncated N bytes]" marker on an already-per-turn-capped turn, overcounting
+	// truncated_bytes by the marker's length (lets-cbmg7 FIX E).
+	srcLen int
 }

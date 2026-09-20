@@ -160,8 +160,10 @@ func TestTail_CallCeiling(t *testing.T) {
 }
 
 // TestTail_CallCeilingCountsDroppedTurnsOwnTruncation: a turn the call ceiling drops
-// may have ALSO lost bytes to the per-turn cap before it ever got there - both losses
-// must be counted, or a heavily-capped dropped turn is under-reported (FIX B).
+// may have ALSO lost bytes to the per-turn cap before it ever got there - the counter
+// must report the turn's EXACT original source size, neither under (missing the
+// per-turn cut, FIX B) nor over (adding redact.Cap's own marker length on top of an
+// already-capped turn, FIX E).
 func TestTail_CallCeilingCountsDroppedTurnsOwnTruncation(t *testing.T) {
 	repo := repoWithLets(t, "")
 	home := claudeHome(t, []regRow{{101, sidMain, "MAIN", repo}, {103, sidWork, "W1", repo}})
@@ -186,8 +188,8 @@ func TestTail_CallCeilingCountsDroppedTurnsOwnTruncation(t *testing.T) {
 			t.Fatalf("the dropped turn must not be among those returned: %+v", res.Turns)
 		}
 	}
-	if res.TruncatedBytes < oldestSize {
-		t.Errorf("a dropped turn's own per-turn truncation must still be counted, not just its kept remainder: truncated_bytes=%d, want at least %d", res.TruncatedBytes, oldestSize)
+	if res.TruncatedBytes != oldestSize {
+		t.Errorf("a dropped turn's own per-turn truncation must be counted EXACTLY - not its kept remainder alone (undercounts), not that plus redact.Cap's own marker (overcounts): truncated_bytes=%d, want exactly %d", res.TruncatedBytes, oldestSize)
 	}
 }
 
