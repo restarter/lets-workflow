@@ -142,6 +142,18 @@ func TestHandoffExecuteLint(t *testing.T) {
 // handoffAwk extracts the plan filter from the Step 5b assembly block of handoff.md.
 var handoffAwk = regexp.MustCompile(`(?s)awk '\n(.*?)' "\$PLAN"`)
 
+// planBannerLine returns the banner line a command file writes into a plan, without
+// the indent plan-workflow.md carries it with, so the two copies can be compared and
+// the filter can be tested against the real text instead of a copy of it.
+func planBannerLine(t *testing.T, body, name, prefix string) string {
+	t.Helper()
+	m := regexp.MustCompile(`(?m)^[ \t]*(> \*\*` + regexp.QuoteMeta(prefix) + `.*)$`).FindStringSubmatch(body)
+	if m == nil {
+		t.Fatalf("%s: no banner line starting %q", name, "> **"+prefix)
+	}
+	return m[1]
+}
+
 // TestHandoffPlanFilter runs the handoff.md plan filter (lets-g5wuz) over the three
 // plan shapes it meets: /lets:plan (banner under the title block), /lets:plan-workflow
 // (banner on line 1), and a plan without a banner whose snippet quotes it.
@@ -158,8 +170,27 @@ func TestHandoffPlanFilter(t *testing.T) {
 	if m == nil {
 		t.Fatal(`handoff.md: no awk '...' "$PLAN" block in Step 5b`)
 	}
-	const stop = "> **STOP - THIS PLAN IS NOT A GO.** Execute it ONLY through `/lets:execute`."
-	const rem = "> **REMINDER: do not start writing code from this plan. The user runs `/lets:execute` when ready - nothing happens before that.**"
+	// The fixtures carry the REAL banner lines, read from the files that write them: a
+	// copy here would keep passing after a reworded banner while the filter stopped
+	// matching it (a `GO.` turned into `GO!` fails the awk regex, not a prefix check).
+	read := func(name string) string {
+		body, err := os.ReadFile(filepath.Join("..", "..", "..", "plugins", "lets", "commands", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(body)
+	}
+	plan, pw := read("plan.md"), read("plan-workflow.md")
+	stop := planBannerLine(t, plan, "plan.md", "STOP - THIS PLAN IS NOT A GO")
+	rem := planBannerLine(t, plan, "plan.md", "REMINDER: do not start writing code")
+	// plan-workflow.md applies the same two lines at save time and says they are
+	// byte-identical to plan.md's - otherwise the filter strips one shape, not the other.
+	if got := planBannerLine(t, pw, "plan-workflow.md", "STOP - THIS PLAN IS NOT A GO"); got != stop {
+		t.Errorf("STOP banner drift:\nplan.md          %q\nplan-workflow.md %q", stop, got)
+	}
+	if got := planBannerLine(t, pw, "plan-workflow.md", "REMINDER: do not start writing code"); got != rem {
+		t.Errorf("REMINDER banner drift:\nplan.md          %q\nplan-workflow.md %q", rem, got)
+	}
 	snippet := "```markdown\n" + stop + "\n" + rem + "\n```\n"
 	for name, c := range map[string]struct{ in, want, stderr string }{
 		"plan": {
