@@ -54,9 +54,10 @@ With Orca, one session looks across every project Orca knows: it lists each proj
 /lets:handoff --branch --codex             # Codex headless, read-only; the report comes back
 /lets:handoff --last-commit --send codex   # type it into the open Codex tab (Orca)
 /lets:handoff --plan --send antigravity    # ... or the Antigravity tab
+/lets:handoff --execute --send codex       # the open Codex tab implements the plan
 ```
 
-The targets are the review targets - `--branch`, `--last-commit`, `--local`, `--plan`, a PR, a file - plus `--commits <N>` and `--range <a>..<b>`, and every brief asks for a review with a BLOCKER / MAJOR / MINOR verdict. Without a delivery flag the brief is only printed. `--codex` runs it through Codex in a read-only sandbox in the background; `--send` types a one-line pointer to it into an agent's Orca tab and waits for the report. Either way the report is relayed whole as UNVERIFIED, then each finding is checked against the code: a finding counts only once it is CONFIRMED. Full page: **[commands/handoff.md](commands/handoff.md)**.
+The targets are the review targets - `--branch`, `--last-commit`, `--local`, `--plan`, a PR, a file - plus `--commits <N>` and `--range <a>..<b>`, and every brief asks for a review with a BLOCKER / MAJOR / MINOR verdict. Without a delivery flag the brief is only printed. `--codex` runs it through Codex in a read-only sandbox in the background; `--send` types a one-line pointer to it into an agent's Orca tab and waits for the report. Either way the report is relayed whole as UNVERIFIED, then each finding is checked against the code: a finding counts only once it is CONFIRMED. `--execute --send` hands an approved plan to an open tab to implement instead - the only brief that lets the agent write, and its commits come back UNVERIFIED for `/lets:review --branch`. Full page: **[commands/handoff.md](commands/handoff.md)**.
 
 ## One safety model
 
@@ -71,7 +72,7 @@ The targets are the review targets - `--branch`, `--last-commit`, `--local`, `--
 ## What each lane cannot do (yet)
 
 - `/lets:orc` messages Claude sessions only. A Codex or Antigravity pane can be read, not messaged - hand it a brief with `/lets:handoff --send` instead.
-- `/lets:handoff --send` and `/lets:hub` need Orca (`LETS_LAUNCHER=orca`). Without it, use `--codex`, or paste the printed brief yourself.
+- `/lets:handoff --send` / `--open` and `/lets:hub` need Orca (`LETS_LAUNCHER=orca`). Without it, use `--codex`, or paste the printed brief yourself - an execution brief has no such fallback.
 - Codex's report is read from Codex's own session log. Any other agent's report comes back only if the agent writes the report file the brief asks for.
 
 ## See also

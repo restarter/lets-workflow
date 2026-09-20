@@ -1,6 +1,6 @@
 # /lets:handoff — hand the work to another agent
 
-`/lets:handoff` builds one self-contained brief so an agent with no context - a fresh Claude session, Codex, Antigravity, an external reviewer - can pick up the exact state and review it. On its own it prints the brief for you to paste anywhere. With `--codex` or `--send` it also delivers the brief and brings the agent's final report back, relayed as UNVERIFIED and checked finding by finding against the code.
+`/lets:handoff` builds one self-contained brief so an agent with no context - a fresh Claude session, Codex, Antigravity, an external reviewer - can pick up the exact state and review it. On its own it prints the brief for you to paste anywhere. With `--codex` or `--send` it also delivers the brief and brings the agent's final report back, relayed as UNVERIFIED and checked finding by finding against the code. With `--execute` the brief is an approved plan for the agent to implement instead of review - see [Handing over execution](#handing-over-execution---execute).
 
 ```
 /lets:handoff --branch                      # print the brief
@@ -8,6 +8,8 @@
 /lets:handoff --plan --send                 # pick an agent tab of this worktree (Orca)
 /lets:handoff --branch --send antigravity   # ... the Antigravity tab
 /lets:handoff --commits 3 --spec docs/spec.md
+/lets:handoff --plan --open                 # a new Codex tab (read-only) gets the brief
+/lets:handoff --execute --send codex        # the open Codex tab implements the plan
 ```
 
 The old name `/lets:review-handoff` still works as a deprecated alias and will be removed in a future release.
@@ -35,7 +37,13 @@ Where the code is (repo, absolute path, branch and sha, whether it is pushed, th
 
 ## Delivery
 
-`--codex` and `--send` are mutually exclusive - give both and the command stops and says so. Either one combines with any target.
+Three lanes, mutually exclusive - give two and the command stops and says so. Each combines with any target; an execution brief goes only through `--send`.
+
+| Lane | Flag | What it opens |
+|------|------|---------------|
+| An open agent tab of this worktree | `--send [<tab>]` | nothing - the agent is already there |
+| A new visible session | `--open [<agent>]` | a Codex tab in this worktree, read-only |
+| Headless, in the background | `--codex` | a Codex run in a read-only sandbox |
 
 ### No flag
 
@@ -44,6 +52,10 @@ The brief is printed in one block to copy. Nothing is written - not `.lets/`, no
 ### `--codex` - headless
 
 The brief is saved under `.lets/handoffs/` and run through `codex exec` in a read-only sandbox, in the background: the session gets the result when Codex finishes, without polling. The report is Codex's final answer to the brief (its last message of the top-level turn - never a subagent's), with Codex's session log as the second source. When the run ends, everything it started is stopped. The result names the Codex session, so `codex resume <id>` continues that conversation.
+
+### `--open [<agent>]` - a new Codex tab
+
+Needs `LETS_LAUNCHER=orca`. Opens Codex read-only in this worktree, waits for its input line and sends the brief there - the same send and the same report as `--send`; it is the tab the `--send` picker offers as **New Codex tab**. Only Codex: LETS cannot start another agent, so open that one yourself and use `--send`.
 
 ### `--send [<tab>]` - an agent's Orca tab
 
@@ -60,6 +72,17 @@ The report comes back per agent:
 |-------|-------------------------------|
 | Codex | Codex's session log: the end of the very turn that received the brief, in the main session - never a subagent's message, an older turn, or text on the screen. A tab opened days ago is found too. |
 | Any other (Antigravity, Claude, ...) | a report file: the brief ends with "When you finish - write your report to `<base>-agent-report.md`, then create `<base>-agent-report.done`", and the done file ends the wait. |
+
+## Handing over execution: `--execute`
+
+Plan with Claude Code, then let the agent already open in this worktree implement it: `/lets:handoff --execute --send [<tab>]` (the newest plan of this task, or `--plan <path>`). `/lets:execute` itself cannot be handed over - its approval is Claude Code's plan mode and its Deviation gate runs before every edit - so the brief carries those rules in plain words.
+
+- **The brief starts with the plan.** The plan file is prepended verbatim, minus its STOP banner and closing reminder: they address Claude Code sessions, and an agent reading "never implement this plan directly" would rightly refuse. Tasks already marked `[DONE]` stay in, and the agent skips them.
+- **Then the contract.** Where the code is; implement task by task, run each Verify, commit at the plan's commit points in this repo's convention; change only the files the plan names; on any mismatch - a file the plan does not name, a tool behaving differently, a Verify that fails - stop and say so in the report instead of adapting; never push, open a PR, merge or touch the tracker; finish with the report file.
+- **Your flag is the approval.** `--execute` authorizes that agent to commit on this branch. This session still edits nothing, and push, PR, tracker state and merge stay with LETS (`/lets:done`).
+- **Only an open tab.** `--codex` and `--open` start read-only and are refused; an idea document, a tab of another checkout and your own tab are refused by name. A plan whose `Task:` differs from this worktree's task gets a warning, not a refusal.
+- **What comes back is UNVERIFIED.** The report is relayed whole, then git is checked rather than the report: one table of the handed-over tasks against the commits that touched their files. The plan's `[DONE]` markers are not updated. The next step is always `/lets:review --branch` - a compensation for the Deviation gate that cannot cross into another agent, not an equivalent of it. The wait lasts up to 3 hours; if the session ends first, the report is still in `.lets/handoffs/`.
+- **Leave the worktree to the agent until the report is back, and watch its tab.** Commits are matched to tasks by the files they touch, not by author - you and the agent commit under the same git identity, so a commit of yours made during the wait would be credited to a task. And an agent that asks for permission to commit - a sandboxed Codex can, since a worktree's git directory lives in the main checkout - waits in its own tab: the wait here cannot see that prompt and would run to its timeout.
 
 ## What comes back
 
@@ -78,6 +101,8 @@ All under `.lets/handoffs/` (gitignored, shared by every worktree of the repo), 
 
 Files are never overwritten: a second run needs a new brief.
 
+`--execute` also writes two scratch files, `.lets/cache/handoff-contract-<session>.md` and `.lets/cache/handoff-plan-<session>.md`, from which the brief is assembled.
+
 ## When it says no
 
 | Reason | Meaning |
@@ -94,6 +119,9 @@ Files are never overwritten: a second run needs a new brief.
 | `headless_unsupported` | a headless run exists only for Codex - use `--send` for any other agent |
 | `await_unsupported_agent` | LETS cannot wait for this agent's report - read it in the agent's tab |
 | `orca_handle_stale` | the tab Orca named is gone - run again to pick a live one |
+| `--execute` with another target, `--codex`, `--open`, or no `--send` | an execution brief is a plan, delivered into an open agent tab - nothing else |
+| idea document | `/lets:plan` turns it into a plan first |
+| every task is `[DONE]` | nothing is left to hand over |
 | `not_supported` | the platform has no `lets handoff` (Windows) - the printed brief still works |
 
 Underneath is the `lets handoff targets|send|codex|await` CLI (see `cli/README.md`); the lanes and the shared safety model are in **[../messaging.md](../messaging.md)**, the Orca side in **[../orca.md](../orca.md)**.
