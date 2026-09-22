@@ -582,6 +582,8 @@ Do NOT delete the branch or remove the worktree here - `/lets:worktree remove` h
 
 `pointer=off` - this command writes the task-side record itself. Print one line `Session record: {snapshot path}` (the skill's Return), then the variant's output. "End session" still runs `/lets:end`, whose `kind=end` snapshot supersedes this one.
 
+**Orca worktrees.** When `{LETS_LAUNCHER}` is `orca`, every "`/lets:worktree remove {name}`" reminder below reads "archive the worktree in Orca - its hook records the release": `remove` refuses a worktree outside `.worktrees/` (`worktree_external`). This command's own `gh pr merge --delete-branch` is safe - gh leaves the current and the main worktree in place; only a merge run from another checkout removes a worker's linked worktree (lets-rules `## Worktrees`).
+
 **Orca card on a confirmed close.** Wherever a handler below (or the merged-PR shortcut) ran `close` and it returned `closed` - not an advance, not a failure:
 
 ```bash
