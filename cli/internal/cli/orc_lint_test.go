@@ -12,7 +12,7 @@ import (
 var (
 	orcSkillCall = regexp.MustCompile(`Skill\(\s*skill:\s*"lets:orc"\s*,\s*args:\s*"((?:[^"\\]|\\.)*)"`)
 	orcVerbArg   = regexp.MustCompile(`\bverb=([a-z-]+|<verb>)`)
-	peerSendSM   = regexp.MustCompile(`SendMessage\(\s*\{?\s*to\s*[:=]`)
+	peerSendSM   = regexp.MustCompile(`SendMessage\(\s*\{?\s*to\s*[:=]\s*"([^"]*)"`)
 	peerSendLits = []string{"lets peers tell", "terminal send", "notify_when_idle"}
 
 	orcOfferLabel  = regexp.MustCompile(`label:\s*"([^"]*[Oo]rchestrator[^"]*)"`)
@@ -25,6 +25,13 @@ var (
 		"commands/start.md":              true,
 		"commands/handoff.md":            true,
 		"commands/install-deprecated.md": true,
+	}
+	// agentSendExempt lists the files of the delegated /lets:execute path, which resumes a
+	// subagent THIS run spawned - addressed by the run's own placeholder name, never a peer
+	// session. Any other recipient in these files is still a peer send and still fails.
+	agentSendExempt = map[string]bool{
+		"commands/execute.md":             true,
+		"skills/implementer-run/SKILL.md": true,
 	}
 )
 
@@ -69,8 +76,12 @@ func lintOrcFiles(files map[string]string) []string {
 					bad = append(bad, rel+": peer-send form "+lit+" outside skills/orc/SKILL.md")
 				}
 			}
-			if peerSendSM.MatchString(body) {
-				bad = append(bad, rel+": peer SendMessage outside skills/orc/SKILL.md")
+			for _, m := range peerSendSM.FindAllStringSubmatch(body, -1) {
+				spawned := m[1] == "{agent}" || m[1] == "{name}"
+				if spawned && agentSendExempt[rel] {
+					continue // the named implementer this run spawned, not a peer
+				}
+				bad = append(bad, rel+": peer SendMessage outside skills/orc/SKILL.md: "+m[1])
 			}
 		}
 		// 3: touchpoints only OFFER /lets:orc (inside an AskUserQuestion fence, a LETS box, or on a handle line)
@@ -206,6 +217,9 @@ func TestOrcLint(t *testing.T) {
 	}
 	if len(mutate("commands/team.md", `SendMessage({to: "x"})`)) == 0 {
 		t.Error("mutation: a peer SendMessage in team.md must fail the lint")
+	}
+	if len(mutate("commands/execute.md", `SendMessage({to: "orc-main"})`)) == 0 {
+		t.Error("mutation: a peer SendMessage in execute.md must fail the lint even though it may address its own implementer")
 	}
 	if len(mutate("commands/done.md", "```\nAskUserQuestion(\n```\n- **Ping** -> `Skill(skill: \"lets:orc\", args: \"verb=ping text=x\")`")) == 0 {
 		t.Error("mutation: an orc call without footer=none must fail the lint")

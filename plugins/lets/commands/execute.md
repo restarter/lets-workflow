@@ -461,7 +461,9 @@ Present it under the agent's name - the name this run spawned it under, never a 
 {the full patch}
 ```
 
-The stat is validation; the patch is what the user reviews. Then ask the gate for that status. When the Orchestrator offer applies (lets-rules `### Orchestrator offer`, Act shape; rule not loaded -> no offer), add as the last option `{ label: "Ask orchestrator", description: "Stay at this gate; /lets:orc ask with the report and the patch" }`.
+The stat is validation; the patch is what the user reviews. Then ask the gate for that status.
+
+- **Orchestrator offer** - when it applies (lets-rules `### Orchestrator offer`, Act shape; rule not loaded -> no offer), add as the last option `{ label: "Ask orchestrator", description: "Stay at this gate; /lets:orc ask with the report and the patch" }`
 
 **`complete`, every Verify `pass`, diff check clean:**
 
