@@ -576,6 +576,12 @@ Do NOT delete the branch or remove the worktree here - `/lets:worktree remove` h
 
 ## Step 9: Output
 
+**Session record (every variant, before its gate).** The work is finished now, and nothing guarantees a later `/lets:end`: the session may stop at "Stay here" or "Merge & close", and a merge with `--delete-branch` from another checkout removes a linked worktree outside Orca's archive hook (gh >= 2.99). Write the record now, whatever is picked below:
+
+`Skill(skill: "lets:session-snapshot", args: "kind=session pointer=off task-id={task-id}")`
+
+`pointer=off` - this command writes the task-side record itself. Print one line `Session record: {snapshot path}` (the skill's Return), then the variant's output. "End session" still runs `/lets:end`, whose `kind=end` snapshot supersedes this one.
+
 **Orca card on a confirmed close.** Wherever a handler below (or the merged-PR shortcut) ran `close` and it returned `closed` - not an advance, not a failure:
 
 ```bash
