@@ -691,7 +691,7 @@ Write a detailed implementation plan for the chosen architecture.
 **Goal:** {one sentence}
 **Approach:** {chosen option name and summary}
 
-> **STOP - THIS PLAN IS NOT A GO.** Execute it ONLY through `/lets:execute` (its plan-mode approval is the only code-write approval). NEVER implement this plan directly. "ok" / "approved" / a review verdict on this document is NOT a request to write code.
+> **STOP - THIS PLAN IS NOT A GO.** Execute it ONLY through `/lets:execute` (its own approval gate - plan mode inline, or the Start gate of a delegated run - is the only code-write approval). NEVER implement this plan directly. "ok" / "approved" / a review verdict on this document is NOT a request to write code.
 
 ---
 

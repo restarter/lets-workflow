@@ -296,7 +296,7 @@ Call `EnterPlanMode`.
 
 **After user approves**, Claude implements per the **Step 4.5 mode**: *step-by-step* implements one task, pauses for review before the next, and confirms each commit; *straight-through* runs all tasks and `/lets:commit`s at each plan commit point without re-asking; *auto* is the `--auto` behavior below. Commit only at the plan's commit points.
 
-**Under `--auto`:** write the `executing` pipeline-state marker, then — the plan-mode approval IS the gate — implement straight through without a per-step "review before moving on" pause, and `/lets:commit` at each plan commit point WITHOUT re-asking (one approval covers the run). Hard-stops still halt (push/PR/close/external gated; 3×-fail; fabrication; `$LETS_MERGE_BRANCH` refused per Step 1) — on any halt, write the `blocked` marker + fire the execute-blocked notify.
+**Under `--auto` (inline runs only - Step 4.5 refuses `--auto` for Implementers):** write the `executing` pipeline-state marker, then — the plan-mode approval IS the gate — implement straight through without a per-step "review before moving on" pause, and `/lets:commit` at each plan commit point WITHOUT re-asking (one approval covers the run). Hard-stops still halt (push/PR/close/external gated; 3×-fail; fabrication; `$LETS_MERGE_BRANCH` refused per Step 1) — on any halt, write the `blocked` marker + fire the execute-blocked notify.
 
 **Progress tracking:** After completing each plan task, append `[DONE]` to its `### Task N:` heading in the plan file. This makes resume self-documenting - on re-entry, skip tasks already marked `[DONE]`.
 
@@ -656,7 +656,7 @@ comment-add task=<task-id> body-file=.lets/cache/exec-complete-<task-id>.md
 - **Don't work on `$LETS_MERGE_BRANCH` without explicit opt-in** - Step 1 soft-gates with a prompt; user must pick "Continue here" to enable trunk-mode (plan lookup uses task-id)
 - **Adapt cosmetically, never structurally** - plan intent matters more than plan text, but an approach change is a deviation, not an adaptation
 - **Stop on deviation** - the Deviation gate (Step 5) runs before every edit; no answer = no edit; under `--auto` it is a hard-stop
-- **NEVER edit before the plan-mode approval** - `ExitPlanMode` approved by the user is the one code-write approval; the fallback path (no plan mode) asks "Start implementing?" in words first
+- **NEVER edit before the code-write approval** - inline: `ExitPlanMode` approved by the user (the fallback path with no plan mode asks "Start implementing?" in words first); delegated: the Step 5-D Start gate, before which nothing is spawned
 - **Delegated: the code-write approval is Step 5-D's Start gate** - nothing is spawned before it, and every commit waits for that chunk's Accept
 - **Delegated: one writer per tree** - a run starts only on a clean tree, this session writes no code while an implementer is running, and a stop is confirmed before anything else writes
 - **Delegated: implementers never commit, push, or touch the tracker** - this session does all three, after review
