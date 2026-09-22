@@ -1,11 +1,11 @@
 ---
-description: Execute implementation plan from /lets:plan - load plan and enter native plan mode
-argument-hint: "[task-id|plan-path] [--status] [--team] [--step|--straight|--auto]"
+description: Execute implementation plan from /lets:plan - inline in native plan mode, or delegated to named implementer subagents you review and correct
+argument-hint: "[task-id|plan-path] [--status] [--step|--straight|--auto|--implementers]"
 ---
 
 # Execute Plan
 
-Load an implementation plan and execute it using Claude Code's native plan mode. The plan provides the roadmap; native plan mode provides approval gates.
+Load an implementation plan and execute it - inline, in Claude Code's native plan mode, or delegated: each commit-point chunk goes to a named implementer subagent, you review its diff, and corrections go back to that same agent. The plan provides the roadmap; the gates are plan mode (inline) or Step 5-D's Start and review gates (delegated).
 
 **Plan is a roadmap, not a script.** Read real files before every change. Adapt cosmetically (a renamed variable, a line that moved). Anything that changes the plan's APPROACH is a **deviation** - see the Deviation gate in Step 5 - and STOPS the run; a silently adapted plan is a new, unapproved plan.
 
@@ -207,7 +207,7 @@ AskUserQuestion(
 
 ## Step 4.5: Choose Execution Mode
 
-How the approved plan runs is ONE up-front choice. **A mode flag pre-answers it - skip the picker entirely when any is present:** `--auto` (Here · auto), `--team` (Team), `--step` / `--step-by-step` (Here · step-by-step), `--straight` / `--straight-through` (Here · straight-through). `--auto` keeps all its AUTO MODE semantics (Step 1 refuses on `$LETS_MERGE_BRANCH`; hard-stops preserved). Default locus is **Here** (this session, native plan mode); **Team** is the only locus switch.
+How the approved plan runs is ONE up-front choice. **A mode flag pre-answers it - skip the picker entirely when any is present:** `--auto` (Here · auto), `--implementers` or its alias `--team` (Implementers), `--step` / `--step-by-step` (Here · step-by-step), `--straight` / `--straight-through` (Here · straight-through). `--auto` keeps all its AUTO MODE semantics (Step 1 refuses on `$LETS_MERGE_BRANCH`; hard-stops preserved). Default locus is **Here** (this session, native plan mode); **Implementers** is the only locus switch. **`--auto` together with `--implementers` / `--team` is REFUSED** with one line - a delegated run is interactive by design (every diff waits for your review, and an unattended run has nobody to review it): drop `--auto`, or run inline.
 
 **Bare `/lets:execute` (no mode flag) - ask exactly once:**
 
@@ -220,22 +220,56 @@ AskUserQuestion(
       { label: "Straight-through (Recommended)", description: "Here, one approval, run all tasks, auto-commit at plan points" },
       { label: "Step-by-step", description: "Here, pause for review after each task; confirm each commit" },
       { label: "Auto", description: "Here, AUTO MODE - unattended; hard-stops + push/PR/close/external still gated" },
-      { label: "Team", description: "Parallel implementers in isolated worktrees; review at the end" }
+      { label: "Implementers", description: "Named agents implement chunk by chunk; you review and correct each diff" }
     ],
     multiSelect: false
   }]
 )
 ```
 
-**Commit cadence is DERIVED from the mode - never a separate question:** step-by-step -> confirm each commit; straight-through -> auto-commit at each plan commit point; auto -> auto-commit; team -> one commit per agent at the end.
+**Commit cadence is DERIVED from the mode - never a separate question:** step-by-step -> confirm each commit; straight-through -> auto-commit at each plan commit point; auto -> auto-commit; implementers -> one commit per chunk, only after you accept its diff.
 
 **Handle response (sets the mode that Step 5 obeys):**
 - **Straight-through** -> Step 5 (native plan mode); after the plan-mode approval, implement all tasks with NO per-task pause and `/lets:commit` at each plan commit point without re-asking.
 - **Step-by-step** -> Step 5 (native plan mode); after the plan-mode approval, implement one task, pause for user review before the next, and confirm each `/lets:commit`.
 - **Auto** -> proceed exactly as `--auto` (Step 5's `--auto` behavior + pipeline-state marker + execute-blocked notify). **Guard:** if on `$LETS_MERGE_BRANCH`, REFUSE Auto here too (same rule as Step 1's `--auto` refuse - AUTO MODE never edits the merge-branch); tell the user to pick step-by-step / straight-through or take a feature branch.
-- **Team** -> do NOT enter native plan mode. Hand off to the team flow: `Skill(skill: "lets:team", args: "run")` - it re-selects ready tasks from the tracker (`ready` picker / `--tasks`) for parallel implementers in isolated worktrees; the plan you just validated is context, not its task list (plan-driven team execution is tracked in **Wire /lets:team to execute a plan's Task decomposition** (`lets-a524x`)). After it completes, the user reviews via `/lets:review --local`. Skip Steps 5-6.
+- **Implementers** -> do NOT enter native plan mode: Step 4.6, then Step 5-D. `/lets:team run` remains its own entry point for several *tracker* tasks; this locus runs one *plan*.
 
 (A remembered default / `LETS_EXECUTE_MODE` to skip the picker on every run is a deferred follow-up - this ships the picker + flag shortcuts only.)
+
+## Step 4.6: Split the plan (Implementers only)
+
+Everything here is derived from the plan's existing `### Task N` sections - their `**Files:**` Create/Modify paths and their `**Commit:**` blocks. No other marker is read and none is invented.
+
+**1. Classify every task, in document order:**
+
+| kind | rule | who runs it |
+|---|---|---|
+| **caller task** | no `Create:` / `Modify:` path (`**Files:** none`, a check, a smoke, a tracker step) | this session, inline, in plan order |
+| **chunk** | a maximal run of consecutive non-caller tasks ending at the first one whose `**Commit:**` is a real commit (not `none`); a non-caller task with `**Commit:** none` extends the run | one implementer |
+| **malformed** | a run of non-caller tasks with no real commit before the next caller task or the end of the plan | nobody - refuse delegation (below) |
+
+Chunk ids are `c1`, `c2`, ... in plan order. A chunk's **allowlist** is the union of its tasks' Create/Modify paths.
+
+**2. Group chunks.** A caller task is a barrier: nothing before it may still be open when it runs, and nothing after it starts before it is done. Within each stretch between barriers, two chunks share a group when their allowlists share a path, directly or through another chunk of the stretch. Groups keep plan order.
+
+**3. Show the split** - every task exactly once:
+
+```
+### Plan split
+
+| Task | Owner    | Group | Files |
+|------|----------|-------|-------|
+| 0    | caller   | -     | none  |
+| 1-2  | chunk c1 | A     | 3     |
+| 3    | chunk c2 | A     | 1     |
+```
+
+A task missing from the table, or listed twice, is a derivation error: stop and say which.
+
+**4. Propose the shape.** Delegated runs are **solo**: one implementer at a time, in this tree, chunks and caller tasks in plan order. When a stretch holds more than one group, add one line: "{N} groups share no file; running groups in parallel is not available yet (lets-7dwc1)." Groups are shown so the split is honest about what could be independent - file-disjoint is not proof of independence (a chunk can call code another chunk adds in a different file).
+
+**Refuse delegation** - one line saying why, then the Step 4.5 picker again without the Implementers option - when any task is malformed (name it); when the plan has no chunk at all; when no task has a `**Files:**` block (a hand-written plan cannot be split); or when any task's execution itself (not one conditional sub-step inside it) depends on something learned during the run - read each whole task section; a heading or opening line such as `only if`, `only when`, `only on` (any case) or `run this task if ...` is the usual sign. A delegated run dispatches every chunk, so such a plan runs inline, where the condition is judged when the plan reaches it.
 
 ## Step 5: Enter Native Plan Mode
 
