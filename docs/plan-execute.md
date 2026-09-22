@@ -26,18 +26,22 @@ When it is too early to design anything, `/lets:plan --idea` writes a concept do
 
 ## `/lets:execute` — build it
 
-`/lets:execute` loads the plan from `/lets:plan` and implements it in Claude Code's native plan mode. You approve the execution strategy before any code is written, then pick how it runs:
+`/lets:execute` loads the plan from `/lets:plan` and implements it - in this session under Claude Code's native plan mode, or by handing each commit-point chunk to a named implementer agent you review and correct. You approve before any code is written, then pick how it runs:
 
 | Run mode | Flag | What happens | Commits |
 |----------|------|--------------|---------|
 | Straight-through (default) | `--straight` | One approval, then every task with no pause | At each commit point the plan names, without re-asking |
 | Step-by-step | `--step` | A pause for your review after each task | Each one confirmed |
 | Auto | `--auto` | Unattended under AUTO MODE; push / PR / close / external actions stay gated, hard-stops still halt it, refused on the merge branch | At the plan's commit points |
-| Team | `--team` | Hands the ready tasks to `/lets:team` - parallel implementers in isolated worktrees | One per agent, at the end |
+| Implementers | `--implementers` (alias `--team`) | Each commit-point chunk goes to a named implementer agent; every diff comes back for your review, and a correction goes to the same agent, which keeps its context. Interactive only - refused with `--auto` | One per chunk, after you accept it |
 
 A flag pre-answers the picker; bare `/lets:execute` asks once. `/lets:execute <task-id>` or `<plan-path>` picks the plan explicitly, and `--status` shows where the current plan stands.
 
 If reality diverges from the plan's approach mid-run — a tool behaving differently than assumed, a step that can't be done as written — Claude stops and asks instead of quietly re-planning in place (under `--auto` that is a hard stop). Use `/lets:commit` at natural commit points along the way.
+
+### Delegated runs - review and correct
+
+With **Implementers**, this session stops writing code and starts reviewing it. First you see how the plan splits: every task is either done here (steps that write no files, such as checks) or part of a *chunk* - the tasks up to the next commit point. One Start approval hands the first chunk to a named agent; you pick its model (Opus by default, Sonnet or Fable when the work is cheap). When its report comes back you see the real diff under that agent's name and choose: accept it (it is committed), send a correction (the same agent continues with everything it already knows), or stop. The next chunk goes to a fresh agent. A delegated run starts only on a clean working tree, nothing is committed until you accept it, and an interrupted run resumes from its record the next time you run `/lets:execute`.
 
 ## The full loop
 

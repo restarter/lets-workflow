@@ -23,6 +23,8 @@ Other subcommands: `/lets:team status` (how the teammates are doing), `/lets:tea
 
 This is the right tool when you have several independent, well-scoped tasks and want them done in parallel without babysitting each one. For a single task you're actively shaping, plain `/lets:plan` + `/lets:execute` is a better fit — see **[plan-execute.md](plan-execute.md)**.
 
+**`/lets:team` or delegated `/lets:execute`?** Team takes several *tracker tasks* and runs one implementer per task in its own worktree; with the Orca backend each worker's questions are relayed to you, and the finished work is reviewed at the end. Delegated `/lets:execute` (the Implementers mode) takes one *plan* on this branch, hands it to implementer agents chunk by chunk, and shows you each diff under the agent's name so you can correct that same agent before anything is committed. Both use the same `implementer` agent. Team's Agent Teams backend is being rebuilt for the current Claude Code (lets-7dwc1); its Orca backend is unaffected.
+
 ## `/lets:worktree` — parallel terminals
 
 When *you* want to work on two tasks at once without constantly switching branches:

@@ -16,7 +16,7 @@ LETS ships 15 specialized agents. You don't have to pick them — the commands t
 | pragmatist | ROI analysis, overengineering detection | Large changes (over ~200 lines) |
 | git-historian | Blame analysis, change patterns | Changes to existing code |
 | explorer | Codebase mapping, pattern discovery | Used during `/lets:plan` |
-| implementer | Full-stack implementation | Used by `/lets:team` |
+| implementer | Full-stack implementation | Used by `/lets:execute` delegated runs and `/lets:team` |
 | skeptic | Verifier: tries to refute one finding or claim against the code / sources | The `/lets:review` verify pass and the `/lets:research` cross-check; never picked as a reviewer |
 | actor | Any personality from a URL or file | On explicit request |
 
@@ -28,7 +28,7 @@ LETS ships 15 specialized agents. You don't have to pick them — the commands t
 
 **Multiple modes.** Each agent behaves differently depending on context: *review* mode for code review, *opinion* mode for technical decisions, *plan* mode for evaluating an architecture, *brainstorm* mode for ideation, *ask* mode for a direct question.
 
-**Read-only by default.** Agents analyze; they never modify code. The one exception is `implementer`, which has write access for parallel implementation via `/lets:team`.
+**Read-only by default.** Agents analyze; they never modify code. The one exception is `implementer`, which has write access: `/lets:execute` hands it plan chunks you review and correct, and `/lets:team` runs it in parallel worktrees.
 
 **Agents respond in English.** Commands localize their output to your language (set by `LETS_LANGUAGE` — see [configuration.md](configuration.md)); the agents themselves always work in English.
 
@@ -45,6 +45,6 @@ It's never auto-selected — it needs an explicit request and a personality sour
 ## See also
 
 - **[code-review.md](code-review.md)** — agents in `/lets:review` and `/lets:github-pr`
-- **[plan-execute.md](plan-execute.md)** — explorer and expert agents in `/lets:plan`
+- **[plan-execute.md](plan-execute.md)** — explorer and expert agents in `/lets:plan`, the `implementer` agent in delegated `/lets:execute` runs
 - **[parallel-work.md](parallel-work.md)** — the `implementer` agent in `/lets:team`
 - **[commands.md](commands.md)** — `/lets:opinion` and `/lets:ask` for decisions and questions

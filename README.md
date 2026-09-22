@@ -114,7 +114,7 @@ Then, inside the Claude Code session:
 | `/lets:backlog` | Backlog review (multi-agent, `--workflow` = off-context) + `--fast` quick no-agent pulse + interactive cleanup triage |
 | `/lets:plan` | Structured planning - explore codebase, design architecture, write plan (`--fast` = orchestrator-only, no subagents; `--idea` = concept document, no code) |
 | `/lets:plan-workflow` | PREVIEW - autonomous planning via a Dynamic Workflow: goal + rubric up front, off-context, you approve at the end (`--fast` = lean budget) |
-| `/lets:execute` | Execute plan from `/lets:plan` via native plan mode - straight-through by default, or `--step` / `--auto` / `--team` |
+| `/lets:execute` | Execute plan from `/lets:plan` - inline in native plan mode (straight-through by default, or `--step` / `--auto`), or `--implementers`: named implementer agents you review and correct chunk by chunk |
 | `/lets:team` | Parallel implementation with Agent Teams |
 | `/lets:worktree` | Create/manage worktrees for parallel sessions |
 | `/lets:statusline` | Manage & persist statusline appearance - light/dark, compact, hidden rows |
@@ -169,7 +169,7 @@ LETS ships **15 specialized agents**. You don't have to pick them by hand — th
 | pragmatist | ROI analysis, overengineering detection, scope creep |
 | git-historian | Blame analysis, past-decision context, change patterns |
 | explorer | Codebase mapping, pattern discovery (used in `/lets:plan`) |
-| implementer | Full-stack implementation (used by `/lets:team`) |
+| implementer | Full-stack implementation (used by `/lets:execute` delegated runs and `/lets:team`) |
 | skeptic | Verifier, never a reviewer: tries to refute each `/lets:review` finding and cross-checks each `/lets:research` claim |
 | actor | Any expert personality loaded from a URL or local file |
 
@@ -179,7 +179,7 @@ LETS ships **15 specialized agents**. You don't have to pick them by hand — th
 
 **Modes.** The same agent behaves differently depending on context — *review* for code review, *opinion* for a technical decision, *plan* for evaluating an architecture, *brainstorm* for ideation, *ask* for a direct question. Same expertise, different lens.
 
-**Read-only by default.** Agents analyze; they never touch your code. The one exception is `implementer`, which gets write access for parallel implementation via `/lets:team` (in an isolated worktree, behind your plan approval).
+**Read-only by default.** Agents analyze; they never touch your code. The one exception is `implementer`, which gets write access behind your approval, with every diff reviewed: `/lets:execute` hands it plan chunks you accept or correct, and `/lets:team` runs it in parallel worktrees.
 
 **The actor agent.** Give `actor` a personality — a URL or a local file — and it adopts that persona, then works with LETS's structured output. A senior iOS dev on your Swift code, a UX designer on your components, anyone — point it at their writeup and get their take. It's never auto-selected; you confirm each personality before it's loaded.
 
@@ -233,7 +233,7 @@ A LETS session runs a loop: start, work, commit, finish.
 
 **Plan** (`/lets:plan`) - codebase exploration with dynamically-scaled explorer agents, then architecture design with expert evaluation. Small project? One explorer. Large monorepo? Usually up to 10, each mapping a different area (more asks you to confirm). Want a quick talk-through instead? `/lets:plan --fast` skips the subagent phases and plans collaboratively in-session.
 
-**Execute** (`/lets:execute`) - implements the plan in native plan mode. You approve the execution once, then pick how it runs: straight-through (the default - all tasks, commits at the plan's commit points), step-by-step (a pause after each task), auto (unattended) or team (parallel). No surprises.
+**Execute** (`/lets:execute`) - implements the plan in native plan mode. You approve the execution once, then pick how it runs: straight-through (the default - all tasks, commits at the plan's commit points), step-by-step (a pause after each task), auto (unattended), or implementers - named agents write each chunk while you review every diff and send corrections back to the same agent. No surprises.
 
 **Research** (`/lets:research`) - unlike `/lets:opinion` (project-grounded judgment, no web) or `/lets:ask` (a quick model-knowledge consult), this answers an external or technical question with a CITED synthesis: it searches the web, fetches the best sources, and a cross-check pass flags single-source, contradicted, or stale claims before presenting. The deliverable is a sourced answer with a Sources list and an as-of date. `--workflow` runs it off-context; `--project` grounds findings against this repo.
 ### Code review
