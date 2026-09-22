@@ -78,12 +78,16 @@ func recordOf(ctx context.Context, repo, letsDir, task, tip string) SnapshotReco
 	return rec
 }
 
+// snapSuffix is the artifact kind suffix: current `-snapshot` and the legacy
+// `-snapshot-precompact` (still read - CHANGELOG), each with an optional `-vN`.
+const snapSuffix = `-snapshot(?:-precompact)?(?:-v(\d+))?\.md$`
+
 // snapshotsOf lists task's own snapshots. The glob only narrows; each name is then
-// parsed exactly ({stamp}-{task}-snapshot[-vN].md), because a wildcard also admits
+// parsed exactly ({stamp}-{task}{snapSuffix}), because a wildcard also admits
 // another task whose id merely extends this one across the reserved `-snapshot`
 // boundary (`lets-a` vs `lets-a-snapshot-v2`).
 func snapshotsOf(letsDir, task string) []string {
-	own := regexp.MustCompile(`^\d{4}-\d{2}-\d{2}-\d{4}-` + regexp.QuoteMeta(task) + `-snapshot(?:-v\d+)?\.md$`)
+	own := regexp.MustCompile(`^\d{4}-\d{2}-\d{2}-\d{4}-` + regexp.QuoteMeta(task) + snapSuffix)
 	cands, _ := filepath.Glob(filepath.Join(letsDir, "sessions", "*-"+task+"-snapshot*.md"))
 	var out []string
 	for _, f := range cands {
@@ -96,7 +100,7 @@ func snapshotsOf(letsDir, task string) []string {
 
 // snapNameRe splits an artifact-path snapshot name into its stamp and its -vN
 // collision suffix (keep in sync with skills/artifact-path/SKILL.md).
-var snapNameRe = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}-\d{4})-.*-snapshot(?:-v(\d+))?\.md$`)
+var snapNameRe = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}-\d{4})-.*` + snapSuffix)
 
 // newestFirst orders snapshot paths by (stamp, collision version) descending. A plain
 // reverse sort gets both wrong: '.' sorts after '-' (the base before its own -v2) and

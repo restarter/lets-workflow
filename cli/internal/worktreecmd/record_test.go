@@ -109,6 +109,27 @@ func TestHeadLine_SHA256(t *testing.T) {
 	}
 }
 
+// A legacy `-snapshot-precompact` file is still the task's record (read, never dropped),
+// and it orders by its stamp and -vN like a current one.
+func TestRecordOf_LegacyPrecompactStillRead(t *testing.T) {
+	ctx := context.Background()
+	repo, letsDir := recordRepo(t)
+	tip := gitOut(t, repo, "rev-parse", "HEAD")
+	writeSnap(t, letsDir, "2026-08-22-1519-lets-p1-snapshot-precompact.md", "## RESUME\n- end\n")
+	if r := recordOf(ctx, repo, letsDir, "lets-p1", tip); r.State != RecordStale || r.Detail != "unanchored" {
+		t.Errorf("a legacy snapshot is a record, not missing: %+v", r)
+	}
+	writeSnap(t, letsDir, "2026-08-22-1519-lets-p1-snapshot-precompact-v2.md", "- head: "+tip+"\n")
+	if r := recordOf(ctx, repo, letsDir, "lets-p1", tip); r.State != RecordPresent || filepath.Base(r.Snapshot) != "2026-08-22-1519-lets-p1-snapshot-precompact-v2.md" {
+		t.Errorf("an anchored legacy -v2 covers the tip: %+v", r)
+	}
+	files := []string{"/s/2026-08-22-1519-lets-p1-snapshot-precompact.md", "/s/2026-08-22-1519-lets-p1-snapshot-precompact-v2.md", "/s/2026-09-01-1000-lets-p1-snapshot.md"}
+	newestFirst(files)
+	if filepath.Base(files[0]) != "2026-09-01-1000-lets-p1-snapshot.md" || filepath.Base(files[1]) != "2026-08-22-1519-lets-p1-snapshot-precompact-v2.md" {
+		t.Errorf("legacy names must order by stamp then -vN: %v", files)
+	}
+}
+
 func TestNewestFirst_StampThenVersion(t *testing.T) {
 	files := []string{
 		"/s/2026-09-02-1000-lets-a1-snapshot.md",
