@@ -86,7 +86,7 @@ func delegatedContractProblems(f map[string]string) []string {
 		if n := strings.Count(delegated, `header: "Review"`); n != 3 {
 			add(fmt.Sprintf("Step 5-D must ask exactly 3 Review gates (one per status), found %d", n))
 		}
-		for _, need := range []string{`Skill(skill: "lets:implementer-run"`, "TaskStop(", "git ls-files --others --exclude-standard", "--untracked-files=all", "| `pending` |", "| `review` / `paused` |", "| `committing` |", "AMENDMENT to chunk"} {
+		for _, need := range []string{`Skill(skill: "lets:implementer-run"`, "TaskStop(", "git ls-files --others --exclude-standard", "--untracked-files=all", "git diff HEAD", "git diff --cached --name-only", `args: "approved=review-accept"`, "patch_sha", "**Render review**", "| `pending` |", "| `review` / `paused` |", "| `committing` |", "AMENDMENT to chunk"} {
 			if !strings.Contains(delegated, need) {
 				add("Step 5-D must contain " + need)
 			}

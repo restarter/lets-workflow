@@ -32,7 +32,7 @@ LETS ships 15 specialized agents. You don't have to pick them — the commands t
 
 **Agents respond in English.** Commands localize their output to your language (set by `LETS_LANGUAGE` — see [configuration.md](configuration.md)); the agents themselves always work in English.
 
-**Which model they run on.** Agents use the model of your session - no agent is pinned to a named model, so a newer model in your session is a newer model everywhere. The one exception is `explorer`, pinned *down* to Sonnet: mapping a codebase is mechanical work, and a cheaper model there costs nothing in quality. The verifier (`skeptic`) deliberately stays on the session model - a weaker verifier tends to answer "not real" when it cannot follow a deep finding, and that would drop genuine `[BLOCKER]`s.
+**Which model they run on.** Agents use the model of your session - no agent is pinned to a named model, so a newer model in your session is a newer model everywhere. There are two exceptions. `explorer` is pinned *down* to Sonnet: mapping a codebase is mechanical work, and a cheaper model there costs nothing in quality. `implementer` in a delegated `/lets:execute` run takes the model you pick: you pick its model once at the start of the run (Opus by default, Sonnet or Fable when the work is cheap). The verifier (`skeptic`) deliberately stays on the session model - a weaker verifier tends to answer "not real" when it cannot follow a deep finding, and that would drop genuine `[BLOCKER]`s.
 
 **Asking one expert.** `/lets:ask <expert> <question>` goes straight to the agent you name (`security`, `architect`, `docs`, `pragmatist`, ...); bare `/lets:ask` offers the four most relevant to the conversation.
 

@@ -26,12 +26,13 @@ var (
 		"commands/handoff.md":            true,
 		"commands/install-deprecated.md": true,
 	}
-	// agentSendExempt lists the files of the delegated /lets:execute path, which resumes a
-	// subagent THIS run spawned - addressed by the run's own placeholder name, never a peer
-	// session. Any other recipient in these files is still a peer send and still fails.
-	agentSendExempt = map[string]bool{
-		"commands/execute.md":             true,
-		"skills/implementer-run/SKILL.md": true,
+	// agentSendExempt maps each file of the delegated /lets:execute path to the ONE placeholder
+	// it names the implementer THIS run spawned by (execute.md's run record calls it {agent},
+	// implementer-run's args call it {name}) - never a peer session. Any other recipient in these
+	// files, including the other file's placeholder, is still a peer send and still fails.
+	agentSendExempt = map[string]string{
+		"commands/execute.md":             "{agent}",
+		"skills/implementer-run/SKILL.md": "{name}",
 	}
 )
 
@@ -77,8 +78,7 @@ func lintOrcFiles(files map[string]string) []string {
 				}
 			}
 			for _, m := range peerSendSM.FindAllStringSubmatch(body, -1) {
-				spawned := m[1] == "{agent}" || m[1] == "{name}"
-				if spawned && agentSendExempt[rel] {
+				if own, ok := agentSendExempt[rel]; ok && m[1] == own {
 					continue // the named implementer this run spawned, not a peer
 				}
 				bad = append(bad, rel+": peer SendMessage outside skills/orc/SKILL.md: "+m[1])
@@ -220,6 +220,9 @@ func TestOrcLint(t *testing.T) {
 	}
 	if len(mutate("commands/execute.md", `SendMessage({to: "orc-main"})`)) == 0 {
 		t.Error("mutation: a peer SendMessage in execute.md must fail the lint even though it may address its own implementer")
+	}
+	if len(mutate("commands/execute.md", `SendMessage({to: "{name}"})`)) == 0 {
+		t.Error("mutation: a generic {name} placeholder in execute.md must fail the lint - only its run-record {agent} is exempt")
 	}
 	if len(mutate("commands/done.md", "```\nAskUserQuestion(\n```\n- **Ping** -> `Skill(skill: \"lets:orc\", args: \"verb=ping text=x\")`")) == 0 {
 		t.Error("mutation: an orc call without footer=none must fail the lint")

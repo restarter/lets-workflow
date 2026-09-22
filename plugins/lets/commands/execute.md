@@ -249,7 +249,7 @@ Everything here is derived from the plan's existing `### Task N` sections - thei
 | **chunk** | a maximal run of consecutive non-caller tasks ending at the first one whose `**Commit:**` is a real commit (not `none`); a non-caller task with `**Commit:** none` extends the run | one implementer |
 | **malformed** | a run of non-caller tasks with no real commit before the next caller task or the end of the plan | nobody - refuse delegation (below) |
 
-Chunk ids are `c1`, `c2`, ... in plan order. A chunk's **allowlist** is the union of its tasks' Create/Modify paths.
+Chunk ids are `c1`, `c2`, ... in plan order. A chunk's **allowlist** is the union of EVERY path its tasks' Create/Modify items name - one item may name several (`Modify: a.md (:10) and b.md (:20)`), and taking only the first drops a planned file. A target that cannot be read as a path unambiguously refuses delegation (below).
 
 **2. Group chunks.** A caller task is a barrier: nothing before it may still be open when it runs, and nothing after it starts before it is done. Within each stretch between barriers, two chunks share a group when their allowlists share a path, directly or through another chunk of the stretch. Groups keep plan order.
 
@@ -258,14 +258,14 @@ Chunk ids are `c1`, `c2`, ... in plan order. A chunk's **allowlist** is the unio
 ```
 ### Plan split
 
-| Task | Owner    | Group | Files |
-|------|----------|-------|-------|
-| 0    | caller   | -     | none  |
-| 1-2  | chunk c1 | A     | 3     |
-| 3    | chunk c2 | A     | 1     |
+| Task | Owner    | Group | Allowlist             |
+|------|----------|-------|-----------------------|
+| 0    | caller   | -     | none                  |
+| 1-2  | chunk c1 | A     | a.md, b.md, cli/x.go  |
+| 3    | chunk c2 | A     | a.md                  |
 ```
 
-A task missing from the table, or listed twice, is a derivation error: stop and say which.
+A task missing from the table, or listed twice, is a derivation error: stop and say which. The Allowlist column names every path, so a dropped file is visible before Start.
 
 **4. Propose the shape.** Delegated runs are **solo**: one implementer at a time, in this tree, chunks and caller tasks in plan order. When a stretch holds more than one group, add one line: "{N} groups share no file; running groups in parallel is not available yet (lets-7dwc1)." Groups are shown so the split is honest about what could be independent - file-disjoint is not proof of independence (a chunk can call code another chunk adds in a different file).
 
@@ -397,7 +397,7 @@ Before the first spawn, write `.lets/cache/delegated-run-{TASK_ID}.json` with th
   "model": null,
   "caller": [ { "task": 0, "state": "pending" } ],
   "chunks": [
-    { "id": "c1", "tasks": [1, 2], "group": "A", "allowlist": ["path/a", "path/b"], "agent": "impl-{RUN}-c1", "generation": 1, "base": null, "phase": "pending", "round": 0, "report": null, "status": null, "reason": null, "received": null, "commit": null }
+    { "id": "c1", "tasks": [1, 2], "group": "A", "allowlist": ["path/a", "path/b"], "agent": "impl-{RUN}-c1", "generation": 1, "base": null, "phase": "pending", "round": 0, "report": null, "status": null, "reason": null, "received": null, "patch_sha": null, "commit": null }
   ]
 }
 ```
@@ -447,13 +447,14 @@ Check the real tree - the report is the agent's claim, the diff is the fact:
 ```bash
 git rev-parse HEAD                                    # must equal the chunk's recorded base
 git status --porcelain --untracked-files=all          # every listed path must be in the chunk's allowlist; new directories are expanded to their files
-git diff                                              # the patch of every tracked file
+git diff --cached --name-only                         # must print nothing: an implementer never stages
+git diff HEAD                                         # the patch of every tracked file, index and worktree alike
 git ls-files --others --exclude-standard -z           # untracked files, NUL-separated so any file name is safe
 ```
 
-For each untracked path, show it as a patch: `git diff --no-index -- /dev/null "<path>"` (read-only; nothing is staged). Its exit status 1 means a patch was printed; only a status above 1 is an error. HEAD moved, or a path outside the allowlist changed -> the diff is NOT attributed to the agent: name the paths and use the `blocked` gate. An amendment cannot clean a path outside the allowlist (amendments stay inside it), so say plainly that those paths are the user's to remove or restore; once they are gone, `/lets:execute` re-checks the tree and, for a `complete` report, offers Accept.
+For each untracked path, show it as a patch: `git diff --no-index -- /dev/null "<path>"` (read-only; nothing is staged). Its exit status 1 means a patch was printed; only a status above 1 is an error. HEAD moved, anything staged, or a path outside the allowlist changed -> the diff is NOT attributed to the agent: name the paths and use the `blocked` gate. An amendment cannot clean a path outside the allowlist (amendments stay inside it), so say plainly that those paths are the user's to remove or restore; once they are gone, `/lets:execute` re-checks the tree and, for a `complete` report, offers Accept.
 
-Present it under the agent's name - the name this run spawned it under, never a name the agent wrote about itself - with the report verbatim and then the full patch (`git diff`, then each untracked file):
+Present it under the agent's name - the name this run spawned it under, never a name the agent wrote about itself - with the report verbatim and then the full patch (`git diff HEAD`, then each untracked file):
 
 ```
 ### {agent} - {chunk} - {status}
@@ -461,7 +462,9 @@ Present it under the agent's name - the name this run spawned it under, never a 
 {the full patch}
 ```
 
-The stat is validation; the patch is what the user reviews. Then ask the gate for that status.
+The stat is validation; the patch is what the user reviews. Record `patch_sha` - the sha256 of the full patch exactly as shown (`git diff HEAD`, then each untracked file's patch, in path order) - so Accept can prove it commits that patch and nothing else. Then ask the gate for that status.
+
+**Render review** = the tree check, the heading with the report verbatim and the full patch, a fresh `patch_sha`, then the status gate - always all four, in that order. Every path that shows a review gate runs it: a new report, a 5-D.7 recovery of `review` / `paused`, and an Accept that found the patch changed. No path asks a Review gate without first recording the sha of what it showed.
 
 - **Orchestrator offer** - when it applies (lets-rules `### Orchestrator offer`, Act shape; rule not loaded -> no offer), add as the last option `{ label: "Ask orchestrator", description: "Stay at this gate; /lets:orc ask with the report and the patch" }`
 
@@ -515,7 +518,7 @@ AskUserQuestion(
 )
 ```
 
-- **Accept** -> record `phase: committing`, then `/lets:commit`, staging exactly the chunk's allowlist paths (untracked ones included); the Accept pick is its approval, so it does not ask again (as Straight-through commits at plan points). Then record `phase: accepted` and `commit`, append `[DONE]` to each of the chunk's `### Task` headings in the plan file, and continue 5-D.4 with the next item.
+- **Accept** -> re-run the tree check above and recompute the patch sha first; a failed check, or a sha that differs from the recorded `patch_sha` -> Render review again (it records the new sha), never commit what was not reviewed. Then record `phase: committing`, stage exactly the chunk's allowlist paths (untracked ones included) and `Skill(skill: "lets:commit", args: "approved=review-accept")` - the Accept pick is its approval, so the skill does not ask again. Then record `phase: accepted` and `commit`, append `[DONE]` to each of the chunk's `### Task` headings in the plan file, and continue 5-D.4 with the next item.
 - **Correct** -> ask in words what to change. Write it to `.lets/cache/correct-{TASK_ID}-{RUN}-{chunk}-g{generation}-r{round+1}.md` framed as an amendment to the brief:
 
   ```
@@ -562,7 +565,7 @@ Then, for each chunk not `accepted`, in plan order:
 | `running` / `correcting` | `ListAgents` shows `{agent}` idle | its report was lost with the old session: `SendMessage({to: "{agent}", message: "Send your last report for chunk {chunk} again, unchanged."})` and handle the reply as 5-D.5 |
 | `running` / `correcting` | `{agent}` not listed | record `phase: blocked`, `reason: unreachable`; the Replacement gate |
 | `stopping` | - | 5-D.6 again |
-| `review` / `paused` | the `report` file exists | re-check the tree and show the ORIGINAL status gate from the saved report - Accept included when it was `complete` and the check is clean. `ListAgents` does not list `{agent}` -> a correction needs the agent that wrote the diff: `complete` shows its gate without **Correct** (Accept, Stop), `deviation-stopped` without **Correct** (Re-plan, Stop), and `blocked` goes to the Replacement gate instead |
+| `review` / `paused` | the `report` file exists | Render review (5-D.5) from the saved report, with its ORIGINAL status gate - Accept included when it was `complete` and the check is clean; a recorded `patch_sha` of `null` is simply replaced. `ListAgents` does not list `{agent}` -> a correction needs the agent that wrote the diff: `complete` shows its gate without **Correct** (Accept, Stop), `deviation-stopped` without **Correct** (Re-plan, Stop), and `blocked` goes to the Replacement gate instead |
 | `committing` | `git log --format=%H {base}..HEAD` | exactly one new commit whose message carries `Task: {TASK_ID}` and whose `git show --name-only --format= <sha>` lists only allowlist paths -> record `accepted` and `commit`, mark `[DONE]`; no new commit -> record `review` and show the gate again; anything else -> record `blocked`, `reason: unrecognized-commits` |
 | `blocked`, `reason: re-plan` | - | say the chunk went to re-planning; after `/lets:plan`, `/lets:execute` starts a run of the new plan |
 | `blocked`, `reason: stopped` or `unreachable` | - | the Replacement gate |
@@ -586,7 +589,7 @@ AskUserQuestion(
 )
 ```
 
-HEAD at `base` and only allowlist paths changed - an unfinished diff the first agent left. Show that patch first (as 5-D.5 renders one, headed `### {agent} (gone) - {chunk} - unfinished`), then:
+HEAD at `base`, nothing staged, and only allowlist paths changed - an unfinished diff the first agent left. Show that patch first (as 5-D.5 renders one, headed `### {agent} (gone) - {chunk} - unfinished`), then:
 
 ```
 AskUserQuestion(
@@ -602,7 +605,7 @@ AskUserQuestion(
 )
 ```
 
-HEAD moved, or a path outside the allowlist changed -> offer neither: show what changed and stop.
+HEAD moved, anything staged, or a path outside the allowlist changed -> offer neither: show what changed and stop.
 
 - **Start a replacement** -> `generation+1`; the new name is `impl-{RUN}-{chunk}-r{generation}`; write `.lets/cache/chunk-{TASK_ID}-{RUN}-{chunk}-g{generation}.md` = the original brief plus an `AMENDMENTS SO FAR:` section holding every correction file of the chunk, oldest first; record `agent`, `generation`, `round: 0`, `phase: running`; spawn it through `implementer-run`. Say plainly that it is a new agent.
 - **Discard it and replace** -> ask in words, listing every file, before touching anything (destructive). On yes: `git restore --staged --worktree -- <each changed tracked allowlist path>` and `rm -- "<each untracked allowlist path>"`, check the tree is clean, then **Start a replacement**.
