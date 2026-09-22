@@ -28,9 +28,10 @@ const (
 	RecordMissing = "missing"
 )
 
-// headLineRe is the anchor session-snapshot writes into its ### Record block.
+// headLineRe is the anchor session-snapshot writes into its ### Record block: the
+// full object id, 40 hex (SHA-1) or 64 (SHA-256 repositories).
 // Keep in sync with plugins/lets/skills/session-snapshot/SKILL.md (Step 3 template).
-var headLineRe = regexp.MustCompile(`(?m)^- head: ([0-9a-f]{40})\s*$`)
+var headLineRe = regexp.MustCompile(`(?m)^- head: ([0-9a-f]{64}|[0-9a-f]{40})\s*$`)
 
 // SnapshotRecord is the answer for one task.
 type SnapshotRecord struct {
@@ -46,7 +47,7 @@ type SnapshotRecord struct {
 // snapshot is stale - including a snapshot written before the head line existed.
 // Ancestry, never time: clocks drift and a rebase rewrites committer dates.
 func recordOf(ctx context.Context, repo, letsDir, task, tip string) SnapshotRecord {
-	files, _ := filepath.Glob(filepath.Join(letsDir, "sessions", "*-"+task+"-snapshot*.md"))
+	files := snapshotsOf(letsDir, task)
 	if len(files) == 0 {
 		return SnapshotRecord{State: RecordMissing}
 	}
@@ -75,6 +76,22 @@ func recordOf(ctx context.Context, repo, letsDir, task, tip string) SnapshotReco
 		rec.Detail = "tip_unknown"
 	}
 	return rec
+}
+
+// snapshotsOf lists task's own snapshots. The glob only narrows; each name is then
+// parsed exactly ({stamp}-{task}-snapshot[-vN].md), because a wildcard also admits
+// another task whose id merely extends this one across the reserved `-snapshot`
+// boundary (`lets-a` vs `lets-a-snapshot-v2`).
+func snapshotsOf(letsDir, task string) []string {
+	own := regexp.MustCompile(`^\d{4}-\d{2}-\d{2}-\d{4}-` + regexp.QuoteMeta(task) + `-snapshot(?:-v\d+)?\.md$`)
+	cands, _ := filepath.Glob(filepath.Join(letsDir, "sessions", "*-"+task+"-snapshot*.md"))
+	var out []string
+	for _, f := range cands {
+		if own.MatchString(filepath.Base(f)) {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 // snapNameRe splits an artifact-path snapshot name into its stamp and its -vN

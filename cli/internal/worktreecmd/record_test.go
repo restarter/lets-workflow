@@ -68,6 +68,47 @@ func TestRecordOf_States(t *testing.T) {
 	}
 }
 
+// A task id that extends another across the `-snapshot` boundary owns its own files.
+func TestRecordOf_ExactTaskOwnership(t *testing.T) {
+	ctx := context.Background()
+	repo, letsDir := recordRepo(t)
+	tip := gitOut(t, repo, "rev-parse", "HEAD")
+	writeSnap(t, letsDir, "2026-09-22-1200-lets-a-snapshot-v2-snapshot.md", "- head: "+tip+"\n")
+	if r := recordOf(ctx, repo, letsDir, "lets-a", tip); r.State != RecordMissing {
+		t.Errorf("lets-a must not own lets-a-snapshot-v2's snapshot: %+v", r)
+	}
+	if r := recordOf(ctx, repo, letsDir, "lets-a-snapshot-v2", tip); r.State != RecordPresent {
+		t.Errorf("the owner still finds it: %+v", r)
+	}
+}
+
+// A SHA-256 repository writes a 64-hex head; it anchors like a SHA-1 one.
+func TestHeadLine_SHA256(t *testing.T) {
+	sha256 := strings.Repeat("ab", 32)
+	m := headLineRe.FindAllSubmatch([]byte("### Record\n- end\n- head: "+sha256+"\n"), -1)
+	if len(m) != 1 || string(m[0][1]) != sha256 {
+		t.Fatalf("64-hex head not parsed: %q", m)
+	}
+	if headLineRe.Match([]byte("- head: " + strings.Repeat("a", 50) + "\n")) {
+		t.Error("a 50-hex value is neither SHA-1 nor SHA-256")
+	}
+	if ok := exec.Command("git", "init", "--object-format=sha256", t.TempDir()).Run() == nil; !ok {
+		t.Skip("git without SHA-256 object format")
+	}
+	repo, _ := filepath.EvalSymlinks(t.TempDir())
+	gitOut(t, repo, "init", "-q", "--object-format=sha256")
+	gitOut(t, repo, "config", "user.email", "t@example.com")
+	gitOut(t, repo, "config", "user.name", "t")
+	gitOut(t, repo, "commit", "--allow-empty", "-m", "one")
+	letsDir := filepath.Join(repo, ".lets")
+	_ = os.MkdirAll(filepath.Join(letsDir, "sessions"), 0o755)
+	tip := gitOut(t, repo, "rev-parse", "HEAD")
+	writeSnap(t, letsDir, "2026-09-22-1200-lets-s2-snapshot.md", "- head: "+tip+"\n")
+	if r := recordOf(context.Background(), repo, letsDir, "lets-s2", tip); len(tip) != 64 || r.State != RecordPresent {
+		t.Errorf("sha256 repo: tip=%q record=%+v", tip, r)
+	}
+}
+
 func TestNewestFirst_StampThenVersion(t *testing.T) {
 	files := []string{
 		"/s/2026-09-02-1000-lets-a1-snapshot.md",
