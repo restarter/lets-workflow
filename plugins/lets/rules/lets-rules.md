@@ -342,6 +342,8 @@ The skill walks the user through an `AskUserQuestion` for each kind — follow t
 
 **Orca lifecycle** (`LETS_LAUNCHER=orca`): `/lets:worktree create` -> Orca creates the worktree and runs `lets worktree adopt` (the SessionStart hook adopts if it did not) -> `/lets:start <id>` -> work -> `/lets:done` -> archive in Orca (`lets worktree release`; `/lets:worktree remove` refuses it with `worktree_external`) -> `/lets:start --main` offers Reopen for archived tasks still `in_progress`
 
+**A worktree can vanish outside Orca.** gh >= 2.99 `gh pr merge --delete-branch`, run from another checkout, removes the head branch's linked worktree - Orca's archive hook (`lets worktree release`) never runs. So a worker's PR is merged WITHOUT `--delete-branch`, and only after `lets worktree record --task <id> --ref <branch> --json` shows `present` (`missing` or `stale` -> do not merge; ask the worker for `/lets:end` first). Archive the worktree in Orca afterwards - its hook records the release - Orca's delete removes the branch too.
+
 ## Architecture Mindset
 
 - **Study codebase first.** Read existing patterns, tests, and docs before non-trivial work. Match what's there.
