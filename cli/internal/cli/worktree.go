@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/restarter/lets-workflow/cli/internal/initcmd"
+	"github.com/restarter/lets-workflow/cli/internal/notifycmd"
 	"github.com/restarter/lets-workflow/cli/internal/worktreecmd"
 )
 
@@ -328,12 +329,15 @@ func newWorktreeAdoptCmd() *cobra.Command {
 	return cmd
 }
 
+// releaseNotify is the notification sink of a release that lost a record (a seam).
+var releaseNotify = notifycmd.Notify
+
 func newWorktreeReleaseCmd() *cobra.Command {
 	var jsonOut, quiet bool
 	var dir string
 	cmd := &cobra.Command{
 		Use:   "release",
-		Short: "Record a worktree's state before something else archives it (never refuses)",
+		Short: "Record a worktree's state before it goes away (never refuses for dirty or unpushed work)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			target, err := dirOrCwd(dir)
@@ -341,6 +345,15 @@ func newWorktreeReleaseCmd() *cobra.Command {
 				return emitErrorEnvelope(cmd.OutOrStdout(), jsonOut, "release", &worktreecmd.Error{Code: worktreecmd.ExitFilesystem, Kind: "getwd_failed", Message: err.Error(), Cause: err})
 			}
 			res, runErr := worktreecmd.Release(cmd.Context(), target, worktreecmd.ReleaseOptions{})
+			if alarm := res.Alarm(); alarm != "" {
+				// Loud even under --quiet: a hook's stdout is not a signal.
+				fmt.Fprintln(cmd.ErrOrStderr(), "lets: "+alarm)
+				home, _ := os.UserHomeDir()
+				_, _ = releaseNotify(cmd.Context(), notifycmd.Options{
+					Title: "LETS: a worktree left without a record", Body: alarm,
+					Cwd: res.ProjectRoot, ProjectRoot: res.ProjectRoot, HomeDir: home,
+				})
+			}
 			return emitJSONOrRender(cmd, jsonOut, quiet, res, func() { worktreecmd.RenderSteps(cmd.OutOrStdout(), res.Envelope) }, runErr)
 		},
 	}
