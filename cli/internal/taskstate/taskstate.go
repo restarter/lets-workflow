@@ -290,12 +290,14 @@ func Remove(letsDir, slug string, deadline time.Time) error {
 	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	if temps, _ := filepath.Glob(path + ".*.tmp"); temps != nil {
+	prefix := tempPath(path) + "."
+	if temps, _ := filepath.Glob(prefix + "*"); temps != nil {
 		for _, m := range temps {
-			// Only atomicWrite's `.task-<slug>.<digits>.tmp`. A bash `mktemp` temp
-			// (`.task-<slug>.XXXX`) is renamed at once, and its shape is also the file
-			// of a branch whose slug extends this one (`lets-abc` vs `lets-abc.1234`).
-			if tempSuffixRe.MatchString(strings.TrimPrefix(m, path+".")) {
+			// Only atomicWrite's `.tasktmp-<slug>.<digits>`: the prefix of a slug that
+			// extends this one (`lets-abc` vs `lets-abc.1234`) leaves a non-digit remainder.
+			// A legacy `.task-<slug>.<digits>.tmp` of an older binary is never deleted -
+			// it is also the state file of a legal branch (`feature.12345.tmp`).
+			if tempSuffixRe.MatchString(strings.TrimPrefix(m, prefix)) {
 				_ = os.Remove(m)
 			}
 		}
@@ -303,12 +305,40 @@ func Remove(letsDir, slug string, deadline time.Time) error {
 	return nil
 }
 
-var tempSuffixRe = regexp.MustCompile(`^[0-9]+\.tmp$`)
+var tempSuffixRe = regexp.MustCompile(`^[0-9]+$`)
+
+// tempPath is the temp-file stem of a task-state path: `.tasktmp-<slug>` beside it.
+// Temps live outside the `.task-` namespace, so no state file can be mistaken for one.
+func tempPath(path string) string {
+	return filepath.Join(filepath.Dir(path), ".tasktmp-"+strings.TrimPrefix(filepath.Base(path), ".task-"))
+}
+
+// Slugs lists the slugs of the task-state files under letsDir: every `.task-*` entry.
+// Temps live under `.tasktmp-*` and locks under .lets/locks/, so nothing is filtered
+// by guessing. A missing sessions directory is an empty list; an unreadable one is an error.
+func Slugs(letsDir string) ([]string, error) {
+	entries, err := os.ReadDir(filepath.Join(letsDir, "sessions"))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, e := range entries {
+		slug, ok := strings.CutPrefix(e.Name(), ".task-")
+		if !ok || slug == "" || e.IsDir() {
+			continue
+		}
+		out = append(out, slug)
+	}
+	return out, nil
+}
 
 // atomicWrite writes content via a same-dir temp file + rename, so it survives the
 // .lets symlink in worktrees (a cross-device rename would fail).
 func atomicWrite(path, content string) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.tmp")
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(tempPath(path))+".*")
 	if err != nil {
 		return err
 	}

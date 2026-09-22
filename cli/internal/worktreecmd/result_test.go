@@ -152,6 +152,22 @@ func TestResult_SchemaContract(t *testing.T) {
 		requireKeys(t, m["released"].(map[string]any), "task", "branch", "marker", "dirty", "unpushed")
 	})
 
+	t.Run("record_success", func(t *testing.T) {
+		r := &RecordResult{
+			Envelope: Envelope{SchemaVersion: SchemaVersion, OK: true, Subcommand: "record", ProjectRoot: "/p", Steps: []Step{}},
+			Tasks: []TaskTrace{{
+				Task: "lets-abc", TaskState: []string{"lets-abc-x"}, Branches: []string{"lets-abc-x"}, Worktrees: []string{},
+				Marker: false, Orphan: true,
+				Record: SnapshotRecord{State: RecordStale, Snapshot: "/p/.lets/sessions/s.md", Head: "0123456789012345678901234567890123456789", Detail: "unanchored"},
+			}},
+		}
+		m := marshalToMap(t, r)
+		requireKeys(t, m, requiredCore...)
+		row := m["tasks"].([]any)[0].(map[string]any)
+		requireKeys(t, row, "task", "task_state", "branches", "worktrees", "marker", "record", "orphan")
+		requireKeys(t, row["record"].(map[string]any), "state", "snapshot", "head", "detail")
+	})
+
 	t.Run("branch_name_success", func(t *testing.T) {
 		r := &BranchNameResult{
 			Envelope: Envelope{SchemaVersion: SchemaVersion, OK: true, Subcommand: "branch-name", ProjectRoot: "/p", Steps: []Step{}},

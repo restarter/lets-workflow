@@ -52,6 +52,7 @@ func NewWorktreeCmd() *cobra.Command {
 		newWorktreeInfoCmd(),
 		newWorktreeAdoptCmd(),
 		newWorktreeReleaseCmd(),
+		newWorktreeRecordCmd(),
 		newWorktreeTaskStateCmd(),
 		newWorktreeBranchNameCmd(),
 		newWorktreeSweepCmd(),
@@ -346,6 +347,28 @@ func newWorktreeReleaseCmd() *cobra.Command {
 	cmd.Flags().StringVar(&dir, "dir", "", "Worktree directory (default: current directory)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
 	cmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Suppress human-readable output")
+	return cmd
+}
+
+func newWorktreeRecordCmd() *cobra.Command {
+	var jsonOut bool
+	var o worktreecmd.RecordOptions
+	cmd := &cobra.Command{
+		Use:   "record",
+		Short: "Report whether each task left a session record, and whether it is orphaned in this checkout",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return emitErrorEnvelope(cmd.OutOrStdout(), jsonOut, "record", &worktreecmd.Error{Code: worktreecmd.ExitFilesystem, Kind: "getwd_failed", Message: err.Error(), Cause: err})
+			}
+			res, runErr := worktreecmd.TaskRecord(cmd.Context(), cwd, o)
+			return emitJSONOrRender(cmd, jsonOut, false, res, func() { worktreecmd.RenderRecord(cmd.OutOrStdout(), res) }, runErr)
+		},
+	}
+	cmd.Flags().StringArrayVar(&o.Tasks, "task", nil, "Task id (repeatable)")
+	cmd.Flags().StringVar(&o.Ref, "ref", "", "Commit the record must cover (one --task only; default: the task's worktree HEAD, else its branch tip)")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
 	return cmd
 }
 

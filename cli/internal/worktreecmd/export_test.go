@@ -26,3 +26,10 @@ func LinkSharedForTesting(mainRoot, wtRoot string, links []trackeradapter.Link, 
 	out, err := linkShared(context.Background(), mainRoot, wtRoot, links, mode)
 	return out.Steps, out.StoreLinks, out.MovedAside, err
 }
+
+// SetForEachRef swaps the branch lister for a test and returns the restorer.
+func SetForEachRef(f func(context.Context, string) ([]byte, error)) (restore func()) {
+	old := forEachRef
+	forEachRef = f
+	return func() { forEachRef = old }
+}

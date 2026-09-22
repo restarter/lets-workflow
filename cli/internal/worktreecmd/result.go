@@ -208,6 +208,12 @@ type ReleaseResult struct {
 	Released *ReleasedInfo `json:"released,omitempty"`
 }
 
+// RecordResult is the record-subcommand envelope: one row per requested task.
+type RecordResult struct {
+	Envelope
+	Tasks []TaskTrace `json:"tasks"`
+}
+
 // SweepResult is the sweep-subcommand envelope.
 type SweepResult struct {
 	Envelope
