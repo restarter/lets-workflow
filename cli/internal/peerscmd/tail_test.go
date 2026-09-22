@@ -212,3 +212,21 @@ func TestTail_OmittedStillCountsDroppedTurns(t *testing.T) {
 		t.Errorf("short turns under both caps must not report truncated_bytes: %d", res.TruncatedBytes)
 	}
 }
+
+func TestTail_ByName(t *testing.T) {
+	root := repoWithLets(t, "")
+	home := claudeHome(t, []regRow{{1, sidM, "MAIN", root}, {2, sidN, "DUP", root}, {3, sidW, "DUP", root}})
+	writeTranscript(t, home, root, sidM, userText("2026-09-22T10:00:00Z", "hi"), assistantText("2026-09-22T10:00:01Z", "hello"))
+	if res, err := Tail(context.Background(), TailOptions{Cwd: root, Name: "MAIN"}); err != nil || !res.OK || len(res.Turns) == 0 {
+		t.Fatalf("tail MAIN: err=%v %+v", err, res)
+	}
+	if _, err := Tail(context.Background(), TailOptions{Cwd: root, Name: "NOPE"}); err == nil {
+		t.Error("an unknown name must be refused")
+	}
+	if res, _ := Tail(context.Background(), TailOptions{Cwd: root, Name: "DUP"}); res.Error == nil || res.Error.Kind != "peer_ambiguous" {
+		t.Errorf("a shared name must be ambiguous: %+v", res)
+	}
+	if _, err := Tail(context.Background(), TailOptions{Cwd: root, Name: "MAIN", ToSession: sidM}); err == nil {
+		t.Error("a name and a session id together must be refused")
+	}
+}
