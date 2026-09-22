@@ -298,7 +298,7 @@ AskUserQuestion(
 
 Invoke `Skill(skill: "lets:orient", args: "caller=start")` - with no active task it degrades to branch + no-task + In flight + Next up + Project, which IS the PM triage surface. Keep it short - if the tracker has a deeper native dashboard, point the user at it in one line.
 
-**Reopen archived claims (merge-branch only).** `lets worktree release` (Orca's archive hook) leaves `.lets/cache/released-<task-id>` with one line `<id>|<branch>|<iso>|dirty=<bool>|unpushed=<bool>` when a worktree goes away while it still named a task. List those markers oldest first; an id outside the detect-task gate class (`[A-Za-z0-9._-]`, no leading `-`) -> delete that marker with a one-line note. Resolve each remaining id, one block per id:
+**Reopen archived and orphaned claims (merge-branch only).** `lets worktree release` (Orca's archive hook) leaves `.lets/cache/released-<task-id>` with one line `<id>|<branch>|<iso>|dirty=<bool>|unpushed=<bool>[|snapshot=<present|stale|missing>]` (older markers have no `snapshot=`) when a worktree goes away while it still named a task. List those markers oldest first; an id outside the detect-task gate class (`[A-Za-z0-9._-]`, no leading `-`) -> delete that marker with a one-line note. Resolve each remaining id, one block per id:
 
 ```lets-tracker
 show task=<id>   # returns {id,title,status}
@@ -307,16 +307,33 @@ show task=<id>   # returns {id,title,status}
 - `show` absent or a no-op (the none adapter): delete every marker, print one line `tracker keeps no task status - nothing to reopen`, ask nothing.
 - `show` FAILED at runtime: keep that id's marker and print one line naming the failure (retried at the next main start).
 - `closed`, or any status other than `in_progress`: delete the marker silently - nothing is claimed.
-- `in_progress`: a candidate. No candidates -> ask nothing. Otherwise ask, offering at most 3 ids (the rest keep their markers):
+- `in_progress`: a candidate.
+
+**Orphans - a worktree that vanished without a marker.** A worktree removed outside Orca's archive hook (gh >= 2.99 `gh pr merge --delete-branch` removes the head's linked worktree) leaves no marker at all. Find the claims that lost theirs:
+
+```lets-tracker
+list-by-status status=in_progress   # returns [{id,title,status}]
+```
+
+Keep the ids that pass the detect-task gate class and have no marker offered above, then ask Go about all of them in ONE call (single-quote each id):
+
+```bash
+command -v lets >/dev/null 2>&1 && lets worktree record --task '<id1>' --task '<id2>' --json
+```
+
+A row with `orphan=true` is a candidate too: in progress, a local trace (a task-state file or a local branch), no worktree holds it, no marker. It joins the same question and the same 3-id cap. An orphan has no marker to delete, so an unpicked one is offered again at the next main start - it stays visible until the task leaves `in_progress`. `list-by-status` absent or failed, `record` failed, or no `lets` binary: one line, no orphans.
+
+No candidates -> ask nothing. Otherwise ask, offering at most 3 ids (the rest keep their markers; orphans past the cap are offered next time):
 
 ```
 AskUserQuestion(
   questions=[{
-    question: "These tasks are still in progress but their worktree was archived{, with uncommitted or unpushed work when the marker says so}. A task with an open PR is in progress too - pick only abandoned work. Set which back to open?",
+    question: "These tasks are still in progress but their worktree was archived or vanished{, with uncommitted or unpushed work when the marker says so}. A task with an open PR is in progress too - pick only abandoned work. Set which back to open?",
     header: "Reopen",
     options: [
       { label: "<id>", description: "Branch {branch} archived{; dirty/unpushed}; picking sets the task back to open" },
-      { label: "Keep all", description: "Nothing changes; this list is not shown again" }
+      { label: "<orphan id>", description: "No worktree and no marker; record {record.state}; picking sets the task back to open" },
+      { label: "Keep all", description: "Nothing changes; archived markers are not shown again" }
     ],
     multiSelect: true
   }]
@@ -329,7 +346,7 @@ For each picked id (`Keep all` picks none):
 set-status task=<id> status=open
 ```
 
-`set-status` absent -> print the degradation line (nothing changed); failed -> say so loudly, never report it reopened. Then delete the markers of every offered id, picked or not.
+`set-status` absent -> print the degradation line (nothing changed); failed -> say so loudly, never report it reopened. Then delete the markers of every offered marker id, picked or not.
 
 
 ### Step M2: Set the stance
