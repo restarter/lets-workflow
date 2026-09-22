@@ -82,9 +82,13 @@ func newPeersTailCmd() *cobra.Command {
 	var o peerscmd.TailOptions
 	var repoIndex func() *int
 	cmd := &cobra.Command{
-		Use: "tail", Short: "Read a peer's recent output (redacted, capped)",
-		Args: cobra.NoArgs, SilenceUsage: true, SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		Use: "tail [<name>]", Short: "Read a peer's recent output (redacted, capped)",
+		Long: "Read a peer's recent output. Name the peer by its exact live name (positional), --to-session SID, or --to-terminal HANDLE.",
+		Args: cobra.MaximumNArgs(1), SilenceUsage: true, SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 1 {
+				o.Name = args[0]
+			}
 			o.RepoIndex = repoIndex()
 			res, err := peerscmd.Tail(cmd.Context(), o)
 			printPeers(cmd, true, res, nil)

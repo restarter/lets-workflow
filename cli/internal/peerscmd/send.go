@@ -272,6 +272,7 @@ func Tell(ctx context.Context, o TellOptions) (*TellResult, error) {
 	switch {
 	case peer == nil || peer.Send == "none":
 		res.Reason = "peer_unreachable"
+		res.State = "not_a_live_peer_of_this_repo"
 		if peer != nil {
 			res.State = peer.Reason
 		}

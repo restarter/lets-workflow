@@ -183,3 +183,11 @@ func RenderSweep(w io.Writer, res *SweepResult) {
 		fmt.Fprintln(w, "\nDry run - pass --apply to delete the merged branches.")
 	}
 }
+
+// RenderRecord writes one line per task.
+func RenderRecord(w io.Writer, res *RecordResult) {
+	RenderSteps(w, res.Envelope)
+	for _, t := range res.Tasks {
+		fmt.Fprintf(w, "%s: record=%s orphan=%t worktrees=%d marker=%t\n", t.Task, t.Record.State, t.Orphan, len(t.Worktrees), t.Marker)
+	}
+}
