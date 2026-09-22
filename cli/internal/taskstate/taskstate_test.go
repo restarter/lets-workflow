@@ -212,6 +212,30 @@ func TestRemove_TempsOnly(t *testing.T) {
 	}
 }
 
+func TestRemoveIfTask(t *testing.T) {
+	letsDir := t.TempDir()
+	_ = os.MkdirAll(filepath.Join(letsDir, "sessions"), 0o755)
+	p := Path(letsDir, "b")
+	if err := os.WriteFile(p, []byte("task: lets-a\nsession: x y\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := RemoveIfTask(letsDir, "b", "lets-b", time.Time{}); !errors.Is(err, ErrChanged) {
+		t.Fatalf("another task must be kept: %v", err)
+	}
+	if _, err := os.Stat(p); err != nil {
+		t.Fatal("kept file vanished")
+	}
+	if err := RemoveIfTask(letsDir, "b", "lets-a", time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(p); !os.IsNotExist(err) {
+		t.Error("the recorded task's file must be removed")
+	}
+	if err := RemoveIfTask(letsDir, "b", "lets-a", time.Time{}); err != nil {
+		t.Errorf("an absent file is not an error: %v", err)
+	}
+}
+
 func TestAtomicWrite_TempOutsideTaskNamespace(t *testing.T) {
 	d := t.TempDir()
 	write(t, d, "a", "task: lets-a\n")

@@ -286,6 +286,40 @@ func Remove(letsDir, slug string, deadline time.Time) error {
 		return err
 	}
 	defer unlock()
+	return removeLocked(letsDir, slug)
+}
+
+// ErrChanged: RemoveIfTask found a different task than the caller recorded.
+var ErrChanged = errors.New("task-state file changed since it was read")
+
+// RemoveIfTask deletes the file only if, under its lock, it still names task (""
+// = still names no task). A file already gone is not an error. The comparison is on
+// task: alone on purpose - a session: refresh for the same task (the SessionStart
+// hook) does not change what the caller's marker covers.
+func RemoveIfTask(letsDir, slug, task string, deadline time.Time) error {
+	if slug == "" {
+		return ErrEmptySlug
+	}
+	unlock, err := lock(letsDir, slug, deadline)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	data, err := os.ReadFile(Path(letsDir, slug))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if parse(string(data)).Task != task {
+		return ErrChanged
+	}
+	return removeLocked(letsDir, slug)
+}
+
+// removeLocked deletes the file and this slug's stranded temps; the caller holds the lock.
+func removeLocked(letsDir, slug string) error {
 	path := Path(letsDir, slug)
 	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err

@@ -145,11 +145,14 @@ func TestResult_SchemaContract(t *testing.T) {
 	t.Run("release_success", func(t *testing.T) {
 		r := &ReleaseResult{
 			Envelope: Envelope{SchemaVersion: SchemaVersion, OK: true, Subcommand: "release", ProjectRoot: "/p", Steps: []Step{}},
-			Released: &ReleasedInfo{Task: "lets-abc", Branch: "b", Marker: "/p/.lets/cache/released-lets-abc", Dirty: true, Unpushed: false},
+			Released: &ReleasedInfo{Task: "lets-abc", Branch: "b", Marker: "/p/.lets/cache/released-lets-abc", Dirty: true, Unpushed: false,
+				Snapshot: RecordMissing, Record: &SnapshotRecord{State: RecordMissing}, Kept: KeepChanged},
 		}
 		m := marshalToMap(t, r)
 		requireKeys(t, m, requiredCore...)
-		requireKeys(t, m["released"].(map[string]any), "task", "branch", "marker", "dirty", "unpushed")
+		rel := m["released"].(map[string]any)
+		requireKeys(t, rel, "task", "branch", "marker", "dirty", "unpushed", "snapshot", "record", "task_state_kept")
+		requireKeys(t, rel["record"].(map[string]any), "state")
 	})
 
 	t.Run("record_success", func(t *testing.T) {

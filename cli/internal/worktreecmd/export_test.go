@@ -33,3 +33,10 @@ func SetForEachRef(f func(context.Context, string) ([]byte, error)) (restore fun
 	forEachRef = f
 	return func() { forEachRef = old }
 }
+
+// SetBeforeTaskStateRemove runs f between release's marker and its removal; returns the restorer.
+func SetBeforeTaskStateRemove(f func()) (restore func()) {
+	old := beforeTaskStateRemove
+	beforeTaskStateRemove = f
+	return func() { beforeTaskStateRemove = old }
+}

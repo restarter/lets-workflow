@@ -195,12 +195,24 @@ type AdoptResult struct {
 
 // ReleasedInfo is what release recorded before the worktree goes away.
 type ReleasedInfo struct {
-	Task     string `json:"task,omitempty"`
-	Branch   string `json:"branch"`
-	Marker   string `json:"marker,omitempty"`
-	Dirty    bool   `json:"dirty"`
-	Unpushed bool   `json:"unpushed"`
+	Task     string          `json:"task,omitempty"`
+	Branch   string          `json:"branch"`
+	Marker   string          `json:"marker,omitempty"`
+	Dirty    bool            `json:"dirty"`
+	Unpushed bool            `json:"unpushed"`
+	Snapshot string          `json:"snapshot,omitempty"`        // present | stale | missing
+	Record   *SnapshotRecord `json:"record,omitempty"`          // the full answer behind Snapshot
+	Kept     string          `json:"task_state_kept,omitempty"` // why the task-state file was left in place (Keep*), "" when removed or absent
 }
+
+// Why release left a task-state file in place.
+const (
+	KeepUnreadable   = "unreadable"    // the read failed
+	KeepInvalidID    = "invalid_id"    // it names something that is not a task id
+	KeepNoMarker     = "no_marker"     // it names a task whose marker could not be written
+	KeepChanged      = "changed"       // a writer changed it between the read and the removal
+	KeepRemoveFailed = "remove_failed" // the removal itself failed
+)
 
 // ReleaseResult is the release-subcommand envelope.
 type ReleaseResult struct {
