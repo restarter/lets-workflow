@@ -54,7 +54,7 @@ type Refused struct {
 	Name     string `json:"name"`
 	Scope    string `json:"scope,omitempty"`
 	Session6 string `json:"session6,omitempty"`
-	Reason   string `json:"reason"` // target_in_other_repo | target_not_alive | target_unsendable
+	Reason   string `json:"reason"` // target_in_other_repo | target_not_alive | target_unsendable | bound_ambiguous
 	Detail   string `json:"detail,omitempty"`
 	Hint     string `json:"hint,omitempty"`
 }
@@ -162,18 +162,37 @@ func ResolveOrchestrator(ctx context.Context, rc *repoContext, o ResolveOptions)
 	}
 	if name, ok := readBinding(rc.root, branch); ok {
 		res.Source = "bound"
+		// Pass 1: the live holder of the name (the name is the address). Pass 2, only
+		// when nobody holds it live: a role file registered under it - a resumed
+		// session that came back under another registry name. Several there = refuse.
+		var byLive, byRegistered []roleFile
 		for _, f := range orchs {
 			if liveName(snap, f) == name {
-				if p, ref := addressable(ctx, rc, f); p != nil {
-					res.Target = p
-				} else {
-					res.Reason, res.Refused = ref.Reason, append(res.Refused, *ref)
-				}
-				return res
+				byLive = append(byLive, f)
+			} else if f.Name == name {
+				byRegistered = append(byRegistered, f)
 			}
 		}
-		res.Reason = "orchestrator_not_registered"
-		res.Refused = append(res.Refused, Refused{Name: name, Reason: "target_not_alive", Detail: "bound orchestrator has no role file"})
+		cands := byLive
+		if len(cands) == 0 {
+			cands = byRegistered
+		}
+		switch len(cands) {
+		case 0:
+			res.Reason = "orchestrator_not_registered"
+			res.Refused = append(res.Refused, Refused{Name: name, Reason: "target_not_alive", Detail: "bound orchestrator has no role file"})
+		case 1:
+			if p, ref := addressable(ctx, rc, cands[0]); p != nil {
+				res.Target = p
+			} else {
+				res.Reason, res.Refused = ref.Reason, append(res.Refused, *ref)
+			}
+		default:
+			res.Reason = "bound_ambiguous"
+			for _, f := range cands {
+				res.Refused = append(res.Refused, Refused{Name: liveName(snap, f), Scope: f.Scope, Session6: session6(f.Session), Reason: "bound_ambiguous", Detail: "registered as " + name, Hint: "/lets:start <id> --orc=\"<live name>\" rebinds this branch"})
+			}
+		}
 		return res
 	}
 	// An exhausted budget must degrade loudly, never silently fall through to the

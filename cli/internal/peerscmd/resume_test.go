@@ -117,3 +117,32 @@ func TestResume_CwdOutsideRepo(t *testing.T) {
 		t.Errorf("foreign cwd: resolution %+v, tell %+v", r, tr)
 	}
 }
+
+// The old name was taken by another orchestrator: the live holder is the address.
+func TestResume_OldNameTakenGoesToLiveHolder(t *testing.T) {
+	root := repoWithLets(t, "")
+	plantRole(t, root, sidM, "role: orchestrator\nname: MAIN\npid: 1\nset: x\n") // A, resumed as MAIN-2
+	plantRole(t, root, sidN, "role: orchestrator\nname: MAIN\npid: 8\nset: x\n") // B, took MAIN
+	withBranch(t, "feature/x")
+	bindBranch(t, root, "feature/x", "MAIN")
+	claudeHome(t, []regRow{{7, sidM, "MAIN-2", root}, {8, sidN, "MAIN", root}, {3, sidW, "W", root}})
+	if r := resolveIn(t, root, sidW); r.Target == nil || r.Target.Session != sidN {
+		t.Errorf("the live holder of the bound name is the target: %+v", r)
+	}
+}
+
+// Nobody holds the name live and two role files registered it: refuse, never pick.
+// agree() does not apply: both sessions are reachable by id, so tell succeeds - the
+// refusal is about WHICH session the binding means, which only resolution can answer.
+func TestResume_RegisteredNameAmbiguousRefuses(t *testing.T) {
+	root := repoWithLets(t, "")
+	plantRole(t, root, sidM, "role: orchestrator\nname: MAIN\npid: 1\nset: x\n")
+	plantRole(t, root, sidN, "role: orchestrator\nname: MAIN\npid: 2\nset: x\n")
+	withBranch(t, "feature/x")
+	bindBranch(t, root, "feature/x", "MAIN")
+	claudeHome(t, []regRow{{7, sidM, "MAIN-2", root}, {8, sidN, "MAIN-3", root}, {3, sidW, "W", root}})
+	r := resolveIn(t, root, sidW)
+	if r.Target != nil || r.Reason != "bound_ambiguous" || len(r.Refused) != 2 {
+		t.Errorf("an ambiguous fallback must refuse with both candidates: %+v", r)
+	}
+}
