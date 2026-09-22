@@ -33,9 +33,10 @@ AskUserQuestion(
     question: "Which model should the implementers in this run use?",
     header: "Model",
     options: [
-      { label: "Opus (Recommended)", description: "Strongest; the default for plan implementation" },
+      { label: "Opus (Recommended)", description: "Strong at a mid price; the default for plan implementation" },
+      { label: "Fable", description: "Most capable, about twice Opus's price; for the hardest chunks" },
       { label: "Sonnet", description: "Cheaper and faster; good for mechanical chunks" },
-      { label: "Fable", description: "Cheapest; for small, well-specified edits" }
+      { label: "Haiku", description: "Cheapest; for small, well-specified edits" }
     ],
     multiSelect: false
   }]

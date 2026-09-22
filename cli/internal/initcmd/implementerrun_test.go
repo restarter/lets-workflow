@@ -74,6 +74,9 @@ func delegatedContractProblems(f map[string]string) []string {
 	if !strings.Contains(split, "depends on something learned during the run") {
 		add("Step 4.6 must refuse a plan in which a task's execution depends on something learned during the run")
 	}
+	if !strings.Contains(split, "print it as your own message text before the Start gate") {
+		add("Step 4.6 must print the split before the Start gate - Start approves it")
+	}
 	delegated := sectionSpan(exec, "## Step 5-D: Delegated run (Implementers)")
 	if delegated == "" {
 		add("execute.md must carry Step 5-D")
@@ -86,7 +89,7 @@ func delegatedContractProblems(f map[string]string) []string {
 		if n := strings.Count(delegated, `header: "Review"`); n != 3 {
 			add(fmt.Sprintf("Step 5-D must ask exactly 3 Review gates (one per status), found %d", n))
 		}
-		for _, need := range []string{`Skill(skill: "lets:implementer-run"`, "TaskStop(", "git ls-files --others --exclude-standard", "--untracked-files=all", "git diff HEAD", "git diff --cached --name-only", `args: "approved=review-accept"`, "patch_sha", "**Render review**", "| `pending` |", "| `review` / `paused` |", "| `committing` |", "AMENDMENT to chunk"} {
+		for _, need := range []string{`Skill(skill: "lets:implementer-run"`, "TaskStop(", "git ls-files --others --exclude-standard", "--untracked-files=all", "git diff HEAD", "git diff --cached --name-only", `args: "approved=review-accept"`, "patch_sha", "**Render review**", "**What is a report.**", "malformed-report", "Write a report with the Write tool", "| `pending` |", "| `review` / `paused` |", "| `committing` |", "AMENDMENT to chunk"} {
 			if !strings.Contains(delegated, need) {
 				add("Step 5-D must contain " + need)
 			}
@@ -102,6 +105,9 @@ func delegatedContractProblems(f map[string]string) []string {
 	}
 	if !strings.Contains(status, "A failing Verify is never `complete`") {
 		add("implementer.md must forbid complete with a failing Verify")
+	}
+	if !strings.Contains(agent, "NEVER run a command in the background") {
+		add("implementer.md must forbid background commands - an idle subagent waiting on its own background task hangs the run")
 	}
 	for _, old := range []string{"parallel team", "spawned exclusively", "TaskUpdate"} {
 		if strings.Contains(agent, old) {

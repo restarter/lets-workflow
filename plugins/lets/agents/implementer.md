@@ -44,7 +44,7 @@ Exactly one status per report:
 | `deviation-stopped` | one of the deviation cases above - including a Verify that ran but did not match |
 | `blocked` | the work could not proceed for a reason that is NOT a plan deviation: a command that cannot run, a missing tool, a permission error, a tree that was not clean at the start, a `MODE:` you do not support |
 
-A failing Verify is never `complete`.
+A failing Verify is never `complete`. No other value exists - not `amended`, not `done`, not `partial`. A report without one of these three on its `**Status:**` line is not a report: the reviewer treats it as malformed and blocks the chunk.
 
 ## Constraints
 
@@ -52,6 +52,8 @@ A failing Verify is never `complete`.
 - NEVER commit, stage, stash, reset, or switch branches in `solo` mode.
 - NEVER push, open or merge a pull request.
 - NEVER touch the task tracker.
+- NEVER run a command in the background (`run_in_background`, `&`, `nohup`) and never wait on one - a subagent that goes idle waiting for its own background task is not woken again, and the run hangs. Every command runs in the foreground and finishes before you continue.
+- A step the harness or a tool refuses (a blocked command, a denied permission) stops the chunk: report `blocked` naming the refusal. Never work around it, and never go on with the rest of the chunk.
 - Stay inside the project root.
 
 ### Bash Security
