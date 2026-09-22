@@ -501,7 +501,7 @@ Every response ends with exactly ONE footer - never mix two. Pick the type by wh
 | `/lets:backlog` | Planning | Backlog review (multi-agent; `--workflow` = off-context) + `--fast` quick no-agent pulse + interactive cleanup triage |
 | `/lets:plan` | Planning | Structured planning with agents - architecture + implementation plan (`--fast` = orchestrator-only, skips explorer/architect/expert subagents; `--idea` = a concept document, no code exploration, never executed) |
 | `/lets:plan-workflow` | Planning | **PREVIEW** - autonomous planning via a Dynamic Workflow (goal + rubric up front, off-context, approve at end); folds into native `/lets:plan` later (lets-jsw00); `--fast` = lean budget (~7 agents, still off-context, heavy review pass skipped, quick plan-check kept) - distinct from `/lets:plan --fast` (orchestrator-only, no subagents) |
-| `/lets:execute` | Planning | Execute plan from /lets:plan via native plan mode |
+| `/lets:execute` | Planning | Execute plan from /lets:plan - inline in native plan mode, or delegated to named implementer agents you review and correct (`--implementers`) |
 | `/lets:status` | Utility | Read-only orient snapshot - where you are, what's in flight, what's next (tracker-universal) |
 | `/lets:worktree` | Utility | Create/manage interactive worktrees for parallel work |
 | `/lets:orc` | Utility | Talk to this chat's orchestrator or a named peer session - `ask` / `ping` / `read` / `tell` / `who`; the only sender of peer messages |
