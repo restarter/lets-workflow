@@ -333,6 +333,111 @@ AskUserQuestion(
 
 The plan file provides the roadmap; explicit user approval provides the gates.
 
+## Step 5-D: Delegated run (Implementers)
+
+Native plan mode is NOT entered: it gates this session's own edits, and in a delegated run this session writes no code. The code-write approval is the **Start** gate below; nothing is spawned before it. Delegated runs are interactive only (Step 4.5 refuses `--auto`).
+
+`{TASK_ID}` is the Step 1 task. `{RUN}` is the first 6 characters of `$CLAUDE_CODE_SESSION_ID` at Start - fixed for the run, stored in the run record, never regenerated on recovery.
+
+### 5-D.1 Preconditions
+
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+ls "$LETS_PROJECT_ROOT/.lets/cache/delegated-run-{TASK_ID}.json" 2>/dev/null
+git status --porcelain
+```
+
+A run record exists -> **5-D.7 Recovery** first.
+
+The tree must be clean - otherwise an implementer's diff cannot be told apart from what was already there:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "The working tree has uncommitted changes, so an implementer's diff could not be told apart from them. What now?",
+    header: "Dirty tree",
+    options: [
+      { label: "Commit them first (Recommended)", description: "Run /lets:commit for the existing changes, then check again" },
+      { label: "Run inline instead", description: "Execute this plan here in native plan mode (Step 5)" },
+      { label: "Cancel", description: "Stop; nothing is spawned" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+### 5-D.2 Start - the one code-write approval
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Hand {N} chunk(s) to implementer agents, one at a time in this tree? {M} caller task(s) run here. Nothing is committed until you accept each diff.",
+    header: "Start work",
+    options: [
+      { label: "Start (Recommended)", description: "Pick the model, then spawn the first implementer" },
+      { label: "Run inline instead", description: "Execute this plan here in native plan mode (Step 5)" },
+      { label: "Cancel", description: "Stop; nothing is spawned and nothing is edited" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+Only **Start** continues. The model is chosen by the first spawn (the `implementer-run` panel), after this approval - never before it.
+
+### 5-D.3 Run record
+
+Before the first spawn, write `.lets/cache/delegated-run-{TASK_ID}.json` with the Write tool (`.lets/` is shared by every worktree, so the name carries the task id):
+
+```json
+{
+  "task": "{TASK_ID}",
+  "plan": "{plan path from Step 2}",
+  "run": "{RUN}",
+  "model": null,
+  "caller": [ { "task": 0, "state": "pending" } ],
+  "chunks": [
+    { "id": "c1", "tasks": [1, 2], "group": "A", "allowlist": ["path/a", "path/b"], "agent": "impl-{RUN}-c1", "generation": 1, "base": null, "phase": "pending", "round": 0, "report": null, "status": null, "reason": null, "received": null, "commit": null }
+  ]
+}
+```
+
+`phase` moves `pending` -> `running` -> `review` -> (`correcting` -> `running` -> `review`)* -> `committing` -> `accepted`. A Stop at a review gate records `paused` (it reopens as `review`); a Stop while an agent works goes through `stopping` to `blocked`; `blocked` always carries a `reason` - `stopped`, `re-plan`, `unreachable` or `unrecognized-commits`. Caller tasks move `pending` -> `running` -> `done`. `report` is the path of the latest round's saved report, `status` and `reason` are read from it, `received` counts reports in arrival order across the run, and `generation` is 1 for the first agent of a chunk and grows with each replacement. Rewrite the record at every transition BEFORE acting on it, so an interrupted session always finds the state it was in.
+
+### 5-D.4 Dispatch - in plan order
+
+Walk the Step 4.6 split:
+
+- **Caller task** -> record its `state: running`, run it here, now, exactly as the plan writes it, then record `state: done`.
+- **Chunk** -> record `base` = `git rev-parse HEAD` and `phase: running`, write its brief, spawn it, and end the turn - the report arrives as a teammate `idle_notification` whose `result` holds it (5-D.5).
+
+The brief, `.lets/cache/chunk-{TASK_ID}-{RUN}-{chunk}.md`:
+
+```
+MODE: solo
+TASK: {TASK_ID}   PLAN: {plan path}   RUN: {RUN}   CHUNK: {chunk} (group {group})
+GOAL: {the plan's Goal line}
+APPROACH: {the plan's Approach line}
+KEY DECISIONS (all bind you):
+{the plan's Key Decisions section, verbatim}
+OUT OF SCOPE:
+{the plan's Non-Goals section, verbatim}
+YOU MAY WRITE ONLY:
+{the chunk's allowlist, one path per line}
+CORRECTIONS: your reviewer may send corrections for this chunk. Each arrives as an AMENDMENT to this brief and changes what it names, within YOU MAY WRITE ONLY; one that needs any other file is a deviation.
+BASE: {base sha}
+TASKS:
+{the chunk's ### Task sections verbatim, each **Commit:** block removed - this session commits after review}
+PROJECT RULES: read the repository's CLAUDE.md before editing.
+REPORT: in the shape your agent definition specifies.
+```
+
+Spawn: `Skill(skill: "lets:implementer-run", args: "op=spawn name={agent} chunk-file=.lets/cache/chunk-{TASK_ID}-{RUN}-{chunk}.md")`, adding ` model=<m>` once the record holds a model. After the first spawn of the run, write the returned model into the record.
+
+One chunk is live at a time.
+
+**One writer.** While a chunk is `running` or `correcting`, this session writes no code. A request to edit meanwhile -> say that `{agent}` (the record's current agent for the chunk) is still working, and offer to wait for its report or to stop it (5-D.6).
+
 ## Step 6: Record Completion
 
 After implementation is complete (all plan tasks done). **Under `--auto`:** write the `done` pipeline-state marker (the Pipeline-state marker helper, phase `done`) so the statusline / a watcher sees the run finished.
