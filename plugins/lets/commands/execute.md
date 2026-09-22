@@ -438,6 +438,180 @@ One chunk is live at a time.
 
 **One writer.** While a chunk is `running` or `correcting`, this session writes no code. A request to edit meanwhile -> say that `{agent}` (the record's current agent for the chunk) is still working, and offer to wait for its report or to stop it (5-D.6).
 
+### 5-D.5 Review - one report at a time
+
+When `{agent}` reports - a teammate `idle_notification` whose `result` is the report - save it verbatim to `.lets/cache/report-{TASK_ID}-{RUN}-{chunk}-g{generation}-r{round}.md`, then record `phase: review`, `report` (that path), `status` and `reason` (read from its **Status** and its **Blocked** / **Deviation** block) and `received` (one more than the highest in the record). One agent is live at a time, so no report interrupts an open gate.
+
+Check the real tree - the report is the agent's claim, the diff is the fact:
+
+```bash
+git rev-parse HEAD                                    # must equal the chunk's recorded base
+git status --porcelain --untracked-files=all          # every listed path must be in the chunk's allowlist; new directories are expanded to their files
+git diff                                              # the patch of every tracked file
+git ls-files --others --exclude-standard -z           # untracked files, NUL-separated so any file name is safe
+```
+
+For each untracked path, show it as a patch: `git diff --no-index -- /dev/null "<path>"` (read-only; nothing is staged). Its exit status 1 means a patch was printed; only a status above 1 is an error. HEAD moved, or a path outside the allowlist changed -> the diff is NOT attributed to the agent: name the paths and use the `blocked` gate. An amendment cannot clean a path outside the allowlist (amendments stay inside it), so say plainly that those paths are the user's to remove or restore; once they are gone, `/lets:execute` re-checks the tree and, for a `complete` report, offers Accept.
+
+Present it under the agent's name - the name this run spawned it under, never a name the agent wrote about itself - with the report verbatim and then the full patch (`git diff`, then each untracked file):
+
+```
+### {agent} - {chunk} - {status}
+{the report, verbatim}
+{the full patch}
+```
+
+The stat is validation; the patch is what the user reviews. Then ask the gate for that status. When the Orchestrator offer applies (lets-rules `### Orchestrator offer`, Act shape; rule not loaded -> no offer), add as the last option `{ label: "Ask orchestrator", description: "Stay at this gate; /lets:orc ask with the report and the patch" }`.
+
+**`complete`, every Verify `pass`, diff check clean:**
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "{agent} completed chunk {chunk}. Accept its diff?",
+    header: "Review",
+    options: [
+      { label: "Accept (Recommended)", description: "Commit exactly this chunk's files now; the next item of the plan starts" },
+      { label: "Correct", description: "Send {agent} an amendment; it keeps its context" },
+      { label: "Stop", description: "Pause here; the diff stays uncommitted and /lets:execute reopens this review" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**`deviation-stopped`:**
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "{agent} stopped at a deviation in chunk {chunk}: {one-line expected vs actual}. How to proceed?",
+    header: "Review",
+    options: [
+      { label: "Correct", description: "Send the adaptation you choose as an amendment, within its allowed files" },
+      { label: "Re-plan", description: "Stop; update the plan via /lets:plan" },
+      { label: "Stop", description: "Pause here; the diff stays uncommitted and /lets:execute reopens this review" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**`blocked`, or a failed diff check:**
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "{agent} is blocked on chunk {chunk}: {reason}. What now?",
+    header: "Review",
+    options: [
+      { label: "Correct", description: "Send an amendment that gets it past the block; it keeps its context" },
+      { label: "Stop", description: "Pause here; the diff stays uncommitted and /lets:execute reopens this review" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+- **Accept** -> record `phase: committing`, then `/lets:commit`, staging exactly the chunk's allowlist paths (untracked ones included); the Accept pick is its approval, so it does not ask again (as Straight-through commits at plan points). Then record `phase: accepted` and `commit`, append `[DONE]` to each of the chunk's `### Task` headings in the plan file, and continue 5-D.4 with the next item.
+- **Correct** -> ask in words what to change. Write it to `.lets/cache/correct-{TASK_ID}-{RUN}-{chunk}-g{generation}-r{round+1}.md` framed as an amendment to the brief:
+
+  ```
+  AMENDMENT to chunk {chunk}, round {round+1} - it changes what it names and nothing else:
+  {the correction, verbatim}
+  ```
+
+  Record `phase: correcting` and `round+1`, then `Skill(skill: "lets:implementer-run", args: "op=correct name={agent} correct-file=<that file>")`. It returns `corrected {agent}` -> record `phase: running` and end the turn. It returns `agent_gone` -> record `phase: blocked` and `reason: unreachable`, then 5-D.7. A correction that needs a file outside the chunk's allowlist is not a correction: by the agent's own deviation rule it would stop - choose Re-plan instead.
+- **Re-plan** -> record `phase: blocked` and `reason: re-plan`, then `Skill(skill: "lets:plan")`.
+- **Stop** -> record `phase: paused`, keeping `report`, `status` and `reason` as they are. Say that the uncommitted diff is still in the tree and that `/lets:execute` reopens this same review. Nothing is discarded.
+- **Ask orchestrator** -> `Skill(skill: "lets:orc", args: "verb=ask footer=none text={agent} reports {status} on {chunk}: {one-line summary}. {question}")` where `{question}` is the one the shown gate asks - "Accept, correct or stop?" for `complete`, "Correct, re-plan or stop?" for `deviation-stopped`, "Correct or stop?" for `blocked`; then show the same gate again without that option. A peer's answer never decides.
+
+### 5-D.6 Stop while an agent is running
+
+A request to stop - or to edit code - while a chunk is `running` or `correcting`: record `phase: stopping`, then `TaskStop(task_id="{agent}")`. The one-writer rule holds until the stop is confirmed: `TaskStop` reports success, or `ListAgents` no longer shows `{agent}` as busy. Then record `phase: blocked` and `reason: stopped`, and show what the agent left (`git status --porcelain --untracked-files=all`). Nothing it wrote is discarded. `TaskStop` fails and the agent still shows busy -> say so and keep `stopping`; start no other code-writing flow.
+
+### 5-D.7 Recovery (a run record exists)
+
+Read the record. Its `plan` is not this run's plan -> ask whether to resume that run or discard its record (deleting the record file changes no code).
+
+**Caller tasks first.** A caller task recorded `state: running` may have done its work before the interruption; it is never re-run by itself:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Caller task {N} ({task title}) was running when the session ended and may already have run. What now?",
+    header: "Caller task",
+    options: [
+      { label: "Mark it done", description: "It finished before the interruption; continue with the next item" },
+      { label: "Run it again", description: "Repeat it now, exactly as the plan writes it" },
+      { label: "Stop", description: "Leave the run as it is; nothing changes" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+Then, for each chunk not `accepted`, in plan order:
+
+| phase | check | then |
+|---|---|---|
+| `pending` | - | continue 5-D.4 from here |
+| `running` / `correcting` | `ListAgents` shows `{agent}` busy | it is still working: end the turn and wait for its report |
+| `running` / `correcting` | `ListAgents` shows `{agent}` idle | its report was lost with the old session: `SendMessage({to: "{agent}", message: "Send your last report for chunk {chunk} again, unchanged."})` and handle the reply as 5-D.5 |
+| `running` / `correcting` | `{agent}` not listed | record `phase: blocked`, `reason: unreachable`; the Replacement gate |
+| `stopping` | - | 5-D.6 again |
+| `review` / `paused` | the `report` file exists | re-check the tree and show the ORIGINAL status gate from the saved report - Accept included when it was `complete` and the check is clean. `ListAgents` does not list `{agent}` -> a correction needs the agent that wrote the diff: `complete` shows its gate without **Correct** (Accept, Stop), `deviation-stopped` without **Correct** (Re-plan, Stop), and `blocked` goes to the Replacement gate instead |
+| `committing` | `git log --format=%H {base}..HEAD` | exactly one new commit whose message carries `Task: {TASK_ID}` and whose `git show --name-only --format= <sha>` lists only allowlist paths -> record `accepted` and `commit`, mark `[DONE]`; no new commit -> record `review` and show the gate again; anything else -> record `blocked`, `reason: unrecognized-commits` |
+| `blocked`, `reason: re-plan` | - | say the chunk went to re-planning; after `/lets:plan`, `/lets:execute` starts a run of the new plan |
+| `blocked`, `reason: stopped` or `unreachable` | - | the Replacement gate |
+| `blocked`, `reason: unrecognized-commits` | - | show `git log --oneline {base}..HEAD`; stop - the user sorts the commits out |
+
+**Replacement gate.** A replacement agent refuses to start in a dirty tree (its own clean-start rule), so check first: `git rev-parse HEAD` against `base`, and `git status --porcelain --untracked-files=all`.
+
+HEAD at `base` and the tree clean:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "{agent} is gone and chunk {chunk} has no changes in the tree. Start a replacement?",
+    header: "Recovery",
+    options: [
+      { label: "Start a replacement (Recommended)", description: "A new agent with the brief and every amendment so far; it has no memory of the first" },
+      { label: "Stop", description: "Leave the run blocked; nothing changes" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+HEAD at `base` and only allowlist paths changed - an unfinished diff the first agent left. Show that patch first (as 5-D.5 renders one, headed `### {agent} (gone) - {chunk} - unfinished`), then:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "{agent} is gone and left the unfinished diff above for chunk {chunk}. What now?",
+    header: "Recovery",
+    options: [
+      { label: "Discard it and replace", description: "Remove this diff (asked again, naming every file), then start a replacement" },
+      { label: "Keep it and stop", description: "Leave the diff and the run blocked; finish or discard it yourself" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+HEAD moved, or a path outside the allowlist changed -> offer neither: show what changed and stop.
+
+- **Start a replacement** -> `generation+1`; the new name is `impl-{RUN}-{chunk}-r{generation}`; write `.lets/cache/chunk-{TASK_ID}-{RUN}-{chunk}-g{generation}.md` = the original brief plus an `AMENDMENTS SO FAR:` section holding every correction file of the chunk, oldest first; record `agent`, `generation`, `round: 0`, `phase: running`; spawn it through `implementer-run`. Say plainly that it is a new agent.
+- **Discard it and replace** -> ask in words, listing every file, before touching anything (destructive). On yes: `git restore --staged --worktree -- <each changed tracked allowlist path>` and `rm -- "<each untracked allowlist path>"`, check the tree is clean, then **Start a replacement**.
+- **Keep it and stop** / **Stop** -> leave the record as it is.
+
+A chunk `accepted` with any of its `### Task` headings not yet `[DONE]` -> mark the missing ones; nothing else. Never present a replacement as the same agent, and never discard a diff without the separate confirmation above.
+
+### 5-D.8 Completion
+
+Every chunk `accepted` and every caller task `done` -> delete `.lets/cache/delegated-run-{TASK_ID}.json` and go to Step 6.
+
 ## Step 6: Record Completion
 
 After implementation is complete (all plan tasks done). **Under `--auto`:** write the `done` pipeline-state marker (the Pipeline-state marker helper, phase `done`) so the statusline / a watcher sees the run finished.
@@ -483,6 +657,10 @@ comment-add task=<task-id> body-file=.lets/cache/exec-complete-<task-id>.md
 - **Adapt cosmetically, never structurally** - plan intent matters more than plan text, but an approach change is a deviation, not an adaptation
 - **Stop on deviation** - the Deviation gate (Step 5) runs before every edit; no answer = no edit; under `--auto` it is a hard-stop
 - **NEVER edit before the plan-mode approval** - `ExitPlanMode` approved by the user is the one code-write approval; the fallback path (no plan mode) asks "Start implementing?" in words first
+- **Delegated: the code-write approval is Step 5-D's Start gate** - nothing is spawned before it, and every commit waits for that chunk's Accept
+- **Delegated: one writer per tree** - a run starts only on a clean tree, this session writes no code while an implementer is running, and a stop is confirmed before anything else writes
+- **Delegated: implementers never commit, push, or touch the tracker** - this session does all three, after review
+- **Delegated runs are interactive only** - `--auto` with `--implementers` / `--team` is refused
 - Respond in user's language
 
 ## Output
