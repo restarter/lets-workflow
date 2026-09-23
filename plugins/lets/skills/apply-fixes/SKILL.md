@@ -14,7 +14,9 @@ The user typing `--fix` IS the write authorization for this run - the same stand
 
 ## Input
 
-Args: `source=<check|review|handoff> mode=<local|staged|last-commit|branch|commits|range|pr|file|plan> [base=<sha>] [range=<a>..<b>] [path=<path>] [scope-file=<path>]` - `base` for `branch`, `range` for `commits` / `range` (pinned shas, never a symbolic `HEAD`), `path` for `file` / `plan`, `scope-file` for `pr`: the caller writes the changed files of the PR diff it reviewed, one per line, to `.lets/cache/fix-scope-<session6>.txt` (6 = first chars of `$CLAUDE_CODE_SESSION_ID`) - a local merge-base can be stale and widen the list.
+Args: `source=<check|review|handoff> mode=<local|staged|last-commit|branch|commits|range|pr|file|plan> [head=<sha>] [base=<sha>] [range=<a>..<b>] [path=<path>]` - `head` the commit the review saw (omitted -> the current `HEAD`), `base` for `branch`, `range` for `commits` / `range` (pinned shas, never a symbolic `HEAD`), `path` for `file` / `plan`.
+
+**PR scope** (`mode=pr`) - the caller lists, in this conversation, the changed files of the PR diff it reviewed, taken from that diff itself: never a new fetch (the PR may have moved) and never a local merge-base (it may be stale). No file is written for it.
 
 **The findings table** is already in this conversation, built by the caller - one row per reported finding:
 
@@ -32,19 +34,18 @@ Args: `source=<check|review|handoff> mode=<local|staged|last-commit|branch|commi
 The files the review covered. Substitute the args single-quoted (`'\''` for a quote inside):
 
 ```bash
-MODE='<mode>'; BASE='<base>'; RANGE='<range>'; P='<path>'; SF='<scope-file>'
+MODE='<mode>'; H='<head, or HEAD when omitted>'; BASE='<base>'; RANGE='<range>'; P='<path>'
 case "$MODE" in
   local)         git diff --name-only ;;
   staged)        git diff --cached --name-only ;;
-  last-commit)   git diff --name-only HEAD~1 HEAD ;;
-  branch)        git diff --name-only "$BASE"...HEAD ;;
-  pr)            cat "$SF" ;;
+  last-commit)   git diff --name-only "$H"~1 "$H" ;;
+  branch)        git diff --name-only "$BASE"..."$H" ;;
   commits|range) git diff --name-only "$RANGE" ;;
   file|plan)     printf '%s\n' "$P" ;;
 esac | sort -u
 ```
 
-Each mode lists exactly what the callers review for it (`--local` is `git diff` - unstaged only), never more: a wider list would let Gate 2 pass an edit to a file no reviewer read. Empty output -> `--fix: no scope - nothing applied`, stop.
+`pr` runs no command - the Scope list is the caller's PR list. Each mode lists exactly what the callers review for it (`--local` is `git diff` - unstaged only), never more: a wider list would let Gate 2 pass an edit to a file no reviewer read. An empty list -> `--fix: no scope - nothing applied`, stop.
 
 ## Gate 1: verified
 

@@ -40,6 +40,9 @@ func fixContractProblems(f map[string]string) []string {
 	if !strings.Contains(sectionSpan(skill, "## Input"), "**Open items**") {
 		add("apply-fixes must turn every open item of the source into a row that stops the run")
 	}
+	if !strings.Contains(skill, "No file is written for it.") || strings.Contains(skill, ".lets/cache/fix-scope-") {
+		add("apply-fixes PR scope must come from the reviewed diff in the conversation, never a scratch file")
+	}
 	if !strings.Contains(f["handoff"], "--fix skipped - HEAD moved while the agent worked") {
 		add("handoff.md must skip --fix when HEAD moved while the agent worked")
 	}
