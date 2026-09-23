@@ -5,6 +5,8 @@ package peerscmd
 import (
 	"context"
 	"sort"
+	"strings"
+	"time"
 
 	"github.com/restarter/lets-workflow/cli/internal/ccregistry"
 	"github.com/restarter/lets-workflow/cli/internal/fsutil"
@@ -176,4 +178,75 @@ func siblingOrchestrator(ctx context.Context, rc *repoContext, name string, loca
 	out := *peer
 	out.Role, out.Scope, out.RepoIndex = "orchestrator", c.f.Scope, &idx
 	return &out, nil, true
+}
+
+// siblingPeers runs a read-only Who over each Orca repo (skip: a main checkout to
+// leave out, "" = none) and tags every row with its repo_index and repo name. A repo
+// that cannot be read degrades by name; a spent budget stops the walk and says so.
+func siblingPeers(ctx context.Context, o WhoOptions, skip string) (repos []orcacmd.RepoInfo, peers []Peer, last []LastOrchestrator, degraded []Degraded) {
+	info, f := listOrcaRepos(ctx)
+	if f != nil {
+		return nil, nil, nil, []Degraded{{Source: "orca", Reason: nonEmpty(info.Reason, f.Reason), Detail: f.Detail}}
+	}
+	for _, name := range info.Dropped {
+		degraded = append(degraded, Degraded{Source: "orca", Reason: "repo_not_a_checkout", Detail: name})
+	}
+	for _, r := range info.Repos {
+		if skip == "" || !fsutil.SameDir(r.Path, skip) {
+			repos = append(repos, r)
+		}
+	}
+	for _, r := range repos {
+		if ctx.Err() != nil {
+			degraded = append(degraded, Degraded{Source: "context", Reason: "deadline_exceeded", Detail: "sibling repos from " + r.Name})
+			break
+		}
+		// The hub's walk has no deadline and gives each repo its own budget; a walk
+		// inside a budgeted Who gets what is left of it.
+		timeout := o.Timeout
+		if d, ok := ctx.Deadline(); ok {
+			timeout = max(time.Until(d), 50*time.Millisecond)
+		}
+		idx, name := r.Index, r.Name
+		sub, err := Who(ctx, WhoOptions{Cwd: o.Cwd, Repo: r.Path, Role: o.Role, ProbeOrca: o.ProbeOrca, Timeout: timeout})
+		if err != nil {
+			degraded = append(degraded, Degraded{Source: "repo", Reason: "repo_invalid", Detail: name})
+			continue
+		}
+		for _, p := range sub.Peers {
+			p.RepoIndex, p.Repo = &idx, name
+			peers = append(peers, p)
+		}
+		for _, lo := range sub.LastOrchestrators {
+			lo.RepoIndex = &idx
+			last = append(last, lo)
+		}
+		for _, d := range sub.Degraded {
+			d.Detail = strings.TrimSpace(name + " " + d.Detail)
+			degraded = append(degraded, d)
+		}
+	}
+	return repos, peers, last, degraded
+}
+
+// siblingWorkers is the orchestrator side of the bound-sibling carve-out: the workers
+// in Orca-listed sibling repos whose branch binding names this orchestrator. A sibling
+// repo with its own live orchestrator of that name keeps its workers - they resolve
+// to it, not here (the worker side resolves in-repo first).
+func siblingWorkers(ctx context.Context, rc *repoContext, o WhoOptions) ([]Peer, []Degraded) {
+	// No Role/Orc filter: the sibling's own orchestrator row decides whose workers they are.
+	_, rows, _, degraded := siblingPeers(ctx, WhoOptions{Cwd: o.Cwd, ProbeOrca: o.ProbeOrca, Timeout: o.Timeout}, rc.mainRoot)
+	claimed := map[int]bool{}
+	for _, p := range rows {
+		if p.Role == "orchestrator" && p.Name == o.Orc && p.RepoIndex != nil {
+			claimed[*p.RepoIndex] = true
+		}
+	}
+	var out []Peer
+	for _, p := range rows {
+		if p.Role == "worker" && p.Orc == o.Orc && p.RepoIndex != nil && !claimed[*p.RepoIndex] && p.Session != o.ExcludeSession {
+			out = append(out, p)
+		}
+	}
+	return out, degraded
 }
