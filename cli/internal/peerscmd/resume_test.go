@@ -12,6 +12,13 @@ import (
 // tellFrom frames and sends from `from` to `to` in root, the way the orc skill does.
 func tellFrom(t *testing.T, root, from, to string) *TellResult {
 	t.Helper()
+	return tellFromIdx(t, root, from, to, nil)
+}
+
+// tellFromIdx is tellFrom for a target Go returned with a repo_index: framed and
+// handed off in root, delivered with --repo-index like the orc skill.
+func tellFromIdx(t *testing.T, root, from, to string, idx *int) *TellResult {
+	t.Helper()
 	fr, err := Frame(context.Background(), FrameOptions{Cwd: root, Session: from, ToSession: to, Kind: "tell"})
 	if err != nil {
 		t.Fatalf("Frame: %v", err)
@@ -19,7 +26,7 @@ func tellFrom(t *testing.T, root, from, to string) *TellResult {
 	if err := os.WriteFile(fr.HandoffPath, []byte(fr.Header+"\nhello\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	res, _ := Tell(context.Background(), TellOptions{Cwd: root, ToSession: to, MsgID: fr.MsgID})
+	res, _ := Tell(context.Background(), TellOptions{Cwd: root, ToSession: to, MsgID: fr.MsgID, RepoIndex: idx})
 	return res
 }
 
@@ -113,7 +120,7 @@ func TestResume_CwdOutsideRepo(t *testing.T) {
 	r := resolveIn(t, root, sidW)
 	tr := tellFrom(t, root, sidW, sidM)
 	agree(t, r, tr)
-	if r.Target != nil || r.Refused[0].Reason != "target_in_other_repo" || tr.State != "not_a_live_peer_of_this_repo" {
+	if r.Target != nil || r.Refused[0].Reason != "target_in_other_repo" || r.Refused[0].Detail != "orca_not_selected" || tr.State != "not_a_live_peer_of_this_repo" {
 		t.Errorf("foreign cwd: resolution %+v, tell %+v", r, tr)
 	}
 }

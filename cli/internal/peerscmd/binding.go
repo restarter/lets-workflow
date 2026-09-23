@@ -101,8 +101,12 @@ type Refused struct {
 	Scope    string `json:"scope,omitempty"`
 	Session6 string `json:"session6,omitempty"`
 	Reason   string `json:"reason"` // target_in_other_repo | target_not_alive | target_unsendable | bound_ambiguous
-	Detail   string `json:"detail,omitempty"`
-	Hint     string `json:"hint,omitempty"`
+	// details for target_in_other_repo: orca_not_selected | orca_unavailable | repo_not_in_orca
+	Detail string `json:"detail,omitempty"`
+	Hint   string `json:"hint,omitempty"`
+	// Sibling: the refusal concerns a target in another repo, so its remediation
+	// must not name a command that only sees this repo.
+	Sibling bool `json:"sibling,omitempty"`
 }
 
 // branchOf is the checked-out branch of cwd ("" when detached or unreadable).
@@ -145,6 +149,7 @@ func orchestratorPeer(snap ccregistry.Snapshot, f roleFile) *Peer {
 // addressable answers the sender's question with the sender's own computation: the
 // target must be a row of THIS repo's peer set with a usable Send. Anything else is
 // refused by name rather than returned as a target the send path cannot reach.
+// Cross-repo reach is decided by siblingOrchestrator, for a bound name only.
 func addressable(ctx context.Context, rc *repoContext, f roleFile) (*Peer, *Refused) {
 	name := liveName(rc.snap, f)
 	ref := &Refused{Name: name, Scope: f.Scope, Session6: session6(f.Session)}
@@ -163,9 +168,6 @@ func addressable(ctx context.Context, rc *repoContext, f roleFile) (*Peer, *Refu
 	if _, ok := rc.snap.Find(f.Session); ok {
 		ref.Reason = "target_in_other_repo"
 		ref.Detail = "its cwd is outside this repo"
-		if orcaSelected(rc.root, false) {
-			ref.Hint = "cross-repo messaging goes through /lets:hub"
-		}
 		return nil, ref
 	}
 	ref.Reason = "target_not_alive"
@@ -235,14 +237,37 @@ func ResolveOrchestrator(ctx context.Context, rc *repoContext, o ResolveOptions)
 		if len(cands) == 0 {
 			cands = byRegistered
 		}
+		// sibling applies the cross-repo rule (bound only - the unbound path below
+		// never calls it); false = no sibling holds the name either.
+		sibling := func(local *roleFile) bool {
+			p, ref, ok := siblingOrchestrator(ctx, rc, name, local)
+			switch {
+			case !ok:
+				return false
+			case p != nil:
+				res.Target = p
+			case ref.Reason == errBudget:
+				res.Reason = errBudget
+				res.Degraded = append(res.Degraded, Degraded{Source: "context", Reason: "deadline_exceeded"})
+			default:
+				res.Reason, res.Refused = ref.Reason, append(res.Refused, *ref)
+			}
+			return true
+		}
 		switch len(cands) {
 		case 0:
+			if sibling(nil) {
+				return res
+			}
 			res.Reason = "orchestrator_not_registered"
 			res.Refused = append(res.Refused, Refused{Name: name, Reason: "target_not_alive", Detail: "bound orchestrator has no role file"})
 		case 1:
-			if p, ref := addressable(ctx, rc, cands[0]); p != nil {
+			p, ref := addressable(ctx, rc, cands[0])
+			switch {
+			case p != nil:
 				res.Target = p
-			} else {
+			case ref.Reason == "target_in_other_repo" && sibling(&cands[0]):
+			default:
 				res.Reason, res.Refused = ref.Reason, append(res.Refused, *ref)
 			}
 		default:
