@@ -63,7 +63,7 @@ type repoContext struct {
 	snap           ccregistry.Snapshot
 	roles          map[string]roleFile
 	moves          []move // reconcileRoles' corrections, already applied to roles; persisted only under peers.lock
-	ops           orcaOps
+	ops            orcaOps
 	terms          []orcaTerm
 	degraded       []Degraded
 	peersCache     []Peer // peers() is deterministic for one context; see peers()
@@ -343,6 +343,9 @@ func Who(ctx context.Context, o WhoOptions) (*WhoResult, error) {
 		return res, err
 	}
 	res.Degraded = rc.degraded
+	if o.Session != "" && o.Repo == "" {
+		res.Degraded = append(res.Degraded, HealSelf(rc, o.Session, rc.root, branchOf(ctx, o.Cwd))...)
+	}
 	if o.Prune {
 		if unlock, err := lockPeers(rc.root, max(time.Until(deadlineOf(ctx)), 50*time.Millisecond)); err == nil {
 			if err := persistMoves(rc.root, rc.moves); err != nil {

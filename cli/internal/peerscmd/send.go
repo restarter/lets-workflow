@@ -96,7 +96,7 @@ func Frame(ctx context.Context, o FrameOptions) (*FrameResult, error) {
 	if err != nil {
 		return fail(err.(*Error))
 	}
-	res.Degraded = rc.degraded
+	res.Degraded = append(rc.degraded, HealSelf(rc, o.Session, rc.root, branchOf(ctx, o.Cwd))...)
 	toName := ""
 	if to, ok := rc.snap.Find(o.ToSession); ok && to.NameOK {
 		toName = to.Name

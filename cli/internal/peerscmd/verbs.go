@@ -93,8 +93,9 @@ func Orchestrator(ctx context.Context, cwd, session string) (*OrchestratorResult
 		res.Error = &ErrorInfo{Kind: e.Kind, Message: e.Message}
 		return res, e
 	}
+	heal := HealSelf(rc, session, cwd, branch)
 	r := ResolveOrchestrator(ctx, rc, ResolveOptions{Session: session, Cwd: cwd, Branch: branch})
 	res.OK = true
-	res.Source, res.Scope, res.Target, res.Candidates, res.Reason, res.Refused, res.Degraded = r.Source, r.Scope, r.Target, r.Candidates, r.Reason, r.Refused, r.Degraded
+	res.Source, res.Scope, res.Target, res.Candidates, res.Reason, res.Refused, res.Degraded = r.Source, r.Scope, r.Target, r.Candidates, r.Reason, r.Refused, append(r.Degraded, heal...)
 	return res, nil
 }
