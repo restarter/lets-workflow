@@ -1059,6 +1059,8 @@ If no "fix" comments (all agree/disagree/skip): skip this step entirely.
 
 ### 6.5 Post replies
 
+Each reply is written in the language of the comment it answers (see `## Rules`) - read that from the comment text fetched in 6.2, never from `$LETS_LANGUAGE` or the chat.
+
 Show reply plan (skip entries with `decision: "skip"`):
 
 ```
@@ -1222,4 +1224,5 @@ Review state cleaned up.
 - **Per-PR folders** - all state and temp files live in `.lets/execution/pr-{number}/`
 - **Restore previous branch** on cleanup/cancel/merge
 - **Error recovery** - if gh pr checkout fails after stash, pop stash before exiting
+- **Every comment posted to the PR is text a person will read, so it follows the language of what it answers** (lets-rules `## Language & Communication`): a reply to a reviewer's comment is written in the language that reviewer used, and a finding raised on someone's PR in the language the thread is conducted in. English is the default only when the thread gives no other language. The findings themselves - file paths, identifiers, code - stay as they are in the repo
 - Respond in user's language
