@@ -289,12 +289,23 @@ const judged = await parallel(toVerify.map(f => () => {
 let refuted = 0
 let verifyFailed = 0 // findings whose skeptics all errored -> verification did NOT run (not "verified clean")
 const kept = []
-for (const j of judged.filter(Boolean)) {
+const refutedFindings = [] // dropped rows, by identity - /lets:review --fix reports them as REFUTED
+// Index-aligned with toVerify: a slot whose whole verify fan-out failed comes back null and must
+// stay a finding with no votes (kept, counted in verifyFailed, UNCLEAR for --fix) - never vanish.
+for (let i = 0; i < toVerify.length; i++) {
+  const j = judged[i] || { f: toVerify[i], votes: [] }
   if (j.votes.length === 0) verifyFailed++ // no usable verdict -> kept conservatively, but flag it
   const action = decide(j.f, j.votes)
-  if (action === 'drop') { refuted++; continue }
-  if (action === 'downgrade') { refuted++; kept.push({ ...j.f, tier: 'SUGGESTION' }) }
-  else kept.push(j.f)
+  // Per-finding outcome for /lets:review --fix (review.md Step 10.5): counts alone cannot tell a
+  // confirmed finding from a downgraded or unverified one. KEEP IN SYNC with that mapping table.
+  const verification = { action, real: j.votes.filter(v => v.real === true).length, votes: j.votes.length }
+  if (action === 'drop') {
+    refuted++
+    refutedFindings.push({ title: j.f.title, file: j.f.file, line: j.f.line, tier: j.f.tier })
+    continue
+  }
+  if (action === 'downgrade') { refuted++; kept.push({ ...j.f, tier: 'SUGGESTION', verification }) }
+  else kept.push({ ...j.f, verification })
 }
 
 const finalFindings = [...kept, ...passthrough].sort((x, y) => TIER_RANK[x.tier] - TIER_RANK[y.tier])
@@ -312,4 +323,5 @@ return {
   systemic,
   summary,
   counts: { blockers, suggestions, total: finalFindings.length, refuted, verify_failed: verifyFailed },
+  refuted_findings: refutedFindings,
 }

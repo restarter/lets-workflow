@@ -1,6 +1,6 @@
 ---
 description: Quick sanity check - code (inline 6-perspective) or plan (--plan).
-argument-hint: "[PR-url-or-number|--local|--staged|--last-commit|--branch|--plan|--file <path>] [--json] [--spec <path>|none]"
+argument-hint: "[PR-url-or-number|--local|--staged|--last-commit|--branch|--plan|--file <path>] [--json] [--spec <path>|none] [--fix]"
 ---
 
 # Quick Local Code Check
@@ -22,6 +22,7 @@ Fast inline sanity check from 6 perspectives. Same target selection as `/lets:re
 /lets:check ... --json           # structured JSON output instead of console report
 /lets:check --spec <path>        # use this file as the spec (or a bare task id)
 /lets:check --spec none          # there is deliberately no spec - no spec block, no caveat
+/lets:check ... --fix            # verify each finding, then apply the fixes when nothing needs deciding (not with --json)
 ```
 
 ## When to Use
@@ -49,6 +50,8 @@ Parse the argument(s):
 | `--branch` | Local | three-dot merge-base diff against the base the Step 1 guard resolves (`origin/{LETS_MERGE_BRANCH}` when it exists) |
 
 `--json` is a modifier that can accompany any code mode (not plan mode): emit structured JSON instead of the console report (see Step 4.5). Skip the LETS box and the tracker comment when `--json` is set - the caller handles output.
+
+`--fix` applies the findings at the end: Step 3.5 verifies them, Step 5.5 applies them through the `apply-fixes` skill (the gates live there). The user typing it is the write authorization for this run. With `--json` -> refused, one line: `--fix edits files - --json has no side effects`. PR mode -> add `headRefOid` to the Step 1 `gh pr view` fields (bitbucket: the source commit); `git rev-parse HEAD` not equal to it -> drop `--fix` with one line (check never moves HEAD). `--plan` -> the plan file only.
 
 `--spec` is the other modifier: `--spec <path>` uses that file, `--spec none` declares there is no spec, a bare task id resolves through the tracker. It short-circuits Step 2's resolution entirely. **`/lets:check` asks no question about this and never will** - `/lets:review` has the picker because it is the considered checkpoint, run once or twice; check is fired repeatedly while writing code and takes the flag instead. Same control, no interruption.
 
@@ -105,7 +108,7 @@ Read the plan and review with 5 lenses (same confidence filter):
 
 REMEDY QUALITY: for each reported issue, ask whether the proposed fix removes the cause or only makes this instance pass - and hold the plan's own remedies to the same standard, since a step that patches a symptom where it surfaces rather than at the component that owns the behavior is itself an issue. Prefer the smallest fix at the owning boundary; do not propose broad refactoring in a quick check.
 
-Output same format as code check, then print: Plan check done. I will not implement it - run `/lets:execute` when ready. A plan-check verdict (any verdict) is about the document; NEVER start implementing, fixes go into the plan file only. Then:
+Output same format as code check, then print: Plan check done. I will not implement it - run `/lets:execute` when ready. A plan-check verdict (any verdict) is about the document; NEVER start implementing, fixes go into the plan file only. With `--fix`: verify each issue as Step 3.5 does, then Step 5.5 with `mode=plan path=<the plan>`. Then, without `--fix` (with it, `apply-fixes` renders the box):
 
 ```
 ┌─ LETS ────────────────────────────────────┐
@@ -332,6 +335,10 @@ Classify each finding:
 
 **Only report [BLOCKER] and [SUGGESTION]. Max 5 issues.**
 
+## Step 3.5: Verify Findings (--fix only)
+
+Without `--fix`, skip. check sends no skeptic (fact 1 in What This Is NOT), so verify inline: for each reported issue Read the cited `file:line` and what it depends on again - never from memory of Step 3 - and mark `CONFIRMED` / `REFUTED` / `UNCLEAR` with the `file:line` read. This is self-verification: it catches a misread line, not a blind spot - `/lets:review --fix` is the stronger path for a risky change.
+
 ## Step 4: Present Results
 
 **If `--json` was set, skip this step - go to Step 4.5 instead.**
@@ -403,9 +410,13 @@ comment-add task=<task-id> body="Quick check ({mode}): {verdict}. {N} issues fou
 
 If clean (no issues) - skip, don't add noise to the task.
 
+## Step 5.5: Apply Fixes (--fix only)
+
+Build the `apply-fixes` table from Step 3.5 - Remedy in your own words - and invoke `Skill(skill: "lets:apply-fixes", args: "source=check mode=<local|staged|last-commit|branch|pr|file|plan> base=<BASE> path=<path>")`: `base` is the Step 1 `BASE` for `--branch`; in PR mode list the changed files of the PR diff Step 1 fetched, taken from that diff, in the conversation (`apply-fixes` PR scope) - never a new fetch, never a local merge-base; `path` for `--file` / `--plan`. Its output replaces the Output box.
+
 ## Output
 
-Skip the box entirely when `--json` was set. Otherwise the box offers the `/lets:review` upgrade path for the same target:
+Skip the box entirely when `--json` was set. With `--fix`, `apply-fixes` renders the box. Otherwise the box offers the `/lets:review` upgrade path for the same target:
 
 **Local modes (`--local` / default / `--staged` / `--last-commit` / `--branch`), GOOD or REVIEW:**
 ```
@@ -455,6 +466,8 @@ Skip the box entirely when `--json` was set. Otherwise the box offers the `/lets
 2. **check is fired repeatedly while writing code** - so it never asks a question (flags instead) and never moves your HEAD.
 
 Anything else that differs is drift, not design. Three such drifts were found and removed at once: the PR body reaching review but not check, the discussion reaching neither, and a spec cap that was smaller in the cheaper command. When adding to either file, name which of the two facts a new difference comes from - if neither fits, the other command needs the same change.
+
+`--fix` is one surface in both files, defined in `skills/apply-fixes`. Its one difference - check verifies inline (Step 3.5) where review sends skeptics - comes from fact 1; it asks nothing and moves no HEAD, per fact 2.
 
 - NOT multi-agent - inline review only, no subagent dispatch in ANY mode (that's the one thing that never changes vs `/lets:review`)
 - NOT saved to file - console only (`--json` emits to console too, for tooling)
