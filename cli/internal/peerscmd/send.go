@@ -105,9 +105,12 @@ func Frame(ctx context.Context, o FrameOptions) (*FrameResult, error) {
 	} else {
 		return fail(&Error{Code: ExitGeneric, Kind: "peer_not_found", Message: "no live, named session " + session6(o.ToSession)})
 	}
-	from, ok := rc.snap.Find(o.Session)
-	if !ok || !from.NameOK {
-		return fail(&Error{Code: ExitGeneric, Kind: "session_not_in_registry", Message: "this session has no valid registry name", Remediation: "/rename <name>, then retry"})
+	// The sender's name is a label on a claim (from_sid is a claim too); only the
+	// target has to resolve. A session with no name - or none the registry shows -
+	// still sends, labelled by its session6.
+	label := session6(o.Session)
+	if from, ok := rc.snap.Find(o.Session); ok && from.NameOK {
+		label = from.Name
 	}
 	role := "peer"
 	if f, ok := rc.roles[o.Session]; ok {
@@ -124,7 +127,7 @@ func Frame(ctx context.Context, o FrameOptions) (*FrameResult, error) {
 	pruneHandoffs(dir) // a handoff kept for retry (Tell never deletes an untyped one) must not accumulate
 	res.MsgID = id
 	res.SentAt = time.Now().UTC().Format(time.RFC3339Nano)
-	res.Header = fmt.Sprintf(`[lets-peer id=%s kind=%s from_sid=%s to_sid=%s from="%s/%s" to="%s"]`, id, o.Kind, o.Session, o.ToSession, role, from.Name, toName)
+	res.Header = fmt.Sprintf(`[lets-peer id=%s kind=%s from_sid=%s to_sid=%s from="%s/%s" to="%s"]`, id, o.Kind, o.Session, o.ToSession, role, label, toName)
 	res.HandoffPath = filepath.Join(dir, id+".txt")
 	if err := os.WriteFile(filepath.Join(dir, id+".issued"), []byte(res.Header), 0o600); err != nil {
 		return fail(&Error{Code: ExitGeneric, Kind: "handoff_dir_refused", Message: err.Error()})
