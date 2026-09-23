@@ -36,3 +36,6 @@ issues.jsonl
 # Private filled-in tracker board instance (real account ids + team PII) - never commit to this public repo.
 # planfix-mcp is a user-authored adapter (not a shipped adapter); this keeps its private board out of the repo.
 .claude/rules/tracker-planfix-mcp.board.md
+
+# Custom
+ideas.md

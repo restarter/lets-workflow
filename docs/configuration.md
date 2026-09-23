@@ -27,7 +27,7 @@ LETS_RULES_SCOPE=project
 
 | Key | Purpose |
 |-----|---------|
-| `LETS_LANGUAGE` | The language Claude responds in when it isn't clear from your message. An English language name (`English`, `Ukrainian`, `Japanese`, …) regardless of the script it's written in. It covers the conversation only: anything written outside the chat - code, comments, commit messages, docs, task titles and comments, plans, PR text - is in English whatever this is set to. |
+| `LETS_LANGUAGE` | The language Claude responds in when it isn't clear from your message. An English language name (`English`, `Ukrainian`, `Japanese`, …) regardless of the script it's written in. It covers the conversation only. What the project stores - code, comments, commit messages, docs, task titles and comments, plans, PR titles and descriptions - is in English whatever this is set to; a reply to a person, such as an answer to a reviewer's comment, is written in the language that person used. |
 | `LETS_MERGE_BRANCH` | The branch tasks merge into and PRs target. Used wherever LETS would otherwise assume `main`. |
 | `LETS_PR_FLOW` | `github` — `/lets:done` pushes and opens a PR via `gh`. `bitbucket` — `/lets:done` pushes and opens a PR via `bbb`; the task stays open until the reviewer merges. `local` — no PR; `/lets:done` merges locally. |
 | `LETS_TRACKER` | The task tracker **adapter**: `beads` (default) or `none`. Selects the `.claude/rules/tracker-<name>.md` that `lets init` installs; commands resolve verbs through it. See [trackers.md](trackers.md). |
