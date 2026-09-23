@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
 // Entry is one live registry file read under peerProtocol 1. Only the fields LETS
@@ -26,6 +27,7 @@ type Entry struct {
 	Cwd          string `json:"cwd"`
 	Status       string `json:"status"`
 	Version      string `json:"version"`
+	StartedAt    int64  `json:"startedAt"` // ms since epoch; unchanged across /clear (same process)
 	PeerProtocol *int   `json:"peerProtocol"`
 }
 
@@ -155,6 +157,29 @@ func (s Snapshot) FindPid(pid int) (Entry, bool) {
 		}
 	}
 	return Entry{}, false
+}
+
+// Rotated returns the session id now running in the process that held sid: pid is
+// alive in the registry under ANOTHER session id, sid itself runs nowhere, and that
+// process started no later than set (the time the holder recorded itself; a second
+// of tolerance for set's precision). /clear and an in-session /resume re-mint the id
+// this way. A reused pid started after set; an entry without startedAt proves
+// nothing - both return false, leaving Liveness's Dead verdict in place.
+func (s Snapshot) Rotated(sid string, pid int, set time.Time) (string, bool) {
+	if pid <= 0 || set.IsZero() {
+		return "", false
+	}
+	if _, running := s.Find(sid); running {
+		return "", false
+	}
+	e, ok := s.FindPid(pid)
+	if !ok || e.SessionID == sid || e.StartedAt <= 0 {
+		return "", false
+	}
+	if time.UnixMilli(e.StartedAt).After(set.Add(time.Second)) {
+		return "", false
+	}
+	return e.SessionID, true
 }
 
 // Liveness of one session; pid is the holder's recorded pid (0 when unknown).
