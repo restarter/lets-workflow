@@ -39,13 +39,42 @@ type Candidate struct {
 
 // Resolution is which orchestrator a caller's /lets:orc talks to. It never writes.
 type Resolution struct {
-	Source     string      `json:"source"` // self | bound | single | ambiguous | none
-	Scope      string      `json:"scope"`  // branch: the binding belongs to the branch
-	Target     *Peer       `json:"target,omitempty"`
-	Candidates []Candidate `json:"candidates"`
-	Reason     string      `json:"reason,omitempty"`
-	Refused    []Refused   `json:"refused,omitempty"`
-	Degraded   []Degraded  `json:"degraded"`
+	Source      string      `json:"source"` // self | bound | single | ambiguous | none
+	Scope       string      `json:"scope"`  // branch: the binding belongs to the branch
+	Target      *Peer       `json:"target,omitempty"`
+	Candidates  []Candidate `json:"candidates"`
+	Reason      string      `json:"reason,omitempty"`
+	Remediation string      `json:"remediation,omitempty"` // the exact line to show the user; set with every Reason
+	Refused     []Refused   `json:"refused,omitempty"`
+	Degraded    []Degraded  `json:"degraded"`
+}
+
+// remedy is the one line a user acts on for a peer dead end; the orc skill prints
+// it verbatim instead of composing a workaround.
+func remedy(reason, name string, orca bool) string {
+	switch reason {
+	case "orchestrator_not_registered":
+		return name + " has no role - in its session run /lets:start --main, or rebind this branch with /lets:start <id> --orc=\"<name>\""
+	case "target_not_alive":
+		if orca {
+			return name + " is not running - /lets:hub wakes a stopped orchestrator, or rebind this branch with /lets:start <id> --orc=\"<name>\""
+		}
+		return name + " is not running - reopen it, or rebind this branch with /lets:start <id> --orc=\"<name>\""
+	case "target_in_other_repo":
+		if orca {
+			return "cross-repo messaging goes through /lets:hub"
+		}
+		return name + " runs outside this repo - message it from its own checkout"
+	case "target_unsendable":
+		return "/lets:orc who shows why " + name + " cannot receive right now; retry when it is idle"
+	case "bound_ambiguous":
+		return "/lets:start <id> --orc=\"<live name>\" rebinds this branch to one of them"
+	case "branch_unreadable", "budget_exhausted":
+		return "resolution did not complete - retry"
+	case "orchestrator_needs_name":
+		return "/rename <name>, then /lets:start --main again"
+	}
+	return ""
 }
 
 // Refused is an orchestrator this caller cannot address, with the reason a human
@@ -141,6 +170,18 @@ type candidate struct {
 // returned as a target.
 func ResolveOrchestrator(ctx context.Context, rc *repoContext, o ResolveOptions) *Resolution {
 	res := &Resolution{Scope: "branch", Candidates: []Candidate{}, Degraded: rc.degraded, Refused: []Refused{}}
+	// Every dead end leaves with its remedy; res is a pointer, so this sees the final value.
+	defer func() {
+		if res.Reason != "" && res.Remediation == "" {
+			name := ""
+			if len(res.Refused) > 0 {
+				name = res.Refused[0].Name
+			} else if res.Target != nil {
+				name = res.Target.Name
+			}
+			res.Remediation = remedy(res.Reason, name, orcaSelected(rc.root, false))
+		}
+	}()
 	files, snap := rc.roles, rc.snap
 	if self, ok := files[o.Session]; ok && self.Role == "orchestrator" {
 		res.Source, res.Target = "self", orchestratorPeer(snap, self)

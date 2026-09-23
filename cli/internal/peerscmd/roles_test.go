@@ -77,7 +77,7 @@ func TestRole_TwoOrchestratorsUniqueNames(t *testing.T) {
 		t.Errorf("scope not cleaned: %q", files[sidM].Scope)
 	}
 	info, _ := SetRole(root, RoleOptions{Session: sidO, Role: "orchestrator"})
-	if info.Granted || info.Reason != "name_held" || info.Holder == nil || info.Holder.Session6 != sidM[:6] || info.Holder.Alive != "alive" {
+	if info.Granted || info.Reason != "name_held" || info.Remediation == "" || info.Holder == nil || info.Holder.Session6 != sidM[:6] || info.Holder.Alive != "alive" {
 		t.Fatalf("same name: %+v", info)
 	}
 	info, _ = SetRole(root, RoleOptions{Session: sidO, Role: "orchestrator", Takeover: true})
@@ -89,10 +89,10 @@ func TestRole_TwoOrchestratorsUniqueNames(t *testing.T) {
 func TestRole_NeedsNameAndRegistry(t *testing.T) {
 	root := rolesRoot(t)
 	registry(t, map[int][2]string{101: {sidM, ""}}, nil, 101)
-	if info, _ := SetRole(root, RoleOptions{Session: sidM, Role: "orchestrator"}); info.Reason != "orchestrator_needs_name" || info.Granted {
+	if info, _ := SetRole(root, RoleOptions{Session: sidM, Role: "orchestrator"}); info.Reason != "orchestrator_needs_name" || info.Remediation == "" || info.Granted {
 		t.Errorf("no name: %+v", info)
 	}
-	if info, _ := SetRole(root, RoleOptions{Session: sidN, Role: "worker", Task: "lets-abc"}); info.Reason != "session_not_in_registry" || info.Granted {
+	if info, _ := SetRole(root, RoleOptions{Session: sidN, Role: "worker", Task: "lets-abc"}); info.Reason != "session_not_in_registry" || info.Remediation == "" || info.Granted {
 		t.Errorf("unregistered worker: %+v", info)
 	}
 	if _, err := os.Stat(filepath.Join(peersDir(root), sidN+".role")); !os.IsNotExist(err) {

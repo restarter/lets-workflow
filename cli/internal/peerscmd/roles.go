@@ -51,14 +51,15 @@ type Holder struct {
 
 // RoleInfo is what SetRole decided.
 type RoleInfo struct {
-	Granted    bool     `json:"granted"`
-	Role       string   `json:"role,omitempty"`
-	Reason     string   `json:"reason,omitempty"` // name_held | orchestrator_needs_name | session_not_in_registry
-	Holder     *Holder  `json:"holder,omitempty"`
-	Registered bool     `json:"registered"`
-	Demoted    string   `json:"demoted,omitempty"` // session6 of a holder turned into a plain peer by --takeover
-	Pruned     int      `json:"pruned"`
-	Invalid    []string `json:"invalid,omitempty"` // role files that could not be parsed (left in place)
+	Granted     bool     `json:"granted"`
+	Role        string   `json:"role,omitempty"`
+	Reason      string   `json:"reason,omitempty"`      // name_held | orchestrator_needs_name | session_not_in_registry
+	Remediation string   `json:"remediation,omitempty"` // the exact line to show the user; set with every Reason
+	Holder      *Holder  `json:"holder,omitempty"`
+	Registered  bool     `json:"registered"`
+	Demoted     string   `json:"demoted,omitempty"` // session6 of a holder turned into a plain peer by --takeover
+	Pruned      int      `json:"pruned"`
+	Invalid     []string `json:"invalid,omitempty"` // role files that could not be parsed (left in place)
 }
 
 type roleFile struct {
@@ -300,11 +301,13 @@ func SetRole(root string, o RoleOptions) (*RoleInfo, error) {
 	info.Registered = selfKnown
 	if !selfKnown {
 		info.Reason = "session_not_in_registry"
+		info.Remediation = "Claude Code's session registry does not list this session - restart it (or update Claude Code), then run /lets:start again"
 		return info, nil
 	}
 	if o.Role == "orchestrator" {
 		if !ccregistry.ValidName(self.Name) {
 			info.Reason = "orchestrator_needs_name"
+			info.Remediation = remedy("orchestrator_needs_name", "", false)
 			return info, nil
 		}
 		for sid, f := range files {
@@ -313,6 +316,7 @@ func SetRole(root string, o RoleOptions) (*RoleInfo, error) {
 			}
 			if !o.Takeover {
 				info.Reason = "name_held"
+				info.Remediation = "/rename this session and run /lets:start --main again, or rerun with --takeover to demote " + self.Name + " (" + session6(sid) + ")"
 				info.Holder = &Holder{Name: self.Name, Session6: session6(sid), Alive: snap.Liveness(f.Session, f.Pid).String(), Since: f.Set}
 				return info, nil
 			}

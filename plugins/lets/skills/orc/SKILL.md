@@ -40,6 +40,8 @@ Every later call addresses the returned **session id** (`target.session`), never
 
 A `refused[].reason` of `target_in_other_repo` / `target_not_alive` / `target_unsendable` is final - never fall back to another orchestrator, never retry with a different verb.
 
+**Remediation is printed, never composed.** Whenever an envelope (`orchestrator`, `frame`, `tell`, `role`) carries `remediation` or `error.remediation`, print it verbatim as the last line of the refusal. Never compose a workaround and never route the message by hand.
+
 `ambiguous`:
 
 ```
