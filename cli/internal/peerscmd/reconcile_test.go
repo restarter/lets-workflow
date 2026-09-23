@@ -131,3 +131,49 @@ func TestReconcile_LoadIsInMemory(t *testing.T) {
 		t.Errorf("memory must be corrected, disk untouched: %+v", rc.roles)
 	}
 }
+
+// A move planned before the lock never overwrites a role the new id wrote since:
+// the locked write decides from disk, not from the earlier view.
+func TestReconcile_StalePlanDoesNotOverwrite(t *testing.T) {
+	root := repoWithLets(t, "")
+	plantRole(t, root, sidM, "role: orchestrator\nname: MAIN\nscope: old\npid: 101\n"+setLine)
+	registryAt(t, regAt{Pid: 101, Sid: sidN, Name: "MAIN", Cwd: root, Source: "user", Started: setT.Add(-time.Hour)},
+		regAt{Pid: 102, Sid: sidO, Name: "W", Cwd: root})
+	rc, _ := loadRepo(t.Context(), root, false) // plans sidM -> sidN with scope old
+	if len(rc.moves) != 1 {
+		t.Fatalf("want one planned move, got %+v", rc.moves)
+	}
+	if info, err := SetRole(root, RoleOptions{Session: sidN, Role: "orchestrator", Scope: "new"}); err != nil || !info.Granted {
+		t.Fatalf("SetRole: %+v %v", info, err)
+	}
+	HealSelf(rc, sidO, root, "main") // persists with the stale view in hand
+	files, _ := loadRoles(root)
+	if files[sidN].Scope != "new" || fileExists(root, sidM) {
+		t.Errorf("the newer role must survive a stale plan: %+v", files[sidN])
+	}
+}
+
+// Two old files of one process rotated to the same id: the latest set wins, not
+// the lexically first session id; equal set values move nothing.
+func TestReconcile_TwoOldIDsLatestSetWins(t *testing.T) {
+	root := rolesRoot(t)
+	// sidM sorts before sidN but is the older role.
+	plantRole(t, root, sidM, "role: worker\ntask: lets-abc\npid: 101\nset: 2026-09-23T10:00:00Z\n")
+	plantRole(t, root, sidN, "role: orchestrator\nname: MAIN\nscope: latest\npid: 101\nset: 2026-09-23T11:00:00Z\n")
+	registryAt(t, regAt{Pid: 101, Sid: sidO, Name: "MAIN", Source: "user", Started: setT.Add(-time.Hour)})
+	files, _, _, err := reconcileLocked(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if files[sidO].Role != "orchestrator" || files[sidO].Scope != "latest" || fileExists(root, sidM) || fileExists(root, sidN) {
+		t.Errorf("the latest role must win the new id: %+v", files)
+	}
+
+	tie := rolesRoot(t)
+	plantRole(t, tie, sidM, "role: worker\ntask: lets-abc\npid: 101\n"+setLine)
+	plantRole(t, tie, sidN, "role: orchestrator\nname: MAIN\npid: 101\n"+setLine)
+	files, _ = loadRoles(tie)
+	if moves := reconcileRoles(files, ccregistry.Read(ccregistry.HomeDir())); len(moves) != 0 {
+		t.Errorf("a tie must move nothing: %+v", moves)
+	}
+}

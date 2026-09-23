@@ -112,3 +112,43 @@ func TestHeal_NoWorkerOnMergeBranch(t *testing.T) {
 		t.Error("no worker role on the merge-branch")
 	}
 }
+
+// Two sessions under one user-set name both plan a restore from the same dead
+// holder before either writes: the second decides again under the lock and sees
+// the first as a live holder - one name never gets two live holders.
+func TestHeal_ConcurrentReclaimOneWinner(t *testing.T) {
+	root := repoWithLets(t, "")
+	plantRole(t, root, sidM, "role: orchestrator\nname: MAIN\npid: 1\n"+setLine)
+	registryAt(t, regAt{Pid: 9, Sid: sidN, Name: "MAIN", Cwd: root, Source: "user"},
+		regAt{Pid: 10, Sid: sidO, Name: "MAIN", Cwd: root, Source: "user"})
+	rcA, _ := loadRepo(t.Context(), root, false)
+	rcB, _ := loadRepo(t.Context(), root, false) // both views: MAIN held only by a dead file
+	HealSelf(rcA, sidN, root, "main")
+	HealSelf(rcB, sidO, root, "main")
+	files, _ := loadRoles(root)
+	holders := 0
+	for _, f := range files {
+		if f.Role == "orchestrator" {
+			holders++
+		}
+	}
+	if holders != 1 || files[sidN].Role != "orchestrator" || fileExists(root, sidO) {
+		t.Errorf("exactly the first healer may hold MAIN: %+v", files)
+	}
+}
+
+// A tie movesTo refused to break (two old roles of this process, set in the same
+// second) must not be broken by a restore either: nothing is written, and the caller
+// is told how to register the role it means - in both lexical orders of the old ids.
+func TestHeal_TiedCollisionRestoresNothing(t *testing.T) {
+	for _, order := range [][2]string{{sidM, sidN}, {sidN, sidM}} {
+		root := repoWithLets(t, "")
+		plantRole(t, root, order[0], "role: worker\ntask: lets-abc\npid: 101\n"+setLine)
+		plantRole(t, root, order[1], "role: orchestrator\nname: MAIN\npid: 101\n"+setLine)
+		registryAt(t, regAt{Pid: 101, Sid: sidO, Name: "MAIN", Cwd: root, Source: "user", Started: setT.Add(-time.Hour)})
+		d := healIn(t, root, sidO, "main")
+		if fileExists(root, sidO) || len(d) == 0 || d[0].Reason != "reclaim_ambiguous" || d[0].Detail == "" {
+			t.Errorf("worker=%s orchestrator=%s: a tie must restore nothing and say why: %+v", order[0][len(order[0])-1:], order[1][len(order[1])-1:], d)
+		}
+	}
+}

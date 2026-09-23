@@ -20,45 +20,35 @@ import (
 // (orchestrator, frame, the SessionStart hook) and must never stall them.
 var healLockDeadline = time.Second
 
-// HealSelf writes rc's pending moves and, when the calling session has no role file
+// HealSelf carries re-minted roles and, when the calling session has no role file
 // of its own, restores one from its anchor - whatever lost it (a re-minted id the
 // reconcile could not prove, a new agent after a crash, a harness duplicate):
 //   - worker: the task: of its branch's .task-<slug> (never on the merge-branch);
 //   - orchestrator: a name the USER set, no live holder of it, and exactly one dead
 //     role file or last-seen record under it (a derived name proves nothing).
 //
-// Own repo only. Best-effort: a busy lock or a failed write is reported in the
-// returned degraded entries; rc.roles is corrected in memory either way.
+// The view rc was loaded with only decides whether to take peers.lock at all; every
+// write is decided again from the files and registry read under the lock, so two
+// sessions healing at once cannot both claim one name, and a move planned earlier
+// never overwrites a role written since. Own repo only. Best-effort: a busy lock or
+// a failed write is reported in the returned degraded entries.
 func HealSelf(rc *repoContext, sid, cwd, branch string) []Degraded {
-	restored, stale, lastSeen, ambiguous := planRestore(rc, sid, cwd, branch)
-	if len(rc.moves) == 0 && restored == nil && !ambiguous {
-		return nil
-	}
-	var out []Degraded
-	if ambiguous {
-		self, _ := rc.snap.Find(sid)
-		out = append(out, Degraded{Source: "roles", Reason: "reclaim_ambiguous",
-			Detail: "several dead orchestrators were registered as " + self.Name + " - /lets:start --main registers this session"})
-	}
-	if restored != nil {
-		if stale != "" {
-			delete(rc.roles, stale)
-		}
-		rc.roles[sid] = *restored
-		rc.peersCache = nil
-	}
+	restored, _, _, ambiguous := planRestore(rc.root, rc.roles, rc.snap, sid, cwd, branch)
 	if len(rc.moves) == 0 && restored == nil {
-		return out
+		return ambiguousDegraded(ambiguous)
 	}
 	unlock, err := lockPeers(rc.root, healLockDeadline)
 	if err != nil {
-		return append(out, Degraded{Source: "roles", Reason: "peers_lock_busy"})
+		return []Degraded{{Source: "roles", Reason: "peers_lock_busy"}}
 	}
 	defer unlock()
-	if err := persistMoves(rc.root, rc.moves); err != nil {
-		return append(out, Degraded{Source: "roles", Reason: "role_write_failed", Detail: err.Error()})
+	files, _, snap, err := reconcileLocked(rc.root)
+	rc.roles, rc.moves, rc.peersCache = files, nil, nil
+	if err != nil {
+		return []Degraded{{Source: "roles", Reason: "role_write_failed", Detail: err.Error()}}
 	}
-	rc.moves = nil
+	restored, stale, lastSeen, ambiguous := planRestore(rc.root, files, snap, sid, cwd, branch)
+	out := ambiguousDegraded(ambiguous)
 	if restored == nil {
 		return out
 	}
@@ -66,8 +56,10 @@ func HealSelf(rc *repoContext, sid, cwd, branch string) []Degraded {
 		return append(out, Degraded{Source: "roles", Reason: "role_write_failed", Detail: err.Error()})
 	}
 	if stale != "" {
+		delete(files, stale)
 		_ = os.Remove(filepath.Join(peersDir(rc.root), stale+".role"))
 	}
+	files[sid] = *restored
 	if lastSeen != "" {
 		if err := os.Remove(lastSeen); err != nil && !errors.Is(err, os.ErrNotExist) {
 			out = append(out, Degraded{Source: "roles", Reason: "role_write_failed", Detail: err.Error()})
@@ -76,33 +68,53 @@ func HealSelf(rc *repoContext, sid, cwd, branch string) []Degraded {
 	return out
 }
 
+// ambiguousDegraded reports a restore that no anchor could decide; detail carries
+// the remedy, "" means nothing was ambiguous.
+func ambiguousDegraded(detail string) []Degraded {
+	if detail == "" {
+		return nil
+	}
+	return []Degraded{{Source: "roles", Reason: "reclaim_ambiguous", Detail: detail}}
+}
+
 // planRestore decides, without writing, which role the caller gets back: the role
 // file to write, the dead holder's file it replaces, the last-seen file it consumes.
-func planRestore(rc *repoContext, sid, cwd, branch string) (restored *roleFile, stale, lastSeen string, ambiguous bool) {
-	if _, has := rc.roles[sid]; has {
-		return nil, "", "", false
+// ambiguous is the remedy when no anchor can decide ("" otherwise).
+func planRestore(root string, roles map[string]roleFile, snap ccregistry.Snapshot, sid, cwd, branch string) (restored *roleFile, stale, lastSeen, ambiguous string) {
+	if _, has := roles[sid]; has {
+		return nil, "", "", ""
 	}
-	self, ok := rc.snap.Find(sid)
+	self, ok := snap.Find(sid)
 	if !ok {
-		return nil, "", "", false
+		return nil, "", "", ""
+	}
+	// A file still rotating to sid after reconcile is a tie movesTo refused to break:
+	// this process held several roles under earlier ids, set in the same second, and
+	// its own history cannot say which is current - so no anchor may pick one either.
+	for osid, f := range roles {
+		if set, err := time.Parse(time.RFC3339, f.Set); err == nil {
+			if to, ok := snap.Rotated(osid, f.Pid, set); ok && to == sid {
+				return nil, "", "", "this session held several roles under earlier session ids, registered in the same second - /lets:start <id> (worker) or /lets:start --main (orchestrator) registers the one you mean"
+			}
+		}
 	}
 	base := roleFile{Session: sid, Name: self.Name, Pid: self.Pid, Cwd: cwd, OrcaTerminal: os.Getenv(orcaTerminalVar),
-		Set: now().UTC().Format(time.RFC3339), path: filepath.Join(peersDir(rc.root), sid+".role")}
-	if task := branchTask(rc.root, branch); task != "" {
+		Set: now().UTC().Format(time.RFC3339), path: filepath.Join(peersDir(root), sid+".role")}
+	if task := branchTask(root, branch); task != "" {
 		base.Role, base.Task = "worker", task
-		return &base, "", "", false
+		return &base, "", "", ""
 	}
 	if self.NameSource != "user" || !ccregistry.ValidName(self.Name) {
-		return nil, "", "", false
+		return nil, "", "", ""
 	}
 	var dead []roleFile
-	for osid, f := range rc.roles {
+	for osid, f := range roles {
 		if f.Role != "orchestrator" {
 			continue
 		}
-		live := rc.snap.Liveness(osid, f.Pid) != ccregistry.Dead
-		if live && liveName(rc.snap, f) == self.Name {
-			return nil, "", "", false // a live holder: name_held territory, never silent
+		live := snap.Liveness(osid, f.Pid) != ccregistry.Dead
+		if live && liveName(snap, f) == self.Name {
+			return nil, "", "", "" // a live holder: name_held territory, never silent
 		}
 		if !live && f.Name == self.Name {
 			dead = append(dead, f)
@@ -111,22 +123,22 @@ func planRestore(rc *repoContext, sid, cwd, branch string) (restored *roleFile, 
 	base.Role = "orchestrator"
 	switch {
 	case len(dead) > 1:
-		return nil, "", "", true
+		return nil, "", "", "several dead orchestrators were registered as " + self.Name + " - /lets:start --main registers this session"
 	case len(dead) == 1:
 		base.Scope = dead[0].Scope
-		return &base, dead[0].Session, lastSeenFile(peersDir(rc.root), self.Name), false
+		return &base, dead[0].Session, lastSeenFile(peersDir(root), self.Name), ""
 	}
-	p := lastSeenFile(peersDir(rc.root), self.Name)
+	p := lastSeenFile(peersDir(root), self.Name)
 	data, err := os.ReadFile(p)
 	if err != nil {
-		return nil, "", "", false
+		return nil, "", "", ""
 	}
 	for _, line := range strings.Split(string(data), "\n") {
 		if k, v, ok := strings.Cut(line, ": "); ok && k == "scope" {
 			base.Scope = cleanScope(v)
 		}
 	}
-	return &base, "", p, false
+	return &base, "", p, ""
 }
 
 // branchTask is the task: of branch's .task-<slug>; "" on the merge-branch, a

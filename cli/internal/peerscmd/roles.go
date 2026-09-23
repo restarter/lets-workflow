@@ -288,14 +288,11 @@ func SetRole(root string, o RoleOptions) (*RoleInfo, error) {
 		return nil, err
 	}
 	defer unlock()
-	files, invalid := loadRoles(root)
-	snap := ccregistry.Read(ccregistry.HomeDir())
-	info := &RoleInfo{Invalid: invalid}
-	moves := reconcileRoles(files, snap)
-	applyMoves(files, moves)
-	if err := persistMoves(root, moves); err != nil {
+	files, invalid, snap, err := reconcileLocked(root)
+	if err != nil {
 		return nil, err
 	}
+	info := &RoleInfo{Invalid: invalid}
 	info.Pruned = pruneRoles(files, snap, o.Session)
 	self, selfKnown := snap.Find(o.Session)
 	info.Registered = selfKnown
@@ -307,7 +304,7 @@ func SetRole(root string, o RoleOptions) (*RoleInfo, error) {
 	if o.Role == "orchestrator" {
 		if !ccregistry.ValidName(self.Name) {
 			info.Reason = "orchestrator_needs_name"
-			info.Remediation = remedy("orchestrator_needs_name", "", false)
+			info.Remediation = remedy("orchestrator_needs_name", "", "", false)
 			return info, nil
 		}
 		for sid, f := range files {

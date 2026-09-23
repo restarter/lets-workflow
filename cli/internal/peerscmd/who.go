@@ -348,10 +348,14 @@ func Who(ctx context.Context, o WhoOptions) (*WhoResult, error) {
 	}
 	if o.Prune {
 		if unlock, err := lockPeers(rc.root, max(time.Until(deadlineOf(ctx)), 50*time.Millisecond)); err == nil {
-			if err := persistMoves(rc.root, rc.moves); err != nil {
+			// Decide from what is on disk now, under the lock - never from the view
+			// loaded before it (a role written since would be overwritten).
+			files, _, snap, err := reconcileLocked(rc.root)
+			if err != nil {
 				res.Degraded = append(res.Degraded, Degraded{Source: "roles", Reason: "role_write_failed", Detail: err.Error()})
 			}
-			pruneRoles(rc.roles, rc.snap, "")
+			pruneRoles(files, snap, "")
+			rc.roles, rc.moves = files, nil
 			unlock()
 		} else {
 			res.Degraded = append(res.Degraded, Degraded{Source: "roles", Reason: "peers_lock_busy"})

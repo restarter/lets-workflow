@@ -256,8 +256,24 @@ func TestResolve_EveryReasonHasRemediation(t *testing.T) {
 		t.Errorf("a dead end must carry its remedy: %+v", r)
 	}
 	for _, reason := range []string{"orchestrator_not_registered", "target_not_alive", "target_in_other_repo", "target_unsendable", "bound_ambiguous", "branch_unreadable", "budget_exhausted", "orchestrator_needs_name"} {
-		if remedy(reason, "X", false) == "" || remedy(reason, "X", true) == "" {
+		if remedy(reason, "", "X", false) == "" || remedy(reason, "", "X", true) == "" {
 			t.Errorf("%s has no remedy", reason)
+		}
+	}
+}
+
+// An unsendable target's remedy follows its reason: idling fixes none of these.
+func TestRemedy_UnsendableFollowsDetail(t *testing.T) {
+	for detail, want := range map[string]string{
+		"session_duplicated": "close one of them",
+		"name_not_unique":    "/rename all but one",
+		"no_valid_name":      "/rename it",
+		"peer_ambiguous":     "close the stale pane",
+		"liveness_unknown":   "/lets:orc who",
+	} {
+		got := remedy("target_unsendable", detail, "X", false)
+		if !strings.Contains(got, want) || strings.Contains(got, "idle") {
+			t.Errorf("%s: %q, want it to say %q", detail, got, want)
 		}
 	}
 }
