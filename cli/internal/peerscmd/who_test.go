@@ -310,3 +310,40 @@ func TestWho_OrcSiblingReadOnly(t *testing.T) {
 		}
 	}
 }
+
+// A sibling orchestrator of that name whose liveness is unknown claims nobody: only a
+// known-live one keeps its repo's workers.
+func TestWho_OrcSiblingUnknownOrchestratorKeepsNothing(t *testing.T) {
+	root, sib := orcWithSiblingWorker(t, "MAIN")
+	plantRole(t, sib, sidN, "role: orchestrator\nname: MAIN\npid: 77\nset: x\n")
+	claudeHome(t, []regRow{{1, sidM, "MAIN", root}, {3, sidW, "W", sib}}, 77) // pid 77: live, unknown protocol
+	res, _ := Who(context.Background(), WhoOptions{Cwd: root, Orc: "MAIN"})
+	if peerBySession(res.Peers, sidW) == nil {
+		t.Fatalf("an unknown-liveness sibling orchestrator must not hide the worker: %+v", res.Peers)
+	}
+}
+
+// Orca failing because the budget ran out is reported as the budget, not as Orca.
+func TestWho_OrcSiblingListFailsAfterDeadline(t *testing.T) {
+	root, sib := orcWithSiblingWorker(t, "MAIN")
+	claudeHome(t, []regRow{{1, sidM, "MAIN", root}, {3, sidW, "W", sib}})
+	old := listOrcaRepos
+	listOrcaRepos = func(ctx context.Context) (*orcacmd.ReposInfo, *orcacmd.Failure) {
+		<-ctx.Done()
+		return &orcacmd.ReposInfo{Reason: "orca_unavailable"}, &orcacmd.Failure{Reason: "orca_unavailable"}
+	}
+	t.Cleanup(func() { listOrcaRepos = old })
+	res, _ := Who(context.Background(), WhoOptions{Cwd: root, Orc: "MAIN", Timeout: 300 * time.Millisecond})
+	for _, d := range res.Degraded {
+		if d.Source == "orca" {
+			t.Errorf("a spent budget must not read as an Orca failure: %+v", res.Degraded)
+		}
+	}
+	spent := false
+	for _, d := range res.Degraded {
+		spent = spent || (d.Source == "context" && d.Reason == "deadline_exceeded")
+	}
+	if !spent {
+		t.Errorf("the spent budget must be named: %+v", res.Degraded)
+	}
+}

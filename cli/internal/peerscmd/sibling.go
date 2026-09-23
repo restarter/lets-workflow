@@ -185,6 +185,9 @@ func siblingOrchestrator(ctx context.Context, rc *repoContext, name string, loca
 // that cannot be read degrades by name; a spent budget stops the walk and says so.
 func siblingPeers(ctx context.Context, o WhoOptions, skip string) (repos []orcacmd.RepoInfo, peers []Peer, last []LastOrchestrator, degraded []Degraded) {
 	info, f := listOrcaRepos(ctx)
+	if ctx.Err() != nil { // Orca's own failure after a spent budget is the budget, not Orca
+		return nil, nil, nil, []Degraded{{Source: "context", Reason: "deadline_exceeded", Detail: "orca repo list"}}
+	}
 	if f != nil {
 		return nil, nil, nil, []Degraded{{Source: "orca", Reason: nonEmpty(info.Reason, f.Reason), Detail: f.Detail}}
 	}
@@ -238,7 +241,7 @@ func siblingWorkers(ctx context.Context, rc *repoContext, o WhoOptions) ([]Peer,
 	_, rows, _, degraded := siblingPeers(ctx, WhoOptions{Cwd: o.Cwd, ProbeOrca: o.ProbeOrca, Timeout: o.Timeout}, rc.mainRoot)
 	claimed := map[int]bool{}
 	for _, p := range rows {
-		if p.Role == "orchestrator" && p.Name == o.Orc && p.RepoIndex != nil {
+		if p.Role == "orchestrator" && p.Name == o.Orc && p.Alive == "alive" && p.RepoIndex != nil {
 			claimed[*p.RepoIndex] = true
 		}
 	}
