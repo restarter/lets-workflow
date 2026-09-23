@@ -44,7 +44,7 @@ A multi-stage chain so per-agent reports never enter the conversation - only the
 
 ## Returns
 
-`{ verdict, findings[], systemic[], summary{}, counts{blockers,suggestions,total,refuted,verify_failed} }` - the same shape `review.md` Step 8/8.5 persists. `verify_failed` > 0 means that many findings could not be verified (skeptics errored) and were kept unverified - surface it, never treat as "verified clean". `findings` + `verdict` are the `/lets:github-pr --json` contract; do not rename them.
+`{ verdict, findings[], systemic[], summary{}, counts{blockers,suggestions,total,refuted,verify_failed}, refuted_findings[] }` - the same shape `review.md` Step 8/8.5 persists. `verify_failed` > 0 means that many findings could not be verified (skeptics errored) and were kept unverified - surface it, never treat as "verified clean". `findings` + `verdict` are the `/lets:github-pr --json` contract; do not rename them. Each verified finding carries `verification: {action: 'keep'|'downgrade', real, votes}` (a `[NIT]` passthrough carries none - it is never verified), and `refuted_findings[]` lists the dropped ones as `{title, file, line, tier}` - both additive, read by `/lets:review --fix` (Step 10.5).
 
 ## Constraints (Dynamic Workflow runtime)
 
