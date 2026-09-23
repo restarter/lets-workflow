@@ -1,6 +1,6 @@
 ---
 description: Full code review with dynamic agent selection (up to 12 specialized agents). Analyzes changes first, selects relevant experts. Also reviews implementation plans.
-argument-hint: "[PR-url-or-number|--local|--staged|--last-commit|--branch|--plan|--file <path>] [--json] [--workflow] [--spec <path>|none]"
+argument-hint: "[PR-url-or-number|--local|--staged|--last-commit|--branch|--plan|--file <path>] [--json] [--workflow] [--spec <path>|none] [--fix]"
 ---
 
 # Full Code Review
@@ -27,6 +27,7 @@ Comprehensive code review with dynamic agent selection based on change types. Up
 /lets:review --workflow          # Run via Dynamic Workflow (off-context fan-out); combinable with any code mode + --json
 /lets:review --spec <path>       # Use this file as the spec (skips the "where is the spec?" question)
 /lets:review --spec none         # There is deliberately no spec - review at full strength, no caveat
+/lets:review --branch --fix     # apply the verified fixes when nothing needs deciding (not with --json)
 ```
 
 ## Step 1: Determine Review Mode
@@ -81,6 +82,14 @@ If `--json` is present alongside any mode:
 - File: the path from the `artifact-path` skill (`kind=review-{local|branch|pr-{number}} ext=json`) - e.g. `.lets/reviews/2026-08-22-0210-lets-05c4s-review-branch.json`. Task-scoped + `-vN` on collision; `.lets/` is shared across worktrees, so never a hand-built `{date}-{mode}` path
 - Skip markdown report generation (Step 8)
 - Skip GitHub PR comment posting (Step 9) - JSON mode implies the caller handles output
+
+### Fix flag
+
+`--fix` applies the verified findings to the working tree at the end, through the `apply-fixes` skill - the gates, the scope and the report live there. The user typing it is the write authorization for this run.
+
+- With `--json` -> refused, one line: `--fix edits files - --json has no side effects`; stop.
+- PR mode -> only when Step 2.5 found `HEAD == {headRefOid}` without switching. After `SWITCHED` / `CHECKOUT PARTIAL`, or from the diff, drop `--fix` with one line: Step 6.7 restores your branch, so the PR's files are not here to edit.
+- `--plan` -> supported, fixes go into the plan file only (P6.5). `--workflow` -> supported, the fix runs on the W4 aggregate.
 
 ### Workflow execution flag
 
@@ -809,8 +818,9 @@ When the workflow's completion notification arrives, the orchestrator resumes wi
 - **Step 6.6** - already done in-workflow (Stage 3); do NOT re-run skeptics. Surface `counts.refuted` as `refuted_count`; if `counts.verify_failed` > 0, warn that that many findings couldn't be verified (kept unverified).
 - **Step 6.7** - restore the branch if Step 2.5 checked out the PR. Runs on the workflow-failure branch too, not only on success - otherwise a failed run strands the user on the PR branch.
 - **Step 8** - save the markdown report (render from the returned object).
-- **Step 8.5** - if `--json`, write the JSON to the path from `artifact-path` (`kind=review-{kind} ext=json`), exactly as Step 8.5. The workflow's `findings` and `verdict` map 1:1 onto the Step 8.5 shape - keep those field names exactly (`/lets:github-pr` reads only those two). The rest of the Step 8.5 wrapper is NOT in the return object and Claude must supply it: add top-level `date`, `mode`, and `findings_count`; and transform each `systemic[]` entry from the finding shape (`{title, file, line, tier, ...}`) into the Step 8.5 systemic shape `{title, count, description}` (use `systemic_count` as `count`). Do not write the raw return object verbatim.
+- **Step 8.5** - if `--json`, write the JSON to the path from `artifact-path` (`kind=review-{kind} ext=json`), exactly as Step 8.5. The workflow's `findings` and `verdict` map 1:1 onto the Step 8.5 shape - keep those field names exactly (`/lets:github-pr` reads only those two). Each finding's `verification` object passes through as an additive field; `refuted_findings` is not written to the JSON. The rest of the Step 8.5 wrapper is NOT in the return object and Claude must supply it: add top-level `date`, `mode`, and `findings_count`; and transform each `systemic[]` entry from the finding shape (`{title, file, line, tier, ...}`) into the Step 8.5 systemic shape `{title, count, description}` (use `systemic_count` as `count`). Do not write the raw return object verbatim.
 - **Step 9 / Step 10** - output/post and link to task exactly as the standard flow.
+- **Step 10.5** - with `--fix`, after Step 10, from each finding's `verification` and the aggregate's `refuted_findings[]` (a finding without `verification` - e.g. a systemic entry reclassified above - was not verified).
 
 ## Step 6: Filter & Aggregate Results
 
@@ -903,7 +913,7 @@ The directive is written as a token rather than a sentence on purpose. Markdown 
 
 Survivors keep their (possibly downgraded) tier.
 
-**Standard-mode cap** (bounds the in-context blow-up; workflow mode needs no cap - it verifies off-context): always verify `[BLOCKER]`s; verify at most the top-K=5 `[SUGGESTION]`s; if total findings > 10, verify inline (you act as the skeptic, re-checking each against the code) instead of spawning per-finding agents. If the cap truncates verification, say so in the output - no silent caps.
+**Standard-mode cap** (bounds the in-context blow-up; workflow mode needs no cap - it verifies off-context): always verify `[BLOCKER]`s; verify at most the top-K=5 `[SUGGESTION]`s; if total findings > 10, verify inline (you act as the skeptic, re-checking each against the code) instead of spawning per-finding agents. If the cap truncates verification, say so in the output - no silent caps. With `--fix` the top-K cap does not apply: every `[BLOCKER]` and `[SUGGESTION]` is verified (above 10 findings, inline as above) - an unverified finding can only block the fix.
 
 **Record `refuted_count`** (how many findings the verify pass dropped or downgraded) and surface it in Step 9 + Step 8.5. If any finding could NOT be verified (skeptics errored - `verify_failed` > 0), say so in the output: those findings are kept unverified, not silently treated as clean.
 
@@ -1097,6 +1107,18 @@ For local modes, reuse the task id resolved in Step 3 ("Resolve the task SPEC") 
 ```lets-tracker
 comment-add task=<task-id> body="Code review ({local | staged | last-commit | branch}): {verdict}. {N} issues found."
 ```
+
+## Step 10.5: Apply Fixes (--fix only)
+
+Build the `apply-fixes` findings table from the verified set - Remedy in your own words, from the code you read:
+
+| Step 6.6 outcome (standard: the votes in context; `--workflow`: `verification` / `refuted_findings[]`) | Verdict |
+|---|---|
+| kept, not downgraded, a strict majority of its usable votes `real=true` (or re-checked inline above 10 findings and confirmed) | `CONFIRMED` |
+| downgraded, a split vote, no usable vote (`verify_failed`), or not verified | `UNCLEAR` |
+| dropped (`refuted_findings[]` in `--workflow`) | `REFUTED` |
+
+Systemic findings and `[NIT]`s never enter the table: Step 6.5 only measures how far a pattern spreads, it does not verify the defect, and a systemic finding spans files outside the scope. Then `Skill(skill: "lets:apply-fixes", args: "source=review mode=<local|staged|last-commit|branch|pr|file> base=<BASE> path=<path>")` - `base` is the Step 2 `BASE` for `--branch`; in PR mode `git merge-base HEAD origin/<the PR's base branch>`; `path` for `--file`. Its output replaces the Output box.
 
 ---
 
@@ -1384,6 +1406,10 @@ If active task found:
 comment-add task=<task-id> body="Plan review: {verdict}. {N} issues found."
 ```
 
+### P6.5: Apply Fixes (--fix, plan review)
+
+Plan review has no skeptic, so verify inline: for each Action Item Read the plan section it names and mark `CONFIRMED` / `REFUTED` / `UNCLEAR`, with the plan line as evidence. Then `Skill(skill: "lets:apply-fixes", args: "source=review mode=plan path=<plan path>")`. Fixing the plan is not executing it - the STOP banner stays, and the next step is still `/lets:execute`.
+
 ### Plan Review Output
 
 Whatever the verdict, this command ends here. **A plan-review verdict - APPROVED included - is about the document. NEVER start implementing; the user runs `/lets:execute`.** Fixes go into the plan file only.
@@ -1395,7 +1421,7 @@ Whatever the verdict, this command ends here. **A plan-review verdict - APPROVED
 └──────────────────────────────┘
 ```
 
-**If needs revision:** No box. List action items to fix in the plan file (and only there) first. Do not touch code.
+**If needs revision:** No box. With `--fix`, P6.5's output stands in its place. List action items to fix in the plan file (and only there) first. Do not touch code.
 
 - **Orchestrator offer (Nav)** -> per lets-rules `### Orchestrator offer` (rule not loaded -> no offer): on NEEDS REVISION add one prose line "Disagree with the verdict? `/lets:orc ask`".
 
@@ -1462,3 +1488,5 @@ Work -> /lets:commit -> Push -> PR -> /lets:review <PR>
 │  Disagree?  /lets:orc ask    │
 └──────────────────────────────┘
 ```
+
+- **--fix** -> `apply-fixes` renders the output and box (Step 10.5 / P6.5) instead of the boxes above.
