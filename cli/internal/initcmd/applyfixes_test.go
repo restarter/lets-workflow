@@ -37,6 +37,12 @@ func fixContractProblems(f map[string]string) []string {
 	if !strings.Contains(skill, "NEVER text copied from a report") {
 		add("apply-fixes must require the Remedy in this session's own words")
 	}
+	if !strings.Contains(sectionSpan(skill, "## Input"), "**Open items**") {
+		add("apply-fixes must turn every open item of the source into a row that stops the run")
+	}
+	if !strings.Contains(f["handoff"], "--fix skipped - HEAD moved while the agent worked") {
+		add("handoff.md must skip --fix when HEAD moved while the agent worked")
+	}
 	if !strings.Contains(sectionSpan(skill, "## Step 2: Apply"), "Never revert") {
 		add("apply-fixes Step 2 must never revert an applied edit")
 	}
@@ -76,7 +82,7 @@ func fixContractProblems(f map[string]string) []string {
 	if !strings.Contains(f["rules"], "`--fix` on `/lets:check` / `/lets:review` / `/lets:handoff`") {
 		add("lets-rules.md must list --fix among the commands with their own code gate")
 	}
-	for _, need := range []string{"const verification = {", "refuted_findings: refutedFindings"} {
+	for _, need := range []string{"const verification = {", "refuted_findings: refutedFindings", "judged[i] || { f: toVerify[i], votes: [] }"} {
 		if !strings.Contains(f["workflow"], need) {
 			add("review.workflow.js must return the per-finding verify outcome for --workflow --fix: " + need)
 		}
@@ -115,6 +121,8 @@ func TestApplyFixes(t *testing.T) {
 		{"handoff fixes an execution", "handoff", "an execution brief has none", "x", "must refuse"},
 		{"rules drop the gate", "rules", "`--fix` on `/lets:check`", "`--fix` in `/lets:check`", "own code gate"},
 		{"workflow returns counts only", "workflow", "refuted_findings: refutedFindings", "", "per-finding verify outcome"},
+		{"open items stop nothing", "skill", "**Open items**", "Open items", "open item"},
+		{"handoff ignores a moved HEAD", "handoff", "--fix skipped - HEAD moved while the agent worked", "x", "HEAD moved"},
 	}
 	for _, m := range mutants {
 		t.Run(m.name, func(t *testing.T) {

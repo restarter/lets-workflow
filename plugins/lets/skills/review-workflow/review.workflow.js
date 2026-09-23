@@ -290,7 +290,10 @@ let refuted = 0
 let verifyFailed = 0 // findings whose skeptics all errored -> verification did NOT run (not "verified clean")
 const kept = []
 const refutedFindings = [] // dropped rows, by identity - /lets:review --fix reports them as REFUTED
-for (const j of judged.filter(Boolean)) {
+// Index-aligned with toVerify: a slot whose whole verify fan-out failed comes back null and must
+// stay a finding with no votes (kept, counted in verifyFailed, UNCLEAR for --fix) - never vanish.
+for (let i = 0; i < toVerify.length; i++) {
+  const j = judged[i] || { f: toVerify[i], votes: [] }
   if (j.votes.length === 0) verifyFailed++ // no usable verdict -> kept conservatively, but flag it
   const action = decide(j.f, j.votes)
   // Per-finding outcome for /lets:review --fix (review.md Step 10.5): counts alone cannot tell a

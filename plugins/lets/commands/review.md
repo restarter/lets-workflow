@@ -1118,7 +1118,7 @@ Build the `apply-fixes` findings table from the verified set - Remedy in your ow
 | downgraded, a split vote, no usable vote (`verify_failed`), or not verified | `UNCLEAR` |
 | dropped (`refuted_findings[]` in `--workflow`) | `REFUTED` |
 
-Systemic findings and `[NIT]`s never enter the table: Step 6.5 only measures how far a pattern spreads, it does not verify the defect, and a systemic finding spans files outside the scope. Then `Skill(skill: "lets:apply-fixes", args: "source=review mode=<local|staged|last-commit|branch|pr|file> base=<BASE> path=<path>")` - `base` is the Step 2 `BASE` for `--branch`; in PR mode `git merge-base HEAD origin/<the PR's base branch>`; `path` for `--file`. Its output replaces the Output box.
+Systemic findings and `[NIT]`s never enter the table: Step 6.5 only measures how far a pattern spreads, it does not verify the defect, and a systemic finding spans files outside the scope. Then `Skill(skill: "lets:apply-fixes", args: "source=review mode=<local|staged|last-commit|branch|pr|file> base=<BASE> path=<path>")` - `base` is the Step 2 `BASE` for `--branch`; in PR mode `scope-file=` instead - write the changed files of the PR diff Step 2 fetched (`gh pr diff <n> --name-only`, bitbucket: the diffstat paths) to the file `apply-fixes` names, never a local merge-base; `path` for `--file`. Its output replaces the Output box.
 
 ---
 

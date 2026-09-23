@@ -412,7 +412,7 @@ If clean (no issues) - skip, don't add noise to the task.
 
 ## Step 5.5: Apply Fixes (--fix only)
 
-Build the `apply-fixes` table from Step 3.5 - Remedy in your own words - and invoke `Skill(skill: "lets:apply-fixes", args: "source=check mode=<local|staged|last-commit|branch|pr|file|plan> base=<BASE> path=<path>")`: `base` is the Step 1 `BASE` for `--branch`, `git merge-base HEAD origin/<the PR's base branch>` in PR mode; `path` for `--file` / `--plan`. Its output replaces the Output box.
+Build the `apply-fixes` table from Step 3.5 - Remedy in your own words - and invoke `Skill(skill: "lets:apply-fixes", args: "source=check mode=<local|staged|last-commit|branch|pr|file|plan> base=<BASE> path=<path>")`: `base` is the Step 1 `BASE` for `--branch`; in PR mode `scope-file=` instead - write the changed files of the PR diff Step 1 fetched (`gh pr diff <n> --name-only`, bitbucket: the diffstat paths) to the file `apply-fixes` names, never a local merge-base; `path` for `--file` / `--plan`. Its output replaces the Output box.
 
 ## Output
 
