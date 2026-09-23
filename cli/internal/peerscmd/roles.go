@@ -290,6 +290,11 @@ func SetRole(root string, o RoleOptions) (*RoleInfo, error) {
 	files, invalid := loadRoles(root)
 	snap := ccregistry.Read(ccregistry.HomeDir())
 	info := &RoleInfo{Invalid: invalid}
+	moves := reconcileRoles(files, snap)
+	applyMoves(files, moves)
+	if err := persistMoves(root, moves); err != nil {
+		return nil, err
+	}
 	info.Pruned = pruneRoles(files, snap, o.Session)
 	self, selfKnown := snap.Find(o.Session)
 	info.Registered = selfKnown

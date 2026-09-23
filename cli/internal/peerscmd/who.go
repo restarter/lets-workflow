@@ -62,7 +62,8 @@ type repoContext struct {
 	roots          []string
 	snap           ccregistry.Snapshot
 	roles          map[string]roleFile
-	ops            orcaOps
+	moves          []move // reconcileRoles' corrections, already applied to roles; persisted only under peers.lock
+	ops           orcaOps
 	terms          []orcaTerm
 	degraded       []Degraded
 	peersCache     []Peer // peers() is deterministic for one context; see peers()
@@ -106,6 +107,8 @@ func loadRepoFor(ctx context.Context, cwd string, useOrca func(root string) bool
 	for _, name := range invalid {
 		rc.degraded = append(rc.degraded, Degraded{Source: "roles", Reason: "role_file_invalid", Detail: name})
 	}
+	rc.moves = reconcileRoles(rc.roles, rc.snap)
+	applyMoves(rc.roles, rc.moves)
 	if useOrca(root) {
 		ops, f := newOrcaOps()
 		if f != nil {
@@ -342,6 +345,9 @@ func Who(ctx context.Context, o WhoOptions) (*WhoResult, error) {
 	res.Degraded = rc.degraded
 	if o.Prune {
 		if unlock, err := lockPeers(rc.root, max(time.Until(deadlineOf(ctx)), 50*time.Millisecond)); err == nil {
+			if err := persistMoves(rc.root, rc.moves); err != nil {
+				res.Degraded = append(res.Degraded, Degraded{Source: "roles", Reason: "role_write_failed", Detail: err.Error()})
+			}
 			pruneRoles(rc.roles, rc.snap, "")
 			unlock()
 		} else {
