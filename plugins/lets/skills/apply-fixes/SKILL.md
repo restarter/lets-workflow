@@ -91,4 +91,13 @@ This output replaces the caller's own box. A complete run ends with:
 └────────────────────────────────┘
 ```
 
-A stopped run: no box - `Review the applied edits, then /lets:check.`
+`mode=plan` - the plan lives under the gitignored `.lets/`, so there is nothing to commit and a plain `/lets:check` sees no diff:
+
+```
+┌─ LETS ─────────────────────────┐
+│  Check?   /lets:check --plan   │
+│  Execute? /lets:execute        │
+└────────────────────────────────┘
+```
+
+A stopped run: no box - `Review the applied edits, then /lets:check.` (`/lets:check --plan` for `mode=plan`).

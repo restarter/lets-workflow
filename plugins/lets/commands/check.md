@@ -108,7 +108,7 @@ Read the plan and review with 5 lenses (same confidence filter):
 
 REMEDY QUALITY: for each reported issue, ask whether the proposed fix removes the cause or only makes this instance pass - and hold the plan's own remedies to the same standard, since a step that patches a symptom where it surfaces rather than at the component that owns the behavior is itself an issue. Prefer the smallest fix at the owning boundary; do not propose broad refactoring in a quick check.
 
-Output same format as code check, then print: Plan check done. I will not implement it - run `/lets:execute` when ready. A plan-check verdict (any verdict) is about the document; NEVER start implementing, fixes go into the plan file only. With `--fix`: verify each issue as Step 3.5 does, then Step 5.5 with `mode=plan path=<the plan>`. Then:
+Output same format as code check, then print: Plan check done. I will not implement it - run `/lets:execute` when ready. A plan-check verdict (any verdict) is about the document; NEVER start implementing, fixes go into the plan file only. With `--fix`: verify each issue as Step 3.5 does, then Step 5.5 with `mode=plan path=<the plan>`. Then, without `--fix` (with it, `apply-fixes` renders the box):
 
 ```
 ┌─ LETS ────────────────────────────────────┐
