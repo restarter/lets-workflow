@@ -112,7 +112,7 @@ These fire automatically when you describe the action in conversation - no slash
 | Skill | When to use |
 |-------|-------------|
 | `/lets:plan` | Task needs architecture + implementation plan |
-| `/lets:execute` | Have a plan from /lets:plan, ready to execute via native plan mode |
+| `/lets:execute` | Have a plan from /lets:plan, ready to execute - inline in native plan mode, or delegated to implementer agents you review |
 
 **Rule of thumb:** Can you write a 1-sentence requirement?
 - YES, small task -> work directly

@@ -100,7 +100,7 @@ AskUserQuestion(
 **One rule above all: transparency. User sees everything, decides everything.**
 
 - Never commit or push without explicit user approval
-- **NEVER start writing code without an explicit user approval to write code.** Presenting a plan, a diff proposal, or an analysis and getting "ok" / "good" / "+" back is approval of THAT TEXT, not of implementation. When code would follow such a text approval, ask in words "Start implementing?" first. A direct instruction to change a specific thing IS that approval; a command with its own code gate (`/lets:execute` after its plan-mode approval, `/lets:team run`, `/lets:review-round`'s final edit pass) needs no extra question.
+- **NEVER start writing code without an explicit user approval to write code.** Presenting a plan, a diff proposal, or an analysis and getting "ok" / "good" / "+" back is approval of THAT TEXT, not of implementation. When code would follow such a text approval, ask in words "Start implementing?" first. A direct instruction to change a specific thing IS that approval; a command with its own code gate (`/lets:execute` after its own approval - plan mode inline, the Start gate when delegated - `/lets:team run`, `/lets:review-round`'s final edit pass) needs no extra question.
 - **A plan is NEVER executed by itself.** After `/lets:plan` (any mode: full, `--fast`, `/lets:plan-workflow`) and after every plan-review round (`/lets:review --plan`, `/lets:check --plan`, APPROVED included) the ONLY way into code is the user typing `/lets:execute` - or `/lets:handoff --execute`, which hands the plan to an agent tab of this worktree instead of running it here. Any reaction to the plan - "ok", "approved", "looks good", a question, a requested edit - is a reaction to the DOCUMENT. Reply "Plan accepted - run `/lets:execute` when ready." and STOP. Plan files carry a `THIS PLAN IS NOT A GO` banner for this reason - obey it wherever you read one.
 - Never silently switch approaches when something fails - stop, explain, present options, wait
 - Don't touch code without explicit approval: no deleting, commenting out, or "simplifying" existing code user didn't ask about
@@ -178,7 +178,7 @@ AUTO MODE (autonomous execution: `/loop`, `/lets:execute --auto`, `/lets:team` p
 - "Execute immediately" = run the next step of an already-approved plan without re-confirming each step. It does NOT mean "skip showing the plan".
 - "Let's think about how to do X" / "подумаємо як" / "проаналізуй" / "how to do X?" = request for a plan or analysis, NOT a green light to edit. Produce the plan/analysis, stop, wait.
 - Multi-task batches: show the full batch breakdown (per-task approach + files touched) before the first edit. One approval covers the whole batch — no need to re-ask per task — but the user must see it before any code changes.
-- Plan approval ≠ execution approval. A saved plan, a plan-review verdict (even APPROVED), or "ok" on either never starts implementation - `/lets:execute` does, and inside it the plan-mode approval is the gate (`/lets:handoff --execute` hands the plan to another agent; the user typing it is that gate). This holds after `/clear`, `/compact`, and in a new session that re-reads the plan.
+- Plan approval ≠ execution approval. A saved plan, a plan-review verdict (even APPROVED), or "ok" on either never starts implementation - `/lets:execute` does, and inside it the gate is plan mode for an inline run, or the Start gate of a delegated run (`/lets:handoff --execute` hands the plan to another agent; the user typing it is that gate). This holds after `/clear`, `/compact`, and in a new session that re-reads the plan.
 
 **Escape hatch:**
 - User interrupt = stop the current action, ack the interruption, await direction. Don't resume without explicit re-approval.
@@ -377,7 +377,7 @@ PR review:  /lets:github-pr <PR> -> discuss -> post -> /lets:github-pr --follow-
 PR respond: /lets:github-pr --respond <PR> -> triage -> fix -> reply
 ```
 
-If a plan exists from `/lets:plan`, the user runs `/lets:execute` to implement it here, or `/lets:handoff --execute --send [<tab>]` to have an agent tab of this worktree implement it - nothing else starts implementation, and the model never starts it on its own. Execute enters native plan mode (its approval is the code-write gate); use `/lets:commit` at natural commit points.
+If a plan exists from `/lets:plan`, the user runs `/lets:execute` to implement it here, or `/lets:handoff --execute --send [<tab>]` to have an agent tab of this worktree implement it - nothing else starts implementation, and the model never starts it on its own. Execute runs inline in native plan mode (its approval is the code-write gate), or delegates to implementer agents (its Start gate is, and each chunk is committed only after you accept it); use `/lets:commit` at natural commit points.
 
 Two separate lifecycles:
 - **Session:** `/lets:start` ... `/lets:end` (one conversation)
@@ -503,7 +503,7 @@ Every response ends with exactly ONE footer - never mix two. Pick the type by wh
 | `/lets:backlog` | Planning | Backlog review (multi-agent; `--workflow` = off-context) + `--fast` quick no-agent pulse + interactive cleanup triage |
 | `/lets:plan` | Planning | Structured planning with agents - architecture + implementation plan (`--fast` = orchestrator-only, skips explorer/architect/expert subagents; `--idea` = a concept document, no code exploration, never executed) |
 | `/lets:plan-workflow` | Planning | **PREVIEW** - autonomous planning via a Dynamic Workflow (goal + rubric up front, off-context, approve at end); folds into native `/lets:plan` later (lets-jsw00); `--fast` = lean budget (~7 agents, still off-context, heavy review pass skipped, quick plan-check kept) - distinct from `/lets:plan --fast` (orchestrator-only, no subagents) |
-| `/lets:execute` | Planning | Execute plan from /lets:plan via native plan mode |
+| `/lets:execute` | Planning | Execute plan from /lets:plan - inline in native plan mode, or delegated to named implementer agents you review and correct (`--implementers`) |
 | `/lets:status` | Utility | Read-only orient snapshot - where you are, what's in flight, what's next (tracker-universal) |
 | `/lets:worktree` | Utility | Create/manage interactive worktrees for parallel work |
 | `/lets:orc` | Utility | Talk to this chat's orchestrator or a named peer session - `ask` / `ping` / `read` / `tell` / `who`; the only sender of peer messages |
