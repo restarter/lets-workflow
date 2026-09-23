@@ -74,8 +74,8 @@ func delegatedContractProblems(f map[string]string) []string {
 	if !strings.Contains(split, "depends on something learned during the run") {
 		add("Step 4.6 must refuse a plan in which a task's execution depends on something learned during the run")
 	}
-	if !strings.Contains(split, "print it as your own message text before the Start gate") {
-		add("Step 4.6 must print the split before the Start gate - Start approves it")
+	if !strings.Contains(exec, `preview: "{the Step 4.6 split table}"`) {
+		add("the Start gate must carry the Step 4.6 split as its preview - Start approves the split the user sees")
 	}
 	delegated := sectionSpan(exec, "## Step 5-D: Delegated run (Implementers)")
 	if delegated == "" {
@@ -88,6 +88,9 @@ func delegatedContractProblems(f map[string]string) []string {
 		}
 		if n := strings.Count(delegated, `header: "Review"`); n != 3 {
 			add(fmt.Sprintf("Step 5-D must ask exactly 3 Review gates (one per status), found %d", n))
+		}
+		if n := strings.Count(delegated, `preview: "{the review block}"`); n != 3 {
+			add(fmt.Sprintf("each of the 3 Review gates must carry the review block as its first option's preview, found %d", n))
 		}
 		for _, need := range []string{`Skill(skill: "lets:implementer-run"`, "TaskStop(", "git ls-files --others --exclude-standard", "--untracked-files=all", "git diff HEAD", "git diff --cached --name-only", `args: "approved=review-accept"`, "patch_sha", "**Render review**", "**What is a report.**", "malformed-report", "Write a report with the Write tool", "| `pending` |", "| `review` / `paused` |", "| `committing` |", "AMENDMENT to chunk"} {
 			if !strings.Contains(delegated, need) {

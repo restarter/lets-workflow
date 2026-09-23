@@ -253,7 +253,7 @@ Chunk ids are `c1`, `c2`, ... in plan order. A chunk's **allowlist** is the unio
 
 **2. Group chunks.** A caller task is a barrier: nothing before it may still be open when it runs, and nothing after it starts before it is done. Within each stretch between barriers, two chunks share a group when their allowlists share a path, directly or through another chunk of the stretch. Groups keep plan order.
 
-**3. Show the split** - print it as your own message text before the Start gate (MUST - Start approves this split), every task exactly once:
+**3. Show the split** - in the Start gate itself, as the `preview` of its Start option (5-D.2), so the user approves the split they are looking at (a table printed as prose before a gate is skipped in practice). Every task exactly once:
 
 ```
 ### Plan split
@@ -374,7 +374,7 @@ AskUserQuestion(
     question: "Hand {N} chunk(s) to implementer agents, one at a time in this tree? {M} caller task(s) run here. Nothing is committed until you accept each diff.",
     header: "Start work",
     options: [
-      { label: "Start (Recommended)", description: "Pick the model, then spawn the first implementer" },
+      { label: "Start (Recommended)", description: "Pick the model, then spawn the first implementer", preview: "{the Step 4.6 split table}" },
       { label: "Run inline instead", description: "Execute this plan here in native plan mode (Step 5)" },
       { label: "Cancel", description: "Stop; nothing is spawned and nothing is edited" }
     ],
@@ -429,7 +429,21 @@ BASE: {base sha}
 TASKS:
 {the chunk's ### Task sections verbatim, each **Commit:** block removed - this session commits after review}
 PROJECT RULES: read the repository's CLAUDE.md before editing.
-REPORT: in the shape your agent definition specifies.
+REPORT: fill in exactly this skeleton and send it as your final message - nothing before it, nothing after it. Status is one of `complete`, `deviation-stopped`, `blocked`; keep only the block that matches it:
+### Chunk: {chunk}
+**Status:** `complete`
+**Files changed**
+- `path` - what changed
+**Verify**
+Command: `...`
+Output:
+(raw output)
+Result: `pass`
+**Tree**
+Before: `...`
+After: `...`
+**Deviation** (deviation-stopped only) - Plan expected / Reality / Options
+**Blocked** (blocked only) - What / Why
 ```
 
 Spawn: `Skill(skill: "lets:implementer-run", args: "op=spawn name={agent} chunk-file=.lets/cache/chunk-{TASK_ID}-{RUN}-{chunk}.md")`, adding ` model=<m>` once the record holds a model. After the first spawn of the run, write the returned model into the record.
@@ -456,7 +470,7 @@ git ls-files --others --exclude-standard -z           # untracked files, NUL-sep
 
 For each untracked path, show it as a patch: `git diff --no-index -- /dev/null "<path>"` (read-only; nothing is staged). Its exit status 1 means a patch was printed; only a status above 1 is an error. HEAD moved, anything staged, or a path outside the allowlist changed -> the diff is NOT attributed to the agent: name the paths and use the `blocked` gate. An amendment cannot clean a path outside the allowlist (amendments stay inside it), so say plainly that those paths are the user's to remove or restore; once they are gone, `/lets:execute` re-checks the tree and, for a `complete` report, offers Accept.
 
-Present it in your own message text - MUST: a tool result is shown collapsed, and the user reviews what you print - under the agent's name, the name this run spawned it under, never a name the agent wrote about itself - with the report verbatim and then the full patch (`git diff HEAD`, then each untracked file):
+Present it in the gate itself - the block below is the `preview` of the status gate's first option, because a tool result is shown collapsed and prose before a gate is skipped in practice - under the agent's name, the name this run spawned it under, never a name the agent wrote about itself - with the report verbatim and then the full patch (`git diff HEAD`, then each untracked file):
 
 ```
 ### {agent} - {chunk} - {status}
@@ -466,7 +480,7 @@ Present it in your own message text - MUST: a tool result is shown collapsed, an
 
 The stat is validation; the patch is what the user reviews. Record `patch_sha` - the sha256 of the full patch exactly as shown (`git diff HEAD`, then each untracked file's patch, in path order) - so Accept can prove it commits that patch and nothing else. Then ask the gate for that status.
 
-**Render review** = the tree check, the heading with the report verbatim and the full patch, a fresh `patch_sha`, then the status gate - always all four, in that order. Every path that shows a review gate runs it: a new report, a 5-D.7 recovery of `review` / `paused`, and an Accept that found the patch changed. No path asks a Review gate without first recording the sha of what it showed.
+**Render review** = the tree check, a fresh `patch_sha`, then the status gate carrying the heading, the report verbatim and the full patch as its first option's `preview` - always in that order. Every path that shows a review gate runs it: a new report, a 5-D.7 recovery of `review` / `paused`, and an Accept that found the patch changed. No path asks a Review gate without first recording the sha of what it showed.
 
 - **Orchestrator offer** - when it applies (lets-rules `### Orchestrator offer`, Act shape; rule not loaded -> no offer), add as the last option `{ label: "Ask orchestrator", description: "Stay at this gate; /lets:orc ask with the report and the patch" }`
 
@@ -478,7 +492,7 @@ AskUserQuestion(
     question: "{agent} completed chunk {chunk}. Accept its diff?",
     header: "Review",
     options: [
-      { label: "Accept (Recommended)", description: "Commit exactly this chunk's files now; the next item of the plan starts" },
+      { label: "Accept (Recommended)", description: "Commit exactly this chunk's files now; the next item of the plan starts", preview: "{the review block}" },
       { label: "Correct", description: "Send {agent} an amendment; it keeps its context" },
       { label: "Stop", description: "Pause here; the diff stays uncommitted and /lets:execute reopens this review" }
     ],
@@ -495,7 +509,7 @@ AskUserQuestion(
     question: "{agent} stopped at a deviation in chunk {chunk}: {one-line expected vs actual}. How to proceed?",
     header: "Review",
     options: [
-      { label: "Correct", description: "Send the adaptation you choose as an amendment, within its allowed files" },
+      { label: "Correct", description: "Send the adaptation you choose as an amendment, within its allowed files", preview: "{the review block}" },
       { label: "Re-plan", description: "Stop; update the plan via /lets:plan" },
       { label: "Stop", description: "Pause here; the diff stays uncommitted and /lets:execute reopens this review" }
     ],
@@ -512,7 +526,7 @@ AskUserQuestion(
     question: "{agent} is blocked on chunk {chunk}: {reason}. What now?",
     header: "Review",
     options: [
-      { label: "Correct", description: "Send an amendment that gets it past the block; it keeps its context" },
+      { label: "Correct", description: "Send an amendment that gets it past the block; it keeps its context", preview: "{the review block}" },
       { label: "Stop", description: "Pause here; the diff stays uncommitted and /lets:execute reopens this review" }
     ],
     multiSelect: false
