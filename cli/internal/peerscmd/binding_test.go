@@ -261,8 +261,8 @@ func TestResolve_EveryReasonHasRemediation(t *testing.T) {
 	if r.Reason != "orchestrator_not_registered" || !strings.Contains(r.Remediation, "/lets:start") || !strings.HasPrefix(r.Remediation, "GONE") {
 		t.Errorf("a dead end must carry its remedy: %+v", r)
 	}
-	for _, reason := range []string{"orchestrator_not_registered", "target_not_alive", "target_in_other_repo", "target_unsendable", "bound_ambiguous", "branch_unreadable", "budget_exhausted", "orchestrator_needs_name"} {
-		if remedy(reason, "", "X", false) == "" || remedy(reason, "", "X", true) == "" {
+	for reason := range refusalDetails {
+		if remedy(reason, "", "X", false, false) == "" || remedy(reason, "", "X", true, false) == "" {
 			t.Errorf("%s has no remedy", reason)
 		}
 	}
@@ -277,7 +277,7 @@ func TestRemedy_UnsendableFollowsDetail(t *testing.T) {
 		"peer_ambiguous":     "close the stale pane",
 		"liveness_unknown":   "/lets:orc who",
 	} {
-		got := remedy("target_unsendable", detail, "X", false)
+		got := remedy("target_unsendable", detail, "X", false, false)
 		if !strings.Contains(got, want) || strings.Contains(got, "idle") {
 			t.Errorf("%s: %q, want it to say %q", detail, got, want)
 		}

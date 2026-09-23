@@ -49,10 +49,27 @@ type Resolution struct {
 	Degraded    []Degraded  `json:"degraded"`
 }
 
+// refusalDetails is every reason a resolution can end on, with the details each
+// can carry ("" = none; "x*" = the literal prefix "x" followed by a name). remedy
+// must answer every pair; remedy_test.go iterates this table and scans the package
+// source so it cannot fall behind.
+var refusalDetails = map[string][]string{
+	"orchestrator_not_registered": {""},
+	"target_not_alive":            {"", "bound orchestrator has no role file"},
+	"target_in_other_repo":        {"", "its cwd is outside this repo", "orca_not_selected", "orca_unavailable", "repo_not_in_orca"},
+	"target_unsendable":           {"", "peer_ambiguous", "session_duplicated", "no_valid_name", "name_not_unique", "non_claude_send_unsupported_v1", "claude_terminal_unjoined", "liveness_unknown"},
+	"bound_ambiguous":             {"", "sibling_repos", "registered as *"},
+	"branch_unreadable":           {""},
+	"budget_exhausted":            {""},
+	"orchestrator_needs_name":     {""},
+}
+
 // remedy is the one line a user acts on for a peer dead end; the orc skill prints
 // it verbatim instead of composing a workaround. detail is the refusal's own detail
-// (for target_unsendable: the peer's send reason), which decides the action.
-func remedy(reason, detail, name string, orca bool) string {
+// (for target_unsendable: the peer's send reason), which decides the action; sibling
+// marks a target in another repo, where a command that sees only this repo is no help.
+// Every command named here must be able to act on that refusal (remedy_test.go).
+func remedy(reason, detail, name string, orca, sibling bool) string {
 	switch reason {
 	case "orchestrator_not_registered":
 		return name + " has no role - in its session run /lets:start --main, or rebind this branch with /lets:start <id> --orc=\"<name>\""
@@ -62,13 +79,19 @@ func remedy(reason, detail, name string, orca bool) string {
 		}
 		return name + " is not running - reopen it, or rebind this branch with /lets:start <id> --orc=\"<name>\""
 	case "target_in_other_repo":
-		if orca {
-			return "cross-repo messaging goes through /lets:hub"
+		switch detail {
+		case "orca_unavailable":
+			return name + " runs in another repo and Orca did not answer - start Orca, then retry"
+		case "repo_not_in_orca":
+			return name + " runs in a repo Orca does not list - add that repo to Orca, then retry"
 		}
-		return name + " runs outside this repo - message it from its own checkout"
+		return name + " runs in another repo - reaching it needs LETS_LAUNCHER=orca (/lets:init), or rebind this branch with /lets:start <id> --orc=\"<name>\""
 	case "target_unsendable":
-		return unsendableRemedy(detail, name)
+		return unsendableRemedy(detail, name, sibling)
 	case "bound_ambiguous":
+		if detail == "sibling_repos" {
+			return "several live orchestrators named " + name + " across Orca repos - /rename all but one of them, or rebind this branch with /lets:start <id> --orc=\"<live name>\""
+		}
 		return "/lets:start <id> --orc=\"<live name>\" rebinds this branch to one of them"
 	case "branch_unreadable", "budget_exhausted":
 		return "resolution did not complete - retry"
@@ -79,8 +102,13 @@ func remedy(reason, detail, name string, orca bool) string {
 }
 
 // unsendableRemedy names the action for each reason peers() marks a peer
-// unsendable; only a reason it does not know falls back to /lets:orc who.
-func unsendableRemedy(detail, name string) string {
+// unsendable; only a reason it does not know falls back to a who that lists the
+// target - /lets:orc who for this repo, `lets peers who --orca-repos` for a sibling.
+func unsendableRemedy(detail, name string, sibling bool) string {
+	who := "/lets:orc who"
+	if sibling {
+		who = "lets peers who --orca-repos"
+	}
 	switch detail {
 	case "session_duplicated":
 		return name + " runs in two processes under one session id (a resumed copy beside the original) - close one of them, then retry"
@@ -89,9 +117,9 @@ func unsendableRemedy(detail, name string) string {
 	case "no_valid_name":
 		return name + " has no valid session name - /rename it in its own session, then retry"
 	case "peer_ambiguous":
-		return name + "'s Orca terminal is claimed twice - /lets:orc who shows both; close the stale pane, then retry"
+		return name + "'s Orca terminal is claimed twice - " + who + " shows both; close the stale pane, then retry"
 	}
-	return "/lets:orc who shows why " + name + " cannot receive (" + nonEmpty(detail, "no reason reported") + ")"
+	return who + " shows why " + name + " cannot receive (" + nonEmpty(detail, "no reason reported") + ")"
 }
 
 // Refused is an orchestrator this caller cannot address, with the reason a human
@@ -192,13 +220,13 @@ func ResolveOrchestrator(ctx context.Context, rc *repoContext, o ResolveOptions)
 	// Every dead end leaves with its remedy; res is a pointer, so this sees the final value.
 	defer func() {
 		if res.Reason != "" && res.Remediation == "" {
-			name, detail := "", ""
+			name, detail, sibling := "", "", false
 			if len(res.Refused) > 0 {
-				name, detail = res.Refused[0].Name, res.Refused[0].Detail
+				name, detail, sibling = res.Refused[0].Name, res.Refused[0].Detail, res.Refused[0].Sibling
 			} else if res.Target != nil {
 				name = res.Target.Name
 			}
-			res.Remediation = remedy(res.Reason, detail, name, orcaSelected(rc.root, false))
+			res.Remediation = remedy(res.Reason, detail, name, orcaSelected(rc.root, false), sibling)
 		}
 	}()
 	files, snap := rc.roles, rc.snap
