@@ -124,7 +124,7 @@ LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 command -v lets >/dev/null 2>&1 && lets peers orchestrator --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" --json 2>/dev/null
 ```
 
-- `bound` / `single` with a live target: `lets peers tail --to-session <target.session> --addressed-to-session "$CLAUDE_CODE_SESSION_ID" --count-only --json 2>/dev/null` returns `addressed_to_me{count, last_at}` and no text. Render `Orchestrator: {name} ({bound | the only one alive}, {target.state})`, plus `{N} message(s) from {name} - /lets:orc read` when the count is non-zero. No peer text enters this session unless the user asks.
+- `bound` / `single` with a live target: `lets peers tail --to-session <target.session> [--repo-index <target.repo_index>] --addressed-to-session "$CLAUDE_CODE_SESSION_ID" --count-only --json 2>/dev/null` (the index only when the target carries one - a bound orchestrator in a sibling repo) returns `addressed_to_me{count, last_at}` and no text. Render `Orchestrator: {name} ({bound | the only one alive}, {target.state})`, plus `{N} message(s) from {name} - /lets:orc read` when the count is non-zero. No peer text enters this session unless the user asks.
 - `ambiguous`: `Orchestrators: {name (scope)}, ... - this branch is not bound; /lets:start <id> --orc="<name>" binds it`.
 - bound but not alive: `Orchestrator: {name} (bound, not alive)`. `none`: `no orchestrator alive`. No binary or a stub reason: say nothing.
 - a `refused[]` entry with no `target`: `Orchestrator: {name} ({reason})` plus the `hint` when present. Nothing is sent and no offer is shown.
