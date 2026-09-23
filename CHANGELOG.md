@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-09-23
+
 ### Added
 - **`--fix` on `/lets:check`, `/lets:review` and `/lets:handoff`: apply the verified fixes when nothing needs deciding (lets-lo8ft).** A review used to stop one step short: every finding checked against the code, and then the fixes typed by hand. With `--fix` the session applies them itself - but only when every finding is verified (review's skeptics, a re-read of the code for check, the relay's check of an agent's report for handoff) and none needs a decision: one concrete remedy each, inside the files the review covered, no open question, no alternative left open. If anything needs your call, nothing is applied and you get that list. The flag you type is the permission to edit, never to commit - the changes wait for `/lets:check` and `/lets:commit`. Not with `--json`; on a PR only when your checkout is the PR head; `--plan --fix` edits the plan document. One internal skill, `apply-fixes`, holds the whole definition.
 - **`lets worktree record` - did a session leave a record, and is a task orphaned (lets-11zwo).** A session snapshot now carries the exact HEAD it covers, so "is there a record" is a git question, not a clock one: `present`, `stale` (commits landed after the last snapshot), or `missing`. The same call lists what the checkout still holds for a task - task-state files, local branches, live worktrees, a released marker - and flags an orphan: in progress somewhere, held by nothing. `/lets:start --main` now offers those orphans in Reopen next to archived claims, and `/lets:done` writes the session record before its final question, whatever you pick.
@@ -604,7 +606,8 @@ Initial release with expert agents team.
 - SessionStart hook injecting workflow rules
 - Plugin structure: commands, agents, hooks
 
-[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.9.2...HEAD
+[0.9.2]: https://github.com/restarter/lets-workflow/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/restarter/lets-workflow/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/restarter/lets-workflow/compare/v0.8.2...v0.9.0
 [0.8.2]: https://github.com/restarter/lets-workflow/compare/v0.8.1...v0.8.2
