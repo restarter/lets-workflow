@@ -23,10 +23,11 @@ type ReleaseOptions struct{}
 
 // Release runs when a worktree is about to be discarded by something else (Orca's
 // archive hook). It deletes neither the checkout nor the branch, so refusing on
-// dirty or unpushed work would protect nothing: it records what it saw, removes the
-// task-state file, and leaves a released-<id> marker that `/lets:start --main` reads
-// to offer reopening a task still in progress. Never calls a tracker, never touches
-// role files.
+// dirty or unpushed work would protect nothing: it records what it saw, writes a
+// released-<id> marker (with the session-record state) that `/lets:start --main`
+// reads to offer reopening a task still in progress, and only then removes the
+// task-state file - compare-and-delete, so a revision written after the read is kept.
+// Never calls a tracker, never touches role files.
 func Release(ctx context.Context, dir string, _ ReleaseOptions) (*ReleaseResult, error) {
 	res := &ReleaseResult{Envelope: Envelope{SchemaVersion: SchemaVersion, Subcommand: "release", Steps: []Step{}}}
 	add := func(status, msg string) { res.Steps = append(res.Steps, Step{Status: status, Message: msg}) }
@@ -54,33 +55,68 @@ func Release(ctx context.Context, dir string, _ ReleaseOptions) (*ReleaseResult,
 	out, err := exec.CommandContext(ctx, "git", "-C", wtRoot, "log", "@{u}..", "--oneline").CombinedOutput()
 	info.Unpushed = err != nil || len(strings.TrimSpace(string(out))) > 0 // no upstream counts as unpushed
 
+	// Order matters (lets-11zwo): read, then write the marker, and only then remove
+	// the task-state file. A file that names a task goes only once that task's marker
+	// is on disk; a read that failed, or an id that is not an id, keeps the file.
 	letsDir := filepath.Join(mainRoot, ".lets")
 	slug, hasSlug := taskstate.Slug(branch)
+	removable := false
 	if hasSlug {
-		if st, err := taskstate.Read(letsDir, slug); err == nil && taskid.Valid(st.Task) {
+		st, err := taskstate.Read(letsDir, slug)
+		switch {
+		case err == nil && taskid.Valid(st.Task):
 			info.Task = st.Task
-		} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
-			add(StepWarn, fmt.Sprintf("could not read the task-state file: %v", err))
-		}
-		if err := taskstate.Remove(letsDir, slug, time.Now().Add(5*time.Second)); err != nil {
-			add(StepWarn, fmt.Sprintf("could not remove the task-state file: %v", err))
-		} else {
-			add(StepOK, "removed task-state file")
+		case err == nil && st.Task == "":
+			// Names no task: the normal state after /lets:done closed one (its cleanup
+			// clears task:/start:/origin: and keeps session:). Nothing to reopen and
+			// no marker to write - removing it is the old behaviour, kept on purpose.
+			removable = true
+		case err == nil:
+			info.Kept = KeepInvalidID
+			add(StepWarn, fmt.Sprintf("the task-state file names an invalid task id (%q) - kept", stripControl(st.Task)))
+		case errors.Is(err, fs.ErrNotExist):
+		default:
+			info.Kept = KeepUnreadable
+			add(StepWarn, fmt.Sprintf("could not read the task-state file: %v - kept", err))
 		}
 	} else {
 		add(StepWarn, "detached HEAD: no task-state file to release")
 	}
 
-	if info.Task == "" {
-		add(StepWarn, "no task recorded for this worktree; no released marker written")
-	} else {
+	if info.Task != "" {
+		rec := recordOf(ctx, mainRoot, letsDir, info.Task, headOf(ctx, wtRoot))
+		info.Record, info.Snapshot = &rec, rec.State
 		marker := filepath.Join(letsDir, "cache", "released-"+info.Task)
-		line := fmt.Sprintf("%s|%s|%s|dirty=%t|unpushed=%t\n", info.Task, info.Branch, time.Now().UTC().Format(time.RFC3339), info.Dirty, info.Unpushed)
+		line := fmt.Sprintf("%s|%s|%s|dirty=%t|unpushed=%t|snapshot=%s\n", info.Task, info.Branch, time.Now().UTC().Format(time.RFC3339), info.Dirty, info.Unpushed, rec.State)
 		if err := writeMarker(marker, line); err != nil {
-			add(StepWarn, fmt.Sprintf("could not write %s: %v", marker, err))
+			info.Kept = KeepNoMarker
+			add(StepWarn, fmt.Sprintf("could not write %s: %v - task-state file kept", marker, err))
 		} else {
 			info.Marker = marker
+			removable = true
 			add(StepOK, "released marker written: "+marker)
+		}
+		if rec.State != RecordPresent {
+			add(StepWarn, fmt.Sprintf("session record for %s: %s", info.Task, rec.State))
+		}
+	} else if hasSlug {
+		add(StepWarn, "no task recorded for this worktree; no released marker written")
+	}
+
+	// Compare-and-delete, not read-then-delete: under the file's lock, remove it only
+	// if it still names the task the marker was written for (or still names none).
+	// A writer that got in between (a claim, a hook) keeps its revision.
+	if hasSlug && removable {
+		beforeTaskStateRemove()
+		switch err := taskstate.RemoveIfTask(letsDir, slug, info.Task, time.Now().Add(5*time.Second)); {
+		case err == nil:
+			add(StepOK, "removed task-state file")
+		case errors.Is(err, taskstate.ErrChanged):
+			info.Kept = KeepChanged
+			add(StepWarn, "the task-state file changed while releasing - kept; the marker covers only the state that was read")
+		default:
+			info.Kept = KeepRemoveFailed
+			add(StepWarn, fmt.Sprintf("could not remove the task-state file: %v", err))
 		}
 	}
 	if info.Dirty || info.Unpushed {
@@ -95,6 +131,27 @@ func Release(ctx context.Context, dir string, _ ReleaseOptions) (*ReleaseResult,
 	}
 	res.OK = true
 	return res, nil
+}
+
+// beforeTaskStateRemove runs between the marker and the removal (a seam: a test
+// writes the file here to prove the removal is conditional).
+var beforeTaskStateRemove = func() {}
+
+// Alarm names why this release must reach a person, or "" when it recorded all it
+// should. A worktree vanishing without a record must be visible when it happens.
+func (r *ReleaseResult) Alarm() string {
+	i := r.Released
+	if i == nil {
+		return ""
+	}
+	var why []string
+	if i.Task != "" && i.Snapshot != "" && i.Snapshot != RecordPresent {
+		why = append(why, fmt.Sprintf("%s was archived without a current session record (snapshot=%s)", i.Task, i.Snapshot))
+	}
+	if i.Kept != "" {
+		why = append(why, fmt.Sprintf("the task-state file of %s was kept (%s)", i.Branch, i.Kept))
+	}
+	return strings.Join(why, "; ")
 }
 
 // writeMarker writes a released marker atomically (0600).

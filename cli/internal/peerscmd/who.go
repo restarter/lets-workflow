@@ -197,8 +197,20 @@ func (rc *repoContext) peers(ctx context.Context) []Peer {
 			nameCount[e.Name]++
 		}
 	}
+	// `claude -r <sid>` beside a still-running original: one session, two live pids.
+	// Counted over the machine-wide registry - the second pid may sit in another
+	// directory or repo under another name, and rc.entries is this repo's rows only.
+	perSession := map[string]int{}
+	for _, e := range rc.snap.Entries {
+		perSession[e.SessionID]++
+	}
+	seenSession := map[string]bool{}
 	out := []Peer{}
 	for _, e := range rc.entries {
+		if seenSession[e.SessionID] {
+			continue // one peer per session: the first row stands for it, flagged below
+		}
+		seenSession[e.SessionID] = true
 		p := Peer{Session: e.SessionID, Session6: session6(e.SessionID), Cwd: e.Cwd, State: e.Status, Alive: "alive", Via: []string{"claude"}}
 		if e.NameOK {
 			p.Name = e.Name
@@ -234,6 +246,8 @@ func (rc *repoContext) peers(ctx context.Context) []Peer {
 			}
 		}
 		switch {
+		case perSession[e.SessionID] > 1:
+			p.Send, p.Reason = "none", "session_duplicated"
 		case p.TerminalID != "":
 			p.Send = "orca"
 		case !e.NameOK:

@@ -4,6 +4,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -185,14 +187,87 @@ func TestRemove_TempsOnly(t *testing.T) {
 	write(t, d, "a", "task: lets-a\n")
 	write(t, d, "a.b", "task: lets-ab\n")            // another branch whose slug extends "a"
 	write(t, d, "a.1234", "task: lets-a.1234\n")     // a sub-task branch: same shape as a bash mktemp temp, so never removed
-	write(t, d, "a.12345.tmp", "stranded go temp\n") // atomicWrite temp
+	write(t, d, "a.12345.tmp", "task: lets-a-tmp\n") // a legal branch name, NOT a temp
+	tmp := filepath.Join(d, "sessions", ".tasktmp-a.98765")
+	if err := os.WriteFile(tmp, []byte("stranded go temp\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	extends := filepath.Join(d, "sessions", ".tasktmp-a.b.98765") // the temp of slug "a.b": not a's
+	if err := os.WriteFile(extends, []byte("other temp\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if err := Remove(d, "a", time.Time{}); err != nil {
 		t.Fatal(err)
 	}
-	for slug, want := range map[string]bool{"a": false, "a.12345.tmp": false, "a.b": true, "a.1234": true} {
+	for slug, want := range map[string]bool{"a": false, "a.12345.tmp": true, "a.b": true, "a.1234": true} {
 		if _, err := os.Stat(Path(d, slug)); (err == nil) != want {
 			t.Errorf("%s exists=%v, want %v", slug, err == nil, want)
 		}
+	}
+	if _, err := os.Stat(tmp); !os.IsNotExist(err) {
+		t.Error("the stranded .tasktmp- temp must be cleaned")
+	}
+	if _, err := os.Stat(extends); err != nil {
+		t.Error("another slug's temp must be left alone")
+	}
+}
+
+func TestRemoveIfTask(t *testing.T) {
+	letsDir := t.TempDir()
+	_ = os.MkdirAll(filepath.Join(letsDir, "sessions"), 0o755)
+	p := Path(letsDir, "b")
+	if err := os.WriteFile(p, []byte("task: lets-a\nsession: x y\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := RemoveIfTask(letsDir, "b", "lets-b", time.Time{}); !errors.Is(err, ErrChanged) {
+		t.Fatalf("another task must be kept: %v", err)
+	}
+	if _, err := os.Stat(p); err != nil {
+		t.Fatal("kept file vanished")
+	}
+	if err := RemoveIfTask(letsDir, "b", "lets-a", time.Time{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(p); !os.IsNotExist(err) {
+		t.Error("the recorded task's file must be removed")
+	}
+	if err := RemoveIfTask(letsDir, "b", "lets-a", time.Time{}); err != nil {
+		t.Errorf("an absent file is not an error: %v", err)
+	}
+}
+
+func TestAtomicWrite_TempOutsideTaskNamespace(t *testing.T) {
+	d := t.TempDir()
+	write(t, d, "a", "task: lets-a\n")
+	if err := atomicWrite(Path(d, "a"), "task: lets-b\n"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Slugs(d)
+	if err != nil || !reflect.DeepEqual(got, []string{"a"}) {
+		t.Errorf("slugs after a write = %v %v", got, err)
+	}
+	if data, _ := os.ReadFile(Path(d, "a")); string(data) != "task: lets-b\n" {
+		t.Errorf("content = %q", data)
+	}
+}
+
+func TestSlugs_EveryTaskEntry(t *testing.T) {
+	d := t.TempDir()
+	for _, slug := range []string{"feature", "feature.12345.tmp", "feature.locked", "feature.tmp"} {
+		write(t, d, slug, "task: lets-a\n")
+	}
+	_ = os.WriteFile(filepath.Join(d, "sessions", ".tasktmp-feature.1"), []byte("x"), 0o600)
+	_ = os.WriteFile(filepath.Join(d, "sessions", "2026-09-22-1000-lets-a-snapshot.md"), []byte("x"), 0o600)
+	got, err := Slugs(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sort.Strings(got)
+	if want := []string{"feature", "feature.12345.tmp", "feature.locked", "feature.tmp"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("slugs = %v, want %v", got, want)
+	}
+	if got, err := Slugs(filepath.Join(d, "absent")); err != nil || len(got) != 0 {
+		t.Errorf("a missing sessions dir is empty: %v %v", got, err)
 	}
 }
 

@@ -33,6 +33,7 @@ func NewWorktreeCmd() *cobra.Command {
 		{"info", "Show worktree info (Windows: not supported)"},
 		{"adopt", "Adopt a worktree created elsewhere (Windows: not supported)"},
 		{"release", "Release a worktree before archiving (Windows: not supported)"},
+		{"record", "Report a task's session record and orphan state (Windows: not supported)"},
 		{"task-state", "Read or write the task-state file (Windows: not supported)"},
 		{"branch-name", "Render a task branch name (Windows: not supported)"},
 		{"sweep", "Sweep merged task branches (Windows: not supported)"},

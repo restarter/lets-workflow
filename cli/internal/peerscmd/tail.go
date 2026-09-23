@@ -8,10 +8,11 @@ import (
 	"github.com/restarter/lets-workflow/cli/internal/ccregistry"
 )
 
-// TailOptions configures Tail. Callers resolve a name to a session id (or, for a
-// non-Claude Orca row, a terminal id) first; tail never resolves a name.
+// TailOptions configures Tail. Callers pass a session id, a terminal id, or an exact
+// live name (resolved here against the same peer set `who` shows).
 type TailOptions struct {
 	Cwd                string
+	Name               string // a live peer's exact name, resolved here
 	ToSession          string
 	ToTerminal         string
 	Last               int // 0: 5 turns, or the whole reply (up to replyTurnsMax) with SinceMessage
@@ -38,8 +39,17 @@ func Tail(ctx context.Context, o TailOptions) (*TailResult, error) {
 		res.Error = &ErrorInfo{Kind: e.Kind, Message: e.Message}
 		return res, e
 	}
-	if (o.ToSession == "") == (o.ToTerminal == "") {
-		return fail(&Error{Code: ExitUsage, Kind: "usage", Message: "pass exactly one of --to-session or --to-terminal"})
+	targets := 0
+	for _, s := range []string{o.Name, o.ToSession, o.ToTerminal} {
+		if s != "" {
+			targets++
+		}
+	}
+	if targets != 1 {
+		return fail(&Error{Code: ExitUsage, Kind: "usage", Message: "pass exactly one of <name>, --to-session or --to-terminal"})
+	}
+	if o.Name != "" && !ccregistry.ValidName(o.Name) {
+		return fail(&Error{Code: ExitUsage, Kind: "usage", Message: "not a peer name"})
 	}
 	if o.ToSession != "" && !ccregistry.ValidSession(o.ToSession) {
 		return fail(&Error{Code: ExitUsage, Kind: "usage", Message: "--to-session is not a session id"})
@@ -66,6 +76,25 @@ func Tail(ctx context.Context, o TailOptions) (*TailResult, error) {
 		return fail(e)
 	}
 	res.Degraded = rc.degraded
+	if o.Name != "" {
+		var hits []Peer
+		for _, p := range rc.peers(ctx) {
+			if p.Name == o.Name {
+				hits = append(hits, p)
+			}
+		}
+		switch len(hits) {
+		case 0:
+			return fail(&Error{Code: ExitGeneric, Kind: "peer_not_found", Message: "no live peer named " + o.Name})
+		case 1:
+			o.ToSession, o.ToTerminal = hits[0].Session, ""
+			if o.ToSession == "" {
+				o.ToTerminal = hits[0].TerminalID
+			}
+		default:
+			return fail(&Error{Code: ExitGeneric, Kind: "peer_ambiguous", Message: "several live peers are named " + o.Name + " - use --to-session"})
+		}
+	}
 	res.OK = true
 
 	if o.ToTerminal != "" {
