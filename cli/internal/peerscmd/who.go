@@ -137,7 +137,7 @@ func otherRepo(ctx context.Context, repo string, idx *int) (path string, given b
 		return "", false, nil
 	}
 	if repo == "" {
-		p, f := orcacmd.RepoByIndex(ctx, *idx)
+		p, f := repoByIndex(ctx, *idx)
 		if f != nil {
 			return "", true, &Error{Code: ExitNotInRepo, Kind: "repo_invalid", Message: f.Error()}
 		}
