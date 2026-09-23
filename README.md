@@ -128,7 +128,7 @@ Then, inside the Claude Code session:
 | `/lets:orc` | Talk to the repo's orchestrator or a named peer session |
 | `/lets:peer` | Alias: `/lets:peer <name> <verb> [text]` = `/lets:orc` with a target |
 | `/lets:hub` | Orca addon: orchestrators across projects - read-only ask to a stopped one, wake one for gated work |
-| `/lets:handoff` | Hand-off brief so another agent (fresh session, Codex, Antigravity, external reviewer) can pick up the exact state and review it - same target selectors as `/lets:review`, plus `--commits` / `--range`. `--codex` runs it through Codex headless, `--send` types it into an agent's Orca tab, and the report comes back verified against the code; `--execute --send` hands an approved plan to that tab to implement instead (old name `/lets:review-handoff` is a deprecated alias) |
+| `/lets:handoff` | Hand-off brief so another agent (fresh session, Codex, Antigravity, external reviewer) can pick up the exact state and review it - same target selectors as `/lets:review`, plus `--commits` / `--range`. `--codex` runs it through Codex headless, `--send` types it into an agent's Orca tab, and the report comes back verified against the code; `--execute --send` hands an approved plan to that tab to implement instead; `--fix` applies the verified fixes here when nothing needs deciding (also on `/lets:check` and `/lets:review`) (old name `/lets:review-handoff` is a deprecated alias) |
 
 ### Review & Analysis
 

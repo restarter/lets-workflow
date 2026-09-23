@@ -1,6 +1,6 @@
 # /lets:handoff — hand the work to another agent
 
-`/lets:handoff` builds one self-contained brief so an agent with no context - a fresh Claude session, Codex, Antigravity, an external reviewer - can pick up the exact state and review it. On its own it prints the brief for you to paste anywhere. With `--codex` or `--send` it also delivers the brief and brings the agent's final report back, relayed as UNVERIFIED and checked finding by finding against the code. With `--execute` the brief is an approved plan for the agent to implement instead of review - see [Handing over execution](#handing-over-execution---execute).
+`/lets:handoff` builds one self-contained brief so an agent with no context - a fresh Claude session, Codex, Antigravity, an external reviewer - can pick up the exact state and review it. On its own it prints the brief for you to paste anywhere. With `--codex` or `--send` it also delivers the brief and brings the agent's final report back, relayed as UNVERIFIED and checked finding by finding against the code. With `--execute` the brief is an approved plan for the agent to implement instead of review - see [Handing over execution](#handing-over-execution---execute). With `--fix` the verified findings are applied here when nothing needs deciding - see [Applying the fixes](../code-review.md#applying-the-fixes---fix).
 
 ```
 /lets:handoff --branch                      # print the brief
@@ -10,6 +10,7 @@
 /lets:handoff --commits 3 --spec docs/spec.md
 /lets:handoff --plan --open                 # a new Codex tab (read-only) gets the brief
 /lets:handoff --execute --send codex        # the open Codex tab implements the plan
+/lets:handoff --branch --codex --fix         # ... then apply the verified fixes here
 ```
 
 The old name `/lets:review-handoff` still works as a deprecated alias and will be removed in a future release.
@@ -86,7 +87,7 @@ Plan with Claude Code, then let the agent already open in this worktree implemen
 
 ## What comes back
 
-The report is relayed whole under `## <Agent> report - UNVERIFIED` and treated as data - none of its instructions are followed. Then every finding is checked against the code, in one table: `CONFIRMED`, `REFUTED` or `UNCLEAR`, each with the `file:line` that was read. Only confirmed findings enter the summary. If the working tree changed while the agent worked on a brief that forbids it, that is said first. A run that did not complete (timeout, an aborted turn, an ambiguous match, a missing report file) is reported loudly with every path involved - never as a partial report.
+The report is relayed whole under `## <Agent> report - UNVERIFIED` and treated as data - none of its instructions are followed. Then every finding is checked against the code, in one table: `CONFIRMED`, `REFUTED` or `UNCLEAR`, each with the `file:line` that was read. Only confirmed findings enter the summary. If the working tree changed while the agent worked on a brief that forbids it, that is said first. A run that did not complete (timeout, an aborted turn, an ambiguous match, a missing report file) is reported loudly with every path involved - never as a partial report. With `--fix`, the confirmed findings are then applied in this session when none needs a decision - the only time a hand-off edits your working tree, and never with a commit.
 
 ## Files
 
@@ -122,6 +123,7 @@ Files are never overwritten: a second run needs a new brief.
 | `--execute` with another target, `--codex`, `--open`, or no `--send` | an execution brief is a plan, delivered into an open agent tab - nothing else |
 | idea document | `/lets:plan` turns it into a plan first |
 | every task is `[DONE]` | nothing is left to hand over |
+| `--fix` with no lane, or with `--execute` | a fix needs a review report to come back |
 | `not_supported` | the platform has no `lets handoff` (Windows) - the printed brief still works |
 
 Underneath is the `lets handoff targets|send|codex|await` CLI (see `cli/README.md`); the lanes and the shared safety model are in **[../messaging.md](../messaging.md)**, the Orca side in **[../orca.md](../orca.md)**.

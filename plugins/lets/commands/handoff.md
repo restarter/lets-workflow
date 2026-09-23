@@ -1,14 +1,15 @@
 ---
 description: Generate a self-contained hand-off brief so ANOTHER agent (a fresh session, Codex, Antigravity, any external reviewer) can pick up the exact state and review it - a plan, a branch, the last commits, a PR, or one file - or implement an approved plan (--execute). Prints one pasteable brief, or delivers it (--send types it into an agent's Orca tab, --open opens a new Codex tab for it, --codex runs it through Codex headless) and brings the report back, verified against the code.
-argument-hint: "[PR-url-or-number|--pr <id>|--local|--staged|--last-commit|--branch|--plan [<path>]|--file <path>|--commits <N>|--range <a>..<b>] [--spec <path>|none] [--execute] [--send [<tab>]|--open [<agent>]|--codex]"
+argument-hint: "[PR-url-or-number|--pr <id>|--local|--staged|--last-commit|--branch|--plan [<path>]|--file <path>|--commits <N>|--range <a>..<b>] [--spec <path>|none] [--execute] [--send [<tab>]|--open [<agent>]|--codex] [--fix]"
 ---
 
 # Handoff - Brief for Another Agent
 
 Produce ONE message the user copies into another agent. That agent has NO context: not this conversation, not the task, not even which repo. The brief must be complete on its own.
 
-- The brief is the deliverable - review nothing yourself and edit no file of the repository; `--send` / `--open` / `--codex` hand it on and bring the report back (Step 7)
+- The brief is the deliverable - review nothing yourself and edit no file of the repository (`--fix` is the one exception); `--send` / `--open` / `--codex` hand it on and bring the report back (Step 7)
 - `--execute` turns a plan's brief from "review this" into "implement this": the receiving agent writes code and commits, this session still edits nothing (Step 5b)
+- `--fix` applies the report's verified fixes in THIS session when nothing needs deciding (7.4, the `apply-fixes` skill); the user typing it is the write authorization for that run - edits only, never a commit
 - Target selectors mirror `/lets:review`, so the same flag reviews here or hands off there; works in any git repo, with or without LETS
 
 > **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
@@ -36,15 +37,16 @@ Produce ONE message the user copies into another agent. That agent has NO contex
 /lets:handoff --plan --open               # a new Codex tab (read-only) in this worktree gets the brief
 /lets:handoff --execute --send codex      # the open Codex tab implements the newest plan of this task
 /lets:handoff --execute --plan <path> --send   # ... a specific plan; pick the tab
+/lets:handoff --branch --codex --fix      # ... then apply the verified fixes here when nothing needs deciding
 ```
 
 Selectors match `/lets:review`, with two deliberate differences: `--commits` / `--range` are **handoff-only** (review has no target for "the commits that answer a review round"), and `--pr` is kept as an alias because it is the spelling this tool shipped with. Review's output modifiers `--json` and `--workflow` are **not** implemented here.
 
-`--send [<tab>]`, `--open [<agent>]` and `--codex` are the three delivery lanes (Step 7) - an open agent tab, a new visible session, a headless background run - combinable with any target and mutually exclusive. `--execute` is a brief kind, not a lane: it takes only a plan and goes only through `--send` (Step 1). `/lets:review-handoff` is a deprecated alias of this command (the old name), to be removed in a future release.
+`--send [<tab>]`, `--open [<agent>]` and `--codex` are the three delivery lanes (Step 7) - an open agent tab, a new visible session, a headless background run - combinable with any target and mutually exclusive. `--execute` is a brief kind, not a lane: it takes only a plan and goes only through `--send` (Step 1). `--fix` is a relay modifier: it needs a lane and a review brief (Step 1). `/lets:review-handoff` is a deprecated alias of this command (the old name), to be removed in a future release.
 
 ## Step 1: Determine the target
 
-- Delivery modifiers first: `--codex`, `--send [<tab>]` (`<tab>` = the next token when it does not start with `--`: a `term_` handle, an agent name such as `codex` / `antigravity`, or a fragment of the tab title), `--open [<agent>]` (`<agent>` = the next token when it does not start with `--`; default `codex`), and the brief kind `--execute`. Strip them, then apply the target rules to the rest.
+- Delivery modifiers first: `--codex`, `--send [<tab>]` (`<tab>` = the next token when it does not start with `--`: a `term_` handle, an agent name such as `codex` / `antigravity`, or a fragment of the tab title), `--open [<agent>]` (`<agent>` = the next token when it does not start with `--`; default `codex`), the brief kind `--execute`, and the relay modifier `--fix`. Strip them, then apply the target rules to the rest.
 - PR URL/number, or `--pr <id-or-url>` -> **PR mode**. `--local` / `--staged` / `--last-commit` / `--branch` / `--commits N` / `--range a..b` -> **local mode**. `--plan [path]` -> **plan mode**. `--file <path>` -> **file mode**.
 - **Host resolution.** A `github.com` URL -> `gh`; a `bitbucket.org` URL -> `bbb`, whose PR number sits in the `/pull-requests/<n>` segment, not github's `/pull/<n>`; a bare number -> `{LETS_PR_FLOW}`. **When `{LETS_PR_FLOW}` is empty** - the normal state outside a LETS project, where the hook emits only four keys - fall through to the forge named by the `origin` URL Step 2 prints. Only when neither names a github or bitbucket host: stop and say a PR hand-off needs one.
 - **No argument -> infer, do not ask by default.** Take the target from the user's sentence next to the command ("цих правок" -> the just-committed fixes; "цієї гілки" -> `--branch`; "план" -> `--plan`; "коміта" -> `--last-commit`) and from what just happened in the session. Only when genuinely ambiguous, ask **one** `AskUserQuestion` (header `Target`, `multiSelect: false`) offering Local changes / Branch / Plan / Last commit. Otherwise decide, and name the choice in the closing line.
@@ -56,6 +58,9 @@ Selectors match `/lets:review`, with two deliberate differences: `--commits` / `
   - `--open` -> `a new session opens read-only (codex --sandbox read-only) - open the agent in this worktree yourself, then --send`
   - no delivery flag -> `` `--execute` goes to an open agent tab - add --send [<tab>] ``
   - `--spec` -> dropped, with one line: the plan is an execution brief's contract
+- **`--fix`**, once the target is known. Each refusal is its one line, then stop:
+  - no delivery flag -> `` `--fix` applies the fixes of a report that comes back - add --send, --open or --codex ``
+  - with `--execute` -> `` `--fix` applies a review's findings - an execution brief has none ``
 
 ## Step 2: Locate
 
@@ -87,7 +92,7 @@ git log --oneline "$BASE"..HEAD 2>/dev/null | head -30
 | `--branch` | `git diff --stat <base>...HEAD`, base sha, whether pushed (`git rev-parse origin/<branch>`), open PR id if any, and the commit list with **each commit's own `git show --stat`** - the range stat says which files the branch touched, never which commit touched them, and attributing them by inference is how a brief claims a file landed two commits before it did |
 | `--local` / `--staged` | `git diff --stat` (or `--staged`), the file list, and that the work is uncommitted - the reviewer reads the working tree, not a ref |
 | `--last-commit` / `--commits N` / `--range` | exact shas, `git show --stat` per commit, and **why** they exist - which findings they answer, quoting the finding ids or the reviewer's wording |
-| `<PR>` / `--pr` | PR id + URL, host, target branch, head sha; for a fix round, each reviewer point mapped to its answering commit, plus points deliberately NOT addressed and why |
+| `<PR>` / `--pr` | PR id + URL, host, target branch, head sha; for a fix round, each reviewer point mapped to its answering commit, plus points deliberately NOT addressed and why; with `--fix`: whether `git rev-parse HEAD` equals the head sha - not equal -> one line `--fix needs this checkout at the PR head <sha> - check it out, or drop --fix`, stop - and the PR's changed-file list at that head, kept for 7.4 as its `--fix` scope |
 | `--file` | absolute path, what the file is, what the reviewer should judge it against |
 
 ## Step 4: Task and spec context
@@ -128,6 +133,7 @@ With `--execute`, compare the plan's `**Task:**` line with the id resolved here:
 ## What we want from the review
 - <the specific question(s): correctness of X, spec conformance vs <doc path>, did the fixes answer the reviewer's points, risk in Y>
 - REMEDY QUALITY: for each finding, separate the observed symptom from its root cause, and propose the smallest coherent fix at the component that canonically owns the behavior. A local workaround is acceptable only when the systemic correction is disproportionate - say why. Do not widen a local issue into speculative refactoring.
+- {with --fix only} FIX FORMAT: give each finding exactly one concrete remedy. List anything that needs the author's decision - a choice between remedies, an open question, a change outside the files under review - separately, under "Needs a decision".
 - Verdict format requested: findings ranked BLOCKER / MAJOR / MINOR with file:line, plus a one-line overall verdict
 
 ## How to verify locally
@@ -137,7 +143,7 @@ With `--execute`, compare the plan's `**Task:**` line with the id resolved here:
 - push, commit, or modify files (with --send / --open: except the two report files named under "When you finish"); touch zones: <list>; re-open decisions above
 ```
 
-The `REMEDY QUALITY` line is **standing text, not a per-run judgement call** - every brief, every mode; the hand-off is the only moment this command gets to set the external reviewer's contract. `How to verify locally` carries commands that **demonstrably exercise the change**, not plausible-looking ones. Name a test by its actual function name rather than a guessed `-run` filter - a filter that matches nothing exits 0, so the reviewer is handed a green run that never touched the thing under review. Carry any caveat the repo documents for those commands (this repo: `-count=1` on Go tests that read `plugins/`, or the cache serves a stale PASS).
+The `REMEDY QUALITY` line is **standing text, not a per-run judgement call** - every brief, every mode; the hand-off is the only moment this command gets to set the external reviewer's contract. The FIX FORMAT line helps the agent, it is not the gate: `apply-fixes` judges each finding on its own. `How to verify locally` carries commands that **demonstrably exercise the change**, not plausible-looking ones. Name a test by its actual function name rather than a guessed `-run` filter - a filter that matches nothing exits 0, so the reviewer is handed a green run that never touched the thing under review. Carry any caveat the repo documents for those commands (this repo: `-count=1` on Go tests that read `plugins/`, or the cache serves a stale PASS).
 
 Composition rules, stated here and nowhere else in this file: the brief is in **English** regardless of conversation language; paths absolute; shas full or 12+ chars; no "as discussed"; under ~80 lines; drop any section that has nothing; **never paste the diff** - the reviewer has the repo, so pointers and verification commands beat a dump.
 
@@ -220,7 +226,7 @@ Without a delivery flag the command ends at Step 6. The three lanes are mutually
 | A new visible session | `--open [<agent>]` | 7.3, Codex read-only | refused (Step 1) |
 | Headless, in the background | `--codex` | 7.2, read-only | refused (Step 1) |
 
-Delivery writes files, all under `.lets/handoffs/`: the brief (7.1), and siblings `lets handoff` or the receiving agent writes (`-report.md`, `-events.jsonl`, `-stderr.txt`, `-agent-report.md`, `-agent-report.done`); `--execute` adds the two 5b scratch files under `.lets/cache/`. This session never edits the repository.
+Delivery writes files, all under `.lets/handoffs/`: the brief (7.1), and siblings `lets handoff` or the receiving agent writes (`-report.md`, `-events.jsonl`, `-stderr.txt`, `-agent-report.md`, `-agent-report.done`); `--execute` adds the two 5b scratch files under `.lets/cache/`. This session edits the repository only with `--fix`, in 7.4.
 
 ### 7.1 Save the brief
 
@@ -325,8 +331,9 @@ With `--execute`, go to 7.5 from here - the rest of 7.4 is for a review.
    | # | Finding | Verdict | Evidence |
    |---|---|---|---|
 
-   Verdict is `CONFIRMED`, `REFUTED` or `UNCLEAR`; Evidence is a `file:line` you read. A finding enters your own summary only once CONFIRMED.
+   Verdict is `CONFIRMED`, `REFUTED` or `UNCLEAR`; Evidence is a `file:line` you read. A finding enters your own summary only once CONFIRMED. With `--fix`, the table gains a `Remedy` column in this session's own words (`apply-fixes` Input).
 3. Close with the report path and, when set, `run.session_id` - for Codex, `codex resume <session_id>` continues that conversation.
+4. With `--fix` (a review brief only - `--execute` never reaches here): the agent reviewed the state Step 2 printed, so check that state first - `workspace_changed=true` -> one line `--fix skipped - the working tree changed while the agent worked`, no edit; `git rev-parse HEAD` differs from the Step 2 `head` -> one line `--fix skipped - HEAD moved while the agent worked` (commits leave `workspace_changed=false`), no edit. The report's "Needs a decision" items and any question it asks become rows of the table (`apply-fixes` Open items). Then `Skill(skill: "lets:apply-fixes", args: "source=handoff mode=<mode> head=<Step 2 head> ...")` - `mode` from the target, every ref pinned to the Step 2 `head` sha, never a symbolic `HEAD`: `local`, `staged`, `last-commit`, `branch` with `base=<Step 2 base>`, `commits` as `range=<head>~<N>..<head>`, `range` as given, `pr` with the changed-file list Step 3 kept, listed in the conversation (`apply-fixes` PR scope), `file` / `plan` with `path=`. Its output replaces the first box.
 
 ### 7.5 Relay an execution (`--execute`)
 
@@ -347,7 +354,7 @@ Two things here are restatements of `/lets:review`, not independent decisions: t
 
 ## Rules
 
-- The brief is the deliverable - review nothing yourself, never edit the repository. Without a delivery flag write no file (not `.lets/`, not the tracker); with one, files only under `.lets/handoffs/` (7.1; Go writes the rest), plus the two 5b scratch files under `.lets/cache/` with `--execute`
+- The brief is the deliverable - review nothing yourself, never edit the repository except through `--fix` (7.4). Without a delivery flag write no file (not `.lets/`, not the tracker); with one, files only under `.lets/handoffs/` (7.1; Go writes the rest), plus the two 5b scratch files under `.lets/cache/` with `--execute`
 - `--execute` authorizes the receiving agent, not this session: what it commits stays UNVERIFIED until `/lets:review --branch`. That review compensates for the Deviation gate `/lets:execute` runs before every edit, which cannot cross into another agent - it is not an equivalent of it
 - The handoff lane is not the peer lane: a brief never goes through `/lets:orc`, `lets peers`, `SendMessage` or `ListAgents` (`lets-rules.md` `### Handoff lane`); `lets handoff` is its only sender
 - Conversation in the user's language; the brief's English is stated at Compose
@@ -356,7 +363,7 @@ Two things here are restatements of `/lets:review`, not independent decisions: t
 
 ## Output
 
-Without a delivery flag: Close - one prose line, no LETS box; the next step is the user pasting the brief into another agent, which is not a `/lets:*` command. After 7.4 relayed a verified report: the first box. After 7.5: the second box. After any failure: Close.
+Without a delivery flag: Close - one prose line, no LETS box; the next step is the user pasting the brief into another agent, which is not a `/lets:*` command. After 7.4 relayed a verified report: the first box. With `--fix`: `apply-fixes` renders the output and box instead. After 7.5: the second box. After any failure: Close.
 
 ```
 ┌─ LETS ─────────────────────────────┐

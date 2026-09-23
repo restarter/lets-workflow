@@ -89,7 +89,7 @@ Only after EVERY comment + reframe is decided:
 
 ## Step 7: Respond to the reviewer
 - Summarize accepted / rejected (reasons) / deferred (triggers) so each comment is traceable.
-- **Audience boundary:** in an external/team channel (PR thread, issue tracker, chat) NEVER expose internal tracker task IDs or absolute repo paths - reference the artifact by bare filename + in-doc IDs. Match the channel's language for the response; conversation in the user's language.
+- **Audience boundary:** in an external/team channel (PR thread, issue tracker, chat) NEVER expose internal tracker task IDs or absolute repo paths - reference the artifact by bare filename + in-doc IDs. The response follows the language of the comments it answers (lets-rules `## Language & Communication`); conversation in the user's language.
 - For a GitHub PR, hand the per-comment summary to `/lets:github-pr --respond` to post replies inline.
 - Re-share the updated artifact if delivered as an attachment.
 
@@ -99,7 +99,7 @@ Only after EVERY comment + reframe is decided:
 - **Reframes before nits.**
 - **Defer = explicit trigger + recorded location**, never "later" in chat.
 - **The user decides**; you triage + recommend.
-- Respond in the user's language; task content + written artifacts in English; team responses in the channel's language.
+- Respond in the user's language; task content + project artifacts in English; a response to reviewers follows the language of what it answers (lets-rules `## Language & Communication`).
 
 ## Output
 ```
