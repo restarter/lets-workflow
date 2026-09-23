@@ -62,6 +62,7 @@ type repoContext struct {
 	roots          []string
 	snap           ccregistry.Snapshot
 	roles          map[string]roleFile
+	moves          []move // reconcileRoles' corrections, already applied to roles; persisted only under peers.lock
 	ops            orcaOps
 	terms          []orcaTerm
 	degraded       []Degraded
@@ -106,6 +107,8 @@ func loadRepoFor(ctx context.Context, cwd string, useOrca func(root string) bool
 	for _, name := range invalid {
 		rc.degraded = append(rc.degraded, Degraded{Source: "roles", Reason: "role_file_invalid", Detail: name})
 	}
+	rc.moves = reconcileRoles(rc.roles, rc.snap)
+	applyMoves(rc.roles, rc.moves)
 	if useOrca(root) {
 		ops, f := newOrcaOps()
 		if f != nil {
@@ -340,9 +343,19 @@ func Who(ctx context.Context, o WhoOptions) (*WhoResult, error) {
 		return res, err
 	}
 	res.Degraded = rc.degraded
+	if o.Session != "" && o.Repo == "" {
+		res.Degraded = append(res.Degraded, HealSelf(rc, o.Session, rc.root, branchOf(ctx, o.Cwd))...)
+	}
 	if o.Prune {
 		if unlock, err := lockPeers(rc.root, max(time.Until(deadlineOf(ctx)), 50*time.Millisecond)); err == nil {
-			pruneRoles(rc.roles, rc.snap, "")
+			// Decide from what is on disk now, under the lock - never from the view
+			// loaded before it (a role written since would be overwritten).
+			files, _, snap, err := reconcileLocked(rc.root)
+			if err != nil {
+				res.Degraded = append(res.Degraded, Degraded{Source: "roles", Reason: "role_write_failed", Detail: err.Error()})
+			}
+			pruneRoles(files, snap, "")
+			rc.roles, rc.moves = files, nil
 			unlock()
 		} else {
 			res.Degraded = append(res.Degraded, Degraded{Source: "roles", Reason: "peers_lock_busy"})

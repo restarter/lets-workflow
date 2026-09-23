@@ -39,13 +39,59 @@ type Candidate struct {
 
 // Resolution is which orchestrator a caller's /lets:orc talks to. It never writes.
 type Resolution struct {
-	Source     string      `json:"source"` // self | bound | single | ambiguous | none
-	Scope      string      `json:"scope"`  // branch: the binding belongs to the branch
-	Target     *Peer       `json:"target,omitempty"`
-	Candidates []Candidate `json:"candidates"`
-	Reason     string      `json:"reason,omitempty"`
-	Refused    []Refused   `json:"refused,omitempty"`
-	Degraded   []Degraded  `json:"degraded"`
+	Source      string      `json:"source"` // self | bound | single | ambiguous | none
+	Scope       string      `json:"scope"`  // branch: the binding belongs to the branch
+	Target      *Peer       `json:"target,omitempty"`
+	Candidates  []Candidate `json:"candidates"`
+	Reason      string      `json:"reason,omitempty"`
+	Remediation string      `json:"remediation,omitempty"` // the exact line to show the user; set with every Reason
+	Refused     []Refused   `json:"refused,omitempty"`
+	Degraded    []Degraded  `json:"degraded"`
+}
+
+// remedy is the one line a user acts on for a peer dead end; the orc skill prints
+// it verbatim instead of composing a workaround. detail is the refusal's own detail
+// (for target_unsendable: the peer's send reason), which decides the action.
+func remedy(reason, detail, name string, orca bool) string {
+	switch reason {
+	case "orchestrator_not_registered":
+		return name + " has no role - in its session run /lets:start --main, or rebind this branch with /lets:start <id> --orc=\"<name>\""
+	case "target_not_alive":
+		if orca {
+			return name + " is not running - /lets:hub wakes a stopped orchestrator, or rebind this branch with /lets:start <id> --orc=\"<name>\""
+		}
+		return name + " is not running - reopen it, or rebind this branch with /lets:start <id> --orc=\"<name>\""
+	case "target_in_other_repo":
+		if orca {
+			return "cross-repo messaging goes through /lets:hub"
+		}
+		return name + " runs outside this repo - message it from its own checkout"
+	case "target_unsendable":
+		return unsendableRemedy(detail, name)
+	case "bound_ambiguous":
+		return "/lets:start <id> --orc=\"<live name>\" rebinds this branch to one of them"
+	case "branch_unreadable", "budget_exhausted":
+		return "resolution did not complete - retry"
+	case "orchestrator_needs_name":
+		return "/rename <name>, then /lets:start --main again"
+	}
+	return ""
+}
+
+// unsendableRemedy names the action for each reason peers() marks a peer
+// unsendable; only a reason it does not know falls back to /lets:orc who.
+func unsendableRemedy(detail, name string) string {
+	switch detail {
+	case "session_duplicated":
+		return name + " runs in two processes under one session id (a resumed copy beside the original) - close one of them, then retry"
+	case "name_not_unique":
+		return "several live sessions are named " + name + " - /rename all but one of them, then retry"
+	case "no_valid_name":
+		return name + " has no valid session name - /rename it in its own session, then retry"
+	case "peer_ambiguous":
+		return name + "'s Orca terminal is claimed twice - /lets:orc who shows both; close the stale pane, then retry"
+	}
+	return "/lets:orc who shows why " + name + " cannot receive (" + nonEmpty(detail, "no reason reported") + ")"
 }
 
 // Refused is an orchestrator this caller cannot address, with the reason a human
@@ -141,6 +187,18 @@ type candidate struct {
 // returned as a target.
 func ResolveOrchestrator(ctx context.Context, rc *repoContext, o ResolveOptions) *Resolution {
 	res := &Resolution{Scope: "branch", Candidates: []Candidate{}, Degraded: rc.degraded, Refused: []Refused{}}
+	// Every dead end leaves with its remedy; res is a pointer, so this sees the final value.
+	defer func() {
+		if res.Reason != "" && res.Remediation == "" {
+			name, detail := "", ""
+			if len(res.Refused) > 0 {
+				name, detail = res.Refused[0].Name, res.Refused[0].Detail
+			} else if res.Target != nil {
+				name = res.Target.Name
+			}
+			res.Remediation = remedy(res.Reason, detail, name, orcaSelected(rc.root, false))
+		}
+	}()
 	files, snap := rc.roles, rc.snap
 	if self, ok := files[o.Session]; ok && self.Role == "orchestrator" {
 		res.Source, res.Target = "self", orchestratorPeer(snap, self)

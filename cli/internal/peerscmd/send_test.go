@@ -366,3 +366,21 @@ func TestWait_Usage(t *testing.T) {
 		}
 	}
 }
+
+// A session with no name, or one the registry does not show, still frames a
+// message - labelled by its session6; only the target has to resolve.
+func TestFrame_NamelessSender(t *testing.T) {
+	root := repoWithLets(t, "")
+	claudeHome(t, []regRow{{1, sidMain, "MAIN-PWA", root}, {2, sidWork, "", root}})
+	res, err := Frame(context.Background(), FrameOptions{Cwd: root, Session: sidWork, ToSession: sidMain, Kind: "tell"})
+	if err != nil || !res.OK || !strings.Contains(res.Header, `from="peer/`+sidWork[:6]+`"`) || !strings.Contains(res.Header, "from_sid="+sidWork) {
+		t.Fatalf("a nameless sender must frame with its session6: %+v %v", res, err)
+	}
+	if _, ok := ParseHeader(res.Header); !ok {
+		t.Error("the header must still parse")
+	}
+	claudeHome(t, []regRow{{1, sidMain, "MAIN-PWA", root}})
+	if res, err := Frame(context.Background(), FrameOptions{Cwd: root, Session: sidWork, ToSession: sidMain, Kind: "tell"}); err != nil || !res.OK {
+		t.Fatalf("an unregistered sender must frame: %+v %v", res, err)
+	}
+}

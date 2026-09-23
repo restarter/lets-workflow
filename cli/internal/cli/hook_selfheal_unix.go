@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/restarter/lets-workflow/cli/internal/gitutil"
+	"github.com/restarter/lets-workflow/cli/internal/peerscmd"
 	"github.com/restarter/lets-workflow/cli/internal/worktreecmd"
 )
 
@@ -88,4 +89,24 @@ func under(path, dir string) bool {
 	}
 	rel, err := filepath.Rel(dir, path)
 	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// peersHealFn restores this session's peer role on SessionStart; a var so tests spy.
+var peersHealFn = peersHeal
+
+// peersHeal carries this session's role to a re-minted id and restores it from its
+// anchor, the moment the harness hands the session its id (startup, resume, /clear).
+// Best-effort like selfHeal: bounded, silent, and skipped in a repo that never used
+// peers - the lazy path in every `lets peers` call covers whatever this misses (the
+// registry may not show the new id yet when the hook fires).
+func peersHeal(root, sid string) {
+	if root == "" || sid == "" {
+		return
+	}
+	if _, err := os.Stat(filepath.Join(root, ".lets", "sessions", "peers")); err != nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	peerscmd.Heal(ctx, root, sid)
 }

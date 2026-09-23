@@ -181,3 +181,17 @@ func TestSelfHeal_LockBusyTimesOut(t *testing.T) {
 		t.Error("nothing may be linked while another adopt holds the lock")
 	}
 }
+
+func TestSessionStart_PeersHealOnClearNotCompact(t *testing.T) {
+	dir := t.TempDir()
+	var got []string
+	old := peersHealFn
+	peersHealFn = func(root, sid string) { got = append(got, sid) }
+	t.Cleanup(func() { peersHealFn = old })
+	const sid = "aaaaaaaa-0000-4000-8000-000000000001"
+	runSessionStart(t, dir, `{"source":"clear","session_id":"`+sid+`"}`)
+	runSessionStart(t, dir, `{"source":"compact","session_id":"`+sid+`"}`)
+	if len(got) != 1 || got[0] != sid {
+		t.Errorf("peers heal must run on clear, not compact; got %v", got)
+	}
+}

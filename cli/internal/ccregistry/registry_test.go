@@ -3,8 +3,11 @@
 package ccregistry
 
 import (
+	"encoding/json"
+	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func withAlive(t *testing.T, pids ...int) {
@@ -99,5 +102,38 @@ func TestLiveness(t *testing.T) {
 	}
 	if got := Read(t.TempDir()).Liveness(a, 1001); got != Unknown {
 		t.Errorf("registry absent: %v", got)
+	}
+}
+
+func TestRotated(t *testing.T) {
+	const old, cur = "11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"
+	set := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
+	write := func(startedAt int64) Snapshot {
+		dir := t.TempDir()
+		_ = os.MkdirAll(filepath.Join(dir, "sessions"), 0o700)
+		b, _ := json.Marshal(map[string]any{"sessionId": cur, "name": "MAIN", "peerProtocol": 1, "startedAt": startedAt})
+		_ = os.WriteFile(filepath.Join(dir, "sessions", "1001.json"), b, 0o600)
+		return Read(dir)
+	}
+	withAlive(t, 1001)
+	cases := []struct {
+		name    string
+		started int64
+		sid     string
+		pid     int
+		want    bool
+	}{
+		{"same process, id re-minted", set.Add(-time.Hour).UnixMilli(), old, 1001, true},
+		{"started within set's second", set.Add(800 * time.Millisecond).UnixMilli(), old, 1001, true},
+		{"pid reused after set", set.Add(time.Hour).UnixMilli(), old, 1001, false},
+		{"startedAt unknown", 0, old, 1001, false},
+		{"same sid is not a rotation", set.Add(-time.Hour).UnixMilli(), cur, 1001, false},
+		{"pid not in the registry", set.Add(-time.Hour).UnixMilli(), old, 1002, false},
+	}
+	for _, c := range cases {
+		got, ok := write(c.started).Rotated(c.sid, c.pid, set)
+		if ok != c.want || (ok && got != cur) {
+			t.Errorf("%s: (%q, %v), want ok=%v", c.name, got, ok, c.want)
+		}
 	}
 }

@@ -292,8 +292,8 @@ AskUserQuestion(
 ```
 
   **Take over** -> rerun `lets peers role set orchestrator --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" {SCOPE_FLAG} --takeover --json`, then the prose hint `/lets:orc tell {holder.name} ...` (tell it, if it should know). **Rename** -> stop registering; main mode continues unregistered.
-- `orchestrator_needs_name`: one line `this session has no name - /rename <name>, then /lets:start --main again`; main mode continues unregistered.
-- `session_not_in_registry`: one line naming the registry reason; main mode continues unregistered.
+- `orchestrator_needs_name`: one line - `role.remediation` verbatim; main mode continues unregistered.
+- `session_not_in_registry`: one line - `role.remediation` verbatim; main mode continues unregistered.
 - `LETS_BINARY_MISSING` or a `not_supported` stub reason: one line, then continue.
 
 Invoke `Skill(skill: "lets:orient", args: "caller=start")` - with no active task it degrades to branch + no-task + In flight + Next up + Project, which IS the PM triage surface. Keep it short - if the tracker has a deeper native dashboard, point the user at it in one line.

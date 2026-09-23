@@ -23,6 +23,9 @@ import (
 //     Orca worktree whose setup hook did not run) BEFORE LETS Config is built, so
 //     the Config comes from the linked main .lets/.env. compact never self-heals,
 //     and PreCompact never reads the payload at all;
+//   - on source startup|resume|clear, restores this session's peer role
+//     (peersHeal): a role file carried to a re-minted id, or the role rebuilt from
+//     its anchor - best-effort and silent, like selfHeal;
 //   - proactively refreshes the session boundary of the current branch's
 //     .task-<slug> file (lets-dsdmp) - but ONLY on a genuinely new session
 //     (source=startup), so /lets:end has a fresh boundary even when /lets:start
@@ -39,6 +42,7 @@ func NewHookSessionStartCmd() *cobra.Command {
 			switch source {
 			case "startup", "resume", "clear":
 				notices = append(notices, selfHealFn(sessionstart.DetectProjectRoot(), rulesPath))
+				peersHealFn(sessionstart.DetectProjectRoot(), sid)
 			}
 			if err := runHookSessionPipeline(cmd, rulesPath, notices); err != nil {
 				return err

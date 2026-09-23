@@ -111,10 +111,11 @@ type RoleResult struct {
 // OrchestratorResult is the resolver's answer.
 type OrchestratorResult struct {
 	Envelope
-	Source     string      `json:"source"`
-	Scope      string      `json:"scope"`
-	Target     *Peer       `json:"target,omitempty"`
-	Candidates []Candidate `json:"candidates"`
-	Reason     string      `json:"reason,omitempty"`
-	Refused    []Refused   `json:"refused,omitempty"`
+	Source      string      `json:"source"`
+	Scope       string      `json:"scope"`
+	Target      *Peer       `json:"target,omitempty"`
+	Candidates  []Candidate `json:"candidates"`
+	Reason      string      `json:"reason,omitempty"`
+	Remediation string      `json:"remediation,omitempty"` // the exact line to show the user; set with every Reason
+	Refused     []Refused   `json:"refused,omitempty"`
 }
