@@ -92,6 +92,14 @@ It **never creates a worktree** — where you review is your call. Run it from y
 
 `/lets:review <bitbucket-PR-url>` works the same way through `bbb`: it fetches the PR, diffs it, reads the discussion (general and inline comments arrive in one call) and posts the summary comment to the PR. A bare PR number resolves against the forge your project is configured for. What stays GitHub-only is the `/lets:github-pr` lifecycle - inline comments, follow-up, approve, merge. A PR from a fork (on either forge) cannot be checked out, so it is reviewed from the diff and the review says so.
 
+### Applying the fixes: `--fix`
+
+`/lets:check --fix`, `/lets:review --fix` and `/lets:handoff --fix` go one step further than a report: when every finding is verified and nothing needs deciding, the session applies the fixes to your working tree. Typing the flag is the permission - for editing the reviewed files, never for a commit: the changes wait for `/lets:check` and `/lets:commit`.
+
+Two conditions, judged over all findings before the first edit. **Verified** - review's skeptics confirmed it, check re-read the code for it (a self-check, weaker than review's), handoff checked the agent's claim against the code; a refuted finding is skipped, one that could not be verified stops the run. **Nothing to decide** - each finding has one concrete remedy, inside the files the review covered, with no open question, no alternative left open, and nothing added that the finding does not need. If anything fails, nothing is applied and you get the list of what needs your call - `/lets:review-round` works through it. The remedy is always written by the session from the code it read, never copied from a report.
+
+Not with `--json`; on a PR only when your checkout already is the PR head; with `--plan` the fixes go into the plan document.
+
 ## `/lets:github-pr` — the PR lifecycle
 
 This is where LETS shines: reviewing a PR from the terminal with expert agents instead of in a browser. The inline-comment / approve / merge lifecycle is GitHub only. A Bitbucket PR still gets a full review through `/lets:review <bitbucket-PR>` (see [Bitbucket PRs](#bitbucket-prs) above); the local flow has no PR at all.
