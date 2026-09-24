@@ -3,6 +3,7 @@ package updatecmd
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/restarter/lets-workflow/cli/internal/rulescache"
 	"github.com/restarter/lets-workflow/cli/internal/version"
 )
 
@@ -456,26 +458,6 @@ func TestRun_RulesAhead_NotDeferred(t *testing.T) {
 	assertRulesFileVersion(t, pr, "0.6.3") // downgraded to plugin, as before
 }
 
-func TestRun_UserRulesDeferred(t *testing.T) {
-	// user-rules block mirrors the project block: a behind plugin defers the
-	// global rules sync too, leaving the file untouched.
-	projectRoot, pluginRoot := scaffold(t, "0.6.4", "0.6.3", "0.6.3", "0.6.4")
-	home := userHome(t, "0.6.2")
-	userPath := filepath.Join(home, ".claude", "rules", "lets-rules.md")
-	before, _ := os.ReadFile(userPath)
-	r, err := Run(context.Background(), Options{HomeDir: home, LatestFn: stubLatest("0.6.4")}, projectRoot, pluginRoot)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := find(t, r, "user-rules").Status; got != StatusDeferred {
-		t.Errorf("user-rules status = %s, want deferred", got)
-	}
-	after, _ := os.ReadFile(userPath)
-	if string(before) != string(after) {
-		t.Error("global rules written despite deferral")
-	}
-}
-
 func TestNextActionCommand_ConstOnly(t *testing.T) {
 	// SECURITY: next_action.Command must be byte-equal to the installScriptCmd
 	// const for any binary-outdated input - never interpolated with versions.
@@ -783,113 +765,160 @@ func TestRun_UserRulesAbsent_NoArtifact(t *testing.T) {
 	}
 }
 
-func TestRun_UserRulesInSync(t *testing.T) {
-	projectRoot, pluginRoot := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0")
-	home := userHome(t, "0.6.0")
-	r, err := Run(context.Background(), Options{HomeDir: home}, projectRoot, pluginRoot)
+// --- user-rules: read-only, hash-keyed (lets-tg008) ---
+
+// globalFixture builds a fully healthy user-scope install at ver: an in-sync
+// project, a plugin installed under home and listed in installed_plugins.json
+// (so the root is VERIFIED), the global copy equal to its rules, and the cache
+// key recording that hash + version. Returns the plugin root and the global path.
+func globalFixture(t *testing.T, ver string) (projectRoot, pluginRoot, home, global string) {
+	t.Helper()
+	projectRoot, _ = scaffold(t, ver, ver, ver, ver)
+	home = t.TempDir()
+	pluginRoot = installRelease(t, home, ver, ver)
+	writeIndex(t, home, pluginRoot)
+	data, err := os.ReadFile(filepath.Join(pluginRoot, "rules", "lets-rules.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(r.Artifacts) != 5 {
-		t.Fatalf("expected 5 artifacts, got %d", len(r.Artifacts))
+	global = filepath.Join(home, ".claude", "rules", "lets-rules.md")
+	writeRaw(t, global, string(data))
+	writeKey(t, home, rulescache.Sum(data), ver)
+	return projectRoot, pluginRoot, home, global
+}
+
+func writeKey(t *testing.T, home, hash, ver string) {
+	t.Helper()
+	b, err := json.Marshal(rulescache.Key{Hash: hash, Version: ver, SourcePath: "x"})
+	if err != nil {
+		t.Fatal(err)
 	}
-	a := find(t, r, "user-rules")
-	if a.Status != StatusInSync || a.Detail != "tracks the plugin" {
+	writeRaw(t, rulescache.KeyPath(home), string(b))
+}
+
+// runUserRules runs update online at ver and returns the user-rules row. It
+// also pins that the row alone never routes next_action to plugin / reload,
+// and that update never writes the global copy.
+func runUserRules(t *testing.T, projectRoot, pluginRoot, home, global, ver string) (Result, Artifact) {
+	t.Helper()
+	before, _ := os.ReadFile(global)
+	r, err := Run(context.Background(), Options{HomeDir: home, LatestFn: stubLatest(ver)}, projectRoot, pluginRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after, _ := os.ReadFile(global); string(after) != string(before) {
+		t.Error("update wrote the global rules - the session hook owns them")
+	}
+	if k := r.NextAction.Kind; k == "plugin" || k == "reload" {
+		t.Errorf("next_action %q caused by the user-rules row alone", k)
+	}
+	return r, find(t, r, "user-rules")
+}
+
+func TestRun_UserRules_NoKeyIsPendingNewSession(t *testing.T) {
+	pr, plug, home, global := globalFixture(t, "0.6.0")
+	if err := os.Remove(rulescache.KeyPath(home)); err != nil {
+		t.Fatal(err)
+	}
+	r, a := runUserRules(t, pr, plug, home, global, "0.6.0")
+	if a.Status != StatusUnknown || !strings.Contains(a.Detail, "not recorded yet") || !a.HookPending {
+		t.Errorf("user-rules: %+v", a)
+	}
+	if r.Summary.Unknown != 1 {
+		t.Errorf("Summary.Unknown = %d, want 1", r.Summary.Unknown)
+	}
+	// Every other row healthy: the pending cache is the next step, not done.
+	if r.NextAction.Kind != "new-session" {
+		t.Errorf("next_action = %+v, want new-session", r.NextAction)
+	}
+}
+
+func TestRun_UserRules_MatchingKeyIsDelegated(t *testing.T) {
+	pr, plug, home, global := globalFixture(t, "0.6.0")
+	k, _ := rulescache.ReadKey(home)
+	r, a := runUserRules(t, pr, plug, home, global, "0.6.0")
+	if a.Status != StatusDelegated || !strings.Contains(a.Detail, "v0.6.0") || !strings.Contains(a.Detail, k.Hash[:12]) {
+		t.Errorf("user-rules: %+v", a)
+	}
+	if r.Summary.UpToDate != 5 || r.NextAction.Kind != "done" {
+		t.Errorf("Summary.UpToDate = %d next_action = %+v, want 5 / done", r.Summary.UpToDate, r.NextAction)
+	}
+}
+
+func TestRun_UserRules_EditedSinceSync(t *testing.T) {
+	pr, plug, home, global := globalFixture(t, "0.6.0")
+	writeRaw(t, global, "---\nversion: 0.6.0\n---\n# my edit\n")
+	r, a := runUserRules(t, pr, plug, home, global, "0.6.0")
+	if a.Status != StatusUnknown || !strings.Contains(a.Detail, "edited since the last sync") || !a.HookPending {
+		t.Errorf("user-rules: %+v", a)
+	}
+	if r.NextAction.Kind != "new-session" {
+		t.Errorf("next_action = %+v, want new-session", r.NextAction)
+	}
+}
+
+// One version string, two contents: the plugin's rules differ from the cached
+// body although key, file and plugin all say 0.6.0 (the weak key this task cures).
+func TestRun_UserRules_SameVersionDifferentRules(t *testing.T) {
+	pr, plug, home, global := globalFixture(t, "0.6.0")
+	writeRaw(t, filepath.Join(plug, "rules", "lets-rules.md"), "---\nname: lets-rules\nversion: 0.6.0\n---\n\n# rebuilt\n")
+	_, a := runUserRules(t, pr, plug, home, global, "0.6.0")
+	if a.Status != StatusUnknown || !strings.Contains(a.Detail, "carries different rules") || !a.HookPending {
 		t.Errorf("user-rules: %+v", a)
 	}
 }
 
-func TestRun_UserRulesOutdated_Rewritten(t *testing.T) {
-	projectRoot, pluginRoot := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0")
-	home := userHome(t, "0.5.0")
-	r, err := Run(context.Background(), Options{HomeDir: home}, projectRoot, pluginRoot)
-	if err != nil {
-		t.Fatal(err)
-	}
-	a := find(t, r, "user-rules")
-	if a.Status != StatusUpdated || a.CurrentVersion != "0.6.0" {
-		t.Errorf("user-rules: %+v", a)
-	}
-	if !strings.Contains(a.Detail, "was outdated (v0.5.0)") {
-		t.Errorf("detail: %q", a.Detail)
-	}
-}
-
-func TestRun_UserRulesAhead_NotClobbered(t *testing.T) {
-	projectRoot, pluginRoot := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0")
-	home := userHome(t, "9.9.9")
-	userPath := filepath.Join(home, ".claude", "rules", "lets-rules.md")
-	before, _ := os.ReadFile(userPath)
-	r, err := Run(context.Background(), Options{HomeDir: home}, projectRoot, pluginRoot)
-	if err != nil {
-		t.Fatal(err)
-	}
-	after, _ := os.ReadFile(userPath)
-	if string(before) != string(after) {
-		t.Error("ahead global rules were clobbered by update")
-	}
-	a := find(t, r, "user-rules")
-	if a.Status != StatusAhead {
-		t.Errorf("status: got %s want ahead", a.Status)
-	}
-	if !strings.Contains(a.Detail, "not overwritten") {
-		t.Errorf("detail: %q", a.Detail)
-	}
-	// Pins the DELIBERATE exclusion of user-rules from the consistency set:
-	// a customized global copy is not a "partial upgrade".
-	if !r.Consistent {
-		t.Error("ahead user-rules must NOT trip the consistency warning")
-	}
-}
-
-func TestRun_UserRulesMalformed_Rewritten(t *testing.T) {
-	projectRoot, pluginRoot := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0")
-	home := userHome(t, "MALFORMED")
-	r, err := Run(context.Background(), Options{HomeDir: home}, projectRoot, pluginRoot)
-	if err != nil {
-		t.Fatal(err)
-	}
-	a := find(t, r, "user-rules")
-	if a.Status != StatusUpdated || a.Detail != "was unparseable" {
+func TestRun_UserRules_StaleKeyVersionIsPending(t *testing.T) {
+	pr, plug, home, global := globalFixture(t, "0.6.0")
+	data, _ := os.ReadFile(global)
+	writeKey(t, home, rulescache.Sum(data), "0.5.0")
+	_, a := runUserRules(t, pr, plug, home, global, "0.6.0")
+	if a.Status != StatusUnknown || !a.HookPending {
 		t.Errorf("user-rules: %+v", a)
 	}
 }
 
-// A broken plugin payload must not crash or clobber the global copy.
-func TestRun_UserRulesPluginUnreadable_NoClobber(t *testing.T) {
-	projectRoot := t.TempDir()
-	pluginRoot := t.TempDir() // no rules/lets-rules.md inside
-	setVersion(t, "0.6.0")
-	writePluginJSON(t, pluginRoot, `{"name":"lets","version":"0.6.0"}`)
-	home := userHome(t, "0.6.0")
-	before, _ := os.ReadFile(filepath.Join(home, ".claude", "rules", "lets-rules.md"))
-
-	r, err := Run(context.Background(), Options{HomeDir: home}, projectRoot, pluginRoot)
-	if err != nil {
-		t.Fatal(err)
+func TestRun_UserRules_NotVerified(t *testing.T) {
+	cases := map[string]func(t *testing.T, plug, home string){
+		"plugin_rules_unreadable": func(t *testing.T, plug, _ string) {
+			if err := os.Remove(filepath.Join(plug, "rules", "lets-rules.md")); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"plugin_version_unknown": func(t *testing.T, plug, _ string) {
+			writePluginJSON(t, plug, `{"name":"lets","version":"garbage"}`)
+		},
+		"index_unreadable": func(t *testing.T, _, home string) {
+			if err := os.Remove(filepath.Join(home, ".claude", "plugins", "installed_plugins.json")); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"index_ambiguous": func(t *testing.T, plug, home string) {
+			twin := installRelease(t, home, "0.6.0-rebuild", "0.6.0")
+			writeIndex(t, home, plug, twin)
+		},
 	}
-	a := find(t, r, "user-rules")
-	if a.Status != StatusUnknown || !strings.Contains(a.Detail, "plugin rules unreadable") {
-		t.Errorf("user-rules: %+v", a)
-	}
-	after, _ := os.ReadFile(filepath.Join(home, ".claude", "rules", "lets-rules.md"))
-	if string(before) != string(after) {
-		t.Error("global rules touched despite unreadable plugin payload")
+	for name, breakIt := range cases {
+		t.Run(name, func(t *testing.T) {
+			pr, plug, home, global := globalFixture(t, "0.6.0")
+			breakIt(t, plug, home)
+			r, a := runUserRules(t, pr, plug, home, global, "0.6.0")
+			if a.Status != StatusUnknown || !strings.Contains(a.Detail, "not verified") || a.HookPending {
+				t.Errorf("user-rules: %+v", a)
+			}
+			if r.NextAction.Kind != "user-rules" {
+				t.Errorf("next_action = %+v, want user-rules", r.NextAction)
+			}
+		})
 	}
 }
 
-// in-sync user-rules whose upstream (plugin) is behind latest gets the
-// annotateInSyncBehind hint, same as project rules.
-func TestRun_UserRulesInSync_AnnotatedWhenPluginOutdated(t *testing.T) {
-	projectRoot, pluginRoot := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0")
-	home := userHome(t, "0.6.0")
-	r, err := Run(context.Background(), Options{HomeDir: home, LatestFn: stubLatest("0.7.0")}, projectRoot, pluginRoot)
-	if err != nil {
-		t.Fatal(err)
-	}
-	a := find(t, r, "user-rules")
-	if !strings.Contains(a.Detail, "itself behind latest v0.7.0") {
-		t.Errorf("missing behind-latest hint: %q", a.Detail)
+func TestRun_UserRules_MalformedKeyIsNoKey(t *testing.T) {
+	pr, plug, home, global := globalFixture(t, "0.6.0")
+	writeRaw(t, rulescache.KeyPath(home), `{"sha256":"x"}`)
+	_, a := runUserRules(t, pr, plug, home, global, "0.6.0")
+	if a.Status != StatusUnknown || !strings.Contains(a.Detail, "not recorded yet") {
+		t.Errorf("user-rules: %+v", a)
 	}
 }
 

@@ -55,11 +55,15 @@ type Artifact struct {
 	LatestVersion  string         `json:"latest_version,omitempty"`
 	Action         string         `json:"action,omitempty"` // human instruction when Status needs user action
 	Detail         string         `json:"detail,omitempty"` // extra context (changed keys, cache age, error reason)
+	// HookPending marks a user-rules row the next session start's cache sync
+	// will fix (lets-tg008); internal, read only by computeNextAction.
+	HookPending bool `json:"-"`
 }
 
 // NextAction is the single, ordered next step `lets update` recommends this run.
 // Exactly one is set per run (the idempotent loop: rerun -> next step -> ... ->
-// done). Order: init -> binary -> plugin -> reload -> done.
+// done). Order: init -> binary -> plugin -> reload -> new-session | user-rules
+// (the global rules row, lets-tg008) -> done.
 //
 // SECURITY: Command is execution-bound - the /lets:update orchestrator runs it
 // via the Bash tool on user approval. It may ONLY ever be a compile-time const
@@ -67,7 +71,7 @@ type Artifact struct {
 // and never derive it from a network response, file contents, env var, or
 // --plugin-root. A byte-equal test pins this.
 type NextAction struct {
-	Kind    string `json:"kind"`              // "init" | "binary" | "plugin" | "reload" | "done"
+	Kind    string `json:"kind"`              // "init" | "binary" | "plugin" | "reload" | "new-session" | "user-rules" | "done"
 	Message string `json:"message"`           // human one-liner
 	Command string `json:"command,omitempty"` // literal shell command (binary: the install.sh curl) - const-only
 	Version string `json:"version,omitempty"` // converged version (kind == "done")

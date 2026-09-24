@@ -38,9 +38,9 @@ func NewUpdateCmd() *cobra.Command {
   .claude/rules/lets-rules.md   re-copied from the plugin if outdated/missing
   lets binary                   version compared to the latest GitHub release (reports only)
   Claude Code plugin            version compared to the latest release (reports only)
-  ~/.claude/rules/lets-rules.md user-scope global rules - row appears only when the file
-                                exists; synced like project rules EXCEPT a newer/customized
-                                (ahead) copy is reported, never overwritten
+  ~/.claude/rules/lets-rules.md global rules - maintained by the session hook (a cache of
+                                the running plugin); reported, never written here (row
+                                appears only when the file exists)
   .claude/rules/tracker-<n>.md  the active tracker adapter (row appears when LETS_TRACKER
                                 names a shipped adapter, or a user-authored one with an
                                 installed copy - reported delegated) - synced like project

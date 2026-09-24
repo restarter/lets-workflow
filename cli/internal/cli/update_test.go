@@ -177,6 +177,9 @@ func TestUpdate_JSONEnvelope_UserRulesArtifact(t *testing.T) {
 			Name   string `json:"name"`
 			Status string `json:"status"`
 		} `json:"artifacts"`
+		NextAction struct {
+			Kind string `json:"kind"`
+		} `json:"next_action"`
 	}
 	if jerr := json.Unmarshal([]byte(out), &r); jerr != nil {
 		t.Fatalf("not valid JSON: %v\n%s", jerr, out)
@@ -188,8 +191,12 @@ func TestUpdate_JSONEnvelope_UserRulesArtifact(t *testing.T) {
 	for _, a := range r.Artifacts {
 		byName[a.Name] = a.Status
 	}
-	// fake plugin is 0.4.0, global rules 0.4.0 -> in sync.
-	if byName["user-rules"] != "in-sync" {
-		t.Errorf("user-rules status = %q, want in-sync", byName["user-rules"])
+	// The session hook owns the global copy (lets-tg008): with no cache key
+	// recorded the row is informational `unknown`, never `in-sync`.
+	if byName["user-rules"] != "unknown" {
+		t.Errorf("user-rules status = %q, want unknown", byName["user-rules"])
+	}
+	if k := r.NextAction.Kind; k == "plugin" || k == "reload" {
+		t.Errorf("next_action %q from the user-rules row", k)
 	}
 }
