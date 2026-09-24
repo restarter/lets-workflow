@@ -11,10 +11,31 @@ import (
 
 func userOpts(t *testing.T, language string) UserOptions {
 	t.Helper()
+	home := t.TempDir()
 	return UserOptions{
 		Language:   language,
-		HomeDir:    t.TempDir(),
-		PluginRoot: setupFakePluginRoot(t),
+		HomeDir:    home,
+		PluginRoot: installedPluginRoot(t, home, "0.4.0"),
+	}
+}
+
+// installedPluginRoot lays out an installed plugin release the rules cache
+// trusts: <home>/.claude/plugins/cache/<marketplace>/lets/<ver>.
+func installedPluginRoot(t *testing.T, home, ver string) string {
+	t.Helper()
+	root := filepath.Join(home, ".claude", "plugins", "cache", "lets-workflow", "lets", ver)
+	writeFile(t, filepath.Join(root, ".claude-plugin", "plugin.json"), `{"name":"lets","version":"`+ver+`"}`)
+	writeRulesFile(t, filepath.Join(root, "rules", "lets-rules.md"), ver)
+	return root
+}
+
+func writeFile(t *testing.T, path, body string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -56,8 +77,11 @@ func TestRunUser_FreshInstall(t *testing.T) {
 	if strings.Contains(string(env), "LETS_MERGE_BRANCH=") {
 		t.Errorf("per-project key managed in user env:\n%s", env)
 	}
-	if s := findStep(result.Steps, "lets-rules.md installed"); s == nil || s.Status != StepOK {
+	if s := findStep(result.Steps, "Global workflow rules installed"); s == nil || s.Status != StepOK {
 		t.Errorf("missing ok install step: %+v", result.Steps)
+	}
+	if result.Drift.Detected || result.Drift.State != drift.StateEqual {
+		t.Errorf("drift after a fresh install: %+v", result.Drift)
 	}
 	if result.ProjectRoot != o.HomeDir {
 		t.Errorf("ProjectRoot should carry HomeDir as scope root: got %q", result.ProjectRoot)
@@ -98,63 +122,62 @@ func TestRunUser_IdempotentRerun(t *testing.T) {
 	}
 }
 
-func TestRunUser_OutdatedGlobalRewritten(t *testing.T) {
+// A second --user run over an unchanged cache says "matches", not "installed".
+func TestRunUser_SecondRunIsSkip(t *testing.T) {
 	o := userOpts(t, "")
-	writeRulesFile(t, globalRulesPath(o), "0.3.0")
+	if _, err := RunUser(o); err != nil {
+		t.Fatal(err)
+	}
 	result, err := RunUser(o)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s := findStep(result.Steps, "updated (v0.3.0 -> v0.4.0)"); s == nil {
-		t.Errorf("missing updated step: %+v", result.Steps)
+	if s := findStep(result.Steps, "matches the running plugin"); s == nil || s.Status != StepSkip {
+		t.Errorf("missing skip step: %+v", result.Steps)
 	}
-	if result.Drift.State != drift.StateEqual {
-		t.Errorf("post-write drift should be equal, got %s", result.Drift.State)
+	if result.Drift.Detected {
+		t.Errorf("no drift expected: %+v", result.Drift)
 	}
 }
 
-// The global file is the documented opt-out mechanism (GH #8395) - a NEWER
-// version is never clobbered, unlike the project copy.
-func TestRunUser_AheadNotClobbered(t *testing.T) {
+// Only an installed plugin writes the cache: a root outside
+// ~/.claude/plugins/cache is a named warning with drift.detected, never a write.
+func TestRunUser_UntrustedPluginRootWarns(t *testing.T) {
 	o := userOpts(t, "")
-	writeRulesFile(t, globalRulesPath(o), "9.9.9")
-	before, _ := os.ReadFile(globalRulesPath(o))
+	o.PluginRoot = setupFakePluginRoot(t) // a temp dir, not an installed release
 	result, err := RunUser(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s := findStep(result.Steps, "not an installed plugin"); s == nil || s.Status != StepWarn {
+		t.Errorf("missing untrusted-root warn step: %+v", result.Steps)
+	}
+	if !result.Drift.Detected || !strings.Contains(result.Drift.Message, "not an installed plugin") {
+		t.Errorf("drift must be detected with the reason: %+v", result.Drift)
+	}
+	if _, err := os.Stat(globalRulesPath(o)); !os.IsNotExist(err) {
+		t.Errorf("untrusted root must not create the global rules: %v", err)
+	}
+}
+
+// A newer cache is never downgraded by an older plugin's --user run.
+func TestRunUser_NewerCacheKept(t *testing.T) {
+	o := userOpts(t, "")
+	newer := installedPluginRoot(t, o.HomeDir, "0.5.0")
+	if _, err := RunUser(UserOptions{HomeDir: o.HomeDir, PluginRoot: newer}); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(globalRulesPath(o))
+	result, err := RunUser(o) // the older 0.4.0 plugin
 	if err != nil {
 		t.Fatal(err)
 	}
 	after, _ := os.ReadFile(globalRulesPath(o))
 	if string(before) != string(after) {
-		t.Errorf("ahead global rules were clobbered")
+		t.Errorf("newer global rules were downgraded")
 	}
-	if s := findStep(result.Steps, "AHEAD"); s == nil || s.Status != StepWarn {
-		t.Errorf("missing AHEAD warn step: %+v", result.Steps)
-	}
-	if result.Drift.State != drift.StateAhead {
-		t.Errorf("Drift.State: got %s want ahead", result.Drift.State)
-	}
-}
-
-// unknown (unparseable frontmatter) IS overwritten - deliberate: lets-* files
-// are plugin-owned by convention and an unversioned copy can't be tracked.
-func TestRunUser_UnknownOverwritten(t *testing.T) {
-	o := userOpts(t, "")
-	if err := os.MkdirAll(filepath.Dir(globalRulesPath(o)), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(globalRulesPath(o), []byte("# hand-stripped frontmatter\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	result, err := RunUser(o)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if s := findStep(result.Steps, "refreshed (was: unparseable"); s == nil || s.Status != StepOK {
-		t.Errorf("missing refreshed step: %+v", result.Steps)
-	}
-	data, _ := os.ReadFile(globalRulesPath(o))
-	if !strings.Contains(string(data), "version: 0.4.0") {
-		t.Errorf("unparseable global not rewritten:\n%s", data)
+	if s := findStep(result.Steps, "kept at v0.5.0"); s == nil || s.Status != StepWarn {
+		t.Errorf("missing kept-newer warn step: %+v", result.Steps)
 	}
 }
 
@@ -184,42 +207,29 @@ func TestRunUser_GuardHomeDir(t *testing.T) {
 	}
 }
 
-// Stat succeeds but ReadVersion fails on an unreadable file -> StateUnknown ->
-// rewritten via AtomicWriteBytes (temp+rename ignores old file perms) -> ok.
-func TestRunUser_UnreadableGlobalFile_Rewritten(t *testing.T) {
-	if os.Getuid() == 0 {
-		t.Skip("chmod ineffective as root")
-	}
-	o := userOpts(t, "")
-	writeRulesFile(t, globalRulesPath(o), "0.4.0")
-	if err := os.Chmod(globalRulesPath(o), 0o000); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chmod(globalRulesPath(o), 0o644) })
-	result, err := RunUser(o)
-	if err != nil {
-		t.Fatalf("unreadable file should degrade, not error: %v", err)
-	}
-	if s := findStep(result.Steps, "refreshed (was: unparseable"); s == nil {
-		t.Errorf("expected unknown->refreshed path: %+v", result.Steps)
-	}
-}
-
-// Read-only rules DIR is the genuine degraded-write case: AtomicWriteBytes
-// can't create its temp file -> RunUser returns an error with partial Result.
-func TestRunUser_ReadOnlyRulesDir_Errors(t *testing.T) {
+// A write failure (read-only rules dir) is a named warning in the Result,
+// never an error: the global copy is left exactly as it was.
+func TestRunUser_ReadOnlyRulesDir_Warns(t *testing.T) {
 	if os.Getuid() == 0 {
 		t.Skip("chmod ineffective as root")
 	}
 	o := userOpts(t, "")
 	rulesDir := filepath.Dir(globalRulesPath(o))
-	writeRulesFile(t, globalRulesPath(o), "0.3.0") // outdated -> write path
+	writeRulesFile(t, globalRulesPath(o), "0.3.0") // stale -> write path
+	before, _ := os.ReadFile(globalRulesPath(o))
 	if err := os.Chmod(rulesDir, 0o555); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Chmod(rulesDir, 0o755) })
-	if _, err := RunUser(o); err == nil {
-		t.Error("expected write error on read-only rules dir")
+	result, err := RunUser(o)
+	if err != nil {
+		t.Fatalf("a sync failure must degrade, not error: %v", err)
+	}
+	if s := findStep(result.Steps, "FAILED"); s == nil || s.Status != StepWarn {
+		t.Errorf("missing FAILED warn step: %+v", result.Steps)
+	}
+	if after, _ := os.ReadFile(globalRulesPath(o)); string(after) != string(before) {
+		t.Errorf("global rules changed despite the failure")
 	}
 }
 

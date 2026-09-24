@@ -67,6 +67,12 @@ func TestResult_SchemaContract(t *testing.T) {
 			t.Errorf("missing top-level JSON key %q", k)
 		}
 	}
+	// summary.skipped is additive (lets-tg008) and always present (no omitempty).
+	if sm, _ := m["summary"].(map[string]any); sm == nil {
+		t.Errorf("summary shape = %#v", m["summary"])
+	} else if _, ok := sm["skipped"]; !ok {
+		t.Error("missing summary JSON key \"skipped\"")
+	}
 	arts, ok := m["artifacts"].([]any)
 	if !ok || len(arts) != 1 {
 		t.Fatalf("artifacts shape = %#v", m["artifacts"])
@@ -113,7 +119,7 @@ func TestResult_AddBucketSum(t *testing.T) {
 	for _, s := range allStatuses {
 		r.Add(Artifact{Name: "x", Status: s})
 	}
-	sum := r.Summary.UpToDate + r.Summary.Updated + r.Summary.ActionNeeded + r.Summary.Unknown
+	sum := r.Summary.UpToDate + r.Summary.Updated + r.Summary.ActionNeeded + r.Summary.Unknown + r.Summary.Skipped
 	if sum != len(r.Artifacts) {
 		t.Fatalf("summary buckets sum %d != %d artifacts - a status is uncounted in Add()", sum, len(r.Artifacts))
 	}

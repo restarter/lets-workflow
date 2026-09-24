@@ -271,6 +271,9 @@ func TestRun_EmptyEnvValues_Skipped(t *testing.T) {
 // missing, G is irrelevant (project copy wins in Claude Code's loading order)
 // - pinned by the "masking" rows below. All remaining P-present x G
 // combinations are deliberately NOT enumerated (redundant by construction).
+// A present G is never drift-checked here: rulescache owns that file and
+// reports through its own Notice (lets-tg008), so every P-missing + G-present
+// row is silent whatever G's version.
 func TestRun_UserScopeNoticeMatrix(t *testing.T) {
 	const (
 		gAbsent    = ""          // no global rules file
@@ -288,12 +291,9 @@ func TestRun_UserScopeNoticeMatrix(t *testing.T) {
 		{"both_missing_keeps_nag", "", gAbsent,
 			"Workflow rules not installed in `.claude/rules/lets-rules.md`. Run `/lets:init` to install."},
 		{"global_equal_suppresses_nag", "", gEqual, ""},
-		{"global_outdated_user_notice", "", gOutdated,
-			"Global workflow rules outdated (installed v0.3.0 < plugin v0.4.0 in `~/.claude/rules/lets-rules.md`). Run `/lets:update` (or `lets init --user`) to update."},
-		{"global_ahead_user_notice", "", gAhead,
-			"Global workflow rules AHEAD of plugin (installed v9.9.9 > plugin v0.4.0 in `~/.claude/rules/lets-rules.md`). If customized deliberately, ignore this; otherwise upgrade the lets binary + plugin."},
-		{"global_malformed_user_notice", "", gMalformed,
-			"Global workflow rules version unknown - `~/.claude/rules/lets-rules.md` may be outdated. Run `/lets:update` (or `lets init --user`) to refresh."},
+		{"global_outdated_silent", "", gOutdated, ""},
+		{"global_ahead_silent", "", gAhead, ""},
+		{"global_malformed_silent", "", gMalformed, ""},
 		{"project_drift_not_masked_by_healthy_global", "0.3.0", gEqual,
 			"Workflow rules outdated (installed v0.3.0 < plugin v0.4.0). Run `/lets:update` to update."},
 		{"global_drift_masked_by_healthy_project", "0.4.0", gOutdated, ""},
@@ -538,11 +538,12 @@ func TestRun_RulesScopeGuard(t *testing.T) {
 		return p
 	}
 
-	t.Run("user_scope_both_missing_points_at_init_user", func(t *testing.T) {
+	t.Run("user_scope_both_missing_is_silent", func(t *testing.T) {
 		pluginRules := plugin(t)
 		project := t.TempDir()
 		home := t.TempDir()
-		// scope=user in the project .env; no project copy, no global copy.
+		// scope=user in the project .env; no project copy, no global copy. The
+		// cache sync (cli layer) creates the global copy and speaks for it.
 		writeFile(t, filepath.Join(project, ".lets", ".env"), "LETS_RULES_SCOPE=user\n")
 
 		var buf bytes.Buffer
@@ -550,24 +551,16 @@ func TestRun_RulesScopeGuard(t *testing.T) {
 			t.Fatal(err)
 		}
 		out := buf.String()
-		if !strings.Contains(out, "Run `lets init --user` to restore it") {
-			t.Errorf("expected the global-missing guard, got:\n%s", out)
-		}
-		if strings.Contains(out, "Run `/lets:init` to install") {
-			t.Errorf("must NOT show the classic project nag under scope=user:\n%s", out)
+		if strings.Contains(out, "LETS Notice") {
+			t.Errorf("scope=user with no copies must not nag from the drift check:\n%s", out)
 		}
 		// Positive: the scope key is whitelisted and injected into the Config block.
 		if !strings.Contains(out, "LETS_RULES_SCOPE=user") {
 			t.Errorf("scope key must appear in the Config block:\n%s", out)
 		}
-		// Ordering: notice precedes the Config block.
-		ni, ci := strings.Index(out, "## LETS Notice"), strings.Index(out, "## LETS Config")
-		if ni < 0 || ci < 0 || ni >= ci {
-			t.Errorf("notice must precede config (notice=%d, config=%d):\n%s", ni, ci, out)
-		}
 	})
 
-	t.Run("user_scope_global_drifted_unchanged", func(t *testing.T) {
+	t.Run("user_scope_global_drifted_is_silent", func(t *testing.T) {
 		pluginRules := plugin(t)
 		project := t.TempDir()
 		home := t.TempDir()
@@ -578,8 +571,8 @@ func TestRun_RulesScopeGuard(t *testing.T) {
 		if err := sessionstart.Run(&buf, pluginRules, project, home, nil); err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(buf.String(), "Global workflow rules outdated") {
-			t.Errorf("drifted global rules notice unchanged under scope=user:\n%s", buf.String())
+		if strings.Contains(buf.String(), "LETS Notice") {
+			t.Errorf("the global copy is rulescache's, not drift-checked here:\n%s", buf.String())
 		}
 	})
 
@@ -597,6 +590,60 @@ func TestRun_RulesScopeGuard(t *testing.T) {
 		}
 		if !strings.Contains(buf.String(), "Workflow rules outdated (installed v0.3.0 < plugin v0.4.0)") {
 			t.Errorf("project copy present must yield the classic project notice (project wins):\n%s", buf.String())
+		}
+	})
+}
+
+// Outside a project the hook surfaces only the machine-global rules cache
+// outcome (lets-tg008): a non-empty notice prints alone, an empty one prints
+// nothing at all.
+func TestRun_NoProjectPrintsOnlyANonEmptyNotice(t *testing.T) {
+	var buf bytes.Buffer
+	if err := sessionstart.Run(&buf, "/nonexistent/rules.md", "", t.TempDir(), []string{"X"}); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "## LETS Notice") || !strings.Contains(out, "X") || strings.Contains(out, "## LETS Config") {
+		t.Errorf("want a Notice with X and no Config, got:\n%s", out)
+	}
+
+	buf.Reset()
+	if err := sessionstart.Run(&buf, "/nonexistent/rules.md", "", t.TempDir(), []string{""}); err != nil {
+		t.Fatal(err)
+	}
+	if got := buf.String(); got != "" {
+		t.Errorf("an empty notice must print nothing, got %q", got)
+	}
+}
+
+// driftCheck never reports on the user scope (lets-tg008): with the project
+// copy missing, a present global copy or scope=user means silence.
+func TestDriftCheck_UserScopeIsSilent(t *testing.T) {
+	pluginRules := filepath.Join(t.TempDir(), "plugin-rules.md")
+	writeFile(t, pluginRules, "---\nversion: 0.4.0\n---\n")
+
+	t.Run("global_present", func(t *testing.T) {
+		project, home := t.TempDir(), t.TempDir()
+		writeFile(t, filepath.Join(project, ".lets", ".env"), "LETS_LANGUAGE=English\n")
+		writeFile(t, filepath.Join(home, ".claude", "rules", "lets-rules.md"), "---\nversion: 0.1.0\n---\n")
+		var buf bytes.Buffer
+		if err := sessionstart.Run(&buf, pluginRules, project, home, nil); err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(buf.String(), "LETS Notice") {
+			t.Errorf("want no notice, got:\n%s", buf.String())
+		}
+	})
+
+	t.Run("scope_user_no_global", func(t *testing.T) {
+		project, home := t.TempDir(), t.TempDir()
+		writeFile(t, filepath.Join(project, ".lets", ".env"), "LETS_RULES_SCOPE=user\n")
+		var buf bytes.Buffer
+		if err := sessionstart.Run(&buf, pluginRules, project, home, nil); err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(buf.String(), "LETS Notice") {
+			t.Errorf("want no notice, got:\n%s", buf.String())
 		}
 	})
 }

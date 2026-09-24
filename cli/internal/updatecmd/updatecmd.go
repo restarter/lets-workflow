@@ -15,8 +15,10 @@ import (
 	"github.com/restarter/lets-workflow/cli/internal/drift"
 	"github.com/restarter/lets-workflow/cli/internal/envfile"
 	"github.com/restarter/lets-workflow/cli/internal/frontmatter"
+	"github.com/restarter/lets-workflow/cli/internal/fsutil"
 	"github.com/restarter/lets-workflow/cli/internal/initcmd"
 	"github.com/restarter/lets-workflow/cli/internal/letsconfig"
+	"github.com/restarter/lets-workflow/cli/internal/rulescache"
 	"github.com/restarter/lets-workflow/cli/internal/version"
 )
 
@@ -27,7 +29,7 @@ const (
 	// const - never fmt.Sprintf'd with a version or any dynamic/untrusted data.
 	installScriptCmd   = "curl -fsSL https://raw.githubusercontent.com/restarter/lets-workflow/main/scripts/install.sh | bash"
 	binaryUpdateAction = "Update the lets binary: `" + installScriptCmd + "`"
-	pluginUpdateAction = "Update the plugin: `/plugin marketplace update lets-workflow`, then `/reload-plugins` (or restart Claude Code: `/exit`, reopen) - all in Claude Code, no terminal. Do it once and skip this in future: enable auto-update in `/plugin` -> Marketplaces -> lets-workflow."
+	pluginUpdateAction = "Update the plugin: `/plugin marketplace update lets-workflow`, then `/reload-plugins` (or start a new session) - all in Claude Code, no terminal."
 )
 
 // Options carries injectable dependencies. LatestFn resolves the latest stable
@@ -39,6 +41,10 @@ type Options struct {
 	// (~/.claude/rules/lets-rules.md). Empty = skip the artifact entirely
 	// (resolution failed, or tests opting out via the zero value).
 	HomeDir string
+	// MainCheckout is set when update runs inside a linked worktree: the
+	// project rows (.env, rules, tracker-rules) are skipped and name it, since
+	// .claude/ is not shared into worktrees (lets-tg008).
+	MainCheckout string
 }
 
 // Run checks the four core drift-able artifacts plus the optional user-scope
@@ -53,6 +59,12 @@ type Options struct {
 // `lets init`'s job. `lets update` only syncs version-pinned artifacts.
 func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Result, error) {
 	result := NewResult(projectRoot, pluginRoot)
+	result.MainCheckout = opts.MainCheckout
+	skipped := func(name string) Artifact {
+		return Artifact{Name: name, Status: StatusSkipped, Detail: "worktree - project files are synced from the main checkout " + opts.MainCheckout}
+	}
+	loadedRoot := pluginRoot
+	pluginRoot, rootVerified, resolveNote := ResolveInstalledRoot(pluginRoot, opts.HomeDir)
 
 	// Resolve "latest" once, shared by the binary and plugin checks.
 	offline := opts.LatestFn == nil
@@ -66,6 +78,8 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 	envPath := filepath.Join(projectRoot, ".lets", ".env")
 	_, envStatErr := os.Stat(envPath)
 	switch {
+	case opts.MainCheckout != "":
+		result.Add(skipped(".env"))
 	case os.IsNotExist(envStatErr):
 		result.Add(Artifact{Name: ".env", Status: StatusNotInitialized, Action: "Run /lets:init"})
 	case version.IsDev():
@@ -103,13 +117,21 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 	// --- Artifact 3: Claude Code plugin ---
 	pluginVer := ReadPluginVersion(pluginRoot)
 	result.Add(versionArtifact("plugin", pluginVer, latest, latestErr, offline, pluginUpdateAction))
+	if !fsutil.SameDir(pluginRoot, loadedRoot) {
+		last := &result.Artifacts[len(result.Artifacts)-1]
+		last.Detail = strings.TrimPrefix(last.Detail+fmt.Sprintf("; v%s is installed - this session still runs v%s", pluginVer, ReadPluginVersion(loadedRoot)), "; ")
+		result.LoadedPluginVersion = ReadPluginVersion(loadedRoot)
+	} else if !rootVerified && resolveNote != "" {
+		last := &result.Artifacts[len(result.Artifacts)-1]
+		last.Detail = strings.TrimPrefix(last.Detail+"; "+resolveNote, "; ")
+	}
 
 	// Order-aware gate (lets-rlue4): the plugin is "behind" when it is outdated
 	// vs the latest release (read straight off the plugin artifact just added -
 	// no duplicated latest-compare, no latestErr divergence) OR behind the binary
 	// locally (offline-safe; versionArtifact never compares plugin-vs-binary).
 	// When behind, do NOT advance the rules file to the stale plugin's version -
-	// that's the half-step. Consumed by the rules + user-rules blocks below.
+	// that's the half-step. Consumed by the rules + tracker-rules blocks below.
 	pluginBehind := false
 	for _, a := range result.Artifacts {
 		if a.Name == "plugin" && a.Status == StatusOutdated {
@@ -154,7 +176,9 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 	// --- Artifact 4: .claude/rules/lets-rules.md ---
 	rulesSrc := filepath.Join(pluginRoot, "rules", "lets-rules.md")
 	rulesDst := filepath.Join(projectRoot, ".claude", "rules", "lets-rules.md")
-	if rulesData, readErr := os.ReadFile(rulesSrc); readErr != nil {
+	if opts.MainCheckout != "" {
+		result.Add(skipped("rules"))
+	} else if rulesData, readErr := os.ReadFile(rulesSrc); readErr != nil {
 		result.Add(Artifact{Name: "rules", Status: StatusUnknown, Detail: fmt.Sprintf("plugin rules unreadable: %s", rulesSrc)})
 	} else {
 		dr := drift.Check(rulesSrc, rulesDst)
@@ -205,44 +229,12 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 		}
 	}
 
-	// --- Artifact 5: ~/.claude/rules/lets-rules.md (user scope, optional) ---
-	// Row appears ONLY when the file exists: absence means "user-scope install
-	// not in use" - the normal state for project-scope users, not a status
-	// worth a row (and keeps project-only output identical to the 4-artifact
-	// era). update never bootstraps user scope; that's `lets init --user`.
-	//
-	// ahead = no-clobber (unlike the project rules artifact): a global file
-	// newer than the plugin is a user customization (the only per-project
-	// opt-out, GH anthropics/claude-code#8395) or a newer release's copy -
-	// never silently reset.
+	// --- Artifact 5: ~/.claude/rules/lets-rules.md - read-only (lets-tg008) ---
+	// The session hook owns this file (rulescache): update never writes it and
+	// never calls it `in-sync` - the row names what the copy is keyed to, and is
+	// healthy (delegated) only when that is verified against the plugin.
 	if globalPresent {
-		if rulesData, readErr := os.ReadFile(rulesSrc); readErr != nil {
-			result.Add(Artifact{Name: "user-rules", Status: StatusUnknown, Detail: fmt.Sprintf("plugin rules unreadable: %s", rulesSrc)})
-		} else {
-			dr := drift.Check(rulesSrc, userRulesDst)
-			switch {
-			// StatePluginUnreadable = the SOURCE (plugin payload) has no
-			// parseable version. An INSTALLED global file with broken
-			// frontmatter is StateUnknown instead -> Detected() -> rewritten
-			// below (lets-* files are plugin-owned by convention).
-			case dr.State == drift.StatePluginUnreadable:
-				result.Add(Artifact{Name: "user-rules", Status: StatusUnknown, Detail: "plugin rules version unparseable (no `version:` frontmatter)"})
-			case dr.State == drift.StateAhead:
-				result.Add(Artifact{Name: "user-rules", Status: StatusAhead, CurrentVersion: dr.InstalledVersion, Detail: "global rules newer than the plugin - customized or newer release; not overwritten"})
-			case dr.State == drift.StateOutdated && pluginBehind:
-				// Half-step guard (lets-rlue4): mirrors the project-rules block -
-				// hold the global rules sync while the plugin is behind.
-				result.Add(Artifact{Name: "user-rules", Status: StatusDeferred, Detail: fmt.Sprintf("plugin behind (plugin v%s); global rules sync deferred until the plugin is updated", pluginVer)})
-			case dr.Detected():
-				if err := initcmd.AtomicWriteBytes(userRulesDst, rulesData, 0o644); err != nil {
-					return result, fmt.Errorf("write user rules: %w", err)
-				}
-				drPost := drift.Check(rulesSrc, userRulesDst)
-				result.Add(Artifact{Name: "user-rules", Status: StatusUpdated, CurrentVersion: drPost.InstalledVersion, Detail: rulesUpdatedDetail(dr)})
-			default:
-				result.Add(Artifact{Name: "user-rules", Status: StatusInSync, CurrentVersion: dr.InstalledVersion, Detail: "tracks the plugin"})
-			}
-		}
+		result.Add(userRulesInfo(opts.HomeDir, userRulesDst, pluginRoot, pluginVer, rootVerified))
 	}
 
 	// --- Artifact 6: .claude/rules/tracker-<name>.md (project scope, optional) ---
@@ -261,7 +253,9 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 			trackerName = vals["LETS_TRACKER"]
 		}
 	}
-	if trackerName != "" && initcmd.ValidTrackerName(trackerName) {
+	if opts.MainCheckout != "" {
+		result.Add(skipped("tracker-rules"))
+	} else if trackerName != "" && initcmd.ValidTrackerName(trackerName) {
 		trackerSrc := filepath.Join(pluginRoot, "rules", "tracker-"+trackerName+".md")
 		if trackerData, readErr := os.ReadFile(trackerSrc); readErr == nil {
 			trackerDst := filepath.Join(projectRoot, ".claude", "rules", "tracker-"+trackerName+".md")
@@ -329,12 +323,16 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 	annotateInSyncBehind(&result)
 
 	// --- internal consistency (binary == plugin == installed-rules frontmatter) ---
-	// user-rules is DELIBERATELY excluded: after a sync it always equals the
-	// plugin (zero signal), and the one divergent case - `ahead` - is a
-	// deliberate customization that must not permanently trip the
-	// "inconsistent install" warning (it would contradict the artifact row's
-	// own "customized, not an error" detail).
-	result.Consistent = consistentVersions(version.Version, pluginVer, frontmatter.ReadVersion(rulesDst))
+	// user-rules is DELIBERATELY excluded: the row is informational - the
+	// session hook owns that file (rulescache, lets-tg008) and the row reports
+	// what it is keyed to, never a version update would reconcile here.
+	if opts.MainCheckout != "" {
+		// A worktree run skipped the project rules - never judge consistency by a
+		// file this run did not check.
+		result.Consistent = consistentVersions(version.Version, pluginVer)
+	} else {
+		result.Consistent = consistentVersions(version.Version, pluginVer, frontmatter.ReadVersion(rulesDst))
+	}
 
 	// The single ordered next step (lets-rlue4) - derived purely from the
 	// artifact statuses computed above, so it can never diverge from the rows.
@@ -362,11 +360,56 @@ func rulesUpdatedDetail(pre drift.Result) string {
 	}
 }
 
+// userRulesInfo describes the hook-maintained global rules. `delegated`
+// (counted healthy) needs proof: the plugin root is VERIFIED as the installed one
+// (ResolveInstalledRoot), its version is known, and the key, the file and that
+// plugin's rules share one hash while the key names that version. Anything else
+// is `unknown` with the reason. HookPending is set only when rulescache.Plan -
+// the hook's own decision, computed without writing - says the next session
+// start will change the file, so next_action never promises more than that.
+func userRulesInfo(home, dst, pluginRoot, pluginVer string, verified bool) Artifact {
+	a := Artifact{Name: "user-rules", Status: StatusUnknown}
+	k, haveKey := rulescache.ReadKey(home)
+	if haveKey {
+		a.CurrentVersion = k.Version
+		a.Detail = fmt.Sprintf("maintained by the session hook - cache of plugin v%s (sha256 %s)", k.Version, k.Hash[:12])
+	} else {
+		a.Detail = "maintained by the session hook - not recorded yet"
+	}
+	dstData, derr := os.ReadFile(dst)
+	srcData, serr := os.ReadFile(filepath.Join(pluginRoot, "rules", "lets-rules.md"))
+	if !verified || serr != nil || pluginVer == "" {
+		a.Detail += "; not verified against the installed plugin (see the plugin row)"
+		return a
+	}
+	if haveKey && derr == nil && rulescache.Sum(dstData) == k.Hash && rulescache.Sum(srcData) == k.Hash && k.Version == pluginVer {
+		a.Status = StatusDelegated
+		return a
+	}
+	var why string
+	switch {
+	case !haveKey:
+		why = "; the next Claude Code session start records it"
+	case derr != nil || rulescache.Sum(dstData) != k.Hash:
+		why = "; edited since the last sync - the next session start saves the edit to a .bak and restores the plugin copy"
+	default:
+		why = fmt.Sprintf("; the installed plugin v%s carries different rules - the next session start refreshes them", pluginVer)
+	}
+	switch p := rulescache.Plan(rulescache.Options{PluginRoot: pluginRoot, HomeDir: home}); p.Outcome {
+	case rulescache.OutcomeNoop, rulescache.OutcomeCreated, rulescache.OutcomeWritten:
+		a.Detail += why
+		a.HookPending = true
+	default:
+		a.Detail += "; the next session start will not change it - " + p.Notice()
+	}
+	return a
+}
+
 // annotateInSyncBehind appends "(itself behind latest v…)" to an in-sync row
 // whose tracked upstream is itself outdated, so two in-sync rows at different
 // versions read as explained rather than contradictory.
 func annotateInSyncBehind(r *Result) {
-	upstreamOf := map[string]string{".env": "binary", "rules": "plugin", "user-rules": "plugin", "tracker-rules": "plugin"}
+	upstreamOf := map[string]string{".env": "binary", "rules": "plugin", "tracker-rules": "plugin"}
 	latestBehind := map[string]string{} // outdated upstream name -> its latest version
 	for _, a := range r.Artifacts {
 		if (a.Name == "binary" || a.Name == "plugin") && a.Status == StatusOutdated {
@@ -392,7 +435,9 @@ func annotateInSyncBehind(r *Result) {
 }
 
 // computeNextAction sets result.NextAction to the single ordered step the user
-// should take this run. Order: init -> binary -> plugin -> reload -> done. The
+// should take this run. Order: init -> binary -> plugin | reload (a newer
+// plugin installed, not loaded) -> reload (rules synced) -> main-checkout (a
+// worktree run) -> new-session | user-rules (the global rules row) -> done. The
 // loop is idempotent: do the one step, rerun `lets update`, repeat until done.
 // It reads only the already-computed artifact statuses (no re-deriving version
 // comparisons); binaryVer is used only for the `done` Version fallback.
@@ -435,25 +480,56 @@ func computeNextAction(r *Result, binaryVer string, latest LatestInfo) {
 	pluginOutdated := func() bool { s, _ := status("plugin"); return s == StatusOutdated }
 	rulesDeferred := func() bool {
 		for _, a := range r.Artifacts {
-			if (a.Name == "rules" || a.Name == "user-rules" || a.Name == "tracker-rules") && a.Status == StatusDeferred {
+			if (a.Name == "rules" || a.Name == "tracker-rules") && a.Status == StatusDeferred {
 				return true
 			}
 		}
 		return false
 	}
+	//    A newer plugin already installed but not loaded by this session needs a
+	//    reload, not an update: a re-run before it reports the same (lets-tg008).
+	if r.LoadedPluginVersion != "" {
+		_, p := status("plugin")
+		r.NextAction = &NextAction{
+			Kind:    "reload",
+			Message: fmt.Sprintf("v%s is already installed; this session still runs v%s. Run /reload-plugins or start a new session - re-running /lets:update before that reports the same.", p.CurrentVersion, r.LoadedPluginVersion),
+		}
+		return
+	}
 	if pluginOutdated() || rulesDeferred() {
 		r.NextAction = &NextAction{
 			Kind:    "plugin",
-			Message: "Update the Claude Code plugin: /plugin marketplace update lets-workflow, then /reload-plugins.",
+			Message: "Update the plugin: /plugin marketplace update lets-workflow, then /reload-plugins (or start a new session).",
 		}
 		return
 	}
 	// 4. Rules were just synced - reload so the running session picks them up.
 	for _, a := range r.Artifacts {
-		if (a.Name == "rules" || a.Name == "user-rules" || a.Name == "tracker-rules") && a.Status == StatusUpdated {
+		if (a.Name == "rules" || a.Name == "tracker-rules") && a.Status == StatusUpdated {
 			r.NextAction = &NextAction{Kind: "reload", Message: "Restart Claude Code so the updated rules load - /exit, then reopen."}
 			return
 		}
+	}
+	// 4a. Project rows skipped from a worktree - they sync in the main checkout.
+	for _, a := range r.Artifacts {
+		if a.Status == StatusSkipped {
+			r.NextAction = &NextAction{Kind: "main-checkout", Message: "Project files were not synced from this worktree - run /lets:update in the main checkout: " + r.MainCheckout}
+			return
+		}
+	}
+	// 4b. The global rules row is not verified healthy (lets-tg008). Say what
+	// actually happens next: the session hook fixes only HookPending states;
+	// anything else is a diagnostic, never a promise and never "re-run".
+	for _, a := range r.Artifacts {
+		if a.Name != "user-rules" || a.Status != StatusUnknown {
+			continue
+		}
+		if a.HookPending {
+			r.NextAction = &NextAction{Kind: "new-session", Message: "The global rules (~/.claude/rules/lets-rules.md) refresh at the next Claude Code session start - re-running /lets:update will not change them."}
+		} else {
+			r.NextAction = &NextAction{Kind: "user-rules", Message: "Global rules not verified: " + a.Detail}
+		}
+		return
 	}
 	// 5. Nothing pending. Only claim "latest release" when we actually checked it
 	//    (latest.Version set = online); offline we report a known version without

@@ -127,7 +127,10 @@ func TestUpdate_TextOutput_Offline(t *testing.T) {
 	}
 }
 
-func TestUpdate_RefusesInsideWorktree(t *testing.T) {
+// From a worktree, update no longer refuses (lets-tg008): it checks the
+// binary, plugin and global rules, and skips the project rows naming the main
+// checkout (.claude/ isn't shared into worktrees).
+func TestUpdate_WorktreeSkipsProjectRows(t *testing.T) {
 	main := gitInitRepo(t)
 	git := func(args ...string) {
 		t.Helper()
@@ -148,11 +151,49 @@ func TestUpdate_RefusesInsideWorktree(t *testing.T) {
 
 	chdirTo(t, wt)
 	out, err := runRootUpdate(t, "--json", "--offline", "--plugin-root="+makeFakePluginRoot(t))
-	if err == nil {
-		t.Fatalf("expected an error when run inside a worktree:\n%s", out)
+	if err != nil {
+		t.Fatalf("worktree run must succeed: %v\n%s", err, out)
 	}
-	if !strings.Contains(out, "worktree") {
-		t.Fatalf("worktree refusal not surfaced:\n%s", out)
+	var r struct {
+		OK           bool   `json:"ok"`
+		MainCheckout string `json:"main_checkout"`
+		Artifacts    []struct {
+			Name   string `json:"name"`
+			Status string `json:"status"`
+			Detail string `json:"detail"`
+		} `json:"artifacts"`
+		NextAction struct {
+			Kind string `json:"kind"`
+		} `json:"next_action"`
+	}
+	if jerr := json.Unmarshal([]byte(out), &r); jerr != nil {
+		t.Fatalf("not valid JSON: %v\n%s", jerr, out)
+	}
+	mainReal, _ := filepath.EvalSymlinks(main)
+	names := func(p string) bool {
+		return strings.Contains(p, main) || (mainReal != "" && strings.Contains(p, mainReal))
+	}
+	if !r.OK || !names(r.MainCheckout) {
+		t.Fatalf("want ok with main_checkout %s, got %+v", main, r)
+	}
+	skipped := 0
+	for _, a := range r.Artifacts {
+		switch a.Name {
+		case ".env", "rules", "tracker-rules":
+			if a.Status != "skipped" || !names(a.Detail) {
+				t.Errorf("%s = %+v, want skipped naming the main checkout", a.Name, a)
+			}
+			skipped++
+		}
+	}
+	if skipped != 3 {
+		t.Errorf("want 3 skipped project rows, got %d:\n%s", skipped, out)
+	}
+	// Offline + a fake 0.4.0 plugin: main-checkout, or an earlier step.
+	switch r.NextAction.Kind {
+	case "main-checkout", "init", "binary", "plugin", "reload":
+	default:
+		t.Errorf("next_action.kind = %q, want main-checkout or an earlier step", r.NextAction.Kind)
 	}
 }
 
@@ -177,6 +218,9 @@ func TestUpdate_JSONEnvelope_UserRulesArtifact(t *testing.T) {
 			Name   string `json:"name"`
 			Status string `json:"status"`
 		} `json:"artifacts"`
+		NextAction struct {
+			Kind string `json:"kind"`
+		} `json:"next_action"`
 	}
 	if jerr := json.Unmarshal([]byte(out), &r); jerr != nil {
 		t.Fatalf("not valid JSON: %v\n%s", jerr, out)
@@ -188,8 +232,12 @@ func TestUpdate_JSONEnvelope_UserRulesArtifact(t *testing.T) {
 	for _, a := range r.Artifacts {
 		byName[a.Name] = a.Status
 	}
-	// fake plugin is 0.4.0, global rules 0.4.0 -> in sync.
-	if byName["user-rules"] != "in-sync" {
-		t.Errorf("user-rules status = %q, want in-sync", byName["user-rules"])
+	// The session hook owns the global copy (lets-tg008): with no cache key
+	// recorded the row is informational `unknown`, never `in-sync`.
+	if byName["user-rules"] != "unknown" {
+		t.Errorf("user-rules status = %q, want unknown", byName["user-rules"])
+	}
+	if k := r.NextAction.Kind; k == "plugin" || k == "reload" {
+		t.Errorf("next_action %q from the user-rules row", k)
 	}
 }

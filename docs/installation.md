@@ -72,14 +72,14 @@ This is a one-time setup per machine. When Claude Code asks who to install for, 
 
 With the plugin installed at **user scope** ("install for yourself everywhere"), one extra step makes LETS work in every project without per-project init: run `/lets:init` in any project — when it detects the user-scope install it offers `lets init --user`, which writes two files:
 
-- `~/.claude/rules/lets-rules.md` — the workflow rules, loaded by Claude Code in **every** project (frontmatter-version-tracked, synced by `/lets:update`'s `user-rules` artifact).
+- `~/.claude/rules/lets-rules.md` — the workflow rules, loaded by Claude Code in **every** project. After this first install it is a cache of the plugin you run: the SessionStart hook keeps it current (see **Refreshing** below).
 - `~/.lets/.env` — your personal defaults: `LETS_LANGUAGE` and `LETS_LAUNCHER`. Per-project keys (merge branch, PR flow) deliberately stay out — those belong in each project's `.lets/.env`.
 
 **How it behaves:**
 
 - In a project that never ran `/lets:init`, the SessionStart hook stays quiet (no "run /lets:init" nag) and injects a minimal config: the project root, your user-level defaults, and `LETS_MERGE_BRANCH` derived from the repo's origin default branch (literal `main` when the repo has no `origin/HEAD` — e.g. a fresh `git init` without a remote).
 - **Precedence:** project `.lets/.env` values override `~/.lets/.env`; for rules, Claude Code loads **both** `.claude/rules/lets-rules.md` files (project + global) when both exist, and the project copy's instruction wins on a direct conflict. Running `/lets:init` in a project still gives you the full per-project setup — it just skips the project rules copy when the global copy already covers you (one prompt; pick "Copy to project" for a git-tracked team copy). The choice is **persisted** as `LETS_RULES_SCOPE=user` in `.lets/.env`, so `/lets:update` respects it — it reports the rules as `delegated` and never re-creates the project copy you opted out of.
-- **Refreshing:** `/lets:update` (run from any initialized project) drift-checks and re-syncs the global rules alongside everything else. Re-running `lets init --user` works from anywhere. A global rules file you've customized (version *ahead* of the plugin) is **never overwritten** — both commands report it and leave it alone.
+- **Refreshing:** automatic. Every Claude Code session start compares the global rules with the plugin that session loaded (by content hash, not version) and refreshes them when they differ - there is nothing to run. An older plugin never replaces newer rules. A copy you edited by hand is saved to `~/.claude/rules/lets-rules.md.bak` (then `.bak-2`, …) before it is replaced, and a one-line notice says so; backups never load, so keep your own rules in a separate `.md` file in `~/.claude/rules/`. Only an installed plugin refreshes the file - a `--plugin-dir` development checkout leaves it alone. `/lets:update` only reports the global rules (the `user-rules` row), never writes them. One caveat: a headless `claude -p` run started right after a plugin update reads the previous rules once - see [the headless contract](../cli/README.md#lets-hook).
 - **NOT FOR SECRETS:** `~/.lets/.env` is injected into model context in *every* project you open (whitelist-filtered to `LETS_*` keys, but world-readable on disk). Tokens and passwords go elsewhere (gh auth, OS keychain).
 
 **Known limitations:**
@@ -131,6 +131,9 @@ With plugin auto-update enabled (above), staying current is a single self-drivin
 
 - Each run advances one step and shows exactly one next action (binary → plugin → reload → done).
 - If the binary is behind, `/lets:update` offers to run the installer in-session (approval-gated) — no terminal needed.
+- If the plugin is behind, `/lets:update` offers to refresh it on disk in-session (approval-gated). A session keeps the plugin it started with, so the step after that is always `/reload-plugins` or a new session - `/lets:update` says so instead of asking you to re-run it, and it checks your project against the plugin actually installed, not the one this session loaded.
+- From a worktree it checks the binary, the plugin and the global rules, and names the main checkout for the project files.
+- The global rules (`~/.claude/rules/lets-rules.md`) are only reported: the session hook keeps them current (see [User-scope install](#user-scope-install-global-rules)).
 - It also refreshes `.lets/.env` and the tracker adapter file. To switch trackers, edit `LETS_TRACKER` in `.lets/.env` and run `/lets:update` - it installs the new adapter and cleans up the old one.
 - It never syncs the workflow rules to a plugin that's still behind (the row shows `deferred`); it tells you to update the plugin first, so you never get stranded mid-upgrade.
 

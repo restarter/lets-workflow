@@ -12,7 +12,7 @@
 //
 // This package owns no I/O policy: callers supply the (plugin) rules file
 // path - used for drift comparison vs the installed rules - the project root,
-// the user home dir (user-scope rules + ~/.lets/.env defaults; lets-wug9k),
+// the user home dir (user-scope rules presence + ~/.lets/.env defaults; lets-wug9k),
 // and the output writer. Detection helpers (DetectProjectRoot) are exposed
 // for cobra wiring.
 package sessionstart
@@ -21,6 +21,7 @@ import (
 	_ "embed"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -28,14 +29,16 @@ import (
 	"github.com/restarter/lets-workflow/cli/internal/drift"
 	"github.com/restarter/lets-workflow/cli/internal/gitutil"
 	"github.com/restarter/lets-workflow/cli/internal/letsconfig"
+	"github.com/restarter/lets-workflow/cli/internal/rulescache"
 )
 
 //go:embed local_config_explainer.md
 var localConfigExplainer string
 
 // Run writes the SessionStart hook output to w:
-//  1. Optional ## LETS Notice block (scope-aware drift check, see driftCheck,
-//     followed by every non-empty extraNotices entry - the cli layer's self-heal)
+//  1. Optional ## LETS Notice block (project rules drift, see driftCheck,
+//     followed by every non-empty extraNotices entry - the cli layer's self-heal
+//     and global rules cache sync)
 //  2. Blank line
 //  3. ## LETS Config block (LETS_PROJECT_ROOT + whitelisted keys from the
 //     merged project-over-user env, see mergedEnv)
@@ -43,21 +46,22 @@ var localConfigExplainer string
 //  5. ### About these values explainer (embedded from local_config_explainer.md)
 //
 // rulesPath is the plugin's rules/lets-rules.md (for version compare against
-// the installed copies).
+// the installed project copy).
 //
 // homeDir is the user's home directory for user-scope lookups
-// (~/.claude/rules/lets-rules.md drift check, ~/.lets/.env config defaults);
+// (~/.claude/rules/lets-rules.md presence, ~/.lets/.env config defaults);
 // empty string = "no user scope" (resolution failed or tests opting out) and
 // degrades to the project-only behavior.
 //
-// projectRoot empty -> emit nothing (matches bash behavior when git rev-parse
-// returns nothing). User scope alone does not create output in non-git dirs.
+// projectRoot empty -> only a non-empty Notice (the global rules cache);
+// nothing else.
 //
 // extraNotices are messages another layer needs surfaced in the same Notice block
-// (the SessionStart self-heal's adopt outcome); PreCompact passes nil.
+// (the SessionStart self-heal's adopt outcome, the global rules cache sync);
+// PreCompact passes nil.
 func Run(w io.Writer, rulesPath, projectRoot, homeDir string, extraNotices []string) error {
 	if projectRoot == "" {
-		return nil
+		return writeNotice(w, extraNotices)
 	}
 
 	// Compute the merged env BEFORE the notice so driftCheck can read the
@@ -65,23 +69,8 @@ func Run(w io.Writer, rulesPath, projectRoot, homeDir string, extraNotices []str
 	// emitted first, the Config block second.
 	env := letsconfig.ResolvedEnv(projectRoot, homeDir, func(r string) string { return gitutil.DefaultBranch(r, time.Second) })
 
-	var msgs []string
-	if msg := driftCheck(rulesPath, projectRoot, homeDir, env["LETS_RULES_SCOPE"]); msg != "" {
-		msgs = append(msgs, msg)
-	}
-	for _, m := range extraNotices {
-		if m != "" {
-			msgs = append(msgs, m)
-		}
-	}
-	if len(msgs) > 0 {
-		notice := "## LETS Notice\n\n" + strings.Join(msgs, "\n\n") + "\n\n→ Surface this to the user at the start of your next response (one line), then continue - do not skip it."
-		if _, err := fmt.Fprintln(w, notice); err != nil {
-			return err
-		}
-		if _, err := fmt.Fprintln(w); err != nil {
-			return err
-		}
+	if err := writeNotice(w, append([]string{driftCheck(rulesPath, projectRoot, homeDir, env["LETS_RULES_SCOPE"])}, extraNotices...)); err != nil {
+		return err
 	}
 
 	if _, err := fmt.Fprintln(w, "## LETS Config"); err != nil {
@@ -109,57 +98,40 @@ func Run(w io.Writer, rulesPath, projectRoot, homeDir string, extraNotices []str
 	return nil
 }
 
-// driftCheck returns the "## LETS Notice" message (Run wraps it) when rules drift requires user
-// action, considering BOTH installed scopes:
-//
-//   - project rules present (any non-missing state) -> existing single-scope
-//     behavior verbatim: project drift wins, global state is irrelevant
-//     (project copy overrides the global one in Claude Code's loading order).
-//   - project rules MISSING + global present and current -> no notice (the
-//     user-scope install covers this project; nagging /lets:init here is the
-//     exact noise lets-wug9k removes).
-//   - project rules MISSING + global present but drifted -> user-scope notice
-//     (MessageUser wording names the global path + remediation).
-//   - both missing + LETS_RULES_SCOPE=user -> the project deliberately relies
-//     on the global copy which is now gone; point at `lets init --user` (the
-//     generic /lets:init nag would install a project copy against the choice).
-//   - both missing (scope unset/project) -> the existing /lets:init nag.
-//
-// rulesScope comes from the MERGED env, so a hand-added LETS_RULES_SCOPE in
-// ~/.lets/.env also engages the guard (documented side effect). homeDir == ""
-// (no user scope / resolution failed) preserves pre-user-scope behavior exactly.
-//
-// Wraps drift.Check + drift.Message/MessageUser — single source of truth for
-// drift wording shared with `lets init --json` output. The trailing
-// surface-this line is hook-only (it tells the orchestrator to relay the
-// notice even when a big slash command like /lets:start is running); it is NOT
-// part of drift.Message, so `lets init --json` output stays clean.
-func driftCheck(pluginRulesPath, projectRoot, homeDir, rulesScope string) string {
-	installedPath := filepath.Join(projectRoot, ".claude", "rules", "lets-rules.md")
-	r := drift.Check(pluginRulesPath, installedPath)
-
-	msg := ""
-	if r.State == drift.StateMissing && homeDir != "" {
-		userPath := filepath.Join(homeDir, ".claude", "rules", "lets-rules.md")
-		ur := drift.Check(pluginRulesPath, userPath)
-		switch {
-		case ur.State == drift.StateMissing && rulesScope == "user":
-			// The project opted into the global copy (scope=user) but it's gone.
-			// Point at the global installer, not /lets:init (which would install
-			// a project copy against the persisted choice).
-			msg = "LETS_RULES_SCOPE=user but the global rules copy `~/.claude/rules/lets-rules.md` is missing. Run `lets init --user` to restore it (or set LETS_RULES_SCOPE=project and run `/lets:init`)."
-		case ur.State == drift.StateMissing:
-			msg = drift.Message(r) // both missing, no scope opt-in: classic nag
-		case ur.Detected():
-			msg = drift.MessageUser(ur) // global present but drifted
-		default:
-			// global equal (or plugin unreadable): covered, stay quiet
+// writeNotice writes the ## LETS Notice block for every non-empty msg; nothing
+// when all are empty. The trailing surface-this line is hook-only (it tells the
+// orchestrator to relay the notice even when a big slash command like
+// /lets:start is running); it is NOT part of drift.Message, so `lets init
+// --json` output stays clean.
+func writeNotice(w io.Writer, msgs []string) error {
+	var keep []string
+	for _, m := range msgs {
+		if m != "" {
+			keep = append(keep, m)
 		}
-	} else {
-		msg = drift.Message(r)
 	}
+	if len(keep) == 0 {
+		return nil
+	}
+	notice := "## LETS Notice\n\n" + strings.Join(keep, "\n\n") + "\n\n→ Surface this to the user at the start of your next response (one line), then continue - do not skip it."
+	if _, err := fmt.Fprintln(w, notice); err != nil {
+		return err
+	}
+	_, err := fmt.Fprintln(w)
+	return err
+}
 
-	return msg
+// driftCheck returns the project rules drift message. The global
+// ~/.claude/rules copy is not drift-checked here: rulescache owns it and
+// reports through its own Notice (lets-tg008).
+func driftCheck(pluginRulesPath, projectRoot, homeDir, rulesScope string) string {
+	r := drift.Check(pluginRulesPath, filepath.Join(projectRoot, ".claude", "rules", "lets-rules.md"))
+	if r.State == drift.StateMissing && homeDir != "" {
+		if _, err := os.Stat(rulescache.DstPath(homeDir)); err == nil || rulesScope == "user" {
+			return "" // user scope covers this project; the cache sync speaks for that file
+		}
+	}
+	return drift.Message(r)
 }
 
 // DetectProjectRoot returns the git toplevel for the current working
@@ -167,9 +139,10 @@ func driftCheck(pluginRulesPath, projectRoot, homeDir, rulesScope string) string
 //
 // Bash parity (matches old session-start.sh `git rev-parse --show-toplevel
 // 2>/dev/null` semantics): no os.Getwd() fallback. Empty result triggers
-// Run() to emit nothing, which is the correct behavior for "user opened
-// Claude Code outside any project" - downstream commands assume the value
-// is a real project root and would otherwise mutate the user's $HOME or cwd.
+// Run() to emit no Config (only a non-empty Notice), which is the correct
+// behavior for "user opened Claude Code outside any project" - downstream
+// commands assume the value is a real project root and would otherwise mutate
+// the user's $HOME or cwd.
 //
 // 2-second timeout because the hook fires on every SessionStart and a
 // hanging git would noticeably delay Claude Code startup.

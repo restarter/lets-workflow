@@ -43,7 +43,7 @@ If a `## LETS Notice` block appears in the injected context (sibling H2 of `## L
   **Exception — trunk-mode.** If `detect-task` returns an active task AND HEAD == `$LETS_MERGE_BRANCH`, trunk-mode is active (user opted in via the `take-task` picker option "Stay on current branch"). In trunk-mode: editing the merge-branch is allowed; `/lets:done` pushes + closes the task without creating a PR (same-source-target is not a valid PR); `/lets:plan` and `/lets:execute` derive plan filenames from task-id instead of branch slug. If HEAD == `$LETS_MERGE_BRANCH` AND `detect-task` returns None, the default rule applies — refuse edits, instruct user to run `/lets:start <id>` first.
 
   **Main / assistant mode.** When the session was entered via `/lets:start --main` (alias `--assistant`), HEAD == `$LETS_MERGE_BRANCH` with no active task is the **intended** state (read + triage), not an error — do not refuse the session or demand a task. The refuse-edits rule still governs *code edits*: on edit-intent, route the user to `take-task` / `create-task` (graceful hand-off) instead of only refusing.
-- **Never edit installed `lets-*` rules files or managed `tracker-<name>.md` adapter files** in `.claude/rules/` or `~/.claude/rules/`. They are plugin-managed copies refreshed by `/lets:init` / `/lets:update` (project) and `lets init --user` / `/lets:update` (global). Edit the canonical source `plugins/lets/rules/` file in the plugin instead — direct edits to installed copies bypass drift detection and silently desync from source. **Exception:** `tracker-<name>.board.md` is user-owned (scaffolded once, never overwritten) — edit it freely.
+- **Never edit installed `lets-*` rules files or managed `tracker-<name>.md` adapter files** in `.claude/rules/` or `~/.claude/rules/`. They are plugin-managed copies: the project copies are refreshed by `/lets:init` / `/lets:update`; the global `~/.claude/rules/lets-rules.md` is refreshed by the session hook at every start (a hand-edited global copy is saved to `.bak[-N]` before it is replaced - own rules go in a separate `.md`). Edit the canonical source `plugins/lets/rules/` file in the plugin instead — direct edits to installed copies bypass drift detection and silently desync from source. **Exception:** `tracker-<name>.board.md` is user-owned (scaffolded once, never overwritten) — edit it freely.
 
 ## Slash Command Discipline
 
@@ -516,7 +516,7 @@ Every response ends with exactly ONE footer - never mix two. Pick the type by wh
 | `/lets:team` | Utility | Parallel implementation with Agent Teams (run, status, stop) |
 | `/lets:note` | Utility | Add note to active task (`--session`, aliases `--snapshot` / `--pre-compact` / `--compact` = resume snapshot on request, one path) |
 | `/lets:init`    | Setup | Per-project initialization. Re-run for self-heal (drift fix) or to change config; offers the user-scope global-rules install (`lets init --user`) when the plugin is user-scoped |
-| `/lets:update`  | Setup | Sync project with the current release - `.lets/.env` + rules self-heal, plus version status for the `lets` binary and the plugin, plus the user-level global rules when installed |
+| `/lets:update`  | Setup | Sync project with the current release - `.lets/.env` + rules self-heal, plus version status for the `lets` binary and the plugin; the global rules are only reported (the session hook keeps them current) |
 
 ### Auto-triggered Skills
 

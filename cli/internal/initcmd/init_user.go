@@ -2,10 +2,10 @@ package initcmd
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/restarter/lets-workflow/cli/internal/drift"
+	"github.com/restarter/lets-workflow/cli/internal/rulescache"
 )
 
 // UserOptions carries the inputs for RunUser. Struct (not positionals) so the
@@ -22,13 +22,11 @@ type UserOptions struct {
 // Idempotent. Deliberately a SUBSET of project Run: no git, no .gitignore,
 // no migrations, no settings.json statusline, no beads, no .env.example.
 //
-// ahead-state no-clobber: unlike the project copy (plugin-owned, reset on any
-// drift), a global rules file NEWER than the plugin is left untouched - it is
-// either a user customization (the only per-project opt-out mechanism Claude
-// Code offers, see GH anthropics/claude-code#8395) or a newer release's copy;
-// both must survive. unknown (unparseable frontmatter) IS overwritten:
-// lets-* files are plugin-owned by convention and an unversioned copy can't
-// be drift-tracked.
+// The global rules copy is a cache of the running plugin (lets-tg008), written
+// only through rulescache: a copy that is not LETS content is saved to
+// .bak[-N] before it is replaced, and a newer cache is never downgraded by an
+// older plugin. Anything withheld (kept newer, untrusted plugin root, lock busy,
+// I/O failure) is a named warning, never silent.
 //
 // Result envelope: same initcmd.Result, SchemaVersion unchanged.
 // Result.ProjectRoot carries HomeDir (the "scope root" for a user-scope run -
@@ -41,54 +39,20 @@ func RunUser(o UserOptions) (Result, error) {
 		return result, err
 	}
 
-	// 1. Global rules: ~/.claude/rules/lets-rules.md (drift-aware, ahead-safe)
-	rulesSrc := filepath.Join(o.PluginRoot, "rules", "lets-rules.md")
-	rulesDst := filepath.Join(o.HomeDir, ".claude", "rules", "lets-rules.md")
-	rulesData, readErr := os.ReadFile(rulesSrc)
-	if readErr != nil {
-		result.Drift = DriftReport{Detected: false, State: drift.StatePluginUnreadable}
-		result.Add(Step{Status: StepWarn, Message: fmt.Sprintf("plugin rules missing: %s", rulesSrc)})
-	} else {
-		dr := drift.Check(rulesSrc, rulesDst)
-		result.Drift = DriftReport{
-			Detected:         dr.Detected(),
-			State:            dr.State,
-			InstalledVersion: dr.InstalledVersion,
-			PluginVersion:    dr.PluginVersion,
-			Message:          drift.MessageUser(dr),
-		}
-		switch {
-		case dr.State == drift.StateAhead:
-			result.Add(Step{Status: StepWarn, Message: fmt.Sprintf("~/.claude/rules/lets-rules.md AHEAD (v%s > plugin v%s) - left untouched (customized or newer release)", dr.InstalledVersion, dr.PluginVersion)})
-		case dr.Detected():
-			if err := os.MkdirAll(filepath.Dir(rulesDst), 0o755); err != nil {
-				return result, err
-			}
-			if err := AtomicWriteBytes(rulesDst, rulesData, 0o644); err != nil {
-				return result, err
-			}
-			// Recompute drift against the newly-written file - symmetric to
-			// project Run Step 8 (surfaces post-write inconsistency instead of
-			// silently lying that all is well).
-			drPost := drift.Check(rulesSrc, rulesDst)
-			result.Drift = DriftReport{
-				Detected:         drPost.Detected(),
-				State:            drPost.State,
-				InstalledVersion: drPost.InstalledVersion,
-				PluginVersion:    drPost.PluginVersion,
-				Message:          drift.MessageUser(drPost),
-			}
-			switch dr.State {
-			case drift.StateMissing:
-				result.Add(Step{Status: StepOK, Message: fmt.Sprintf("~/.claude/rules/lets-rules.md installed (v%s)", dr.PluginVersion)})
-			case drift.StateUnknown:
-				result.Add(Step{Status: StepOK, Message: fmt.Sprintf("~/.claude/rules/lets-rules.md refreshed (was: unparseable, now v%s)", dr.PluginVersion)})
-			case drift.StateOutdated:
-				result.Add(Step{Status: StepOK, Message: fmt.Sprintf("~/.claude/rules/lets-rules.md updated (v%s -> v%s)", dr.InstalledVersion, dr.PluginVersion)})
-			}
-		default:
-			result.Add(Step{Status: StepSkip, Message: fmt.Sprintf("~/.claude/rules/lets-rules.md (v%s up to date)", dr.InstalledVersion)})
-		}
+	// 1. Global rules: ~/.claude/rules/lets-rules.md is a cache of the running
+	// plugin, written only through rulescache (lets-tg008). --user is an
+	// explicit bootstrap, so it may create the file.
+	res := rulescache.Sync(rulescache.Options{PluginRoot: o.PluginRoot, HomeDir: o.HomeDir, InProject: true, ScopeUser: true})
+	switch res.Outcome {
+	case rulescache.OutcomeCreated, rulescache.OutcomeWritten:
+		result.Drift = DriftReport{State: drift.StateEqual}
+		result.Add(Step{Status: StepOK, Message: res.Notice()})
+	case rulescache.OutcomeNoop:
+		result.Drift = DriftReport{State: drift.StateEqual}
+		result.Add(Step{Status: StepSkip, Message: "~/.claude/rules/lets-rules.md (matches the running plugin)"})
+	default: // kept-newer, skipped, failed: named, never silent
+		result.Drift = DriftReport{Detected: true, State: drift.StateUnknown, Message: res.Notice()}
+		result.Add(Step{Status: StepWarn, Message: res.Notice()})
 	}
 
 	// 2. User-level defaults: ~/.lets/.env (LETS_LANGUAGE + LETS_LAUNCHER)
