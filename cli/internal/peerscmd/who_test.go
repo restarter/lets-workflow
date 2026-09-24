@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -345,5 +346,46 @@ func TestWho_OrcSiblingListFailsAfterDeadline(t *testing.T) {
 	}
 	if !spent {
 		t.Errorf("the spent budget must be named: %+v", res.Degraded)
+	}
+}
+
+// linkedWorktree adds a git worktree of repo whose .lets is a symlink to the main
+// checkout's - the shape /lets:worktree create and `lets worktree adopt` produce.
+func linkedWorktree(t *testing.T, repo, branch string) string {
+	t.Helper()
+	wt := filepath.Join(filepath.Dir(repo), "wt-"+strings.ReplaceAll(branch, "/", "-"))
+	if out, err := exec.Command("git", "-C", repo, "worktree", "add", "-q", "-b", branch, wt).CombinedOutput(); err != nil {
+		t.Fatalf("worktree add: %v %s", err, out)
+	}
+	if err := os.Symlink(filepath.Join(repo, ".lets"), filepath.Join(wt, ".lets")); err != nil {
+		t.Fatal(err)
+	}
+	return wt
+}
+
+// A worker (or a sibling's own orchestrator) running in a linked worktree registers
+// through its .lets symlink, i.e. in the main checkout the Orca walk reads.
+func TestWho_OrcSiblingWorkerInLinkedWorktree(t *testing.T) {
+	root := repoWithLets(t, "orca")
+	useOrca(t, &fakeOps{})
+	withBranch(t, "feature/x")
+	sib := siblingRepo(t)
+	fakeRepos(t, root, sib)
+	wt := linkedWorktree(t, sib, "feature/x")
+	plantRole(t, root, sidM, "role: orchestrator\nname: MAIN\npid: 1\nset: x\n")
+	plantRole(t, wt, sidW, "role: worker\ntask: t-1\npid: 3\nset: x\n") // written through wt/.lets
+	bindBranch(t, wt, "feature/x", "MAIN")
+	claudeHome(t, []regRow{{1, sidM, "MAIN", root}, {3, sidW, "W", wt}})
+	res, _ := Who(context.Background(), WhoOptions{Cwd: root, Orc: "MAIN"})
+	if w := peerBySession(res.Peers, sidW); w == nil || w.RepoIndex == nil || *w.RepoIndex != 1 {
+		t.Fatalf("a bound worker in a linked worktree of a sibling must be listed: %+v", res.Peers)
+	}
+	// The sibling's own live MAIN, itself in another linked worktree, still keeps it.
+	wt2 := linkedWorktree(t, sib, "feature/y")
+	plantRole(t, wt2, sidN, "role: orchestrator\nname: MAIN\npid: 2\nset: x\n")
+	claudeHome(t, []regRow{{1, sidM, "MAIN", root}, {2, sidN, "MAIN", wt2}, {3, sidW, "W", wt}})
+	res, _ = Who(context.Background(), WhoOptions{Cwd: root, Orc: "MAIN"})
+	if peerBySession(res.Peers, sidW) != nil {
+		t.Fatalf("a worktree-local sibling orchestrator named MAIN keeps its worker: %+v", res.Peers)
 	}
 }
