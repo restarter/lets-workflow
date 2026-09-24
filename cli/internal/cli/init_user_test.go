@@ -24,10 +24,21 @@ type initUserResult struct {
 	} `json:"steps"`
 }
 
+// installedTestPluginRoot lays out an installed plugin release the rules cache
+// trusts (<home>/.claude/plugins/cache/<marketplace>/lets/<ver>); a root
+// elsewhere is refused by `lets init --user` (lets-tg008).
+func installedTestPluginRoot(t *testing.T, home, ver string) string {
+	t.Helper()
+	root := filepath.Join(home, ".claude", "plugins", "cache", "lets-workflow", "lets", ver)
+	writeTestFile(t, filepath.Join(root, ".claude-plugin", "plugin.json"), `{"name":"lets","version":"`+ver+`"}`)
+	writeTestFile(t, filepath.Join(root, "rules", "lets-rules.md"), "---\nname: lets-rules\nversion: "+ver+"\n---\n# test rules\n")
+	return root
+}
+
 func TestInitUser_JSONEnvelope(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	pluginRoot := makeFakePluginRoot(t)
+	pluginRoot := installedTestPluginRoot(t, home, "0.4.0")
 
 	root := cli.NewRootCmd()
 	root.SetArgs([]string{"init", "--user", "--json", "--plugin-root=" + pluginRoot, "--language=Ukrainian"})
@@ -51,6 +62,15 @@ func TestInitUser_JSONEnvelope(t *testing.T) {
 	}
 	if len(r.Steps) == 0 {
 		t.Error("no steps in envelope")
+	}
+	installed := false
+	for _, s := range r.Steps {
+		if s.Status == "ok" && strings.Contains(s.Message, "Global workflow rules installed") {
+			installed = true
+		}
+	}
+	if !installed {
+		t.Errorf("missing ok step for the global rules install: %+v", r.Steps)
 	}
 
 	for _, want := range []string{
