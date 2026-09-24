@@ -28,7 +28,7 @@ const (
 	// const - never fmt.Sprintf'd with a version or any dynamic/untrusted data.
 	installScriptCmd   = "curl -fsSL https://raw.githubusercontent.com/restarter/lets-workflow/main/scripts/install.sh | bash"
 	binaryUpdateAction = "Update the lets binary: `" + installScriptCmd + "`"
-	pluginUpdateAction = "Update the plugin: `/plugin marketplace update lets-workflow`, then `/reload-plugins` (or restart Claude Code: `/exit`, reopen) - all in Claude Code, no terminal. Do it once and skip this in future: enable auto-update in `/plugin` -> Marketplaces -> lets-workflow."
+	pluginUpdateAction = "Update the plugin: `/plugin marketplace update lets-workflow`, then `/reload-plugins` (or start a new session) - all in Claude Code, no terminal."
 )
 
 // Options carries injectable dependencies. LatestFn resolves the latest stable
@@ -40,6 +40,10 @@ type Options struct {
 	// (~/.claude/rules/lets-rules.md). Empty = skip the artifact entirely
 	// (resolution failed, or tests opting out via the zero value).
 	HomeDir string
+	// MainCheckout is set when update runs inside a linked worktree: the
+	// project rows (.env, rules, tracker-rules) are skipped and name it, since
+	// .claude/ is not shared into worktrees (lets-tg008).
+	MainCheckout string
 }
 
 // Run checks the four core drift-able artifacts plus the optional user-scope
@@ -54,6 +58,10 @@ type Options struct {
 // `lets init`'s job. `lets update` only syncs version-pinned artifacts.
 func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Result, error) {
 	result := NewResult(projectRoot, pluginRoot)
+	result.MainCheckout = opts.MainCheckout
+	skipped := func(name string) Artifact {
+		return Artifact{Name: name, Status: StatusSkipped, Detail: "worktree - project files are synced from the main checkout " + opts.MainCheckout}
+	}
 	loadedRoot := pluginRoot
 	pluginRoot, rootVerified, resolveNote := ResolveInstalledRoot(pluginRoot, opts.HomeDir)
 
@@ -69,6 +77,8 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 	envPath := filepath.Join(projectRoot, ".lets", ".env")
 	_, envStatErr := os.Stat(envPath)
 	switch {
+	case opts.MainCheckout != "":
+		result.Add(skipped(".env"))
 	case os.IsNotExist(envStatErr):
 		result.Add(Artifact{Name: ".env", Status: StatusNotInitialized, Action: "Run /lets:init"})
 	case version.IsDev():
@@ -165,7 +175,9 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 	// --- Artifact 4: .claude/rules/lets-rules.md ---
 	rulesSrc := filepath.Join(pluginRoot, "rules", "lets-rules.md")
 	rulesDst := filepath.Join(projectRoot, ".claude", "rules", "lets-rules.md")
-	if rulesData, readErr := os.ReadFile(rulesSrc); readErr != nil {
+	if opts.MainCheckout != "" {
+		result.Add(skipped("rules"))
+	} else if rulesData, readErr := os.ReadFile(rulesSrc); readErr != nil {
 		result.Add(Artifact{Name: "rules", Status: StatusUnknown, Detail: fmt.Sprintf("plugin rules unreadable: %s", rulesSrc)})
 	} else {
 		dr := drift.Check(rulesSrc, rulesDst)
@@ -240,7 +252,9 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 			trackerName = vals["LETS_TRACKER"]
 		}
 	}
-	if trackerName != "" && initcmd.ValidTrackerName(trackerName) {
+	if opts.MainCheckout != "" {
+		result.Add(skipped("tracker-rules"))
+	} else if trackerName != "" && initcmd.ValidTrackerName(trackerName) {
 		trackerSrc := filepath.Join(pluginRoot, "rules", "tracker-"+trackerName+".md")
 		if trackerData, readErr := os.ReadFile(trackerSrc); readErr == nil {
 			trackerDst := filepath.Join(projectRoot, ".claude", "rules", "tracker-"+trackerName+".md")
@@ -405,8 +419,9 @@ func annotateInSyncBehind(r *Result) {
 }
 
 // computeNextAction sets result.NextAction to the single ordered step the user
-// should take this run. Order: init -> binary -> plugin -> reload ->
-// new-session | user-rules (the global rules row) -> done. The
+// should take this run. Order: init -> binary -> plugin | reload (a newer
+// plugin installed, not loaded) -> reload (rules synced) -> main-checkout (a
+// worktree run) -> new-session | user-rules (the global rules row) -> done. The
 // loop is idempotent: do the one step, rerun `lets update`, repeat until done.
 // It reads only the already-computed artifact statuses (no re-deriving version
 // comparisons); binaryVer is used only for the `done` Version fallback.
@@ -455,10 +470,20 @@ func computeNextAction(r *Result, binaryVer string, latest LatestInfo) {
 		}
 		return false
 	}
+	//    A newer plugin already installed but not loaded by this session needs a
+	//    reload, not an update: a re-run before it reports the same (lets-tg008).
+	if r.LoadedPluginVersion != "" {
+		_, p := status("plugin")
+		r.NextAction = &NextAction{
+			Kind:    "reload",
+			Message: fmt.Sprintf("v%s is already installed; this session still runs v%s. Run /reload-plugins or start a new session - re-running /lets:update before that reports the same.", p.CurrentVersion, r.LoadedPluginVersion),
+		}
+		return
+	}
 	if pluginOutdated() || rulesDeferred() {
 		r.NextAction = &NextAction{
 			Kind:    "plugin",
-			Message: "Update the Claude Code plugin: /plugin marketplace update lets-workflow, then /reload-plugins.",
+			Message: "Update the plugin: /plugin marketplace update lets-workflow, then /reload-plugins (or start a new session).",
 		}
 		return
 	}
@@ -466,6 +491,13 @@ func computeNextAction(r *Result, binaryVer string, latest LatestInfo) {
 	for _, a := range r.Artifacts {
 		if (a.Name == "rules" || a.Name == "tracker-rules") && a.Status == StatusUpdated {
 			r.NextAction = &NextAction{Kind: "reload", Message: "Restart Claude Code so the updated rules load - /exit, then reopen."}
+			return
+		}
+	}
+	// 4a. Project rows skipped from a worktree - they sync in the main checkout.
+	for _, a := range r.Artifacts {
+		if a.Status == StatusSkipped {
+			r.NextAction = &NextAction{Kind: "main-checkout", Message: "Project files were not synced from this worktree - run /lets:update in the main checkout: " + r.MainCheckout}
 			return
 		}
 	}

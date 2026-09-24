@@ -37,6 +37,7 @@ const (
 	StatusDev            ArtifactStatus = "dev"             // running an untagged dev binary - no comparison
 	StatusDelegated      ArtifactStatus = "delegated"       // deliberately not plugin-managed here: project rules via ~/.claude/rules (LETS_RULES_SCOPE=user), OR a user-authored tracker adapter with no shipped source
 	StatusDeferred       ArtifactStatus = "deferred"        // rules sync held back: the plugin is behind, syncing now would write a stale lower version. Resolves once the plugin is updated.
+	StatusSkipped        ArtifactStatus = "skipped"         // not checked here (a worktree): the row names where it can run - never counted as up to date
 )
 
 // allStatuses - keep adjacent to the Status* consts. A new status MUST be
@@ -44,7 +45,7 @@ const (
 var allStatuses = []ArtifactStatus{
 	StatusUpToDate, StatusInSync, StatusUpdated, StatusOutdated,
 	StatusAhead, StatusUnknown, StatusNotInitialized, StatusDev,
-	StatusDelegated, StatusDeferred,
+	StatusDelegated, StatusDeferred, StatusSkipped,
 }
 
 // Artifact is the outcome of checking one drift-able artifact.
@@ -62,8 +63,9 @@ type Artifact struct {
 
 // NextAction is the single, ordered next step `lets update` recommends this run.
 // Exactly one is set per run (the idempotent loop: rerun -> next step -> ... ->
-// done). Order: init -> binary -> plugin -> reload -> new-session | user-rules
-// (the global rules row, lets-tg008) -> done.
+// done). Order: init -> binary -> plugin | reload -> reload -> main-checkout
+// (a worktree run) -> new-session | user-rules (the global rules row,
+// lets-tg008) -> done.
 //
 // SECURITY: Command is execution-bound - the /lets:update orchestrator runs it
 // via the Bash tool on user approval. It may ONLY ever be a compile-time const
@@ -71,7 +73,7 @@ type Artifact struct {
 // and never derive it from a network response, file contents, env var, or
 // --plugin-root. A byte-equal test pins this.
 type NextAction struct {
-	Kind    string `json:"kind"`              // "init" | "binary" | "plugin" | "reload" | "new-session" | "user-rules" | "done"
+	Kind    string `json:"kind"`              // "init" | "binary" | "plugin" | "reload" | "main-checkout" | "new-session" | "user-rules" | "done"
 	Message string `json:"message"`           // human one-liner
 	Command string `json:"command,omitempty"` // literal shell command (binary: the install.sh curl) - const-only
 	Version string `json:"version,omitempty"` // converged version (kind == "done")
@@ -83,6 +85,7 @@ type Summary struct {
 	Updated      int `json:"updated"`
 	ActionNeeded int `json:"action_needed"` // outdated + not-initialized
 	Unknown      int `json:"unknown"`       // unknown + ahead + dev
+	Skipped      int `json:"skipped"`       // project rows not checked from a worktree (lets-tg008)
 }
 
 // Result is the structured outcome of `lets update`. Always populated, even on
@@ -101,6 +104,9 @@ type Result struct {
 	// when the installed plugin (ResolveInstalledRoot) differs from it
 	// (lets-tg008); the plugin/rules rows compare against the installed one.
 	LoadedPluginVersion string `json:"loaded_plugin_version,omitempty"`
+	// MainCheckout is the main checkout when update ran from a worktree: the
+	// project rows are skipped there and name it (lets-tg008).
+	MainCheckout string `json:"main_checkout,omitempty"`
 }
 
 // NewResult initializes a Result with paths and a non-nil Artifacts slice
@@ -135,5 +141,7 @@ func (r *Result) Add(a Artifact) {
 		// once, on the plugin row); not an independent action - keep it out of
 		// ActionNeeded so next_action stays the single source of "do this".
 		r.Summary.Unknown++
+	case StatusSkipped:
+		r.Summary.Skipped++
 	}
 }

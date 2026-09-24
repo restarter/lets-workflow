@@ -82,9 +82,6 @@ slash command, which shells out with --plugin-root=${CLAUDE_PLUGIN_ROOT}.`,
 			if projectRoot == "" {
 				return emit(updatecmd.NewResult("", ""), fmt.Errorf("not in a git repository"))
 			}
-			if initcmd.DetectInsideWorktree() {
-				return emit(updatecmd.NewResult(projectRoot, ""), fmt.Errorf("'lets update' must run from the main repo, not a worktree (.claude/ isn't shared into worktrees)"))
-			}
 			pluginRoot, err := initcmd.DetectPluginRoot(flagPluginRoot)
 			if err != nil {
 				return emit(updatecmd.NewResult(projectRoot, ""), fmt.Errorf("%w\n\nRun /lets:update from inside Claude Code, or pass --plugin-root=<path-to-plugins/lets>", err))
@@ -95,6 +92,12 @@ slash command, which shells out with --plugin-root=${CLAUDE_PLUGIN_ROOT}.`,
 			}
 			home, _ := os.UserHomeDir() // "" on failure -> user-rules artifact skipped
 			opts := updatecmd.Options{HomeDir: home}
+			// A worktree run checks the binary, plugin and global rules; the
+			// project rows are skipped and name the main checkout (.claude/ isn't
+			// shared into worktrees) - lets-tg008.
+			if in, mainRoot := initcmd.DetectInsideWorktreeAt(""); in {
+				opts.MainCheckout = mainRoot
+			}
 			if !flagOffline {
 				cacheDir := filepath.Join(projectRoot, ".lets", "cache")
 				refresh := flagRefreshCache

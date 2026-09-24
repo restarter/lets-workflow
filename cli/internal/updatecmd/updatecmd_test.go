@@ -1326,3 +1326,64 @@ func TestRun_StaleHandedRootComparesAgainstInstalled(t *testing.T) {
 		t.Errorf("plugin Detail = %q, want the loaded-version note", p.Detail)
 	}
 }
+
+// --- worktree runs + honest next steps (lets-tg008) ---
+
+// A worktree run checks the binary, plugin and global rules; the project rows
+// are skipped, name the main checkout, and never count as up to date.
+func TestRun_WorktreeSkipsProjectRows(t *testing.T) {
+	pr, plug := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0")
+	main := "/repos/main-checkout"
+	r, err := Run(context.Background(), Options{LatestFn: stubLatest("0.6.0"), MainCheckout: main}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{".env", "rules", "tracker-rules"} {
+		a := find(t, r, name)
+		if a.Status != StatusSkipped || !strings.Contains(a.Detail, main) {
+			t.Errorf("%s = %+v, want skipped naming %s", name, a, main)
+		}
+	}
+	for _, name := range []string{"binary", "plugin"} {
+		if got := find(t, r, name).Status; got != StatusUpToDate {
+			t.Errorf("%s status = %s, want up-to-date", name, got)
+		}
+	}
+	if r.Summary.Skipped != 3 || r.Summary.UpToDate != 2 {
+		t.Errorf("Summary = %+v, want skipped=3 up_to_date=2", r.Summary)
+	}
+	if r.MainCheckout != main {
+		t.Errorf("MainCheckout = %q, want %q", r.MainCheckout, main)
+	}
+	if r.NextAction.Kind != "main-checkout" || !strings.Contains(r.NextAction.Message, main) {
+		t.Errorf("next_action = %+v, want main-checkout naming %s", r.NextAction, main)
+	}
+	// Nothing written into the worktree's project files.
+	assertRulesFileVersion(t, pr, "0.6.0")
+}
+
+// A newer plugin installed but not loaded by this session: the next step is a
+// reload, and it says a re-run before that cannot change the answer.
+func TestRun_LoadedOlderThanInstalled_Reload(t *testing.T) {
+	pr, _ := scaffold(t, "0.9.2", "0.9.2", "0.9.1", "0.9.2")
+	home := t.TempDir()
+	old := installRelease(t, home, "0.9.1", "0.9.1")
+	neu := installRelease(t, home, "0.9.2", "0.9.2")
+	writeIndex(t, home, old, neu)
+	r, err := Run(context.Background(), Options{HomeDir: home, LatestFn: stubLatest("0.9.2")}, pr, old)
+	if err != nil {
+		t.Fatal(err)
+	}
+	na := r.NextAction
+	if na.Kind != "reload" || !strings.Contains(na.Message, "v0.9.2 is already installed") ||
+		!strings.Contains(na.Message, "still runs v0.9.1") || !strings.Contains(na.Message, "reports the same") {
+		t.Errorf("next_action = %+v", na)
+	}
+}
+
+// The plugin update hint no longer promises auto-update will prevent the loop.
+func TestPluginUpdateAction_NoAutoUpdatePromise(t *testing.T) {
+	if strings.Contains(pluginUpdateAction, "auto-update") || !strings.Contains(pluginUpdateAction, "start a new session") {
+		t.Errorf("pluginUpdateAction = %q", pluginUpdateAction)
+	}
+}
