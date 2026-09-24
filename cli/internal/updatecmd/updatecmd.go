@@ -53,6 +53,8 @@ type Options struct {
 // `lets init`'s job. `lets update` only syncs version-pinned artifacts.
 func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Result, error) {
 	result := NewResult(projectRoot, pluginRoot)
+	loadedRoot := pluginRoot
+	pluginRoot, rootVerified, resolveNote := ResolveInstalledRoot(pluginRoot, opts.HomeDir)
 
 	// Resolve "latest" once, shared by the binary and plugin checks.
 	offline := opts.LatestFn == nil
@@ -103,6 +105,14 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 	// --- Artifact 3: Claude Code plugin ---
 	pluginVer := ReadPluginVersion(pluginRoot)
 	result.Add(versionArtifact("plugin", pluginVer, latest, latestErr, offline, pluginUpdateAction))
+	if filepath.Clean(pluginRoot) != filepath.Clean(loadedRoot) {
+		last := &result.Artifacts[len(result.Artifacts)-1]
+		last.Detail = strings.TrimPrefix(last.Detail+fmt.Sprintf("; v%s is installed - this session still runs v%s", pluginVer, ReadPluginVersion(loadedRoot)), "; ")
+		result.LoadedPluginVersion = ReadPluginVersion(loadedRoot)
+	} else if !rootVerified && resolveNote != "" {
+		last := &result.Artifacts[len(result.Artifacts)-1]
+		last.Detail = strings.TrimPrefix(last.Detail+"; "+resolveNote, "; ")
+	}
 
 	// Order-aware gate (lets-rlue4): the plugin is "behind" when it is outdated
 	// vs the latest release (read straight off the plugin artifact just added -

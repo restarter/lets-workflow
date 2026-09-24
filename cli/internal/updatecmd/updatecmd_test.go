@@ -1272,3 +1272,28 @@ func TestRun_TrackerSwitch_StaleAdapterRemoved(t *testing.T) {
 		t.Error("tracker-none.md not installed after switch-via-update")
 	}
 }
+
+// A session that loaded an older plugin than the one installed must not report
+// the project rules in-sync against the stale root (lets-tg008).
+func TestRun_StaleHandedRootComparesAgainstInstalled(t *testing.T) {
+	pr, _ := scaffold(t, "0.9.2", "0.9.1", "0.9.1", "0.9.2")
+	home := t.TempDir()
+	old := installRelease(t, home, "0.9.1", "0.9.1")
+	neu := installRelease(t, home, "0.9.2", "0.9.2")
+	writeIndex(t, home, old, neu)
+
+	r, err := Run(context.Background(), Options{HomeDir: home}, pr, old)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := find(t, r, "rules")
+	if a.Status != StatusUpdated || a.CurrentVersion != "0.9.2" {
+		t.Fatalf("rules = %+v, want updated to 0.9.2", a)
+	}
+	if r.LoadedPluginVersion != "0.9.1" {
+		t.Errorf("LoadedPluginVersion = %q, want 0.9.1", r.LoadedPluginVersion)
+	}
+	if p := find(t, r, "plugin"); !strings.Contains(p.Detail, "this session still runs v0.9.1") {
+		t.Errorf("plugin Detail = %q, want the loaded-version note", p.Detail)
+	}
+}

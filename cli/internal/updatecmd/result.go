@@ -93,6 +93,10 @@ type Result struct {
 	Consistent    bool        `json:"consistent"` // binary == plugin == installed-rules frontmatter version (ignoring "dev"/"")
 	Summary       Summary     `json:"summary"`
 	NextAction    *NextAction `json:"next_action,omitempty"` // the single ordered next step (nil only on a hard error before computeNextAction)
+	// LoadedPluginVersion is the plugin version THIS session loaded, set only
+	// when the installed plugin (ResolveInstalledRoot) differs from it
+	// (lets-tg008); the plugin/rules rows compare against the installed one.
+	LoadedPluginVersion string `json:"loaded_plugin_version,omitempty"`
 }
 
 // NewResult initializes a Result with paths and a non-nil Artifacts slice
