@@ -4,11 +4,31 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
 	"github.com/restarter/lets-workflow/cli/internal/hook/sessionstart"
+	"github.com/restarter/lets-workflow/cli/internal/letsconfig"
+	"github.com/restarter/lets-workflow/cli/internal/rulescache"
 )
+
+// rulesSyncFn keeps ~/.claude/rules/lets-rules.md a cache of THIS session's
+// plugin (lets-tg008). Every source: the no-op path hashes the plugin's and the installed rules (sub-millisecond) under the per-home lock.
+var rulesSyncFn = func(rulesPath string) string {
+	if rulesPath == "" {
+		return ""
+	}
+	home, _ := os.UserHomeDir()
+	o := rulescache.Options{PluginRoot: filepath.Dir(filepath.Dir(rulesPath)), HomeDir: home}
+	if root := sessionstart.DetectProjectRoot(); root != "" {
+		if _, err := os.Stat(filepath.Join(root, ".lets", ".env")); err == nil {
+			o.InProject = true
+			o.ScopeUser = letsconfig.MergedEnv(root, home)["LETS_RULES_SCOPE"] == "user"
+		}
+	}
+	return rulescache.Sync(o).Notice()
+}
 
 // NewHookSessionStartCmd builds `lets hook session-start --rules=<path>`.
 // Output is the LETS Config block + optional drift notice (rules emission was
@@ -26,6 +46,9 @@ import (
 //   - on source startup|resume|clear, restores this session's peer role
 //     (peersHeal): a role file carried to a re-minted id, or the role rebuilt from
 //     its anchor - best-effort and silent, like selfHeal;
+//   - on every source, after the self-heal, keeps the global
+//     ~/.claude/rules/lets-rules.md a cache of this session's plugin
+//     (rulesSyncFn, lets-tg008); its outcome joins the Notice;
 //   - proactively refreshes the session boundary of the current branch's
 //     .task-<slug> file (lets-dsdmp) - but ONLY on a genuinely new session
 //     (source=startup), so /lets:end has a fresh boundary even when /lets:start
@@ -44,6 +67,7 @@ func NewHookSessionStartCmd() *cobra.Command {
 				notices = append(notices, selfHealFn(sessionstart.DetectProjectRoot(), rulesPath))
 				peersHealFn(sessionstart.DetectProjectRoot(), sid)
 			}
+			notices = append(notices, rulesSyncFn(rulesPath)) // every source, after self-heal
 			if err := runHookSessionPipeline(cmd, rulesPath, notices); err != nil {
 				return err
 			}

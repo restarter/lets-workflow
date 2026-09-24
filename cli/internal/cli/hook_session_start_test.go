@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -60,11 +61,14 @@ func TestHookSessionStart_E2E(t *testing.T) {
 // rather than letting one subcommand silently drift while the other
 // stays correct. Closes S15 from the 2026-05-08 review.
 func TestHookSessionStart_PreCompact_OutputParity(t *testing.T) {
-	dir := t.TempDir()
-	rulesPath := filepath.Join(dir, "rules.md")
-	if err := os.WriteFile(rulesPath, []byte("---\nversion: 0.4.0\n---\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	// session-start also syncs the global rules cache (lets-tg008); a global copy
+	// byte-identical to the plugin rules keeps that sync a silent no-op whatever
+	// the host project's LETS_RULES_SCOPE, so the parity below stays meaningful.
+	rulesPath := filepath.Join(t.TempDir(), "rules", "lets-rules.md")
+	writeTestFile(t, rulesPath, "---\nversion: 0.4.0\n---\n")
+	home := t.TempDir()
+	writeTestFile(t, filepath.Join(home, ".claude", "rules", "lets-rules.md"), "---\nversion: 0.4.0\n---\n")
+	t.Setenv("HOME", home)
 
 	run := func(t *testing.T, sub string) string {
 		t.Helper()
@@ -88,15 +92,17 @@ func TestHookSessionStart_PreCompact_OutputParity(t *testing.T) {
 }
 
 // TestHookSessionStart_PreCompact_ParityOnUserScopePath pins parity on the
-// NEW user-scope branch deterministically (the unsandboxed parity test above
+// user-scope branch deterministically (the unsandboxed parity test above
 // exercises whatever the host repo's state happens to be): fake home with
-// DRIFTED global rules + ~/.lets/.env, fresh git repo without project rules.
-// A parity bug specific to the user-scope path (e.g. one subcommand forgets
-// to pass homeDir) is exactly the divergence this fixture catches.
+// global rules + ~/.lets/.env, fresh git repo without project rules. A parity
+// bug specific to the user-scope path (e.g. one subcommand forgets to pass
+// homeDir) is exactly the divergence this fixture catches. The global copy is
+// byte-identical to the plugin rules so session-start's cache sync (lets-tg008)
+// is a silent no-op - that sync is session-start-only by design.
 func TestHookSessionStart_PreCompact_ParityOnUserScopePath(t *testing.T) {
 	home := t.TempDir()
 	writeTestFile(t, filepath.Join(home, ".claude", "rules", "lets-rules.md"),
-		"---\nversion: 0.3.0\n---\n")
+		"---\nversion: 0.4.0\n---\n")
 	writeTestFile(t, filepath.Join(home, ".lets", ".env"), "LETS_LANGUAGE=Ukrainian\n")
 	t.Setenv("HOME", home)
 
@@ -111,7 +117,7 @@ func TestHookSessionStart_PreCompact_ParityOnUserScopePath(t *testing.T) {
 	}
 	chdirTo(t, repo)
 
-	rulesPath := filepath.Join(t.TempDir(), "rules.md")
+	rulesPath := filepath.Join(t.TempDir(), "rules", "lets-rules.md")
 	writeTestFile(t, rulesPath, "---\nversion: 0.4.0\n---\n")
 
 	run := func(t *testing.T, sub string) string {
@@ -132,9 +138,9 @@ func TestHookSessionStart_PreCompact_ParityOnUserScopePath(t *testing.T) {
 	if got1 != got2 {
 		t.Errorf("session-start vs precompact diverged on the user-scope path.\nsession-start:\n%s\nprecompact:\n%s", got1, got2)
 	}
-	// Sanity: the fixture actually exercised the new branch.
-	if !strings.Contains(got1, "Global workflow rules outdated") {
-		t.Errorf("fixture did not hit the user-scope notice branch:\n%s", got1)
+	// Sanity: the user-scope path covers the missing project copy silently.
+	if strings.Contains(got1, "LETS Notice") {
+		t.Errorf("user-scope path must not nag:\n%s", got1)
 	}
 	if !strings.Contains(got1, "LETS_LANGUAGE=Ukrainian") {
 		t.Errorf("user env overlay missing:\n%s", got1)
@@ -253,5 +259,110 @@ func TestHookSessionStart_SessionRefreshGating(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// installTestPlugin lays out an installed plugin release the rules cache trusts
+// (<home>/.claude/plugins/cache/<marketplace>/lets/<ver>) and returns its
+// rules/lets-rules.md - the --rules path Claude Code passes the hook.
+func installTestPlugin(t *testing.T, home, ver string) string {
+	t.Helper()
+	root := filepath.Join(home, ".claude", "plugins", "cache", "lets-workflow", "lets", ver)
+	writeTestFile(t, filepath.Join(root, ".claude-plugin", "plugin.json"), `{"name":"lets","version":"`+ver+`"}`)
+	rules := filepath.Join(root, "rules", "lets-rules.md")
+	writeTestFile(t, rules, "---\nname: lets-rules\nversion: "+ver+"\n---\n\nRULES "+ver+"\n")
+	return rules
+}
+
+// The global rules cache is synced on EVERY SessionStart source, compact
+// included (lets-tg008), and its outcome lands in the Notice. Run outside a
+// project, where the Notice is the only output. rulesSyncFn is not reachable
+// from package cli_test, so each source is proven by its effect: a pristine
+// older global copy is refreshed on every run.
+func TestHookSessionStart_RulesSyncRunsOnEverySource(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	oldRules := installTestPlugin(t, home, "0.9.1")
+	newRules := installTestPlugin(t, home, "0.9.2")
+	old, err := os.ReadFile(oldRules)
+	if err != nil {
+		t.Fatal(err)
+	}
+	chdirTo(t, t.TempDir()) // not a git project
+	global := filepath.Join(home, ".claude", "rules", "lets-rules.md")
+
+	for _, src := range []string{"startup", "resume", "clear", "compact"} {
+		writeTestFile(t, global, string(old))
+		root := cli.NewRootCmd()
+		root.SetArgs([]string{"hook", "session-start", "--rules=" + newRules})
+		root.SetIn(strings.NewReader(`{"source":"` + src + `"}`))
+		var buf bytes.Buffer
+		root.SetOut(&buf)
+		root.SetErr(&buf)
+		if err := root.Execute(); err != nil {
+			t.Fatalf("%s: %v", src, err)
+		}
+		out := buf.String()
+		if !strings.Contains(out, "## LETS Notice") || !strings.Contains(out, "refreshed v0.9.1 -> v0.9.2") || strings.Contains(out, "## LETS Config") {
+			t.Errorf("%s: want only the refresh Notice, got:\n%s", src, out)
+		}
+		if got, _ := os.ReadFile(global); !bytes.Contains(got, []byte("RULES 0.9.2")) {
+			t.Errorf("%s: global copy not refreshed:\n%s", src, got)
+		}
+	}
+}
+
+// The sync runs AFTER the self-heal: in the first session of an unlinked
+// worktree of a LETS_RULES_SCOPE=user project, only a linked .lets/.env makes
+// the sync see the user scope and create the missing global copy. Proven by
+// effect (package cli_test cannot swap the hooks): a sync that ran first would
+// see no project and create nothing.
+func TestHookSessionStart_RulesSyncRunsAfterSelfHeal(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("self-heal is unix-only")
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	rules := installTestPlugin(t, home, "0.9.2")
+
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, wt := filepath.Join(base, "repo"), filepath.Join(base, "wt")
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", repo, "-c", "user.name=t", "-c", "user.email=t@example.com"}, args...)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	if err := os.Mkdir(repo, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	git("init", "-q", "-b", "main")
+	git("commit", "-q", "--allow-empty", "-m", "init")
+	writeTestFile(t, filepath.Join(repo, ".lets", ".env"), "LETS_TRACKER=none\nLETS_RULES_SCOPE=user\n")
+	git("worktree", "add", "-q", "-b", "feature/x", wt)
+	chdirTo(t, wt)
+
+	root := cli.NewRootCmd()
+	root.SetArgs([]string{"hook", "session-start", "--rules=" + rules})
+	root.SetIn(strings.NewReader(`{"source":"startup"}`))
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if fi, err := os.Lstat(filepath.Join(wt, ".lets")); err != nil || fi.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("self-heal did not link .lets: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "Global workflow rules installed") {
+		t.Errorf("sync must run after self-heal and create the global copy:\n%s", out)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".claude", "rules", "lets-rules.md")); err != nil {
+		t.Errorf("global copy not created: %v", err)
 	}
 }
