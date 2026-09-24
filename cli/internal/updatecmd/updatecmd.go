@@ -325,7 +325,13 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 	// user-rules is DELIBERATELY excluded: the row is informational - the
 	// session hook owns that file (rulescache, lets-tg008) and the row reports
 	// what it is keyed to, never a version update would reconcile here.
-	result.Consistent = consistentVersions(version.Version, pluginVer, frontmatter.ReadVersion(rulesDst))
+	if opts.MainCheckout != "" {
+		// A worktree run skipped the project rules - never judge consistency by a
+		// file this run did not check.
+		result.Consistent = consistentVersions(version.Version, pluginVer)
+	} else {
+		result.Consistent = consistentVersions(version.Version, pluginVer, frontmatter.ReadVersion(rulesDst))
+	}
 
 	// The single ordered next step (lets-rlue4) - derived purely from the
 	// artifact statuses computed above, so it can never diverge from the rows.
@@ -357,34 +363,43 @@ func rulesUpdatedDetail(pre drift.Result) string {
 // (counted healthy) needs proof: the plugin root is VERIFIED as the installed one
 // (ResolveInstalledRoot), its version is known, and the key, the file and that
 // plugin's rules share one hash while the key names that version. Anything else
-// is `unknown` with the reason. HookPending marks only the states the next
-// session start will actually fix, so next_action never promises more.
+// is `unknown` with the reason. HookPending is set only when rulescache.Plan -
+// the hook's own decision, computed without writing - says the next session
+// start will change the file, so next_action never promises more than that.
 func userRulesInfo(home, dst, pluginRoot, pluginVer string, verified bool) Artifact {
 	a := Artifact{Name: "user-rules", Status: StatusUnknown}
-	k, ok := rulescache.ReadKey(home)
-	if !ok {
+	k, haveKey := rulescache.ReadKey(home)
+	if haveKey {
+		a.CurrentVersion = k.Version
+		a.Detail = fmt.Sprintf("maintained by the session hook - cache of plugin v%s (sha256 %s)", k.Version, k.Hash[:12])
+	} else {
 		a.Detail = "maintained by the session hook - not recorded yet"
-		if verified {
-			a.Detail += "; the next Claude Code session start records it"
-			a.HookPending = true
-		}
-		return a
 	}
-	a.CurrentVersion = k.Version
-	a.Detail = fmt.Sprintf("maintained by the session hook - cache of plugin v%s (sha256 %s)", k.Version, k.Hash[:12])
 	dstData, derr := os.ReadFile(dst)
 	srcData, serr := os.ReadFile(filepath.Join(pluginRoot, "rules", "lets-rules.md"))
-	switch {
-	case !verified || serr != nil || pluginVer == "":
+	if !verified || serr != nil || pluginVer == "" {
 		a.Detail += "; not verified against the installed plugin (see the plugin row)"
+		return a
+	}
+	if haveKey && derr == nil && rulescache.Sum(dstData) == k.Hash && rulescache.Sum(srcData) == k.Hash && k.Version == pluginVer {
+		a.Status = StatusDelegated
+		return a
+	}
+	var why string
+	switch {
+	case !haveKey:
+		why = "; the next Claude Code session start records it"
 	case derr != nil || rulescache.Sum(dstData) != k.Hash:
-		a.Detail += "; edited since the last sync - the next session start saves the edit to a .bak and restores the plugin copy"
-		a.HookPending = true
-	case rulescache.Sum(srcData) != k.Hash || k.Version != pluginVer:
-		a.Detail += fmt.Sprintf("; the installed plugin v%s carries different rules - the next session start refreshes them", pluginVer)
+		why = "; edited since the last sync - the next session start saves the edit to a .bak and restores the plugin copy"
+	default:
+		why = fmt.Sprintf("; the installed plugin v%s carries different rules - the next session start refreshes them", pluginVer)
+	}
+	switch p := rulescache.Plan(rulescache.Options{PluginRoot: pluginRoot, HomeDir: home}); p.Outcome {
+	case rulescache.OutcomeNoop, rulescache.OutcomeCreated, rulescache.OutcomeWritten:
+		a.Detail += why
 		a.HookPending = true
 	default:
-		a.Status = StatusDelegated
+		a.Detail += "; the next session start will not change it - " + p.Notice()
 	}
 	return a
 }

@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"golang.org/x/mod/semver"
+
+	"github.com/restarter/lets-workflow/cli/internal/rulescache"
 )
 
 // ResolveInstalledRoot returns the plugin root Claude Code has INSTALLED now,
@@ -43,7 +45,14 @@ func ResolveInstalledRoot(handed, home string) (root string, verified bool, note
 		return handed, false, "installed_plugins.json unparseable - not verified against the installed plugin"
 	}
 	best, bestVer, tie := "", "", false
+	mpDir := cache + parts[0] + string(filepath.Separator)
 	for _, e := range f.Plugins["lets@"+parts[0]] {
+		// Only an entry that is provably an installed LETS plugin of THIS
+		// marketplace may be chosen - the same check rulescache applies before it
+		// writes (cache layout, manifest name/version, rules frontmatter).
+		if !strings.HasPrefix(filepath.Clean(e.InstallPath)+string(filepath.Separator), mpDir) || rulescache.CheckInstalledRoot(e.InstallPath, home) != "" {
+			continue
+		}
 		v := ReadPluginVersion(e.InstallPath)
 		if v == "" {
 			continue

@@ -114,3 +114,32 @@ func TestResolveInstalledRoot_OutsideCache(t *testing.T) {
 		t.Fatalf("got %q verified=%v note=%q", root, verified, note)
 	}
 }
+
+// An index entry outside the marketplace's cache dir is never chosen, however
+// good its manifest looks.
+func TestResolveInstalledRoot_EntryOutsideCacheIgnored(t *testing.T) {
+	home := t.TempDir()
+	old := installRelease(t, home, "0.9.1", "0.9.1")
+	outside := filepath.Join(t.TempDir(), "lets")
+	writePluginJSON(t, outside, `{"name":"lets","version":"0.9.9"}`)
+	rulesFile(t, filepath.Join(outside, "rules", "lets-rules.md"), "0.9.9")
+	writeIndex(t, home, old, outside)
+	if root, verified, _ := ResolveInstalledRoot(old, home); root != old || !verified {
+		t.Fatalf("got %q verified=%v, want the installed %q", root, verified, old)
+	}
+}
+
+// A manifest that is not LETS (wrong name) or whose version differs from its
+// rules is not an installed LETS root.
+func TestResolveInstalledRoot_WrongIdentityIgnored(t *testing.T) {
+	home := t.TempDir()
+	old := installRelease(t, home, "0.9.1", "0.9.1")
+	wrongName := installRelease(t, home, "0.9.8", "0.9.8")
+	writePluginJSON(t, wrongName, `{"name":"not-lets","version":"0.9.8"}`)
+	mismatched := installRelease(t, home, "0.9.9", "0.9.9")
+	rulesFile(t, filepath.Join(mismatched, "rules", "lets-rules.md"), "0.9.7")
+	writeIndex(t, home, old, wrongName, mismatched)
+	if root, verified, _ := ResolveInstalledRoot(old, home); root != old || !verified {
+		t.Fatalf("got %q verified=%v, want the installed %q", root, verified, old)
+	}
+}

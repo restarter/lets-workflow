@@ -10,7 +10,9 @@
 //     files - there is no stat shortcut, because size+mtime cannot prove equality;
 //   - the whole read-compare-backup-write runs under one per-home lock, and
 //     re-reads everything inside it;
-//   - forward only: an older plugin never replaces a newer cache;
+//   - forward only: an older plugin never replaces a newer cache - a version
+//     counts only for content provably written by LETS (the key, or a copy
+//     byte-identical to an installed release);
 //   - only an installed plugin writes; uncertain means do not write;
 //   - a copy that is not provably LETS content is COPIED to .bak[-N] first; the
 //     active file is only ever replaced atomically, never moved away;
@@ -130,10 +132,27 @@ func Sync(o Options) Result {
 		return Result{Outcome: OutcomeSkipped, Reason: fmt.Sprintf("another session is syncing them right now (%v)", err)}
 	}
 	defer func() { _ = fsutil.UnlockFile(lf) }()
-	return syncLocked(o)
+	return syncLocked(o, false)
 }
 
-func syncLocked(o Options) Result {
+// Plan reports what Sync would do right now, without the lock and without
+// writing anything (no file, no key, no backup). /lets:update uses it so a
+// "the next session start fixes it" promise is exactly the hook's own decision.
+func Plan(o Options) Result {
+	if o.HomeDir == "" || !filepath.IsAbs(o.HomeDir) || filepath.Clean(o.HomeDir) == "/" {
+		return Result{Outcome: OutcomeSkipped, Reason: "home directory unresolved"}
+	}
+	return syncLocked(o, true)
+}
+
+// CheckInstalledRoot returns "" when root is provably an installed LETS plugin
+// (the same test Sync applies before writing), else the reason it is not. The
+// rules frontmatter version is read from root itself.
+func CheckInstalledRoot(root, home string) string {
+	return untrusted(root, home, frontmatter.ReadVersion(filepath.Join(root, "rules", "lets-rules.md")))
+}
+
+func syncLocked(o Options, dry bool) Result {
 	src := filepath.Join(o.PluginRoot, "rules", "lets-rules.md")
 	dst := DstPath(o.HomeDir)
 	key, haveKey := ReadKey(o.HomeDir)
@@ -156,7 +175,7 @@ func syncLocked(o Options) Result {
 	if exists && Sum(dstData) == srcHash {
 		// Already equal. Only an installed plugin may record the key: an equal
 		// --plugin-dir checkout stays silent and leaves the metadata untouched.
-		if (!haveKey || key.Hash != srcHash || key.Version != srcVer || key.SourcePath != src) && untrusted(o.PluginRoot, o.HomeDir, srcVer) == "" {
+		if !dry && (!haveKey || key.Hash != srcHash || key.Version != srcVer || key.SourcePath != src) && untrusted(o.PluginRoot, o.HomeDir, srcVer) == "" {
 			writeKey(o.HomeDir, Key{Hash: srcHash, Version: srcVer, SourcePath: src})
 		}
 		return Result{Outcome: OutcomeNoop}
@@ -171,16 +190,35 @@ func syncLocked(o Options) Result {
 	if exists {
 		dstHash := Sum(dstData)
 		res.Outcome = OutcomeWritten
+		// Forward-only trusts a version only for content provably written by LETS:
+		// the recorded key, or a byte-identical copy of an installed release. A
+		// copy that is neither claims nothing - whatever version its frontmatter
+		// states, it is saved to .bak and replaced. While a key exists, its version
+		// still gates the write: a newer plugin owns the cache even if the file was
+		// edited since, and that newer session restores it.
+		gate := ""
 		res.From = frontmatter.ReadVersion(dst)
-		if haveKey && dstHash == key.Hash {
-			res.From, pristine = key.Version, true
-		} else {
-			pristine = isPristine(o.HomeDir, dstHash, res.From)
+		switch {
+		case haveKey && dstHash == key.Hash:
+			res.From, pristine, gate = key.Version, true, key.Version
+		case isPristine(o.HomeDir, dstHash, res.From):
+			pristine, gate = true, res.From
+		default:
+			res.From = "" // not LETS content: its frontmatter says nothing about a version
+			if haveKey {
+				gate = key.Version
+			}
 		}
-		if validVer(res.From) && semver.Compare("v"+srcVer, "v"+res.From) < 0 {
-			return Result{Outcome: OutcomeKeptNewer, From: res.From, To: res.From,
+		if validVer(gate) && semver.Compare("v"+srcVer, "v"+gate) < 0 {
+			return Result{Outcome: OutcomeKeptNewer, From: gate, To: gate,
 				Reason: fmt.Sprintf("this session runs the older plugin v%s", srcVer)}
 		}
+	}
+	if dry {
+		if exists && !pristine {
+			res.Backup = "lets-rules.md.bak" // the first free name is only known at write time
+		}
+		return res
 	}
 
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {

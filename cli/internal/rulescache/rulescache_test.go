@@ -242,3 +242,73 @@ func TestSync_FailureIsAResultNotABlock(t *testing.T) {
 		t.Fatalf("got %+v", r)
 	}
 }
+
+// A hand edit gains nothing by claiming a higher version: only content provably
+// written by LETS carries a version, so the edit is saved and replaced.
+func TestSync_EditClaimingNewerVersionIsReplaced(t *testing.T) {
+	home := t.TempDir()
+	root := install(t, home, "0.9.2", "A")
+	create(t, home, root)
+	edit := rules("9.9.9", "EDIT")
+	mustWrite(t, DstPath(home), edit)
+	r := Sync(Options{PluginRoot: root, HomeDir: home})
+	if r.Outcome != OutcomeWritten || r.Backup != "lets-rules.md.bak" || read(t, DstPath(home)) != rules("0.9.2", "A") {
+		t.Fatalf("got %+v", r)
+	}
+	if strings.Contains(r.Notice(), "9.9.9") {
+		t.Fatalf("a non-LETS copy's frontmatter must not be quoted as a version: %q", r.Notice())
+	}
+	if read(t, DstPath(home)+".bak") != edit {
+		t.Fatal("the edit was not saved")
+	}
+}
+
+// While the key names a newer plugin, an older session leaves even an edited
+// file alone - the newer session owns the cache and restores it.
+func TestSync_OlderSessionLeavesAnEditedNewerCache(t *testing.T) {
+	home := t.TempDir()
+	old := install(t, home, "0.9.1", "OLD")
+	neu := install(t, home, "0.9.2", "NEW")
+	create(t, home, neu)
+	edit := rules("0.9.2", "EDIT")
+	mustWrite(t, DstPath(home), edit)
+	if r := Sync(Options{PluginRoot: old, HomeDir: home}); r.Outcome != OutcomeKeptNewer || read(t, DstPath(home)) != edit {
+		t.Fatalf("got %+v", r)
+	}
+	if r := Sync(Options{PluginRoot: neu, HomeDir: home}); r.Outcome != OutcomeWritten || r.Backup == "" {
+		t.Fatalf("the newer session must restore it: %+v", r)
+	}
+}
+
+func TestPlan_WritesNothing(t *testing.T) {
+	home := t.TempDir()
+	install(t, home, "0.9.1", "OLD")
+	neu := install(t, home, "0.9.2", "NEW")
+	mustWrite(t, DstPath(home), rules("0.9.1", "OLD"))
+	if p := Plan(Options{PluginRoot: neu, HomeDir: home}); p.Outcome != OutcomeWritten || p.From != "0.9.1" || p.To != "0.9.2" {
+		t.Fatalf("got %+v", p)
+	}
+	if read(t, DstPath(home)) != rules("0.9.1", "OLD") {
+		t.Fatal("Plan wrote the rules")
+	}
+	if _, ok := ReadKey(home); ok {
+		t.Fatal("Plan wrote the key")
+	}
+	if _, err := os.Stat(DstPath(home) + ".bak"); !os.IsNotExist(err) {
+		t.Fatal("Plan wrote a backup")
+	}
+}
+
+func TestCheckInstalledRoot(t *testing.T) {
+	home := t.TempDir()
+	root := install(t, home, "0.9.2", "A")
+	if reason := CheckInstalledRoot(root, home); reason != "" {
+		t.Fatalf("installed root refused: %s", reason)
+	}
+	dev := filepath.Join(t.TempDir(), "lets")
+	mustWrite(t, filepath.Join(dev, ".claude-plugin", "plugin.json"), `{"name":"lets","version":"0.9.2"}`)
+	mustWrite(t, filepath.Join(dev, "rules", "lets-rules.md"), rules("0.9.2", "A"))
+	if CheckInstalledRoot(dev, home) == "" {
+		t.Fatal("a checkout outside the cache was accepted")
+	}
+}

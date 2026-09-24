@@ -1387,3 +1387,47 @@ func TestPluginUpdateAction_NoAutoUpdatePromise(t *testing.T) {
 		t.Errorf("pluginUpdateAction = %q", pluginUpdateAction)
 	}
 }
+
+// A hand edit that claims a newer version is still restored by the hook (only
+// LETS-written content carries a version), so the promise stands.
+func TestRun_UserRules_EditClaimingNewerVersionIsPending(t *testing.T) {
+	pr, plug, home, global := globalFixture(t, "0.6.0")
+	writeRaw(t, global, "---\nversion: 9.9.9\n---\n# my edit\n")
+	r, a := runUserRules(t, pr, plug, home, global, "0.6.0")
+	if a.Status != StatusUnknown || !strings.Contains(a.Detail, "edited since the last sync") || !a.HookPending {
+		t.Errorf("user-rules: %+v", a)
+	}
+	if r.NextAction.Kind != "new-session" {
+		t.Errorf("next_action = %+v, want new-session", r.NextAction)
+	}
+}
+
+// When the key names a newer plugin, the hook keeps the cache: update must not
+// promise a refresh the hook will refuse - it relays the hook's own answer.
+func TestRun_UserRules_NewerCacheIsNotPromised(t *testing.T) {
+	pr, plug, home, global := globalFixture(t, "0.6.0")
+	body := "---\nname: lets-rules\nversion: 9.9.9\n---\n\n# newer release\n"
+	writeRaw(t, global, body)
+	writeKey(t, home, rulescache.Sum([]byte(body)), "9.9.9")
+	r, a := runUserRules(t, pr, plug, home, global, "0.6.0")
+	if a.Status != StatusUnknown || a.HookPending || !strings.Contains(a.Detail, "will not change it") || !strings.Contains(a.Detail, "kept at v9.9.9") {
+		t.Errorf("user-rules: %+v", a)
+	}
+	if r.NextAction.Kind != "user-rules" {
+		t.Errorf("next_action = %+v, want user-rules (a diagnostic, not a promise)", r.NextAction)
+	}
+}
+
+// A worktree run skipped the project rules, so a stale local copy must not make
+// the result inconsistent.
+func TestRun_WorktreeConsistencyIgnoresSkippedRules(t *testing.T) {
+	pr, plug := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0")
+	rulesFile(t, filepath.Join(pr, ".claude", "rules", "lets-rules.md"), "0.1.0")
+	r, err := Run(context.Background(), Options{LatestFn: stubLatest("0.6.0"), MainCheckout: "/repos/main"}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !r.Consistent {
+		t.Error("Consistent = false because of a project file the worktree run skipped")
+	}
+}
