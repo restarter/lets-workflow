@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/restarter/lets-workflow/cli/internal/fsutil"
 )
 
 // SetStatusLine mutates settings.json to set:
@@ -62,33 +64,7 @@ func atomicWriteJSON(path string, m map[string]any) error {
 //
 // Exported for reuse by sibling packages (updatecmd writes the rules copy and
 // the latest-release cache with it) - keeps "write a primary artifact" atomic
-// everywhere, not just inside initcmd.
+// everywhere, not just inside initcmd. Delegates to fsutil.AtomicWriteBytes.
 func AtomicWriteBytes(path string, data []byte, defaultMode os.FileMode) error {
-	mode := defaultMode
-	if fi, err := os.Stat(path); err == nil {
-		mode = fi.Mode().Perm()
-	}
-	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, ".lets-init-*")
-	if err != nil {
-		return err
-	}
-	tmpPath := tmp.Name()
-	defer func() { _ = os.Remove(tmpPath) }()
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Chmod(mode); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmpPath, path)
+	return fsutil.AtomicWriteBytes(path, data, defaultMode)
 }
