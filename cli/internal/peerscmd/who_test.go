@@ -7,7 +7,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/restarter/lets-workflow/cli/internal/orcacmd"
 )
@@ -179,5 +181,211 @@ func TestWho_ForeignRepoReadOnly(t *testing.T) {
 	}
 	if _, err := Who(context.Background(), WhoOptions{Repo: t.TempDir()}); err == nil || err.(*Error).Kind != "repo_invalid" {
 		t.Errorf("a non-checkout repo: %v", err)
+	}
+}
+
+// orcWithSiblingWorker: orchestrator MAIN in root (launcher orca), one worker in a
+// sibling repo whose branch is bound to bindTo.
+func orcWithSiblingWorker(t *testing.T, bindTo string) (root, sib string) {
+	t.Helper()
+	root = repoWithLets(t, "orca")
+	useOrca(t, &fakeOps{})
+	withBranch(t, "feature/x")
+	sib = siblingRepo(t)
+	fakeRepos(t, root, sib)
+	plantRole(t, root, sidM, "role: orchestrator\nname: MAIN\npid: 1\nset: x\n")
+	plantRole(t, sib, sidW, "role: worker\ntask: t-1\npid: 3\nset: x\n")
+	bindBranch(t, sib, "feature/x", bindTo)
+	return root, sib
+}
+
+func TestWho_OrcListsSiblingWorkers(t *testing.T) {
+	root, sib := orcWithSiblingWorker(t, "MAIN")
+	claudeHome(t, []regRow{{1, sidM, "MAIN", root}, {3, sidW, "W", sib}})
+	res, err := Who(context.Background(), WhoOptions{Cwd: root, Orc: "MAIN"})
+	w := peerBySession(res.Peers, sidW)
+	if err != nil || w == nil || w.RepoIndex == nil || *w.RepoIndex != 1 || w.Repo != filepath.Base(filepath.Dir(sib)) || w.Send != "claude" {
+		t.Fatalf("a bound sibling worker must be listed, marked with its repo: %+v %v", res, err)
+	}
+	if tr := tellFromIdx(t, root, sidM, sidW, w.RepoIndex); tr.Reason != "claude_transport_model_send" {
+		t.Errorf("tell with the row's index must reach the sibling worker: %+v", tr)
+	}
+	if tr := tellFrom(t, root, sidM, sidW); tr.Reason != "peer_unreachable" {
+		t.Errorf("without the index tell must not reach it: %+v", tr)
+	}
+}
+
+func TestWho_OrcSkipsUnboundSiblingWorkers(t *testing.T) {
+	root, sib := orcWithSiblingWorker(t, "OTHER")
+	plantRole(t, sib, sidO, "role: worker\ntask: t-2\npid: 4\nset: x\n") // same branch file: also bound to OTHER
+	claudeHome(t, []regRow{{1, sidM, "MAIN", root}, {3, sidW, "W", sib}, {4, sidO, "W2", sib}})
+	res, _ := Who(context.Background(), WhoOptions{Cwd: root, Orc: "MAIN"})
+	if peerBySession(res.Peers, sidW) != nil || peerBySession(res.Peers, sidO) != nil {
+		t.Fatalf("workers bound elsewhere must not be listed: %+v", res.Peers)
+	}
+}
+
+func TestWho_OrcSiblingOwnOrchestratorKeepsWorkers(t *testing.T) {
+	root, sib := orcWithSiblingWorker(t, "MAIN")
+	plantRole(t, sib, sidN, "role: orchestrator\nname: MAIN\npid: 2\nset: x\n")
+	claudeHome(t, []regRow{{1, sidM, "MAIN", root}, {2, sidN, "MAIN", sib}, {3, sidW, "W", sib}})
+	res, _ := Who(context.Background(), WhoOptions{Cwd: root, Orc: "MAIN"})
+	if peerBySession(res.Peers, sidW) != nil {
+		t.Fatalf("a sibling with its own live MAIN keeps its workers: %+v", res.Peers)
+	}
+}
+
+func TestWho_OrcNoSiblingScanWithoutOrca(t *testing.T) {
+	root := repoWithLets(t, "")
+	withBranch(t, "feature/x")
+	sib := siblingRepo(t)
+	plantRole(t, sib, sidW, "role: worker\ntask: t-1\npid: 3\nset: x\n")
+	bindBranch(t, sib, "feature/x", "MAIN")
+	claudeHome(t, []regRow{{1, sidM, "MAIN", root}, {3, sidW, "W", sib}})
+	calls := 0
+	old := listOrcaRepos
+	listOrcaRepos = func(context.Context) (*orcacmd.ReposInfo, *orcacmd.Failure) {
+		calls++
+		return &orcacmd.ReposInfo{Repos: []orcacmd.RepoInfo{{Index: 0, Name: "sib", Path: sib}}}, nil
+	}
+	t.Cleanup(func() { listOrcaRepos = old })
+	res, _ := Who(context.Background(), WhoOptions{Cwd: root, Orc: "MAIN"})
+	if calls != 0 || peerBySession(res.Peers, sidW) != nil {
+		t.Fatalf("without LETS_LAUNCHER=orca no sibling is read (%d calls): %+v", calls, res.Peers)
+	}
+	if res2, _ := Who(context.Background(), WhoOptions{Cwd: root}); calls != 0 || len(res2.Peers) == 0 {
+		t.Fatalf("plain who never scans siblings (%d calls)", calls)
+	}
+}
+
+func TestWho_OrcSiblingDegradesByName(t *testing.T) {
+	root, sib := orcWithSiblingWorker(t, "MAIN")
+	gone := siblingRepo(t)
+	fakeRepos(t, root, gone, sib)
+	_ = os.RemoveAll(gone)
+	claudeHome(t, []regRow{{1, sidM, "MAIN", root}, {3, sidW, "W", sib}})
+	res, _ := Who(context.Background(), WhoOptions{Cwd: root, Orc: "MAIN"})
+	named := false
+	for _, d := range res.Degraded {
+		if d.Source == "repo" && d.Reason == "repo_invalid" && d.Detail == filepath.Base(filepath.Dir(gone)) {
+			named = true
+		}
+	}
+	if !named || peerBySession(res.Peers, sidW) == nil {
+		t.Fatalf("an unreadable sibling degrades by name and the others still list: %+v", res)
+	}
+	// Orca answers only once the budget is spent: the walk stops and says so.
+	old := listOrcaRepos
+	listOrcaRepos = func(ctx context.Context) (*orcacmd.ReposInfo, *orcacmd.Failure) {
+		<-ctx.Done()
+		return &orcacmd.ReposInfo{Repos: []orcacmd.RepoInfo{{Index: 1, Name: "sib", Path: sib}}}, nil
+	}
+	t.Cleanup(func() { listOrcaRepos = old })
+	res, err := Who(context.Background(), WhoOptions{Cwd: root, Orc: "MAIN", Timeout: 300 * time.Millisecond})
+	spent := false
+	for _, d := range res.Degraded {
+		if d.Source == "context" && d.Reason == "deadline_exceeded" {
+			spent = true
+		}
+	}
+	if err != nil || !spent || !res.OK {
+		t.Fatalf("a spent budget is named, not silent: %+v %v", res, err)
+	}
+}
+
+func TestWho_OrcSiblingReadOnly(t *testing.T) {
+	root, sib := orcWithSiblingWorker(t, "MAIN")
+	plantRole(t, sib, sidO, "role: worker\ntask: t-3\npid: 9\n"+setLine) // dead: a normal who would prune it
+	claudeHome(t, []regRow{{1, sidM, "MAIN", root}, {3, sidW, "W", sib}})
+	before := treeState(t, filepath.Join(sib, ".lets"))
+	if _, err := Who(context.Background(), WhoOptions{Cwd: root, Orc: "MAIN", Prune: true}); err != nil {
+		t.Fatal(err)
+	}
+	after := treeState(t, filepath.Join(sib, ".lets"))
+	if len(before) != len(after) {
+		t.Fatalf("the sibling tree changed: %d -> %d entries", len(before), len(after))
+	}
+	for p, s := range before {
+		if after[p] != s {
+			t.Errorf("%s changed", p)
+		}
+	}
+}
+
+// A sibling orchestrator of that name whose liveness is unknown claims nobody: only a
+// known-live one keeps its repo's workers.
+func TestWho_OrcSiblingUnknownOrchestratorKeepsNothing(t *testing.T) {
+	root, sib := orcWithSiblingWorker(t, "MAIN")
+	plantRole(t, sib, sidN, "role: orchestrator\nname: MAIN\npid: 77\nset: x\n")
+	claudeHome(t, []regRow{{1, sidM, "MAIN", root}, {3, sidW, "W", sib}}, 77) // pid 77: live, unknown protocol
+	res, _ := Who(context.Background(), WhoOptions{Cwd: root, Orc: "MAIN"})
+	if peerBySession(res.Peers, sidW) == nil {
+		t.Fatalf("an unknown-liveness sibling orchestrator must not hide the worker: %+v", res.Peers)
+	}
+}
+
+// Orca failing because the budget ran out is reported as the budget, not as Orca.
+func TestWho_OrcSiblingListFailsAfterDeadline(t *testing.T) {
+	root, sib := orcWithSiblingWorker(t, "MAIN")
+	claudeHome(t, []regRow{{1, sidM, "MAIN", root}, {3, sidW, "W", sib}})
+	old := listOrcaRepos
+	listOrcaRepos = func(ctx context.Context) (*orcacmd.ReposInfo, *orcacmd.Failure) {
+		<-ctx.Done()
+		return &orcacmd.ReposInfo{Reason: "orca_unavailable"}, &orcacmd.Failure{Reason: "orca_unavailable"}
+	}
+	t.Cleanup(func() { listOrcaRepos = old })
+	res, _ := Who(context.Background(), WhoOptions{Cwd: root, Orc: "MAIN", Timeout: 300 * time.Millisecond})
+	for _, d := range res.Degraded {
+		if d.Source == "orca" {
+			t.Errorf("a spent budget must not read as an Orca failure: %+v", res.Degraded)
+		}
+	}
+	spent := false
+	for _, d := range res.Degraded {
+		spent = spent || (d.Source == "context" && d.Reason == "deadline_exceeded")
+	}
+	if !spent {
+		t.Errorf("the spent budget must be named: %+v", res.Degraded)
+	}
+}
+
+// linkedWorktree adds a git worktree of repo whose .lets is a symlink to the main
+// checkout's - the shape /lets:worktree create and `lets worktree adopt` produce.
+func linkedWorktree(t *testing.T, repo, branch string) string {
+	t.Helper()
+	wt := filepath.Join(filepath.Dir(repo), "wt-"+strings.ReplaceAll(branch, "/", "-"))
+	if out, err := exec.Command("git", "-C", repo, "worktree", "add", "-q", "-b", branch, wt).CombinedOutput(); err != nil {
+		t.Fatalf("worktree add: %v %s", err, out)
+	}
+	if err := os.Symlink(filepath.Join(repo, ".lets"), filepath.Join(wt, ".lets")); err != nil {
+		t.Fatal(err)
+	}
+	return wt
+}
+
+// A worker (or a sibling's own orchestrator) running in a linked worktree registers
+// through its .lets symlink, i.e. in the main checkout the Orca walk reads.
+func TestWho_OrcSiblingWorkerInLinkedWorktree(t *testing.T) {
+	root := repoWithLets(t, "orca")
+	useOrca(t, &fakeOps{})
+	withBranch(t, "feature/x")
+	sib := siblingRepo(t)
+	fakeRepos(t, root, sib)
+	wt := linkedWorktree(t, sib, "feature/x")
+	plantRole(t, root, sidM, "role: orchestrator\nname: MAIN\npid: 1\nset: x\n")
+	plantRole(t, wt, sidW, "role: worker\ntask: t-1\npid: 3\nset: x\n") // written through wt/.lets
+	bindBranch(t, wt, "feature/x", "MAIN")
+	claudeHome(t, []regRow{{1, sidM, "MAIN", root}, {3, sidW, "W", wt}})
+	res, _ := Who(context.Background(), WhoOptions{Cwd: root, Orc: "MAIN"})
+	if w := peerBySession(res.Peers, sidW); w == nil || w.RepoIndex == nil || *w.RepoIndex != 1 {
+		t.Fatalf("a bound worker in a linked worktree of a sibling must be listed: %+v", res.Peers)
+	}
+	// The sibling's own live MAIN, itself in another linked worktree, still keeps it.
+	wt2 := linkedWorktree(t, sib, "feature/y")
+	plantRole(t, wt2, sidN, "role: orchestrator\nname: MAIN\npid: 2\nset: x\n")
+	claudeHome(t, []regRow{{1, sidM, "MAIN", root}, {2, sidN, "MAIN", wt2}, {3, sidW, "W", wt}})
+	res, _ = Who(context.Background(), WhoOptions{Cwd: root, Orc: "MAIN"})
+	if peerBySession(res.Peers, sidW) != nil {
+		t.Fatalf("a worktree-local sibling orchestrator named MAIN keeps its worker: %+v", res.Peers)
 	}
 }

@@ -137,7 +137,7 @@ func otherRepo(ctx context.Context, repo string, idx *int) (path string, given b
 		return "", false, nil
 	}
 	if repo == "" {
-		p, f := orcacmd.RepoByIndex(ctx, *idx)
+		p, f := repoByIndex(ctx, *idx)
 		if f != nil {
 			return "", true, &Error{Code: ExitNotInRepo, Kind: "repo_invalid", Message: f.Error()}
 		}
@@ -371,6 +371,13 @@ func Who(ctx context.Context, o WhoOptions) (*WhoResult, error) {
 		}
 		res.Peers = append(res.Peers, p)
 	}
+	// An orchestrator's bound workers in sibling repos (the bound-sibling carve-out).
+	// Never from a --repo read: a sibling read does not fan out again.
+	if o.Orc != "" && o.Repo == "" && orcaSelected(rc.root, o.ProbeOrca) {
+		sib, deg := siblingWorkers(ctx, rc, o)
+		res.Peers = append(res.Peers, sib...)
+		res.Degraded = append(res.Degraded, deg...)
+	}
 	if o.Repo != "" {
 		res.LastOrchestrators = lastOrchestrators(rc)
 	}
@@ -436,36 +443,12 @@ func lastOrch(name, scope, sid, pid, source string) LastOrchestrator {
 // row with its repo_index, so the hub never types an Orca path into a shell.
 func whoOrcaRepos(ctx context.Context, o WhoOptions) (*WhoResult, error) {
 	res := &WhoResult{Envelope: newEnvelope("who"), Peers: []Peer{}, LastOrchestrators: []LastOrchestrator{}}
-	info, f := orcacmd.ListRepos(ctx)
 	res.OK = true
-	if f != nil {
-		res.Degraded = append(res.Degraded, Degraded{Source: "orca", Reason: nonEmpty(info.Reason, f.Reason), Detail: f.Detail})
-		return res, nil
-	}
-	res.Repos = info.Repos
-	for _, name := range info.Dropped {
-		res.Degraded = append(res.Degraded, Degraded{Source: "orca", Reason: "repo_not_a_checkout", Detail: name})
-	}
-	for _, r := range info.Repos {
-		idx := r.Index
-		sub, err := Who(ctx, WhoOptions{Cwd: o.Cwd, Repo: r.Path, Role: o.Role, ProbeOrca: o.ProbeOrca, Timeout: o.Timeout})
-		if err != nil {
-			res.Degraded = append(res.Degraded, Degraded{Source: "repo", Reason: "repo_invalid", Detail: r.Name})
-			continue
-		}
-		for _, p := range sub.Peers {
-			p.RepoIndex = &idx
-			res.Peers = append(res.Peers, p)
-		}
-		for _, lo := range sub.LastOrchestrators {
-			lo.RepoIndex = &idx
-			res.LastOrchestrators = append(res.LastOrchestrators, lo)
-		}
-		for _, d := range sub.Degraded {
-			d.Detail = strings.TrimSpace(r.Name + " " + d.Detail)
-			res.Degraded = append(res.Degraded, d)
-		}
-	}
+	repos, peers, last, degraded := siblingPeers(ctx, o, "")
+	res.Repos = repos
+	res.Peers = append(res.Peers, peers...)
+	res.LastOrchestrators = append(res.LastOrchestrators, last...)
+	res.Degraded = append(res.Degraded, degraded...)
 	return res, nil
 }
 

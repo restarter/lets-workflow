@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- **A worker can reach its orchestrator in a sibling repo, and the orchestrator can see it (lets-th8ti).** With one Orca over several repos of a product and one orchestrator for the group, a worker bound to that orchestrator with `/lets:start <id> --orc=<name>` was refused `target_in_other_repo` and told to use `/lets:hub` - which cannot carry a message to that orchestrator. The route already existed; resolution now hands it over. Under `LETS_LAUNCHER=orca`, a bound name this repo cannot address is looked up in the repos Orca lists and comes back with a `repo_index`, so `/lets:orc` sends through the usual resolve-frame-preview-send path. The other direction works too: the orchestrator's `who` lists the workers in sibling repos bound to it, marked with their repo, and `/lets:orc tell` reaches them. Only a binding you typed opens this channel; the sibling repo is only read, never written, and a new Boundaries carve-out says exactly what is read. Refusals now name only actions that work - a test fails when a remediation points at a command that cannot perform the refused action.
+
 ## [0.9.2] - 2026-09-23
 
 ### Added

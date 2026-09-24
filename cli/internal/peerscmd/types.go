@@ -25,6 +25,7 @@ type Peer struct {
 	Send         string   `json:"send,omitempty"` // orca | claude | none (computed in who/peers; absent when not computed)
 	Reason       string   `json:"reason,omitempty"`
 	RepoIndex    *int     `json:"repo_index,omitempty"` // who --orca-repos: which Orca repo this row belongs to
+	Repo         string   `json:"repo,omitempty"`       // that Orca repo's display name - the visible mark of a sibling-repo row
 }
 
 // LastOrchestrator is an orchestrator that is not running, as the hub needs it to
