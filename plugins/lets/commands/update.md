@@ -8,7 +8,7 @@ Sync the drift-able LETS artifacts (four core + two optional: the user-scope glo
 
 > **MANDATORY:** Execute every Step's bash block **literally as written**. Do not substitute output from earlier `ls`/`cat` in this conversation - `.env` and other dotfiles are invisible to plain `ls`. The `test -f` checks below ARE the contract.
 
-Difference from `/lets:init`: `/lets:init` is first-time setup (it also asks config questions and sets up the statusline + beads). `/lets:update` only syncs what a new release changes - it never prompts and never touches `settings.json` or beads.
+Difference from `/lets:init`: `/lets:init` is first-time setup (it also asks config questions and sets up the statusline + beads). `/lets:update` only syncs what a new release changes - it asks no project-configuration questions and never touches `settings.json` or beads; the binary install and the on-disk plugin refresh each run only after an approval prompt.
 
 ## Step 1: Pre-checks
 

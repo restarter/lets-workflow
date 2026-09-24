@@ -24,13 +24,22 @@ func ResolveInstalledRoot(handed, home string) (root string, verified bool, note
 	if home == "" {
 		return handed, false, ""
 	}
-	cache := filepath.Join(home, ".claude", "plugins", "cache") + string(filepath.Separator)
-	if !strings.HasPrefix(handed, cache) {
-		return handed, false, "" // a dev checkout: nothing installed to resolve against
+	// Paths are compared RESOLVED - the definition rulescache.CheckInstalledRoot
+	// uses - so a symlinked cache, or a handed / indexed path on either side of
+	// the link, still resolves to the same install.
+	sep := string(filepath.Separator)
+	cache, err := filepath.EvalSymlinks(filepath.Join(home, ".claude", "plugins", "cache"))
+	if err != nil {
+		return handed, false, "" // no installed-plugin cache: nothing to resolve against
 	}
-	parts := strings.Split(strings.TrimPrefix(handed, cache), string(filepath.Separator))
-	if len(parts) < 2 || parts[1] != "lets" {
+	realHanded, err := filepath.EvalSymlinks(handed)
+	if err != nil {
 		return handed, false, ""
+	}
+	rel, err := filepath.Rel(cache, realHanded)
+	parts := strings.Split(filepath.ToSlash(rel), "/")
+	if err != nil || len(parts) < 2 || parts[0] == ".." || parts[1] != "lets" {
+		return handed, false, "" // a dev checkout: nothing installed to resolve against
 	}
 	data, err := os.ReadFile(filepath.Join(home, ".claude", "plugins", "installed_plugins.json"))
 	if err != nil {
@@ -44,13 +53,14 @@ func ResolveInstalledRoot(handed, home string) (root string, verified bool, note
 	if json.Unmarshal(data, &f) != nil {
 		return handed, false, "installed_plugins.json unparseable - not verified against the installed plugin"
 	}
-	best, bestVer, tie := "", "", false
-	mpDir := cache + parts[0] + string(filepath.Separator)
+	best, bestReal, bestVer, tie := "", "", "", false
+	mpDir := filepath.Join(cache, parts[0]) + sep
 	for _, e := range f.Plugins["lets@"+parts[0]] {
 		// Only an entry that is provably an installed LETS plugin of THIS
 		// marketplace may be chosen - the same check rulescache applies before it
 		// writes (cache layout, manifest name/version, rules frontmatter).
-		if !strings.HasPrefix(filepath.Clean(e.InstallPath)+string(filepath.Separator), mpDir) || rulescache.CheckInstalledRoot(e.InstallPath, home) != "" {
+		real, err := filepath.EvalSymlinks(e.InstallPath)
+		if err != nil || !strings.HasPrefix(real+sep, mpDir) || rulescache.CheckInstalledRoot(e.InstallPath, home) != "" {
 			continue
 		}
 		v := ReadPluginVersion(e.InstallPath)
@@ -59,8 +69,8 @@ func ResolveInstalledRoot(handed, home string) (root string, verified bool, note
 		}
 		switch {
 		case bestVer == "" || semver.Compare("v"+v, "v"+bestVer) > 0:
-			best, bestVer, tie = filepath.Clean(e.InstallPath), v, false
-		case semver.Compare("v"+v, "v"+bestVer) == 0 && filepath.Clean(e.InstallPath) != best:
+			best, bestReal, bestVer, tie = filepath.Clean(e.InstallPath), real, v, false
+		case semver.Compare("v"+v, "v"+bestVer) == 0 && real != bestReal:
 			tie = true
 		}
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/restarter/lets-workflow/cli/internal/drift"
 	"github.com/restarter/lets-workflow/cli/internal/envfile"
 	"github.com/restarter/lets-workflow/cli/internal/frontmatter"
+	"github.com/restarter/lets-workflow/cli/internal/fsutil"
 	"github.com/restarter/lets-workflow/cli/internal/initcmd"
 	"github.com/restarter/lets-workflow/cli/internal/letsconfig"
 	"github.com/restarter/lets-workflow/cli/internal/rulescache"
@@ -116,7 +117,7 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 	// --- Artifact 3: Claude Code plugin ---
 	pluginVer := ReadPluginVersion(pluginRoot)
 	result.Add(versionArtifact("plugin", pluginVer, latest, latestErr, offline, pluginUpdateAction))
-	if filepath.Clean(pluginRoot) != filepath.Clean(loadedRoot) {
+	if !fsutil.SameDir(pluginRoot, loadedRoot) {
 		last := &result.Artifacts[len(result.Artifacts)-1]
 		last.Detail = strings.TrimPrefix(last.Detail+fmt.Sprintf("; v%s is installed - this session still runs v%s", pluginVer, ReadPluginVersion(loadedRoot)), "; ")
 		result.LoadedPluginVersion = ReadPluginVersion(loadedRoot)

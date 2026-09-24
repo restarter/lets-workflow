@@ -143,3 +143,31 @@ func TestResolveInstalledRoot_WrongIdentityIgnored(t *testing.T) {
 		t.Fatalf("got %q verified=%v, want the installed %q", root, verified, old)
 	}
 }
+
+// A symlinked ~/.claude/plugins/cache: the index records physical paths, and the
+// session may hand either the lexical or the physical root - both resolve to the
+// newer install, verified (the same resolved-path definition CheckInstalledRoot uses).
+func TestResolveInstalledRoot_SymlinkedCache(t *testing.T) {
+	home := t.TempDir()
+	phys := filepath.Join(t.TempDir(), "plugin-cache")
+	mk := func(ver string) string {
+		root := filepath.Join(phys, "lets-workflow", "lets", ver)
+		writePluginJSON(t, root, fmt.Sprintf(`{"name":"lets","version":%q}`, ver))
+		rulesFile(t, filepath.Join(root, "rules", "lets-rules.md"), ver)
+		return root
+	}
+	oldPhys, newPhys := mk("0.9.1"), mk("0.9.2")
+	if err := os.MkdirAll(filepath.Join(home, ".claude", "plugins"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(phys, filepath.Join(home, ".claude", "plugins", "cache")); err != nil {
+		t.Fatal(err)
+	}
+	writeIndex(t, home, oldPhys, newPhys)
+	lexical := filepath.Join(home, ".claude", "plugins", "cache", "lets-workflow", "lets", "0.9.1")
+	for _, handed := range []string{lexical, oldPhys} {
+		if root, verified, note := ResolveInstalledRoot(handed, home); root != newPhys || !verified || note != "" {
+			t.Errorf("handed %s: got %q verified=%v note=%q, want %q verified", handed, root, verified, note, newPhys)
+		}
+	}
+}
