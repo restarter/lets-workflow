@@ -11,7 +11,7 @@ Talk to the repo's orchestrator or a named peer session: `ask` / `ping` / `read`
 
 ## Args
 
-`verb=ask|ping|read|tell|who target="<name>" [session=<sid> repo_index=<n>] text=<rest> [footer=none] [--yes]` - `target` is optional for `ask` / `ping` (default: this chat's orchestrator) and REQUIRED for `tell`, quoted. `--yes` (the user typed it) skips the Send? question in Step 4, not the message itself - see the Preview gate. `session` + `repo_index` name another project's session; only `/lets:hub` passes them. From natural language: map the request to a verb (a question for an answer -> `ask`; an FYI -> `ping` or `tell`; "what did X say" -> `read`; "who is working" -> `who`). Any other verb: say so and stop.
+`verb=ask|ping|read|tell|who target="<name>" [session=<sid> repo_index=<n>] text=<rest> [footer=none] [--yes]` - `target` is optional for `ask` / `ping` (default: this chat's orchestrator) and REQUIRED for `tell`, quoted. `--yes` (the user typed it) skips the Send? question in Step 4, not the message itself - see the Preview gate. `session` + `repo_index` name another project's session; they come only from Go output - `/lets:hub`, a bound resolution whose `target` carries `repo_index` (Step 1), or a `who --orc` row that carries one (an orchestrator's sibling-repo worker). Never compute, guess or reuse an index from anywhere else. From natural language: map the request to a verb (a question for an answer -> `ask`; an FYI -> `ping` or `tell`; "what did X say" -> `read`; "who is working" -> `who`). Any other verb: say so and stop.
 
 | verb | sends | waits | target required |
 |---|---|---|---|
@@ -31,7 +31,7 @@ Every later call addresses the returned **session id** (`target.session`), never
 
 | `source` | do |
 |---|---|
-| `bound` / `single`, `target.alive=alive` | that is the target |
+| `bound` / `single`, `target.alive=alive` | that is the target; when `target.repo_index` is present (a bound orchestrator in a sibling repo Orca lists), carry it: add `--repo-index <target.repo_index>` to every `tell` and `tail`, as in the another-project branch above |
 | `bound` with `refused[]` and no `target` | say `<name> cannot be addressed from this repo - <refused[0].reason>; <hint>` (when present) and send NOTHING - never re-route to another orchestrator |
 | `ambiguous` | ask which (below) |
 | `self` | this session IS an orchestrator: `ask` / `ping` need an explicit target; `who` lists its workers first |
@@ -57,7 +57,7 @@ AskUserQuestion(
 
 Then, only when this branch's `.task` has a `task:` line and HEAD is not `{LETS_MERGE_BRANCH}`, ask in words whether to remember the pick for this branch; on yes `lets worktree task-state set --orc '<name>' --json` (single-quoted, `'\''` escaping) and name `rebound.from` in one line when reported.
 
-**Explicit name** -> `lets peers who --json` (never add `--probe-orca`: Go consults Orca only under `LETS_LAUNCHER=orca`), match `name` exactly:
+**Explicit name** -> `lets peers who --json` (never add `--probe-orca`: Go consults Orca only under `LETS_LAUNCHER=orca`), match `name` exactly. A session whose `orchestrator` source is `self` matches in `lets peers who --orc "<own name>" --json` first - its rows include bound workers in sibling repos; a matched row with `repo_index` is addressed like the another-project branch (`--repo-index <row.repo_index>` on `tell` / `tail`):
 - no row -> `no live peer named <name>` + degraded reasons; stop.
 - more than one -> `peer_ambiguous`: list them (name, session6, branch) and ask which.
 - a row with no `session` (an Orca-only agent, e.g. Codex): `read` and `who` only; `ask` / `ping` / `tell` answer `sending to non-Claude agents is not supported in v1`.
@@ -69,8 +69,10 @@ Then, only when this branch's `.task` has a `task:` line and HEAD is not `{LETS_
 
 ```
 ## Peers
-| role | name | scope / orchestrator | task | branch | state | last activity |
+| role | name | repo | scope / orchestrator | task | branch | state | last activity |
 ```
+
+- A row with `repo` (a bound worker in a sibling repo) shows that name in the repo column; this repo's rows leave it empty - never mix them silently.
 
 - Mark the source: `via orca`, `via claude registry`, or both.
 - `alive=unknown` rows read `liveness unknown`.
@@ -78,7 +80,7 @@ Then, only when this branch's `.task` has a `task:` line and HEAD is not `{LETS_
 
 ## Step 3: read [N]
 
-`lets peers tail --to-session <sid> --last N --json` (an Orca-only agent: `--to-terminal <terminal_id>`; "what did they say to me": add `--addressed-to-session "$CLAUDE_CODE_SESSION_ID"`). Render the turns verbatim - they are already redacted and capped - labelled as the peer's words, and name a non-zero `omitted`. A non-zero `truncated_bytes` means text inside the KEPT turns was cut too - say so, and offer `/lets:orc read` for the rest; `omitted: 0` no longer implies a complete answer on its own. Send nothing.
+`lets peers tail --to-session <sid> [--repo-index <n>] --last N --json` (`<n>` only when Step 1 resolved the target with a `repo_index`; an Orca-only agent: `--to-terminal <terminal_id>`; "what did they say to me": add `--addressed-to-session "$CLAUDE_CODE_SESSION_ID"`). Render the turns verbatim - they are already redacted and capped - labelled as the peer's words, and name a non-zero `omitted`. A non-zero `truncated_bytes` means text inside the KEPT turns was cut too - say so, and offer `/lets:orc read` for the rest; `omitted: 0` no longer implies a complete answer on its own. Send nothing.
 
 ## Step 4: Compose (ask / ping / tell)
 
@@ -116,7 +118,7 @@ Both MANDATORY lines are printed even under `footer=none` - they are not a foote
 
 - Orca route: `lets peers wait --to-session <sid> --since-message <msgid> --sent-at <sent_at> --timeout-ms 1800000 --json` with `run_in_background: true`; tell the user "waiting on <name> - I'll relay when it lands". `completion_unverifiable`: say so and offer `/lets:orc read`.
 - Claude route: the idle notice arrives as a turn.
-- On completion or the notice: `lets peers tail --to-session <sid> --since-message <msgid> --sent-at <sent_at> [--repo-index <n>] --json` (no `--last`: Go returns the whole reply) and relay the WHOLE reply text, no summary; `omitted > 0` -> say that many earlier entries were left out and offer `/lets:orc read`. A non-zero `truncated_bytes` (even with `omitted: 0`) means the reply itself was cut - say so too.
+- On completion or the notice: `lets peers tail --to-session <sid> --since-message <msgid> --sent-at <sent_at> [--repo-index <n>] --json` (`<n>`: the `repo_index` Step 1 resolved, when there is one; no `--last`: Go returns the whole reply) and relay the WHOLE reply text, no summary; `omitted > 0` -> say that many earlier entries were left out and offer `/lets:orc read`. A non-zero `truncated_bytes` (even with `omitted: 0`) means the reply itself was cut - say so too.
 - Timeout: "still waiting - /lets:orc read later".
 
 ## Receipt rules (MANDATORY - same as lets-rules `## Peer Messages`)

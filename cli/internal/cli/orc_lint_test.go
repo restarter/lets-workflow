@@ -203,6 +203,15 @@ func TestOrcLint(t *testing.T) {
 		}
 	}
 
+	// a repo_index reaches the orc skill only from Go output (lets-th8ti): the skill
+	// names both Go sources, and the start pointer forwards the resolved one
+	if orc := files["skills/orc/SKILL.md"]; !strings.Contains(orc, "target.repo_index") || !strings.Contains(orc, "row.repo_index") || strings.Contains(orc, "only `/lets:hub` passes them") {
+		t.Error("skills/orc/SKILL.md: a repo_index must come from a resolved target or a who --orc row, and not only from /lets:hub")
+	}
+	if !strings.Contains(files["commands/start.md"], "--repo-index <target.repo_index>") {
+		t.Error("commands/start.md: the orchestrator pointer must forward a resolved target's repo_index")
+	}
+
 	// mutation checks on scratch copies
 	mutate := func(rel, add string) []string {
 		c := map[string]string{}

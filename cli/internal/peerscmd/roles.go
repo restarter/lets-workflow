@@ -304,7 +304,7 @@ func SetRole(root string, o RoleOptions) (*RoleInfo, error) {
 	if o.Role == "orchestrator" {
 		if !ccregistry.ValidName(self.Name) {
 			info.Reason = "orchestrator_needs_name"
-			info.Remediation = remedy("orchestrator_needs_name", "", "", false)
+			info.Remediation = remedy("orchestrator_needs_name", "", "", false, false)
 			return info, nil
 		}
 		for sid, f := range files {
