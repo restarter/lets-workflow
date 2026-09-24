@@ -102,11 +102,11 @@ The workflow rules are the exception — they live outside `.lets/` because they
 .claude/rules/tracker-<name>.md        The active tracker adapter — installed by /lets:init, re-synced by /lets:update; managed, don't edit
 .claude/rules/tracker-<name>.board.md  Your board profile for that tracker — yours: scaffolded once, never overwritten
 orca.yaml                       Orca hooks (adopt on create, release on archive) — written only when LETS_LAUNCHER=orca
-~/.claude/rules/lets-rules.md   Global rules (user-scope install) — written by `lets init --user`, re-synced by /lets:update
+~/.claude/rules/lets-rules.md   Global rules (user-scope install) — first written by `lets init --user`, then kept current by the session hook
 ~/.lets/.env                    User-level defaults (language, launcher) — see above
 ```
 
-Don't edit either `lets-rules.md` copy by hand — they're managed copies, rewritten on the next sync (the one exception: a global copy you've deliberately set *ahead* of the plugin version is reported but never overwritten). If you're customizing the plugin itself, edit `plugins/lets/rules/lets-rules.md` instead — see [`CONTRIBUTING.md`](../CONTRIBUTING.md).
+Don't edit either `lets-rules.md` copy by hand — they're managed copies, rewritten on the next sync. The global copy is refreshed at every session start; a hand-edited global copy is saved to `lets-rules.md.bak[-N]` first, so put your own rules in a separate `.md` file. If you're customizing the plugin itself, edit `plugins/lets/rules/lets-rules.md` instead — see [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 ## Setup order: `lets init`, then `bd init`
 

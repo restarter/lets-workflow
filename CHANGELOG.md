@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Fixed
+- **The global workflow rules keep themselves current (lets-tg008).** With a user-scope install, `~/.claude/rules/lets-rules.md` was a copy you had to re-sync by hand with `/lets:update` or `lets init --user` - and the check keyed on the frontmatter version, which has shipped with two different contents, so a stale copy could read as current. The SessionStart hook now keeps that file a cache of the plugin the session actually runs, keyed by content hash: every session start refreshes it when it differs, an older plugin never replaces newer rules, only an installed plugin (not a `--plugin-dir` checkout) writes it, and a copy you edited is saved to `lets-rules.md.bak` (then `.bak-2`, ...) before it is replaced - backups never load, so keep your own rules in a separate `.md` file. A one-line notice appears only when something happened. `lets init --user` remains the first install and writes through the same code. One stated limit: a headless `claude -p` run started right after a plugin update reads the previous rules once; the next start of any kind is current.
+- **`/lets:update` no longer reports a row behind the installed plugin as fine (lets-tg008).** A session keeps the plugin it loaded, so after a plugin update `/lets:update` compared against the old one and called stale rules `in-sync`, and re-running it could never change that. It now compares the project rules against the plugin actually installed, says when this session still runs an older one (`reload` - a re-run before `/reload-plugins` or a new session reports the same), and reports the global rules read-only: healthy only when their hash matches the installed plugin, otherwise the reason and whether the next session start fixes it. It never says "re-run" where a re-run cannot change the answer. The plugin step can now be run in-session on approval (`claude plugin marketplace update` + `claude plugin update`), and the hint no longer promises that enabling auto-update prevents the loop.
+- **`/lets:update` works from a worktree (lets-tg008).** It used to refuse. It now checks the binary, the plugin and the global rules, marks the project rows `skipped` with the main checkout's path, and points you there for the project files.
+
 ## [0.9.2] - 2026-09-23
 
 ### Added
