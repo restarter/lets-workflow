@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-09-25
+
 ### Fixed
 - **A worker can reach its orchestrator in a sibling repo, and the orchestrator can see it (lets-th8ti).** With one Orca over several repos of a product and one orchestrator for the group, a worker bound to that orchestrator with `/lets:start <id> --orc=<name>` was refused `target_in_other_repo` and told to use `/lets:hub` - which cannot carry a message to that orchestrator. The route already existed; resolution now hands it over. Under `LETS_LAUNCHER=orca`, a bound name this repo cannot address is looked up in the repos Orca lists and comes back with a `repo_index`, so `/lets:orc` sends through the usual resolve-frame-preview-send path. The other direction works too: the orchestrator's `who` lists the workers in sibling repos bound to it, marked with their repo, and `/lets:orc tell` reaches them. Only a binding you typed opens this channel; the sibling repo is only read, never written, and a new Boundaries carve-out says exactly what is read. Refusals now name only actions that work - a test fails when a remediation points at a command that cannot perform the refused action.
 - **The global workflow rules keep themselves current (lets-tg008).** With a user-scope install, `~/.claude/rules/lets-rules.md` was a copy you had to re-sync by hand with `/lets:update` or `lets init --user` - and the check keyed on the frontmatter version, which has shipped with two different contents, so a stale copy could read as current. The SessionStart hook now keeps that file a cache of the plugin the session actually runs, keyed by content hash: every session start refreshes it when it differs, an older plugin never replaces newer rules, only an installed plugin (not a `--plugin-dir` checkout) writes it, and a copy you edited is saved to `lets-rules.md.bak` (then `.bak-2`, ...) before it is replaced - backups never load, so keep your own rules in a separate `.md` file. A one-line notice appears only when something happened. `lets init --user` remains the first install and writes through the same code. One stated limit: a headless `claude -p` run started right after a plugin update reads the previous rules once; the next start of any kind is current.
@@ -612,7 +614,8 @@ Initial release with expert agents team.
 - SessionStart hook injecting workflow rules
 - Plugin structure: commands, agents, hooks
 
-[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.9.2...HEAD
+[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.9.3...HEAD
+[0.9.3]: https://github.com/restarter/lets-workflow/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/restarter/lets-workflow/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/restarter/lets-workflow/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/restarter/lets-workflow/compare/v0.8.2...v0.9.0
