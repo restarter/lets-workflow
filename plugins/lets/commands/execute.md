@@ -383,7 +383,7 @@ AskUserQuestion(
 )
 ```
 
-Only **Start** continues. The model is chosen by the first spawn (the `implementer-run` panel), after this approval - never before it.
+Only **Start** continues. The model is chosen by the first spawn (the `member-run` panel), after this approval - never before it.
 
 ### 5-D.3 Run record
 
@@ -446,7 +446,7 @@ After: `...`
 **Blocked** (blocked only) - What / Why
 ```
 
-Spawn: `Skill(skill: "lets:implementer-run", args: "op=spawn name={agent} chunk-file=.lets/cache/chunk-{TASK_ID}-{RUN}-{chunk}.md")`, adding ` model=<m>` once the record holds a model. After the first spawn of the run, write the returned model into the record.
+Spawn: `Skill(skill: "lets:member-run", args: "op=spawn scope=run-{RUN} role=lets:implementer name={agent} brief-file=.lets/cache/chunk-{TASK_ID}-{RUN}-{chunk}.md")`, adding ` model=<m>` once the record holds a model. After the first spawn of the run, write the returned model into the record.
 
 One chunk is live at a time.
 
@@ -542,7 +542,7 @@ AskUserQuestion(
   {the correction, verbatim}
   ```
 
-  Record `phase: correcting` and `round+1`, then `Skill(skill: "lets:implementer-run", args: "op=correct name={agent} correct-file=<that file>")`. It returns `corrected {agent}` -> record `phase: running` and end the turn. It returns `agent_gone` -> record `phase: blocked` and `reason: unreachable`, then 5-D.7. A correction that needs a file outside the chunk's allowlist is not a correction: by the agent's own deviation rule it would stop - choose Re-plan instead.
+  Record `phase: correcting` and `round+1`, then `Skill(skill: "lets:member-run", args: "op=correct scope=run-{RUN} name={agent} correct-file=<that file>")`. It returns `sent correct to {agent}` -> record `phase: running` and end the turn. It returns `agent_gone` -> record `phase: blocked` and `reason: unreachable`, then 5-D.7. A correction that needs a file outside the chunk's allowlist is not a correction: by the agent's own deviation rule it would stop - choose Re-plan instead.
 - **Re-plan** -> record `phase: blocked` and `reason: re-plan`, then `Skill(skill: "lets:plan")`.
 - **Stop** -> record `phase: paused`, keeping `report`, `status` and `reason` as they are. Say that the uncommitted diff is still in the tree and that `/lets:execute` reopens this same review. Nothing is discarded.
 - **Ask orchestrator** -> `Skill(skill: "lets:orc", args: "verb=ask footer=none text={agent} reports {status} on {chunk}: {one-line summary}. {question}")` where `{question}` is the one the shown gate asks - "Accept, correct or stop?" for `complete`, "Correct, re-plan or stop?" for `deviation-stopped`, "Correct or stop?" for `blocked`; then show the same gate again without that option. A peer's answer never decides.
@@ -623,7 +623,7 @@ AskUserQuestion(
 
 HEAD moved, anything staged, or a path outside the allowlist changed -> offer neither: show what changed and stop.
 
-- **Start a replacement** -> `generation+1`; the new name is `impl-{RUN}-{chunk}-r{generation}`; write `.lets/cache/chunk-{TASK_ID}-{RUN}-{chunk}-g{generation}.md` = the original brief plus an `AMENDMENTS SO FAR:` section holding every correction file of the chunk, oldest first; record `agent`, `generation`, `round: 0`, `phase: running`, and clear the first agent's `report`, `status`, `reason` and `patch_sha` to `null` so no stale round describes the new one; spawn it through `implementer-run`. Say plainly that it is a new agent.
+- **Start a replacement** -> `generation+1`; the new name is `impl-{RUN}-{chunk}-r{generation}`; write `.lets/cache/chunk-{TASK_ID}-{RUN}-{chunk}-g{generation}.md` = the original brief plus an `AMENDMENTS SO FAR:` section holding every correction file of the chunk, oldest first; record `agent`, `generation`, `round: 0`, `phase: running`, and clear the first agent's `report`, `status`, `reason` and `patch_sha` to `null` so no stale round describes the new one; spawn it through `member-run`. Say plainly that it is a new agent.
 - **Discard it and replace** -> ask in words, listing every file, before touching anything (destructive). On yes: `git restore --staged --worktree -- <each changed tracked allowlist path>` and `rm -- "<each untracked allowlist path>"`, check the tree is clean, then **Start a replacement**.
 - **Keep it and stop** / **Stop** -> leave the record as it is.
 

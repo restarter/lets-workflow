@@ -11,7 +11,7 @@ import (
 
 // delegatedContractProblems returns every way the given plugin files break the
 // delegated /lets:execute contract (lets-l6ah9); an empty result means none.
-// It reads only its argument, so TestImplementerRun can feed it in-memory
+// It reads only its argument, so TestMemberRun can feed it in-memory
 // mutants and prove each guard can fail without mutating a repository file.
 func delegatedContractProblems(f map[string]string) []string {
 	var p []string
@@ -19,40 +19,78 @@ func delegatedContractProblems(f map[string]string) []string {
 
 	skill := f["skill"]
 	if !strings.Contains(skill, "user-invocable: false") {
-		add("implementer-run must be internal (user-invocable: false)")
+		add("member-run must be internal (user-invocable: false)")
 	}
+	// the predecessor's name, spelled in two parts so this file passes the rename grep gate itself
+	predecessor := "implementer" + "-run"
+	if strings.Contains(skill, predecessor) {
+		add("member-run must never name its predecessor, not even as history (the rename grep gate)")
+	}
+	check0 := sectionSpan(skill, "## Step 0: Binary check")
 	spawn := sectionSpan(skill, "## Step 2: Spawn")
-	correct := sectionSpan(skill, "## Step 3: Correct")
-	if spawn == "" || correct == "" {
-		add("implementer-run must keep its Step 2: Spawn and Step 3: Correct sections")
+	next := sectionSpan(skill, "## Step 3: Next / Correct")
+	if check0 == "" || !strings.Contains(check0, "lets members status --scope") || !strings.Contains(check0, "/lets:update") {
+		add("member-run must keep Step 0: a lets members status check that stops with /lets:update")
+	} else if strings.Index(skill, "## Step 0: Binary check") > strings.Index(skill, "Agent(") {
+		add("the Step 0 binary check must precede the first Agent call")
+	}
+	if spawn == "" || next == "" {
+		add("member-run must keep its Step 2: Spawn and Step 3: Next / Correct sections")
 	} else {
 		call := ""
-		if i := strings.Index(spawn, "Agent("); i >= 0 {
-			call = spawn[i:]
-			if j := strings.Index(call, "\n)"); j >= 0 {
-				call = call[:j]
+		agentAt := strings.Index(spawn, "Agent(")
+		if agentAt >= 0 {
+			call = spawn[agentAt:]
+			// the call ends at its own closing line, indented or not
+			for i, line := range strings.Split(call, "\n") {
+				if i > 0 && strings.TrimSpace(line) == ")" {
+					call = strings.Join(strings.Split(call, "\n")[:i], "\n")
+					break
+				}
 			}
 		} else {
 			add("Step 2 must contain the Agent call")
 		}
-		if !strings.Contains(call, `subagent_type="lets:implementer"`) {
-			add("the Step 2 Agent call must spawn lets:implementer")
+		if !strings.Contains(call, `subagent_type="{role}"`) {
+			add("the Step 2 Agent call must spawn the role it was given")
 		}
 		for _, field := range []string{"team_name=", "mode=", "isolation="} {
 			if strings.Contains(call, field) {
 				add("the Step 2 Agent call must not pass " + field)
 			}
 		}
-		if strings.Contains(correct, "Agent(") {
-			add("Step 3: Correct must never spawn")
+		if status := strings.Index(spawn, "lets members status"); status < 0 || agentAt < 0 || status > agentAt {
+			add("Step 2 must read lets members status before the Agent call")
 		}
-		if !strings.Contains(correct, "SendMessage(") {
-			add("Step 3: Correct must resume the named agent with SendMessage")
+		if addAt := strings.Index(spawn, "lets members add"); addAt < 0 || agentAt < 0 || addAt < agentAt {
+			add("Step 2 must record the member with lets members add right after the Agent call")
+		}
+		if !strings.Contains(spawn, "pane") || !strings.Contains(spawn, "in_process") {
+			add("Step 2 must report which kind was recorded (pane or in_process)")
+		}
+		if !strings.Contains(spawn, "no_lead") {
+			add("a team-scope spawn must stop on no_lead")
+		}
+		if !strings.Contains(skill, "`<callsign>-<name>` in a team scope") {
+			add("member-run must name team-scope agents <callsign>-<name>")
+		}
+		if strings.Contains(next, "Agent(") {
+			add("Step 3: Next / Correct must never spawn")
+		}
+		send := strings.Index(next, "SendMessage(")
+		if send < 0 {
+			add("Step 3: Next / Correct must resume the named member with SendMessage")
+		}
+		if status := strings.Index(next, "lets members status"); status < 0 || send < 0 || status > send {
+			add("Step 3 must run lets members status before every SendMessage")
+		}
+		if strings.Count(skill, "SendMessage(") != strings.Count(next, "SendMessage(") {
+			add("every SendMessage must live in Step 3, behind its lets members status")
 		}
 	}
-	for _, absent := range []string{"TeamCreate", "TeamDelete", "TaskCreate", "TaskUpdate", "TaskList"} {
+	for _, absent := range []string{"TeamCreate", "TeamDelete", "TaskCreate", "TaskUpdate", "TaskList", "team_name", "mode="} {
 		if strings.Contains(skill, absent) {
-			add("implementer-run must not reference the absent " + absent + " tool")
+			add("member-run must not reference the absent " + absent)
 		}
 	}
 
@@ -92,11 +130,15 @@ func delegatedContractProblems(f map[string]string) []string {
 		if n := strings.Count(delegated, `preview: "{the review block}"`); n != 3 {
 			add(fmt.Sprintf("each of the 3 Review gates must carry the review block as its first option's preview, found %d", n))
 		}
-		for _, need := range []string{`Skill(skill: "lets:implementer-run"`, "TaskStop(", "git ls-files --others --exclude-standard", "--untracked-files=all", "git diff HEAD", "git diff --cached --name-only", `args: "approved=review-accept"`, "patch_sha", "**Render review**", "**What is a report.**", "malformed-report", "Write a report with the Write tool", "| `pending` |", "| `review` / `paused` |", "| `committing` |", "AMENDMENT to chunk"} {
+		for _, need := range []string{`Skill(skill: "lets:member-run"`, "brief-file=", "scope=run-{RUN}", "TaskStop(", "git ls-files --others --exclude-standard", "--untracked-files=all", "git diff HEAD", "git diff --cached --name-only", `args: "approved=review-accept"`, "patch_sha", "**Render review**", "**What is a report.**", "malformed-report", "Write a report with the Write tool", "| `pending` |", "| `review` / `paused` |", "| `committing` |", "AMENDMENT to chunk"} {
 			if !strings.Contains(delegated, need) {
 				add("Step 5-D must contain " + need)
 			}
 		}
+	}
+
+	if strings.Contains(exec, predecessor) || strings.Contains(exec, "chunk-file=") {
+		add("execute.md must call member-run with brief-file= - not its predecessor, no chunk-file=")
 	}
 
 	agent := f["agent"]
@@ -136,10 +178,10 @@ func delegatedContractProblems(f map[string]string) []string {
 	return p
 }
 
-// TestImplementerRun pins the delegated /lets:execute contract on the real
+// TestMemberRun pins the delegated /lets:execute contract on the real
 // plugin files, then proves each guard can fail: every mutant breaks one
 // invariant in memory and must produce a problem naming it.
-func TestImplementerRun(t *testing.T) {
+func TestMemberRun(t *testing.T) {
 	read := func(parts ...string) string {
 		t.Helper()
 		b, err := os.ReadFile(filepath.Join(append([]string{pluginDir(t)}, parts...)...))
@@ -153,7 +195,7 @@ func TestImplementerRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	files := map[string]string{
-		"skill":        read("skills", "implementer-run", "SKILL.md"),
+		"skill":        read("skills", "member-run", "SKILL.md"),
 		"execute":      read("commands", "execute.md"),
 		"agent":        read("agents", "implementer.md"),
 		"rules":        read("rules", "lets-rules.md"),
@@ -168,6 +210,9 @@ func TestImplementerRun(t *testing.T) {
 	mutants := []struct{ name, key, old, repl, want string }{
 		{"picker loses Implementers", "execute", `label: "Implementers"`, `label: "Implementer"`, "Implementers locus"},
 		{"correct spawns", "skill", "SendMessage(", "Agent(", "Correct must"},
+		{"status after the send", "skill", "1. `lets members status --scope {scope} --name {name} --json`, before every message.", "1. Check the member before every message.", "before every SendMessage"},
+		{"add before the Agent call", "skill", "   lets members add --scope", "   lets memberz add --scope", "right after the Agent call"},
+		{"execute back on the old skill", "execute", `Skill(skill: "lets:member-run", args: "op=spawn`, "Skill(skill: \"lets:implementer" + "-run\", args: \"op=spawn", "not its predecessor"},
 		{"a Review gate is dropped", "execute", `header: "Review"`, `header: "Reviewed"`, "Review gates"},
 		{"unscoped gate sentence returns", "rules", "inside it the gate is plan mode for an inline run", "inside it the plan-mode approval is the gate", "still asserts"},
 	}

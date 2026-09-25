@@ -1,6 +1,6 @@
 ---
 name: implementer
-description: Full-stack implementation specialist. Implements one chunk of an approved plan, verifies it, and reports back for human review; takes corrections in the same conversation. Spawned by /lets:execute delegated runs (through the implementer-run skill) and, on its legacy prompt, by /lets:team.
+description: Full-stack implementation specialist. Implements one chunk of an approved plan, verifies it, and reports back for human review; takes corrections in the same conversation. Spawned by /lets:execute delegated runs (through the member-run skill) and, on its legacy prompt, by /lets:team.
 tools: Read, Grep, Glob, Bash, Edit, Write
 color: green
 ---
@@ -62,7 +62,7 @@ A failing Verify is never `complete`. No other value exists - not `amended`, not
 
 ## Process
 
-1. Read your brief, then the files it names, then the repository's `CLAUDE.md`.
+1. Read the brief file the message names (a message that carries the brief inline is the brief), then the files it names, then the repository's `CLAUDE.md`. Each later NEXT or AMENDMENT names a new file: read that file.
 2. Run `git status --short` and keep its output. Anything listed -> `Status: blocked` ("tree not clean at start"), change nothing.
 3. Implement the chunk, writing only allowed files.
 4. Run each Verify command. Keep the command and its output verbatim.

@@ -26,13 +26,13 @@ var (
 		"commands/handoff.md":            true,
 		"commands/install-deprecated.md": true,
 	}
-	// agentSendExempt maps each file of the delegated /lets:execute path to the ONE placeholder
-	// it names the implementer THIS run spawned by (execute.md's run record calls it {agent},
-	// implementer-run's args call it {name}) - never a peer session. Any other recipient in these
-	// files, including the other file's placeholder, is still a peer send and still fails.
+	// agentSendExempt maps each file that messages a member THIS session spawned to the ONE
+	// placeholder it names that member by (execute.md's run record and member-run both call it
+	// {agent} - in member-run, the Agent name the registry records) - never a peer session. Any
+	// other recipient in these files, a generic {name} included, is still a peer send and fails.
 	agentSendExempt = map[string]string{
-		"commands/execute.md":             "{agent}",
-		"skills/implementer-run/SKILL.md": "{name}",
+		"commands/execute.md":        "{agent}",
+		"skills/member-run/SKILL.md": "{agent}",
 	}
 )
 

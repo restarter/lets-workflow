@@ -611,8 +611,8 @@ func TestStatus_IsolatedWorktreeGone(t *testing.T) {
 }
 
 // The flags member-run passes are the flags the binary defines: this pins the
-// review's flag list per subcommand, and every `lets members` flag used in the
-// member-run skill once it exists.
+// review's flag list per subcommand, and every `lets members` flag the member-run
+// skill uses.
 func TestMembersFlags_MatchMemberRun(t *testing.T) {
 	want := map[string][]string{
 		"add":     {"scope", "json", "name", "role", "model", "isolation", "worktree-path", "worktree-branch", "link", "cwd"},
@@ -646,13 +646,10 @@ func TestMembersFlags_MatchMemberRun(t *testing.T) {
 	}
 	skill := filepath.Join("..", "..", "..", "plugins", "lets", "skills", "member-run", "SKILL.md")
 	data, err := os.ReadFile(skill)
-	if errors.Is(err, os.ErrNotExist) {
-		t.Log("member-run skill not present yet; flag list pinned only")
-		return
-	}
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("member-run skill: %v - the flag pin must follow a rename, never lapse", err)
 	}
+	checked := 0
 	for _, line := range strings.Split(string(data), "\n") {
 		for rest := line; ; {
 			i := strings.Index(rest, "lets members ")
@@ -670,11 +667,15 @@ func TestMembersFlags_MatchMemberRun(t *testing.T) {
 				}
 				if name, ok := strings.CutPrefix(f, "--"); ok {
 					name, _, _ = strings.Cut(name, "=")
+					checked++
 					if !defined[fields[0]][name] {
 						t.Errorf("member-run uses `lets members %s --%s`, which the binary does not define", fields[0], name)
 					}
 				}
 			}
 		}
+	}
+	if checked == 0 {
+		t.Error("no `lets members` flag found in member-run - scanner or skill broken")
 	}
 }
