@@ -13,7 +13,7 @@ import (
 // direction in plan lets-ip06f section 4). A leaf must never import a package that
 // imports it back, and the easiest way to guarantee that is to allow no non-leaf
 // import at all. Append a directory when a leaf lands.
-var leafPackages = []string{"trackeradapter", "taskid", "fsutil", "peername", "taskstate", "redact", "ccregistry", "agentrun", "teamfile", "memberscmd"}
+var leafPackages = []string{"trackeradapter", "taskid", "fsutil", "peername", "taskstate", "redact", "ccregistry", "agentrun", "teamfile", "memberscmd", "integratecmd"}
 
 const modulePrefix = "github.com/restarter/lets-workflow/cli/internal/"
 

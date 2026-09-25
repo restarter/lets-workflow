@@ -36,5 +36,6 @@ func NewRootCmd() *cobra.Command {
 	cmd.AddCommand(NewNotifyCmd())
 	cmd.AddCommand(NewHandoffCmd())
 	cmd.AddCommand(NewMembersCmd())
+	cmd.AddCommand(NewIntegrateCmd())
 	return cmd
 }
