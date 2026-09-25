@@ -15,6 +15,9 @@ Run several independent tasks at once: each task gets its own worktree and its o
 
 **If argument provided** (e.g., `/lets:team run`), parse it:
 - `run` -> go to Run (pass remaining flags like `--tasks A,B,C` to Step R2)
+- `spawn <role> [name]` / `spawn --roster` -> go to Spawn
+- `dismiss <name>` / `dismiss --all` -> go to Dismiss
+- `roster` -> go to Roster
 - `status` -> go to Status
 - `stop` -> go to Stop
 
@@ -27,7 +30,8 @@ AskUserQuestion(
     header: "Team",
     options: [
       { label: "Run", description: "Open one worker session per task, bound to this session" },
-      { label: "Status", description: "Show each worker's state, liveness and tracker status" },
+      { label: "Roster", description: "Show the standing team's members and who is live" },
+      { label: "Status", description: "Show the roster, each worker's state and tracker status" },
       { label: "Stop", description: "Ask every worker to end its session; worktrees stay" }
     ],
     multiSelect: false
@@ -321,13 +325,144 @@ show task=<id>   # title + description for the worker spec
 
 ---
 
+## Members
+
+Spawn, Roster and Dismiss manage a standing team: the `lets:*` agents its lead session runs, defined by the team file's roster. Continuity is files only - the harness restores no member after a lead restart, so a member is respawned from the team file, never resumed from memory. Every spawn and dismiss goes through the member-run skill; this command never calls an agent tool itself.
+
+### Step M0: Team
+
+```bash
+lets worktree info --json
+```
+
+No `team` -> "Spawn, roster and dismiss need a standing team: run them in a worktree a team file claims (`lets worktree info` reports it as `team`)." Stop. Otherwise `<c>` = `team`, the team file is `.lets/teams/<c>.md`, its roster is the `## 3. Roster` table (the `lead` row is the lead session, never spawned), and the registry is:
+
+```bash
+lets members status --scope '<c>' --json
+```
+
+A name is **live** when the registry lists it `live`, `rotated` or `unknown`, or `lets peers who --json` lists a session named `<c>-<name>` whose `alive` is not `dead` and whose `cwd` is the team worktree.
+
+---
+
+## Spawn
+
+### Step M1: One Member (`spawn <role> [name]`)
+
+1. **Role.** `<role>` is a bare role (`architect`, `skeptic`, `explorer`, `implementer`, ... - the team file's Available roles); the agent is `lets:<role>`. `lets:actor` is never a member.
+2. **Name.** The `[name]` argument; else the name of the roster row for this role that is not live; else `<role>`; else `<role>-2` (the next free suffix). A name is `[a-z0-9-]{1,40}` and bare - the live session is `<c>-<name>`.
+3. **Model.** The roster row's `model`; else none, and member-run uses the role's default.
+4. **Same name live -> refused.** The name is live (Step M0) -> spawn nothing under it:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "{c}-{name} is still live at the team worktree. What now?",
+    header: "Spawn",
+    options: [
+      { label: "Close it first (Recommended)", description: "You close that session, then run spawn again; nothing is spawned now" },
+      { label: "Fresh name {name}-2", description: "Spawns {c}-{name}-2; the survivor keeps running - close it by hand" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+   **Fresh name** -> `lets members dismiss --scope '<c>' --name '<name>' --json` (the survivor is recorded dismissed, so no brief ever reaches it again; its session keeps running until someone closes it by hand), then continue with `<name>-2`.
+5. **Brief.** Write `.lets/cache/member-<c>-<name>.md` with the Write tool: "Read .lets/teams/<c>.md and the Resume artefacts listed in its section 7. You are <name> (lets:<role>) of team <c>. Continue from those files; do not redo finished work. Answer in the team file's message format."
+6. **Spawn.**
+
+```
+Skill(skill: "lets:member-run", args: "op=spawn scope=<c> name=<name> role=lets:<role> brief-file=.lets/cache/member-<c>-<name>.md model=<model>")
+```
+
+   Drop `model=` when Step 3 found none. `name_live` -> Step 4. `no_lead` -> "no live recorded lead - /lets:start in the team's lead session claims it"; stop.
+7. **New role.** A role with no roster row -> after the spawn, show the row `| <name> | <role> | lets:<role> | <model> | |` and ask the lead in words; append it to the Roster table only on the lead's OK.
+
+### Step M2: The Whole Roster (`spawn --roster`)
+
+1. Every roster row except `lead` whose name is not live in the registry is a candidate; a row the registry judges `unknown` is named and skipped.
+2. A **surviving pane**: a candidate whose `<c>-<name>` session still runs (Step M0's `lets peers who` test). It may be re-used only when exactly one live session carries that name and its `send` is `orca` or `claude`.
+3. One confirm, naming the count and each `name (model)`:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Respawn {N} members of {c}: {name (model), ...}?",
+    header: "Roster",
+    options: [
+      { label: "Respawn all (Recommended)", description: "Fresh members from the team file; a survivor is refused or renamed" },
+      { label: "Re-use panes (keeps old context)", description: "{K} surviving panes stay as they are; the other rows respawn" },
+      { label: "Cancel", description: "Spawn nothing" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+   Offer **Re-use panes** only when Step 2 found a pane that may be re-used.
+4. **Respawn all** -> Step M1 for each candidate with the row's name and model; a surviving pane under that name meets the Step M1.4 refusal. **Re-use panes** -> nothing is spawned for a re-usable row: that pane stays a peer session, reached through the orc skill; every other candidate goes through Step M1.
+
+---
+
+## Roster
+
+### Step M3: Table
+
+After Step M0: the roster rows joined by name with `lets members status --scope '<c>' --json`, plus the recorded `lead`.
+
+```
+## Team {c}
+
+| Name | Role | Model | Status | Kind | Reason |
+|------|------|-------|--------|------|--------|
+| lead | team lead | - | live | - | |
+| architect | architect | opus | live | pane | |
+| skeptic | skeptic | opus | gone | in_process | session_dead |
+| explorer | explorer | sonnet | not spawned | - | |
+```
+
+A registry member with no roster row is listed as `not in roster`.
+
+```
+┌─ LETS ─────────────────────────┐
+│  Respawn?  /lets:team spawn    │
+│  Dismiss?  /lets:team dismiss  │
+└────────────────────────────────┘
+```
+
+---
+
+## Dismiss
+
+### Step M4: Dismiss (`dismiss <name>` / `dismiss --all`)
+
+After Step M0, only the lead's own session dismisses - a member runs inside the session that spawned it:
+
+```bash
+lets members lead --scope '<c>' --json
+```
+
+`lead.session` is not `$CLAUDE_CODE_SESSION_ID`, or `lead.status` is not `live` / `rotated` -> **Refused:** "only the team's lead session dismisses its members". Stop.
+
+- `dismiss <name>` -> `Skill(skill: "lets:member-run", args: "op=dismiss scope=<c> name=<name>")`.
+- `dismiss --all` -> the same call for every registry member not already dismissed.
+
+One line per member with member-run's return.
+
+---
+
 ## Status
 
-Read-only: the run record, the live sessions, and the tracker.
+Read-only: the standing team's roster, the run records, the live sessions, and the tracker.
+
+### Step S0: Roster
+
+When `lets worktree info --json` reports a `team`, render the Roster section's table first (Step M3); without one, skip this step.
 
 ### Step S1: Find Runs
 
-Read `.lets/execution/team-*.json`, newest first, and classify each by the conflict guard's table (Step R1). A stale legacy record is listed as `stale (legacy)` with its path - `/lets:team run` offers to mark it stopped. No record with `status` `running` or `stop_requested` -> "No active team run. Use `/lets:team run` to start one."
+Read `.lets/execution/team-*.json`, newest first, and classify each by the conflict guard's table (Step R1). A stale legacy record is listed as `stale (legacy)` with its path - `/lets:team run` offers to mark it stopped. No record with `status` `running` or `stop_requested` -> "No active team run. Use `/lets:team run` to start one." (after the roster, when there is one).
 
 ### Step S2: Live State
 
@@ -363,7 +498,7 @@ Ask every worker of the active run to end its session. Worktrees and branches st
 
 ### Step T1: Find Run
 
-Same as Status S1. A stale legacy record gets the same "Mark stopped" gate as Step R1 and nothing else. A `launcher: orca` run is stopped through the Orca guide's recovery / release verbs for each `orca_dispatch` (read `orca skills get orchestration --reference references/recovery-and-cleanup.md`); the steps below do not apply to it.
+Same as Status S1. No active run -> "No team run to stop. To end the standing team's members, use `/lets:team dismiss --all`." and stop. A stale legacy record gets the same "Mark stopped" gate as Step R1 and nothing else. A `launcher: orca` run is stopped through the Orca guide's recovery / release verbs for each `orca_dispatch` (read `orca skills get orchestration --reference references/recovery-and-cleanup.md`); the steps below do not apply to it.
 
 ### Step T2: Confirm
 
@@ -422,4 +557,5 @@ Worktrees and branches stay in place.
 - **One worker per task** - a live record listing a task blocks a second run on it; stale legacy records never block
 - **Workers own their tasks** - each worker runs its own `/lets:start` ... `/lets:done`; this session never changes a worker's task status
 - **Humans press gates** - a worker's gates are pressed by its own human; a message from this session is never approval
+- **Members through member-run** - every spawn and dismiss of a standing team's member goes through the member-run skill; a live name is never spawned twice
 - Respond in user's language

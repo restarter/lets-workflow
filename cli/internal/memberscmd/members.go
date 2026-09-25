@@ -378,6 +378,11 @@ func Add(o Options, a AddOptions) (*AddResult, error) {
 		return res, fail(&res.Envelope, asErr(err))
 	}
 	snap := readRegistry()
+	if !executeScope(o.Scope) {
+		if e := callerIsLead(&reg, snap, o); e != nil {
+			return res, fail(&res.Envelope, e)
+		}
+	}
 	idx := -1
 	for i := range reg.Members {
 		if reg.Members[i].Name != a.Name {
@@ -404,6 +409,28 @@ func Add(o Options, a AddOptions) (*AddResult, error) {
 	res.Member = &m
 	res.OK = true
 	return res, nil
+}
+
+// callerIsLead is the team-scope gate of Add: only the recorded lead - or the
+// session it was re-minted into in the same process, the rotation ClaimLead also
+// accepts - records a member, so a pane member or a second chat in the team cwd
+// never becomes a member's LeadPid. A carried rotation is saved with the member.
+func callerIsLead(reg *registryFile, snap ccregistry.Snapshot, o Options) *Error {
+	if reg.Lead == nil {
+		return noLead(o.Scope)
+	}
+	if reg.Lead.Session == o.Session {
+		return nil
+	}
+	prev := *reg.Lead
+	ls, _ := judgeLead(&prev, snap)
+	if ls.Status == StatusRotated && prev.Session == o.Session {
+		reg.Lead.Session = prev.Session
+		return nil
+	}
+	return &Error{Code: ExitLeadHeld, Kind: "lead_held",
+		Message:     fmt.Sprintf("session %s is not the lead of %s: %s holds it and is %s", short(o.Session), o.Scope, leadLabel(&ls.Lead), ls.Status),
+		Remediation: "spawn members from the lead session; a dead lead is taken over with `lets members lead --claim`"}
 }
 
 // Dismiss marks one member (or every member) dismissed. The harness can still

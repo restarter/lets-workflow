@@ -151,3 +151,80 @@ func TestTeamBackend(t *testing.T) {
 		t.Error("the run record example must carry backend sessions and the launcher")
 	}
 }
+
+// TestTeamBackend_Members pins the standing-team verbs: spawn and dismiss only through
+// member-run, the same-name live refusal, --roster recommending respawn, dismiss from
+// the lead's own session, and /lets:start claiming the lead before take-task.
+func TestTeamBackend_Members(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join(pluginDir(t), "commands", "team.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	team := string(b)
+	for _, route := range []string{"- `spawn <role> [name]` / `spawn --roster` -> go to Spawn", "- `dismiss <name>` / `dismiss --all` -> go to Dismiss", "- `roster` -> go to Roster"} {
+		if !strings.Contains(team, route) {
+			t.Errorf("Step 1 must route %q", route)
+		}
+	}
+	if strings.Contains(team, "Agent(") {
+		t.Error("team.md never calls the Agent tool - members go through member-run")
+	}
+	const spawnCall = `Skill(skill: "lets:member-run", args: "op=spawn `
+	if n, calls := strings.Count(team, "op=spawn"), strings.Count(team, spawnCall); calls == 0 || n != calls {
+		t.Errorf("every spawn goes through %s (op=spawn %d, calls %d)", spawnCall, n, calls)
+	}
+	dismiss := sectionSpan(team, "\n## Dismiss\n")
+	if !strings.Contains(dismiss, `Skill(skill: "lets:member-run", args: "op=dismiss `) {
+		t.Error("dismiss goes through member-run op=dismiss")
+	}
+	if !strings.Contains(dismiss, "`lead.session` is not `$CLAUDE_CODE_SESSION_ID`") || !strings.Contains(dismiss, "**Refused:**") {
+		t.Error("only the lead's own session dismisses")
+	}
+	members := sectionSpan(team, "\n## Members\n")
+	for _, want := range []string{"lets worktree info --json", "No `team`", "`<c>-<name>`", "`cwd` is the team worktree"} {
+		if !strings.Contains(members, want) {
+			t.Errorf("Step M0 must state %q", want)
+		}
+	}
+	spawn := sectionSpan(team, "\n## Spawn\n")
+	refuse := strings.Index(spawn, "**Same name live -> refused.**")
+	call := strings.Index(spawn, spawnCall)
+	if refuse < 0 || call < 0 || refuse > call {
+		t.Error("the same-name live refusal comes before the spawn call")
+	}
+	for _, want := range []string{`label: "Close it first (Recommended)"`, "the survivor is recorded dismissed", "the survivor keeps running - close it by hand", ".lets/cache/member-<c>-<name>.md", "on the lead's OK"} {
+		if !strings.Contains(spawn, want) {
+			t.Errorf("spawn must carry %q", want)
+		}
+	}
+	respawn := strings.Index(spawn, `label: "Respawn all (Recommended)"`)
+	reuse := strings.Index(spawn, `label: "Re-use panes (keeps old context)"`)
+	if respawn < 0 || reuse < 0 || respawn > reuse {
+		t.Error("spawn --roster recommends respawn first; re-use is labelled keeps old context")
+	}
+	if !strings.Contains(spawn, "`send` is `orca` or `claude`") || !strings.Contains(spawn, "exactly one live session carries that name") {
+		t.Error("re-use is offered only for a unique surviving pane with an orca or claude send route")
+	}
+	if stop := sectionSpan(team, "\n## Stop\n"); !strings.Contains(stop, "`/lets:team dismiss --all`") {
+		t.Error("stop with no run points to dismiss --all")
+	}
+	if status := sectionSpan(team, "\n## Status\n"); !strings.Contains(status, "Step M3") {
+		t.Error("status shows the roster")
+	}
+
+	s, err := os.ReadFile(filepath.Join(pluginDir(t), "commands", "start.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	step6 := sectionSpan(string(s), "\n## Step 6: Take Task\n")
+	claim := strings.Index(step6, "lets members lead --claim --scope")
+	take := strings.Index(step6, `Skill(skill: "lets:take-task"`)
+	if claim < 0 || take < 0 || claim > take {
+		t.Errorf("start.md claims the team lead before take-task (claim=%d take=%d)", claim, take)
+	}
+	for _, want := range []string{"`lead_held` -> stop", "`registry_unavailable` included", "then continue"} {
+		if !strings.Contains(step6, want) {
+			t.Errorf("start.md's lead claim must state %q", want)
+		}
+	}
+}

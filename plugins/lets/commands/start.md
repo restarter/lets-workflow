@@ -164,6 +164,18 @@ The orient snapshot (Step 3) already shows In flight + Next up - don't repeat th
 
 ## Step 6: Take Task
 
+**Team worktree: claim the lead first.** When `lets worktree info --json` reports a `team`, this session claims that team's lead before take-task:
+
+```bash
+lets members lead --claim --scope '<team>' --json
+```
+
+- `claimed=true` -> continue.
+- `lead_held` -> stop, naming the live lead (`lead.name`, `lead.session`, `lead.status`): continue in that session, or close it and run `/lets:start` again. take-task does not run.
+- Any other failure (`registry_unavailable` included, or no `lets` binary) -> one warning line naming it, then continue.
+
+No `team` -> skip this paragraph.
+
 After task is selected, delegate to the **take-task** skill to claim it and prepare the branch: `Skill(skill: "lets:take-task", args: "<task-id>")`.
 
 The take-task skill handles: setting task to `in_progress`, uncommitted changes check, worktree detection, branch creation/switching, offering worktree option, context recovery, saving session start ref.

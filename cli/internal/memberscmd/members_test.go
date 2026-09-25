@@ -100,6 +100,15 @@ func kindOf(err error) string {
 	return ""
 }
 
+// claim records o's session as the lead of its team scope: Add in a team scope
+// records members only for the lead.
+func claim(t *testing.T, o memberscmd.Options) {
+	t.Helper()
+	if _, err := memberscmd.ClaimLead(o); err != nil {
+		t.Fatalf("claim lead: %v", err)
+	}
+}
+
 func readFile(t *testing.T, o memberscmd.Options) map[string]any {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join(o.Root, ".lets", "execution", "members-"+o.Scope+".json"))
@@ -197,6 +206,7 @@ func TestAdd_RefusesLiveName(t *testing.T) {
 	r := newRegistry(t)
 	o := opts(t, "snake", sidA)
 	r.put(100, sidA, "snake-lead", o.Root)
+	claim(t, o)
 	a := memberscmd.AddOptions{Name: "architect", Role: "architect"}
 	if _, err := memberscmd.Add(o, a); err != nil {
 		t.Fatal(err)
@@ -219,6 +229,52 @@ func TestAdd_RefusesLiveName(t *testing.T) {
 		if _, err := memberscmd.Add(o, memberscmd.AddOptions{Name: bad, Role: "qa"}); kindOf(err) != "name_invalid" {
 			t.Errorf("name %q: err=%v, want name_invalid", bad, err)
 		}
+	}
+}
+
+// In a team scope only the recorded lead (or its same-process rotation) records a
+// member; an execute scope has no lead gate.
+func TestAdd_TeamScopeLeadOnly(t *testing.T) {
+	r := newRegistry(t)
+	oa := opts(t, "snake", sidA)
+	ob := oa
+	ob.Session = sidB
+	r.put(100, sidA, "snake-lead", oa.Root)
+	r.put(200, sidB, "snake-architect", oa.Root) // a pane member in the team cwd
+	a := memberscmd.AddOptions{Name: "skeptic", Role: "skeptic"}
+	if _, err := memberscmd.Add(oa, a); kindOf(err) != "no_lead" {
+		t.Errorf("no recorded lead: err=%v, want no_lead", err)
+	}
+	claim(t, oa)
+	res, err := memberscmd.Add(ob, a)
+	if kindOf(err) != "lead_held" || res.OK {
+		t.Fatalf("a non-lead caller: err=%v, want lead_held", err)
+	}
+	if st, _ := memberscmd.Status(oa, ""); len(st.Members) != 0 {
+		t.Errorf("a refused add records nothing: %+v", st.Members)
+	}
+	res, err = memberscmd.Add(oa, a)
+	if err != nil || res.Member.LeadPid != 100 {
+		t.Fatalf("the lead: err=%v member=%+v", err, res.Member)
+	}
+	// /clear re-mints the lead's id in the same process: the new id is the lead
+	oc := oa
+	oc.Session = sidN
+	r.put(100, sidN, "snake-lead", oa.Root)
+	if res, err := memberscmd.Add(oc, memberscmd.AddOptions{Name: "explorer", Role: "explorer"}); err != nil || res.Member.LeadPid != 100 {
+		t.Fatalf("the rotated lead: err=%v", err)
+	}
+	if got := readFile(t, oa)["lead"].(map[string]any)["session"]; got != sidN {
+		t.Errorf("stored lead session = %v, want the rotation carried to %s", got, sidN)
+	}
+	if _, err := memberscmd.Add(ob, memberscmd.AddOptions{Name: "qa", Role: "qa"}); kindOf(err) != "lead_held" {
+		t.Errorf("a non-lead after the rotation: err=%v, want lead_held", err)
+	}
+	// an execute scope: no lead recorded, any caller records its implementer
+	or := opts(t, "run-abc123", sidB)
+	r.put(300, sidB, "other", or.Root)
+	if _, err := memberscmd.Add(or, memberscmd.AddOptions{Name: "impl-1", Role: "implementer"}); err != nil {
+		t.Errorf("execute scope: %v", err)
 	}
 }
 
@@ -246,6 +302,7 @@ func TestAdd_PaneMemberOwnSid(t *testing.T) {
 	o := opts(t, "snake", sidA)
 	r.put(100, sidA, "snake-lead", o.Root)
 	r.put(200, sidM, "snake-architect", o.Root)
+	claim(t, o)
 	sleeps := 0
 	memberscmd.Sleep = func(time.Duration) { sleeps++ }
 	res, err := memberscmd.Add(o, memberscmd.AddOptions{Name: "architect", Role: "architect"})
@@ -268,6 +325,7 @@ func TestAdd_InProcessFallsBackToLead(t *testing.T) {
 	r.put(100, sidA, "snake-lead", o.Root)
 	r.put(200, sidM, "snake-architect", "/somewhere/else") // right name, wrong cwd
 	r.put(300, sidN, "architect", o.Root)                  // right cwd, bare name
+	claim(t, o)
 	res, err := memberscmd.Add(o, memberscmd.AddOptions{Name: "architect", Role: "architect"})
 	if err != nil {
 		t.Fatal(err)
@@ -287,6 +345,7 @@ func TestAdd_RetryBounded(t *testing.T) {
 	r := newRegistry(t)
 	o := opts(t, "snake", sidA)
 	r.put(100, sidA, "snake-lead", o.Root)
+	claim(t, o)
 	var slept []time.Duration
 	memberscmd.Sleep = func(d time.Duration) { slept = append(slept, d) }
 	res, err := memberscmd.Add(o, memberscmd.AddOptions{Name: "explorer", Role: "explorer"})
@@ -390,6 +449,7 @@ func TestStatus_ResumedNewPidGone(t *testing.T) {
 	o := opts(t, "snake", sidA)
 	r.put(100, sidA, "snake-lead", o.Root)
 	r.put(200, sidM, "snake-architect", o.Root)
+	claim(t, o)
 	if _, err := memberscmd.Add(o, memberscmd.AddOptions{Name: "architect", Role: "architect"}); err != nil {
 		t.Fatal(err)
 	}

@@ -61,7 +61,7 @@ AskUserQuestion(
 ## Step 2: Spawn
 
 1. `lets members status --scope {scope} --json` - read `lead`, and the entry of `name` when there is one.
-   - A team scope (not `run-*`) whose `lead` is null or not `live` / `rotated` -> stop: `no_lead: {scope} has no live recorded lead - /lets:start in the team's lead session claims it`. Nothing is spawned.
+   - A team scope (not `run-*`) whose `lead` is null or not `live` / `rotated`, or whose `lead.session` is not `$CLAUDE_CODE_SESSION_ID` -> stop: `no_lead: {scope} has no live lead, or this session is not it - /lets:start in the team's lead session claims it`. Nothing is spawned. (The registry's add in item 3 refuses the same caller with `lead_held`.)
    - An entry of that name that is `live`, `rotated` or `unknown` -> stop: `name_live: {name}`. The caller picks another name.
 2. The Agent call:
 
