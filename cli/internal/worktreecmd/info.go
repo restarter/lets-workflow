@@ -17,6 +17,7 @@ import (
 	"github.com/restarter/lets-workflow/cli/internal/letsconfig"
 	"github.com/restarter/lets-workflow/cli/internal/taskid"
 	"github.com/restarter/lets-workflow/cli/internal/taskstate"
+	"github.com/restarter/lets-workflow/cli/internal/teamfile"
 	"github.com/restarter/lets-workflow/cli/internal/trackeradapter"
 )
 
@@ -75,6 +76,17 @@ func Info(ctx context.Context, dir string) (*InfoResult, error) {
 	}
 	if cwd, err := os.Getwd(); err == nil && fsutil.SameDir(gitutil.ProjectRoot(cwd, 2*time.Second), probeRoot) {
 		wt.OrcaWorktreeID = stripControl(os.Getenv("ORCA_WORKTREE_ID"))
+	}
+	// A team file problem is reported, never fatal: info still answers for the worktree.
+	gitDir, _ := exec.CommandContext(ctx, "git", "-C", probeRoot, "rev-parse", "--absolute-git-dir").Output()
+	team, ok, warnings, err := teamfile.FindByWorktree(filepath.Join(mainRoot, ".lets", "teams"), probeRoot, strings.TrimSpace(string(gitDir)))
+	for _, w := range warnings {
+		res.Steps = append(res.Steps, Step{Status: StepWarn, Message: w})
+	}
+	if err != nil {
+		res.Steps = append(res.Steps, Step{Status: StepWarn, Message: "team: " + err.Error()})
+	} else if ok {
+		res.Team = team
 	}
 	res.Worktree = &wt
 	res.OK = true

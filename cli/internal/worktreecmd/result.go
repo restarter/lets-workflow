@@ -126,6 +126,7 @@ type InfoResult struct {
 	Worktree      *WorktreeInfo  `json:"worktree,omitempty"`
 	MainRoot      string         `json:"main_root"`
 	TaskCandidate *TaskCandidate `json:"task_candidate,omitempty"`
+	Team          string         `json:"team,omitempty"` // the standing team owning this worktree (teamfile.FindByWorktree)
 }
 
 // TaskCandidate is the task id the active convention reads off a branch name in a
