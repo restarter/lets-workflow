@@ -18,6 +18,7 @@ import (
 // NewIntegrateCmd builds `lets integrate`: land since..from of an isolated
 // implementer's branch in this tree as a staged patch, through a temporary
 // worktree, never a merge and never `reset --hard`. The lead commits.
+// `--revert --patch` undoes such a patch before it is committed.
 func NewIntegrateCmd() *cobra.Command {
 	var (
 		o       integratecmd.Options
@@ -34,7 +35,11 @@ func NewIntegrateCmd() *cobra.Command {
 			root := gitutil.ProjectRoot(cwd, 2*time.Second)
 			if root == "" {
 				e := &integratecmd.Error{Code: integratecmd.ExitGeneric, Kind: "not_in_repo", Message: "not inside a git repository"}
-				return printIntegrate(cmd, jsonOut, integratecmd.NewErrorResult("integrate", e.Kind, e.Message), e)
+				sub := "integrate"
+				if o.Revert {
+					sub = "revert"
+				}
+				return printIntegrate(cmd, jsonOut, integratecmd.NewErrorResult(sub, e.Kind, e.Message), e)
 			}
 			res, err := integratecmd.Run(cmd.Context(), root, o)
 			return printIntegrate(cmd, jsonOut, res, err)
@@ -45,6 +50,8 @@ func NewIntegrateCmd() *cobra.Command {
 	f.StringVar(&o.Since, "since", "", "Exclusive start of the range: the group's integrated source, or BASE")
 	f.StringVar(&o.Run, "run", "", "Run id ([a-z0-9-]{1,40})")
 	f.StringVar(&o.Chunk, "chunk", "", "Chunk id ([a-z0-9-]{1,40})")
+	f.BoolVar(&o.Revert, "revert", false, "Undo a patch an earlier integrate applied (with --patch)")
+	f.StringVar(&o.Patch, "patch", "", "With --revert: the patch_path an integrate call returned")
 	f.BoolVar(&jsonOut, "json", false, "Emit a JSON envelope")
 	return cmd
 }
@@ -58,6 +65,10 @@ func printIntegrate(cmd *cobra.Command, jsonOut bool, res *integratecmd.Result, 
 		return runErr
 	}
 	if runErr == nil {
+		if res.Subcommand == "revert" {
+			fmt.Fprintf(w, "reverted %s; patch kept: %s\n", strings.Join(res.Files, ", "), res.PatchPath)
+			return nil
+		}
 		if len(res.Picked) == 0 {
 			fmt.Fprintln(w, "nothing to integrate")
 		} else {

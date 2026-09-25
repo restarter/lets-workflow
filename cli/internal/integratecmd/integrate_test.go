@@ -660,3 +660,142 @@ func TestIntegrate_ForeignMissingWorktreeKept(t *testing.T) {
 	stillListed("the stale cleanup")
 	assertNoTemp(t, repo)
 }
+
+// integrated returns a repo in which one chunk was integrated and not yet
+// committed: a.txt edited, b.txt added, old.txt renamed to new.txt.
+func integrated(t *testing.T) (repo, base string, res *Result) {
+	t.Helper()
+	requireGit245(t)
+	repo, _ = newRepo(t)
+	write(t, filepath.Join(repo, "old.txt"), "keep\nthis\nfile\nlong\nenough\n")
+	base = commit(t, repo, "add old.txt")
+	wt := agentWorktree(t, repo, "worktree-agent-x", base)
+	write(t, filepath.Join(wt, "a.txt"), "one\nTWO\nthree\n")
+	write(t, filepath.Join(wt, "b.txt"), "b\n")
+	git(t, wt, "mv", "old.txt", "new.txt")
+	commit(t, wt, "chunk")
+	res, err := run(t, repo, Options{From: "worktree-agent-x", Since: base})
+	if err != nil {
+		t.Fatalf("integrate: %v", err)
+	}
+	return repo, base, res
+}
+
+func revert(repo, patch string) (*Result, error) {
+	return Run(context.Background(), repo, Options{Revert: true, Patch: patch})
+}
+
+// snapshot is the index tree and the worktree diff - both must survive a refused revert.
+func snapshot(t *testing.T, repo string) string {
+	t.Helper()
+	return git(t, repo, "write-tree") + "\n" + git(t, repo, "diff") + "\n" + git(t, repo, "status", "--porcelain", "--untracked-files=all")
+}
+
+func TestRevert_Clean(t *testing.T) {
+	repo, base, fwd := integrated(t)
+	res, err := revert(repo, fwd.PatchPath)
+	if err != nil {
+		t.Fatalf("revert: %v", err)
+	}
+	if !res.OK || res.Subcommand != "revert" || strings.Join(res.Files, ",") != "a.txt,b.txt,new.txt,old.txt" {
+		t.Errorf("result = %+v", res)
+	}
+	assertUntouched(t, repo, base) // back to HEAD, nothing staged, nothing untracked
+	if _, err := os.Stat(fwd.PatchPath); err != nil {
+		t.Errorf("the patch file must stay: %v", err)
+	}
+}
+
+func TestRevert_ConflictingEditUntouched(t *testing.T) {
+	repo, _, fwd := integrated(t)
+	write(t, filepath.Join(repo, "b.txt"), "edited after the integrate\n")
+	git(t, repo, "add", "b.txt") // index == worktree, so only the reverse check can refuse
+	before := snapshot(t, repo)
+
+	res, err := revert(repo, fwd.PatchPath)
+	if exitOf(err) != ExitRevertConflictingEdit || kindOf(err) != "revert_conflicting_edit" {
+		t.Fatalf("exit %d kind %q (%v), want %d revert_conflicting_edit", exitOf(err), kindOf(err), err, ExitRevertConflictingEdit)
+	}
+	if !strings.Contains(strings.Join(res.Files, ","), "b.txt") || !strings.Contains(err.Error(), "b.txt") {
+		t.Errorf("the refusal must list the files: %v / %v", res.Files, err)
+	}
+	if after := snapshot(t, repo); after != before {
+		t.Errorf("a refused revert touched the tree:\nbefore %s\nafter  %s", before, after)
+	}
+}
+
+func TestRevert_IndexDiffers(t *testing.T) {
+	repo, _, fwd := integrated(t)
+	write(t, filepath.Join(repo, "a.txt"), "one\nTWO\nthree\nunstaged\n")
+	before := snapshot(t, repo)
+
+	_, err := revert(repo, fwd.PatchPath)
+	if exitOf(err) != ExitRevertIndexDiffers || kindOf(err) != "revert_index_differs" {
+		t.Fatalf("exit %d kind %q (%v), want %d revert_index_differs", exitOf(err), kindOf(err), err, ExitRevertIndexDiffers)
+	}
+	if after := snapshot(t, repo); after != before {
+		t.Errorf("a refused revert touched the index or worktree:\nbefore %s\nafter  %s", before, after)
+	}
+}
+
+func TestRevert_MissingPatch(t *testing.T) {
+	repo, _, _ := integrated(t)
+	before := snapshot(t, repo)
+	for _, p := range []string{"", filepath.Join(repo, ".lets", "cache", "integrate-none.patch"), filepath.Join(repo, ".lets")} {
+		_, err := revert(repo, p)
+		if exitOf(err) != ExitUsage {
+			t.Errorf("--patch %q: exit %d (%v), want %d", p, exitOf(err), err, ExitUsage)
+		}
+	}
+	if after := snapshot(t, repo); after != before {
+		t.Error("a revert without a patch touched the tree")
+	}
+}
+
+func TestRevert_CommittedChunkRefused(t *testing.T) {
+	repo, _, fwd := integrated(t)
+	head := commit(t, repo, "the lead committed the chunk")
+	before := snapshot(t, repo)
+
+	_, err := revert(repo, fwd.PatchPath)
+	if exitOf(err) != ExitRevertConflictingEdit || kindOf(err) != "revert_nothing_staged" {
+		t.Fatalf("exit %d kind %q (%v), want %d revert_nothing_staged", exitOf(err), kindOf(err), err, ExitRevertConflictingEdit)
+	}
+	if after := snapshot(t, repo); after != before {
+		t.Errorf("a refused revert touched committed work:\nbefore %s\nafter  %s", before, after)
+	}
+	assertUntouched(t, repo, head)
+}
+
+func TestRevert_OtherStagedHunksReported(t *testing.T) {
+	requireGit245(t)
+	repo, _ := newRepo(t)
+	var lines []string
+	for i := 1; i <= 20; i++ {
+		lines = append(lines, "line "+strconv.Itoa(i))
+	}
+	long := strings.Join(lines, "\n") + "\n"
+	write(t, filepath.Join(repo, "long.txt"), long)
+	base := commit(t, repo, "long.txt")
+	wt := agentWorktree(t, repo, "worktree-agent-x", base)
+	write(t, filepath.Join(wt, "long.txt"), strings.Replace(long, "line 2\n", "line 2 agent\n", 1))
+	commit(t, wt, "chunk")
+	fwd, err := run(t, repo, Options{From: "worktree-agent-x", Since: base})
+	if err != nil {
+		t.Fatalf("integrate: %v", err)
+	}
+	staged := strings.Replace(long, "line 2\n", "line 2 agent\n", 1)
+	write(t, filepath.Join(repo, "long.txt"), strings.Replace(staged, "line 19\n", "line 19 user\n", 1))
+	git(t, repo, "add", "long.txt") // another hunk, staged in the same file
+
+	_, err = revert(repo, fwd.PatchPath)
+	if exitOf(err) != ExitVerifyMismatch || kindOf(err) != "revert_verify_mismatch" {
+		t.Fatalf("exit %d kind %q (%v), want %d revert_verify_mismatch", exitOf(err), kindOf(err), err, ExitVerifyMismatch)
+	}
+	if !strings.Contains(err.Error(), "reverse WAS applied") || !strings.Contains(err.Error(), "long.txt") {
+		t.Errorf("the 57 text must say the reverse was applied and name the paths: %v", err)
+	}
+	if got, _ := os.ReadFile(filepath.Join(repo, "long.txt")); string(got) != strings.Replace(long, "line 19\n", "line 19 user\n", 1) {
+		t.Errorf("the chunk's hunk must be reversed and the user's kept, got:\n%s", got)
+	}
+}

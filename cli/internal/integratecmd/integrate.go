@@ -37,9 +37,12 @@ import (
 
 // Options is one `lets integrate` call. From is any commit-ish (a branch or a
 // sha); Since must be its ancestor. Run and Chunk name the temp worktree and the
-// patch file, so they are validated before any path is built.
+// patch file, so they are validated before any path is built. Revert with Patch
+// is `--revert --patch`: undo a patch an earlier call applied (Revert).
 type Options struct {
 	From, Since, Run, Chunk string
+	Revert                  bool
+	Patch                   string
 	LockDeadline            time.Duration // zero = defaultLockDeadline
 }
 
@@ -56,6 +59,9 @@ var nameRe = regexp.MustCompile(`^[a-z0-9-]{1,40}$`)
 
 // Run integrates since..from into the caller's tree at root (its git toplevel).
 func Run(ctx context.Context, root string, o Options) (*Result, error) {
+	if o.Revert {
+		return Revert(ctx, root, o)
+	}
 	r := newResult("integrate")
 	if o.From == "" || o.Since == "" {
 		return r, fail(r, &Error{Code: ExitUsage, Kind: "usage", Message: "--from and --since are required"})
@@ -216,6 +222,108 @@ func apply(ctx context.Context, root string, t *temp, o Options, base, head stri
 func reverseApply(ctx context.Context, root, patchPath string) error {
 	_, err := gitOut(ctx, root, "apply", "-R", "--index", "--binary", "--whitespace=nowarn", patchPath)
 	return err
+}
+
+// Revert undoes a rejected chunk's patch in the caller's tree, index and
+// worktree together, in three steps that each stop before touching anything:
+// the patch's paths must have index == worktree (59), a staged change against
+// HEAD (58 revert_nothing_staged - a committed chunk is never undone here), and a
+// reverse that applies cleanly (58); after it the paths must be back to HEAD (57).
+// The patch file stays.
+func Revert(ctx context.Context, root string, o Options) (*Result, error) {
+	r := newResult("revert")
+	if o.Patch == "" || o.From != "" || o.Since != "" {
+		return r, fail(r, &Error{Code: ExitUsage, Kind: "usage", Message: "--revert takes --patch <path> and no --from / --since"})
+	}
+	patch := o.Patch
+	if !filepath.IsAbs(patch) {
+		patch = filepath.Join(root, patch)
+	}
+	if fi, err := os.Stat(patch); err != nil || !fi.Mode().IsRegular() {
+		return r, fail(r, &Error{Code: ExitUsage, Kind: "patch_missing", Message: "--patch " + o.Patch + " is not a readable file", Remediation: "pass the patch_path an integrate call returned"})
+	}
+	r.PatchPath = patch
+	unlock, e := lock(root, o.LockDeadline)
+	if e != nil {
+		return r, fail(r, e)
+	}
+	defer unlock()
+
+	paths, err := patchPaths(ctx, root, patch)
+	if err != nil {
+		return r, fail(r, gitErr("apply --numstat", err))
+	}
+	if len(paths) == 0 {
+		r.OK = true
+		r.step(StepSkip, "the patch touches no path - nothing to revert")
+		return r, nil
+	}
+	r.Files = paths
+	scoped := func(args ...string) []string {
+		return append(append([]string{"--literal-pathspecs"}, args...), append([]string{"--"}, paths...)...)
+	}
+
+	if _, err := gitOut(ctx, root, scoped("diff", "--quiet")...); err != nil {
+		if exitStatus(err) == 1 {
+			return r, fail(r, &Error{Code: ExitRevertIndexDiffers, Kind: "revert_index_differs", Message: "the worktree differs from the index on the patch's paths: " + strings.Join(paths, ", ") + "; nothing was touched", Remediation: "stage or drop those edits, then revert"})
+		}
+		return r, fail(r, gitErr("diff --quiet", err))
+	}
+	r.step(StepOK, "index == worktree on the patch's paths")
+	if _, err := gitOut(ctx, root, scoped("diff", "--cached", "--quiet", "HEAD")...); err == nil {
+		return r, fail(r, &Error{Code: ExitRevertConflictingEdit, Kind: "revert_nothing_staged", Message: "the patch's paths have no staged change against HEAD: " + strings.Join(paths, ", ") + " - the chunk is committed or was never applied; nothing was touched", Remediation: "to undo a committed chunk, git revert that commit"})
+	} else if exitStatus(err) != 1 {
+		return r, fail(r, gitErr("diff --cached --quiet", err))
+	}
+	if _, err := gitOut(ctx, root, "apply", "-R", "--check", "--index", "--binary", "--whitespace=nowarn", patch); err != nil {
+		return r, fail(r, &Error{Code: ExitRevertConflictingEdit, Kind: "revert_conflicting_edit", Message: "the patch no longer reverses cleanly on " + strings.Join(paths, ", ") + " (" + err.Error() + "); nothing was touched", Remediation: "an edit after the integrate overlaps the patch - resolve it by hand"})
+	}
+	if _, err := gitOut(ctx, root, "apply", "-R", "--index", "--binary", "--whitespace=nowarn", patch); err != nil {
+		return r, fail(r, gitErr("apply -R --index", err))
+	}
+	r.step(StepOK, "patch reverse-applied to the index and worktree")
+	_, cachedErr := gitOut(ctx, root, scoped("diff", "--cached", "--quiet", "HEAD")...)
+	_, wtErr := gitOut(ctx, root, scoped("diff", "--quiet", "HEAD")...)
+	if cachedErr != nil || wtErr != nil {
+		return r, fail(r, &Error{Code: ExitVerifyMismatch, Kind: "revert_verify_mismatch", Message: "the reverse WAS applied to the index and worktree; these paths still differ from HEAD (other staged edits?): " + strings.Join(paths, ", "), Remediation: "inspect `git status`; the patch is " + patch})
+	}
+	r.step(StepOK, "the patch's paths are back to HEAD; the patch file stays at "+patch)
+	r.OK = true
+	return r, nil
+}
+
+// patchPaths lists every path a patch touches, both sides of a rename: `git
+// apply --numstat -z` names only a rename's destination, so the forward and the
+// reverse listing are merged. A record with an empty path field (a git that
+// prints the rename as two paths after it) takes the two paths that follow.
+func patchPaths(ctx context.Context, root, patch string) ([]string, error) {
+	var paths []string
+	seen := map[string]bool{}
+	for _, dir := range [][]string{nil, {"-R"}} {
+		out, err := gitRaw(ctx, root, append(append([]string{"apply"}, dir...), "--numstat", "-z", patch)...)
+		if err != nil {
+			return nil, err
+		}
+		fields := strings.Split(string(out), "\x00")
+		for i := 0; i < len(fields); i++ {
+			parts := strings.SplitN(fields[i], "\t", 3)
+			if len(parts) != 3 {
+				continue
+			}
+			names := []string{parts[2]}
+			if parts[2] == "" && i+2 < len(fields) {
+				names = []string{fields[i+1], fields[i+2]}
+				i += 2
+			}
+			for _, n := range names {
+				if n != "" && !seen[n] {
+					seen[n] = true
+					paths = append(paths, n)
+				}
+			}
+		}
+	}
+	return paths, nil
 }
 
 // temp is the temporary worktree of one run / chunk and its owner marker.

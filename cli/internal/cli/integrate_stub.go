@@ -19,9 +19,11 @@ func NewIntegrateCmd() *cobra.Command {
 		Use: "integrate", Short: "Integrate an isolated implementer's commits (not supported on this platform)", SilenceUsage: true, SilenceErrors: true,
 		RunE: func(*cobra.Command, []string) error { return errIntegrateUnsupported },
 	}
-	for _, name := range []string{"from", "since", "run", "chunk"} {
+	for _, name := range []string{"from", "since", "run", "chunk", "patch"} {
 		c.Flags().String(name, "", "")
 	}
-	c.Flags().Bool("json", false, "")
+	for _, name := range []string{"json", "revert"} {
+		c.Flags().Bool(name, false, "")
+	}
 	return c
 }
