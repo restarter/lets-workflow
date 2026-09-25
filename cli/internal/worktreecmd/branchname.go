@@ -4,15 +4,19 @@ package worktreecmd
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/restarter/lets-workflow/cli/internal/gitutil"
 	"github.com/restarter/lets-workflow/cli/internal/initcmd"
 	"github.com/restarter/lets-workflow/cli/internal/letsconfig"
 	"github.com/restarter/lets-workflow/cli/internal/taskid"
+	"github.com/restarter/lets-workflow/cli/internal/taskstate"
 	"github.com/restarter/lets-workflow/cli/internal/trackeradapter"
 )
 
@@ -120,7 +124,103 @@ func BranchName(ctx context.Context, dir string, o BranchNameOptions) (*BranchNa
 	if exec.CommandContext(ctx, "git", "check-ref-format", "--branch", name).Run() != nil {
 		return fail(&Error{Code: ExitUsage, Kind: "branch_name_invalid", Message: fmt.Sprintf("%q is not a valid branch name", name)})
 	}
-	res.Branch, res.Slug, res.Template, res.Source = name, slug, tmpl, source
+	wtDir := dirName(o.Task, slug)
+	var dirErr *Error
+	if err := ValidateName(ctx, wtDir); err != nil {
+		dirErr = &Error{Code: ExitUsage, Kind: "dir_name_invalid", Message: fmt.Sprintf("task %q renders the worktree dir %q, which is not a valid worktree name", o.Task, wtDir), Cause: err}
+	} else if other := dirOccupant(ctx, mainRoot, filepath.Join(mainRoot, ".worktrees", wtDir), conv, name, o.Task); other != "" && other != o.Task {
+		dirErr = &Error{Code: ExitWorktreeExists, Kind: "dir_collision",
+			Message:     fmt.Sprintf("worktree dir %q is already held by task %q, not by task %q", wtDir, other, o.Task),
+			Remediation: "remove or rename the existing worktree, then retry"}
+	}
+	if dirErr != nil {
+		// Only a worktree render creates the dir; a plain render (take-task on a
+		// feature branch) keeps its branch and reports the dir problem as a warning.
+		if o.Worktree {
+			return fail(dirErr)
+		}
+		res.Steps = append(res.Steps, Step{Status: StepWarn, Message: dirErr.Kind + ": " + dirErr.Message})
+		wtDir = ""
+	}
+	res.Branch, res.Dir, res.Slug, res.Template, res.Source = name, wtDir, slug, tmpl, source
 	res.OK = true
 	return res, nil
+}
+
+// maxDirStem bounds the lowered stem of a hashed dir: 51 + `-` + 12 hex = 64,
+// nameRE's limit.
+const maxDirStem = 51
+
+// dirHash is the suffix of a hashed dir: the first 12 hex (48 bits) of sha256 of
+// the original task id. A package var so a test can force two ids onto one suffix.
+var dirHash = func(id string) string {
+	sum := sha256.Sum256([]byte(id))
+	return hex.EncodeToString(sum[:])[:12]
+}
+
+// dirName derives the worktree dir for a task: `<id>-<slug>` unchanged when it is
+// already a valid name for nameRE. Otherwise (an upper-case id, a character outside
+// the name class, or longer than 64) the lowered form, every other character mapped
+// to `-`, cut to 51 at a `-` where possible, plus `-` and dirHash(id) - so two ids
+// that lower to the same text (PROJ-42 and proj-42) still get distinct dirs. The
+// branch and the task id keep the original spelling; only the directory changes.
+// The caller validates the result.
+func dirName(id, slug string) string {
+	base := id + "-" + slug
+	if nameRE.MatchString(base) {
+		return base
+	}
+	var b strings.Builder
+	for _, r := range strings.ToLower(base) {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '.' || r == '_' || r == '-' {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('-')
+		}
+	}
+	stem := b.String()
+	if len(stem) > maxDirStem {
+		stem = stem[:maxDirStem]
+		if i := strings.LastIndexByte(stem, '-'); i > 0 {
+			stem = stem[:i]
+		}
+	}
+	return strings.TrimRight(stem, "-") + "-" + dirHash(id)
+}
+
+// dirOccupant returns the task id held by the worktree already at path: its
+// task-state `task:` line, else the id the convention reads off its branch. ""
+// when nothing is there, it is not a worktree, or no id is readable (detached
+// HEAD, no task-state, a branch outside the convention) - `lets worktree create`
+// then refuses the path itself (worktree_path_exists). An occupant on selfBranch,
+// the branch this task renders, is selfID: a greedy id pattern can read a longer
+// id off that branch (`PROJ-8-fix` from `worktree-PROJ-8-fix-login`).
+func dirOccupant(ctx context.Context, mainRoot, path string, conv trackeradapter.Convention, selfBranch, selfID string) string {
+	if _, err := os.Lstat(path); err != nil {
+		return ""
+	}
+	out, err := exec.CommandContext(ctx, "git", "-C", path, "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return ""
+	}
+	top, err1 := filepath.EvalSymlinks(strings.TrimSpace(string(out)))
+	here, err2 := filepath.EvalSymlinks(path)
+	if err1 != nil || err2 != nil || top != here {
+		return "" // a plain directory inside the main checkout, not a worktree
+	}
+	branch := currentBranchOf(ctx, path)
+	slug, ok := taskstate.Slug(branch)
+	if !ok {
+		return ""
+	}
+	if st, err := taskstate.Read(filepath.Join(mainRoot, ".lets"), slug); err == nil && taskid.Valid(st.Task) {
+		return st.Task
+	}
+	if branch == selfBranch {
+		return selfID
+	}
+	if id, _, ok := conv.ParseBranch(branch, trackeradapter.Created); ok && taskid.Valid(id) {
+		return id
+	}
+	return ""
 }
