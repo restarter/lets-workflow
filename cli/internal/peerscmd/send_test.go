@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/restarter/lets-workflow/cli/internal/orcacmd"
 )
 
 func TestFrame_MsgIDEntropy(t *testing.T) {
@@ -382,5 +384,82 @@ func TestFrame_NamelessSender(t *testing.T) {
 	claudeHome(t, []regRow{{1, sidMain, "MAIN-PWA", root}})
 	if res, err := Frame(context.Background(), FrameOptions{Cwd: root, Session: sidWork, ToSession: sidMain, Kind: "tell"}); err != nil || !res.OK {
 		t.Fatalf("an unregistered sender must frame: %+v %v", res, err)
+	}
+}
+
+// flipOps lists the target as idle until a send was tried, then as working: the
+// re-check after a stale-handle send refuses, so the one typed attempt is all there is.
+type flipOps struct {
+	*fakeOps
+	sent   bool
+	listed int // Terminals calls after the send
+}
+
+func (f *flipOps) Send(ctx context.Context, handle, text string) (orcacmd.Receipt, *orcacmd.Failure) {
+	f.sent = true
+	return f.fakeOps.Send(ctx, handle, text)
+}
+
+func (f *flipOps) Terminals(ctx context.Context) ([]orcaTerm, *orcacmd.Failure) {
+	terms, fail := f.fakeOps.Terminals(ctx)
+	if f.sent {
+		f.listed++
+		for i := range terms {
+			terms[i].State = "working"
+		}
+	}
+	return terms, fail
+}
+
+// tellMidTurnPeer frames and tells sidFable over Orca through the ops opsFor builds
+// for the repo it creates.
+func tellMidTurnPeer(t *testing.T, opsFor func(repo string) orcaOps) (*TellResult, error) {
+	t.Helper()
+	fastLoops(t)
+	repo := repoWithLets(t, "orca")
+	home := claudeHome(t, []regRow{{101, sidMain, "MAIN", repo}, {102, sidFable, "MAIN-FABLE", repo}})
+	settledTranscript(t, home, repo, sidFable)
+	plantRole(t, repo, sidFable, "role: peer\npid: 102\norca_terminal: term_fable\nset: x\n")
+	useOrca(t, opsFor(repo))
+	fr, err := Frame(context.Background(), FrameOptions{Cwd: repo, Session: sidMain, ToSession: sidFable, Kind: "ask"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(fr.HandoffPath, []byte(fr.Header+"\nq"), 0o600)
+	return Tell(context.Background(), TellOptions{Cwd: repo, ToSession: sidFable, MsgID: fr.MsgID})
+}
+
+// A typed attempt that ends in peer_not_ready (the stale-handle retry was refused)
+// may already have reached the peer: no SendMessage fallback on top of it - that
+// would deliver the message twice. It reads as "delivery unproven, never resend".
+func TestTell_NoClaudeFallbackAfterAttempt(t *testing.T) {
+	var ops *flipOps
+	res, err := tellMidTurnPeer(t, func(repo string) orcaOps {
+		ops = &flipOps{fakeOps: &fakeOps{terms: []orcaTerm{{Handle: "term_fable", Path: repo, AgentType: "claude", State: "done"}}, screen: idleScreen,
+			sendResult: []*orcacmd.Failure{{Reason: orcacmd.ReasonHandleStale, Verb: "terminal send"}}}}
+		return ops
+	})
+	var e *Error
+	if !errors.As(err, &e) || e.Kind != "not_delivered" {
+		t.Fatalf("want not_delivered, got %+v %v", res, err)
+	}
+	if res.Reason != "peer_not_ready" || !strings.HasPrefix(res.State, "after_stale_handle") || res.ClaudeFallbackAllowed || res.Text != "" {
+		t.Errorf("after a typed attempt the fallback must stay closed: %+v", res)
+	}
+	if !ops.sent || ops.listed == 0 {
+		t.Errorf("the test never reached a typed attempt and its re-check (sent=%v, re-listed %d)", ops.sent, ops.listed)
+	}
+}
+
+// Control: peer_not_ready with nothing typed (the peer is mid-turn) still offers the
+// fallback, with the text.
+func TestTell_ClaudeFallbackWhenNothingTyped(t *testing.T) {
+	var ops *fakeOps
+	res, err := tellMidTurnPeer(t, func(repo string) orcaOps {
+		ops = &fakeOps{terms: []orcaTerm{{Handle: "term_fable", Path: repo, AgentType: "claude", State: "working"}}, screen: idleScreen}
+		return ops
+	})
+	if err != nil || res.Reason != "peer_not_ready" || !res.ClaudeFallbackAllowed || res.Text == "" || len(ops.sends) != 0 {
+		t.Errorf("nothing typed: the fallback must be offered: %+v %v", res, err)
 	}
 }

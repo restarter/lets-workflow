@@ -115,6 +115,19 @@ func lintOrcFiles(files map[string]string) []string {
 		if rel == "commands/peer.md" && (strings.Contains(body, "SendMessage") || strings.Contains(body, "lets peers")) {
 			bad = append(bad, rel+": the alias delegates to the orc skill and sends nothing itself")
 		}
+		// 6: the SendMessage fallback is never silent (lets-rry3c): its Step 5 row is MANDATORY
+		// and names the line to print
+		if rel == "skills/orc/SKILL.md" {
+			row := ""
+			for _, line := range strings.Split(body, "\n") {
+				if strings.HasPrefix(line, "| `reason=peer_not_ready`, `claude_fallback_allowed=true` |") {
+					row = line
+				}
+			}
+			if !strings.Contains(row, "**MANDATORY:**") || !strings.Contains(row, "delivered via SendMessage fallback") {
+				bad = append(bad, rel+": the peer_not_ready fallback row must be **MANDATORY:** and print `delivered via SendMessage fallback`")
+			}
+		}
 	}
 	return append(bad, lintOrcOffers(files)...)
 }
@@ -220,6 +233,14 @@ func TestOrcLint(t *testing.T) {
 		}
 		c[rel] += "\n" + add + "\n"
 		return lintOrcFiles(c)
+	}
+	silent := map[string]string{}
+	for k, v := range files {
+		silent[k] = v
+	}
+	silent["skills/orc/SKILL.md"] = strings.Replace(files["skills/orc/SKILL.md"], "delivered via SendMessage fallback", "sent", 1)
+	if len(lintOrcFiles(silent)) == 0 {
+		t.Error("mutation: a fallback row without its printed line must fail the lint")
 	}
 	if len(mutate("commands/done.md", "lets peers tell x")) == 0 {
 		t.Error("mutation: a peer send in done.md must fail the lint")

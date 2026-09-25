@@ -106,13 +106,13 @@ Write `header` + newline + the message with the Write tool to `handoff_path` (ne
 |---|---|
 | `delivered=true` (route orca) | report `receipt` and `observed` honestly; `observed=false` = "input accepted, not seen in the peer's transcript". Never resend |
 | `reason=claude_transport_model_send` | `SendMessage({to: "<name>", message: <text from the envelope>, notify_when_idle: <true for ask, false for ping/tell>})` - Go already guaranteed the name is unique across the whole registry |
-| `reason=peer_not_ready`, `claude_fallback_allowed=true` | nothing was typed; send the envelope's `text` with the `SendMessage` form above |
+| `reason=peer_not_ready`, `claude_fallback_allowed=true` | **MANDATORY:** nothing was typed; send the envelope's `text` with the `SendMessage` form above, then print, as its own line, `delivered via SendMessage fallback - orca refused: <reason> (<state>)` - the fallback is never silent. A standing lead is often mid-turn (`turn_in_progress`), so this fallback is the normal path to it, not an error |
 | `delivered=false`, no `text`, `note` present | **MANDATORY:** nothing was typed - the handoff is kept. Print, as its own line, `NOT DELIVERED - <reason> (<state>) - nothing was typed. Retry with the same msgid: /lets:orc <verb> ...` |
 | `delivered=false`, no `text`, `note` absent | **MANDATORY:** something WAS typed but delivery could not be proven - the handoff is consumed, so this is NOT retryable with the same msgid. Print, as its own line, `NOT DELIVERED - <reason> (<state>) - delivery unproven, the text may have reached the peer. Not retried - never resend.` |
 
 In both lines, `state` is empty whenever there was no peer at all (`reason=peer_unreachable` with an unknown target) - omit the parenthetical AND its leading space in that case (`NOT DELIVERED - <reason> - ...`), never print a bare `()`.
 
-Both MANDATORY lines are printed even under `footer=none` - they are not a footer, they are the result. Never resend by yourself; never report a send that did not happen.
+Every MANDATORY line is printed even under `footer=none` - they are not a footer, they are the result. Never resend by yourself; never report a send that did not happen.
 
 ## Step 6: ask follow-up
 

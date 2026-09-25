@@ -230,3 +230,19 @@ func TestTail_ByName(t *testing.T) {
 		t.Error("a name and a session id together must be refused")
 	}
 }
+
+// A reply to a message delivered through SendMessage: the receiver's transcript
+// holds Claude Code's delivered record (prefix line, wrapper, header), and
+// --since-message finds it - before lets-rry3c it stayed "not seen yet".
+func TestTail_SinceMessageSeesDeliveredSendMessage(t *testing.T) {
+	repo := repoWithLets(t, "")
+	home := claudeHome(t, []regRow{{101, sidMain, "MAIN", repo}, {103, sidWork, "W1", repo}})
+	writeTranscript(t, home, repo, sidWork,
+		deliveredLine(t),
+		assistantText("2026-09-25T12:15:30Z", "the answer"),
+		turnEnd("2026-09-25T12:15:31Z"))
+	res, err := Tail(context.Background(), TailOptions{Cwd: repo, ToSession: sidWork, SinceMessage: deliveredID, SentAt: "2026-09-25T12:15:21Z"})
+	if err != nil || len(res.Turns) != 1 || res.Turns[0].Text != "the answer" {
+		t.Errorf("--since-message must see the delivered message and return the reply: %+v %v", res, err)
+	}
+}
