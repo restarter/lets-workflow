@@ -393,3 +393,133 @@ func atomicWrite(path, content string) error {
 	}
 	return os.Rename(name, path)
 }
+
+// Liveness is a session guard's verdict on one session id, never guessed.
+type Liveness int
+
+const (
+	LiveUnknown Liveness = iota
+	LiveAlive
+	LiveDead
+)
+
+// SessionOp is what a session: write means to do.
+type SessionOp int
+
+const (
+	// OpRefresh records THIS session's start (a new session, SessionStart startup).
+	OpRefresh SessionOp = iota
+	// OpCarry moves the recorded boundary to this session's re-minted id (/clear).
+	OpCarry
+)
+
+// SessionGuard protects the session: line from a writer that does not own it - a
+// teammate pane in the same worktree runs the same SessionStart hook. Every
+// callback is optional: a nil Liveness keeps the unguarded behaviour (no registry
+// to judge by), a nil Rotated proves no rotation, a nil Lead means no recorded lead.
+type SessionGuard struct {
+	// Liveness judges a recorded session id.
+	Liveness func(sid string) Liveness
+	// Rotated names the session id a recorded one was re-minted into in the same
+	// process (/clear, an in-session /resume), when that can be proven.
+	Rotated func(sid string) (string, bool)
+	// Lead reports whether sid may write here at all - set only in a team worktree
+	// with a recorded lead; holder names that lead for the refusal.
+	Lead func(sid string) (ok bool, holder string)
+}
+
+var (
+	// ErrSessionHeld: the session: line belongs to another session (or its owner
+	// cannot be judged); nothing is written.
+	ErrSessionHeld = errors.New("session held by another session")
+	// ErrSessionUnchanged: the line already names this session; nothing to write.
+	ErrSessionUnchanged = errors.New("session unchanged")
+)
+
+// Held reasons.
+const (
+	HeldLive           = "live"            // the recorded session runs
+	HeldUnknown        = "unknown"         // the registry cannot prove it dead
+	HeldRotatedForeign = "rotated_foreign" // re-minted into another live session
+	HeldLead           = "lead"            // a team worktree whose recorded lead is someone else
+	HeldNoProof        = "no_proof"        // a carry with no proof the recorded id became this one
+)
+
+// HeldError is ErrSessionHeld with who holds the line and why.
+type HeldError struct {
+	Holder string // a session id, or the lead's label
+	Reason string // Held*
+}
+
+func (e *HeldError) Error() string { return fmt.Sprintf("session held (%s) by %s", e.Reason, e.Holder) }
+func (e *HeldError) Unwrap() error { return ErrSessionHeld }
+
+// StoredSession is the session id of a `session: <sha> <sid>` line; "" when the
+// line is absent or carries no well-formed id.
+func StoredSession(s State) string {
+	f := strings.Fields(s.Session)
+	if len(f) != 2 || !sessionRe.MatchString(s.Session) {
+		return ""
+	}
+	return f[1]
+}
+
+// MaySetSession decides whether own may write the session: line of cur. It returns
+// nil (write), ErrSessionUnchanged, or a *HeldError (wraps ErrSessionHeld).
+//
+//   - Refresh: allowed when no well-formed session is recorded, or the recorded
+//     session is dead and was not re-minted into another session, or it was
+//     re-minted into own. Recorded == own is unchanged; live, unknown, or re-minted
+//     into a foreign session is held.
+//   - Carry: allowed only when Rotated proves the recorded id became own; recorded
+//     == own (or nothing recorded) is unchanged; anything else is held (no_proof,
+//     or live when a foreign holder still runs).
+//
+// The Lead check, when set, must pass first.
+func MaySetSession(cur State, exists bool, own string, op SessionOp, g SessionGuard) error {
+	if g.Lead != nil {
+		if ok, holder := g.Lead(own); !ok {
+			return &HeldError{Holder: holder, Reason: HeldLead}
+		}
+	}
+	stored := ""
+	if exists {
+		stored = StoredSession(cur)
+	}
+	switch {
+	case stored == own:
+		return ErrSessionUnchanged
+	case stored == "" && op == OpCarry:
+		return ErrSessionUnchanged
+	case stored == "":
+		return nil
+	}
+	rotatedTo := ""
+	if g.Rotated != nil {
+		rotatedTo, _ = g.Rotated(stored)
+	}
+	if op == OpCarry {
+		if rotatedTo == own {
+			return nil
+		}
+		if g.Liveness != nil && g.Liveness(stored) == LiveAlive {
+			return &HeldError{Holder: stored, Reason: HeldLive}
+		}
+		return &HeldError{Holder: stored, Reason: HeldNoProof}
+	}
+	switch {
+	case rotatedTo == own:
+		return nil
+	case rotatedTo != "":
+		return &HeldError{Holder: rotatedTo, Reason: HeldRotatedForeign}
+	case g.Liveness == nil:
+		return nil // no registry to judge by: the unguarded behaviour
+	}
+	switch g.Liveness(stored) {
+	case LiveDead:
+		return nil
+	case LiveAlive:
+		return &HeldError{Holder: stored, Reason: HeldLive}
+	}
+	return &HeldError{Holder: stored, Reason: HeldUnknown}
+}
