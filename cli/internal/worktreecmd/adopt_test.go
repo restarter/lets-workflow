@@ -234,3 +234,121 @@ func TestAdoptTask_DetachedHeadWritesNothing(t *testing.T) {
 		t.Errorf("detached HEAD wrote %v", matches)
 	}
 }
+
+// teamAdoptRepo is adoptRepo with the worktree directory named apart from its
+// branch. tracker "fake" runs the shared partial-adapter fixture from a temporary
+// plugin root, with a board whose id grammar accepts `_` - a custom grammar under
+// which even `team_backend-api` parses as an id, so the team_ prefix must win first.
+func teamAdoptRepo(t *testing.T, tracker, branch, dir string) (repo, wt, pluginRoot string) {
+	t.Helper()
+	repo = initRepo(t)
+	mustMkdir(t, filepath.Join(repo, ".lets", "sessions"))
+	switch tracker {
+	case "beads":
+		mustWrite(t, filepath.Join(repo, ".beads", ".env"), "X=1", 0o600)
+		installAdapter(t, repo, "beads", beadsConvention)
+	case "fake":
+		fake, err := os.ReadFile(filepath.Join("..", "initcmd", "testdata", "tracker-fake.md"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		pluginRoot = realTempDir(t)
+		mustWrite(t, filepath.Join(pluginRoot, ".claude-plugin", "plugin.json"), "{}", 0o644)
+		mustWrite(t, filepath.Join(pluginRoot, "rules", "tracker-fake.md"), string(fake), 0o644)
+		mustWrite(t, filepath.Join(repo, ".lets", ".env"), "LETS_TRACKER=fake\n", 0o644)
+		mustWrite(t, filepath.Join(repo, ".fake", "token.json"), "{}", 0o600)
+		mustWrite(t, filepath.Join(repo, ".claude", "rules", "tracker-fake.board.md"),
+			"# board\n\n## Worktree\n\nid: `[a-z_-]+`.\naccept: `{id}`.\n", 0o644)
+	}
+	wt = filepath.Join(realTempDir(t), dir)
+	runIn(t, repo, "git", "worktree", "add", "-q", "-b", branch, wt)
+	return repo, wt, pluginRoot
+}
+
+func requireNoTaskFile(t *testing.T, label, repo, branch string) {
+	t.Helper()
+	if data, err := os.ReadFile(taskFile(repo, branch)); !os.IsNotExist(err) {
+		t.Errorf("%s: a team worktree must write no task-state file, got err=%v:\n%s", label, err, data)
+	}
+}
+
+// A team worktree (area backend-api) derives no task id from a team_ branch or
+// directory, under beads and under the fake adapter's custom grammar. The control
+// row proves the hand-named `snake-backend-api` DOES derive an id without the
+// prefix (beads: id snake-backend + slug api - the adopt trap), so each mixed row
+// would record a task if the prefix check were missing; under fake the Go-created
+// row would too.
+func TestAdopt_TeamPrefixDerivesNoTask(t *testing.T) {
+	for tracker, controlID := range map[string]string{"beads": "snake-backend", "fake": "snake-backend-api"} {
+		_, wt, pr := teamAdoptRepo(t, tracker, "snake-backend-api", "snake-backend-api")
+		res, err := worktreecmd.Adopt(context.Background(), wt, worktreecmd.AdoptOptions{PluginRoot: pr})
+		if err != nil || res.Task == nil || res.Task.ID != controlID {
+			t.Fatalf("%s control: want id %s, err=%v task=%+v steps=%+v", tracker, controlID, err, res.Task, res.Steps)
+		}
+		for _, c := range []struct{ branch, dir string }{
+			{"team_backend-api", "team_backend-api"},  // Go-created: dir and branch
+			{"snake-backend-api", "team_backend-api"}, // dir only
+			{"team_backend-api", "snake-backend-api"}, // branch only
+		} {
+			label := tracker + " " + c.branch + " in " + c.dir
+			repo, wt, pr := teamAdoptRepo(t, tracker, c.branch, c.dir)
+			res, err := worktreecmd.Adopt(context.Background(), wt, worktreecmd.AdoptOptions{PluginRoot: pr})
+			if err != nil || !res.OK || res.Task != nil || !stepsContain(res.Steps, "team_worktree") {
+				t.Errorf("%s: err=%v task=%+v steps=%+v", label, err, res.Task, res.Steps)
+			}
+			requireNoTaskFile(t, label, repo, c.branch)
+		}
+	}
+}
+
+// A team file that claims the worktree derives no id; a team file that claims it
+// but is not clean (stale git_dir, name mismatch) derives none either and warns
+// naming the file - fail-safe, never a fall-through to the convention. An explicit
+// --task still records: the skip is on derivation only.
+func TestAdopt_TeamFileErrorDerivesNoTask(t *testing.T) {
+	for _, c := range []struct{ label, team, file, gitDir, step string }{
+		{"hit", "snake", "snake.md", "", "team_worktree"},
+		{"stale git_dir", "snake", "snake.md", "/nowhere/.git/worktrees/gone", "team_file_error"},
+		{"name mismatch", "frog", "snake.md", "", "team_file_error"},
+	} {
+		repo, wt, _ := teamAdoptRepo(t, "beads", "snake-backend-api", "snake-backend-api")
+		gitDir := c.gitDir
+		if gitDir == "" {
+			gitDir = strings.TrimSpace(gitOutput(t, wt, "rev-parse", "--absolute-git-dir"))
+		}
+		mustWrite(t, filepath.Join(repo, ".lets", "teams", c.file),
+			"---\nteam: \""+c.team+"\"\nworktree: \""+wt+"\"\ngit_dir: \""+gitDir+"\"\n---\n", 0o644)
+		res, err := worktreecmd.Adopt(context.Background(), wt, worktreecmd.AdoptOptions{})
+		if err != nil || !res.OK || res.Task != nil || !stepsContain(res.Steps, c.step) {
+			t.Errorf("%s: err=%v task=%+v steps=%+v", c.label, err, res.Task, res.Steps)
+		}
+		if c.step == "team_file_error" && !stepsContain(res.Steps, c.file) {
+			t.Errorf("%s: the warn step must name %s: %+v", c.label, c.file, res.Steps)
+		}
+		requireNoTaskFile(t, c.label, repo, "snake-backend-api")
+		if c.label == "hit" {
+			res, err = worktreecmd.Adopt(context.Background(), wt, worktreecmd.AdoptOptions{Task: "lets-abc"})
+			if err != nil || res.Task == nil || res.Task.ID != "lets-abc" {
+				t.Errorf("explicit --task in a team worktree: err=%v task=%+v", err, res.Task)
+			}
+		}
+	}
+}
+
+// One broken team file that claims another worktree does not affect this one: the
+// convention still derives the id, and the file is named in a warn step.
+func TestAdopt_UnrelatedMalformedIgnored(t *testing.T) {
+	repo, wt, _ := teamAdoptRepo(t, "beads", "snake-backend-api", "snake-backend-api")
+	mustWrite(t, filepath.Join(repo, ".lets", "teams", "broken.md"), "---\nteam: \"frog\nworktree: /elsewhere\n", 0o644)
+	mustWrite(t, filepath.Join(repo, ".lets", "teams", "notes.md"), "# notes, not a team file\n", 0o644)
+	res, err := worktreecmd.Adopt(context.Background(), wt, worktreecmd.AdoptOptions{})
+	if err != nil || res.Task == nil || res.Task.ID != "snake-backend" {
+		t.Fatalf("err=%v task=%+v steps=%+v", err, res.Task, res.Steps)
+	}
+	if !stepsContain(res.Steps, "broken.md") || stepsContain(res.Steps, "notes.md") || stepsContain(res.Steps, "team_") {
+		t.Errorf("steps=%+v, want one warn naming broken.md and no team skip", res.Steps)
+	}
+	if got := readTask(t, repo, "snake-backend-api"); !strings.Contains(got, "task: snake-backend") {
+		t.Errorf("task file:\n%s", got)
+	}
+}
