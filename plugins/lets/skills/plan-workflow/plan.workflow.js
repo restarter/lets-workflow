@@ -269,6 +269,7 @@ CHOSEN ARCHITECTURE:
 ${JSON.stringify(winnerArch, null, 2)}`
 }
 
+// The Risk rule in planPrompt + planReviewPrompt: KEEP IN SYNC with plan.md Step 9 (Plan Format + Plan Quality Gates).
 function planPrompt(winnerArch, findings) {
   return `ultrathink
 
@@ -279,7 +280,7 @@ MODE: plan (write the implementation plan)
 GOAL: ${goal}
 ${RUBRIC_BLOCK}
 ${TASK_BLOCK}
-The judged winner is approach ${winnerArch.approach} (${winnerArch.name}). Write a detailed, bite-sized implementation plan in MARKDOWN for it, folding in the evaluation findings below. Each task 15-60 min, exact file paths, complete (no TODO placeholders), a verification step per task, and a commit point per logical unit.
+The judged winner is approach ${winnerArch.approach} (${winnerArch.name}). Write a detailed, bite-sized implementation plan in MARKDOWN for it, folding in the evaluation findings below. Each task 15-60 min, exact file paths, complete (no TODO placeholders), a verification step per task, and a commit point per logical unit. Every task that carries a commit point states **Risk:** high|low directly under its heading - high when it holds a gate, fail-closed logic, security logic or git-destructive logic, low otherwise; /lets:execute reads a missing Risk line as high.
 
 If the evaluation findings (especially blockers) show the chosen architecture is wrong, you MAY revise or abandon it - but you MUST report it: set delivered_approach (the approach id you actually implement, or "revised" for a hybrid/inversion), diverged_from_winner (true if the plan departs from the judged winner ${winnerArch.approach}), and divergence_reason (one sentence, or null). Return the plan as plan_markdown.
 
@@ -300,7 +301,7 @@ MODE: plan (review the written plan)
 GOAL: ${goal}
 ${RUBRIC_BLOCK}
 ${TASK_BLOCK}
-Review this IMPLEMENTATION PLAN for quality, like /lets:review --plan. Check: every task is 15-60 min; code snippets are complete (no TODO/placeholder); file paths are exact and plausible; every task has a verification step; every logical unit has a commit point; ordering is logical; edge cases covered; the plan honors the RUBRIC. Grep the codebase to verify claims about existing code. Return verdict (APPROVED | NEEDS REVISION) and concrete findings (issue + fix + severity).
+Review this IMPLEMENTATION PLAN for quality, like /lets:review --plan. Check: every task is 15-60 min; code snippets are complete (no TODO/placeholder); file paths are exact and plausible; every task has a verification step; every logical unit has a commit point; every task with a commit point states **Risk:** high|low, and high covers every gate, fail-closed, security or git-destructive change (a missing Risk line is read as high); ordering is logical; edge cases covered; the plan honors the RUBRIC. Grep the codebase to verify claims about existing code. Return verdict (APPROVED | NEEDS REVISION) and concrete findings (issue + fix + severity).
 
 PLAN:
 ${planMd}`

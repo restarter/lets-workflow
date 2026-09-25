@@ -233,7 +233,7 @@ AskUserQuestion(
 - **Straight-through** -> Step 5 (native plan mode); after the plan-mode approval, implement all tasks with NO per-task pause and `/lets:commit` at each plan commit point without re-asking.
 - **Step-by-step** -> Step 5 (native plan mode); after the plan-mode approval, implement one task, pause for user review before the next, and confirm each `/lets:commit`.
 - **Auto** -> proceed exactly as `--auto` (Step 5's `--auto` behavior + pipeline-state marker + execute-blocked notify). **Guard:** if on `$LETS_MERGE_BRANCH`, REFUSE Auto here too (same rule as Step 1's `--auto` refuse - AUTO MODE never edits the merge-branch); tell the user to pick step-by-step / straight-through or take a feature branch.
-- **Implementers** -> do NOT enter native plan mode: Step 4.6, then Step 5-D. `/lets:team run` remains its own entry point for several *tracker* tasks; this locus runs one *plan*.
+- **Implementers** -> do NOT enter native plan mode: Step 4.6, Step 4.7, then Step 5-D. `/lets:team` manages a standing team; parallel implementation of a plan runs here, in the parallel shape.
 
 (A remembered default / `LETS_EXECUTE_MODE` to skip the picker on every run is a deferred follow-up - this ships the picker + flag shortcuts only.)
 
@@ -251,25 +251,84 @@ Everything here is derived from the plan's existing `### Task N` sections - thei
 
 Chunk ids are `c1`, `c2`, ... in plan order. A chunk's **allowlist** is the union of EVERY path its tasks' Create/Modify items name - one item may name several (`Modify: a.md (:10) and b.md (:20)`), and taking only the first drops a planned file. A target that cannot be read as a path unambiguously refuses delegation (below).
 
+A chunk's **Risk** is `high` when any of its tasks says `**Risk:** high` or its commit task has no `**Risk:**` line - missing = high; otherwise `low`. Review depth follows it.
+
+**Files audit - a GATE.** Every path a task's step text creates, edits, renames or deletes must appear in that task's `**Files:**` (a path named only to read or cite is not a touch). Resolve the Files: lines first:
+
+- expand `{a,b}` brace sets (`memberscmd/{members.go,lead.go}` -> two paths);
+- a bare name (no `/`) inherits the directory of the previous path on the same Files line (`info.go`, `info_test.go` -> both in `info.go`'s directory); with no previous path on the line it is a repo-root path (`CLAUDE.md`);
+- a task's `Files add:` Amendment lines count as its Files.
+
+Only a FULL path a step's text touches that is still missing from Files after this expansion refuses delegation (below), naming each task and path - it would put the implementer outside its allowlist, a certain deviation; fixing the plan's Files: lines, or `/lets:plan`, clears it. A name that cannot be resolved, or resolves ambiguously, is a warning in the preview's `### Warnings` block, never a refusal.
+
+**Removed-symbol check - a WARNING only.** Best-effort: for each symbol (function, type, flag, file, heading) a commit point's text removes or renames, grep the text of every LATER commit point for it. A later use is listed as a warning in the Start preview; it never refuses delegation - a grep over prose cannot prove a use.
+
+**Anchor check against BASE - a WARNING only.** `BASE` = `git rev-parse HEAD` now. Mechanically check every `file:line` anchor the plan names (the line still holds what the plan says it holds), every pin counter (a count the plan or its tests fix, e.g. "exactly 3 Review gates" - count it in the file) and every path a Verify command names (it exists, or a task creates it). The checker is an explorer already live for this run or team, through `member-run` (`op=next`, `role=lets:explorer`), when there is one - never spawned for this, nothing is spawned before Start - else this session inline. A mismatch is a warning listed in the Start preview; it adds no gate and no option.
+
+**CI checks.** Read the repo's CI workflow files (e.g. `.github/workflows/*.yml`) and the Makefile targets they call, and take the commands CI runs on a change (e.g. `make build`, `make test`, `make lint`). They go into every chunk brief as `CI CHECKS:`. No CI workflow -> the brief's list reads `none found`, and the Start preview's warnings say so.
+
 **2. Group chunks.** A caller task is a barrier: nothing before it may still be open when it runs, and nothing after it starts before it is done. Within each stretch between barriers, two chunks share a group when their allowlists share a path, directly or through another chunk of the stretch. Groups keep plan order.
 
-**3. Show the split** - in the Start gate itself, as the `preview` of its Start option (5-D.2), so the user approves the split they are looking at (a table printed as prose before a gate is skipped in practice). Every task exactly once:
+**3. Show the split** - in the Start gate itself, in the `preview` of its Start option after the Step 4.7 launch plan (5-D.2), so the user approves the split they are looking at (a table printed as prose before a gate is skipped in practice). Every task exactly once, then the warnings:
 
 ```
 ### Plan split
 
-| Task | Owner    | Group | Allowlist             |
-|------|----------|-------|-----------------------|
-| 0    | caller   | -     | none                  |
-| 1-2  | chunk c1 | A     | a.md, b.md, cli/x.go  |
-| 3    | chunk c2 | A     | a.md                  |
+| Task | Owner    | Group | Risk | Allowlist             |
+|------|----------|-------|------|-----------------------|
+| 0    | caller   | -     | -    | none                  |
+| 1-2  | chunk c1 | A     | high | a.md, b.md, cli/x.go  |
+| 3    | chunk c2 | A     | low  | a.md                  |
+
+### Warnings
+- removed symbol: `oldName` removed by c1, still used by Task 3
+- anchor: `a.md:120` no longer holds "Step 2" at BASE
 ```
 
-A task missing from the table, or listed twice, is a derivation error: stop and say which. The Allowlist column names every path, so a dropped file is visible before Start.
+A task missing from the table, or listed twice, is a derivation error: stop and say which. The Allowlist column names every path, so a dropped file is visible before Start. No warnings -> `### Warnings` reads `none`.
 
 **4. Propose the shape.** Delegated runs are **solo**: one implementer at a time, in this tree, chunks and caller tasks in plan order. When a stretch holds more than one group, add one line: "{N} groups share no file; running groups in parallel is not available yet (lets-7dwc1)." Groups are shown so the split is honest about what could be independent - file-disjoint is not proof of independence (a chunk can call code another chunk adds in a different file).
 
-**Refuse delegation** - one line saying why, then the Step 4.5 picker again without the Implementers option - when any task is malformed (name it); when the plan has no chunk at all; when no task has a `**Files:**` block (a hand-written plan cannot be split); or when any task's execution itself (not one conditional sub-step inside it) depends on something learned during the run - read each whole task section; a heading or opening line such as `only if`, `only when`, `only on` (any case) or `run this task if ...` is the usual sign. A delegated run dispatches every chunk, so such a plan runs inline, where the condition is judged when the plan reaches it.
+**Refuse delegation** - one line saying why, then the Step 4.5 picker again without the Implementers option - when any task is malformed (name it); when the Files audit fails (name each task and path); when the plan has no chunk at all; when no task has a `**Files:**` block (a hand-written plan cannot be split); or when any task's execution itself (not one conditional sub-step inside it) depends on something learned during the run - read each whole task section; a heading or opening line such as `only if`, `only when`, `only on` (any case) or `run this task if ...` is the usual sign. A delegated run dispatches every chunk, so such a plan runs inline, where the condition is judged when the plan reaches it.
+
+## Step 4.7: Launch plan (proposal)
+
+Before the 5-D.2 Start gate, read the plan and PROPOSE how to run it. This is reasoning about THIS plan, not a fixed rule - no allocation is applied by default. The inputs:
+
+- the plan's blocks (its `**Unit:**` lines or an execution-order table, when it has them) and the Step 4.6 chunks and groups;
+- each chunk's Risk (Step 4.6);
+- the Files audit: which groups are file-disjoint;
+- dependencies: a chunk that needs another chunk's output (a function, a flag, a file it creates) runs serially after it, whatever the files say - file-disjoint is not independence.
+
+The proposal names six choices, each with a one-line reason:
+
+| Choice | What it names |
+|---|---|
+| Implementers | how many, each by its name, and the blocks or chunks each one owns |
+| Isolation | which implementers run isolated (only file-disjoint groups that run at the same time) and which run in the task worktree |
+| Integration order | the order in which chunks land in the task branch |
+| Pipelined | whether an implementer starts its next chunk before the previous one is accepted |
+| Gate policy | the default: `per-commit` (your Review gate before every commit), `high-only` (your gate on Risk high or missing only) or `at-end` (the team flow accepts, you review the finished run) - 5-D.5 dispatches on it |
+| Overrides | which choices an owner flag fixed |
+
+```
+### Launch plan
+
+| Choice            | Proposal                                  | Why                                           |
+|-------------------|-------------------------------------------|-----------------------------------------------|
+| Implementers      | 1: impl-{RUN} owns c1-c4                  | c1-c4 all touch a.md                          |
+| Isolation         | impl-{RUN} in the task worktree           | nothing runs at the same time                 |
+| Integration order | c1, c2, c3, c4                            | plan order; c3 calls what c2 adds             |
+| Pipelined         | no                                        | c1 and c2 are Risk high - review each first   |
+| Gate policy       | per-commit                                | two high-risk chunks                          |
+| Overrides         | none                                      | -                                             |
+```
+
+**Owner overrides.** `--parallel`, `--pipelined` and `--gate <policy>` each fix one choice (the parallel shape, pipelining, the gate policy); the proposal keeps the fixed value and its Why reads `fixed by --<flag>`. The proposal never contradicts a flag - a flag that cannot hold for this plan (e.g. `--parallel` with no file-disjoint groups) is said in one line, and the run does not start until the owner drops or changes it.
+
+**The proposal is the Start option's `preview`**, above the Step 4.6 split table and its warnings, so the owner accepts exactly what they see - the launch plan, the split and the warnings in one view.
+
+**Change the launch plan** (the Start gate's option for it, 5-D.2) -> follow-up questions change the implementers and their groups, the isolation, the pipelining and the gate policy; recompute the preview (every changed choice's Why reads `set by you`), then show the Start gate again. Nothing is spawned before Start.
 
 ## Step 5: Enter Native Plan Mode
 
@@ -374,7 +433,7 @@ AskUserQuestion(
     question: "Hand {N} chunk(s) to implementer agents, one at a time in this tree? {M} caller task(s) run here. Nothing is committed until you accept each diff.",
     header: "Start work",
     options: [
-      { label: "Start (Recommended)", description: "Pick the model, then spawn the first implementer", preview: "{the Step 4.6 split table}" },
+      { label: "Start (Recommended)", description: "Pick the model, then spawn the first implementer", preview: "{the Step 4.7 launch plan, then the Step 4.6 split table and its warnings}" },
       { label: "Run inline instead", description: "Execute this plan here in native plan mode (Step 5)" },
       { label: "Cancel", description: "Stop; nothing is spawned and nothing is edited" }
     ],
@@ -428,6 +487,8 @@ CORRECTIONS: your reviewer may send corrections for this chunk. Each arrives as 
 BASE: {base sha}
 TASKS:
 {the chunk's ### Task sections verbatim, each **Commit:** block removed - this session commits after review}
+CI CHECKS: run each from the repository root before your report; a failing one is never `complete`:
+{the Step 4.6 CI commands, one per line}
 PROJECT RULES: read the repository's CLAUDE.md before editing.
 REPORT: fill in exactly this skeleton and send it as your final message - nothing before it, nothing after it. Status is one of `complete`, `deviation-stopped`, `blocked`; keep only the block that matches it:
 ### Chunk: {chunk}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -112,8 +113,58 @@ func delegatedContractProblems(f map[string]string) []string {
 	if !strings.Contains(split, "depends on something learned during the run") {
 		add("Step 4.6 must refuse a plan in which a task's execution depends on something learned during the run")
 	}
-	if !strings.Contains(exec, `preview: "{the Step 4.6 split table}"`) {
-		add("the Start gate must carry the Step 4.6 split as its preview - Start approves the split the user sees")
+	if !strings.Contains(exec, `preview: "{the Step 4.7 launch plan, then the Step 4.6 split table and its warnings}"`) {
+		add("the Start gate must carry the launch plan and the Step 4.6 split as its preview - Start approves the split the user sees")
+	}
+	if !strings.Contains(split, "**Files audit - a GATE.**") || !strings.Contains(split, "when the Files audit fails") {
+		add("Step 4.6 must run the Files audit as a gate that refuses delegation")
+	}
+	for _, need := range []string{"expand `{a,b}` brace sets", "a bare name (no `/`) inherits the directory of the previous path on the same Files line", "it is a repo-root path", "`Files add:` Amendment lines count as its Files", "Only a FULL path", "resolves ambiguously, is a warning", "never a refusal"} {
+		if !strings.Contains(split, need) {
+			add("the Files audit must resolve paths before it refuses: " + need)
+		}
+	}
+	if !strings.Contains(split, "**Removed-symbol check - a WARNING only.**") || !strings.Contains(split, "it never refuses delegation") {
+		add("Step 4.6 must run the removed-symbol check as a warning only, never a refusal")
+	}
+	anchor := ""
+	if at := strings.Index(split, "**Anchor check against BASE - a WARNING only.**"); at >= 0 {
+		anchor = split[at:]
+		if end := strings.Index(anchor, "\n\n"); end >= 0 {
+			anchor = anchor[:end]
+		}
+	}
+	for _, need := range []string{"`file:line` anchor", "pin counter", "Verify command", "role=lets:explorer", "else this session inline", "listed in the Start preview", "adds no gate and no option"} {
+		if !strings.Contains(anchor, need) {
+			add("the Step 4.6 anchor check must be a warning against BASE naming " + need)
+		}
+	}
+	if !strings.Contains(split, "`CI CHECKS:`") || !strings.Contains(split, "CI workflow") || !strings.Contains(split, "Makefile") {
+		add("Step 4.6 must take the brief's CI CHECKS from the CI workflow and the Makefile")
+	}
+	if !strings.Contains(split, "missing = high") {
+		add("Step 4.6 must read a missing Risk as high")
+	}
+	riskRule := "**Risk:** high|low"
+	if !strings.Contains(f["plan"], "**Risk:** {high|low}") || !strings.Contains(f["plan"], "a missing Risk line is read as `high`") {
+		add("plan.md's template and quality gates must carry the Risk field (missing = high)")
+	}
+	for _, fn := range []string{"function planPrompt(", "function planReviewPrompt("} {
+		body := f["planWorkflowJS"]
+		if at := strings.Index(body, fn); at >= 0 {
+			body = body[at:]
+			if end := strings.Index(body[len(fn):], "\nfunction "); end >= 0 {
+				body = body[:len(fn)+end]
+			}
+		} else {
+			body = ""
+		}
+		if !strings.Contains(body, riskRule) || !strings.Contains(body, "missing Risk line") {
+			add("plan.workflow.js " + fn + " must carry the Risk field (keep-in-sync with plan.md)")
+		}
+	}
+	if !strings.Contains(f["planWorkflowJS"], "KEEP IN SYNC with plan.md") {
+		add("plan.workflow.js must mark the Risk rule KEEP IN SYNC with plan.md")
 	}
 	delegated := sectionSpan(exec, "## Step 5-D: Delegated run (Implementers)")
 	if delegated == "" {
@@ -129,6 +180,9 @@ func delegatedContractProblems(f map[string]string) []string {
 		}
 		if n := strings.Count(delegated, `preview: "{the review block}"`); n != 3 {
 			add(fmt.Sprintf("each of the 3 Review gates must carry the review block as its first option's preview, found %d", n))
+		}
+		if !strings.Contains(delegated, "\nCI CHECKS: ") {
+			add("the chunk brief template must carry CI CHECKS:")
 		}
 		for _, need := range []string{`Skill(skill: "lets:member-run"`, "brief-file=", "scope=run-{RUN}", "TaskStop(", "git ls-files --others --exclude-standard", "--untracked-files=all", "git diff HEAD", "git diff --cached --name-only", `args: "approved=review-accept"`, "patch_sha", "**Render review**", "**What is a report.**", "malformed-report", "Write a report with the Write tool", "| `pending` |", "| `review` / `paused` |", "| `committing` |", "AMENDMENT to chunk"} {
 			if !strings.Contains(delegated, need) {
@@ -195,13 +249,14 @@ func TestMemberRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	files := map[string]string{
-		"skill":        read("skills", "member-run", "SKILL.md"),
-		"execute":      read("commands", "execute.md"),
-		"agent":        read("agents", "implementer.md"),
-		"rules":        read("rules", "lets-rules.md"),
-		"plan":         read("commands", "plan.md"),
-		"planWorkflow": read("commands", "plan-workflow.md"),
-		"claude":       string(claude),
+		"skill":          read("skills", "member-run", "SKILL.md"),
+		"execute":        read("commands", "execute.md"),
+		"agent":          read("agents", "implementer.md"),
+		"rules":          read("rules", "lets-rules.md"),
+		"plan":           read("commands", "plan.md"),
+		"planWorkflow":   read("commands", "plan-workflow.md"),
+		"planWorkflowJS": read("skills", "plan-workflow", "plan.workflow.js"),
+		"claude":         string(claude),
 	}
 	for _, problem := range delegatedContractProblems(files) {
 		t.Error(problem)
@@ -214,6 +269,14 @@ func TestMemberRun(t *testing.T) {
 		{"add before the Agent call", "skill", "   lets members add --scope", "   lets memberz add --scope", "right after the Agent call"},
 		{"execute back on the old skill", "execute", `Skill(skill: "lets:member-run", args: "op=spawn`, "Skill(skill: \"lets:implementer" + "-run\", args: \"op=spawn", "not its predecessor"},
 		{"a Review gate is dropped", "execute", `header: "Review"`, `header: "Reviewed"`, "Review gates"},
+		{"files audit becomes a warning", "execute", "**Files audit - a GATE.**", "**Files audit - a WARNING.**", "Files audit as a gate"},
+		{"files audit drops bare-name resolution", "execute", "a bare name (no `/`) inherits", "a bare name (no `/`) is refused", "resolve paths before it refuses"},
+		{"unresolvable name refuses", "execute", "resolves ambiguously, is a warning", "resolves ambiguously, refuses delegation", "resolve paths before it refuses"},
+		{"removed-symbol check refuses", "execute", "it never refuses delegation", "it refuses delegation", "warning only"},
+		{"anchor check adds an option", "execute", "adds no gate and no option", "adds an option", "anchor check"},
+		{"brief loses CI CHECKS", "execute", "\nCI CHECKS: ", "\nCHECKS: ", "CI CHECKS:"},
+		{"plan.workflow.js drops Risk in review", "planWorkflowJS", "every task with a commit point states **Risk:** high|low", "every task with a commit point states a risk", "planReviewPrompt"},
+		{"plan.md drops the Risk template line", "plan", "**Risk:** {high|low}", "**Risk:** {level}", "Risk field"},
 		{"unscoped gate sentence returns", "rules", "inside it the gate is plan mode for an inline run", "inside it the plan-mode approval is the gate", "still asserts"},
 	}
 	for _, m := range mutants {
@@ -227,6 +290,108 @@ func TestMemberRun(t *testing.T) {
 			}
 			mutated[m.key] = strings.Replace(files[m.key], m.old, m.repl, 1)
 			for _, problem := range delegatedContractProblems(mutated) {
+				if strings.Contains(problem, m.want) {
+					return
+				}
+			}
+			t.Errorf("mutant produced no problem containing %q - that guard cannot fail", m.want)
+		})
+	}
+}
+
+// fixedAllocation matches a hardcoded implementer count - the launch plan is
+// reasoned per plan, never a fixed rule.
+var fixedAllocation = regexp.MustCompile(`(?i)\b(always|every run uses|by default)\s+(\d+|one|two|three|a single)\s+implementers?\b`)
+
+// launchPlanProblems returns every way execute.md breaks the Step 4.7 launch
+// plan contract (lets-7dwc1); an empty result means none.
+func launchPlanProblems(exec string) []string {
+	var p []string
+	add := func(s string) { p = append(p, s) }
+
+	const heading = "## Step 4.7: Launch plan (proposal)"
+	split := strings.Index(exec, "## Step 4.6: Split the plan (Implementers only)")
+	launch := strings.Index(exec, heading)
+	start := strings.Index(exec, "### 5-D.2 Start")
+	if split < 0 || launch < 0 || start < 0 || split > launch || launch > start {
+		add("Step 4.7 must exist between Step 4.6 and the 5-D.2 Start gate")
+	}
+	lp := sectionSpan(exec, heading)
+	for _, choice := range []struct{ name, row string }{
+		{"Implementers", "| Implementers | how many, each by its name, and the blocks or chunks each one owns"},
+		{"Isolation", "| Isolation | which implementers run isolated"},
+		{"Integration order", "| Integration order | the order"},
+		{"Pipelined", "| Pipelined | whether"},
+		{"Gate policy", "| Gate policy | the default"},
+	} {
+		if !strings.Contains(lp, choice.row) {
+			add("the launch plan must name " + choice.name)
+		}
+	}
+	if !strings.Contains(lp, "each with a one-line reason") || !strings.Contains(lp, "| Why ") {
+		add("every launch plan choice must carry a one-line reason")
+	}
+	for _, policy := range []string{"`per-commit`", "`high-only`", "`at-end`"} {
+		if !strings.Contains(lp, policy) {
+			add("the launch plan's gate policy must name " + policy)
+		}
+	}
+	for _, need := range []string{"Risk", "Files audit", "file-disjoint", "dependencies"} {
+		if !strings.Contains(lp, need) {
+			add("the launch plan must reason from " + need)
+		}
+	}
+	if !strings.Contains(lp, "Start option's `preview`") || !strings.Contains(exec, `preview: "{the Step 4.7 launch plan`) {
+		add("the launch plan must be the Start option's preview")
+	}
+	if !strings.Contains(lp, "**Owner overrides.**") {
+		add("the launch plan must name the owner overrides")
+	}
+	for _, flag := range []string{"`--parallel`", "`--pipelined`", "`--gate <policy>`"} {
+		if !strings.Contains(lp, flag) {
+			add("the launch plan must name the override " + flag)
+		}
+	}
+	if !strings.Contains(lp, "not a fixed rule") || fixedAllocation.MatchString(lp) {
+		add("the launch plan must be reasoned per plan - no fixed allocation rule")
+	}
+	if !strings.Contains(lp, "**Change the launch plan**") || !strings.Contains(lp, "Nothing is spawned before Start.") {
+		add("Change the launch plan must recompute the preview and nothing may spawn before Start")
+	}
+	if !strings.Contains(sectionSpan(exec, "## Step 4.5: Choose Execution Mode"), "Step 4.6, Step 4.7, then Step 5-D") {
+		add("the Implementers route must pass through Step 4.7")
+	}
+	return p
+}
+
+// TestExecuteLaunchPlan pins the Step 4.7 launch plan on the real execute.md,
+// then proves each guard can fail on an in-memory mutant.
+func TestExecuteLaunchPlan(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join(pluginDir(t), "commands", "execute.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	exec := string(b)
+	for _, problem := range launchPlanProblems(exec) {
+		t.Error(problem)
+	}
+
+	mutants := []struct{ name, old, repl, want string }{
+		{"launch plan moves after Start", "## Step 4.7: Launch plan (proposal)", "## Step 4.8: Launch plan (proposal)", "between Step 4.6"},
+		{"integration order dropped", "| Integration order | the order", "| Order | the order", "Integration order"},
+		{"reasons dropped", "each with a one-line reason", "each with a value", "one-line reason"},
+		{"at-end policy dropped", "or `at-end` (", "or `after` (", "`at-end`"},
+		{"fixed allocation creeps in", "This is reasoning about THIS plan, not a fixed rule", "Always two implementers, not a fixed rule", "no fixed allocation"},
+		{"pipelined override dropped", "`--pipelined`", "`--pipe`", "`--pipelined`"},
+		{"preview loses the launch plan", `preview: "{the Step 4.7 launch plan`, `preview: "{the plan`, "Start option's preview"},
+		{"spawn before Start", "Nothing is spawned before Start.", "Spawn when ready.", "nothing may spawn"},
+	}
+	for _, m := range mutants {
+		t.Run(m.name, func(t *testing.T) {
+			if !strings.Contains(exec, m.old) {
+				t.Fatalf("mutant cannot apply: %q is not in execute.md - update the mutant with the text it guards", m.old)
+			}
+			for _, problem := range launchPlanProblems(strings.Replace(exec, m.old, m.repl, 1)) {
 				if strings.Contains(problem, m.want) {
 					return
 				}

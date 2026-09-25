@@ -714,6 +714,8 @@ Write a detailed implementation plan for the chosen architecture.
 
 ### Task 1: {Component/Step Name}
 
+**Risk:** {high|low}
+
 **Files:**
 - Create: `exact/path/to/file.ext` - {purpose}
 - Modify: `exact/path/to/existing.ext` - {what changes}
@@ -766,6 +768,7 @@ Before saving, verify the plan passes these gates:
 - Every task that creates new code shows the interface (signatures, types)
 - Every task has a verification step with expected output
 - Every logical unit has a commit point
+- Every task that carries a commit point states `**Risk:** high|low` under its heading - `high` when it holds a gate, fail-closed logic, security logic or git-destructive logic, `low` otherwise; a missing Risk line is read as `high` (`/lets:execute` reviews by it). Keep in sync: the same rule is in `plan.workflow.js` (`planPrompt`, `planReviewPrompt`)
 - File paths are exact and verified against explorer findings
 - The STOP banner (`THIS PLAN IS NOT A GO`) is the first thing after the title block and the REMINDER footer is the last line - a plan without them is not finished
 
