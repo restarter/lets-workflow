@@ -64,4 +64,11 @@ On a scratch team: `/lets:team create` with no callsign proposes a free animal c
 
 | Date | Claude Code version | Check | Result (pass / deviation + what happened) |
 |---|---|---|---|
-| | | | |
+| 2026-09-26 | 2.1.283 | 1.1 guard, plain worktree | pass - a second named session got the held Notice naming 73671cbc and "run /lets:start in that chat"; `session:` unchanged |
+| 2026-09-26 | 2.1.283 | 2 member-run in a team | pass - `architect` live, `link: team`, `kind: in_process`, agent `snake-architect`; in-process, so `lets peers who` lists no row for it (expected) |
+| 2026-09-26 | 2.1.283 | 3 fallback line | pass (sender) - `delivered via SendMessage fallback - orca refused: peer_not_ready (tool_running)`; the message was held for approval (the sessions ran different permission modes) |
+| 2026-09-26 | 2.1.283 | 3 tail --since-message | deviation - a message delivered while the lead was mid-turn is not found by `lets peers tail --since-message` (dev binary): the mid-turn delivery is not recorded as the user TEXT shape lets-rry3c parses; owner decision pending |
+| 2026-09-26 | 2.1.283 | 7 dismiss + spawn --roster | pass - dismiss stops the agent and records `gone / dismissed`; `spawn --roster` brings a new live `snake-architect`; the lead's `session:` untouched |
+| 2026-09-26 | 2.1.283 | 8(a) create on Orca | deviation - Go created `team_snake` from origin/main (HEAD == origin/main, branch team_snake), but `lets orca terminal` timed out ("Timed out waiting for terminal handle after creation"): Orca does not know a worktree it did not create (`orca worktree list` never lists it); the fallback command was printed; with the lead launched by hand the `peers who` row is exactly `snake-lead` at the team worktree, `send: claude`; the model then wrongly narrated that Orca had created the terminal; owner decision pending |
+| 2026-09-26 | 2.1.283 | 9 create + disband | pass - no callsign -> `snake` proposed after `team-init --check`; disband with a live lead asked the owner (Tell / Lead has wrapped up / Cancel), found no task or park, removed the worktree and branch without force on the owner's yes, appended `Retired` to Decisions |
+| 2026-09-26 | 2.1.283 | 1.2, 1.3, 4, 5, 6, 8(b), 8(d), 8(e) | not run |
