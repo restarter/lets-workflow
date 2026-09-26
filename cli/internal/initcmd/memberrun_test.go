@@ -260,7 +260,7 @@ func delegatedContractProblems(f map[string]string) []string {
 	}
 	integrateAt := strings.Index(review, "lets integrate --from ")
 	acceptAt := strings.Index(review, "- **Accept** ->")
-	if integrateAt < 0 || acceptAt < 0 || integrateAt > acceptAt || !strings.Contains(review, "lets integrate --revert --patch {patch_path}") {
+	if integrateAt < 0 || acceptAt < 0 || integrateAt > acceptAt || !strings.Contains(review, "first takes its patch back out: `lets integrate --revert --patch {patch_path} --json`") {
 		add("an isolated chunk must be integrated through lets integrate before Accept, and reverted on a reject")
 	}
 	if !strings.Contains(review, "`{since}` is the group's integrated_source, or its base") {
@@ -290,6 +290,15 @@ func delegatedContractProblems(f map[string]string) []string {
 		if !strings.Contains(pipe, need) {
 			add("a pipelined chunk must be reviewed by sha, corrected by --fixup, stop on overlap and never reset: " + need)
 		}
+	}
+	isoPipe := between(pipe, "- **Isolated group** (with `--parallel`).", "- **Correct** ->")
+	srcAt := strings.Index(isoPipe, "1. **Check the source commits**")
+	intAt := strings.Index(isoPipe, "2. **Integrate**")
+	stagedAt := strings.Index(isoPipe, "3. **Check the staged paths**")
+	commitAt := strings.Index(isoPipe, "4. **Only then the lead's commit**")
+	if srcAt < 0 || intAt < srcAt || stagedAt < intAt || commitAt < stagedAt || strings.Contains(isoPipe, "committed by the lead at once") ||
+		!strings.Contains(isoPipe, "no lead commit; a patch already applied comes back out with `lets integrate --revert --patch {patch_path} --json`") {
+		add("an isolated pipelined chunk is checked (source commits, then staged paths) before the lead's commit, never committed at once")
 	}
 	for _, field := range []string{"commit_policy", "pre_rebase_head", "commit_sha", "fixups", "review_sha", "accepted_sha"} {
 		if !strings.Contains(record, `"`+field+`":`) {
@@ -449,7 +458,7 @@ func TestMemberRun(t *testing.T) {
 		{"parallel allowed alone", "execute", "it needs `--implementers` / `--team`", "it runs alone", "--parallel must need"},
 		{"groups inferred", "execute", "The shape is never inferred", "The shape is inferred", "declare parallel groups"},
 		{"isolated brief loses CALLER_TOPLEVEL", "execute", "CALLER_TOPLEVEL: {git rev-parse", "TOPLEVEL: {git rev-parse", "CALLER_TOPLEVEL"},
-		{"no revert on reject", "execute", "lets integrate --revert --patch {patch_path}", "git checkout -- {patch_path}", "reverted on a reject"},
+		{"no revert on reject", "execute", "first takes its patch back out: `lets integrate --revert --patch {patch_path}", "first takes its patch back out: `git checkout -- {patch_path}", "reverted on a reject"},
 		{"cleanup without the tip check", "execute", "compare its `integrated_source` with the tip of its `agent_branch`", "look at its `agent_branch`", "integrated_source is its tip"},
 		{"guard switches first", "agent", "At spawn only, before any edit,", "At spawn only, first `git switch -C <branch> {BASE}`, then before any edit,", "before git switch -C"},
 		{"reset --hard creeps in", "agent", "NEVER push.", "NEVER push; git reset --hard on a bad start.", "reset --hard"},
@@ -467,6 +476,7 @@ func TestMemberRun(t *testing.T) {
 		{"autosquash autostashes", "execute", "`git rebase --autosquash --no-autostash {start}`", "`git rebase --autosquash {start}`", "never autostashing"},
 		{"record loses review_sha", "execute", `"review_sha": null, `, "", "review_sha"},
 		{"pipelined row loses fixup", "agent", "`git commit --fixup=<that sha>`", "`git commit --amend`", "--fixup and the overlap stop"},
+		{"isolated pipelined commits at once", "execute", "4. **Only then the lead's commit**", "0. **Committed by the lead at once**", "before the lead's commit"},
 		{"unscoped gate sentence returns", "rules", "inside it the gate is plan mode for an inline run", "inside it the plan-mode approval is the gate", "still asserts"},
 	}
 	for _, m := range mutants {
