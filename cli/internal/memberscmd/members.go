@@ -78,6 +78,7 @@ const (
 type Member struct {
 	Name           string    `json:"name"`
 	AgentName      string    `json:"agent_name"`
+	AgentID        string    `json:"agent_id,omitempty"` // the id an isolated Agent call returned; messages address it
 	Role           string    `json:"role"`
 	Model          string    `json:"model"`
 	Isolation      string    `json:"isolation"`
@@ -109,6 +110,7 @@ type Options struct {
 type AddOptions struct {
 	Name, Role, Model, Isolation, WorktreePath, WorktreeBranch, Link string
 	Cwd                                                              string // where a pane member's session runs; default below
+	AgentID                                                          string // the id an isolated Agent call returned (it is reachable only by it)
 }
 
 const (
@@ -128,6 +130,7 @@ var (
 	nameRe     = regexp.MustCompile(`^[a-z0-9-]{1,40}$`)
 	runScopeRe = regexp.MustCompile(`^run-[a-z0-9-]{1,36}$`)
 	modelRe    = regexp.MustCompile(`^[A-Za-z0-9._:\[\]-]{0,64}$`)
+	agentIDRe  = regexp.MustCompile(`^[A-Za-z0-9._:@-]{0,128}$`)
 )
 
 // ValidScope: a team callsign (teamfile.ValidName) or an execute scope run-<RUN>.
@@ -333,8 +336,12 @@ func Add(o Options, a AddOptions) (*AddResult, error) {
 		return res, fail(&res.Envelope, usageErr("--isolation must be worktree or empty"))
 	case a.Isolation != "" && !filepath.IsAbs(a.WorktreePath):
 		return res, fail(&res.Envelope, usageErr("--isolation worktree needs an absolute --worktree-path"))
+	case a.Isolation != "" && a.AgentID == "":
+		return res, fail(&res.Envelope, usageErr("--isolation worktree needs --agent-id: an isolated member is reachable only by the id its Agent call returned"))
 	case !modelRe.MatchString(a.Model):
 		return res, fail(&res.Envelope, usageErr(fmt.Sprintf("--model %q is not a model name", a.Model)))
+	case !agentIDRe.MatchString(a.AgentID):
+		return res, fail(&res.Envelope, usageErr(fmt.Sprintf("--agent-id %q is not an agent id", a.AgentID)))
 	case strings.ContainsFunc(a.WorktreeBranch+a.WorktreePath+a.Cwd, func(r rune) bool { return r < 0x20 || r == 0x7f }):
 		return res, fail(&res.Envelope, usageErr("a path or branch carries a control character"))
 	}
@@ -352,7 +359,7 @@ func Add(o Options, a AddOptions) (*AddResult, error) {
 	}
 	agent := AgentName(o.Scope, a.Name)
 	m := Member{
-		Name: a.Name, AgentName: agent, Role: role, Model: a.Model, Isolation: a.Isolation,
+		Name: a.Name, AgentName: agent, AgentID: a.AgentID, Role: role, Model: a.Model, Isolation: a.Isolation,
 		WorktreePath: a.WorktreePath, WorktreeBranch: a.WorktreeBranch, CallerToplevel: o.CallerToplevel,
 		LeadPid: caller.Pid, Link: link, Status: StatusActive, Set: Now().UTC(),
 	}

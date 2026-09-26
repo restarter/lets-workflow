@@ -21,7 +21,7 @@ func NewMembersCmd() *cobra.Command {
 			Use: use, Short: "members " + use + " (not supported on this platform)", SilenceUsage: true, SilenceErrors: true,
 			RunE: func(*cobra.Command, []string) error { return errMembersUnsupported },
 		}
-		for _, name := range []string{"scope", "name", "role", "model", "isolation", "worktree-path", "worktree-branch", "link", "cwd"} {
+		for _, name := range []string{"scope", "name", "role", "model", "isolation", "worktree-path", "worktree-branch", "link", "cwd", "agent-id"} {
 			c.Flags().String(name, "", "")
 		}
 		for _, name := range []string{"json", "all", "claim"} {

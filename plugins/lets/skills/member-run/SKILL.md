@@ -21,7 +21,8 @@ One operation on one named member. The caller (`/lets:execute` Step 5-D, `/lets:
 
 - `scope` - the team's callsign, or `run-<RUN>` for an execute run.
 - `name` - the member name, `[a-z0-9-]{1,40}`: the bare roster name in a team scope (`architect`, `architect-2`), in an execute scope `impl-<RUN>` (a replacement `impl-<RUN>-r<generation>`), `explorer-<RUN>`, `skeptic-<RUN>`, `architect-<RUN>`.
-- `{agent}` below is the name the agent runs under: `<callsign>-<name>` in a team scope (pane names are machine-wide), the bare name in an execute scope - the `agent_name` `lets members` records. Every `SendMessage` and `TaskStop` addresses it.
+- `{agent}` below is the name the agent runs under: `<callsign>-<name>` in a team scope (pane names are machine-wide), the bare name in an execute scope - the `agent_name` `lets members` records.
+- A member with a recorded `agent_id` - an isolated member, which the harness runs as a background agent reachable only by the id its `Agent` call returned, never by name - is addressed by that id: every `SendMessage` and `TaskStop` below puts the `agent_id` where it says `{agent}`.
 - `role` - a shipped `lets:*` agent except `lets:actor`; `lets members add` refuses anything else.
 - `brief-file` / `correct-file` - repo-root-relative paths the caller wrote. Every brief crosses as a file path, never inline.
 - `model` - `opus` | `sonnet` | `fable` | `haiku`, the values the `Agent` tool accepts. Absent -> the role's own default, except for an implementer (Step 1).
@@ -82,9 +83,9 @@ AskUserQuestion(
    lets members add --scope {scope} --name {name} --role {role} --json
    ```
 
-   Add `--model {model}` when a model was chosen. With `isolation=worktree`, add `--isolation worktree --worktree-path {path}` and `--worktree-branch {branch}` from what the Agent call reports. A refusal (`name_live`, `role_not_allowed`, `registry_unavailable`) halts: name it and return; the agent is spawned but unrecorded, so say so and let the caller stop it.
+   Add `--model {model}` when a model was chosen. With `isolation=worktree`, add `--isolation worktree --worktree-path {path} --worktree-branch {branch} --agent-id {id}` from what the Agent call reports - the id is the only address of an isolated member. A refusal (`name_live`, `role_not_allowed`, `registry_unavailable`) halts: name it and return; the agent is spawned but unrecorded, so say so and let the caller stop it.
 
-Return: `spawned {agent} on {model} ({member.kind})` - `pane` (its own session) or `in_process` (inside this session, live only while it is).
+Return: `spawned {agent} on {model} ({member.kind})` - `pane` (its own session) or `in_process` (inside this session, live only while it is). An isolated spawn adds `id {agent_id}, worktree {path}, branch {branch}` - the caller records all three.
 
 ## Step 3: Next / Correct
 
@@ -92,6 +93,7 @@ The member exists and holds its context. Do NOT spawn, and do NOT re-send an ear
 
 1. `lets members status --scope {scope} --name {name} --json`, before every message.
    - `gone` (any reason, `dismissed` included), `unknown`, or `name_invalid` (not a member of the scope) -> return `agent_gone: {agent} ({status}: {reason})` and do nothing else. Never message it: the harness can still resume a gone or dismissed agent by name, and LETS refuses to. The caller's replacement path decides.
+   - Read the entry's `agent_id`: set -> the `to:` below is that id, not the name.
    - `link: peer` -> say that the message crosses sessions (the lead that spawned it was replaced) and may wait for approval in the member's pane.
 2. Send the pointer:
 
@@ -105,13 +107,13 @@ The member exists and holds its context. Do NOT spawn, and do NOT re-send an ear
 
    On `correct` the message is `AMENDMENT: read {correct-file}; it changes what it names and nothing else.`
 
-The name does not resolve -> run `ListAgents`, return `agent_gone: {agent}` with what it listed, and do nothing else. Never spawn a replacement here - a replacement has no context, and the caller decides whether to start one under a visibly different name.
+The address does not resolve -> run `ListAgents`, return `agent_gone: {agent}` with what it listed, and do nothing else. Never spawn a replacement here - a replacement has no context, and the caller decides whether to start one under a visibly different name.
 
 Return: `sent {op} to {agent}`.
 
 ## Step 4: Dismiss
 
-1. `lets members status --scope {scope} --name {name} --json`. `live` or `rotated` -> `TaskStop(task_id="{agent}")`.
+1. `lets members status --scope {scope} --name {name} --json`. `live` or `rotated` -> `TaskStop(task_id="{agent}")` - the `agent_id` when set, as in Step 3.
 2. `lets members dismiss --scope {scope} --name {name} --json`.
 
 The harness can still resume a dismissed member by name; LETS refuses to: Step 3 never messages it again.

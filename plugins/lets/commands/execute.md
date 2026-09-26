@@ -1,6 +1,6 @@
 ---
 description: Execute implementation plan from /lets:plan - inline in native plan mode, or delegated to named implementer subagents you review and correct
-argument-hint: "[task-id|plan-path] [--status] [--step|--straight|--auto|--implementers] [--gate per-commit|high-only|at-end]"
+argument-hint: "[task-id|plan-path] [--status] [--step|--straight|--auto|--implementers] [--parallel] [--gate per-commit|high-only|at-end]"
 ---
 
 # Execute Plan
@@ -207,7 +207,7 @@ AskUserQuestion(
 
 ## Step 4.5: Choose Execution Mode
 
-How the approved plan runs is ONE up-front choice. **A mode flag pre-answers it - skip the picker entirely when any is present:** `--auto` (Here · auto), `--implementers` or its alias `--team` (Implementers), `--step` / `--step-by-step` (Here · step-by-step), `--straight` / `--straight-through` (Here · straight-through). `--auto` keeps all its AUTO MODE semantics (Step 1 refuses on `$LETS_MERGE_BRANCH`; hard-stops preserved). Default locus is **Here** (this session, native plan mode); **Implementers** is the only locus switch. **`--auto` together with `--implementers` / `--team` is REFUSED** with one line - a delegated run is interactive by design (its gates wait for you, and an unattended run has nobody to review it): drop `--auto`, or run inline. **`--gate <per-commit|high-only|at-end>`** sets a delegated run's gate policy (Step 4.7 proposes it, 5-D.5 dispatches on it); under `--auto` any value other than `per-commit` is REFUSED with one line - `--auto` runs keep today's gates.
+How the approved plan runs is ONE up-front choice. **A mode flag pre-answers it - skip the picker entirely when any is present:** `--auto` (Here · auto), `--implementers` or its alias `--team` (Implementers), `--step` / `--step-by-step` (Here · step-by-step), `--straight` / `--straight-through` (Here · straight-through). `--auto` keeps all its AUTO MODE semantics (Step 1 refuses on `$LETS_MERGE_BRANCH`; hard-stops preserved). Default locus is **Here** (this session, native plan mode); **Implementers** is the only locus switch. **`--auto` together with `--implementers` / `--team` is REFUSED** with one line - a delegated run is interactive by design (its gates wait for you, and an unattended run has nobody to review it): drop `--auto`, or run inline. **`--gate <per-commit|high-only|at-end>`** sets a delegated run's gate policy (Step 4.7 proposes it, 5-D.5 dispatches on it); under `--auto` any value other than `per-commit` is REFUSED with one line - `--auto` runs keep today's gates. **`--parallel`** fixes the parallel shape (Step 4.6, 4.7); it needs `--implementers` / `--team` - alone it is REFUSED with one line - and under `--auto` it is REFUSED like every delegated run.
 
 **Bare `/lets:execute` (no mode flag) - ask exactly once:**
 
@@ -267,7 +267,7 @@ Only a FULL path a step's text touches that is still missing from Files after th
 
 **CI checks.** Read the repo's CI workflow files (e.g. `.github/workflows/*.yml`) and the Makefile targets they call, and take the commands CI runs on a change (e.g. `make build`, `make test`, `make lint`). They go into every chunk brief as `CI CHECKS:`. No CI workflow -> the brief's list reads `none found`, and the Start preview's warnings say so.
 
-**2. Group chunks.** A caller task is a barrier: nothing before it may still be open when it runs, and nothing after it starts before it is done. Within each stretch between barriers, two chunks share a group when their allowlists share a path, directly or through another chunk of the stretch. Groups keep plan order.
+**2. File-sharing sets.** A caller task is a barrier: nothing before it may still be open when it runs, and nothing after it starts before it is done. Within each stretch between barriers, two chunks share a set when their allowlists share a path, directly or through another chunk of the stretch. Sets keep plan order; groups (step 4) are built from them.
 
 **3. Show the split** - in the Start gate itself, in the `preview` of its Start option after the Step 4.7 launch plan (5-D.2), so the user approves the split they are looking at (a table printed as prose before a gate is skipped in practice). Every task exactly once, then the warnings:
 
@@ -277,8 +277,8 @@ Only a FULL path a step's text touches that is still missing from Files after th
 | Task | Owner    | Group | Risk | Allowlist             |
 |------|----------|-------|------|-----------------------|
 | 0    | caller   | -     | -    | none                  |
-| 1-2  | chunk c1 | A     | high | a.md, b.md, cli/x.go  |
-| 3    | chunk c2 | A     | low  | a.md                  |
+| 1-2  | chunk c1 | a     | high | a.md, b.md, cli/x.go  |
+| 3    | chunk c2 | a     | low  | a.md                  |
 
 ### Warnings
 - removed symbol: `oldName` removed by c1, still used by Task 3
@@ -287,7 +287,7 @@ Only a FULL path a step's text touches that is still missing from Files after th
 
 A task missing from the table, or listed twice, is a derivation error: stop and say which. The Allowlist column names every path, so a dropped file is visible before Start. No warnings -> `### Warnings` reads `none`.
 
-**4. Propose the shape.** Delegated runs are **solo**: one implementer at a time, in this tree, chunks and caller tasks in plan order. When a stretch holds more than one group, add one line: "{N} groups share no file; running groups in parallel is not available yet (lets-7dwc1)." Groups are shown so the split is honest about what could be independent - file-disjoint is not proof of independence (a chunk can call code another chunk adds in a different file).
+**4. Declare the groups (parallel shape).** The shape is never inferred. In the solo shape every chunk belongs to one group, `a`. In the parallel shape (`--parallel`, or a launch plan the owner accepts with it) this session DECLARES the groups - which chunks each implementer owns - in the split table's Group column, each group a union of the step-2 file-sharing sets, in plan order inside it. Group ids are `a`, `b`, ... **Files-disjoint gate across groups:** no path may sit in the allowlists of two groups; a declared split that breaks it is not offered - name the shared paths and declare again, or run solo. Every declared split carries the warning, in the preview's `### Warnings`: "file-disjoint is not independence" - a chunk can call code another group adds in a different file; a dependency like that puts both chunks in one group. A caller task stays a barrier for every group.
 
 **Refuse delegation** - one line saying why, then the Step 4.5 picker again without the Implementers option - when any task is malformed (name it); when the Files audit fails (name each task and path); when the plan has no chunk at all; when no task has a `**Files:**` block (a hand-written plan cannot be split); or when any task's execution itself (not one conditional sub-step inside it) depends on something learned during the run - read each whole task section; a heading or opening line such as `only if`, `only when`, `only on` (any case) or `run this task if ...` is the usual sign. A delegated run dispatches every chunk, so such a plan runs inline, where the condition is judged when the plan reaches it.
 
@@ -464,14 +464,14 @@ Before the first spawn, write `.lets/cache/delegated-run-{TASK_ID}.json` (`.lets
   "members_scope": "run-{RUN}",
   "model": null,
   "caller": [ { "task": 0, "state": "pending" } ],
-  "groups": [ { "id": "A", "agent": "impl-{RUN}", "generation": 1, "integrated_source": null } ],
+  "groups": [ { "id": "a", "agent": "impl-{RUN}", "generation": 1, "isolation": null, "base": null, "agent_id": null, "agent_branch": null, "agent_worktree_path": null, "integrated_source": null } ],
   "chunks": [
-    { "id": "c1", "tasks": [1, 2], "group": "A", "risk": "high", "allowlist": ["path/a", "path/b"], "allowlist_amendments": [], "agent": "impl-{RUN}", "generation": 1, "base": null, "agent_branch": null, "agent_worktree_path": null, "picked_sha": null, "patch_path": null, "phase": "pending", "round": 0, "report": null, "status": null, "reason": null, "received": null, "patch_sha": null, "check": null, "skeptic": null, "accepted_by": null, "committed_by": null, "commit": null }
+    { "id": "c1", "tasks": [1, 2], "group": "a", "risk": "high", "allowlist": ["path/a", "path/b"], "allowlist_amendments": [], "agent": "impl-{RUN}", "generation": 1, "base": null, "agent_branch": null, "agent_worktree_path": null, "commit_sha": null, "picked_sha": null, "patch_path": null, "phase": "pending", "round": 0, "report": null, "status": null, "reason": null, "received": null, "patch_sha": null, "check": null, "skeptic": null, "accepted_by": null, "committed_by": null, "commit": null }
   ]
 }
 ```
 
-Run fields: `shape` is `solo` or `parallel` (the launch plan's); `gate_policy` is `per-commit` (default), `high-only` or `at-end` (the Start pick); `members_scope` names the `lets members` scope every agent of the run is registered in. Per group: the agent that owns it now and its `generation`, and `integrated_source` - the last agent-branch commit landed in the task branch; it moves only after the lead's commit, never on a report or a pick. Per chunk: `risk` from Step 4.6 (missing = high); `agent_branch`, `agent_worktree_path`, `picked_sha` and `patch_path` belong to an isolated group's integration and stay `null` in the task worktree; `check` and `skeptic` hold the 5-D.5 verdicts; `accepted_by` is `owner` or `team`; `committed_by` is `lead`, or `implementer` only under pipelining; `allowlist_amendments[]` holds `{path, by, reason}` for every path added to the allowlist mid-run (5-D.5 Correct). Liveness is never stored here - `lets members status` is its one judge.
+Run fields: `shape` is `solo` or `parallel` (the launch plan's); `gate_policy` is `per-commit` (default), `high-only` or `at-end` (the Start pick); `members_scope` names the `lets members` scope every agent of the run is registered in. Per group: the agent that owns it now and its `generation`; for an isolated group (`isolation: worktree`) its `base` (the task branch's HEAD at Start), and the `agent_id`, `agent_branch` and `agent_worktree_path` the spawn returned - `agent_id` mirrors the registry's for recovery only, `lets members` stays the record member-run reads; and `integrated_source` - the last agent-branch commit landed in the task branch; it moves only after the lead's commit, never on a report or a pick. Per chunk: `risk` from Step 4.6 (missing = high); `agent_branch`, `agent_worktree_path`, `commit_sha` (the latest `**Commit:**` sha the agent reported), `picked_sha` and `patch_path` belong to an isolated group's integration and stay `null` in the task worktree; `check` and `skeptic` hold the 5-D.5 verdicts; `accepted_by` is `owner` or `team`; `committed_by` is `lead`, or `implementer` only under pipelining; `allowlist_amendments[]` holds `{path, by, reason}` for every path added to the allowlist mid-run (5-D.5 Correct). Liveness is never stored here - `lets members status` is its one judge.
 
 `phase` moves `pending` -> `running` -> `review` -> (`correcting` -> `running` -> `review`)* -> `committing` -> `accepted`. A Stop at a review gate records `paused` (it reopens as `review`); a Stop while an agent works goes through `stopping` to `blocked`; `blocked` always carries a `reason` - `stopped`, `re-plan`, `unreachable` or `unrecognized-commits`. Caller tasks move `pending` -> `running` -> `done`. `report` is the path of the latest round's saved report, `status` and `reason` are read from it, `received` counts reports in arrival order across the run, and `generation` is 1 for the first agent of a chunk and grows with each replacement. Rewrite the record at every transition BEFORE acting on it, so an interrupted session always finds the state it was in.
 
@@ -479,13 +479,13 @@ Run fields: `shape` is `solo` or `parallel` (the launch plan's); `gate_policy` i
 
 Walk the Step 4.6 split:
 
-- **Caller task** -> record its `state: running`, run it here, now, exactly as the plan writes it, then record `state: done`.
+- **Caller task** -> wait until every group has no chunk open, record its `state: running`, run it here, now, exactly as the plan writes it, then record `state: done`.
 - **Chunk** -> record `base` = `git rev-parse HEAD` and `phase: running`, write its brief, hand it to its group's agent (below), and end the turn - the report arrives as the agent's message (5-D.5 says what counts as one).
 
 The brief, `.lets/cache/chunk-{TASK_ID}-{RUN}-{chunk}.md`:
 
 ```
-MODE: solo
+MODE: {solo | isolated}
 TASK: {TASK_ID}   PLAN: {plan path}   RUN: {RUN}   CHUNK: {chunk} (group {group})
 GOAL: {the plan's Goal line}
 APPROACH: {the plan's Approach line}
@@ -497,6 +497,10 @@ YOU MAY WRITE ONLY:
 {the chunk's allowlist, one path per line}
 CORRECTIONS: your reviewer may send corrections for this chunk. Each arrives as an AMENDMENT to this brief and changes what it names, within YOU MAY WRITE ONLY - or within a path the AMENDMENT itself adds to it; one that needs any other file is a deviation.
 BASE: {base sha}
+{isolated only, and only in the group's FIRST brief:}
+CALLER_TOPLEVEL: {git rev-parse --show-toplevel of this session}
+MAIN_ROOT: {main_root from lets worktree info --json}
+COMMIT MESSAGE: {the chunk's plan commit message, with its Task: footer}
 TASKS:
 {the chunk's ### Task sections verbatim, each **Commit:** block removed - this session commits after review}
 CI CHECKS: run each from the repository root before your report; a failing one is never `complete`:
@@ -519,32 +523,44 @@ After: `...`
 **Blocked** (blocked only) - What / Why
 ```
 
+In an isolated brief `BASE` is the literal group base - the task branch's HEAD sha at Start - that the agent's guard switches to; `CALLER_TOPLEVEL` is the tree it must never write. A group's later briefs (`op=next`) carry `MODE: isolated` and no base instruction: the agent never switches or resets again. An isolated agent's report adds a `**Commit:** <sha>` line - its chunk's commit, or its fixup's on an amendment.
+
 **One persistent implementer per group.** In the solo shape - the shape the 4.7 proposal usually picks when chunks share files or build on each other - the run has one group and one agent, `impl-{RUN}`, working in this tree (the task worktree). The group's agent is spawned once, for its first chunk; every later chunk of the group goes to the same agent as its next brief, so it keeps its context from chunk to chunk. Each brief is complete on its own - the agent's memory helps, the brief is the contract.
 
 - The group's first chunk: `Skill(skill: "lets:member-run", args: "op=spawn scope=run-{RUN} role=lets:implementer name={agent} brief-file=.lets/cache/chunk-{TASK_ID}-{RUN}-{chunk}.md")`, adding ` model=<m>` once the record holds a model. After the first spawn of the run, write the returned model into the record.
+- An isolated group's first chunk (parallel shape, a group the launch plan runs isolated): `Skill(skill: "lets:member-run", args: "op=spawn scope=run-{RUN} role=lets:implementer isolation=worktree name=impl-{RUN}-{group} brief-file=.lets/cache/chunk-{TASK_ID}-{RUN}-{chunk}.md")`. Record what it returns in the group (`agent_id`, `agent_branch`, `agent_worktree_path`) - the harness reaches an isolated agent only by its `agent_id`, and member-run addresses it by that.
 - Every later chunk of the group: `Skill(skill: "lets:member-run", args: "op=next scope=run-{RUN} name={agent} brief-file=.lets/cache/chunk-{TASK_ID}-{RUN}-{chunk}.md")`. It returns `agent_gone` -> record `phase: blocked`, `reason: unreachable`, then the 5-D.7 Replacement gate - a replacement always runs under a visibly new name, never as the same agent.
 
-One chunk is live at a time.
+One chunk per group is live at a time; in the parallel shape the groups run at the same time.
 
-**One writer.** While a chunk is `running` or `correcting`, this session writes no code. A request to edit meanwhile -> say that `{agent}` (the record's current agent for the chunk) is still working, and offer to wait for its report or to stop it (5-D.6).
+**One writer per tree.** The task worktree has one writer at a time: its in-tree group's agent while that chunk is `running` or `correcting`, or this session - which writes it only through `lets integrate` and the lead's commit, and only while the tree is clean. An isolated agent writes only its own worktree. A request to edit meanwhile -> say which `{agent}` is still working, and offer to wait for its report or to stop it (5-D.6).
 
 ### 5-D.5 Review - one report at a time
 
 **What is a report.** The FIRST text from `{agent}` after its latest spawn, next brief or correction - a message, or an idle notification's `result` - that carries a `**Status:**` line holding `complete`, `deviation-stopped` or `blocked`. Anything later in the same round is a repeat of it, Status line or not: record nothing. An idle notification with no such line is NOT a report - the agent may still be working: keep the phase and end the turn. A message offered as the report whose Status line is missing or holds any other value IS a report with status `blocked`, reason `malformed-report` - never infer a status from prose.
 
-When `{agent}` reports, save it verbatim to `.lets/cache/report-{TASK_ID}-{RUN}-{chunk}-g{generation}-r{round}.md`, then record `phase: review`, `report` (that path), `status` and `reason` (read from its **Status** and its **Blocked** / **Deviation** block) and `received` (one more than the highest in the record). One agent is live at a time, so no report interrupts an open gate.
+When `{agent}` reports, save it verbatim to `.lets/cache/report-{TASK_ID}-{RUN}-{chunk}-g{generation}-r{round}.md`, then record `phase: review`, `report` (that path), `status` and `reason` (read from its **Status** and its **Blocked** / **Deviation** block) and `received` (one more than the highest in the record). Reports are handled one at a time: a report that arrives while a gate is open is saved and recorded, and handled after that gate.
+
+**Isolated chunk - integrate first.** An isolated group's `complete` report is landed in this tree before any check or gate, and only while the tree is clean (an in-tree chunk that is running waits for its commit first):
+
+1. `lets members status --scope run-{RUN} --name {agent} --json` - `live` is the normal case; a gone agent's branch can still be integrated (its context is lost; a correction then needs the 5-D.7 replacement).
+2. `lets integrate --from {commit} --since {since} --run {RUN} --chunk {chunk} --json`, where `{commit}` is the reported `**Commit:**` sha (recorded first as the chunk's `commit_sha`) and `{since}` is the group's integrated_source, or its base. Record `picked_sha` (the last of `picked`) and `patch_path` on the chunk, and `agent_branch` / `agent_worktree_path` from the group.
+3. Exit 50 (conflict) -> the caller tree is untouched: the `blocked` gate with the conflicting files - **Correct** (an AMENDMENT to that agent) or **Stop**. Any other failure -> show the error kind as-is, the `blocked` gate.
+4. Success -> run the brief's CI CHECKS here, in this tree, and add their output to the review block; then the tree check below and the Accept dispatch, as for any chunk. `integrated_source` moves to that `--from` sha only after the lead's commit (Accept).
+
+A **Correct**, **Re-plan** or **Stop** that rejects an integrated, uncommitted chunk first takes its patch back out: `lets integrate --revert --patch {patch_path} --json`; exits 58 / 59 are shown as-is and nothing else runs until the tree is sorted out. The agent's fixup then comes back as a new report and is integrated from the same `--since`.
 
 Check the real tree - the report is the agent's claim, the diff is the fact:
 
 ```bash
 git rev-parse HEAD                                    # must equal the chunk's recorded base
 git status --porcelain --untracked-files=all          # every listed path must be in the chunk's allowlist; new directories are expanded to their files
-git diff --cached --name-only                         # must print nothing: an implementer never stages
+git diff --cached --name-only                         # in-tree chunk: must print nothing (an implementer never stages); integrated chunk: exactly the integrate result's files
 git diff HEAD                                         # the patch of every tracked file, index and worktree alike
 git ls-files --others --exclude-standard -z           # untracked files, NUL-separated so any file name is safe
 ```
 
-For each untracked path, show it as a patch: `git diff --no-index -- /dev/null "<path>"` (read-only; nothing is staged). Its exit status 1 means a patch was printed; only a status above 1 is an error. HEAD moved, anything staged, or a path outside the allowlist changed -> the diff is NOT attributed to the agent: name the paths and use the `blocked` gate. An amendment cannot clean a path outside the allowlist (amendments stay inside it), so say plainly that those paths are the user's to remove or restore; once they are gone, `/lets:execute` re-checks the tree and, for a `complete` report, offers Accept.
+For each untracked path, show it as a patch: `git diff --no-index -- /dev/null "<path>"` (read-only; nothing is staged). Its exit status 1 means a patch was printed; only a status above 1 is an error. HEAD moved, anything staged (beyond an integrated chunk's own files), or a path outside the allowlist changed -> the diff is NOT attributed to the agent: name the paths and use the `blocked` gate. An amendment cannot clean a path outside the allowlist (amendments stay inside it), so say plainly that those paths are the user's to remove or restore; once they are gone, `/lets:execute` re-checks the tree and, for a `complete` report, offers Accept.
 
 **Team check - every `complete` report whose tree check is clean, before any gate.** Save the full patch (as Render review builds it) to `.lets/cache/patch-{TASK_ID}-{RUN}-{chunk}-r{round}.diff`, then:
 
@@ -759,7 +775,7 @@ AskUserQuestion(
 
 HEAD moved, anything staged, or a path outside the allowlist changed -> offer neither: show what changed and stop.
 
-- **Start a replacement** -> `generation+1` on the chunk and its group; the new name is `impl-{RUN}-r{generation}`, and it becomes the group's agent for its later chunks (`op=next`); write `.lets/cache/chunk-{TASK_ID}-{RUN}-{chunk}-g{generation}.md` = the original brief plus an `AMENDMENTS SO FAR:` section holding every correction file of the chunk, oldest first; record `agent`, `generation`, `round: 0`, `phase: running`, and clear the first agent's `report`, `status`, `reason` and `patch_sha` to `null` so no stale round describes the new one; spawn it through `member-run`. Say plainly that it is a new agent.
+- **Start a replacement** -> `generation+1` on the chunk and its group; the new name is `impl-{RUN}-r{generation}` (an isolated group's: `impl-{RUN}-{group}-r{generation}`), and it becomes the group's agent for its later chunks (`op=next`). An isolated group's replacement is spawned isolated in a new worktree: first integrate anything the gone agent reported and never integrated - `--from` the chunk's recorded `commit_sha`, never the branch tip (a sha outlives a removed branch until gc, and a tip can hold commits nobody reviewed) - then set the group's `base` to the task branch's HEAD, `integrated_source` to `null`, and its `agent_id` / `agent_branch` / `agent_worktree_path` from the new spawn; write `.lets/cache/chunk-{TASK_ID}-{RUN}-{chunk}-g{generation}.md` = the original brief plus an `AMENDMENTS SO FAR:` section holding every correction file of the chunk, oldest first; record `agent`, `generation`, `round: 0`, `phase: running`, and clear the first agent's `report`, `status`, `reason` and `patch_sha` to `null` so no stale round describes the new one; spawn it through `member-run`. Say plainly that it is a new agent.
 - **Discard it and replace** -> ask in words, listing every file, before touching anything (destructive). On yes: `git restore --staged --worktree -- <each changed tracked allowlist path>` and `rm -- "<each untracked allowlist path>"`, check the tree is clean, then **Start a replacement**.
 - **Keep it and stop** / **Stop** -> leave the record as it is.
 
@@ -792,7 +808,15 @@ Nothing here pushes - that is `/lets:done`'s job.
 
 ### 5-D.9 Completion
 
-Every chunk `accepted`, every caller task `done`, and - under `at-end` / `high-only` - the 5-D.8 run review accepted -> delete `.lets/cache/delegated-run-{TASK_ID}.json` and go to Step 6.
+Every chunk `accepted`, every caller task `done`, and - under `at-end` / `high-only` - the 5-D.8 run review accepted -> clean up, then delete `.lets/cache/delegated-run-{TASK_ID}.json` and go to Step 6.
+
+**Isolated groups' worktrees.** For each isolated group, compare its `integrated_source` with the tip of its `agent_branch` (`git rev-parse {agent_branch}`). Not equal, or the branch is gone -> remove nothing; say which commits were never integrated (`git log --oneline {integrated_source}..{agent_branch}`). Equal -> ask in words, naming the branch and the worktree; only on the user's yes, each a separate command, in this order:
+
+1. `member-run` `op=dismiss` FIRST - its stop must be confirmed, so the agent can commit nothing more.
+2. Compare `integrated_source` with `git rev-parse {agent_branch}` again, then `git worktree remove {agent_worktree_path}` - plain, never with `--force`: a failure (a dirty agent tree) stops the cleanup here, and it is not retried.
+3. Compare them once more, then `git branch -D {agent_branch}`.
+
+Any mismatch at step 2 or 3 -> remove nothing more and list the unintegrated commits.
 
 ## Step 6: Record Completion
 
@@ -841,7 +865,7 @@ comment-add task=<task-id> body-file=.lets/cache/exec-complete-<task-id>.md
 - **NEVER edit before the code-write approval** - inline: `ExitPlanMode` approved by the user (the fallback path with no plan mode asks "Start implementing?" in words first); delegated: the Step 5-D Start gate, before which nothing is spawned
 - **Delegated: the code-write approval is Step 5-D's Start gate** - nothing is spawned before it, and every commit waits for the Accept its gate policy names (5-D.5): the owner's, or the team check's under the `high-only` / `at-end` policy the owner picked at Start
 - **Delegated: one writer per tree** - a run starts only on a clean tree, this session writes no code while an implementer is running, and a stop is confirmed before anything else writes
-- **Delegated: implementers never commit, push, or touch the tracker** - this session does all three, after review
+- **Delegated: implementers never push or touch the tracker, and commit only in their own isolated worktree** - the task branch gets its commits from this session, after review
 - **Delegated runs are interactive only** - `--auto` with `--implementers` / `--team` is refused
 - Respond in user's language
 

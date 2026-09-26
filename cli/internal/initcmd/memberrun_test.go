@@ -241,6 +241,70 @@ func delegatedContractProblems(f map[string]string) []string {
 		add("5-D.7 must reach a member only through member-run, never a bare SendMessage")
 	}
 
+	// parallel shape and isolated groups (Task 10)
+	if !strings.Contains(picker, "**`--parallel`**") || !strings.Contains(picker, "it needs `--implementers` / `--team`") || !strings.Contains(picker, "under `--auto` it is REFUSED") {
+		add("--parallel must need --implementers and be refused under --auto")
+	}
+	for _, need := range []string{"The shape is never inferred", "**Files-disjoint gate across groups:**", "file-disjoint is not independence"} {
+		if !strings.Contains(split, need) {
+			add("Step 4.6 must declare parallel groups behind a files-disjoint gate: " + need)
+		}
+	}
+	for _, need := range []string{"MODE: {solo | isolated}", "CALLER_TOPLEVEL:", "MAIN_ROOT:", "BASE: {base sha}", "carry `MODE: isolated` and no base instruction"} {
+		if !strings.Contains(dispatch, need) {
+			add("the isolated brief must carry BASE, CALLER_TOPLEVEL and MAIN_ROOT, and a NEXT no base instruction: " + need)
+		}
+	}
+	if !strings.Contains(dispatch, "isolation=worktree name=impl-{RUN}-{group}") {
+		add("an isolated group must be spawned through member-run with isolation=worktree")
+	}
+	integrateAt := strings.Index(review, "lets integrate --from ")
+	acceptAt := strings.Index(review, "- **Accept** ->")
+	if integrateAt < 0 || acceptAt < 0 || integrateAt > acceptAt || !strings.Contains(review, "lets integrate --revert --patch {patch_path}") {
+		add("an isolated chunk must be integrated through lets integrate before Accept, and reverted on a reject")
+	}
+	if !strings.Contains(review, "`{since}` is the group's integrated_source, or its base") {
+		add("lets integrate --since must read the group's integrated_source")
+	}
+	completion := sectionSpan(exec, "### 5-D.9 Completion")
+	if !strings.Contains(completion, "compare its `integrated_source` with the tip of its `agent_branch`") || !strings.Contains(completion, "only on the user's yes") {
+		add("an agent branch and worktree may be removed only when integrated_source is its tip, and only on the user's yes")
+	}
+	cleanup := between(completion, "**Isolated groups' worktrees.**", "Any mismatch at step 2 or 3")
+	dismissAt, removeAt, deleteAt := strings.Index(cleanup, "`op=dismiss` FIRST"), strings.Index(cleanup, "`git worktree remove {agent_worktree_path}`"), strings.Index(cleanup, "`git branch -D {agent_branch}`")
+	if dismissAt < 0 || removeAt < dismissAt || deleteAt < removeAt || strings.Count(cleanup, "git rev-parse {agent_branch}") < 2 || !strings.Contains(cleanup, "never with `--force`") || strings.Contains(cleanup, "remove --force") {
+		add("cleanup must dismiss first, re-check the tip before the worktree remove and before the branch delete, and never force the remove")
+	}
+	if !strings.Contains(sectionSpan(exec, "### 5-D.7 Recovery (a run record exists)"), "`--from` the chunk's recorded `commit_sha`, never the branch tip") {
+		add("an isolated replacement must integrate from the last reported commit_sha, never the branch tip")
+	}
+	for _, key := range []string{"execute", "agent"} {
+		if strings.Contains(f[key], "reset --hard") {
+			add(key + " must never carry reset --hard")
+		}
+	}
+	isolated := ""
+	for _, line := range strings.Split(f["agent"], "\n") {
+		if strings.HasPrefix(line, "| `isolated` |") {
+			isolated = line
+		}
+	}
+	switchAt := strings.Index(isolated, "git switch -C")
+	for _, check := range []string{"/.claude/worktrees/agent-", "`CALLER_TOPLEVEL`", "`worktree-agent-`", "`git status --porcelain --untracked-files=all`"} {
+		if at := strings.Index(isolated, check); at < 0 || switchAt < 0 || at > switchAt {
+			add("implementer.md's isolated row must run every guard check before git switch -C: " + check)
+		}
+	}
+	if !strings.Contains(isolated, "Before EVERY commit re-check") || !strings.Contains(isolated, "still equals the path you verified at spawn") || !strings.Contains(isolated, "still the branch you switched at spawn") || !strings.Contains(isolated, "NEVER push") {
+		add("implementer.md's isolated row must re-check the toplevel (the path verified at spawn) and the branch before every commit, and never push")
+	}
+	if step3 := sectionSpan(skill, "## Step 3: Next / Correct"); !strings.Contains(step3, "`agent_id`: set -> the `to:` below is that id") || !strings.Contains(skill, "puts the `agent_id` where it says `{agent}`") {
+		add("member-run Step 3 must send to the member's agent_id when it is set")
+	}
+	if !strings.Contains(sectionSpan(skill, "## Step 4: Dismiss"), "`TaskStop(task_id=\"{agent}\")` - the `agent_id` when set") || !strings.Contains(sectionSpan(skill, "## Step 2: Spawn"), "--agent-id {id}") {
+		add("member-run must record an isolated member's agent id and stop it by that id")
+	}
+
 	if strings.Contains(exec, predecessor) || strings.Contains(exec, "chunk-file=") {
 		add("execute.md must call member-run with brief-file= - not its predecessor, no chunk-file=")
 	}
@@ -335,6 +399,18 @@ func TestMemberRun(t *testing.T) {
 		{"bare integrated field", "execute", `"integrated_source": null`, `"integrated": null`, "bare integrated"},
 		{"addendum heading dropped", "execute", "`## Allowlist addendum`", "`## Extra paths`", "addendum"},
 		{"pre-upgrade member messaged", "execute", "such a member is never messaged", "such a member is asked to report", "pre-upgrade"},
+		{"parallel allowed alone", "execute", "it needs `--implementers` / `--team`", "it runs alone", "--parallel must need"},
+		{"groups inferred", "execute", "The shape is never inferred", "The shape is inferred", "declare parallel groups"},
+		{"isolated brief loses CALLER_TOPLEVEL", "execute", "CALLER_TOPLEVEL: {git rev-parse", "TOPLEVEL: {git rev-parse", "CALLER_TOPLEVEL"},
+		{"no revert on reject", "execute", "lets integrate --revert --patch {patch_path}", "git checkout -- {patch_path}", "reverted on a reject"},
+		{"cleanup without the tip check", "execute", "compare its `integrated_source` with the tip of its `agent_branch`", "look at its `agent_branch`", "integrated_source is its tip"},
+		{"guard switches first", "agent", "At spawn only, before any edit,", "At spawn only, first `git switch -C <branch> {BASE}`, then before any edit,", "before git switch -C"},
+		{"reset --hard creeps in", "agent", "NEVER push.", "NEVER push; git reset --hard on a bad start.", "reset --hard"},
+		{"step 3 sends by name", "skill", "   - Read the entry's `agent_id`: set -> the `to:` below is that id, not the name.\n", "", "agent_id when it is set"},
+		{"cleanup deletes before dismissing", "execute", "1. `member-run` `op=dismiss` FIRST", "1. `member-run` `op=dismiss` last", "dismiss first"},
+		{"cleanup forces the remove", "execute", "then `git worktree remove {agent_worktree_path}` - plain", "then `git worktree remove --force {agent_worktree_path}` - plain", "dismiss first"},
+		{"replacement integrates the tip", "execute", "`--from` the chunk's recorded `commit_sha`, never the branch tip", "`--from` the branch tip", "commit_sha"},
+		{"commit guard only checks the caller", "agent", "still equals the path you verified at spawn", "is not the caller's", "verified at spawn"},
 		{"unscoped gate sentence returns", "rules", "inside it the gate is plan mode for an inline run", "inside it the plan-mode approval is the gate", "still asserts"},
 	}
 	for _, m := range mutants {

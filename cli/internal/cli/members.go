@@ -91,6 +91,7 @@ func newMembersAddCmd() *cobra.Command {
 	f.StringVar(&a.WorktreePath, "worktree-path", "", "Absolute path of an isolated member's worktree")
 	f.StringVar(&a.WorktreeBranch, "worktree-branch", "", "Branch of an isolated member's worktree")
 	f.StringVar(&a.Link, "link", memberscmd.LinkTeam, "team | peer")
+	f.StringVar(&a.AgentID, "agent-id", "", "Id an isolated Agent call returned; messages address the member by it")
 	f.StringVar(&a.Cwd, "cwd", "", "Where a pane member's session runs (default: --worktree-path when isolated, else the git toplevel)")
 	f.BoolVar(&jsonOut, "json", false, "Emit a JSON envelope")
 	return cmd
@@ -145,7 +146,7 @@ func newMembersStatusCmd() *cobra.Command {
 					fmt.Fprintf(w, "lead %s %s\n", res.Lead.Name, res.Lead.Status)
 				}
 				for _, m := range res.Members {
-					fmt.Fprintf(w, "%s %s %s %s %s\n", m.Name, m.Role, m.Kind, m.Status, m.Reason)
+					fmt.Fprintf(w, "%s %s %s %s %s %s\n", m.Name, m.Role, m.Kind, m.Status, m.Reason, m.AgentID)
 				}
 			})
 		},

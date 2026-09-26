@@ -380,7 +380,7 @@ func TestAdd_ExecuteScopePaneOwnSid(t *testing.T) {
 	wt := realDir(t)
 	r.put(100, sidA, "lead", o.Root)
 	r.put(200, sidM, "impl-abc123-c1", wt)
-	res, err := memberscmd.Add(o, memberscmd.AddOptions{Name: "impl-abc123-c1", Role: "implementer", Isolation: "worktree", WorktreePath: wt, WorktreeBranch: "worktree-agent-x"})
+	res, err := memberscmd.Add(o, memberscmd.AddOptions{Name: "impl-abc123-c1", Role: "implementer", Isolation: "worktree", WorktreePath: wt, WorktreeBranch: "worktree-agent-x", AgentID: "id-c1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -636,11 +636,11 @@ func TestStatus_IsolatedWorktreeGone(t *testing.T) {
 	for _, n := range []string{"keep", "pruned", "listed-missing"} {
 		wt := filepath.Join(base, n)
 		git("worktree", "add", "-q", "-b", n, wt)
-		if _, err := memberscmd.Add(o, memberscmd.AddOptions{Name: n, Role: "implementer", Isolation: "worktree", WorktreePath: wt}); err != nil {
+		if _, err := memberscmd.Add(o, memberscmd.AddOptions{Name: n, Role: "implementer", Isolation: "worktree", WorktreePath: wt, AgentID: "id-" + n}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, err := memberscmd.Add(o, memberscmd.AddOptions{Name: "never", Role: "implementer", Isolation: "worktree", WorktreePath: filepath.Join(base, "never")}); err != nil {
+	if _, err := memberscmd.Add(o, memberscmd.AddOptions{Name: "never", Role: "implementer", Isolation: "worktree", WorktreePath: filepath.Join(base, "never"), AgentID: "id-never"}); err != nil {
 		t.Fatal(err)
 	}
 	// pruned: the directory goes and git marks it prunable.
@@ -670,12 +670,50 @@ func TestStatus_IsolatedWorktreeGone(t *testing.T) {
 	}
 }
 
+// An isolated member is reachable only by the id its Agent call returned: add
+// stores it, status shows it, and a malformed id is refused.
+func TestAdd_IsolatedAgentID(t *testing.T) {
+	r := newRegistry(t)
+	o := opts(t, "run-abc123", sidA)
+	r.put(100, sidA, "lead", o.Root)
+	wt := filepath.Join(realDir(t), "agent-wt")
+	res, err := memberscmd.Add(o, memberscmd.AddOptions{Name: "impl-abc123-a", Role: "implementer", Isolation: "worktree", WorktreePath: wt, AgentID: "a1b2c3d4e5f6"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Member.AgentID != "a1b2c3d4e5f6" {
+		t.Errorf("add stored agent_id %q", res.Member.AgentID)
+	}
+	st, err := memberscmd.Status(o, "impl-abc123-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := json.Marshal(st.Members[0])
+	if !strings.Contains(string(b), `"agent_id":"a1b2c3d4e5f6"`) {
+		t.Errorf("status does not show agent_id: %s", b)
+	}
+	if _, err := memberscmd.Add(o, memberscmd.AddOptions{Name: "impl-abc123-c", Role: "implementer", Isolation: "worktree", WorktreePath: wt}); kindOf(err) != "usage" || !strings.Contains(err.Error(), "--agent-id") {
+		t.Errorf("an isolated member without --agent-id must be a usage error, got %v", err)
+	}
+	if _, err := memberscmd.Add(o, memberscmd.AddOptions{Name: "impl-abc123-b", Role: "implementer", AgentID: "bad id\n"}); err == nil {
+		t.Error("a malformed --agent-id must be refused")
+	}
+	// a member without one keeps no agent_id key at all
+	res, err = memberscmd.Add(o, memberscmd.AddOptions{Name: "impl-abc123", Role: "implementer"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := json.Marshal(res.Member); strings.Contains(string(b), "agent_id") {
+		t.Errorf("agent_id must be omitted when empty: %s", b)
+	}
+}
+
 // The flags member-run passes are the flags the binary defines: this pins the
 // review's flag list per subcommand, and every `lets members` flag the member-run
 // skill uses.
 func TestMembersFlags_MatchMemberRun(t *testing.T) {
 	want := map[string][]string{
-		"add":     {"scope", "json", "name", "role", "model", "isolation", "worktree-path", "worktree-branch", "link", "cwd"},
+		"add":     {"scope", "json", "name", "role", "model", "isolation", "worktree-path", "worktree-branch", "link", "cwd", "agent-id"},
 		"dismiss": {"scope", "json", "name", "all"},
 		"status":  {"scope", "json", "name"},
 		"lead":    {"scope", "json", "claim"},
