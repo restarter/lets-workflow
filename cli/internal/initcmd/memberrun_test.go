@@ -119,7 +119,7 @@ func delegatedContractProblems(f map[string]string) []string {
 	if !strings.Contains(split, "**Files audit - a GATE.**") || !strings.Contains(split, "when the Files audit fails") {
 		add("Step 4.6 must run the Files audit as a gate that refuses delegation")
 	}
-	for _, need := range []string{"expand `{a,b}` brace sets", "a bare name (no `/`) inherits the directory of the previous path on the same Files line", "it is a repo-root path", "`Files add:` Amendment lines count as its Files", "Only a FULL path", "resolves ambiguously, is a warning", "never a refusal"} {
+	for _, need := range []string{"expand `{a,b}` brace sets", "a bare name (no `/`) resolves, in this order: to the directory of the previous path on the same Files line only when the file exists there at BASE or the task creates it there", "else to the repo root when it exists there at BASE or the task creates it there", "else it is unresolvable - a warning, never a refusal", "`Files add:` Amendment lines count as its Files", "Only a FULL path", "resolves ambiguously, is a warning", "never a refusal"} {
 		if !strings.Contains(split, need) {
 			add("the Files audit must resolve paths before it refuses: " + need)
 		}
@@ -430,7 +430,8 @@ func TestMemberRun(t *testing.T) {
 		{"execute back on the old skill", "execute", `Skill(skill: "lets:member-run", args: "op=spawn`, "Skill(skill: \"lets:implementer" + "-run\", args: \"op=spawn", "not its predecessor"},
 		{"a Review gate is dropped", "execute", `header: "Review"`, `header: "Reviewed"`, "Review gates"},
 		{"files audit becomes a warning", "execute", "**Files audit - a GATE.**", "**Files audit - a WARNING.**", "Files audit as a gate"},
-		{"files audit drops bare-name resolution", "execute", "a bare name (no `/`) inherits", "a bare name (no `/`) is refused", "resolve paths before it refuses"},
+		{"files audit drops bare-name resolution", "execute", "a bare name (no `/`) resolves", "a bare name (no `/`) is refused", "resolve paths before it refuses"},
+		{"bare name always inherits", "execute", "a bare name (no `/`) resolves, in this order: to the directory of the previous path on the same Files line only when the file exists there at BASE or the task creates it there", "a bare name (no `/`) inherits the directory of the previous path on the same Files line", "resolve paths before it refuses"},
 		{"unresolvable name refuses", "execute", "resolves ambiguously, is a warning", "resolves ambiguously, refuses delegation", "resolve paths before it refuses"},
 		{"removed-symbol check refuses", "execute", "it never refuses delegation", "it refuses delegation", "warning only"},
 		{"anchor check adds an option", "execute", "adds no gate and no option", "adds an option", "anchor check"},

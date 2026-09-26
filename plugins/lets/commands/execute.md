@@ -256,7 +256,7 @@ A chunk's **Risk** is `high` when any of its tasks says `**Risk:** high` or its 
 **Files audit - a GATE.** Every path a task's step text creates, edits, renames or deletes must appear in that task's `**Files:**` (a path named only to read or cite is not a touch). Resolve the Files: lines first:
 
 - expand `{a,b}` brace sets (`memberscmd/{members.go,lead.go}` -> two paths);
-- a bare name (no `/`) inherits the directory of the previous path on the same Files line (`info.go`, `info_test.go` -> both in `info.go`'s directory); with no previous path on the line it is a repo-root path (`CLAUDE.md`);
+- a bare name (no `/`) resolves, in this order: to the directory of the previous path on the same Files line only when the file exists there at BASE or the task creates it there (`info.go`, `info_test.go` -> both in `info.go`'s directory); else to the repo root when it exists there at BASE or the task creates it there (`plugins/lets/rules/lets-rules.md`, `CLAUDE.md` -> `CLAUDE.md` at the root); else it is unresolvable - a warning, never a refusal;
 - a task's `Files add:` Amendment lines count as its Files.
 
 Only a FULL path a step's text touches that is still missing from Files after this expansion refuses delegation (below), naming each task and path - it would put the implementer outside its allowlist, a certain deviation; fixing the plan's Files: lines, or `/lets:plan`, clears it. A name that cannot be resolved, or resolves ambiguously, is a warning in the preview's `### Warnings` block, never a refusal.
