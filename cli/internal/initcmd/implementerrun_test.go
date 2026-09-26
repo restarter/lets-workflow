@@ -92,14 +92,29 @@ func delegatedContractProblems(f map[string]string) []string {
 		if n := strings.Count(delegated, `preview: "{the review block}"`); n != 3 {
 			add(fmt.Sprintf("each of the 3 Review gates must carry the review block as its first option's preview, found %d", n))
 		}
-		for _, need := range []string{`Skill(skill: "lets:implementer-run"`, "TaskStop(", "git ls-files --others --exclude-standard", "--untracked-files=all", "git diff HEAD", "git diff --cached --name-only", `args: "approved=review-accept"`, "patch_sha", "**Render review**", "**What is a report.**", "malformed-report", "Write a report with the Write tool", "| `pending` |", "| `review` / `paused` |", "| `committing` |", "AMENDMENT to chunk"} {
+		for _, need := range []string{`Skill(skill: "lets:implementer-run"`, "TaskStop(", "git ls-files --others --exclude-standard", "--untracked-files=all", "git diff HEAD", "git diff --cached --name-only", `args: "approved=review-accept"`, "patch_sha", "**Render review**", "**What is a report.**", "malformed-report", "REPORT_WRITTEN", "missing-report", "READ EVERY REPORT IN FULL", "retry=no", "| `pending` |", "| `review` / `paused` |", "| `committing` |", "AMENDMENT to chunk"} {
 			if !strings.Contains(delegated, need) {
 				add("Step 5-D must contain " + need)
 			}
 		}
+		if !strings.Contains(delegated, "EMPTY ones included") || !strings.Contains(delegated, "op=peek") {
+			add("Step 5-D.5 must peek at the REPORT_FILE on every notification, EMPTY ones included - the final text is not the completion gate")
+		}
+		if !strings.Contains(delegated, "Never wait for a later `/lets:execute` to notice a stopped agent") {
+			add("Step 5-D.5 must nudge once and then record a gap for a stopped agent with no report, in the same session")
+		}
+	}
+	if !strings.Contains(exec, "a replacement never writes an earlier generation's report") {
+		add("the replacement brief must name the new generation's round-0 REPORT_FILE as its only REPORT_FILE")
+	}
+	if !strings.Contains(exec, "rehydration") {
+		add("5-D.7 must rehydrate a recorded round whose report file no longer peeks OK, without counting a new report")
 	}
 
 	agent := f["agent"]
+	if !strings.Contains(agent, "REPORT_FILE") {
+		add("implementer.md must write its report to the REPORT_FILE its brief names")
+	}
 	status := sectionSpan(agent, "## Status")
 	for _, s := range []string{"`complete`", "`deviation-stopped`", "`blocked`"} {
 		if !strings.Contains(status, s) {
@@ -165,11 +180,19 @@ func TestImplementerRun(t *testing.T) {
 		t.Error(problem)
 	}
 
-	mutants := []struct{ name, key, old, repl, want string }{
-		{"picker loses Implementers", "execute", `label: "Implementers"`, `label: "Implementer"`, "Implementers locus"},
-		{"correct spawns", "skill", "SendMessage(", "Agent(", "Correct must"},
-		{"a Review gate is dropped", "execute", `header: "Review"`, `header: "Reviewed"`, "Review gates"},
-		{"unscoped gate sentence returns", "rules", "inside it the gate is plan mode for an inline run", "inside it the plan-mode approval is the gate", "still asserts"},
+	// n is strings.Replace's count: 1 for one occurrence, -1 when a mutant must rewrite
+	// every occurrence for its guard to see the change.
+	mutants := []struct {
+		name, key, old, repl, want string
+		n                          int
+	}{
+		{"picker loses Implementers", "execute", `label: "Implementers"`, `label: "Implementer"`, "Implementers locus", 1},
+		{"correct spawns", "skill", "SendMessage(", "Agent(", "Correct must", 1},
+		{"a Review gate is dropped", "execute", `header: "Review"`, `header: "Reviewed"`, "Review gates", 1},
+		{"unscoped gate sentence returns", "rules", "inside it the gate is plan mode for an inline run", "inside it the plan-mode approval is the gate", "still asserts", 1},
+		{"a replacement keeps the old report path", "execute", "a replacement never writes an earlier generation's report", "keep the copied lines", "new generation's round-0 REPORT_FILE", 1},
+		{"the final text gates the report again", "execute", "EMPTY ones included", "non-empty ones", "EMPTY ones included", 1},
+		{"interim notifications conclude a gap", "execute", "op=peek", "op=collect", "EMPTY ones included", -1},
 	}
 	for _, m := range mutants {
 		t.Run(m.name, func(t *testing.T) {
@@ -180,7 +203,7 @@ func TestImplementerRun(t *testing.T) {
 			for k, v := range files {
 				mutated[k] = v
 			}
-			mutated[m.key] = strings.Replace(files[m.key], m.old, m.repl, 1)
+			mutated[m.key] = strings.Replace(files[m.key], m.old, m.repl, m.n)
 			for _, problem := range delegatedContractProblems(mutated) {
 				if strings.Contains(problem, m.want) {
 					return
