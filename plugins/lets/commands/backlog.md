@@ -186,12 +186,14 @@ Titles and priorities only. Do NOT call `show` or `comment-list` per task: brain
 
 `stats` absent -> omit the totals line, keep the rest. `list-by-status` absent -> say the backlog could not be read and stop; a backlog review with no backlog is not worth running.
 
-Then launch explorer for everything the tracker cannot answer.
+Then launch explorer for everything the tracker cannot answer. Open the run first: `Skill(skill: "lets:agent-report", args: "op=open command=backlog task={task-id} names=explorer")` (task omitted when none); the explorer prompt carries its `REPORT_FILE:` line right after `ultrathink`.
 
 ```
 Task(
   subagent_type="lets:explorer",
   prompt="ultrathink
+
+REPORT_FILE: {the explorer's path from op=open}
 
 BRAINSTORM SCOUT MODE. In this mode, your mapping role extends to surfacing signals and gaps - not just structure. Gather project context for a brainstorm session.
 
@@ -250,7 +252,9 @@ OUTPUT FORMAT - Project State Profile:
 
 #### Explorer Failure Guard
 
-If explorer fails, times out, or returns no structured profile:
+First `Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names=explorer")` - READ EVERY REPORT IN FULL; the profile is the report read, never the final text, and it is used only after this guard.
+
+If explorer fails, times out, is a `GAP` after the collect, or returns no structured profile:
 
 > "Explorer couldn't gather context for multi-agent review. For a quick no-agent pulse instead, run `/lets:backlog --fast`."
 
@@ -348,6 +352,8 @@ Launching...
 
 ### Phase 3: Launch Brainstorm Agents (Parallel)
 
+Name the report files first: `Skill(skill: "lets:agent-report", args: "op=add dir={REPORT_DIR} names={comma-separated agent short names}")` (a re-run after a failure takes fresh suffixed names). Each prompt carries its `REPORT_FILE:` line right after `ultrathink`.
+
 CRITICAL: Launch ALL selected agents in a SINGLE message with multiple Task tool calls.
 
 For each selected agent:
@@ -356,6 +362,8 @@ For each selected agent:
 Task(
   subagent_type="lets:{agent-name}",
   prompt="ultrathink
+
+REPORT_FILE: {this agent's path from op=add}
 
 PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
 
@@ -406,7 +414,7 @@ Agents define their own brainstorm focus in their `## Modes` section - no mandat
 
 > **Keep in sync (--workflow):** the off-context clustering lives in `skills/backlog-workflow/backlog.workflow.js` - `buildThemes` (semantic merge -> impact-sort with `agents[]`) and `clusterIdeas` (title-only fallback). Any change to the dedupe/merge/impact-sort here MUST be mirrored there, and vice versa. (No unit test pins this - the runtime blocks clean import; keep-in-sync discipline + a live smoke test are the guards.)
 
-After all agents respond:
+After all agents respond: `Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names={the Phase 3 names}")` - READ EVERY REPORT IN FULL; aggregate the reports read. When any `GAP` exists, the output below gains a `Coverage: {ok}/{expected} experts - {name}: no report ({state})` line under its first line.
 
 1. Group ideas by impact (high first)
 2. Deduplicate: if two agents suggest the same area, merge and note both perspectives
