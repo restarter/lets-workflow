@@ -115,7 +115,7 @@ Then, inside the Claude Code session:
 | `/lets:plan` | Structured planning - explore codebase, design architecture, write plan (`--fast` = orchestrator-only, no subagents; `--idea` = concept document, no code) |
 | `/lets:plan-workflow` | PREVIEW - autonomous planning via a Dynamic Workflow: goal + rubric up front, off-context, you approve at the end (`--fast` = lean budget) |
 | `/lets:execute` | Execute plan from `/lets:plan` - inline in native plan mode (straight-through by default, or `--step` / `--auto`), or `--implementers`: one persistent implementer (or `--parallel` isolated groups) you review and correct chunk by chunk, under the gate policy you pick at Start |
-| `/lets:team` | Team management - `run` several tasks at once (one visible session per task, any launcher), `spawn` / `dismiss` / `roster` a standing team's members, `status`, `stop` |
+| `/lets:team` | Team management - `run` several tasks at once (one visible session per task, any launcher), `create` / `disband` a standing team, `spawn` / `dismiss` / `roster` its members, `status`, `stop` |
 | `/lets:worktree` | Create/manage worktrees for parallel sessions |
 | `/lets:statusline` | Manage & persist statusline appearance - light/dark, compact, hidden rows |
 
@@ -276,7 +276,7 @@ Two ways to work on multiple tasks at once:
 /lets:team run    # select tasks, one worker session opens per task
 ```
 
-Each worker runs its own `/lets:start` ... `/lets:done`, and you press its gates in its own terminal; this session is the orchestrator and talks to the workers through `/lets:orc`. It works on every launcher (terminal, cmux, tmux, Orca). A standing team's lead can also `/lets:team spawn` expert members (architect, skeptic, explorer, implementer) that keep working with it across tasks. Inside ONE task, `/lets:execute --implementers --parallel` splits the plan into file-disjoint groups for parallel implementers instead.
+Each worker runs its own `/lets:start` ... `/lets:done`, and you press its gates in its own terminal; this session is the orchestrator and talks to the workers through `/lets:orc`. It works on every launcher (terminal, cmux, tmux, Orca). A **standing team** goes further: `/lets:team create` gives an area its own worktree (`team_<callsign>`, named by a callsign like snake or frog), a lead session and a team file that remembers what it learned; the lead moves the worktree from task to task with `/lets:start <id>` (unfinished work is committed or parked, never stashed), `/lets:team spawn` brings in expert members (architect, skeptic, explorer, implementer) that keep working with it across tasks, and `/lets:team disband` retires it. Inside ONE task, `/lets:execute --implementers --parallel` splits the plan into file-disjoint groups for parallel implementers instead.
 
 **Worktrees (interactive)** — work on multiple tasks yourself in separate terminals:
 

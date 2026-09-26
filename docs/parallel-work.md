@@ -20,14 +20,28 @@ Start it from the main checkout, with a clean tree; your session is registered a
 
 This is the right tool when you have several independent, well-scoped tasks. For a single task you're actively shaping, plain `/lets:plan` + `/lets:execute` is a better fit — see **[plan-execute.md](plan-execute.md)**.
 
-## A standing team — members that outlive a task
+## A standing team — a workspace that outlives its tasks
 
-A worktree a team file claims (`.lets/teams/<callsign>.md`; `/lets:worktree info` reports it as `team`) belongs to a **standing team**: a lead session plus `lets:*` members - architect, skeptic, explorer, implementer - that keep working with it from task to task. In that worktree, from the lead's session:
+A **standing team** owns an area of the repo for longer than one task: its own worktree, a lead session, `lets:*` members (architect, skeptic, explorer, implementer) and a team file that remembers what it learned. Continuity is files only: the harness restores no member after the lead restarts, so every decision and finding that matters is written to the team file (`.lets/teams/<callsign>.md`) or a file it lists, and members are respawned from it, never resumed from memory.
 
-- `/lets:team spawn <role> [name]` spawns one member (`spawn --roster` the whole roster from the team file); a name that is still live is never spawned twice.
+**Create.** From the main checkout:
+
+```
+/lets:team create [<callsign>] --area "billing API"
+```
+
+Teams are named by callsign (snake, frog, otter, ...). Without one, LETS proposes a free callsign - no team file under that name and no live `<callsign>-lead` session - and checks it before anything is created. It then creates the worktree `team_<callsign>` (dir and branch) from `origin/<merge-branch>`, writes the team file (never overwriting one), shows your project's optional `.lets/hooks/team-setup` whole and runs it only on your yes (it can fill the team file's Workspace: a docker prefix, a compose project, a port block), and launches ONE session - the lead, named `<callsign>-lead` - on your launcher. The same command on an existing team reopens it: its lead is launched again.
+
+**Work task by task.** In the lead session, `/lets:start <task-id>` claims the team's lead (a second chat is told who the live lead is) and moves the team worktree to that task's branch - an existing one, or a new one cut from `origin/<merge-branch>`. Uncommitted work on the previous task is committed or **parked**: a `wip(<id>): park` commit on that branch, which is undone (its changes staged again) when you come back to the task and the park was never pushed. Every new file must be named for a park; ignored files are never parked, and nothing is ever stashed. A switch refuses while a merge or rebase is in progress, while an implementer is still writing in the worktree, or onto the merge-branch. `/lets:done` warns about park commits still in the range and offers to promote what this task learned to the team file's Standing knowledge.
+
+**Members.** From the lead's session:
+
+- `/lets:team spawn <role> [name]` spawns one member (`spawn --roster` the whole roster from the team file); a name that is still live is never spawned twice. After a restart, `/lets:start` offers **Respawn roster**.
 - `/lets:team roster` shows the roster joined with who is live; `/lets:team dismiss <name>` or `dismiss --all` ends members.
 
-`/lets:start` in a team worktree first claims the team's lead (`lets members lead --claim`); a second chat there is told who the live lead is. Members only ever talk to the lead, and the harness restores no member after the lead restarts - continuity is files only, so a member is respawned from the team file, never resumed from memory.
+Members only ever talk to the lead.
+
+**Disband.** `/lets:team disband <callsign>` retires the team, and never kills anything: when the recorded lead is still live it asks the lead (through `/lets:orc`) to dismiss its members and wrap up, or lets you say it already has; when LETS cannot tell, it asks you; with no live lead, it lists every session still open in the team worktree for you to close or keep. A task still in progress, or a branch the team parked, stops it until you decide. The worktree is removed through `/lets:worktree remove` with its usual checks (uncommitted changes, unpushed commits), your optional `.lets/hooks/team-teardown` runs only on your yes, and the team file and its members registry stay as history - the callsign stays taken.
 
 ## Parallel implementers inside one task
 

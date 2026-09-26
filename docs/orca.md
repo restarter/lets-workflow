@@ -19,7 +19,10 @@ When the project's `.lets/.env` names Orca, `lets init` also writes `orca.yaml`:
 | Peer messages | `/lets:orc` can type straight into a peer's pane when its transcript, screen and Orca all show it idle ([commands/orc.md](commands/orc.md)) |
 | Across projects | `/lets:hub` lists every project's orchestrators, asks a stopped one read-only, or wakes it in a visible terminal ([messaging.md](messaging.md)) |
 | Parallel runs | `/lets:team run` works on every launcher; with Orca running it becomes the Orca addon (`--backend orca` picks it directly): each task a visible LETS session in an Orca child worktree under Orca's supervised orchestration ([parallel-work.md](parallel-work.md)) |
+| Standing teams | `/lets:team create` creates the team worktree itself - Go, never Orca, whatever the launcher - then, after the team file and your approved setup hook, opens ONLY the lead's terminal through Orca (`lets orca terminal`) in that worktree. When Orca refuses, the command to run is printed instead ([parallel-work.md](parallel-work.md)) |
 | Hand-offs | `/lets:handoff --send` types a brief into a Codex, Antigravity or Claude tab of this worktree and brings the report back; `--open` opens a new Codex tab for it, and `--execute` hands an open tab an approved plan to implement ([commands/handoff.md](commands/handoff.md)) |
+
+**Standing teams under Orca.** Whether the lead's teammates show up as separate panes is Claude Code's own setting, not LETS's - LETS turns on no agent-teams option. Archiving a team worktree in the Orca UI still runs Orca's archive hook, `lets worktree release`: harmless (it records the current branch's task and removes only that task-state file), but it does not retire the team - `/lets:team disband` is the LETS way to do that.
 
 ## When Orca is not there
 

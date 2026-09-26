@@ -1,6 +1,6 @@
 # Smoke: parallel implementers and team runs
 
-The live checks behind lets-7dwc1 (merged; ships next release): what a Go test cannot prove because it depends on the running Claude Code harness - how it names, isolates and restores agents, and what it does with a session's id. Run them on a scratch branch, with the owner's yes, whenever Claude Code or this area changes; record every run in the results table at the end. A check that fails is a **deviation**: stop, record what happened, and decide with the owner - never adapt the procedure to make it pass.
+The live checks behind lets-7dwc1 and lets-0rgnd (merged; ships next release): what a Go test cannot prove because it depends on the running Claude Code harness - how it names, isolates and restores agents, and what it does with a session's id. Run them on a scratch branch, with the owner's yes, whenever Claude Code or this area changes; record every run in the results table at the end. A check that fails is a **deviation**: stop, record what happened, and decide with the owner - never adapt the procedure to make it pass.
 
 The design facts these checks rest on are pinned statically by `TestSmokeFacts` (`cli/internal/initcmd/smokefacts_test.go`): no `team_name` / `mode=` in the execute or team commands, `BASE` in every isolated brief, member-run never messaging a gone member, and `lets integrate` running before Accept.
 
@@ -44,6 +44,21 @@ With `LETS_LAUNCHER=tmux` or `cmux` and two scratch tasks, run `/lets:team run -
 ## 7. Standing-team members (Task 12)
 
 In a team worktree: dismiss a pane member, then `/lets:team spawn --roster`. Pass: a new `<c>-architect` is live, a surviving pane under the same name is refused or renamed (`<name>-2`), and the lead's task-state `session:` is untouched.
+
+## 8. Creating a team on each launcher (lets-0rgnd, Task 16)
+
+1. **(a) Orca.** Run `git fetch origin`, then `/lets:team create --area <a>` with `LETS_LAUNCHER=orca`. Pass, all of:
+   - the team worktree's HEAD == `origin/main` after that fetch, and its branch is `team_<c>`;
+   - `orca terminal create` ACCEPTS the worktree LETS created (a refusal is recorded - the printed fallback command is then the Orca behaviour);
+   - the lead's command ran with cwd == the team worktree;
+   - the `lets peers who --json` row has the name exactly `<c>-lead`, that exact cwd, and `send: orca`.
+2. **(e) Orca.** The lead spawns one named teammate. Record whether it shows as a pane - a finding, not a gate (that is Claude Code's own setting).
+3. **(b) cmux and tmux.** With each launcher, the lead's command `claude --name <c>-lead '/lets:start'` gives a `lets peers who` row named exactly `<c>-lead`.
+4. **(d) Setup hook.** Two teams in one repo whose `.lets/hooks/team-setup` sets them record distinct `DOCKER_PREFIX`, `COMPOSE_PROJECT_NAME` and port blocks in their team files' Workspace sections. The hook runs only after the owner's yes; a hook that fails stops the flow before the lead is launched, and the reopen offers to run it again.
+
+## 9. Create and disband (lets-0rgnd, Task 18)
+
+On a scratch team: `/lets:team create` with no callsign proposes a free animal callsign. `/lets:team disband <c>` with a live pane member asks the owner and never proceeds silently.
 
 ## Results
 
