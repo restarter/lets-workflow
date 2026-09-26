@@ -677,6 +677,8 @@ Skipped for file mode:
 
 **If `--workflow` was parsed:** skip this step and Step 6 - go to the `## Workflow Mode (--workflow)` section below, then resume at Step 6.5. The rest of Step 5 is the standard Task-based path.
 
+Open the run: `Skill(skill: "lets:agent-report", args: "op=open command=review task={task-id} names={comma-separated selected agent short names}")` (task omitted when none). Each agent's prompt carries its own `REPORT_FILE:` line - the path `op=open` printed for that agent.
+
 **CRITICAL:** Launch ALL selected agents in a SINGLE message with multiple Task tool calls.
 
 For each selected agent, use the Task tool with:
@@ -693,6 +695,7 @@ Each agent receives this context in their task prompt. Agents define their own e
 ultrathink
 
 PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
+REPORT_FILE: {this agent's path from op=open}
 
 MODE: review
 
@@ -826,7 +829,7 @@ When the workflow's completion notification arrives, the orchestrator resumes wi
 
 **Workflow mode:** the script already filtered, deduped, separated systemic, sorted, and computed the verdict. Skip this step - the aggregate is in the Workflow return value. Continue at Step 6.5. The `skills/review-workflow/review.workflow.js` script mirrors the filter/dedupe rules below; **keep them in sync** (see the Keep-in-sync note under Step 7).
 
-Wait for all agents, then:
+Wait for all agents, then `Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names={the names opened in Step 5}")`. READ EVERY REPORT IN FULL - the steps below run over the reports read, never over final texts. Keep every `GAP` for Step 8 / 9.
 
 1. **Separate systemic first:** Split `[SYSTEMIC]` findings into their own section BEFORE any tier filter. The systemic instruction downgrades tier by one, so a `[SUGGESTION]`-systemic arrives as `[NIT]`; filtering NITs first would drop it before the split can capture it.
 2. **Filter:** From the regular (non-systemic) findings, keep [BLOCKER] and [SUGGESTION]. Include [NIT] only for small diffs (<50 lines)
@@ -856,7 +859,9 @@ Cut false positives before reporting: each finding gets a refutation pass from t
 
 **Scope:** verify `[BLOCKER]` and `[SUGGESTION]` findings only (skip `[NIT]`).
 
-**Per finding:** launch `lets:skeptic` (via the Task tool in standard mode) N times - **N=2**, or **N=3** for a `[BLOCKER]`. Each skeptic returns `{real, confidence, reason}`.
+**Per finding:** name the skeptics' report files first - `Skill(skill: "lets:agent-report", args: "op=add dir={REPORT_DIR} names=skeptic-f{i}-{k}")` (finding i, skeptic k; every skeptic of the pass in one call) - then launch `lets:skeptic` (via the Task tool in standard mode) N times - **N=2**, or **N=3** for a `[BLOCKER]`, each prompt carrying its own `REPORT_FILE:` line. Each skeptic returns `{real, confidence, reason}` in its report file.
+
+**After the skeptics return** (when this run dispatched skeptics - inline verification above 10 findings dispatches nothing and writes no files): `Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names={the skeptic names}")` - READ EVERY REPORT IN FULL; the drop rule below runs over the reports read. A skeptic `GAP` is an errored skeptic: the finding counts toward `verify_failed` and is kept unverified, never refuted.
 
 **Skeptic prompt template.** The skeptic's spec block is NARROWER than the reviewer's: it returns a verdict and cannot set a tier, so its only lever is `real`. Any reviewer-style "do NOT report this" therefore comes out as `real=false`, which this step maps to a **drop** - a deleted finding, not a softened one. The reviewer's "if the SPEC covers it, do NOT report it as creep" is exactly that shape; the skeptic is told the narrower thing instead (a spec-covered scope finding is not real). It also gets the same REVIEW TREE state as the reviewers; a skeptic on the wrong tree refutes real findings.
 
@@ -864,6 +869,7 @@ Cut false positives before reporting: each finding gets a refutation pass from t
 ultrathink
 
 PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
+REPORT_FILE: {this skeptic's path from op=add}
 
 MODE: review (adversarial verification)
 
@@ -966,6 +972,8 @@ The pop runs ONLY after a successful checkout - popping onto the PR branch would
 | 0 [BLOCKER]s, 3+ [SUGGESTION]s | APPROVED WITH SUGGESTIONS |
 | 1+ [BLOCKER]s | CHANGES REQUESTED |
 
+With any `GAP` from Step 6, append `(partial coverage: {ok}/{expected} lenses)` to the verdict line - the verdict covers only the lenses that reported.
+
 > **Keep in sync (--workflow):** the `skills/review-workflow/review.workflow.js` script reimplements this table in JS (its `computeVerdict()`: `const verdict = blockers > 0 ? ... : suggestions >= 3 ? ...`). Any change to these thresholds MUST be mirrored there, and vice versa - otherwise the two paths return different verdicts for the same diff. (No unit test pins this - the workflow runtime blocks clean testing; the keep-in-sync discipline + the live smoke test are the guards.)
 
 ## Step 8: Save Review (BEFORE output)
@@ -974,7 +982,7 @@ The pop runs ONLY after a successful checkout - popping onto the PR branch would
 
 Resolve the path via `Skill(skill: "lets:artifact-path", args: "kind=review-{kind} ext=md")` - kind by mode: Local -> `review-local`, Branch -> `review-branch` (own file - PR-equivalent diff deserves its own artifact), PR -> `review-pr-{number}` - and write the report to the echoed `ARTIFACT_FILE` VERBATIM. The name carries the task id (or branch + session hex when taskless) and a `-vN` suffix on collision. `.lets/` is shared across worktrees: NEVER write to a hand-built `{date}-{mode}.md` path (lets-05c4s - a plan review was lost that way).
 
-Content: Full review report with all issues, verdict, and summary.
+Content: Full review report with all issues, verdict, and summary. The saved report ends with a `## Coverage` section: the `Coverage:` line and every `GAP` line (`lens {name} did not report ({state}) - its findings are absent, not clean`; a skeptic gap as `skeptic {name} did not report ({state}) - finding kept unverified`). A review NEVER ends without this file: when reports are missing, save what exists and mark the gaps - never stop at the agents' files, never write the review anywhere but the `artifact-path` result.
 
 **The saved report carries the same caveats as Step 9's console/PR output** (they are the durable record, and Step 9's Local Mode section has no report template of its own). Include, when each applies:
 - spec `unresolved` -> `_Reviewed without a task spec - scope findings are unverified against planned work._` (NOT when `spec_source` is `none`: the user declared there is no spec, and repeating the caveat on every review of a spec-less project is noise)
@@ -1018,20 +1026,27 @@ Resolve the path via `Skill(skill: "lets:artifact-path", args: "kind=review-{kin
     "compliance": "pass",
     "backend": "2 issues",
     "security": "1 issue",
-    "architecture": "pass"
-  }
+    "architecture": "pass",
+    "database": "no report"
+  },
+  "coverage": { "reviewers": { "ok": 9, "expected": 10 }, "skeptics": { "ok": 12, "expected": 12 } },
+  "gaps": [ { "name": "database", "state": "MISSING", "phase": "review" }, { "name": "skeptic-f3-2", "state": "EMPTY", "phase": "verify" } ]
 }
 ```
 
 `mode` values: `PR-{number}` | `local-review` | `branch-review` | (plan modes are handled by the Plan Review section, not this path).
 
-`refuted_count` is additive (consumers that don't know it ignore it, e.g. `/lets:github-pr` reads only `findings` + `verdict`): the number of findings the Step 6.6 verify pass dropped or downgraded. Omit or `0` when no verification ran.
+`refuted_count` is additive (consumers that don't know it ignore it, e.g. `/lets:github-pr` reads `findings`, `verdict`, `coverage` and `gaps`): the number of findings the Step 6.6 verify pass dropped or downgraded. Omit or `0` when no verification ran.
 
-After saving, inform user: "Review saved to: {path}"
+`coverage` and `gaps` are additive - `/lets:github-pr` reads `findings`, `verdict`, `coverage` and `gaps` (its Step 5.10 contract). `gaps` is `[]` when every report arrived; `phase` is `review` for a lens, `verify` for a skeptic. Each `summary` field of a lens whose report is a `GAP` is `"no report"` - never `"pass"`.
+
+After saving, when any gap exists print the `Coverage:` line and every `GAP` line FIRST (`--json` skips Step 9, so this is its only user-facing output), then inform user: "Review saved to: {path}"
 Then STOP - skip Step 9 (Output) and Step 10 (Link to task).
 The calling command handles output and task linking.
 
 ## Step 9: Output Results
+
+When any `GAP` exists, the Coverage line and the gaps appear in the output (PR mode: in the review body), above the findings. The per-category summary renders `{pass | N issues | no report}` - `no report` for a lens whose report is a `GAP` - never `pass`; the saved Step 8 report uses the same rendering.
 
 ### For PR Mode (github or bitbucket):
 
@@ -1049,6 +1064,7 @@ gh pr comment <PR> --body "$(cat <<'EOF'
 {If `spec_source` is `unresolved`, add: `_Reviewed without a task spec - scope findings are unverified against planned work._` Omit it when `spec_source` is `none` - that was a deliberate answer, not a failure.}
 {If `pr_tree` is false, add: `_Reviewed from the diff - the working tree was not the PR branch._`}
 {If Step 3 reported `NO RULES REF`, add: `_Reviewed without project rules - CLAUDE.md was unreadable from the base ref._`}
+{If any `GAP` exists, add the `Coverage:` line and every gap: `_Coverage: {ok}/{expected} lenses - {names} did not report; their areas are unreviewed._`}
 
 Found {N} issues:
 
@@ -1073,17 +1089,17 @@ These patterns exist across the project, not just in this PR:
 ---
 
 **Review Summary:**
-- Compliance: {pass/N issues}
-- Backend/Bugs: {pass/N issues}
-- Security: {pass/N issues}
-- Architecture: {pass/N issues}
-- Git History: {pass/N issues}
-- Documentation: {pass/N issues}
-- Infrastructure: {pass/N issues}
-- Database: {pass/N issues}
-- Frontend: {pass/N issues}
-- Tests: {pass/N issues}
-- Pragmatism: {pass/N issues}
+- Compliance: {pass | N issues | no report}
+- Backend/Bugs: {pass | N issues | no report}
+- Security: {pass | N issues | no report}
+- Architecture: {pass | N issues | no report}
+- Git History: {pass | N issues | no report}
+- Documentation: {pass | N issues | no report}
+- Infrastructure: {pass | N issues | no report}
+- Database: {pass | N issues | no report}
+- Frontend: {pass | N issues | no report}
+- Tests: {pass | N issues | no report}
+- Pragmatism: {pass | N issues | no report}
 
 Generated with Claude Code
 EOF
@@ -1215,6 +1231,8 @@ Selected agents ({N}):
 
 ### P4: Launch Plan Review Agents (Parallel)
 
+Open the run: `Skill(skill: "lets:agent-report", args: "op=open command=review task={task-id} names=architect,pragmatist,{domain agent short names}")`. Each prompt below carries its agent's `REPORT_FILE:` line right after `ultrathink`.
+
 **CRITICAL: Launch ALL selected agents in a SINGLE message.**
 
 #### Architect (always included)
@@ -1223,6 +1241,8 @@ Selected agents ({N}):
 Task(
   subagent_type="lets:architect",
   prompt="ultrathink
+
+REPORT_FILE: {this agent's path from op=open}
 
 PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
 
@@ -1273,6 +1293,8 @@ OUTPUT FORMAT:
 Task(
   subagent_type="lets:pragmatist",
   prompt="ultrathink
+
+REPORT_FILE: {this agent's path from op=open}
 
 PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
 
@@ -1327,6 +1349,8 @@ Task(
   subagent_type="lets:{agent-name}",
   prompt="ultrathink
 
+REPORT_FILE: {this agent's path from op=open}
+
 PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
 
 MODE: plan
@@ -1368,12 +1392,12 @@ OUTPUT FORMAT:
 
 ### P5: Aggregate & Output
 
-After all agents respond:
+After all agents respond: `Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names=architect,pragmatist,{domain agent short names}")` - READ EVERY REPORT IN FULL; aggregate the reports read, never final texts. An agent `GAP` is rendered under its heading as `_No report ({state}) - this lens was not reviewed._`, never as APPROVED. INCOMPLETE (below) names the lenses that did not review and says to re-run `/lets:review --plan` before treating the plan as approved - a missing lens is never an approval.
 
 ```
 ## Plan Review: **{plan title}** (`{task-id}`)
 
-**Verdict:** {APPROVED if all approve | NEEDS REVISION if any agent flags revision}
+**Verdict:** {NEEDS REVISION if any agent flags revision | INCOMPLETE if no agent flags revision but any plan-review agent is a GAP | APPROVED if all approve}
 **Agents:** {N} ({agent names})
 
 ### Architecture
@@ -1394,12 +1418,18 @@ After all agents respond:
 ...
 {end if}
 
+{if any GAP}
+### Coverage
+Coverage: {ok}/{expected} reports
+{one line per GAP: {name}: no report ({state})}
+{end if}
+
 Saved to: {ARTIFACT_FILE}
 ```
 
 ### P6: Save & Link
 
-Resolve via `Skill(skill: "lets:artifact-path", args: "kind=review-plan ext=md")` and save to the echoed `ARTIFACT_FILE` VERBATIM (task-scoped, `-vN` on collision - never overwrite another worktree's plan review).
+Resolve via `Skill(skill: "lets:artifact-path", args: "kind=review-plan ext=md")` and save to the echoed `ARTIFACT_FILE` VERBATIM (task-scoped, `-vN` on collision - never overwrite another worktree's plan review). The saved plan review carries the P5 verdict (INCOMPLETE included) and ends with the same `## Coverage` section as Step 8.
 
 If active task found:
 ```lets-tracker

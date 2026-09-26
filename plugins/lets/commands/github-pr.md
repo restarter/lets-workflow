@@ -259,8 +259,7 @@ Invoke `/lets:review <PR> --json`.
 - `--json`: saves structured findings under `.lets/reviews/` (path from the `artifact-path` skill, kind `review-pr-{number}`; review reports the exact file) and skips GitHub posting (pr controls all posting)
 
 After review completes, read the JSON file.
-Copy findings array into state file.
-Copy verdict into state file.
+Copy `findings`, `verdict`, `coverage` and `gaps` into the state file (`gaps` absent - a review file from before this change - is read as `[]`, `coverage` as unknown). A non-empty `gaps` means the review is partial: every later step that shows or publishes it says so.
 Save review_json path in state file.
 
 ### 2.6 Show findings summary
@@ -270,6 +269,8 @@ Save review_json path in state file.
 
 **Verdict:** {verdict}
 **Findings:** {N} issues ([BLOCKER] + [SUGGESTION])
+{if gaps has phase=review entries} Coverage: {coverage.reviewers.ok}/{coverage.reviewers.expected} lenses - no report from {review-phase names}
+{if gaps has phase=verify entries} Verification: {n} skeptic report(s) missing - the affected findings are kept unverified
 
 | # | Severity | Title | File | Line |
 |---|----------|-------|------|------|
@@ -447,7 +448,7 @@ Write the FULL payload to `$PR_DIR/payload.json`:
 Field requirements:
 - `commit_id`: HEAD SHA of the PR (required - without it GitHub uses latest which may differ)
 - `event`: "COMMENT" to post immediately. NOT "PENDING" (creates draft) or "APPROVE"/"REQUEST_CHANGES" (submits verdict)
-- `body`: review summary in markdown
+- `body`: review summary in markdown. When the state's `gaps` is non-empty, append - for `phase: review` gaps - `\n**Coverage:** {coverage.reviewers.ok}/{coverage.reviewers.expected} lenses - {names} did not report; their areas are unreviewed.` and - for `phase: verify` gaps - `\n**Verification:** {n} skeptic report(s) missing - the findings they covered are posted unverified.` Never describe a missing skeptic as an unreviewed area, and never post a partial review as a complete one.
 - `comments[].path`: file path relative to repo root
 - `comments[].line`: NEW-file line number (verified in Step 3.3)
 - `comments[].side`: always "RIGHT" (commenting on new code)
@@ -488,7 +489,7 @@ If gh api returns error (400/422):
 gh pr comment <PR> --body-file "$PR_DIR/fallback.md"
 ```
 
-(Write all findings as a formatted list in the fallback file)
+(Write all findings as a formatted list in the fallback file. It carries the same Coverage / Verification lines as the payload `body` when `gaps` is non-empty - the fallback is a published review too.)
 
 ### 3.5 Post summary comment (if needed)
 
@@ -674,7 +675,7 @@ Summary: {X}/{Y} BLOCKER fixed, {A}/{B} SUGGESTION fixed
 ```
 AskUserQuestion(
   questions=[{
-    question: "PR #{number} - your verdict?",
+    question: "PR #{number} - your verdict?{when the state's gaps is non-empty: ' Not reviewed: {review-phase gap names}; unverified: {n} finding(s).'}",
     header: "Verdict",
     options: [
       { label: "Approve", description: "All BLOCKER issues resolved" },
@@ -693,7 +694,7 @@ LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 PR_DIR="$LETS_PROJECT_ROOT/.lets/execution/pr-{number}"
 ```
 
-Write verdict body to `$PR_DIR/verdict.md`:
+Write verdict body to `$PR_DIR/verdict.md`. When the state's `gaps` is non-empty, both bodies below - approve AND request-changes - end with the same Coverage / Verification lines as the 3.4 `body`: an "LGTM" never goes out without saying which lenses did not report.
 
 For approve:
 ```
