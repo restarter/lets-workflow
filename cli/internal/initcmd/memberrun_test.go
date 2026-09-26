@@ -88,8 +88,8 @@ func delegatedContractProblems(f map[string]string) []string {
 		if !strings.Contains(call, `\nREPORT_FILE: {report-file}"`) {
 			add("the Step 2 Agent prompt must carry a REPORT_FILE line")
 		}
-		if !strings.Contains(next, `\nREPORT_FILE: {report-file}"`) || !strings.Contains(next, "followed by the line `REPORT_FILE: {report-file}`") {
-			add("Step 3's NEXT and AMENDMENT must each carry a REPORT_FILE line")
+		if !strings.Contains(next, `\nREPORT_FILE: {report-file}\n`+roundFileNote+`"`) || !strings.Contains(next, "followed by the line `REPORT_FILE: {report-file}` and the line `"+roundFileNote+"`") {
+			add("Step 3's NEXT and AMENDMENT must each carry a REPORT_FILE line that replaces any earlier one")
 		}
 		if !strings.Contains(skill, "`REPORT_WRITTEN` pointer") || !strings.Contains(skill, "report_file_missing") {
 			add("member-run must read the report as a REPORT_WRITTEN pointer to a file, and refuse a missing report-file")
@@ -147,6 +147,9 @@ func delegatedContractProblems(f map[string]string) []string {
 		if !strings.Contains(anchor, need) {
 			add("the Step 4.6 anchor check must be a warning against BASE naming " + need)
 		}
+	}
+	if peek, collect := strings.Index(anchor, "`op=peek`"), strings.Index(anchor, "`op=collect ... retry=no`"); peek < 0 || collect < peek || !strings.Contains(anchor, "`op=correct`") {
+		add("the Step 4.6 anchor check reads a member-run explorer by peek, one op=correct nudge, then op=collect retry=no - never an agent-report retry")
 	}
 	if !strings.Contains(split, "`CI CHECKS:`") || !strings.Contains(split, "CI workflow") || !strings.Contains(split, "Makefile") {
 		add("Step 4.6 must take the brief's CI CHECKS from the CI workflow and the Makefile")
@@ -210,6 +213,32 @@ func delegatedContractProblems(f map[string]string) []string {
 	}
 	if !strings.Contains(exec, "rehydration") {
 		add("5-D.7 must rehydrate a recorded round whose report file no longer peeks OK, without counting a new report")
+	}
+	// A nudge is an amendment that changes nothing: implementer.md re-checks for a clean
+	// tree on every NEXT, so a nudge sent as op=next blocks a solo implementer on its own chunk.
+	if !strings.Contains(exec, `args: "op=correct scope=run-{RUN} name={agent} correct-file=<that file> report-file={path}")`) || strings.Contains(exec, "brief-file=<that file>") ||
+		!strings.Contains(exec, "`member-run` `op=correct` with it as `correct-file=`") || !strings.Contains(exec, "do not re-run Verify unless you have not run it yet") {
+		add("the 5-D.5 nudge and the 5-D.7 resend must go through op=correct, never op=next, and say they change nothing in the chunk")
+	}
+	if !strings.Contains(exec, "only a correction advances `round`") {
+		add("5-D.5 must say a nudge or rehydration sent through op=correct keeps the round")
+	}
+	if !strings.Contains(exec, "Do not re-run Verify and do not change the work.") {
+		add("the 5-D.7 rehydration must ask for the same report again, without re-running Verify or changing the work")
+	}
+	// Owner decision (fix-7): a member-run member is never retried by agent-report.
+	who := ""
+	if at := strings.Index(exec, "**Who checks.**"); at >= 0 {
+		who = exec[at:]
+		if end := strings.Index(who, "\n\n"); end >= 0 {
+			who = who[:end]
+		}
+	}
+	if peek, collect := strings.Index(who, "op=peek"), strings.Index(who, "op=collect"); peek < 0 || collect < peek || strings.Count(who, "op=collect") != strings.Count(who, "retry=no") || !strings.Contains(who, "`op=correct`") || strings.Contains(who, "ONE retry") {
+		add("the team check must peek, nudge once through op=correct, then op=collect retry=no - a member-run member is never retried by agent-report")
+	}
+	if !strings.Contains(exec, "read in the team check's member order: `op=peek`, one nudge through `op=correct`, then `op=collect ... retry=no`") {
+		add("the allowlist architect is a member-run member: read it in the team check's member order, never retried")
 	}
 
 	dispatch := between(exec, "### 5-D.4 Dispatch - in plan order", "### 5-D.5 Review")
@@ -398,6 +427,9 @@ func delegatedContractProblems(f map[string]string) []string {
 	if !strings.Contains(status, "A failing Verify is never `complete`") {
 		add("implementer.md must forbid complete with a failing Verify")
 	}
+	if !strings.Contains(agent, "An AMENDMENT that changes nothing (a report nudge, resend or rehydration) means write the report only: no re-run of Verify beyond what its text asks, and in `pipelined` / `isolated` mode no commit and no fixup.") {
+		add("implementer.md must treat a report-only amendment (nudge, resend, rehydration) as write-the-report-only: no extra Verify, no commit, no fixup")
+	}
 	if !strings.Contains(agent, "NEVER run a command in the background") {
 		add("implementer.md must forbid background commands - an idle subagent waiting on its own background task hangs the run")
 	}
@@ -511,6 +543,17 @@ func TestMemberRun(t *testing.T) {
 		{"the final text gates the report again", "execute", "EMPTY ones included", "non-empty ones", "EMPTY ones included", 1},
 		{"interim notifications conclude a gap", "execute", "op=peek", "op=collect", "EMPTY ones included", -1},
 		{"spawn loses REPORT_FILE", "skill", `\nREPORT_FILE: {report-file}"`, `"`, "REPORT_FILE line", 1},
+		{"next keeps an earlier REPORT_FILE", "skill", `\nREPORT_FILE: {report-file}\n` + roundFileNote + `"`, `\nREPORT_FILE: {report-file}"`, "replaces any earlier one", 1},
+		{"the note rejoins the REPORT_FILE line", "skill", `\nREPORT_FILE: {report-file}\n` + roundFileNote + `"`, `\nREPORT_FILE: {report-file} - ` + roundFileNote + `"`, "replaces any earlier one", 1},
+		{"a report-only amendment commits", "agent", "and in `pipelined` / `isolated` mode no commit and no fixup.", "and in `pipelined` / `isolated` mode a fixup as usual.", "report-only amendment", 1},
+		{"the nudge goes back to op=next", "execute", `args: "op=correct scope=run-{RUN} name={agent} correct-file=<that file> report-file={path}")`, `args: "op=next scope=run-{RUN} name={agent} brief-file=<that file> report-file={path}")`, "never op=next", 1},
+		{"the resend goes back to op=next", "execute", "`member-run` `op=correct` with it as `correct-file=`", "`member-run` `op=next` with it", "never op=next", 1},
+		{"a nudge advances the round", "execute", "only a correction advances `round`", "every op=correct advances `round`", "keeps the round", 1},
+		{"rehydration re-runs the work", "execute", "Do not re-run Verify and do not change the work.", "", "without re-running Verify", 1},
+		{"the team check retries an analyst", "execute", "names=report-{TASK_ID}-{RUN}-{chunk}-{member}-r{round} retry=no\")`", "names=report-{TASK_ID}-{RUN}-{chunk}-{member}-r{round}\")`", "never retried by agent-report", 1},
+		{"the team check collects before its peek", "execute", "Each verdict is read in the member order - peek, one nudge, collect: on every notification from the member, `Skill(skill: \"lets:agent-report\", args: \"op=peek", "Each verdict is read in the member order - peek, one nudge, collect: on every notification from the member, `Skill(skill: \"lets:agent-report\", args: \"op=skim", "never retried by agent-report", 1},
+		{"the anchor check retries its explorer", "execute", "then `op=collect ... retry=no`; never a retry, since nothing is spawned before Start", "then `op=collect`", "never an agent-report retry", 1},
+		{"the architect is retried", "execute", "then `op=collect ... retry=no`; a `GAP` is shown as \"no verdict\"", "then `op=collect`; a `GAP` is shown as \"no verdict\"", "never retried", 1},
 	}
 	for _, m := range mutants {
 		t.Run(m.name, func(t *testing.T) {
@@ -531,6 +574,11 @@ func TestMemberRun(t *testing.T) {
 		})
 	}
 }
+
+// roundFileNote is its own line after the REPORT_FILE line of every NEXT and AMENDMENT
+// (the REPORT_FILE line carries only the path): the member holds the earlier rounds'
+// lines in its context, so the newest must say it wins.
+const roundFileNote = "This round's report file; it replaces any earlier REPORT_FILE."
 
 // memberRunCall matches a member-run Skill call's args, or a member-run op
 // written in prose with its role; roleModelPin matches a model named by value in one.

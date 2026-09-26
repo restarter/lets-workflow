@@ -102,11 +102,11 @@ The member exists and holds its context. Do NOT spawn, and do NOT re-send an ear
    SendMessage({
      to: "{agent}",
      summary: "{op} for {agent}",
-     message: "NEXT: your next brief is {brief-file}. Read it and follow it.\nREPORT_FILE: {report-file}"
+     message: "NEXT: your next brief is {brief-file}. Read it and follow it.\nREPORT_FILE: {report-file}\nThis round's report file; it replaces any earlier REPORT_FILE."
    })
    ```
 
-   On `correct` the message is `AMENDMENT: read {correct-file}; it changes what it names and nothing else.` followed by the line `REPORT_FILE: {report-file}`.
+   On `correct` the message is `AMENDMENT: read {correct-file}; it changes what it names and nothing else.` followed by the line `REPORT_FILE: {report-file}` and the line `This round's report file; it replaces any earlier REPORT_FILE.`. The caller also sends a report nudge as `correct` (an amendment that changes nothing, with the SAME round's report-file): a NEXT is a new brief, and an implementer re-checks for a clean tree on every NEXT.
 
 The address does not resolve -> run `ListAgents`, return `agent_gone: {agent}` with what it listed, and do nothing else. Never spawn a replacement here - a replacement has no context, and the caller decides whether to start one under a visibly different name.
 

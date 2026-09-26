@@ -513,6 +513,21 @@ func membersLinkProblems(team string) []string {
 			p = append(p, "Step M1 must carry "+need)
 		}
 	}
+	// fix-7: a reader takes only this lead session's Reports line, and the brief file
+	// carries the REPORT_FILE an implementer reads from it (implementer.md ## Output).
+	if !strings.Contains(m1, "Take the line whose `<session6>` is this session's (`$CLAUDE_CODE_SESSION_ID`)") {
+		p = append(p, "Step M1.5 must read only the Reports line this lead session opened")
+	}
+	if !strings.Contains(m1, "then its own last line `REPORT_FILE: <path>`") {
+		p = append(p, "the Step M1 brief file must carry its REPORT_FILE line")
+	}
+	if m2 := sectionSpan(team, "### Step M2: The Whole Roster (`spawn --roster`)"); !strings.Contains(m2, "by Step M1.5's rule") || !strings.Contains(m2, "Each member's brief and prompt then carry its own `REPORT_FILE: <path>` line") {
+		p = append(p, "Step M2 must open or add the report files by Step M1.5's rule and hand each brief its REPORT_FILE")
+	}
+	m4 := sectionSpan(team, "### Step M4: Dismiss (`dismiss <name>` / `dismiss --all`)")
+	if strings.Contains(m4, "the same call") || strings.Count(m4, `Skill(skill: "lets:member-run", args: "op=dismiss scope=<c> name=<name>")`) != 2 {
+		p = append(p, "Step M4 must name member-run op=dismiss for dismiss <name> and dismiss --all alike")
+	}
 	return p
 }
 
@@ -531,5 +546,24 @@ func TestTeamBackend_MembersLink(t *testing.T) {
 	}
 	if len(membersLinkProblems(strings.Replace(team, d2, "", 1))) == 0 {
 		t.Error("removing the D2 line must fail the pin")
+	}
+	mutants := []struct{ name, old, repl, want string }{
+		{"a reader takes any Reports line", "Take the line whose `<session6>` is this session's (`$CLAUDE_CODE_SESSION_ID`)", "Take the latest line", "only the Reports line this lead session opened"},
+		{"the brief loses its REPORT_FILE", ", then its own last line `REPORT_FILE: <path>` (Step 5's path)", "", "brief file must carry its REPORT_FILE"},
+		{"M2 skips the M1.5 rule", "first the report files, by Step M1.5's rule, for every name at once", "first the report files for every name at once", "Step M2 must open or add"},
+		{"dismiss --all says the same call again", "then `Skill(skill: \"lets:member-run\", args: \"op=dismiss scope=<c> name=<name>\")` for every registry member", "then the same call for every registry member", "Step M4 must name member-run op=dismiss"},
+	}
+	for _, m := range mutants {
+		t.Run(m.name, func(t *testing.T) {
+			if !strings.Contains(team, m.old) {
+				t.Fatalf("mutant cannot apply: %q is not in team.md", m.old)
+			}
+			for _, problem := range membersLinkProblems(strings.Replace(team, m.old, m.repl, 1)) {
+				if strings.Contains(problem, m.want) {
+					return
+				}
+			}
+			t.Errorf("mutant produced no problem containing %q - that guard cannot fail", m.want)
+		})
 	}
 }

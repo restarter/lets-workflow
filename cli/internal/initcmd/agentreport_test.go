@@ -215,8 +215,22 @@ func agentReportProblems(f map[string]string) []string {
 		add("team.md Step M5 must peek, nudge once, then collect - in that order, so no gap is declared before its recovery")
 	}
 
-	if m1 := sectionSpan(f["commands/team.md"], "### Step M1: One Member (`spawn <role> [name]`)"); !strings.Contains(m1, "`Reports: <REPORT_DIR>`") || !strings.Contains(m1, "`## 7. Current task`") {
+	// m5 nudges through op=correct: a NEXT is a new brief, and implementer.md re-checks
+	// for a clean tree on every NEXT. Every collect of a member is retry=no (owner, fix-7).
+	if !strings.Contains(m5, `args: "op=correct scope=<c> name=<name> correct-file=`) || strings.Contains(m5, "op=next") {
+		add("team.md Step M5 must nudge through member-run op=correct, never op=next")
+	}
+	if strings.Count(m5, "op=collect") != strings.Count(m5, "retry=no") {
+		add("team.md Step M5 must collect every member with retry=no - agent-report never retries a member-run member")
+	}
+
+	// the Reports line carries its lead session, so a later lead opens its own directory
+	const reportsLine = "`Reports: <REPORT_DIR> (lead <session6>)`"
+	if m1 := sectionSpan(f["commands/team.md"], "### Step M1: One Member (`spawn <role> [name]`)"); !strings.Contains(m1, reportsLine) || !strings.Contains(m1, "`## 7. Current task`") {
 		add("team.md M1 must record `Reports:` in the team file's Current task")
+	}
+	if m2 := sectionSpan(f["commands/team.md"], "### Step M2: The Whole Roster (`spawn --roster`)"); !strings.Contains(m2, reportsLine) || !strings.Contains(m2, "`## 7. Current task`") {
+		add("team.md M2 must record `Reports:` in the team file's Current task - it skips M1.5")
 	}
 	for _, h := range []string{"- **Re-explore** ->", "- **Combine** ->"} {
 		plan := f["commands/plan.md"]
@@ -269,7 +283,15 @@ func agentReportProblems(f map[string]string) []string {
 	if m5 := sectionSpan(f["commands/team.md"], "### Step M5: Member reports"); !strings.Contains(m5, "`GAP` line goes into the team file's `## 8. Decisions`") {
 		add("team.md M5 must write each GAP into the team file's Decisions - a missing report is never nothing to report")
 	}
-	if m4 := sectionSpan(f["commands/team.md"], "### Step M4: Dismiss (`dismiss <name>` / `dismiss --all`)"); !strings.Contains(m4, skillCall) || !strings.Contains(m4, "op=collect") || !strings.Contains(m4, readInFull) || strings.Index(m4, "op=collect") > strings.Index(m4, "the same call for every registry member") {
+	m4 := sectionSpan(f["commands/team.md"], "### Step M4: Dismiss (`dismiss <name>` / `dismiss --all`)")
+	all := ""
+	if at := strings.Index(m4, "- `dismiss --all` ->"); at >= 0 {
+		all = m4[at:]
+		if end := strings.Index(all, "\n"); end >= 0 {
+			all = all[:end]
+		}
+	}
+	if collect, dismiss := strings.Index(all, "op=collect"), strings.Index(all, `Skill(skill: "lets:member-run", args: "op=dismiss `); !strings.Contains(all, skillCall) || !strings.Contains(all, readInFull) || collect < 0 || dismiss < collect {
 		add("team.md M4 must collect the members' reports before dismiss --all")
 	}
 	// ## Stop stops LETS session workers (N-steps); they are sessions, not Agent-tool
@@ -343,6 +365,11 @@ func TestAgentReport(t *testing.T) {
 		{"a later P4 template loses REPORT_FILE", "commands/review.md", "#### Pragmatist (always included)", "REPORT_FILE:", "REPORT:", "Pragmatist (always included) must hand every agent a REPORT_FILE", -1},
 		{"a consumer section loses its collect", "commands/plan.md", "### Checkpoint: Evaluation Results", "op=collect", "op=skip", "Evaluation Results must carry op=collect", -1},
 		{"team concludes gaps before its nudge", "commands/team.md", "### Step M5: Member reports", "op=peek", "op=collect", "peek, nudge once, then collect", -1},
+		{"M2 loses the Reports write", "commands/team.md", "### Step M2: The Whole Roster (`spawn --roster`)", ", then append `Reports: <REPORT_DIR> (lead <session6>)` to the team file's `## 7. Current task`", "", "M2 must record `Reports:`", 1},
+		{"the Reports line loses its lead session", "commands/team.md", "### Step M1: One Member (`spawn <role> [name]`)", "`Reports: <REPORT_DIR> (lead <session6>)`", "`Reports: <REPORT_DIR>`", "M1 must record `Reports:`", 1},
+		{"the team nudge goes back to op=next", "commands/team.md", "### Step M5: Member reports", `args: "op=correct scope=<c> name=<name> correct-file=`, `args: "op=next scope=<c> name=<name> brief-file=`, "never op=next", 1},
+		{"team retries an analyst member", "commands/team.md", "### Step M5: Member reports", "retry=no\")`, for every role", "\")`, for every role", "collect every member with retry=no", 1},
+		{"dismiss --all dismisses before collecting", "commands/team.md", "### Step M4: Dismiss (`dismiss <name>` / `dismiss --all`)", "then `Skill(skill: \"lets:member-run\", args: \"op=dismiss scope=<c> name=<name>\")` for every registry member", "then the same call for every registry member", "collect the members' reports before dismiss --all", 1},
 		{"a repeat dispatch loses its protocol", "commands/plan.md", "", "- **Re-explore** ->", "- **Re-explore** -> launch an explorer again\n- **Re-explored** ->", "Re-explore** -> repeat dispatch must carry", 1},
 		{"the skill loses its single retry", "skills/agent-report/SKILL.md", "", "ONCE", "twice", "must carry ONCE", -1},
 		{"an unregistered dispatch appears", "commands/check.md", "", "\n## ", "\nTask(\n  subagent_type=\"lets:qa\",\n)\n\n## ", "unregistered", 1},
