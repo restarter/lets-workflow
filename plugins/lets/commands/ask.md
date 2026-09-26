@@ -89,7 +89,7 @@ Also check if the question references specific files - if so, note the file path
 
 ## Step 4: Launch Agent
 
-Open the run: `Skill(skill: "lets:agent-report", args: "op=open command=ask task={task-id} names={agent short name}")` (task omitted when none), then use the Task tool to spawn the selected agent with its `REPORT_FILE:` line:
+Open the run: `Skill(skill: "lets:agent-report", args: "op=open command=ask task={task-id} names={agent short name}")` (task omitted when none), then use the Task tool to spawn the selected agent with its REPORT_FILE line:
 
 ```
 Task(

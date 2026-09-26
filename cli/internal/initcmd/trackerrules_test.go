@@ -31,7 +31,7 @@ func sectionSpan(content, heading string) string {
 	}
 	rest := content[start+len(heading):]
 	level := strings.Count(strings.Split(heading, " ")[0], "#")
-	for _, prefix := range []string{"\n## ", "\n### "} {
+	for _, prefix := range []string{"\n## ", "\n### ", "\n#### "} {
 		if strings.Count(prefix, "#") > level {
 			continue // deeper headings stay inside the span
 		}
