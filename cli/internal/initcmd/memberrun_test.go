@@ -681,7 +681,10 @@ func gatePolicyProblems(exec string) []string {
 		}
 	}
 	team := between(review, "**Who checks.**", "- **CHECK**")
-	for _, need := range []string{"`worktree.team`", "`op=next scope=<callsign> name=explorer|skeptic`", "Only when the team has no live one", "`explorer-{RUN}` / `skeptic-{RUN}`"} {
+	if strings.Contains(exec, "`worktree.team`") {
+		add("the team check must read the info envelope's top-level team field, never worktree.team")
+	}
+	for _, need := range []string{"the top-level `team` field set", "`op=next scope=<callsign> name=explorer|skeptic`", "Only when the team has no live one", "`explorer-{RUN}` / `skeptic-{RUN}`"} {
 		if !strings.Contains(team, need) {
 			add("in a team worktree the team check must reuse the standing team's live explorer / skeptic first: " + need)
 		}
@@ -730,6 +733,7 @@ func TestExecuteGatePolicy(t *testing.T) {
 		{"run review dropped", "### 5-D.8 Run review (`at-end` and `high-only`)", "### 5-D.8 Wrap-up", "5-D.8 run review"},
 		{"extension point lost", "a new policy is a new row, never a new code path", "a new policy gets its own step", "new row"},
 		{"skeptic pinned to a model", "`role=lets:skeptic`", "`role=lets:skeptic model=opus`", "pins a model"},
+		{"team read from worktree.team", "the top-level `team` field set", "`worktree.team` set", "top-level team"},
 		{"team explorer not reused", "`op=next scope=<callsign> name=explorer|skeptic`", "`op=spawn scope=run-{RUN}`", "standing team"},
 		{"accepted_by loses team", "`accepted_by` is `owner` or `team`", "`accepted_by` is `owner`", "accepted_by"},
 	}
