@@ -3,8 +3,10 @@ package initcmd
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -67,6 +69,15 @@ const skillCall = `Skill(skill: "lets:agent-report"`
 // dispatch carries no subagent_type= and would otherwise slip past the guard.
 var dispatchCall = regexp.MustCompile(`(?m)^\s*(Task|Agent)\(`)
 
+// argPlaceholder matches what Claude Code substitutes in a skill body invoked
+// with args - a dollar sign plus a digit, or dollar-ARGUMENTS - fenced code
+// included. An awk field reference written that way arrives as an argument.
+var argPlaceholder = regexp.MustCompile(`\$([0-9]|ARGUMENTS)`)
+
+// argSkills are invoked with args on every call, so their bodies must render
+// as written.
+var argSkills = []string{"skills/agent-report/SKILL.md", "skills/artifact-path/SKILL.md"}
+
 // dispatchExempt dispatch agents with a prompt they do not author.
 var dispatchExempt = map[string]string{
 	"skills/implementer-run/SKILL.md": "its prompt is the caller's chunk file; execute.md hands out the REPORT_FILE",
@@ -105,6 +116,11 @@ func agentReportProblems(f map[string]string) []string {
 	for _, need := range []string{"user-invocable: false", "## op=open", "## op=add", "## op=peek", "## op=collect", "MISSING", "EMPTY", "UNTERMINATED", "UNREADABLE", "REPORT-END", readInFull, "ONCE", "retry=no", "GAP", "Coverage:"} {
 		if !strings.Contains(skill, need) {
 			add("the agent-report skill must carry " + need)
+		}
+	}
+	for _, k := range argSkills {
+		if m := argPlaceholder.FindString(f[k]); m != "" {
+			add(k + " carries the positional placeholder " + m + " - Claude Code replaces it with an argument before the model reads the skill")
 		}
 	}
 	ap := f["skills/artifact-path/SKILL.md"]
@@ -324,6 +340,7 @@ func TestAgentReport(t *testing.T) {
 		{"a call outside every dispatch section", "commands/review.md", "", "\n## Step 7: Determine Verdict", "\nTask(\n  subagent_type=\"lets:qa\",\n)\n\n## Step 7: Determine Verdict", "outside every registered dispatch section", 1},
 		{"a second call in a section without its own path", "commands/ask.md", "## Step 4: Launch Agent", "\nTask(", "\nTask(\n  subagent_type=\"lets:qa\",\n)\n\nTask(", "Task/Agent calls but only", 1},
 		{"review stops saving coverage", "commands/review.md", "", "## Coverage", "## Scope", "## Coverage section", -1},
+		{"the classifier regains an awk field reference", "skills/agent-report/SKILL.md", "", "# last non-blank line", "# last non-blank line: awk '{print $0}'", "positional placeholder", 1},
 	}
 	for _, m := range mutants {
 		t.Run(m.name, func(t *testing.T) {
@@ -350,5 +367,88 @@ func TestAgentReport(t *testing.T) {
 			}
 			t.Errorf("mutant produced no problem containing %q - that guard cannot fail", m.want)
 		})
+	}
+}
+
+// TestAgentReportClassifier runs the Step 1 block of the agent-report skill -
+// extracted from SKILL.md exactly as the model receives it, which the
+// placeholder lint above makes equal to the text on disk - over one fixture
+// per state.
+func TestAgentReportClassifier(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the classifier is a bash block")
+	}
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash not on PATH")
+	}
+	skill, err := os.ReadFile(filepath.Join(pluginDir(t), "skills", "agent-report", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	step := sectionSpan(string(skill), "### Step 1: Classify every expected file")
+	i := strings.Index(step, "```bash\n")
+	if i < 0 {
+		t.Fatal("agent-report Step 1 lost its bash block")
+	}
+	block := step[i+len("```bash\n"):]
+	j := strings.Index(block, "\n```")
+	if j < 0 {
+		t.Fatal("agent-report Step 1 bash block is not closed")
+	}
+	block = block[:j]
+
+	dir := t.TempDir()
+	fixtures := map[string]string{
+		"good":            "finding\nREPORT-END\n",
+		"empty":           "",
+		"blank":           "  \n\t\n",
+		"only":            "REPORT-END\n",
+		"cut":             "finding, no sentinel\n",
+		"crlf":            "finding\r\nREPORT-END\r\n",
+		"trailing":        "finding\nREPORT-END   \n\n",
+		"body-sentinel":   "REPORT-END\nlater line\n",
+		"report-lets-1.2": "finding\nREPORT-END\n",
+		"locked":          "finding\nREPORT-END\n",
+	}
+	for name, body := range fixtures {
+		if err := os.WriteFile(filepath.Join(dir, name+".md"), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := map[string]string{
+		"good": "OK", "gone": "MISSING", "empty": "EMPTY", "blank": "EMPTY", "only": "EMPTY",
+		"cut": "UNTERMINATED", "crlf": "OK", "trailing": "OK", "body-sentinel": "UNTERMINATED",
+		"report-lets-1.2": "OK", "locked": "UNREADABLE",
+	}
+	if os.Geteuid() == 0 {
+		delete(want, "locked") // root reads a 000 file
+	} else {
+		locked := filepath.Join(dir, "locked.md")
+		if err := os.Chmod(locked, 0); err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = os.Chmod(locked, 0o600) }()
+	}
+	names := make([]string, 0, len(want))
+	for n := range want {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	script := strings.NewReplacer("{dir}", dir, "{names}", strings.Join(names, ",")).Replace(block)
+	out, err := exec.Command(bash, "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("classifier failed: %v\n%s", err, out)
+	}
+	got := map[string]string{}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if fields := strings.Fields(line); len(fields) >= 2 {
+			got[fields[1]] = fields[0]
+		}
+	}
+	for _, n := range names {
+		if got[n] != want[n] {
+			t.Errorf("%s: classified %q, want %q", n, got[n], want[n])
+		}
 	}
 }
