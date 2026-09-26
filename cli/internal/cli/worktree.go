@@ -531,6 +531,8 @@ func newWorktreeTeamInitCmd() *cobra.Command {
 				switch {
 				case res.Suggested:
 					fmt.Fprintln(cmd.OutOrStdout(), res.Callsign)
+				case res.OK && o.Check:
+					fmt.Fprintln(cmd.OutOrStdout(), res.Callsign+" is free")
 				case res.OK:
 					fmt.Fprintln(cmd.OutOrStdout(), res.TeamFile)
 				default:
@@ -547,6 +549,7 @@ func newWorktreeTeamInitCmd() *cobra.Command {
 	f.StringVar(&o.AgentCommand, "agent-command", "", "How the lead is launched (default claude)")
 	f.StringVar(&o.OrcaAgent, "orca-agent", "", "Shell command an Orca lead terminal runs (default claude)")
 	f.BoolVar(&o.Suggest, "suggest-callsign", false, "Only propose a free callsign; write nothing")
+	f.BoolVar(&o.Check, "check", false, "Only check that --callsign is free (no team file, no live lead); write nothing")
 	f.BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
 	return cmd
 }

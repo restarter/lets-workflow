@@ -25,7 +25,7 @@ func NewOrcaCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(newOrcaOpenCmd(), newOrcaNotifyCmd(), newOrcaStatusCmd(), newOrcaCardCmd(), newOrcaReposCmd(), newOrcaWakeCmd())
+	root.AddCommand(newOrcaOpenCmd(), newOrcaNotifyCmd(), newOrcaStatusCmd(), newOrcaCardCmd(), newOrcaReposCmd(), newOrcaWakeCmd(), newOrcaTerminalCmd())
 	return root
 }
 
@@ -59,6 +59,33 @@ func newOrcaOpenCmd() *cobra.Command {
 	cmd.Flags().StringVar(&name, "name", "", "Worktree name (Orca turns `/` into `-`; pass a `/`-free name)")
 	cmd.Flags().StringVar(&prompt, "prompt", "", "First message for the agent (e.g. /lets:start <id>)")
 	cmd.Flags().BoolVar(&force, "force", false, "Open even when a worktree with this name is already open")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
+	cmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Suppress human-readable output")
+	return cmd
+}
+
+// newOrcaTerminalCmd is `lets orca terminal`: ONE Orca terminal in a worktree Go
+// already created (a standing team's lead). It never creates an Orca worktree.
+func newOrcaTerminalCmd() *cobra.Command {
+	var (
+		o              orcacmd.TerminalOptions
+		jsonOut, quiet bool
+	)
+	cmd := &cobra.Command{
+		Use:           "terminal",
+		Short:         "Open one Orca terminal running a command in an existing worktree (falls back to a printed command)",
+		Args:          cobra.NoArgs,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			res, runErr := orcacmd.OpenTerminal(cmd.Context(), o)
+			printOrca(cmd, jsonOut, quiet, res.OK, res, func() { orcacmd.RenderTerminal(cmd.OutOrStdout(), res) })
+			return runErr
+		},
+	}
+	cmd.Flags().StringVar(&o.Worktree, "worktree", "", "Absolute path of the existing worktree")
+	cmd.Flags().StringVar(&o.Title, "title", "", "Terminal title (the lead's name)")
+	cmd.Flags().StringVar(&o.Command, "command", "", "Shell command the terminal runs")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
 	cmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Suppress human-readable output")
 	return cmd

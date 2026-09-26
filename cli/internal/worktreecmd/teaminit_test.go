@@ -229,3 +229,31 @@ func TestTeamInit_LinkRefusesLateFile(t *testing.T) {
 	}
 	noTempFiles(t, repo)
 }
+
+// --check verifies a callsign before any worktree exists: it writes nothing and
+// refuses exactly like the write does (27 file, 34 live lead, 2 invalid).
+func TestTeamInit_Check(t *testing.T) {
+	repo, wt, pluginRoot := teamSetup(t, "frog-lead")
+	check := func(c string) error {
+		_, err := worktreecmd.TeamInit(context.Background(), repo, worktreecmd.TeamInitOptions{Callsign: c, Check: true})
+		return err
+	}
+	if err := check("snake"); err != nil {
+		t.Fatalf("a free callsign: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(repo, ".lets", "teams")); !os.IsNotExist(err) {
+		t.Error("--check wrote something")
+	}
+	if code := worktreecmd.ExitCode(check("frog")); code != worktreecmd.ExitCallsignLive {
+		t.Errorf("live lead: exit %d", code)
+	}
+	if code := worktreecmd.ExitCode(check("Bad")); code != worktreecmd.ExitUsage {
+		t.Errorf("invalid callsign: exit %d", code)
+	}
+	if _, err := teamInit(repo, wt, pluginRoot, "snake"); err != nil {
+		t.Fatal(err)
+	}
+	if code := worktreecmd.ExitCode(check("snake")); code != worktreecmd.ExitTeamExists {
+		t.Errorf("existing team file: exit %d", code)
+	}
+}

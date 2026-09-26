@@ -228,3 +228,90 @@ func TestTeamBackend_Members(t *testing.T) {
 		}
 	}
 }
+
+// TestTeamBackend_WorktreeTeam pins `/lets:worktree create --team` (lets-0rgnd): Go
+// creates the team worktree for every launcher, then team-init, then the gated setup
+// hook, then only the lead is launched - Orca through `lets orca terminal`, never an
+// Orca worktree create - and the relaunch is gated.
+func TestTeamBackend_WorktreeTeam(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join(pluginDir(t), "commands", "worktree.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wt := string(b)
+	lines := strings.Split(wt, "\n")
+	if len(lines) < 17 || !strings.Contains(lines[2], "create --team [<callsign>] --area <a>") {
+		t.Error("the argument-hint (:3) must offer create --team [<callsign>] --area <a>")
+	}
+	strip := ""
+	for _, l := range lines[:40] {
+		if strings.HasPrefix(l, "- `create --team [<callsign>] --area <a>`") {
+			strip = l
+		}
+	}
+	if strip == "" || !strings.Contains(strip, "`--flow` or `--auto`") || !strings.Contains(strip, "from inside a worktree") || !strings.Contains(strip, "**Refused**") {
+		t.Errorf("Step 1 must route create --team and refuse it with --flow / --auto and inside a worktree: %q", strip)
+	}
+
+	team := sectionSpan(wt, "\n## Create a team\n")
+	if team == "" {
+		t.Fatal("## Create a team section missing")
+	}
+	for _, banned := range []string{"orca worktree create", "lets orca create", "lets orca open"} {
+		if strings.Contains(team, banned) {
+			t.Errorf("the team flow must not use %q", banned)
+		}
+	}
+	check := strings.Index(team, "lets worktree team-init --check --callsign")
+	create := strings.Index(team, `lets worktree create "team_<c>" --branch "team_<c>" --new-branch --base "origin/`)
+	if check < 0 || create < check || !strings.Contains(team, "a given one and a suggested one alike; it writes nothing") {
+		t.Error("the callsign is checked (writing nothing) before the team worktree is created")
+	}
+	if !strings.Contains(team, "`/lets:worktree remove team_<c>`") {
+		t.Error("a late 27 / 34 must name the worktree cleanup")
+	}
+	init := strings.Index(team, "lets worktree team-init --callsign")
+	hook := strings.Index(team, "The hook runs only after that yes")
+	failStop := strings.Index(team, "**A hook that fails stops here, before the lead is launched:**")
+	launch := strings.Index(team, "### Step T5: Launch the lead")
+	orcaTerm := strings.Index(team, "lets orca terminal --worktree")
+	if create < 0 || init < create || hook < init || failStop < hook || launch < failStop || orcaTerm < launch {
+		t.Errorf("order create (%d) -> team-init (%d) -> gated hook (%d) -> fail stop (%d) -> launch (%d, orca %d)", create, init, hook, failStop, launch, orcaTerm)
+	}
+	if !strings.Contains(team, "Go creates the worktree for EVERY launcher, Orca included") || !strings.Contains(team, "the worktree is the one T2 created") {
+		t.Error("every launcher, orca included, uses the Go-created worktree")
+	}
+	if !strings.Contains(team, "`launched=false`") || !strings.Contains(team, "`fallback_command`") || !strings.Contains(team, "never an Orca worktree create") {
+		t.Error("an Orca refusal falls to the printed command, never an Orca create")
+	}
+	// the team file's agent command crosses through a quoted heredoc, never a double-quoted argument
+	teamLines := strings.Split(team, "\n")
+	for i, l := range teamLines {
+		if strings.Contains(l, "--command") && !strings.Contains(l, `--command "$CMD"`) {
+			t.Errorf("every team --command passes \"$CMD\" from a quoted heredoc: %s", strings.TrimSpace(l))
+		}
+		if strings.Contains(l, "CMD=$(cat <<") {
+			if !strings.Contains(l, "<<'EOF'") || i+1 >= len(teamLines) || !strings.Contains(teamLines[i+1], "--name '<c>-lead' '/lets:start'") {
+				t.Errorf("a CMD heredoc must be quoted and carry --name '<c>-lead': %s", strings.TrimSpace(l))
+			}
+		}
+	}
+	if n := strings.Count(team, `--command "$CMD"`); n < 2 {
+		t.Errorf("cmux/tmux and orca both launch through the heredoc, found %d", n)
+	}
+	if !strings.Contains(team, "ends in `/team_<c>`") || !strings.Contains(team, "branch --show-current` prints `team_<c>`") {
+		t.Error("the created path must be asserted to end in /team_<c>")
+	}
+	if !strings.Contains(team, `label: "Show the rest"`) || !strings.Contains(team, "40 lines or fewer") {
+		t.Error("the hook gate shows the whole hook, or a way to see the rest before Run")
+	}
+	reopen := strings.Index(team, "### Reopen a team")
+	if reopen < 0 || !strings.Contains(team[reopen:], "through the same quoted heredoc - only after the user's yes") || !strings.Contains(team[reopen:], `header: "Reopen"`) {
+		t.Error("the relaunch shows the command verbatim and runs only after the user's yes")
+	}
+
+	c1 := sectionSpan(wt, "\n### Step C1: Get Name\n")
+	if !strings.Contains(c1, "the `dir` field as the dir `<name>`") || strings.Contains(c1, "from `slug` as the dir") {
+		t.Error("C1 takes the dir name from branch-name's dir field, never hand-built from slug")
+	}
+}

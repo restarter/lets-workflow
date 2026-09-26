@@ -21,10 +21,12 @@ import (
 
 // TeamInitOptions configures TeamInit. AgentCommand is how the lead is launched
 // (default `claude`); OrcaAgent is the shell command an Orca lead terminal runs
-// (default `claude`). Suggest only proposes a free callsign and writes nothing.
+// (default `claude`). Suggest only proposes a free callsign and writes nothing;
+// Check only verifies Callsign is free (valid, no team file, no live lead) and
+// writes nothing - run before a team worktree is created.
 type TeamInitOptions struct {
 	Callsign, Area, Worktree, PluginRoot, AgentCommand, OrcaAgent string
-	Suggest                                                       bool
+	Suggest, Check                                                bool
 }
 
 // TeamInitResult is `lets worktree team-init`.
@@ -72,6 +74,17 @@ func TeamInit(ctx context.Context, dir string, o TeamInitOptions) (*TeamInitResu
 		return fail(&Error{Code: ExitUsage, Kind: "callsign_invalid", Message: fmt.Sprintf("--callsign %q is not a team name ([a-z0-9-]{1,40}, not run-*)", o.Callsign)})
 	}
 	res.Callsign = o.Callsign
+	if o.Check {
+		if _, err := os.Lstat(filepath.Join(teamsDir, o.Callsign+".md")); err == nil {
+			return fail(ErrTeamExists(filepath.Join(teamsDir, o.Callsign+".md")))
+		}
+		if live[o.Callsign+"-lead"] {
+			return fail(ErrCallsignLive(o.Callsign))
+		}
+		res.OK = true
+		res.Steps = append(res.Steps, Step{Status: StepOK, Message: "callsign " + o.Callsign + " is free (nothing written)"})
+		return res, nil
+	}
 	if strings.TrimSpace(o.Area) == "" || o.Worktree == "" || !filepath.IsAbs(o.Worktree) {
 		return fail(&Error{Code: ExitUsage, Kind: "usage", Message: "--area and an absolute --worktree are required"})
 	}
