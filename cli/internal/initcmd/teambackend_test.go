@@ -258,7 +258,7 @@ func TestTeamBackend_WorktreeTeam(t *testing.T) {
 	if team == "" {
 		t.Fatal("## Create a team section missing")
 	}
-	for _, banned := range []string{"orca worktree create", "lets orca create", "lets orca open"} {
+	for _, banned := range []string{"orca worktree create", "lets orca create", "lets orca open", "orca worktree rm"} {
 		if strings.Contains(team, banned) {
 			t.Errorf("the team flow must not use %q", banned)
 		}
@@ -279,10 +279,24 @@ func TestTeamBackend_WorktreeTeam(t *testing.T) {
 	if create < 0 || init < create || hook < init || failStop < hook || launch < failStop || orcaTerm < launch {
 		t.Errorf("order create (%d) -> team-init (%d) -> gated hook (%d) -> fail stop (%d) -> launch (%d, orca %d)", create, init, hook, failStop, launch, orcaTerm)
 	}
-	if !strings.Contains(team, "Go creates the worktree for EVERY launcher, Orca included") || !strings.Contains(team, "the worktree is the one T2 created") {
-		t.Error("every launcher, orca included, uses the Go-created worktree")
+	if !strings.Contains(team, "Orca creates the worktree (so Orca registers it)") || strings.Contains(team, "the worktree is the one T2 created") {
+		t.Error("on orca the worktree comes from Orca (T2-orca); the orca bullet no longer says the one T2 created")
 	}
-	if !strings.Contains(team, "`launched=false`") || !strings.Contains(team, "`fallback_command`") || !strings.Contains(team, "never an Orca worktree create") {
+	// T2-orca: team-create -> adopt -> team-init (T3) -> hook (T4) -> lets orca terminal (T5)
+	o := between(team, "### Step T2-orca: Create the worktree through Orca", "### Step T2: Create the worktree (Go)")
+	tc := strings.Index(team, `lets orca team-create --name "team_<c>" --base-branch "origin/`)
+	adopt := strings.Index(team, `lets worktree adopt --dir "<team.path>"`)
+	if o == "" || tc < 0 || adopt < tc || init < adopt || hook < init || orcaTerm < hook {
+		t.Errorf("T2-orca order team-create (%d) -> adopt (%d) -> team-init (%d) -> hook (%d) -> orca terminal (%d)", tc, adopt, init, hook, orcaTerm)
+	}
+	if !strings.Contains(o, "NEVER Step T2 after this - a create was attempted") || !strings.Contains(o, "`not_attempted`") {
+		t.Error("an ambiguous or failed Orca create never falls to the Go create; only not_attempted does")
+	}
+	// the non-orca T2 block is byte-identical to 8b36520
+	if got := between(team, "### Step T2: Create the worktree (Go)\n", "### Step T3: Team file"); strings.TrimPrefix(got, "### Step T2: Create the worktree (Go)\n") != goldenT2 {
+		t.Errorf("the Go T2 block changed:\n%s", got)
+	}
+	if !strings.Contains(team, "`launched=false`") || !strings.Contains(team, "`fallback_command`") || !strings.Contains(team, "never a worktree create") {
 		t.Error("an Orca refusal falls to the printed command, never an Orca create")
 	}
 	// the team file's agent command crosses through a quoted heredoc, never a double-quoted argument
@@ -452,11 +466,28 @@ func TestTeamBackend_CreateDisband(t *testing.T) {
 		}
 	}
 	parked := strings.Index(disband, "### Step D3: Parked tasks")
-	remove := strings.Index(disband, `Skill(skill: "lets:worktree", args: "remove team_<c>")`)
-	if parked < 0 || remove < parked || !strings.Contains(disband, "every launcher removes it the same way") {
-		t.Error("disband removes through /lets:worktree remove for every launcher, after the parked check")
+	d4 := between(disband, "### Step D4: Remove the worktree", "### Step D5")
+	goRoute := between(d4, "**Under `<main checkout>/.worktrees/`**", "- **Anywhere else**")
+	orcaRoute := between(d4, "- **Anywhere else**", "### Step D5")
+	if orcaRoute == "" {
+		orcaRoute = d4[strings.Index(d4, "- **Anywhere else**"):]
 	}
-	for _, banned := range []string{"--force", "git worktree remove", "rm -rf"} {
+	if parked < 0 || strings.Index(disband, "### Step D4") < parked || !strings.Contains(d4, "decided by WHERE the worktree lives") || !strings.Contains(d4, "never by an Orca answer") {
+		t.Error("D4 routes by the worktree's location, after the parked check")
+	}
+	if !strings.Contains(goRoute, `Skill(skill: "lets:worktree", args: "remove team_<c>")`) || !strings.Contains(goRoute, "no Orca call") || strings.Contains(goRoute, "lets orca") {
+		t.Error("a worktree under .worktrees/ goes to /lets:worktree remove with no Orca call")
+	}
+	if !strings.Contains(orcaRoute, `lets orca team-remove --name "team_<c>" --json`) || strings.Contains(orcaRoute, `Skill(skill: "lets:worktree"`) {
+		t.Error("a worktree outside .worktrees/ goes to lets orca team-remove, never to the Go remove")
+	}
+	if !strings.Contains(orcaRoute, "- `not_attempted` (Orca absent or not running) -> stop") || !strings.Contains(orcaRoute, "- `not_listed` (19) -> stop") {
+		t.Error("team-remove's not_attempted and not_listed are named stops")
+	}
+	if n := strings.Count(d4, "`git worktree list` no longer shows the path"); n < 2 {
+		t.Errorf("both removal paths end with the git worktree list check, found %d", n)
+	}
+	for _, banned := range []string{"--force", "--allow-failed-archive-hook", "git worktree remove", "rm -rf"} {
 		if strings.Contains(disband, banned) {
 			t.Errorf("disband must not carry %q", banned)
 		}
@@ -465,3 +496,6 @@ func TestTeamBackend_CreateDisband(t *testing.T) {
 		t.Error("the teardown hook is gated and the team file is retired, kept as history")
 	}
 }
+
+// goldenT2 is the Go T2 block of worktree.md at 8b36520 - the non-orca path is unchanged by fix-5.
+const goldenT2 = "\nFetch as `lets worktree switch` does: `git fetch --no-tags origin {LETS_MERGE_BRANCH}` bounded to 20 s; it fails and `origin/{LETS_MERGE_BRANCH}` exists -> go on with a one-line staleness warning; no `origin/{LETS_MERGE_BRANCH}` -> stop (`no_remote_base`) - the local merge-branch is never a base. Then:\n\n```bash\nLETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)\ncd \"$LETS_PROJECT_ROOT\"\nlets worktree create \"team_<c>\" --branch \"team_<c>\" --new-branch --base \"origin/{LETS_MERGE_BRANCH}\" --plugin-root \"${CLAUDE_PLUGIN_ROOT}\" --json\n```\n\n`ok=false` -> surface `error.message` and stop. Assert, then go on: `worktree.path` ends in `/team_<c>`, and `git -C \"<path>\" branch --show-current` prints `team_<c>`; anything else -> stop and show both.\n\n"

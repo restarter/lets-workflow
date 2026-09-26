@@ -13,8 +13,8 @@ import (
 )
 
 // TerminalOptions configures OpenTerminal: open ONE Orca terminal running Command in
-// an existing worktree Go created (a standing team's lead). Orca never creates the
-// worktree here.
+// an existing team worktree - Orca-created on the orca launcher, Go-created otherwise
+// (a standing team's lead). Orca never creates the worktree here.
 type TerminalOptions struct {
 	Worktree string // absolute path of the existing worktree
 	Title    string // terminal title (the lead's name, `<callsign>-lead`)

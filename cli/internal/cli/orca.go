@@ -25,7 +25,7 @@ func NewOrcaCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(newOrcaOpenCmd(), newOrcaNotifyCmd(), newOrcaStatusCmd(), newOrcaCardCmd(), newOrcaReposCmd(), newOrcaWakeCmd(), newOrcaTerminalCmd())
+	root.AddCommand(newOrcaOpenCmd(), newOrcaNotifyCmd(), newOrcaStatusCmd(), newOrcaCardCmd(), newOrcaReposCmd(), newOrcaWakeCmd(), newOrcaTerminalCmd(), newOrcaTeamCreateCmd(), newOrcaTeamRemoveCmd())
 	return root
 }
 
@@ -59,6 +59,59 @@ func newOrcaOpenCmd() *cobra.Command {
 	cmd.Flags().StringVar(&name, "name", "", "Worktree name (Orca turns `/` into `-`; pass a `/`-free name)")
 	cmd.Flags().StringVar(&prompt, "prompt", "", "First message for the agent (e.g. /lets:start <id>)")
 	cmd.Flags().BoolVar(&force, "force", false, "Open even when a worktree with this name is already open")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
+	cmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Suppress human-readable output")
+	return cmd
+}
+
+// newOrcaTeamCreateCmd is `lets orca team-create`: a standing team's worktree created
+// THROUGH Orca (the orca launcher only), so Orca registers it and can attach the lead.
+func newOrcaTeamCreateCmd() *cobra.Command {
+	var (
+		o              orcacmd.TeamCreateOptions
+		jsonOut, quiet bool
+	)
+	cmd := &cobra.Command{
+		Use:           "team-create",
+		Short:         "Create a team_<callsign> worktree through Orca from origin/<merge> (no agent, setup skipped)",
+		Args:          cobra.NoArgs,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			res, runErr := orcacmd.TeamCreate(cmd.Context(), o)
+			printOrca(cmd, jsonOut, quiet, res.OK, res, func() { orcacmd.RenderTeam(cmd.OutOrStdout(), res.Envelope, res.Team) })
+			return runErr
+		},
+	}
+	cmd.Flags().StringVar(&o.Name, "name", "", "Team worktree name, team_<callsign>")
+	cmd.Flags().StringVar(&o.BaseBranch, "base-branch", "", "Base, origin/<merge> (a bare name is the local ref to Orca)")
+	cmd.Flags().StringVar(&o.Repo, "repo", "", "Main checkout (default: the one of the cwd)")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
+	cmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Suppress human-readable output")
+	return cmd
+}
+
+// newOrcaTeamRemoveCmd is `lets orca team-remove`: an Orca-created team worktree
+// removed through Orca (`worktree rm --run-hooks`), after LETS's dirty and unpushed nets.
+func newOrcaTeamRemoveCmd() *cobra.Command {
+	var (
+		o              orcacmd.TeamRemoveOptions
+		jsonOut, quiet bool
+	)
+	cmd := &cobra.Command{
+		Use:           "team-remove",
+		Short:         "Remove an Orca-created team_<callsign> worktree through Orca (never forced)",
+		Args:          cobra.NoArgs,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			res, runErr := orcacmd.TeamRemove(cmd.Context(), o)
+			printOrca(cmd, jsonOut, quiet, res.OK, res, func() { orcacmd.RenderTeamRemove(cmd.OutOrStdout(), res.Envelope, res.Team) })
+			return runErr
+		},
+	}
+	cmd.Flags().StringVar(&o.Name, "name", "", "Team worktree name, team_<callsign>")
+	cmd.Flags().StringVar(&o.Repo, "repo", "", "Main checkout (default: the one of the cwd)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
 	cmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Suppress human-readable output")
 	return cmd

@@ -631,9 +631,28 @@ lets worktree parked --team '<c>' --json
 
 ### Step D4: Remove the worktree
 
-Every team worktree is Go-created, so every launcher removes it the same way. On the orca launcher the lead's Orca terminal is closed by the owner first (LETS never closes it). Then:
+The route is decided by WHERE the worktree lives - the team file's `worktree:` path - never by an Orca answer:
 
-`Skill(skill: "lets:worktree", args: "remove team_<c>")` - `/lets:worktree remove` with its nets (uncommitted changes, unpushed commits), on the owner's yes; its refusals stop the disband, and nothing here passes a force flag.
+- **Under `<main checkout>/.worktrees/`** (Go-created) -> no Orca call:
+
+  `Skill(skill: "lets:worktree", args: "remove team_<c>")` - `/lets:worktree remove` with its nets (uncommitted changes, unpushed commits), on the owner's yes; its refusals stop the disband, and nothing here passes a force flag. Then confirm that `git worktree list` no longer shows the path.
+
+- **Anywhere else** (Orca-created by Step T2-orca of `/lets:worktree create --team`) -> through Orca, on the owner's yes:
+
+  ```bash
+  LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+  cd "$LETS_PROJECT_ROOT"
+  lets orca team-remove --name "team_<c>" --json
+  ```
+
+  By `team.state`:
+
+  - `removed` -> confirm that `git worktree list` no longer shows the path, then D5. The lead's Orca terminal went with the worktree, and `lets worktree release` ran as Orca's archive hook.
+  - `dirty_worktree` (15) / `unpushed_commits` (16) -> stop: show the paths, or the commit state; the owner resolves them in the team session - nothing is forced.
+  - `archive_hook_failed` (17) -> stop: show the hook output; the worktree stays and LETS never waives the hook.
+  - `remove_ambiguous` (18) -> stop: name what git and Orca still show.
+  - `not_attempted` (Orca absent or not running) -> stop: "start Orca, then disband again" - Go never removes an Orca worktree.
+  - `not_listed` (19) -> stop: show the path - a worktree outside `.worktrees/` that Orca does not know; `/lets:worktree remove` refuses it too (`worktree_external`), so the owner sorts it out by hand.
 
 ### Step D5: Teardown hook
 
