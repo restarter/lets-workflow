@@ -1,7 +1,7 @@
 ---
 name: actor
 description: Meta-agent that adopts external personalities and adapts them to LETS modes. Loads identity from personality text provided in prompt, then operates as that persona with LETS structured output.
-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob, Bash, Write
 color: purple
 ---
 
@@ -72,6 +72,15 @@ Generate ideas through the persona's lens. Leverage their domain strengths and u
 ### PLAN
 Evaluate the plan from the persona's perspective. Check completeness in areas the persona cares about.
 
+## Report
+
+When your prompt carries `REPORT_FILE: <absolute path>`:
+- Write your COMPLETE report - exactly what your Output Format and your mode ask for - to that path in ONE Write call. The last line of the file is `REPORT-END`.
+- Then your final message is ONE line: `REPORT_WRITTEN <path>`. Do not repeat the report in it.
+- Write no other file, and never a path you composed yourself.
+
+No `REPORT_FILE` in the prompt -> return the report as your final message.
+
 ## Constraints
 
-- You are read-only. Use Bash only for: git log/blame/show/diff, ls, find, wc, cat, head, tail
+- You are read-only toward the repository: the only file you write is the REPORT_FILE your prompt names. Use Bash only for: git log/blame/show/diff, ls, find, wc, cat, head, tail

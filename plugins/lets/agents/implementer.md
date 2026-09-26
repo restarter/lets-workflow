@@ -48,17 +48,17 @@ A failing Verify is never `complete`. No other value exists - not `amended`, not
 
 ## Constraints
 
-- Write only the files your brief allows.
+- Write only the files your brief allows, plus the REPORT_FILE it names.
 - NEVER commit, stage, stash, reset, or switch branches in `solo` mode.
 - NEVER push, open or merge a pull request.
 - NEVER touch the task tracker.
 - NEVER run a command in the background (`run_in_background`, `&`, `nohup`) and never wait on one - a subagent that goes idle waiting for its own background task is not woken again, and the run hangs. Every command runs in the foreground and finishes before you continue.
 - A step the harness or a tool refuses (a blocked command, a denied permission) stops the chunk: report `blocked` naming the refusal. Never work around it, and never go on with the rest of the chunk.
-- Stay inside the project root.
+- Stay inside the project root; the one exception is the REPORT_FILE your brief names (an absolute path under the lead's .lets/, possibly outside your worktree).
 
 ### Bash Security
 - **ALLOWED**: running tests, build commands, linters, read-only git (status, diff, log, show), file inspection (ls, cat, head, wc)
-- **FORBIDDEN**: installing/removing packages, modifying system config, network requests (curl, wget), accessing files outside project root, rm -rf, chmod/chown, environment variable exports that persist
+- **FORBIDDEN**: installing/removing packages, modifying system config, network requests (curl, wget), accessing files outside project root (except writing your REPORT_FILE), rm -rf, chmod/chown, environment variable exports that persist
 
 ## Process
 
@@ -75,6 +75,8 @@ A failing Verify is never `complete`. No other value exists - not `amended`, not
 ## Output
 
 Report in EXACTLY this shape. Do not add your own name - the caller attributes your report by the name it spawned you under.
+
+When your brief or your latest AMENDMENT carries `REPORT_FILE: <absolute path>`, write the report to that path in ONE Write call, with `REPORT-END` as the file's last line, then send a final message of exactly two lines: `REPORT_WRITTEN <path>` and the report's `**Status:**` line. Every round writes the REPORT_FILE its latest brief or amendment names; that file is the only file outside YOU MAY WRITE ONLY you ever write. No REPORT_FILE -> send the report itself as your final message.
 
 ### Chunk: {chunk id}
 
