@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -100,7 +101,13 @@ func planRestore(root string, roles map[string]roleFile, snap ccregistry.Snapsho
 	}
 	base := roleFile{Session: sid, Name: self.Name, Pid: self.Pid, Cwd: cwd, OrcaTerminal: os.Getenv(orcaTerminalVar),
 		Set: now().UTC().Format(time.RFC3339), path: filepath.Join(peersDir(root), sid+".role")}
-	if task := branchTask(root, branch); task != "" {
+	if task, holder := branchTask(root, branch); task != "" {
+		// The task-state session: names who owns this branch's task. A live foreign
+		// holder (a teammate pane opened in the lead's worktree) gets no worker role -
+		// it would be listed as the task's worker to the orchestrator.
+		if _, live := snap.Find(holder); live && holder != sid {
+			return nil, "", "", ""
+		}
 		base.Role, base.Task = "worker", task
 		return &base, "", "", ""
 	}
@@ -141,25 +148,51 @@ func planRestore(root string, roles map[string]roleFile, snap ccregistry.Snapsho
 	return &base, "", p, ""
 }
 
-// branchTask is the task: of branch's .task-<slug>; "" on the merge-branch, a
-// detached HEAD, or a missing / invalid id.
-func branchTask(root, branch string) string {
+// branchTask is the task: of branch's .task-<slug> and the session id its session:
+// line records ("" when none); task is "" on the merge-branch, a detached HEAD, or a
+// missing / invalid id. A plain read, no lock: the hook's hot path.
+func branchTask(root, branch string) (task, holder string) {
 	if branch == "" {
-		return ""
+		return "", ""
 	}
 	home, _ := os.UserHomeDir()
 	if branch == letsconfig.ResolvedEnv(root, home, nil)["LETS_MERGE_BRANCH"] {
-		return ""
+		return "", ""
 	}
 	slug, ok := taskstate.Slug(branch)
 	if !ok {
-		return ""
+		return "", ""
 	}
 	st, err := taskstate.Read(filepath.Join(root, ".lets"), slug)
 	if err != nil || !taskid.Valid(st.Task) {
-		return ""
+		return "", ""
 	}
-	return st.Task
+	return st.Task, taskstate.StoredSession(st)
+}
+
+// RoleProof returns the pid and set time sid's role file recorded - the proof a
+// later session id is the same process re-minted (ccregistry.Snapshot.Rotated).
+// Read-only: the SessionStart hook reads it BEFORE peersHeal, whose reconcile moves
+// a re-minted role file to the new id and deletes the old one.
+func RoleProof(root, sid string) (pid int, set time.Time, ok bool) {
+	if !ccregistry.ValidSession(sid) {
+		return 0, time.Time{}, false
+	}
+	data, err := os.ReadFile(filepath.Join(peersDir(root), sid+".role"))
+	if err != nil {
+		return 0, time.Time{}, false
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		k, v, cut := strings.Cut(line, ": ")
+		switch {
+		case !cut:
+		case k == "pid":
+			pid, _ = strconv.Atoi(strings.TrimSpace(v))
+		case k == "set":
+			set, _ = time.Parse(time.RFC3339, strings.TrimSpace(v))
+		}
+	}
+	return pid, set, pid > 0 && !set.IsZero()
 }
 
 // Heal is the SessionStart hook's entry: load this checkout, heal sid, report nothing.

@@ -137,3 +137,36 @@ func TestRotated(t *testing.T) {
 		}
 	}
 }
+
+// An entry under another peerProtocol is not addressable, but its session id still
+// proves that session runs: Loose keeps it (a valid id only); an unparseable one
+// and a stale file add nothing.
+func TestSnapshot_LooseKeepsProtocolUnknown(t *testing.T) {
+	dir := t.TempDir()
+	sessions := filepath.Join(dir, "sessions")
+	if err := os.MkdirAll(sessions, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write := func(pid, body string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(sessions, pid+".json"), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const v2, bad = "bbbbbbbb-0000-4000-8000-000000000002", "not-a-uuid"
+	write("2001", `{"sessionId":"`+v2+`","peerProtocol":2}`)
+	write("2002", `{"sessionId":"`+bad+`"}`)
+	write("2003", `{not json`)
+	write("2004", `{"sessionId":"cccccccc-0000-4000-8000-000000000003","peerProtocol":2}`) // stale: pid dead
+	withAlive(t, 2001, 2002, 2003)
+	s := Read(dir)
+	if len(s.Loose) != 1 || s.Loose[v2] != 2001 {
+		t.Errorf("Loose = %v, want only %s -> 2001", s.Loose, v2)
+	}
+	if s.Degraded == nil || s.Degraded.Reason != "registry_protocol_unknown" || len(s.Unrecognized) != 3 {
+		t.Errorf("degraded=%+v unrecognized=%v", s.Degraded, s.Unrecognized)
+	}
+	if _, ok := s.Find(v2); ok {
+		t.Error("a Loose session must never be addressable through Find")
+	}
+}

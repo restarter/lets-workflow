@@ -1,6 +1,6 @@
 ---
 description: Worktree lifecycle management - create, list, remove, info on interactive worktrees
-argument-hint: "[create <name|task-id> [--branch <ref>] [--attach|--new-branch] [--flow plan|plan-workflow] [--auto] [--orca|--cmux|--tmux]|list|info|remove <name>]"
+argument-hint: "[create <name|task-id> [--branch <ref>] [--attach|--new-branch] [--flow plan|plan-workflow] [--auto] [--orca|--cmux|--tmux]|create --team [<callsign>] --area <a> [--orca|--cmux|--tmux]|list|info|remove <name>]"
 ---
 
 # Worktree Management
@@ -14,6 +14,7 @@ Thin dispatcher for interactive parallel worktrees. All filesystem/git work live
 ## Step 1: Determine Subcommand
 
 **If argument provided** (e.g., `/lets:worktree create auth-feature`), parse it:
+- `create --team [<callsign>] --area <a>` -> go to **Create a team** (a standing team's worktree and its lead). Strip `--team`, the optional `<callsign>`, `--area <a>` and the launcher overrides (`--orca` / `--no-orca` / `--cmux` / `--no-cmux` / `--tmux` / `--no-tmux`). **Refused** with one line, then stop: together with `--flow` or `--auto` (a team's lead starts interactively), and from inside a worktree.
 - `create <name>` -> go to Create. **First strip any `--orca` / `--no-orca` / `--cmux` / `--no-cmux` / `--tmux` / `--no-tmux` / `--auto` / `--flow <value>` / `--branch <ref>` / `--title-file <path>` token** out of the argument and carry them as overrides (`--orca`/`--no-orca` = the Orca launcher, Step C0; `--cmux`/`--no-cmux`/`--tmux`/`--no-tmux` = launcher; `--auto` = autonomous permission mode; `--flow plan|plan-workflow` = which command the launch lands in — all for Steps C0 / C3.5; `--branch <ref>` decouples the attached/created branch from the dir name — Step C2; `--title-file <path>` = a file holding the task title, passed by `take-task` so the branch name is derived in Go — Step C1). Bind the remainder as `<name>` (so `create auth --flow plan-workflow --auto` => name `auth`, not the flags; `create pwa-46696 --branch feature/pwa-46696` => name `pwa-46696`, branch `feature/pwa-46696`). A `<name>` that is a bare task id (it passes the detect-task id gate and `take-task` sent it) means **From task** in Step C1 with that id.
 - `list` -> go to List
 - `remove <name>` -> go to Remove
@@ -75,7 +76,7 @@ AskUserQuestion(
 lets worktree branch-name --task '<task-id>' --title-file '<title-file>' --worktree --plugin-root "${CLAUDE_PLUGIN_ROOT}" --json
 ```
 
-Take `branch` (the adapter's `worktree-branch:` shape, default `worktree-<task-id>-<slug>`) as `$BRANCH_REF` and `<task-id>-<slug>` from `slug` as the dir `<name>` (e.g. `lets-hpi.3-worktree-start`). With the default templates these are exactly today's names. On `ok=false` surface `error.message` and stop.
+Take `branch` (the adapter's `worktree-branch:` shape, default `worktree-<task-id>-<slug>`) as `$BRANCH_REF` and the `dir` field as the dir `<name>` (e.g. `lets-hpi.3-worktree-start`) - never hand-built from the id and `slug`: Go lowers and hash-suffixes an id that is not a valid worktree name (an uppercase id). With the default templates these are exactly today's names. On `ok=false` surface `error.message` and stop.
 
 **Custom:** Use provided text. Slugify: lowercase, spaces to hyphens, remove special chars, max 50 chars (the Go validator allows up to 64; the skill pre-truncates to 50 to leave headroom for `worktree-` prefixes and tmux pane labels). `lets worktree create` will reject invalid names with exit 2.
 
@@ -281,6 +282,151 @@ Symlinks: lets={worktree.lets_symlinked} store={worktree.store_linked} ({store_l
 │  Info?   /lets:worktree info    │
 └─────────────────────────────────┘
 ```
+
+---
+
+## Create a team
+
+A standing team's worktree `team_<c>` on branch `team_<c>` (`<c>` = the callsign), its team file `.lets/teams/<c>.md`, and ONE session: the lead, named `<c>-lead`, which claims the lead through `/lets:start`. On the orca launcher with Orca running, Orca creates the worktree (so Orca registers it) and opens the lead's terminal (Step T2-orca); every other launcher, and orca when Orca is not running, gets the worktree from Go (Step T2) and a launcher only opens the lead. Members are spawned later by the lead (`/lets:team spawn`).
+
+### Step T1: Callsign
+
+A `<callsign>` on the argument is used as given. Otherwise:
+
+```bash
+lets worktree team-init --suggest-callsign --json
+```
+
+Offer its `callsign`; the owner accepts it or types another (a callsign is `[a-z0-9-]`, 1-40 characters, not `run-*`). `--area <a>` is required: missing -> ask in words for one line on what the team owns.
+
+Before anything is created, check the callsign - a given one and a suggested one alike; it writes nothing:
+
+```bash
+lets worktree team-init --check --callsign '<c>' --json
+```
+
+`team_exists` (27) -> the callsign has a team file: its worktree is on disk -> "Reopen a team" below; otherwise (a disbanded team keeps its file as history) pick another callsign. `callsign_live` (34) or a usage error (2) -> pick another callsign. Only an `ok=true` goes on to T2.
+
+### Step T2-orca: Create the worktree through Orca
+
+Only when the launcher resolves to orca (as in Step C3.5); T1's `--check` already passed. Fetch exactly as Step T2 does (20 s bound, the staleness warning, `no_remote_base` stops). Then, from the main checkout:
+
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+cd "$LETS_PROJECT_ROOT"
+lets orca team-create --name "team_<c>" --base-branch "origin/{LETS_MERGE_BRANCH}" --json
+```
+
+By `team.state`:
+
+- `not_attempted` (Orca absent or not running, or its ps failed) -> one line with `team.reason`, then Step T2 (Go); T5 then resolves the lead's launcher as C3.5's orca fallback (cmux, else terminal).
+- `already_exists` -> "Reopen a team" below.
+- `created` -> first link it, the step Orca's `orca.yaml` would have run (the `team_` prefix keeps adopt from deriving a task id):
+
+  ```bash
+  lets worktree adopt --dir "<team.path>" --plugin-root "${CLAUDE_PLUGIN_ROOT}" --json
+  ```
+
+  `ok=false` -> stop. Show `team.terminals[]` titles in one line ("Orca opened: <titles>; a command a repo default starts there runs before the setup hook"), then Step T3 with `<path>` = `team.path`; T5 uses `lets orca terminal`.
+- `create_ambiguous` (11) / `create_failed` (12) -> stop: show `error.message` and the path if any, and name the check - `orca worktree ps` and `git worktree list`. NEVER Step T2 after this - a create was attempted; retrying with `--no-orca` is the owner's choice.
+- `team_worktree_mismatch` (13) / `agent_terminal_present` (14) -> stop: show expected vs actual, or the terminal, and say the worktree stays; `/lets:team disband <c>` (or `lets orca team-remove`) removes it through Orca.
+
+### Step T2: Create the worktree (Go)
+
+Fetch as `lets worktree switch` does: `git fetch --no-tags origin {LETS_MERGE_BRANCH}` bounded to 20 s; it fails and `origin/{LETS_MERGE_BRANCH}` exists -> go on with a one-line staleness warning; no `origin/{LETS_MERGE_BRANCH}` -> stop (`no_remote_base`) - the local merge-branch is never a base. Then:
+
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+cd "$LETS_PROJECT_ROOT"
+lets worktree create "team_<c>" --branch "team_<c>" --new-branch --base "origin/{LETS_MERGE_BRANCH}" --plugin-root "${CLAUDE_PLUGIN_ROOT}" --json
+```
+
+`ok=false` -> surface `error.message` and stop. Assert, then go on: `worktree.path` ends in `/team_<c>`, and `git -C "<path>" branch --show-current` prints `team_<c>`; anything else -> stop and show both.
+
+### Step T3: Team file
+
+```bash
+lets worktree team-init --callsign '<c>' --area '<a>' --worktree "<path>" --plugin-root "${CLAUDE_PLUGIN_ROOT}" --json
+```
+
+`team_exists` (27) or `callsign_live` (34) here means another writer took the callsign after the T1 check (a race): say so and stop, and name the cleanup of the worktree T2 created - `/lets:worktree remove team_<c>`. Read `agent_command` and `orca_agent` from the written file's frontmatter (both default `claude`).
+
+### Step T4: Setup hook
+
+The hook point is `.lets/hooks/team-setup` in the main checkout. Absent, or not executable -> one line naming the hook point, and go on to T5.
+
+Present -> show its path and the whole hook when it is 40 lines or fewer; a longer one shows its first 20 lines and "{N} more lines", and the gate adds "Show the rest" - approving lines nobody saw defeats the gate:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Run the team setup hook {hook path} in {path}?",
+    header: "Setup hook",
+    options: [
+      { label: "Run it (Recommended)", description: "Runs in the team worktree; its output fills the team file's Workspace" },
+      { label: "Show the rest", description: "Print the whole hook, then ask this again" },  /* only when the hook was cut */
+      { label: "Skip", description: "Launch the lead without it; Workspace stays unfilled" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+The hook runs only after that yes: cwd = the team worktree, env `TEAM_CALLSIGN=<c>`, `TEAM_WORKTREE=<path>`, `TEAM_FILE=<team file>`. Record what it prints - the docker prefix, the compose project, the port block - in the team file's `## 2. Workspace` section. **A hook that fails stops here, before the lead is launched:** the worktree and the team file stay, its output is shown, and the "Reopen a team" gate below offers to run it again (on the user's yes) before any launch.
+
+### Step T5: Launch the lead
+
+The launcher resolves as in Step C3.5 (an override, else `$LETS_LAUNCHER`). The lead's command is `{agent_command} --name '<c>-lead' '/lets:start'`; the orca path uses `{orca_agent}` in its place. `agent_command` / `orca_agent` come from the shared, writable team file, so they never go inside a double-quoted argument of this session's own Bash call (a `$(...)`, a backtick or a `"` there would expand here): they cross through a quoted heredoc.
+
+- **cmux / tmux** (`<launcher>`):
+
+  ```bash
+  CMD=$(cat <<'EOF'
+  {agent_command} --name '<c>-lead' '/lets:start'
+  EOF
+  )
+  lets <launcher> open "<path>" --name "<c>-lead" --command "$CMD" --json
+  ```
+
+- **terminal:** print, for the human to run in a new terminal: `cd "<path>" && {agent_command} --name '<c>-lead' '/lets:start'`
+- **orca** (a worktree from T2-orca): the lead's terminal opens in the Orca worktree T2-orca created (now attachable):
+
+  ```bash
+  CMD=$(cat <<'EOF'
+  {orca_agent} --name '<c>-lead' '/lets:start'
+  EOF
+  )
+  lets orca terminal --worktree "<path>" --title '<c>-lead' --command "$CMD" --json
+  ```
+
+  `terminal.launched=true` -> record `terminal.handle` in the team file's Workspace section (`Orca lead terminal: <handle>`). `launched=false` (Orca absent, not running or refusing) -> print its `fallback_command` for a terminal, prefixed with one line naming `reason` - never a worktree create.
+
+cmux / tmux `launched=false` -> print their `fallback_command` the same way. A second lead from an ambiguous success is harmless: its `/lets:start` gets `lead_held` and stops.
+
+### Reopen a team
+
+`/lets:worktree create --team <c>` for a team whose file exists (T3 `team_exists`, or `.lets/teams/<c>.md` present with its worktree on disk) reopens it instead: read `agent_command` / `orca_agent` from the file, show the T5 command for the resolved launcher verbatim, and run it - through the same quoted heredoc - only after the user's yes.
+
+On orca the T5 orca command applies when `lets orca team-create`'s ps check (or `orca worktree ps`) lists `team_<c>`; a team worktree Orca does not list (created by Go) gets the printed command. The gate:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Reopen team <c>: launch its lead with the command above?",
+    header: "Reopen",
+    options: [
+      { label: "Launch the lead (Recommended)", description: "Runs exactly the command shown, in the team worktree" },
+      { label: "Run the setup hook first", description: "Run .lets/hooks/team-setup again, then show this gate again" },
+      { label: "Cancel", description: "Launch nothing" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+A last T4 run that failed makes "Run the setup hook first" the recommended option; that pick goes through T4's display and gate, so the hook still runs only on its own yes.
+
+> **Keep in sync:** the lead's `--name '<c>-lead'` is the session name `lets members` and `/lets:start` read as the team's lead; `lets orca terminal` mirrors `orcacmd.OpenTerminal` (`cli/internal/orcacmd/terminal.go`) and never creates a worktree; `lets orca team-create` mirrors `orcacmd.TeamCreate` (`teamcreate.go`) and is the only Orca create in the team flow.
 
 ---
 

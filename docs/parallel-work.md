@@ -1,29 +1,51 @@
 # Parallel work
 
-Two ways to work on more than one task at a time: **`/lets:team`** spawns autonomous agents that each take a task, and **`/lets:worktree`** gives you separate directories so you can drive several sessions yourself.
+Three ways to get more than one thing done at a time: **`/lets:team run`** opens one visible LETS session per task, **`/lets:worktree`** gives you separate directories so you can drive several sessions yourself, and **parallel implementers** (`/lets:execute --implementers --parallel`) split ONE task's plan across agents.
 
-## `/lets:team` — autonomous agents
+## `/lets:team run` — one session per task
 
 ```
 /lets:team run
 ```
 
-Pick a set of tasks; the system spawns one teammate per task (the count scales with how many you select). Each teammate:
+Pick a set of tasks (or name them with `/lets:team run --tasks A,B,C`). For each task LETS cuts a branch from `origin/<merge-branch>` into its own worktree and opens a visible LETS session there - a **worker** named `<repo>-<task-id>`, bound to your session as its orchestrator. It works on every launcher: a terminal command, a cmux workspace, a tmux window, or an Orca pane.
 
-1. Works in its own isolated git worktree.
-2. Creates a plan and waits for your approval — you're the lead.
-3. Implements the task once you've approved the plan.
-4. Has its commits cherry-picked back.
+1. Each worker runs its own `/lets:start` ... `/lets:done` - its plan, its code, its PR.
+2. You press every gate in the worker's own terminal. Your session coordinates through `/lets:orc` (ask / ping / tell) and never decides for a worker; a message from it is never approval.
+3. `/lets:team status` shows every worker - live or not, and its tracker status. `/lets:team stop` asks each worker to commit and end its session; worktrees and branches stay.
 
-`/lets:team run --tasks A,B,C` names the tasks up front and skips the picker.
+Start it from the main checkout, with a clean tree; your session is registered as an orchestrator before the first worker opens, and a task another active run holds is refused.
 
-Other subcommands: `/lets:team status` (how the teammates are doing), `/lets:team stop`.
+**Orca addon.** With `LETS_LAUNCHER=orca` and Orca running, `/lets:team run` is an Orca supervised run (`--backend orca` picks it directly): each task becomes a visible LETS session in its own Orca child worktree, you press that session's gates in its terminal, and this session coordinates - relaying every worker question to you whole and replying only with your words. A run never uses both backends for one task: a team record names its backend, and a run stops when another active record of the other backend already holds a selected task. `--backend agents` is refused: the Agent Teams primitives it used are gone from Claude Code.
 
-**Orca backend (addon).** With `LETS_LAUNCHER=orca` and Orca running, `/lets:team run` offers an Orca supervised run instead (`--backend orca` picks it directly): each task becomes a visible LETS session in its own Orca child worktree, you press that session's gates in its terminal, and this session coordinates - relaying every worker question to you whole and replying only with your words. A run never uses both backends for one task: a team record names its backend, and a run stops when another active record of the other backend already holds a selected task.
+This is the right tool when you have several independent, well-scoped tasks. For a single task you're actively shaping, plain `/lets:plan` + `/lets:execute` is a better fit — see **[plan-execute.md](plan-execute.md)**.
 
-This is the right tool when you have several independent, well-scoped tasks and want them done in parallel without babysitting each one. For a single task you're actively shaping, plain `/lets:plan` + `/lets:execute` is a better fit — see **[plan-execute.md](plan-execute.md)**.
+## A standing team — a workspace that outlives its tasks
 
-**`/lets:team` or delegated `/lets:execute`?** Team takes several *tracker tasks* and runs one implementer per task in its own worktree; with the Orca backend each worker's questions are relayed to you, and the finished work is reviewed at the end. Delegated `/lets:execute` (the Implementers mode) takes one *plan* on this branch, hands it to implementer agents chunk by chunk, and shows you each diff under the agent's name so you can correct that same agent before anything is committed. Both use the same `implementer` agent. Team's Agent Teams backend is being rebuilt for the current Claude Code (lets-7dwc1); its Orca backend is unaffected.
+A **standing team** owns an area of the repo for longer than one task: its own worktree, a lead session, `lets:*` members (architect, skeptic, explorer, implementer) and a team file that remembers what it learned. Continuity is files only: the harness restores no member after the lead restarts, so every decision and finding that matters is written to the team file (`.lets/teams/<callsign>.md`) or a file it lists, and members are respawned from it, never resumed from memory. Every implementer and member writes its report to a file the lead reads in full; a missing report is a loud gap, never an empty result.
+
+**Create.** From the main checkout:
+
+```
+/lets:team create [<callsign>] --area "billing API"
+```
+
+Teams are named by callsign (snake, frog, otter, ...). Without one, LETS proposes a free callsign - no team file under that name and no live `<callsign>-lead` session - and checks it before anything is created. It then creates the worktree `team_<callsign>` (dir and branch) from `origin/<merge-branch>`, writes the team file (never overwriting one), shows your project's optional `.lets/hooks/team-setup` whole and runs it only on your yes (it can fill the team file's Workspace: a docker prefix, a compose project, a port block), and launches ONE session - the lead, named `<callsign>-lead` - on your launcher. The same command on an existing team reopens it: its lead is launched again.
+
+**Work task by task.** In the lead session, `/lets:start <task-id>` claims the team's lead (a second chat is told who the live lead is) and moves the team worktree to that task's branch - an existing one, or a new one cut from `origin/<merge-branch>`. Uncommitted work on the previous task is committed or **parked**: a `wip(<id>): park` commit on that branch, which is undone (its changes staged again) when you come back to the task and the park was never pushed. Every new file must be named for a park; ignored files are never parked, and nothing is ever stashed. A switch refuses while a merge or rebase is in progress, while an implementer is still writing in the worktree, or onto the merge-branch. `/lets:done` warns about park commits still in the range and offers to promote what this task learned to the team file's Standing knowledge.
+
+**Members.** From the lead's session:
+
+- `/lets:team spawn <role> [name]` spawns one member (`spawn --roster` the whole roster from the team file); a name that is still live is never spawned twice. After a restart, `/lets:start` offers **Respawn roster**.
+- `/lets:team roster` shows the roster joined with who is live; `/lets:team dismiss <name>` or `dismiss --all` ends members.
+
+Members only ever talk to the lead.
+
+**Disband.** `/lets:team disband <callsign>` retires the team, and never kills anything: when the recorded lead is still live it asks the lead (through `/lets:orc`) to dismiss its members and wrap up, or lets you say it already has; when LETS cannot tell, it asks you; with no live lead, it lists every session still open in the team worktree for you to close or keep. A task still in progress, or a branch the team parked, stops it until you decide. The worktree is removed through `/lets:worktree remove` with its usual checks (uncommitted changes, unpushed commits), your optional `.lets/hooks/team-teardown` runs only on your yes, and the team file and its members registry stay as history - the callsign stays taken.
+
+## Parallel implementers inside one task
+
+**`/lets:team` or delegated `/lets:execute`?** Team takes several *tracker tasks* and runs each in its own session. Delegated `/lets:execute --implementers` takes one *plan* on this branch: by default ONE persistent implementer works through it chunk by chunk, and you (or the team check, under the gate policy you pick at Start) accept each chunk before it is committed. With `--parallel`, you declare file-disjoint groups of chunks and each group gets its own implementer in an isolated worktree; `lets integrate` lands each finished chunk in your tree as one verified patch - never a merge, never `reset --hard`. File-disjoint is not independence: a chunk that calls code another group adds belongs in the same group. Details: **[plan-execute.md](plan-execute.md)**.
 
 ## `/lets:worktree` — parallel terminals
 
@@ -67,9 +89,10 @@ With `LETS_LAUNCHER=orca`, one session can look across every project Orca knows.
 
 ## See also
 
-- **[plan-execute.md](plan-execute.md)** — `/lets:team` runs this flow per task
+- **[plan-execute.md](plan-execute.md)** — each `/lets:team` worker runs this flow for its task; delegated and parallel implementers
 - **[workflow.md](workflow.md)** — where parallel work fits the overall loop
 - **[autonomous.md](autonomous.md)** — the autonomous pipeline that automates this with `--flow plan-workflow --auto`
 - **[commands.md](commands.md)** — `/lets:team` and `/lets:worktree` subcommands
+- **[smoke/parallel-implementers.md](smoke/parallel-implementers.md)** — the live smoke procedure for team runs and parallel implementers
 - **[messaging.md](messaging.md)** — orchestrators, workers and hand-offs: talking to other sessions and agents
 - **[orca.md](orca.md)** — the Orca addon

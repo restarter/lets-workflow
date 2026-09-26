@@ -21,6 +21,28 @@ func NewOrcaCmd() *cobra.Command {
 		Use: "open", Short: "Open in Orca (not supported on this platform)", SilenceUsage: true, SilenceErrors: true,
 		RunE: func(_ *cobra.Command, _ []string) error { return errOrcaUnsupported },
 	})
+	term := &cobra.Command{
+		Use: "terminal", Short: "Open an Orca terminal (not supported on this platform)", SilenceUsage: true, SilenceErrors: true,
+		RunE: func(_ *cobra.Command, _ []string) error { return errOrcaUnsupported },
+	}
+	for _, name := range []string{"worktree", "title", "command"} {
+		term.Flags().String(name, "", "")
+	}
+	term.Flags().Bool("json", false, "")
+	term.Flags().BoolP("quiet", "q", false, "")
+	root.AddCommand(term)
+	for _, use := range []string{"team-create", "team-remove"} {
+		c := &cobra.Command{
+			Use: use, Short: "Orca " + use + " (not supported on this platform)", SilenceUsage: true, SilenceErrors: true,
+			RunE: func(_ *cobra.Command, _ []string) error { return errOrcaUnsupported },
+		}
+		for _, name := range []string{"name", "base-branch", "repo"} {
+			c.Flags().String(name, "", "")
+		}
+		c.Flags().Bool("json", false, "")
+		c.Flags().BoolP("quiet", "q", false, "")
+		root.AddCommand(c)
+	}
 	for _, sub := range []struct{ use, key string }{{"notify", "notify"}, {"status", "status"}, {"card", "card"}, {"repos", "repos"}, {"wake", "wake"}} {
 		sub := sub
 		var jsonOut, quiet bool

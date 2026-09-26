@@ -37,6 +37,10 @@ func NewWorktreeCmd() *cobra.Command {
 		{"task-state", "Read or write the task-state file (Windows: not supported)"},
 		{"branch-name", "Render a task branch name (Windows: not supported)"},
 		{"sweep", "Sweep merged task branches (Windows: not supported)"},
+		{"pushed", "Report whether a commit is on the remote (Windows: not supported)"},
+		{"team-init", "Write a standing team's file (Windows: not supported)"},
+		{"switch", "Move a team worktree to another task (Windows: not supported)"},
+		{"parked", "List a team's parked branches (Windows: not supported)"},
 	} {
 		sub := &cobra.Command{
 			Use:           use.name,

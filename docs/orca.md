@@ -18,12 +18,15 @@ When the project's `.lets/.env` names Orca, `lets init` also writes `orca.yaml`:
 | Gate notifications | `lets notify` lands as a comment on the card |
 | Peer messages | `/lets:orc` can type straight into a peer's pane when its transcript, screen and Orca all show it idle ([commands/orc.md](commands/orc.md)) |
 | Across projects | `/lets:hub` lists every project's orchestrators, asks a stopped one read-only, or wakes it in a visible terminal ([messaging.md](messaging.md)) |
-| Parallel runs | `/lets:team run --backend orca` runs each task as a visible LETS session in an Orca child worktree ([parallel-work.md](parallel-work.md)) |
+| Parallel runs | `/lets:team run` works on every launcher; with Orca running it becomes the Orca addon (`--backend orca` picks it directly): each task a visible LETS session in an Orca child worktree under Orca's supervised orchestration ([parallel-work.md](parallel-work.md)) |
+| Standing teams | `/lets:team create` has Orca create the team worktree (`lets orca team-create`: no agent, Orca's setup skipped, based on `origin/<merge>`, then verified), links it with `lets worktree adopt`, writes the team file, runs your approved setup hook, and only then opens the lead's terminal through Orca (`lets orca terminal`). When Orca is not running nothing was attempted, and the Go path creates the worktree instead; a create Orca attempted never falls back to a Go worktree. Disband: `lets orca team-remove` removes an Orca-created team worktree through `orca worktree rm --run-hooks`, after LETS's dirty and unpushed checks and on the owner's yes, never forced ([parallel-work.md](parallel-work.md)) |
 | Hand-offs | `/lets:handoff --send` types a brief into a Codex, Antigravity or Claude tab of this worktree and brings the report back; `--open` opens a new Codex tab for it, and `--execute` hands an open tab an approved plan to implement ([commands/handoff.md](commands/handoff.md)) |
+
+**Standing teams under Orca.** Whether the lead's teammates show up as separate panes is Claude Code's own setting, not LETS's - LETS turns on no agent-teams option. Archiving a team worktree in the Orca UI still runs Orca's archive hook, `lets worktree release`: harmless (it records the current branch's task and removes only that task-state file), but it does not retire the team - `/lets:team disband` is the LETS way to do that, and it removes the worktree through `lets orca team-remove`.
 
 ## When Orca is not there
 
-Nothing hard-fails. Orca missing, not running, or refusing a request is a named reason, and each feature degrades on its own: the worktree launcher falls back to cmux, then to the plain `cd … && claude` command; the card and notifications are skipped with a reason; `/lets:hub` and `--send` stop and say why; `/lets:team` uses Agent Teams. On Windows the Orca commands are stubs.
+Nothing hard-fails. Orca missing, not running, or refusing a request is a named reason, and each feature degrades on its own: the worktree launcher falls back to cmux, then to the plain `cd … && claude` command; the card and notifications are skipped with a reason; `/lets:hub` and `--send` stop and say why; `/lets:team run` opens its worker sessions on your other launcher instead (cmux, then the terminal command), and `--backend orca` is refused. On Windows the Orca commands are stubs.
 
 LETS finds the Orca CLI inside the app bundle first (`/Applications/Orca.app/Contents/Resources/bin/orca`) and trusts an `orca` on `PATH` only when it answers like Orca: a broken `/usr/local/bin/orca` symlink and the GNOME screen reader named `orca` both exist in the wild.
 
@@ -42,6 +45,6 @@ Observed with Orca 1.4 (2026-09):
 ## See also
 
 - **[messaging.md](messaging.md)** - the three lanes: peers, hub, hand-offs
-- **[parallel-work.md](parallel-work.md)** - worktrees, adopt / release, `/lets:team --backend orca`
+- **[parallel-work.md](parallel-work.md)** - worktrees, adopt / release, `/lets:team run` and its Orca addon
 - **[configuration.md](configuration.md)** - `LETS_LAUNCHER` and the other launchers
 - `cli/README.md` "## lets orca" - the `lets orca open|notify|status|card|repos|wake` CLI

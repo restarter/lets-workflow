@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -259,6 +260,50 @@ func TestHookSessionStart_SessionRefreshGating(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestHookSessionStart_HeldNoticeNamesRemedy: a declined refresh is never silent -
+// the Notice names the holder AND the remedy. The live holder is this test process
+// itself, registered through $CLAUDE_CONFIG_DIR (the registry Claude Code writes).
+func TestHookSessionStart_HeldNoticeNamesRemedy(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the session registry guard is unix-only")
+	}
+	const holder = "0f0f0f0f-0000-4000-8000-00000000000f"
+	cfg := t.TempDir()
+	writeTestFile(t, filepath.Join(cfg, "sessions", strconv.Itoa(os.Getpid())+".json"),
+		`{"sessionId":"`+holder+`","name":"lead","cwd":"/x","peerProtocol":1,"status":"busy","startedAt":1}`)
+	t.Setenv("CLAUDE_CONFIG_DIR", cfg)
+	t.Setenv("HOME", t.TempDir())
+	repo := t.TempDir()
+	for _, args := range [][]string{{"init", "-q", "-b", "feature-y"}, {"-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init"}} {
+		if out, err := exec.Command("git", append([]string{"-C", repo}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	chdirTo(t, repo)
+	body := "task: lets-x\nsession: 1111111 " + holder + "\n"
+	taskFile := filepath.Join(repo, ".lets", "sessions", ".task-feature-y")
+	writeTestFile(t, taskFile, body)
+	rulesPath := filepath.Join(t.TempDir(), "rules.md")
+	writeTestFile(t, rulesPath, "---\nversion: 0.4.0\n---\n")
+
+	root := cli.NewRootCmd()
+	root.SetArgs([]string{"hook", "session-start", "--rules=" + rulesPath})
+	root.SetIn(strings.NewReader(`{"session_id":"0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d","source":"startup"}`))
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if got, _ := os.ReadFile(taskFile); string(got) != body {
+		t.Errorf("a live holder's boundary was overwritten:\n%s", got)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "## LETS Notice") || !strings.Contains(out, "0f0f0f0f") || !strings.Contains(out, "run /lets:start in that chat to rewrite the session") {
+		t.Errorf("the Notice must name the holder and the remedy:\n%s", out)
 	}
 }
 

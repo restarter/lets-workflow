@@ -1,11 +1,11 @@
 ---
 description: Execute implementation plan from /lets:plan - inline in native plan mode, or delegated to named implementer subagents you review and correct
-argument-hint: "[task-id|plan-path] [--status] [--step|--straight|--auto|--implementers]"
+argument-hint: "[task-id|plan-path] [--status] [--step|--straight|--auto|--implementers] [--parallel] [--pipelined] [--gate per-commit|high-only|at-end]"
 ---
 
 # Execute Plan
 
-Load an implementation plan and execute it - inline, in Claude Code's native plan mode, or delegated: each commit-point chunk goes to a named implementer subagent, you review its diff, and corrections go back to that same agent. The plan provides the roadmap; the gates are plan mode (inline) or Step 5-D's Start and review gates (delegated).
+Load an implementation plan and execute it - inline, in Claude Code's native plan mode, or delegated: each commit-point chunk goes to a named implementer subagent, its diff is reviewed - by you or, under the gate policy you approve at Start, by the team's check - and corrections go back to that same agent. The plan provides the roadmap; the gates are plan mode (inline) or Step 5-D's Start, review and run-review gates (delegated).
 
 **Plan is a roadmap, not a script.** Read real files before every change. Adapt cosmetically (a renamed variable, a line that moved). Anything that changes the plan's APPROACH is a **deviation** - see the Deviation gate in Step 5 - and STOPS the run; a silently adapted plan is a new, unapproved plan.
 
@@ -207,7 +207,7 @@ AskUserQuestion(
 
 ## Step 4.5: Choose Execution Mode
 
-How the approved plan runs is ONE up-front choice. **A mode flag pre-answers it - skip the picker entirely when any is present:** `--auto` (Here · auto), `--implementers` or its alias `--team` (Implementers), `--step` / `--step-by-step` (Here · step-by-step), `--straight` / `--straight-through` (Here · straight-through). `--auto` keeps all its AUTO MODE semantics (Step 1 refuses on `$LETS_MERGE_BRANCH`; hard-stops preserved). Default locus is **Here** (this session, native plan mode); **Implementers** is the only locus switch. **`--auto` together with `--implementers` / `--team` is REFUSED** with one line - a delegated run is interactive by design (every diff waits for your review, and an unattended run has nobody to review it): drop `--auto`, or run inline.
+How the approved plan runs is ONE up-front choice. **A mode flag pre-answers it - skip the picker entirely when any is present:** `--auto` (Here · auto), `--implementers` or its alias `--team` (Implementers), `--step` / `--step-by-step` (Here · step-by-step), `--straight` / `--straight-through` (Here · straight-through). `--auto` keeps all its AUTO MODE semantics (Step 1 refuses on `$LETS_MERGE_BRANCH`; hard-stops preserved). Default locus is **Here** (this session, native plan mode); **Implementers** is the only locus switch. **`--auto` together with `--implementers` / `--team` is REFUSED** with one line - a delegated run is interactive by design (its gates wait for you, and an unattended run has nobody to review it): drop `--auto`, or run inline. **`--gate <per-commit|high-only|at-end>`** sets a delegated run's gate policy (Step 4.7 proposes it, 5-D.5 dispatches on it); under `--auto` any value other than `per-commit` is REFUSED with one line - `--auto` runs keep today's gates. **`--parallel`** fixes the parallel shape (Step 4.6, 4.7); it needs `--implementers` / `--team` - alone it is REFUSED with one line - and under `--auto` it is REFUSED like every delegated run. **`--pipelined`** fixes the commit policy `pipelined` (implementers commit locally and move on; 5-D.5 "Pipelined run"), solo or with `--parallel`; it too needs `--implementers` / `--team`, and under `--auto` it is REFUSED.
 
 **Bare `/lets:execute` (no mode flag) - ask exactly once:**
 
@@ -220,20 +220,20 @@ AskUserQuestion(
       { label: "Straight-through (Recommended)", description: "Here, one approval, run all tasks, auto-commit at plan points" },
       { label: "Step-by-step", description: "Here, pause for review after each task; confirm each commit" },
       { label: "Auto", description: "Here, AUTO MODE - unattended; hard-stops + push/PR/close/external still gated" },
-      { label: "Implementers", description: "Named agents implement chunk by chunk; you review and correct each diff" }
+      { label: "Implementers", description: "Named agents implement chunk by chunk; reviewed by the gate policy you approve" }
     ],
     multiSelect: false
   }]
 )
 ```
 
-**Commit cadence is DERIVED from the mode - never a separate question:** step-by-step -> confirm each commit; straight-through -> auto-commit at each plan commit point; auto -> auto-commit; implementers -> one commit per chunk, only after you accept its diff.
+**Commit cadence is DERIVED from the mode - never a separate question:** step-by-step -> confirm each commit; straight-through -> auto-commit at each plan commit point; auto -> auto-commit; implementers -> one commit per chunk, after the Accept its gate policy names (5-D.5).
 
 **Handle response (sets the mode that Step 5 obeys):**
 - **Straight-through** -> Step 5 (native plan mode); after the plan-mode approval, implement all tasks with NO per-task pause and `/lets:commit` at each plan commit point without re-asking.
 - **Step-by-step** -> Step 5 (native plan mode); after the plan-mode approval, implement one task, pause for user review before the next, and confirm each `/lets:commit`.
 - **Auto** -> proceed exactly as `--auto` (Step 5's `--auto` behavior + pipeline-state marker + execute-blocked notify). **Guard:** if on `$LETS_MERGE_BRANCH`, REFUSE Auto here too (same rule as Step 1's `--auto` refuse - AUTO MODE never edits the merge-branch); tell the user to pick step-by-step / straight-through or take a feature branch.
-- **Implementers** -> do NOT enter native plan mode: Step 4.6, then Step 5-D. `/lets:team run` remains its own entry point for several *tracker* tasks; this locus runs one *plan*.
+- **Implementers** -> do NOT enter native plan mode: Step 4.6, Step 4.7, then Step 5-D. `/lets:team` manages a standing team; parallel implementation of a plan runs here, in the parallel shape.
 
 (A remembered default / `LETS_EXECUTE_MODE` to skip the picker on every run is a deferred follow-up - this ships the picker + flag shortcuts only.)
 
@@ -251,25 +251,84 @@ Everything here is derived from the plan's existing `### Task N` sections - thei
 
 Chunk ids are `c1`, `c2`, ... in plan order. A chunk's **allowlist** is the union of EVERY path its tasks' Create/Modify items name - one item may name several (`Modify: a.md (:10) and b.md (:20)`), and taking only the first drops a planned file. A target that cannot be read as a path unambiguously refuses delegation (below).
 
-**2. Group chunks.** A caller task is a barrier: nothing before it may still be open when it runs, and nothing after it starts before it is done. Within each stretch between barriers, two chunks share a group when their allowlists share a path, directly or through another chunk of the stretch. Groups keep plan order.
+A chunk's **Risk** is `high` when any of its tasks says `**Risk:** high` or its commit task has no `**Risk:**` line - missing = high; otherwise `low`. Review depth follows it.
 
-**3. Show the split** - in the Start gate itself, as the `preview` of its Start option (5-D.2), so the user approves the split they are looking at (a table printed as prose before a gate is skipped in practice). Every task exactly once:
+**Files audit - a GATE.** Every path a task's step text creates, edits, renames or deletes must appear in that task's `**Files:**` (a path named only to read or cite is not a touch). Resolve the Files: lines first:
+
+- expand `{a,b}` brace sets (`memberscmd/{members.go,lead.go}` -> two paths);
+- a bare name (no `/`) resolves, in this order: to the directory of the previous path on the same Files line only when the file exists there at BASE or the task creates it there (`info.go`, `info_test.go` -> both in `info.go`'s directory); else to the repo root when it exists there at BASE or the task creates it there (`plugins/lets/rules/lets-rules.md`, `CLAUDE.md` -> `CLAUDE.md` at the root); else it is unresolvable - a warning, never a refusal;
+- a task's `Files add:` Amendment lines count as its Files.
+
+Only a FULL path a step's text touches that is still missing from Files after this expansion refuses delegation (below), naming each task and path - it would put the implementer outside its allowlist, a certain deviation; fixing the plan's Files: lines, or `/lets:plan`, clears it. A name that cannot be resolved, or resolves ambiguously, is a warning in the preview's `### Warnings` block, never a refusal.
+
+**Removed-symbol check - a WARNING only.** Best-effort: for each symbol (function, type, flag, file, heading) a commit point's text removes or renames, grep the text of every LATER commit point for it. A later use is listed as a warning in the Start preview; it never refuses delegation - a grep over prose cannot prove a use.
+
+**Anchor check against BASE - a WARNING only.** `BASE` = `git rev-parse HEAD` now. Mechanically check every `file:line` anchor the plan names (the line still holds what the plan says it holds), every pin counter (a count the plan or its tests fix, e.g. "exactly 3 Review gates" - count it in the file) and every path a Verify command names (it exists, or a task creates it). The checker is an explorer already live for this run or team, through `member-run` (`op=next`, `role=lets:explorer`, `report-file=` the absolute `.lets/cache/report-{TASK_ID}-{RUN}-plan-explorer-r0.md`, which its brief also names as `REPORT_FILE:`), when there is one - never spawned for this, nothing is spawned before Start - else this session inline. Its report is read in the 5-D.5 team check's member order - `agent-report` `op=peek` on every notification (READ EVERY REPORT IN FULL), one nudge through `member-run` `op=correct`, then `op=collect ... retry=no`; never a retry, since nothing is spawned before Start. A GAP is listed as a warning at the Start gate, never as a clean check. A mismatch is a warning listed in the Start preview; it adds no gate and no option.
+
+**CI checks.** Read the repo's CI workflow files (e.g. `.github/workflows/*.yml`) and the Makefile targets they call, and take the commands CI runs on a change (e.g. `make build`, `make test`, `make lint`). They go into every chunk brief as `CI CHECKS:`. No CI workflow -> the brief's list reads `none found`, and the Start preview's warnings say so.
+
+**2. File-sharing sets.** A caller task is a barrier: nothing before it may still be open when it runs, and nothing after it starts before it is done. Within each stretch between barriers, two chunks share a set when their allowlists share a path, directly or through another chunk of the stretch. Sets keep plan order; groups (step 4) are built from them.
+
+**3. Show the split** - in the Start gate itself, in the `preview` of its Start option after the Step 4.7 launch plan (5-D.2), so the user approves the split they are looking at (a table printed as prose before a gate is skipped in practice). Every task exactly once, then the warnings:
 
 ```
 ### Plan split
 
-| Task | Owner    | Group | Allowlist             |
-|------|----------|-------|-----------------------|
-| 0    | caller   | -     | none                  |
-| 1-2  | chunk c1 | A     | a.md, b.md, cli/x.go  |
-| 3    | chunk c2 | A     | a.md                  |
+| Task | Owner    | Group | Risk | Allowlist             |
+|------|----------|-------|------|-----------------------|
+| 0    | caller   | -     | -    | none                  |
+| 1-2  | chunk c1 | a     | high | a.md, b.md, cli/x.go  |
+| 3    | chunk c2 | a     | low  | a.md                  |
+
+### Warnings
+- removed symbol: `oldName` removed by c1, still used by Task 3
+- anchor: `a.md:120` no longer holds "Step 2" at BASE
 ```
 
-A task missing from the table, or listed twice, is a derivation error: stop and say which. The Allowlist column names every path, so a dropped file is visible before Start.
+A task missing from the table, or listed twice, is a derivation error: stop and say which. The Allowlist column names every path, so a dropped file is visible before Start. No warnings -> `### Warnings` reads `none`.
 
-**4. Propose the shape.** Delegated runs are **solo**: one implementer at a time, in this tree, chunks and caller tasks in plan order. When a stretch holds more than one group, add one line: "{N} groups share no file; running groups in parallel is not available yet (lets-7dwc1)." Groups are shown so the split is honest about what could be independent - file-disjoint is not proof of independence (a chunk can call code another chunk adds in a different file).
+**4. Declare the groups (parallel shape).** The shape is never inferred. In the solo shape every chunk belongs to one group, `a`. In the parallel shape (`--parallel`, or a launch plan the owner accepts with it) this session DECLARES the groups - which chunks each implementer owns - in the split table's Group column, each group a union of the step-2 file-sharing sets, in plan order inside it. Group ids are `a`, `b`, ... **Files-disjoint gate across groups:** no path may sit in the allowlists of two groups; a declared split that breaks it is not offered - name the shared paths and declare again, or run solo. Every declared split carries the warning, in the preview's `### Warnings`: "file-disjoint is not independence" - a chunk can call code another group adds in a different file; a dependency like that puts both chunks in one group. A caller task stays a barrier for every group.
 
-**Refuse delegation** - one line saying why, then the Step 4.5 picker again without the Implementers option - when any task is malformed (name it); when the plan has no chunk at all; when no task has a `**Files:**` block (a hand-written plan cannot be split); or when any task's execution itself (not one conditional sub-step inside it) depends on something learned during the run - read each whole task section; a heading or opening line such as `only if`, `only when`, `only on` (any case) or `run this task if ...` is the usual sign. A delegated run dispatches every chunk, so such a plan runs inline, where the condition is judged when the plan reaches it.
+**Refuse delegation** - one line saying why, then the Step 4.5 picker again without the Implementers option - when any task is malformed (name it); when the Files audit fails (name each task and path); when the plan has no chunk at all; when no task has a `**Files:**` block (a hand-written plan cannot be split); or when any task's execution itself (not one conditional sub-step inside it) depends on something learned during the run - read each whole task section; a heading or opening line such as `only if`, `only when`, `only on` (any case) or `run this task if ...` is the usual sign. A delegated run dispatches every chunk, so such a plan runs inline, where the condition is judged when the plan reaches it.
+
+## Step 4.7: Launch plan (proposal)
+
+Before the 5-D.2 Start gate, read the plan and PROPOSE how to run it. This is reasoning about THIS plan, not a fixed rule - no allocation is applied by default. The inputs:
+
+- the plan's blocks (its `**Unit:**` lines or an execution-order table, when it has them) and the Step 4.6 chunks and groups;
+- each chunk's Risk (Step 4.6);
+- the Files audit: which groups are file-disjoint;
+- dependencies: a chunk that needs another chunk's output (a function, a flag, a file it creates) runs serially after it, whatever the files say - file-disjoint is not independence.
+
+The proposal names six choices, each with a one-line reason:
+
+| Choice | What it names |
+|---|---|
+| Implementers | how many, each by its name, and the blocks or chunks each one owns |
+| Isolation | which implementers run isolated (only file-disjoint groups that run at the same time) and which run in the task worktree |
+| Integration order | the order in which chunks land in the task branch |
+| Pipelined | whether an implementer starts its next chunk before the previous one is accepted - the run's commit policy, `pipelined` or `lead`, which the Start preview names |
+| Gate policy | the default: `per-commit` (your Review gate before every commit), `high-only` (your gate on Risk high or missing only) or `at-end` (the team flow accepts, you review the finished run) - 5-D.5 dispatches on it |
+| Overrides | which choices an owner flag fixed |
+
+```
+### Launch plan
+
+| Choice            | Proposal                                  | Why                                           |
+|-------------------|-------------------------------------------|-----------------------------------------------|
+| Implementers      | 1: impl-{RUN} owns c1-c4                  | c1-c4 all touch a.md                          |
+| Isolation         | impl-{RUN} in the task worktree           | nothing runs at the same time                 |
+| Integration order | c1, c2, c3, c4                            | plan order; c3 calls what c2 adds             |
+| Pipelined         | no                                        | c1 and c2 are Risk high - review each first   |
+| Gate policy       | per-commit                                | two high-risk chunks                          |
+| Overrides         | none                                      | -                                             |
+```
+
+**Owner overrides.** `--parallel`, `--pipelined` and `--gate <policy>` each fix one choice (the parallel shape, pipelining, the gate policy); the proposal keeps the fixed value and its Why reads `fixed by --<flag>`. The proposal never contradicts a flag - a flag that cannot hold for this plan (e.g. `--parallel` with no file-disjoint groups) is said in one line, and the run does not start until the owner drops or changes it.
+
+**The proposal is the Start option's `preview`**, above the Step 4.6 split table and its warnings, so the owner accepts exactly what they see - the launch plan, the split and the warnings in one view.
+
+**Change the launch plan** (the Start gate's option for it, 5-D.2) -> follow-up questions change the implementers and their groups, the isolation, the pipelining and the gate policy; recompute the preview (every changed choice's Why reads `set by you`), then show the Start gate again. Nothing is spawned before Start.
 
 ## Step 5: Enter Native Plan Mode
 
@@ -371,10 +430,11 @@ AskUserQuestion(
 ```
 AskUserQuestion(
   questions=[{
-    question: "Hand {N} chunk(s) to implementer agents, one at a time in this tree? {M} caller task(s) run here. Nothing is committed until you accept each diff.",
+    question: "Run the launch plan: {N} chunk(s) by {K} implementer(s), gate policy {gate_policy}? {M} caller task(s) run here.",
     header: "Start work",
     options: [
-      { label: "Start (Recommended)", description: "Pick the model, then spawn the first implementer", preview: "{the Step 4.6 split table}" },
+      { label: "Start (Recommended)", description: "Pick the model, then spawn; commits follow the gate policy shown", preview: "{the Step 4.7 launch plan, then the Step 4.6 split table and its warnings}" },
+      { label: "Change the launch plan", description: "Change implementers, isolation, pipelining or the gate policy; this gate returns" },
       { label: "Run inline instead", description: "Execute this plan here in native plan mode (Step 5)" },
       { label: "Cancel", description: "Stop; nothing is spawned and nothing is edited" }
     ],
@@ -383,7 +443,12 @@ AskUserQuestion(
 )
 ```
 
-Only **Start** continues. The model is chosen by the first spawn (the `implementer-run` panel), after this approval - never before it.
+Four options is the cap: the parallel shape, pipelining and the gate policy are flags or launch-plan choices, never another option, and this gate carries no orchestrator offer (run mode is session mechanics).
+
+- **Start** -> record the run's `gate_policy`. With `high-only` or `at-end`, this pick is the owner's explicit, recorded approval for the lead's commits in this run - the commits 5-D.5 makes without a Review gate. With `--pipelined`, Start is also the owner's approval for the implementer's LOCAL commits on the branch it works on (the lead's integration commits, for an isolated group) - the recorded exception to "committed only after Accept"; record `commit_policy: pipelined`. Nothing is ever pushed. The model is chosen by the first spawn (the `member-run` panel), after this approval - never before it.
+- **Change the launch plan** -> the Step 4.7 follow-up questions, then this gate again with the recomputed preview.
+- **Run inline instead** -> Step 5.
+- **Cancel** -> stop; nothing is spawned.
 
 ### 5-D.3 Run record
 
@@ -394,13 +459,21 @@ Before the first spawn, write `.lets/cache/delegated-run-{TASK_ID}.json` (`.lets
   "task": "{TASK_ID}",
   "plan": "{plan path from Step 2}",
   "run": "{RUN}",
+  "shape": "solo",
+  "gate_policy": "per-commit",
+  "commit_policy": "lead",
+  "pre_rebase_head": null,
+  "members_scope": "run-{RUN}",
   "model": null,
   "caller": [ { "task": 0, "state": "pending" } ],
+  "groups": [ { "id": "a", "agent": "impl-{RUN}", "generation": 1, "isolation": null, "base": null, "agent_id": null, "agent_branch": null, "agent_worktree_path": null, "integrated_source": null } ],
   "chunks": [
-    { "id": "c1", "tasks": [1, 2], "group": "A", "allowlist": ["path/a", "path/b"], "agent": "impl-{RUN}-c1", "generation": 1, "base": null, "phase": "pending", "round": 0, "report": null, "status": null, "reason": null, "received": null, "patch_sha": null, "commit": null, "nudged": false }
+    { "id": "c1", "tasks": [1, 2], "group": "a", "risk": "high", "allowlist": ["path/a", "path/b"], "allowlist_amendments": [], "agent": "impl-{RUN}", "generation": 1, "base": null, "agent_branch": null, "agent_worktree_path": null, "commit_sha": null, "fixups": [], "review_sha": null, "accepted_sha": null, "picked_sha": null, "patch_path": null, "phase": "pending", "round": 0, "nudged": false, "report": null, "status": null, "reason": null, "received": null, "patch_sha": null, "check": null, "skeptic": null, "accepted_by": null, "committed_by": null, "commit": null }
   ]
 }
 ```
+
+Run fields: `shape` is `solo` or `parallel` (the launch plan's); `gate_policy` is `per-commit` (default), `high-only` or `at-end` (the Start pick); `commit_policy` is `lead` (default) or `pipelined`, and `pre_rebase_head` is recorded before a 5-D.9 autosquash; `members_scope` names the `lets members` scope every agent of the run is registered in. Per group: the agent that owns it now and its `generation`; for an isolated group (`isolation: worktree`) its `base` (the task branch's HEAD at Start), and the `agent_id`, `agent_branch` and `agent_worktree_path` the spawn returned - `agent_id` mirrors the registry's for recovery only, `lets members` stays the record member-run reads; and `integrated_source` - the last agent-branch commit landed in the task branch; it moves only after the lead's commit, never on a report or a pick. Per chunk: `risk` from Step 4.6 (missing = high); `agent_branch`, `agent_worktree_path`, `commit_sha` (the latest `**Commit:**` sha the agent reported), `picked_sha` and `patch_path` belong to an isolated group's integration and stay `null` in the task worktree; under `pipelined` the record is keyed by sha: `commit_sha`, `fixups[]` (each `git commit --fixup` sha, in order), `review_sha` (the last sha the review showed) and `accepted_sha` (the commit and its fixups, as accepted); `check` and `skeptic` hold the 5-D.5 verdicts; `accepted_by` is `owner` or `team`; `committed_by` is `lead`, or `implementer` only under pipelining; `allowlist_amendments[]` holds `{path, by, reason}` for every path added to the allowlist mid-run (5-D.5 Correct). Liveness is never stored here - `lets members status` is its one judge.
 
 `phase` moves `pending` -> `running` -> `review` -> (`correcting` -> `running` -> `review`)* -> `committing` -> `accepted`. A Stop at a review gate records `paused` (it reopens as `review`); a Stop while an agent works goes through `stopping` to `blocked`; `blocked` always carries a `reason` - `stopped`, `re-plan`, `unreachable`, `missing-report` or `unrecognized-commits`. `nudged` records that this round's one report nudge was sent; it resets to `false` whenever `round` or `generation` changes. Caller tasks move `pending` -> `running` -> `done`. `report` is the path of the latest round's saved report, `status` and `reason` are read from it, `received` counts reports in arrival order across the run, and `generation` is 1 for the first agent of a chunk and grows with each replacement. Rewrite the record at every transition BEFORE acting on it, so an interrupted session always finds the state it was in.
 
@@ -408,13 +481,13 @@ Before the first spawn, write `.lets/cache/delegated-run-{TASK_ID}.json` (`.lets
 
 Walk the Step 4.6 split:
 
-- **Caller task** -> record its `state: running`, run it here, now, exactly as the plan writes it, then record `state: done`.
-- **Chunk** -> record `base` = `git rev-parse HEAD` and `phase: running`, write its brief, spawn it, and end the turn - the report arrives as the agent's message (5-D.5 says what counts as one).
+- **Caller task** -> wait until every group has no chunk open, record its `state: running`, run it here, now, exactly as the plan writes it, then record `state: done`.
+- **Chunk** -> record `base` = `git rev-parse HEAD` and `phase: running`, write its brief, hand it to its group's agent (below), and end the turn - the report arrives as the agent's message (5-D.5 says what counts as one).
 
 The brief, `.lets/cache/chunk-{TASK_ID}-{RUN}-{chunk}.md`:
 
 ```
-MODE: solo
+MODE: {solo | isolated | pipelined}
 TASK: {TASK_ID}   PLAN: {plan path}   RUN: {RUN}   CHUNK: {chunk} (group {group})
 GOAL: {the plan's Goal line}
 APPROACH: {the plan's Approach line}
@@ -424,11 +497,19 @@ OUT OF SCOPE:
 {the plan's Non-Goals section, verbatim}
 YOU MAY WRITE ONLY:
 {the chunk's allowlist, one path per line}
-CORRECTIONS: your reviewer may send corrections for this chunk. Each arrives as an AMENDMENT to this brief and changes what it names, within YOU MAY WRITE ONLY; one that needs any other file is a deviation.
+CORRECTIONS: your reviewer may send corrections for this chunk. Each arrives as an AMENDMENT to this brief and changes what it names, within YOU MAY WRITE ONLY - or within a path the AMENDMENT itself adds to it; one that needs any other file is a deviation.
 BASE: {base sha}
+{isolated only, and only in the group's FIRST brief:}
+CALLER_TOPLEVEL: {git rev-parse --show-toplevel of this session}
+MAIN_ROOT: {main_root from lets worktree info --json}
+{isolated or pipelined, in every brief:}
+COMMIT MESSAGE: {the chunk's plan commit message, with its Task: footer}
 TASKS:
-{the chunk's ### Task sections verbatim, each **Commit:** block removed - this session commits after review}
+{the chunk's ### Task sections verbatim, each **Commit:** block removed - its message is COMMIT MESSAGE where the agent commits; in `solo` this session commits after review}
+CI CHECKS: run each from the repository root before your report; a failing one is never `complete`:
+{the Step 4.6 CI commands, one per line}
 PROJECT RULES: read the repository's CLAUDE.md before editing.
+In an execute run, send nothing to other agents; your report file is your only output channel.
 REPORT_FILE: {absolute path of .lets/cache/report-{TASK_ID}-{RUN}-{chunk}-g{generation}-r{round}.md}
 REPORT: fill in exactly this skeleton and write it to REPORT_FILE (last line REPORT-END); your final message is REPORT_WRITTEN <path> and the report's **Status:** line. Status is one of `complete`, `deviation-stopped`, `blocked`; keep only the block that matches it:
 ### Chunk: {chunk}
@@ -447,29 +528,82 @@ After: `...`
 **Blocked** (blocked only) - What / Why
 ```
 
-Spawn: `Skill(skill: "lets:implementer-run", args: "op=spawn name={agent} chunk-file=.lets/cache/chunk-{TASK_ID}-{RUN}-{chunk}.md")`, adding ` model=<m>` once the record holds a model. After the first spawn of the run, write the returned model into the record.
+In an isolated brief `BASE` is the literal group base - the task branch's HEAD sha at Start - that the agent's guard switches to; `CALLER_TOPLEVEL` is the tree it must never write. A group's later briefs (`op=next`) carry `MODE: isolated` and no base instruction: the agent never switches or resets again. An isolated agent's report adds a `**Commit:** <sha>` line - its chunk's commit, or its fixup's on an amendment. Under `--pipelined` the in-tree group's briefs carry `MODE: pipelined`, and its reports carry the same line.
 
-One chunk is live at a time.
+**One persistent implementer per group.** In the solo shape - the shape the 4.7 proposal usually picks when chunks share files or build on each other - the run has one group and one agent, `impl-{RUN}`, working in this tree (the task worktree). The group's agent is spawned once, for its first chunk; every later chunk of the group goes to the same agent as its next brief, so it keeps its context from chunk to chunk. Each brief is complete on its own - the agent's memory helps, the brief is the contract.
 
-**One writer.** While a chunk is `running` or `correcting`, this session writes no code. A request to edit meanwhile -> say that `{agent}` (the record's current agent for the chunk) is still working, and offer to wait for its report or to stop it (5-D.6).
+- The group's first chunk: `Skill(skill: "lets:member-run", args: "op=spawn scope=run-{RUN} role=lets:implementer name={agent} brief-file=.lets/cache/chunk-{TASK_ID}-{RUN}-{chunk}.md report-file={abs .lets/cache/report-{TASK_ID}-{RUN}-{chunk}-g{generation}-r{round}.md}")`, adding ` model=<m>` once the record holds a model. After the first spawn of the run, write the returned model into the record.
+- An isolated group's first chunk (parallel shape, a group the launch plan runs isolated): `Skill(skill: "lets:member-run", args: "op=spawn scope=run-{RUN} role=lets:implementer isolation=worktree name=impl-{RUN}-{group} brief-file=.lets/cache/chunk-{TASK_ID}-{RUN}-{chunk}.md report-file={abs .lets/cache/report-{TASK_ID}-{RUN}-{chunk}-g{generation}-r{round}.md}")`. Record what it returns in the group (`agent_id`, `agent_branch`, `agent_worktree_path`) - the harness reaches an isolated agent only by its `agent_id`, and member-run addresses it by that.
+- Every later chunk of the group: `Skill(skill: "lets:member-run", args: "op=next scope=run-{RUN} name={agent} brief-file=.lets/cache/chunk-{TASK_ID}-{RUN}-{chunk}.md report-file={abs .lets/cache/report-{TASK_ID}-{RUN}-{chunk}-g{generation}-r{round}.md}")`. It returns `agent_gone` -> record `phase: blocked`, `reason: unreachable`, then the 5-D.7 Replacement gate - a replacement always runs under a visibly new name, never as the same agent.
+
+Every call passes `report-file=` = the absolute path of the brief's own `REPORT_FILE:` line; a new chunk for the persistent implementer is round 0 of that chunk (one report path per chunk and round). One chunk per group is live at a time; in the parallel shape the groups run at the same time.
+
+**One writer per tree.** The task worktree has one writer at a time: its in-tree group's agent while that chunk is `running` or `correcting`, or this session - which writes it only through `lets integrate` and the lead's commit, and only while the tree is clean. An isolated agent writes only its own worktree. A request to edit meanwhile -> say which `{agent}` is still working, and offer to wait for its report or to stop it (5-D.6).
 
 ### 5-D.5 Review - one report at a time
 
-**What is a report.** On EVERY notification from `{agent}` after its latest spawn or correction - a message, an idle notification, a completion, EMPTY ones included - inspect the round's REPORT_FILE first, without concluding: `Skill(skill: "lets:agent-report", args: "op=peek dir={abs .lets/cache} names=report-{TASK_ID}-{RUN}-{chunk}-g{generation}-r{round}")` - READ EVERY REPORT IN FULL. `OK` -> that file IS the report, whatever the message says or whether it is empty: `status` and `reason` come from its **Status** line and its **Blocked** / **Deviation** block (a message Status that disagrees is ignored and named in the review block). A file whose Status line is missing or holds any other value -> `blocked`, reason `malformed-report` - never infer a status from prose. Not `OK` -> the report is DUE only when the message carries `REPORT_WRITTEN` or a `**Status:**` line: then `Skill(skill: "lets:agent-report", args: "op=collect dir={abs .lets/cache} names=report-{TASK_ID}-{RUN}-{chunk}-g{generation}-r{round} retry=no")` records the `GAP`, and the report is status `blocked`, reason `missing-report`, with the message text quoted UNVERIFIED. Not `OK` and neither marker: an interim message while `{agent}` is still working -> not a report yet, no gap, keep the phase and end the turn. An IDLE or COMPLETION notification (the agent has stopped) -> the report is due now, in this session: when the chunk's record has no `nudged: true` for this round, record it and `SendMessage({to: "{agent}", message: "Write your report for chunk {chunk} to REPORT_FILE {path} now and send REPORT_WRITTEN."})` - a SendMessage that fails (the agent is gone) settles the round at once: `op=collect ... retry=no`, `blocked`, `missing-report`; otherwise end the turn. A messaged agent takes a turn, so its NEXT notification - a reply or another idle - settles the round under this same rule; and the round never outlives the nudge: whenever this session is next invoked for any OTHER reason (a user turn, another agent's notification, a `/lets:execute` resume) while a nudged round still has no `OK` file, `op=peek` it and check `ListAgents`: `{agent}` busy -> it is still answering, leave the round pending; `{agent}` idle (it has had its turn since the nudge) or not listed -> settle now: `op=collect ... retry=no`, `blocked`, `missing-report`, and the review gate. When the round was already nudged, the same settlement applies. Never wait for a later `/lets:execute` to notice a stopped agent. Anything later in the same round is a repeat: record nothing.
+**What is a report.** On EVERY notification from `{agent}` after its latest spawn, next brief or correction - a message, an idle notification, a completion, EMPTY ones included - inspect the round's REPORT_FILE first, without concluding: `Skill(skill: "lets:agent-report", args: "op=peek dir={abs .lets/cache} names=report-{TASK_ID}-{RUN}-{chunk}-g{generation}-r{round}")` - READ EVERY REPORT IN FULL. `OK` -> that file IS the report, whatever the message says or whether it is empty: `status` and `reason` come from its **Status** line and its **Blocked** / **Deviation** block (a message Status that disagrees is ignored and named in the review block). A file whose Status line is missing or holds any other value -> `blocked`, reason `malformed-report` - never infer a status from prose. Not `OK` -> the report is DUE only when the message carries `REPORT_WRITTEN` or a `**Status:**` line: then `Skill(skill: "lets:agent-report", args: "op=collect dir={abs .lets/cache} names=report-{TASK_ID}-{RUN}-{chunk}-g{generation}-r{round} retry=no")` records the `GAP`, and the report is status `blocked`, reason `missing-report`, with the message text quoted UNVERIFIED. Not `OK` and neither marker: an interim message while `{agent}` is still working -> not a report yet, no gap, keep the phase and end the turn. An IDLE or COMPLETION notification (the agent has stopped) -> the report is due now, in this session: when the chunk's record has no `nudged: true` for this round, record it, write `.lets/cache/nudge-{TASK_ID}-{RUN}-{chunk}-g{generation}-r{round}.md` ("Report on chunk {chunk} now: write your report to REPORT_FILE {path} and send REPORT_WRITTEN, or, if you have not finished, write a report saying why. This changes nothing in the chunk; do not re-run Verify unless you have not run it yet.") and send it through `Skill(skill: "lets:member-run", args: "op=correct scope=run-{RUN} name={agent} correct-file=<that file> report-file={path}")` - an amendment, never a NEXT: the implementer re-checks for a clean tree on every NEXT and exempts only an amendment, so a nudged solo implementer would report `blocked` on its own uncommitted chunk. `report-file` is the SAME round's path and `round` does not advance - a nudge is no correction. An `agent_gone` (the agent is gone) settles the round at once: `op=collect ... retry=no`, `blocked`, `missing-report`; otherwise end the turn. A messaged agent takes a turn, so its NEXT notification - a reply or another idle - settles the round under this same rule; and the round never outlives the nudge: whenever this session is next invoked for any OTHER reason (a user turn, another agent's notification, a `/lets:execute` resume) while a nudged round still has no `OK` file, `op=peek` it and check `ListAgents`: `{agent}` busy -> it is still answering, leave the round pending; `{agent}` idle (it has had its turn since the nudge) or not listed -> settle now: `op=collect ... retry=no`, `blocked`, `missing-report`, and the review gate. When the round was already nudged, the same settlement applies. Never wait for a later `/lets:execute` to notice a stopped agent. Anything later in the same round is a repeat: record nothing.
 
-When `{agent}` reports, record `phase: review`, `report` (the REPORT_FILE path), `status` and `reason` (read from its **Status** and its **Blocked** / **Deviation** block) and `received` (one more than the highest in the record). One agent is live at a time, so no report interrupts an open gate.
+When `{agent}` reports, record `phase: review`, `report` (the REPORT_FILE path), `status` and `reason` (read from its **Status** and its **Blocked** / **Deviation** block) and `received` (one more than the highest in the record). Reports are handled one at a time: a report that arrives while a gate is open is recorded, and handled after that gate; in a parallel run each group's agent is peeked on its own notifications.
+
+**Isolated chunk - integrate first.** An isolated group's `complete` report is landed in this tree before any check or gate, and only while the tree is clean (an in-tree chunk that is running waits for its commit first):
+
+1. `lets members status --scope run-{RUN} --name {agent} --json` - `live` is the normal case; a gone agent's branch can still be integrated (its context is lost; a correction then needs the 5-D.7 replacement).
+2. `lets integrate --from {commit} --since {since} --run {RUN} --chunk {chunk} --json`, where `{commit}` is the reported `**Commit:**` sha (recorded first as the chunk's `commit_sha`) and `{since}` is the group's integrated_source, or its base. Record `picked_sha` (the last of `picked`) and `patch_path` on the chunk, and `agent_branch` / `agent_worktree_path` from the group.
+3. Exit 50 (conflict) -> the caller tree is untouched: the `blocked` gate with the conflicting files - **Correct** (an AMENDMENT to that agent) or **Stop**. Any other failure -> show the error kind as-is, the `blocked` gate.
+4. Success -> run the brief's CI CHECKS here, in this tree, and add their output to the review block; then the tree check below and the Accept dispatch, as for any chunk. `integrated_source` moves to that `--from` sha only after the lead's commit (Accept).
+
+A **Correct**, **Re-plan** or **Stop** that rejects an integrated, uncommitted chunk first takes its patch back out: `lets integrate --revert --patch {patch_path} --json`; exits 58 / 59 are shown as-is and nothing else runs until the tree is sorted out. The agent's fixup then comes back as a new report and is integrated from the same `--since`.
+
+**Pipelined run (`commit_policy: pipelined`) - review by sha.** Start approved local commits, so the review reads commits, never a working diff:
+
+- **Move on at once.** A `complete` report with a `**Commit:**` sha -> record `commit_sha`, then send the group's next chunk (`op=next`) right away - the next chunk starts before this one is accepted - and review this one.
+- **In-tree group** (`MODE: pipelined`, `committed_by: implementer`). The implementer is the only writer of the tree, so this session writes and stages nothing there, and the tree check below is replaced by a check of the commits: the review block is `git show {commit_sha}`, then `git show {each fixup}` - read-only, by sha. Every file they touch must be in the chunk's allowlist, each commit's parent must be the previous chunk's last sha (or `base`), and each message must carry `Task: {TASK_ID}`; anything else -> the `blocked` gate. Record `review_sha` = the last sha shown; it takes the place of `patch_sha`.
+- **Isolated group** (with `--parallel`). The agent commits per chunk and moves on. Nothing enters the task branch unchecked - for each report, in this order:
+  1. **Check the source commits** - `git show --name-only --format='%P%n%B' {sha}` for the reported sha and each of its fixups: every changed path is in the chunk's allowlist, each commit's parent is the last commit already checked for this group (or its `base`), each message carries `Task: {TASK_ID}`.
+  2. **Integrate** from the reported sha, as steps 1-2 of "Isolated chunk" above say (member status, then `lets integrate`) - no gate yet.
+  3. **Check the staged paths** - `git diff --cached --name-only` equals the integrate result's `files`, every one inside the allowlist, nothing else changed.
+  4. **Only then the lead's commit** (`committed_by: lead`, `integrated_source` = that `--from` sha after the commit), reviewed by `git show` of the lead's commit.
+
+  Any mismatch in 1 or 3 -> the `blocked` gate and no lead commit; a patch already applied comes back out with `lets integrate --revert --patch {patch_path} --json`. An agent's fixup goes through the same four steps and is committed by the lead as `fixup! <that chunk's commit subject>`, recorded in `fixups[]`.
+- **Correct** -> the AMENDMENT (framed as 5-D.5's Correct writes it, its `REPORT_FILE:` line and `report-file=` included) names the sha: "fix `{commit_sha}` - stage only the fix's paths and `git commit --fixup={commit_sha}`". A fix path that the agent's in-progress chunk also changes -> it reports `blocked` with reason `overlap`: wait for that chunk's report (its commit), then send the same amendment again.
+- **Accept makes no commit**: record `accepted_sha` (the commit and its fixups), `accepted_by`, and `[DONE]` as usual. The team check and the Accept dispatch run as for any chunk, on the commits.
+- **A reject no correction can fix** stops the pipeline: no further `op=next`. Once the running chunk has reported (or 5-D.6 stopped it), offer `git revert --no-edit <sha>` for the rejected commit and each of its fixups - a new commit, only on the owner's yes, never a reset.
 
 Check the real tree - the report is the agent's claim, the diff is the fact:
 
 ```bash
 git rev-parse HEAD                                    # must equal the chunk's recorded base
 git status --porcelain --untracked-files=all          # every listed path must be in the chunk's allowlist; new directories are expanded to their files
-git diff --cached --name-only                         # must print nothing: an implementer never stages
+git diff --cached --name-only                         # in-tree chunk: must print nothing (an implementer never stages); integrated chunk: exactly the integrate result's files
 git diff HEAD                                         # the patch of every tracked file, index and worktree alike
 git ls-files --others --exclude-standard -z           # untracked files, NUL-separated so any file name is safe
 ```
 
-For each untracked path, show it as a patch: `git diff --no-index -- /dev/null "<path>"` (read-only; nothing is staged). Its exit status 1 means a patch was printed; only a status above 1 is an error. HEAD moved, anything staged, or a path outside the allowlist changed -> the diff is NOT attributed to the agent: name the paths and use the `blocked` gate. An amendment cannot clean a path outside the allowlist (amendments stay inside it), so say plainly that those paths are the user's to remove or restore; once they are gone, `/lets:execute` re-checks the tree and, for a `complete` report, offers Accept.
+For each untracked path, show it as a patch: `git diff --no-index -- /dev/null "<path>"` (read-only; nothing is staged). Its exit status 1 means a patch was printed; only a status above 1 is an error. HEAD moved, anything staged (beyond an integrated chunk's own files), or a path outside the allowlist changed -> the diff is NOT attributed to the agent: name the paths and use the `blocked` gate. An amendment cannot clean a path outside the allowlist (amendments stay inside it), so say plainly that those paths are the user's to remove or restore; once they are gone, `/lets:execute` re-checks the tree and, for a `complete` report, offers Accept.
+
+**Team check - every `complete` report whose tree check is clean, before any gate.** Save the full patch (as Render review builds it) to `.lets/cache/patch-{TASK_ID}-{RUN}-{chunk}-r{round}.diff`, then:
+
+**Who checks.** In a team worktree (`lets worktree info --json` -> the top-level `team` field set; it is not inside the `worktree` object) the standing team's live `explorer` / `skeptic` do it, through `member-run` `op=next scope=<callsign> name=explorer|skeptic`. Only when the team has no live one - `lets members status --scope <callsign> --name <name>` not `live` / `rotated` - or outside a team worktree, the run's own `explorer-{RUN}` / `skeptic-{RUN}` do it (`member-run` `op=spawn scope=run-{RUN}` the first time, `op=next` after). Every hand-over is a brief file naming the chunk's brief, the saved report and the saved patch, with its own `REPORT_FILE:` line; the member-run call passes the same absolute path as `report-file=` - `.lets/cache/report-{TASK_ID}-{RUN}-{chunk}-{member}-r{round}.md` (`{member}` = `explorer` or `skeptic`). Each verdict is read in the member order - peek, one nudge, collect: on every notification from the member, `Skill(skill: "lets:agent-report", args: "op=peek dir={abs .lets/cache} names=report-{TASK_ID}-{RUN}-{chunk}-{member}-r{round}")` - READ EVERY REPORT IN FULL; `OK` -> that file IS the verdict. Not `OK` and the message carries `REPORT_WRITTEN`, or the member has stopped -> ONE nudge: `.lets/cache/nudge-{TASK_ID}-{RUN}-{chunk}-{member}-r{round}.md` ("Write your report to REPORT_FILE {path} now, last line REPORT-END, then reply REPORT_WRITTEN. This changes nothing in your work; do not redo anything you already ran.") through `member-run` `op=correct` with `report-file=` the same path; an interim message is not a report yet. Its next notification still not `OK` (or `agent_gone` on the nudge) -> `Skill(skill: "lets:agent-report", args: "op=collect dir={abs .lets/cache} names=report-{TASK_ID}-{RUN}-{chunk}-{member}-r{round} retry=no")`. A member-run member is never retried by agent-report - that re-dispatch would bypass member-run, go unrecorded in `lets members` and start a second agent beside a live one. A `GAP` is a failed check, never a pass: under `at-end` it halts as a deviation, under `per-commit` / `high-only` it is shown at the Review gate. No model is passed for either role: they inherit the session model (no upward name pin).
+
+- **CHECK** - every policy, every Risk. The explorer (`role=lets:explorer`) checks the patch against the brief: every step done, nothing beyond it, the report's CI CHECKS output present and passing. Record `check`: `clean`, or its findings.
+- **Skeptic** - Risk high or missing, every policy. The skeptic (`role=lets:skeptic`) tries to refute the patch against the brief. Record `skeptic`: `confirmed`, or its findings. Risk low -> `skeptic: not-run`.
+
+**Accept dispatch - the ONE table.** `gate_policy` x the chunk's `risk` decides who accepts, who commits and where the owner stops:
+
+| gate_policy | risk | CHECK | skeptic | accepted_by | committed_by | the owner stops |
+|---|---|---|---|---|---|---|
+| `per-commit` (default) | any | yes | yes on high / missing | owner (Review gate) | lead | at every chunk |
+| `high-only` | high / missing | yes | yes | owner (Review gate) | lead | at this chunk |
+| `high-only` | low | yes | no | team | lead | only on a deviation; the 5-D.8 run review |
+| `at-end` | high / missing | yes | yes | team | lead | the 5-D.8 run review |
+| `at-end` | low | yes | no | team | lead | the 5-D.8 run review |
+
+The table is the extension point: a new policy is a new row, never a new code path. The skeptic runs whenever Risk is high or missing, in every policy. `committed_by: implementer` exists only under pipelining.
+
+- **owner** -> Render review and the status gate below; its Accept records `accepted_by: owner`.
+- **team** -> both verdicts clean (`check: clean`, and `skeptic: confirmed` where it ran) -> compute `patch_sha` as Render review does, without a gate, then the Accept steps below with `accepted_by: team`: the owner's Start pick of this policy is the approval for that commit. A finding the lead can fix inside the plan and the chunk's allowlist -> Correct, with the lead writing the AMENDMENT, and the team check runs again on the next report. A finding the lead cannot resolve inside the plan - a skeptic finding included - is a deviation: Render review and the `deviation-stopped` gate, now.
+- **Hard stops and deviations halt at once in every policy**, `at-end` included: a `deviation-stopped` or `blocked` report, a failed tree check, an unresolvable finding or a hard stop (lets-rules `## AUTO MODE`) goes to the owner's gate now, never to the run review.
 
 Present it in the gate itself - the block below is the `preview` of the status gate's first option, because a tool result is shown collapsed and prose before a gate is skipped in practice - under the agent's name, the name this run spawned it under, never a name the agent wrote about itself - with the report verbatim and then the full patch (`git diff HEAD`, then each untracked file):
 
@@ -535,8 +669,43 @@ AskUserQuestion(
 )
 ```
 
-- **Accept** -> re-run the tree check above and recompute the patch sha first; a failed check, or a sha that differs from the recorded `patch_sha` -> Render review again (it records the new sha), never commit what was not reviewed. Then record `phase: committing`, stage exactly the chunk's allowlist paths (untracked ones included) and `Skill(skill: "lets:commit", args: "approved=review-accept")` - the Accept pick is its approval, so the skill does not ask again. Then record `phase: accepted` and `commit`, append `[DONE]` to each of the chunk's `### Task` headings in the plan file, and continue 5-D.4 with the next item.
-- **Correct** -> ask in words what to change. Write it to `.lets/cache/correct-{TASK_ID}-{RUN}-{chunk}-g{generation}-r{round+1}.md` framed as an amendment to the brief:
+- **Accept** -> re-run the tree check above and recompute the patch sha first; a failed check, or a sha that differs from the recorded `patch_sha` -> Render review again (it records the new sha), never commit what was not reviewed. Then record `phase: committing`, stage exactly the chunk's allowlist paths (untracked ones included) and `Skill(skill: "lets:commit", args: "approved=review-accept")` - the owner's Accept pick, or under team acceptance the owner's Start pick of the policy, is its approval, so the skill does not ask again. Then record `phase: accepted`, `commit`, `accepted_by` and `committed_by: lead`, append `[DONE]` to each of the chunk's `### Task` headings in the plan file, and continue 5-D.4 with the next item.
+- **Correct** -> ask in words what to change, then:
+
+  ```
+  AskUserQuestion(
+    questions=[{
+      question: "Does the fix need a file outside the chunk's allowlist?",
+      header: "Allowlist",
+      options: [
+        { label: "No", description: "The amendment stays inside the chunk's allowed files" },
+        { label: "Yes", description: "The architect weighs the path first; you confirm before it is added" }
+      ],
+      multiSelect: false
+    }]
+  )
+  ```
+
+  **Yes** -> ask in words for the path and why. Route it to an architect by the same rule as the team check - the standing team's live `architect` (`op=next scope=<callsign> name=architect`), else the run's `architect-{RUN}` (`op=spawn scope=run-{RUN} role=lets:architect` the first time, `op=next` after; no model passed) - with a brief naming the chunk, the path and the reason and a `REPORT_FILE:` line (`report-file=` the absolute `.lets/cache/report-{TASK_ID}-{RUN}-{chunk}-architect-r{round}.md`, read in the team check's member order: `op=peek`, one nudge through `op=correct`, then `op=collect ... retry=no`; a `GAP` is shown as "no verdict", never as a yes), then show its answer and confirm:
+
+  ```
+  AskUserQuestion(
+    questions=[{
+      question: "Add {path} to chunk {chunk}'s allowlist? The architect says: {one-line verdict}.",
+      header: "Addendum",
+      options: [
+        { label: "Add it", description: "Record the addendum, then send the amendment" },
+        { label: "Re-plan", description: "Stop; update the plan via /lets:plan" },
+        { label: "Cancel", description: "Send nothing; this review gate returns" }
+      ],
+      multiSelect: false
+    }]
+  )
+  ```
+
+  **Add it** -> append to the plan file (through Bash) a `## Allowlist addendum` section when there is none, and under it `- {chunk}: {path} - by: {architect|owner} - {reason}` (`architect` when you took its recommendation, `owner` when you decided against or without it); record `{path, by, reason}` in the chunk's `allowlist_amendments[]` and add the path to its `allowlist`. Only then write the amendment, which names the added path. **Re-plan** -> as below. **Cancel** -> show the review gate again.
+
+  Write it to `.lets/cache/correct-{TASK_ID}-{RUN}-{chunk}-g{generation}-r{round+1}.md` framed as an amendment to the brief:
 
   ```
   AMENDMENT to chunk {chunk}, round {round+1} - it changes what it names and nothing else:
@@ -544,7 +713,7 @@ AskUserQuestion(
   {the correction, verbatim}
   ```
 
-  Record `phase: correcting` and `round+1`, then `Skill(skill: "lets:implementer-run", args: "op=correct name={agent} correct-file=<that file>")`. It returns `corrected {agent}` -> record `phase: running` and end the turn. It returns `agent_gone` -> record `phase: blocked` and `reason: unreachable`, then 5-D.7. A correction that needs a file outside the chunk's allowlist is not a correction: by the agent's own deviation rule it would stop - choose Re-plan instead.
+  Record `phase: correcting` and `round+1` - only a correction advances `round`; a nudge (5-D.5, the 5-D.7 resend) and a rehydration also go through `op=correct` but keep the round and its REPORT_FILE. Then `Skill(skill: "lets:member-run", args: "op=correct scope=run-{RUN} name={agent} correct-file=<that file> report-file={abs .lets/cache/report-{TASK_ID}-{RUN}-{chunk}-g{generation}-r{round+1}.md}")` - the same path the amendment's `REPORT_FILE:` line names. It returns `sent correct to {agent}` -> record `phase: running` and end the turn. It returns `agent_gone` -> record `phase: blocked` and `reason: unreachable`, then 5-D.7. A path outside the allowlist goes through the Allowlist question and its addendum - never a fifth option on a gate - or the plan is re-planned.
 - **Re-plan** -> record `phase: blocked` and `reason: re-plan`, then `Skill(skill: "lets:plan")`.
 - **Stop** -> record `phase: paused`, keeping `report`, `status` and `reason` as they are. Say that the uncommitted diff is still in the tree and that `/lets:execute` reopens this same review. Nothing is discarded.
 - **Ask orchestrator** -> `Skill(skill: "lets:orc", args: "verb=ask footer=none text={agent} reports {status} on {chunk}: {one-line summary}. {question}")` where `{question}` is the one the shown gate asks - "Accept, correct or stop?" for `complete`, "Correct, re-plan or stop?" for `deviation-stopped`, "Correct or stop?" for `blocked`; then show the same gate again without that option. A peer's answer never decides.
@@ -556,6 +725,8 @@ A request to stop - or to edit code - while a chunk is `running` or `correcting`
 ### 5-D.7 Recovery (a run record exists)
 
 Read the record. Its `plan` is not this run's plan -> ask whether to resume that run or discard its record (deleting the record file changes no code).
+
+**Liveness comes from `lets members status --scope {members_scope} --json`**, never from the record: a member `gone` or `unknown` counts below as `{agent}` not listed; `ListAgents` only tells a live member busy from idle. **A pre-upgrade record** - no `members_scope`, or no `.lets/execution/members-run-{RUN}.json` - proves no member: treat every agent name it records as gone (`unknown_pre_upgrade`) and go to the Replacement gate; such a member is never messaged.
 
 **Caller tasks first.** A caller task recorded `state: running` may have done its work before the interruption; it is never re-run by itself:
 
@@ -580,11 +751,11 @@ Then, for each chunk not `accepted`, in plan order:
 |---|---|---|
 | `pending` | - | continue 5-D.4 from here |
 | `running` / `correcting` | `ListAgents` shows `{agent}` busy | it is still working: end the turn and wait for its report |
-| `running` / `correcting` | `ListAgents` shows `{agent}` idle | FIRST the 5-D.5 `op=peek` on the round's REPORT_FILE - `OK` -> handle it as 5-D.5 (the report was written, only the message was lost); otherwise the SAME one-nudge rule as 5-D.5, on the same per-round `nudged` state: not yet nudged -> record `nudged: true` and `SendMessage({to: "{agent}", message: "Report on chunk {chunk} now: write your report to REPORT_FILE {path} and send REPORT_WRITTEN, or, if you have not finished, write a report saying why."})`, handle the reply as 5-D.5; already nudged -> `op=collect ... retry=no`, record `blocked`, `reason: missing-report`. A resumed session never nudges a round twice |
+| `running` / `correcting` | `ListAgents` shows `{agent}` idle | FIRST the 5-D.5 `op=peek` on the round's REPORT_FILE - `OK` -> handle it as 5-D.5 (the report was written, only the message was lost); otherwise the SAME one-nudge rule as 5-D.5, on the same per-round `nudged` state: not yet nudged -> record `nudged: true` and write `.lets/cache/resend-{TASK_ID}-{RUN}-{chunk}.md` ("Report on chunk {chunk} now: write your report to REPORT_FILE {path} and send REPORT_WRITTEN, or, if you have not finished, write a report saying why. This changes nothing in the chunk; do not re-run Verify unless you have not run it yet."), `member-run` `op=correct` with it as `correct-file=` and `report-file=` the same round's path (`round` unchanged, as for the 5-D.5 nudge), and handle the reply as 5-D.5; already nudged -> `op=collect ... retry=no`, record `blocked`, `reason: missing-report`. A resumed session never nudges a round twice |
 | `running` / `correcting` | `{agent}` not listed | FIRST the same `op=peek` - `OK` -> handle as 5-D.5 (the agent finished before it vanished); otherwise `op=collect ... retry=no` (the report is due and will not come), then record `phase: blocked`, `reason: unreachable`; the Replacement gate |
 | `stopping` | - | 5-D.6 again |
 | `review` / `paused` | the recorded `report` file peeks `OK` | Render review (5-D.5) from the saved report, with its ORIGINAL status gate - Accept included when it was `complete` and the check is clean; a recorded `patch_sha` of `null` is simply replaced. `ListAgents` does not list `{agent}` -> a correction needs the agent that wrote the diff: `complete` shows its gate without **Correct** (Accept, Stop), `deviation-stopped` without **Correct** (Re-plan, Stop), and `blocked` goes to the Replacement gate instead |
-| `review` / `paused` | the recorded `report` file does NOT peek `OK` (MISSING, EMPTY, UNTERMINATED or UNREADABLE since it was recorded) | a **rehydration** of the SAME round, not a new report: `{agent}` listed -> `SendMessage({to: "{agent}", message: "Your report for chunk {chunk}, round {round}, is no longer readable at {path}: write it there again, unchanged, and send REPORT_WRITTEN."})`; on its reply `op=peek` the same file - `OK` -> read it in full, overwrite the record's `status` / `reason` for THIS round (`round` and `received` unchanged - it is the same report), then render the review gate from it; still not `OK`, or `{agent}` not listed -> `op=collect ... retry=no`, record `blocked`, `reason: missing-report`, then the Replacement gate. 5-D.5's "anything later in the same round is a repeat" does not apply to a reply this row asked for |
+| `review` / `paused` | the recorded `report` file does NOT peek `OK` (MISSING, EMPTY, UNTERMINATED or UNREADABLE since it was recorded) | a **rehydration** of the SAME round, not a new report: `{agent}` listed -> write `.lets/cache/rehydrate-{TASK_ID}-{RUN}-{chunk}-g{generation}-r{round}.md` ("Your report for chunk {chunk}, round {round}, is no longer readable at {path}: write the same report to REPORT_FILE {path} again, unchanged, and send REPORT_WRITTEN. Do not re-run Verify and do not change the work.") and send it through `member-run` `op=correct` with `report-file=` the SAME round path; on its reply `op=peek` the same file - `OK` -> read it in full, overwrite the record's `status` / `reason` for THIS round (`round` and `received` unchanged - it is the same report), then render the review gate from it; still not `OK`, or `{agent}` not listed -> `op=collect ... retry=no`, record `blocked`, `reason: missing-report`, then the Replacement gate. 5-D.5's "anything later in the same round is a repeat" does not apply to a reply this row asked for |
 | `committing` | `git log --format=%H {base}..HEAD` | exactly one new commit whose message carries `Task: {TASK_ID}` and whose `git show --name-only --format= <sha>` lists only allowlist paths -> record `accepted` and `commit`, mark `[DONE]`; no new commit -> record `review` and show the gate again; anything else -> record `blocked`, `reason: unrecognized-commits` |
 | `blocked`, `reason: re-plan` | - | say the chunk went to re-planning; after `/lets:plan`, `/lets:execute` starts a run of the new plan |
 | `blocked`, `reason: stopped`, `unreachable` or `missing-report` | - | the Replacement gate |
@@ -626,15 +797,58 @@ AskUserQuestion(
 
 HEAD moved, anything staged, or a path outside the allowlist changed -> offer neither: show what changed and stop.
 
-- **Start a replacement** -> `generation+1`; the new name is `impl-{RUN}-{chunk}-r{generation}`; write `.lets/cache/chunk-{TASK_ID}-{RUN}-{chunk}-g{generation}.md` = the original brief plus an `AMENDMENTS SO FAR:` section holding every correction file of the chunk, oldest first - drop every `REPORT_FILE:` line from the copied brief and amendments, and put one operative line `REPORT_FILE: {absolute path of .lets/cache/report-{TASK_ID}-{RUN}-{chunk}-g{generation}-r0.md}` (the NEW generation, round 0) directly above `REPORT:` - a replacement never writes an earlier generation's report; record `agent`, `generation`, `round: 0`, `phase: running`, and clear the first agent's `report`, `status`, `reason` and `patch_sha` to `null` so no stale round describes the new one; spawn it through `implementer-run`. Say plainly that it is a new agent.
+- **Start a replacement** -> `generation+1` on the chunk and its group; the new name is `impl-{RUN}-r{generation}` (an isolated group's: `impl-{RUN}-{group}-r{generation}`), and it becomes the group's agent for its later chunks (`op=next`). An isolated group's replacement is spawned isolated in a new worktree: first integrate anything the gone agent reported and never integrated - `--from` the chunk's recorded `commit_sha`, never the branch tip (a sha outlives a removed branch until gc, and a tip can hold commits nobody reviewed) - then set the group's `base` to the task branch's HEAD, `integrated_source` to `null`, and its `agent_id` / `agent_branch` / `agent_worktree_path` from the new spawn; write `.lets/cache/chunk-{TASK_ID}-{RUN}-{chunk}-g{generation}.md` = the original brief plus an `AMENDMENTS SO FAR:` section holding every correction file of the chunk (its `correct-` files; a nudge, resend or rehydration changes nothing and is not copied), oldest first - drop every `REPORT_FILE:` line from the copied brief and amendments, and put one operative line `REPORT_FILE: {absolute path of .lets/cache/report-{TASK_ID}-{RUN}-{chunk}-g{generation}-r0.md}` (the NEW generation, round 0) directly above `REPORT:` - a replacement never writes an earlier generation's report; record `agent`, `generation`, `round: 0`, `phase: running`, and clear the first agent's `report`, `status`, `reason` and `patch_sha` to `null` so no stale round describes the new one; spawn it through `member-run` with that path as `report-file=`. Say plainly that it is a new agent.
 - **Discard it and replace** -> ask in words, listing every file, before touching anything (destructive). On yes: `git restore --staged --worktree -- <each changed tracked allowlist path>` and `rm -- "<each untracked allowlist path>"`, check the tree is clean, then **Start a replacement**.
 - **Keep it and stop** / **Stop** -> leave the record as it is.
 
 A chunk `accepted` with any of its `### Task` headings not yet `[DONE]` -> mark the missing ones; nothing else. Never present a replacement as the same agent, and never discard a diff without the separate confirmation above.
 
-### 5-D.8 Completion
+### 5-D.8 Run review (`at-end` and `high-only`)
 
-Every chunk `accepted` and every caller task `done` -> delete `.lets/cache/delegated-run-{TASK_ID}.json` and go to Step 6.
+Every chunk `accepted` and every caller task `done`, under `gate_policy` `at-end` or `high-only` - before completion the owner sees the finished run (under `per-commit` every chunk was already reviewed: go to 5-D.9). The order is Run review -> Completion. Show, as the preview of the first option, the commits in `{start}..HEAD` (`{start}` = the first chunk's `base`: `git log --format='%h %s' {start}..HEAD`), each with its chunk's report file, `risk`, `check`, `skeptic`, `accepted_by`, `committed_by` and any deviation it went through - a chunk with a `GAP` check or a `missing-report` is listed first and never shown as clean:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "The run is done: {N} commit(s), {T} accepted by the team. Accept the run?",
+    header: "Run review",
+    options: [
+      { label: "Accept run (Recommended)", description: "Finish the run; nothing is pushed - that is /lets:done", preview: "{the run review table}" },
+      { label: "Correct", description: "A fix chunk goes to the implementer; this review returns after it" },
+      { label: "Stop", description: "The commits stay, local and unpushed; the run ends here" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+- **Accept run** -> 5-D.9.
+- **Correct** -> ask in words what to fix; it becomes a fix chunk (`f1`, `f2`, ... in the record, allowlist = the paths the fix names, `risk` as the owner says, missing = high) with its own brief, sent to the group's agent with `op=next` - the same flow, 5-D.4 and 5-D.5 under the run's gate policy - then this review again.
+- **Stop** -> the commits stay, local and unpushed. Offer a revert of a named commit as `git revert --no-edit <sha>` (a new commit, nothing rewritten), run only on the owner's yes. The record stays; nothing is pushed.
+
+Nothing here pushes - that is `/lets:done`'s job.
+
+### 5-D.9 Completion
+
+Every chunk `accepted`, every caller task `done`, and - under `at-end` / `high-only` - the 5-D.8 run review accepted -> autosquash (pipelined only), clean up, then delete `.lets/cache/delegated-run-{TASK_ID}.json` and go to Step 6. The order is Run review -> autosquash -> Completion.
+
+**Autosquash (`commit_policy: pipelined`, any chunk with `fixups[]`).** `{branch}` = `git branch --show-current`; `{start}` = the first chunk's `base`; `{oldest}` = the oldest commit of `{start}..HEAD` (`git rev-list --reverse {start}..HEAD`, its first line).
+
+0. `git rev-list --merges {start}..HEAD` must print nothing: a merge in the range (the lead merged the merge-branch mid-run) brings commits that are already on a remote, and a rebase would re-create them under new shas where the empty-diff check cannot see it. A merge -> stop, no rewrite (the same rule as `lets integrate`), and say why.
+1. `lets worktree pushed --branch {branch} --commit {oldest} --json` (every configured remote) must return `state: not_pushed`. `pushed` or `unverified` -> stop: no rewrite, the fixups stay as commits; say why (`head` / `reason`).
+2. `git version` must be 2.44 or newer (a non-interactive autosquash); older -> stop the same way.
+3. Ask in words, naming `{start}..HEAD` and its fixups; only on the owner's yes: record `pre_rebase_head` = `git rev-parse HEAD`, then `git rebase --autosquash --no-autostash {start}` - non-interactive, never with an editor or a todo list, and never stashing (a `rebase.autoStash` would push onto the stash stack every worktree shares).
+4. `git diff {pre_rebase_head} HEAD` must print nothing.
+
+A rebase conflict -> `git rebase --abort`, stop and report it. A non-empty diff in step 4 -> stop and show it; `pre_rebase_head` is recorded, and nothing is reset.
+
+**Isolated groups' worktrees.** For each isolated group, compare its `integrated_source` with the tip of its `agent_branch` (`git rev-parse {agent_branch}`). Not equal, or the branch is gone -> remove nothing; say which commits were never integrated (`git log --oneline {integrated_source}..{agent_branch}`). Equal -> ask in words, naming the branch and the worktree; only on the user's yes, each a separate command, in this order:
+
+1. `member-run` `op=dismiss` FIRST - its stop must be confirmed, so the agent can commit nothing more.
+2. Compare `integrated_source` with `git rev-parse {agent_branch}` again, then `git worktree remove {agent_worktree_path}` - plain, never with `--force`: a failure (a dirty agent tree) stops the cleanup here, and it is not retried.
+3. Compare them once more, then `git branch -D {agent_branch}`.
+
+Any mismatch at step 2 or 3 -> remove nothing more and list the unintegrated commits.
 
 ## Step 6: Record Completion
 
@@ -681,9 +895,9 @@ comment-add task=<task-id> body-file=.lets/cache/exec-complete-<task-id>.md
 - **Adapt cosmetically, never structurally** - plan intent matters more than plan text, but an approach change is a deviation, not an adaptation
 - **Stop on deviation** - the Deviation gate (Step 5) runs before every edit; no answer = no edit; under `--auto` it is a hard-stop
 - **NEVER edit before the code-write approval** - inline: `ExitPlanMode` approved by the user (the fallback path with no plan mode asks "Start implementing?" in words first); delegated: the Step 5-D Start gate, before which nothing is spawned
-- **Delegated: the code-write approval is Step 5-D's Start gate** - nothing is spawned before it, and every commit waits for that chunk's Accept
+- **Delegated: the code-write approval is Step 5-D's Start gate** - nothing is spawned before it, and every commit waits for the Accept its gate policy names (5-D.5): the owner's, or the team check's under the `high-only` / `at-end` policy the owner picked at Start. The one exception is `--pipelined`: Start approves the implementer's local commits (the lead's integration commits for an isolated group), and Accept then records `accepted_sha` instead of committing
 - **Delegated: one writer per tree** - a run starts only on a clean tree, this session writes no code while an implementer is running, and a stop is confirmed before anything else writes
-- **Delegated: implementers never commit, push, or touch the tracker** - this session does all three, after review
+- **Delegated: implementers never push or touch the tracker, and commit only in their own isolated worktree or, under `--pipelined`, locally in the task worktree** - otherwise the task branch gets its commits from this session, after review; a history rewrite (the autosquash) needs `lets worktree pushed` = `not_pushed` and the owner's yes
 - **Delegated runs are interactive only** - `--auto` with `--implementers` / `--team` is refused
 - Respond in user's language
 

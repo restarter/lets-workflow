@@ -65,7 +65,7 @@ Run: `/lets:init`
 
 Worktree: /lets:worktree create -> terminal -> /lets:start -> Work -> /lets:done -> /lets:end -> /lets:worktree remove
 
-Team:     /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /lets:done
+Team:     /lets:team run -> one visible worker session per task -> each worker /lets:start ... /lets:done
 ```
 
 ### Essential Skills
@@ -87,7 +87,7 @@ Team:     /lets:plan -> /lets:team run -> monitor -> /lets:review --local -> /le
 | `/lets:init` | Setup | Initialize LETS in a new project; re-run for self-heal or config change. User-scope plugin install: offers `lets init --user` (global rules + `~/.lets/.env` defaults) |
 | `/lets:update` | Setup | Sync project with the current release - `.lets/.env` + rules self-heal (incl. the user-level global rules when installed), plus `lets` binary / plugin version status |
 | `/lets:worktree` | Utility | Create/manage worktrees for parallel sessions |
-| `/lets:team` | Utility | Parallel implementation with Agent Teams |
+| `/lets:team` | Utility | Team management - run several tasks at once (one session per task), spawn / dismiss / roster a standing team's members |
 | `/lets:status` | Utility | Read-only orient snapshot — where you are, what's in flight, what's next |
 | `/lets:orc` | Utility | Talk to this chat's orchestrator or a named peer session - ask / ping / read / tell / who |
 | `/lets:peer` | Utility | Alias: `/lets:peer <name> <verb> [text]` |
@@ -112,7 +112,7 @@ These fire automatically when you describe the action in conversation - no slash
 | Skill | When to use |
 |-------|-------------|
 | `/lets:plan` | Task needs architecture + implementation plan |
-| `/lets:execute` | Have a plan from /lets:plan, ready to execute - inline in native plan mode, or delegated to implementer agents you review |
+| `/lets:execute` | Have a plan from /lets:plan, ready to execute - inline in native plan mode, or delegated to one persistent implementer (or `--parallel` isolated groups) you review |
 
 **Rule of thumb:** Can you write a 1-sentence requirement?
 - YES, small task -> work directly

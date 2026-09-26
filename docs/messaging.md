@@ -17,6 +17,7 @@ Rule of thumb: a **peer** knows the project and speaks LETS - talk to it with `/
 - **Orchestrator session** - a chat started with `/lets:start --main`, registered under its `/rename` name, optionally with `--scope "<part of the repo>"`. It plans, triages and routes; it writes no code. A repo can have several. Not the same as "the orchestrator" in the review docs (`/lets:check` is reviewed "by the orchestrator, inline"), which means the main model running a command, as opposed to its subagents.
 - **Worker** - a chat working a task, bound to one orchestrator. `/lets:worktree create <id>` run from an orchestrator binds every worker it spawns; a chat you open yourself takes `/lets:start <id> --orc=<name>`. The binding lives with the branch, so it survives `/clear` and restarts.
 - **Peer** - any live LETS session of the repo, as `/lets:orc who` lists it.
+- **Team run and members** - `/lets:team run` opens a worker per task bound to the session that ran it, so its workers are reached like any worker. A standing team's members (`/lets:team spawn`) talk only to their lead: every message between members is routed through the lead, which persists what matters in files.
 - **Brief** - the text `/lets:handoff` builds: where the code is, what to review, the context and decisions not to re-open, how to verify, and the verdict format - enough for an agent with no memory of this chat to act on it.
 
 ## Peer lane: `/lets:orc`
@@ -41,7 +42,7 @@ Without a name `/lets:orc` talks to the bound orchestrator; when that session ca
 
 A few naming gotchas worth knowing: the `[ref]` shown by ListAgents is not a prefix of a session's id, a session resumed under a new pid shows a fresh start time rather than its original one, and a session name is unique only per repo in the LETS role registry, not machine-wide - so an offline Remote Control session and a live session can share a display name without colliding. Cross-repo messaging over `/lets:orc` remains an Orca-only route today; on the `terminal` launcher a session outside this repo is reported unreachable, not silently addressed.
 
-A message goes out through Claude's own session messaging, or - with `LETS_LAUNCHER=orca` - straight into the peer's Orca pane, only when its transcript, its screen and Orca all show it idle. Full page: **[commands/orc.md](commands/orc.md)**.
+A message goes out through Claude's own session messaging, or - with `LETS_LAUNCHER=orca` - straight into the peer's Orca pane, only when its transcript, its screen and Orca all show it idle. When Orca refuses because the peer is busy and nothing was typed, the message goes through Claude's messaging instead and says so on its own line (`delivered via SendMessage fallback - orca refused: ...`) - a mid-turn lead is the usual case; once anything was typed, it is never sent again. A reply to a message delivered through Claude's messaging is read like any other. Full page: **[commands/orc.md](commands/orc.md)**.
 
 ## Across projects: `/lets:hub`
 
@@ -81,4 +82,4 @@ The targets are the review targets - `--branch`, `--last-commit`, `--local`, `--
 - **[commands/handoff.md](commands/handoff.md)** - the handoff lane in full
 - **[orca.md](orca.md)** - the Orca addon: launcher, card, hub, team backend, `--send`
 - **[workflow.md](workflow.md)** - where orchestrators and workers fit the daily loop
-- **[parallel-work.md](parallel-work.md)** - `/lets:team` and `/lets:worktree`
+- **[parallel-work.md](parallel-work.md)** - `/lets:team run`, a standing team, and `/lets:worktree`

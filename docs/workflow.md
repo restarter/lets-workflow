@@ -51,12 +51,26 @@ See **[plan-execute.md](plan-execute.md)** for the full flow.
 
 | Command | What it does |
 |---------|--------------|
-| `/lets:team` | Spawn autonomous agents that implement several tasks at once, each in its own worktree |
+| `/lets:team` | Run several tasks at once - one worktree and one visible LETS session per task, on any launcher - and create, staff and disband a standing team |
 | `/lets:worktree` | Open parallel sessions in separate terminals — you drive each one |
 
 See **[parallel-work.md](parallel-work.md)**.
 
 For the hands-off version — autonomous spawn → plan → execute, and off-context `--workflow` runs — see **[autonomous.md](autonomous.md)**.
+
+### A standing team
+
+A team per area that outlives its tasks - one worktree, one lead session, expert members, and a team file that remembers what it learned:
+
+```
+/lets:team create --area "<what it owns>"   (main checkout) -> the lead <callsign>-lead opens in team_<callsign>
+/lets:start <id>                            (lead) -> claims the lead, switches to the task's branch; commit or park the last one, never stash
+/lets:team spawn --roster                   (lead) -> the members come back from the team file
+work -> /lets:done -> /lets:start <next-id> -> ...
+/lets:team disband <callsign>               -> retired; the team file stays as history
+```
+
+See **[parallel-work.md](parallel-work.md)**.
 
 ### An orchestrator and its workers
 

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 )
@@ -228,5 +229,59 @@ func TestTail_ByName(t *testing.T) {
 	}
 	if _, err := Tail(context.Background(), TailOptions{Cwd: root, Name: "MAIN", ToSession: sidM}); err == nil {
 		t.Error("a name and a session id together must be refused")
+	}
+}
+
+// A reply to a message delivered through SendMessage: the receiver's transcript
+// holds Claude Code's delivered record (prefix line, wrapper, header), and
+// --since-message finds it - before lets-rry3c it stayed "not seen yet".
+func TestTail_SinceMessageSeesDeliveredSendMessage(t *testing.T) {
+	repo := repoWithLets(t, "")
+	home := claudeHome(t, []regRow{{101, sidMain, "MAIN", repo}, {103, sidWork, "W1", repo}})
+	writeTranscript(t, home, repo, sidWork,
+		deliveredLine(t),
+		assistantText("2026-09-25T12:15:30Z", "the answer"),
+		turnEnd("2026-09-25T12:15:31Z"))
+	res, err := Tail(context.Background(), TailOptions{Cwd: repo, ToSession: sidWork, SinceMessage: deliveredID, SentAt: "2026-09-25T12:15:21Z"})
+	if err != nil || len(res.Turns) != 1 || res.Turns[0].Text != "the answer" {
+		t.Errorf("--since-message must see the delivered message and return the reply: %+v %v", res, err)
+	}
+}
+
+// A reply to a message delivered mid-turn: the queued_command attachment, wrapped in
+// its queue-operation enqueue / remove records, anchors --since-message exactly once.
+func TestTail_SinceMessageSeesMidTurnDelivery(t *testing.T) {
+	repo := repoWithLets(t, "")
+	home := claudeHome(t, []regRow{{101, sidMain, "MAIN", repo}, {103, sidWork, "W1", repo}})
+	b, err := os.ReadFile(fixturePath("delivered-midturn.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lines []map[string]any
+	for _, l := range strings.Split(strings.TrimSpace(string(b)), "\n") {
+		var m map[string]any
+		if err := json.Unmarshal([]byte(l), &m); err != nil {
+			t.Fatal(err)
+		}
+		lines = append(lines, m)
+	}
+	lines = append(lines, assistantText("2026-09-26T09:10:05Z", "the mid-turn answer"), turnEnd("2026-09-26T09:10:06Z"))
+	writeTranscript(t, home, repo, sidWork, lines...)
+	res, err := Tail(context.Background(), TailOptions{Cwd: repo, ToSession: sidWork, SinceMessage: midTurnID, SentAt: "2026-09-26T09:10:00Z"})
+	if err != nil || len(res.Turns) != 1 || res.Turns[0].Text != "the mid-turn answer" {
+		t.Fatalf("--since-message must see the mid-turn delivery: %+v %v", res, err)
+	}
+	all, err := Tail(context.Background(), TailOptions{Cwd: repo, ToSession: sidWork, Last: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	inbound := 0
+	for _, tr := range all.Turns {
+		if tr.Kind == "INBOUND" {
+			inbound++
+		}
+	}
+	if inbound != 1 {
+		t.Errorf("the queue-operation records must not double the message: %d inbound turns", inbound)
 	}
 }

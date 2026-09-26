@@ -471,7 +471,7 @@ var tips = []string{
 	"Lost track of where you are? /lets:status shows the overview.",
 	"Starting fresh? /lets:start restores context and picks a task.",
 	"Working in parallel? /lets:worktree create spins up an isolated tree.",
-	"Big task? /lets:team runs implementers in parallel worktrees.",
+	"Several tasks at once? /lets:team run opens one session per task.",
 	"Reviewing a GitHub PR? /lets:github-pr drives the full lifecycle.",
 	"Quick backlog pulse? /lets:backlog --fast — fast context scan, no agents.",
 	"Backlog review or cleanup? /lets:backlog — multi-agent ideation or fast triage.",

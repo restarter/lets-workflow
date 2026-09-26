@@ -26,13 +26,13 @@ var (
 		"commands/handoff.md":            true,
 		"commands/install-deprecated.md": true,
 	}
-	// agentSendExempt maps each file of the delegated /lets:execute path to the ONE placeholder
-	// it names the implementer THIS run spawned by (execute.md's run record calls it {agent},
-	// implementer-run's args call it {name}) - never a peer session. Any other recipient in these
-	// files, including the other file's placeholder, is still a peer send and still fails.
+	// agentSendExempt maps each file that messages a member THIS session spawned to the ONE
+	// placeholder it names that member by (execute.md's run record and member-run both call it
+	// {agent} - in member-run, the Agent name the registry records) - never a peer session. Any
+	// other recipient in these files, a generic {name} included, is still a peer send and fails.
 	agentSendExempt = map[string]string{
-		"commands/execute.md":             "{agent}",
-		"skills/implementer-run/SKILL.md": "{name}",
+		"commands/execute.md":        "{agent}",
+		"skills/member-run/SKILL.md": "{agent}",
 	}
 )
 
@@ -114,6 +114,19 @@ func lintOrcFiles(files map[string]string) []string {
 		// 4: the alias never sends itself
 		if rel == "commands/peer.md" && (strings.Contains(body, "SendMessage") || strings.Contains(body, "lets peers")) {
 			bad = append(bad, rel+": the alias delegates to the orc skill and sends nothing itself")
+		}
+		// 6: the SendMessage fallback is never silent (lets-rry3c): its Step 5 row is MANDATORY
+		// and names the line to print
+		if rel == "skills/orc/SKILL.md" {
+			row := ""
+			for _, line := range strings.Split(body, "\n") {
+				if strings.HasPrefix(line, "| `reason=peer_not_ready`, `claude_fallback_allowed=true` |") {
+					row = line
+				}
+			}
+			if !strings.Contains(row, "**MANDATORY:**") || !strings.Contains(row, "delivered via SendMessage fallback") {
+				bad = append(bad, rel+": the peer_not_ready fallback row must be **MANDATORY:** and print `delivered via SendMessage fallback`")
+			}
 		}
 	}
 	return append(bad, lintOrcOffers(files)...)
@@ -220,6 +233,14 @@ func TestOrcLint(t *testing.T) {
 		}
 		c[rel] += "\n" + add + "\n"
 		return lintOrcFiles(c)
+	}
+	silent := map[string]string{}
+	for k, v := range files {
+		silent[k] = v
+	}
+	silent["skills/orc/SKILL.md"] = strings.Replace(files["skills/orc/SKILL.md"], "delivered via SendMessage fallback", "sent", 1)
+	if len(lintOrcFiles(silent)) == 0 {
+		t.Error("mutation: a fallback row without its printed line must fail the lint")
 	}
 	if len(mutate("commands/done.md", "lets peers tell x")) == 0 {
 		t.Error("mutation: a peer send in done.md must fail the lint")

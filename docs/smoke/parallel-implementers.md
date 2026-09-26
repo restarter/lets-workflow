@@ -1,0 +1,78 @@
+# Smoke: parallel implementers and team runs
+
+The live checks behind lets-7dwc1 and lets-0rgnd (merged; ships next release): what a Go test cannot prove because it depends on the running Claude Code harness - how it names, isolates and restores agents, and what it does with a session's id. Run them on a scratch branch, with the owner's yes, whenever Claude Code or this area changes; record every run in the results table at the end. A check that fails is a **deviation**: stop, record what happened, and decide with the owner - never adapt the procedure to make it pass.
+
+The design facts these checks rest on are pinned statically by `TestSmokeFacts` (`cli/internal/initcmd/smokefacts_test.go`): no `team_name` / `mode=` in the execute or team commands, `BASE` in every isolated brief, member-run never messaging a gone member, and `lets integrate` running before Accept.
+
+Before any check: a clean tree, `make build`, and the plugin loaded from this checkout (`make dev` from a host terminal) when the change is not released yet. Note the Claude Code version (`claude --version`).
+
+## 1. Session-owner guard (Task 4)
+
+1. **Plain worktree, pane teammate.** In a task worktree whose `.task-<slug>` records this session, open a second, named Claude session in the same worktree. Pass: the task-state `session:` line still names the first session, and the second session shows the held Notice naming the holder and "run /lets:start in that chat to rewrite the session".
+2. **Plain worktree, no role file, `/clear`.** In a worktree where no peer role file was ever registered, run `/clear` in the owning session, then open a pane. Pass: the CarrySession Notice naming the missing peer role file appears when `.lets/sessions/peers` exists (and nothing when it does not). Do NOT assert `session:` - this residual gap is accepted.
+3. **Team worktree.** In a worktree a team file claims, with a recorded lead (`lets members lead --scope <c> --json`), open a pane. Pass: `session:` unchanged, and the Notice names the recorded lead.
+
+## 2. member-run in a team (Task 5)
+
+In a team worktree with a recorded lead, spawn `<c>-architect` through member-run (`/lets:team spawn architect`). Pass: `lets peers who --json` shows exactly one `<c>-architect`, and `lets members status --scope <c> --json` shows it `live` with `link: team`.
+
+## 3. Delivered SendMessage and the fallback line (Task 5b)
+
+From a worker, `/lets:orc ask` the lead while the lead is mid-turn. Pass: the worker prints `delivered via SendMessage fallback - orca refused: <reason> (<state>)` on its own line, and `lets peers tail --to-session <lead sid> --since-message <msgid> --json` on the receiver shows the message as seen.
+
+## 4. Parallel isolated groups (Task 10)
+
+On a scratch branch, a plan with two groups, one of them two sequential one-file chunks; run `/lets:execute --implementers --parallel`.
+
+Pass, all of:
+
+- both groups run at the same time;
+- each isolated agent's spawn guard passes, and the harness lets `git switch -C <branch> {BASE}` through (a refusal is a deviation: stop);
+- `git rev-parse HEAD` == BASE in both agent worktrees before the first chunk;
+- the second chunk of the two-chunk group arrives by `op=next`, and its `lets integrate` uses `--since` = that group's `integrated_source`;
+- the integrations run one after another, with a clean caller tree between them;
+- after completion the agent branches still hold their commits, and `git worktree list` shows no `lets-integrate` entry.
+
+## 5. Pipelined run (Task 10b)
+
+On a scratch branch, a plan with three one-file chunks; run `/lets:execute --implementers --pipelined`. Pass: c2 starts before c1 is accepted; a correction on c1 lands as a `fixup!` commit; the closing autosquash (after `lets worktree pushed` reports `not_pushed`) leaves three commits with the plan's messages, and `git diff <pre_rebase_head> HEAD` is empty.
+
+## 6. Team run on a launcher (Task 11)
+
+With `LETS_LAUNCHER=tmux` or `cmux` and two scratch tasks, run `/lets:team run --tasks <a>,<b>` from the main checkout. Pass: two sessions named `<repo>-<id>` appear in `lets peers who --orc <lead> --json`, bound to this lead; the run record goes `launched` -> `open`; `/lets:team stop` asks both workers. Any miss is a deviation.
+
+## 7. Standing-team members (Task 12)
+
+In a team worktree: dismiss a pane member, then `/lets:team spawn --roster`. Pass: a new `<c>-architect` is live, a surviving pane under the same name is refused or renamed (`<name>-2`), and the lead's task-state `session:` is untouched.
+
+## 8. Creating a team on each launcher (lets-0rgnd, Task 16)
+
+1. **(a) Orca.** Run `git fetch origin`, then `/lets:team create --area <a>` with `LETS_LAUNCHER=orca`. Pass, all of:
+   - the team worktree's HEAD == `origin/main` after that fetch, and its branch is `team_<c>`;
+   - `orca terminal create` ACCEPTS the worktree LETS created (a refusal is recorded - the printed fallback command is then the Orca behaviour);
+   - the lead's command ran with cwd == the team worktree;
+   - the `lets peers who --json` row has the name exactly `<c>-lead`, that exact cwd, and `send: orca`.
+2. **(e) Orca.** The lead spawns one named teammate. Record whether it shows as a pane - a finding, not a gate (that is Claude Code's own setting).
+3. **(b) cmux and tmux.** With each launcher, the lead's command `claude --name <c>-lead '/lets:start'` gives a `lets peers who` row named exactly `<c>-lead`.
+4. **(d) Setup hook.** Two teams in one repo whose `.lets/hooks/team-setup` sets them record distinct `DOCKER_PREFIX`, `COMPOSE_PROJECT_NAME` and port blocks in their team files' Workspace sections. The hook runs only after the owner's yes; a hook that fails stops the flow before the lead is launched, and the reopen offers to run it again.
+
+## 9. Create and disband (lets-0rgnd, Task 18)
+
+On a scratch team: `/lets:team create` with no callsign proposes a free animal callsign. `/lets:team disband <c>` with a live pane member asks the owner and never proceeds silently.
+
+## Results
+
+| Date | Claude Code version | Check | Result (pass / deviation + what happened) |
+|---|---|---|---|
+| 2026-09-26 | 2.1.283 | 1.1 guard, plain worktree | pass - a second named session got the held Notice naming 73671cbc and "run /lets:start in that chat"; `session:` unchanged |
+| 2026-09-26 | 2.1.283 | 2 member-run in a team | pass - `architect` live, `link: team`, `kind: in_process`, agent `snake-architect`; in-process, so `lets peers who` lists no row for it (expected) |
+| 2026-09-26 | 2.1.283 | 3 fallback line | pass (sender) - `delivered via SendMessage fallback - orca refused: peer_not_ready (tool_running)`; the message was held for approval (the sessions ran different permission modes) |
+| 2026-09-26 | 2.1.283 | 3 tail --since-message | deviation - a message delivered while the lead was mid-turn is not found by `lets peers tail --since-message` (dev binary): the mid-turn delivery is not recorded as the user TEXT shape lets-rry3c parses; owner decision pending |
+| 2026-09-26 | 2.1.283 | 7 dismiss + spawn --roster | pass - dismiss stops the agent and records `gone / dismissed`; `spawn --roster` brings a new live `snake-architect`; the lead's `session:` untouched |
+| 2026-09-26 | 2.1.283 | 8(a) create on Orca, before fix-5 | deviation (fixed by fix-5, 3e8b140) - Go created `team_snake` from origin/main (HEAD == origin/main, branch team_snake), but `lets orca terminal` timed out ("Timed out waiting for terminal handle after creation"): Orca does not know a worktree it did not create (`orca worktree list` never lists it); the fallback command was printed; with the lead launched by hand the `peers who` row is exactly `snake-lead` at the team worktree, `send: claude`; the model then wrongly narrated that Orca had created the terminal; owner decision pending |
+| 2026-09-26 | 2.1.283 | 9 create + disband | pass - no callsign -> `snake` proposed after `team-init --check`; disband with a live lead asked the owner (Tell / Lead has wrapped up / Cancel), found no task or park, removed the worktree and branch without force on the owner's yes, appended `Retired` to Decisions |
+| 2026-09-26 | 2.1.283 | 8(a) create on Orca, after fix-5 (3e8b140) | pass - Orca created `team_snake` (listed by `orca worktree list`), branch `team_snake`, HEAD == origin/main (e1f4c0d), `.lets` + `.beads/.env` linked by adopt, the lead's Orca terminal opened and its handle recorded; finding: `lets peers who` shows the lead with `send: claude` (not joined to Orca) - so does every Claude launched through `orca terminal create --command "claude ..."`; only agents Orca launches itself join the Orca route (delivery still works through SendMessage) |
+| 2026-09-26 | 2.1.283 | 8(f) terminals after an agentless create | one plain shell ("Terminal 1"), no agent, no command |
+| 2026-09-26 | 2.1.283 | 8(g) disband an Orca team | pass - a planted untracked file stopped `lets orca team-remove` with exit 15 `dirty_worktree` (nothing removed, Orca untouched); after removing it: `removed`, the worktree gone from git, Orca and disk, branch deleted, `lets worktree release` ran as the archive hook, `Retired` appended |
+| 2026-09-26 | 2.1.283 | note | the lead launched from the team file's `agent_command` (`claude`) loads the INSTALLED plugin, so on an unreleased branch its `/lets:start` does not claim the lead (`no_lead` at disband) - an artefact of smoking before a release, not a defect |
+| 2026-09-26 | 2.1.283 | 1.2, 1.3, 4, 5, 6, 8(b), 8(d), 8(e) | not run |

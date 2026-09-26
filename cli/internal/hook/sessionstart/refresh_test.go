@@ -6,6 +6,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/restarter/lets-workflow/cli/internal/fsutil"
+	"github.com/restarter/lets-workflow/cli/internal/taskstate"
 )
 
 // newSID is a real session-id shape: taskstate refuses anything else.
@@ -47,8 +51,8 @@ func TestRefreshSessionBoundary_RefreshesExisting(t *testing.T) {
 	dir, branch := gitInitRepo(t)
 	p := writeTaskFile(t, dir, branch, "task: lets-x\nstart: abc123\nsession: oldsha oldsid\n")
 
-	if err := RefreshSessionBoundary(dir, newSID); err != nil {
-		t.Fatalf("refresh: %v", err)
+	if o, _ := RefreshSessionBoundary(dir, newSID, taskstate.SessionGuard{}); o != OutcomeWritten {
+		t.Fatalf("outcome = %v, want OutcomeWritten", o)
 	}
 	s := readFile(t, p)
 	if !strings.Contains(s, "task: lets-x") || !strings.Contains(s, "start: abc123") {
@@ -64,8 +68,8 @@ func TestRefreshSessionBoundary_RefreshesExisting(t *testing.T) {
 
 func TestRefreshSessionBoundary_AbsentFileNotCreated(t *testing.T) {
 	dir, branch := gitInitRepo(t)
-	if err := RefreshSessionBoundary(dir, newSID); err != nil {
-		t.Fatalf("refresh: %v", err)
+	if o, _ := RefreshSessionBoundary(dir, newSID, taskstate.SessionGuard{}); o != OutcomeSkipped {
+		t.Fatalf("outcome = %v, want OutcomeSkipped", o)
 	}
 	p := filepath.Join(dir, ".lets", "sessions", ".task-"+branch)
 	if _, err := os.Stat(p); !os.IsNotExist(err) {
@@ -76,8 +80,8 @@ func TestRefreshSessionBoundary_AbsentFileNotCreated(t *testing.T) {
 func TestRefreshSessionBoundary_AppendsWhenNoSessionLine(t *testing.T) {
 	dir, branch := gitInitRepo(t)
 	p := writeTaskFile(t, dir, branch, "task: lets-y\nstart: def456\n")
-	if err := RefreshSessionBoundary(dir, newSID); err != nil {
-		t.Fatalf("refresh: %v", err)
+	if o, _ := RefreshSessionBoundary(dir, newSID, taskstate.SessionGuard{}); o != OutcomeWritten {
+		t.Fatalf("outcome = %v, want OutcomeWritten", o)
 	}
 	s := readFile(t, p)
 	if !strings.Contains(s, "task: lets-y") || !strings.Contains(s, "start: def456") {
@@ -92,8 +96,8 @@ func TestRefreshSessionBoundary_EmptySessionIDNoOp(t *testing.T) {
 	dir, branch := gitInitRepo(t)
 	orig := "task: lets-z\nstart: ghi\nsession: s1 sid1\n"
 	p := writeTaskFile(t, dir, branch, orig)
-	if err := RefreshSessionBoundary(dir, ""); err != nil {
-		t.Fatalf("refresh: %v", err)
+	if o, _ := RefreshSessionBoundary(dir, "", taskstate.SessionGuard{}); o != OutcomeSkipped {
+		t.Fatalf("outcome = %v, want OutcomeSkipped", o)
 	}
 	if got := readFile(t, p); got != orig {
 		t.Errorf("file changed on empty sessionID:\ngot:  %q\nwant: %q", got, orig)
@@ -107,8 +111,8 @@ func TestRefreshSessionBoundary_DetachedHeadNoOp(t *testing.T) {
 	if out, err := exec.Command("git", "-C", dir, "checkout", "--detach", "HEAD").CombinedOutput(); err != nil {
 		t.Fatalf("detach: %v\n%s", err, out)
 	}
-	if err := RefreshSessionBoundary(dir, newSID); err != nil {
-		t.Fatalf("refresh: %v", err)
+	if o, _ := RefreshSessionBoundary(dir, newSID, taskstate.SessionGuard{}); o != OutcomeSkipped {
+		t.Fatalf("outcome = %v, want OutcomeSkipped", o)
 	}
 	if got := readFile(t, p); got != orig {
 		t.Errorf("detached HEAD must be a no-op:\ngot:  %q\nwant: %q", got, orig)
@@ -135,8 +139,8 @@ func TestRefreshSessionBoundary_ThroughLetsSymlink(t *testing.T) {
 	if err := os.WriteFile(p, []byte("task: lets-y\nstart: s2\nsession: oldsha oldsid\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := RefreshSessionBoundary(dir, newSID); err != nil {
-		t.Fatalf("refresh: %v", err)
+	if o, _ := RefreshSessionBoundary(dir, newSID, taskstate.SessionGuard{}); o != OutcomeWritten {
+		t.Fatalf("outcome = %v, want OutcomeWritten", o)
 	}
 	s := readFile(t, p)
 	if !strings.Contains(s, newSID) || strings.Contains(s, "oldsid") {
@@ -159,8 +163,8 @@ func readFile(t *testing.T, p string) string {
 func TestRefreshSessionBoundary_KeepsOrcAndUnknownLines(t *testing.T) {
 	dir, branch := gitInitRepo(t)
 	p := writeTaskFile(t, dir, branch, "task: lets-x\norc: MAIN-PWA\nfuture: kept\nsession: oldsha oldsid\n")
-	if err := RefreshSessionBoundary(dir, newSID); err != nil {
-		t.Fatalf("refresh: %v", err)
+	if o, _ := RefreshSessionBoundary(dir, newSID, taskstate.SessionGuard{}); o != OutcomeWritten {
+		t.Fatalf("outcome = %v, want OutcomeWritten", o)
 	}
 	s := readFile(t, p)
 	for _, want := range []string{"task: lets-x", "orc: MAIN-PWA", "future: kept", newSID} {
@@ -174,8 +178,8 @@ func TestRefreshSessionBoundary_MalformedSIDNotWritten(t *testing.T) {
 	dir, branch := gitInitRepo(t)
 	orig := "task: lets-x\nsession: oldsha oldsid\n"
 	p := writeTaskFile(t, dir, branch, orig)
-	if err := RefreshSessionBoundary(dir, "not a session id"); err != nil {
-		t.Fatalf("refresh: %v", err)
+	if o, _ := RefreshSessionBoundary(dir, "not a session id", taskstate.SessionGuard{}); o != OutcomeSkipped {
+		t.Fatalf("outcome = %v, want OutcomeSkipped", o)
 	}
 	if got := readFile(t, p); got != orig {
 		t.Errorf("a malformed sid must not be written:\n%s", got)
@@ -184,10 +188,136 @@ func TestRefreshSessionBoundary_MalformedSIDNotWritten(t *testing.T) {
 
 func TestRefreshSessionBoundary_NonLetsRepoUntouched(t *testing.T) {
 	dir, _ := gitInitRepo(t)
-	if err := RefreshSessionBoundary(dir, "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"); err != nil {
-		t.Fatal(err)
+	if o, _ := RefreshSessionBoundary(dir, "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d", taskstate.SessionGuard{}); o != OutcomeSkipped {
+		t.Fatalf("outcome = %v in a repo without .lets, want OutcomeSkipped", o)
 	}
 	if _, err := os.Lstat(filepath.Join(dir, ".lets")); !os.IsNotExist(err) {
 		t.Errorf("a new session in a repo without .lets must not create it (err=%v)", err)
+	}
+}
+
+const (
+	sidOwn     = "aaaaaaaa-0000-4000-8000-000000000001"
+	sidForeign = "bbbbbbbb-0000-4000-8000-000000000002"
+)
+
+// guardFor is a guard over a fixed world: alive sids, and rotations old -> new.
+func guardFor(alive map[string]bool, rotated map[string]string) taskstate.SessionGuard {
+	return taskstate.SessionGuard{
+		Liveness: func(sid string) taskstate.Liveness {
+			if alive[sid] {
+				return taskstate.LiveAlive
+			}
+			return taskstate.LiveDead
+		},
+		Rotated: func(sid string) (string, bool) {
+			to, ok := rotated[sid]
+			return to, ok
+		},
+	}
+}
+
+// A teammate pane runs the same hook: a live foreign holder is never overwritten,
+// and the refusal says so (holder + remedy); a dead holder is replaced.
+func TestRefresh_ForeignLiveUntouched(t *testing.T) {
+	dir, branch := gitInitRepo(t)
+	body := "task: lets-x\nstart: abc123\nsession: 1111111 " + sidForeign + "\n"
+	p := writeTaskFile(t, dir, branch, body)
+	o, notice := RefreshSessionBoundary(dir, sidOwn, guardFor(map[string]bool{sidForeign: true}, nil))
+	if o != OutcomeHeld || readFile(t, p) != body {
+		t.Fatalf("outcome=%v file:\n%s", o, readFile(t, p))
+	}
+	if !strings.Contains(notice, "bbbbbbbb") || !strings.Contains(notice, "run /lets:start in that chat to rewrite the session") {
+		t.Errorf("notice must name the holder and the remedy: %q", notice)
+	}
+	o, _ = RefreshSessionBoundary(dir, sidOwn, guardFor(nil, nil))
+	if o != OutcomeWritten || !strings.Contains(readFile(t, p), sidOwn) {
+		t.Errorf("dead holder: outcome=%v file:\n%s", o, readFile(t, p))
+	}
+}
+
+// The decision is made under the task lock on the state it will overwrite: a
+// foreign session recorded while the refresh waited for the lock is not clobbered.
+func TestRefresh_InsideDerive(t *testing.T) {
+	dir, branch := gitInitRepo(t)
+	p := writeTaskFile(t, dir, branch, "task: lets-x\n")
+	lockDir := filepath.Join(dir, ".lets", "locks")
+	if err := os.MkdirAll(lockDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.OpenFile(filepath.Join(lockDir, "task-"+branch+".lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	if err := fsutil.LockFile(f); err != nil {
+		t.Fatal(err)
+	}
+	type res struct {
+		o Outcome
+	}
+	done := make(chan res)
+	go func() {
+		o, _ := RefreshSessionBoundary(dir, sidOwn, guardFor(map[string]bool{sidForeign: true}, nil))
+		done <- res{o}
+	}()
+	time.Sleep(200 * time.Millisecond)
+	body := "task: lets-x\nsession: 1111111 " + sidForeign + "\n"
+	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_ = fsutil.UnlockFile(f)
+	if r := <-done; r.o != OutcomeHeld || readFile(t, p) != body {
+		t.Errorf("outcome=%v file:\n%s", r.o, readFile(t, p))
+	}
+}
+
+// A busy task lock past the deadline is held + Notice, never a blind write.
+func TestRefresh_LockBusyHeld(t *testing.T) {
+	dir, branch := gitInitRepo(t)
+	body := "task: lets-x\n"
+	p := writeTaskFile(t, dir, branch, body)
+	lockDir := filepath.Join(dir, ".lets", "locks")
+	_ = os.MkdirAll(lockDir, 0o755)
+	f, err := os.OpenFile(filepath.Join(lockDir, "task-"+branch+".lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	if err := fsutil.LockFile(f); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	o, notice := RefreshSessionBoundary(dir, sidOwn, guardFor(nil, nil))
+	if o != OutcomeBusy || notice == "" || readFile(t, p) != body {
+		t.Errorf("outcome=%v notice=%q", o, notice)
+	}
+	if d := time.Since(start); d > 3*time.Second {
+		t.Errorf("waited %v, want about 1s", d)
+	}
+}
+
+// /clear carries the boundary (sha kept) ONLY on proof the recorded id was
+// re-minted into this one; no proof writes nothing and names the gap; a foreign
+// live holder is held.
+func TestCarry_ProvenOnly(t *testing.T) {
+	dir, branch := gitInitRepo(t)
+	body := "task: lets-x\nsession: 1111111 " + sidForeign + "\n"
+	p := writeTaskFile(t, dir, branch, body)
+
+	o, notice := CarrySession(dir, sidOwn, guardFor(nil, nil))
+	if o != OutcomeNoProof || readFile(t, p) != body || !strings.Contains(notice, "no peer role file") {
+		t.Errorf("no proof: outcome=%v notice=%q file:\n%s", o, notice, readFile(t, p))
+	}
+	o, _ = CarrySession(dir, sidOwn, guardFor(map[string]bool{sidForeign: true}, nil))
+	if o != OutcomeHeld || readFile(t, p) != body {
+		t.Errorf("foreign live: outcome=%v", o)
+	}
+	o, notice = CarrySession(dir, sidOwn, guardFor(nil, map[string]string{sidForeign: sidOwn}))
+	if o != OutcomeWritten || notice == "" || !strings.Contains(readFile(t, p), "session: 1111111 "+sidOwn) {
+		t.Errorf("proven: outcome=%v file:\n%s", o, readFile(t, p))
+	}
+	if o, _ = CarrySession(dir, sidOwn, guardFor(nil, nil)); o != OutcomeUnchanged {
+		t.Errorf("already own: outcome=%v", o)
 	}
 }

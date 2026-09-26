@@ -126,6 +126,7 @@ type InfoResult struct {
 	Worktree      *WorktreeInfo  `json:"worktree,omitempty"`
 	MainRoot      string         `json:"main_root"`
 	TaskCandidate *TaskCandidate `json:"task_candidate,omitempty"`
+	Team          string         `json:"team,omitempty"` // the standing team owning this worktree (teamfile.FindByWorktree)
 }
 
 // TaskCandidate is the task id the active convention reads off a branch name in a
@@ -142,7 +143,10 @@ type TaskCandidate struct {
 // BranchNameResult is the branch-name-subcommand envelope.
 type BranchNameResult struct {
 	Envelope
-	Branch   string `json:"branch,omitempty"`
+	Branch string `json:"branch,omitempty"`
+	// Dir is the worktree directory name for the task: `<task-id>-<slug>` when that
+	// is already a valid worktree name, else a lowered, hash-suffixed form (dirName).
+	Dir      string `json:"dir,omitempty"`
 	Slug     string `json:"slug,omitempty"`
 	Template string `json:"template,omitempty"`
 	Source   string `json:"source,omitempty"` // installed | board | plugin | default

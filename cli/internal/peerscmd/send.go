@@ -289,7 +289,9 @@ func Tell(ctx context.Context, o TellOptions) (*TellResult, error) {
 			out := orcaTell(ctx, prc.ops, *peer, path, o.MsgID, text)
 			res.Delivered, res.Reason, res.State, res.SentAt, res.Observed = out.Delivered, out.Reason, out.State, out.SentAt, out.Observed
 			attempted = out.Attempted
-			if out.Reason == "peer_not_ready" && peer.Name != "" {
+			// Never after a typed attempt: delivery is then unproven, and a SendMessage
+			// on top of it would deliver the message twice.
+			if out.Reason == "peer_not_ready" && !attempted && peer.Name != "" {
 				n := 0
 				for _, e := range prc.snap.Entries {
 					if e.NameOK && e.Name == peer.Name {

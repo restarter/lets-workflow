@@ -29,6 +29,8 @@ set-status task=<task-id> status=in_progress
 
 ### Step 2: Check Uncommitted Changes
 
+**Team worktree** - `lets worktree info --json` reports a top-level `team`: this worktree belongs to a standing team and moves between tasks through `lets worktree switch`. Skip the generic question below and go to **Step 2T**. No `team` -> continue here.
+
 Before switching branches, check for uncommitted changes:
 
 ```bash
@@ -59,6 +61,52 @@ Handle response:
 
 If staying on current branch (worktree, already correct) or no changes - skip this step.
 
+### Step 2T: Team worktree - park, then switch
+
+A team worktree never stashes. `git status --short`; changes present -> list them, and list separately every NEW path a park would need to name - untracked (`git ls-files --others --exclude-standard`) and staged additions (`git diff --cached --diff-filter=ACR --name-only HEAD`). Ignored files are never parked; they stay on disk. Then:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Uncommitted changes on {branch} before switching to {task-id}. What to do?",
+    header: "Uncommitted",
+    options: [
+      { label: "Commit first", description: "Commit them with /lets:commit, then switch" },
+      { label: "Park", description: "Commit them as wip(<id>): park on this branch; unparked when you come back" },
+      { label: "Stay", description: "Skip the switch - keep working on {branch}" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+- **Commit first** -> delegate to the commit skill, then the switch below.
+- **Park** -> ask which of the listed new paths go into the park commit. `--include` names only the paths the user confirmed; an unconfirmed new path makes the switch refuse (`untracked_present`, nothing touched) - say so, and let the user confirm it or remove it.
+- **Stay** -> no switch; warn about mixed work, then Step 5 as in Step 2's Stay.
+
+No changes -> the switch below directly. The switch, from the team worktree:
+
+```bash
+lets worktree switch --task '<task-id>' --title-file .lets/cache/title-<session6>.txt --json
+# Park: add --park and one --include '<path>' per confirmed new path
+```
+
+(The title file is written as in Step 4, with the Write tool.) Render the result:
+
+- `ok=true` -> "Switched to `{branch}`" (`created` -> "cut from `{base}`", with the staleness warning when `base_stale`); `park` -> name the park commit; `unpark` -> `unparked` (the parked changes are staged again), `parked_pushed` / `parked_unverified` / `parked_kept` (the park stays a commit - say why).
+- A refusal -> show `error.kind` and `error.message`, change nothing, stop: `dirty_worktree`, `index_unmerged`, `operation_in_progress`, `detached_head` (exit 14 - the tree must be sorted out first), `untracked_present` (list `new_paths`, back to the Park question), `members_live` (a live implementer writes in this tree - wait for it or dismiss it), `no_remote_base`, `target_is_merge_branch`, `session_held` (switch from the team's lead session).
+
+`lets worktree switch` wrote the target branch's task-state (`task`, `start`, `session` through the session guard, `orc` carried from the old branch), so Step 5's own write - its `--session-sha`, unguarded - is skipped on this path. Its tail still runs on the new branch, passing only what switch did not write:
+
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+# {ORC_FLAG} as in Step 5: --orc '<name>' when args carried orc="<name>", else empty
+lets worktree task-state set --clear-origin {ORC_FLAG} --json
+lets peers role set worker --task "<task-id>" --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" --json
+```
+
+The first clears `origin:` and applies a requested orchestrator binding (an explicit `--orc` wins over the carried one); the second registers this session as the task's worker. Each failure is Step 5's one-line report - never hidden. Then rewrite the team file's `## 7. Current task` section (`.lets/teams/<team>.md`; the lead is its only writer): the task as **Title** (`id`), its branch, the phase, the next step, and `Resume artefacts:`. Then Step 6.
+
 ### Step 3: Worktree Check
 
 ```bash
@@ -66,6 +114,7 @@ GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
 ```
 
 **If in a worktree** (`$GIT_DIR` contains `worktrees/`):
+- A team worktree (Step 2T ran) never reaches here - its branch comes from `lets worktree switch`, not from the current branch.
 - Skip branch creation - use the current worktree branch as-is
 - Go reads the branch against the active tracker's convention: `lets worktree info --json --task-candidate --plugin-root "${CLAUDE_PLUGIN_ROOT}"`. `task_candidate.source=created` (the adapter's `branch:` / `worktree-branch:` shape, default `worktree-<task-id>-<slug>`) is this branch's task: confirm it with the user via the tracker's `show` verb. Any other result is an attached or externally named branch (e.g. `feature/foo`): rely on the task-id passed as the skill argument - never guess an id from the name by eye. No `lets` binary: the shapes are the ones detect-task Step 1 lists.
 - **Derived id (`.task` carries `origin: branch` or `origin: dir`).** `lets worktree adopt` guessed the id from the branch or directory name. When take-task did NOT receive the id as its argument, confirm with the user that the derived id is the task, and when Step 1's `show` returned `in_progress` (before this claim) warn in one line that it may already be claimed in another worktree. An explicit id argument supersedes the guess with no question, so unattended `--flow` / `--auto` spawns never stop here. Step 5 clears `origin:`.

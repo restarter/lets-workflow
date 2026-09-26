@@ -152,3 +152,50 @@ func TestHeal_TiedCollisionRestoresNothing(t *testing.T) {
 		}
 	}
 }
+
+// A teammate pane opened in the lead's worktree: the task-state session: names the
+// lead, who is live - the pane gets no worker role (it is not the task's worker).
+// The lead itself, and a new agent after the lead's session ended, still do.
+func TestHeal_ForeignHolderNoWorkerRole(t *testing.T) {
+	const sidLead = "eeeeeeee-0000-4000-8000-00000000000e"
+	root := repoWithLets(t, "")
+	p := root + "/.lets/sessions/.task-feature-x"
+	if err := os.WriteFile(p, []byte("task: lets-abc\nsession: 1111111 "+sidLead+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	registryAt(t, regAt{Pid: 7, Sid: sidW, Name: "snake-architect", Cwd: root}, regAt{Pid: 8, Sid: sidLead, Name: "snake-lead", Cwd: root})
+	healIn(t, root, sidW, "feature/x")
+	if fileExists(root, sidW) {
+		t.Error("a pane under a live foreign holder must get no worker role")
+	}
+	healIn(t, root, sidLead, "feature/x")
+	if files, _ := loadRoles(root); files[sidLead].Role != "worker" {
+		t.Errorf("the holder itself: %+v", files[sidLead])
+	}
+	registryAt(t, regAt{Pid: 7, Sid: sidW, Name: "snake-architect", Cwd: root}) // the lead exited
+	healIn(t, root, sidW, "feature/x")
+	if files, _ := loadRoles(root); files[sidW].Role != "worker" {
+		t.Errorf("after the holder ended: %+v", files[sidW])
+	}
+}
+
+// RoleProof reads pid + set from a role file, read-only; no file or no pid = no proof.
+func TestRoleProof(t *testing.T) {
+	root := repoWithLets(t, "")
+	plantRole(t, root, sidW, "role: peer\npid: 42\nset: 2026-09-26T10:00:00Z\n")
+	before, _ := os.ReadFile(root + "/.lets/sessions/peers/" + sidW + ".role")
+	pid, set, ok := RoleProof(root, sidW)
+	if !ok || pid != 42 || !set.Equal(time.Date(2026, 9, 26, 10, 0, 0, 0, time.UTC)) {
+		t.Errorf("proof = %d %v %v", pid, set, ok)
+	}
+	if after, _ := os.ReadFile(root + "/.lets/sessions/peers/" + sidW + ".role"); string(after) != string(before) {
+		t.Error("RoleProof must not write")
+	}
+	if _, _, ok := RoleProof(root, "aaaaaaaa-0000-4000-8000-0000000000aa"); ok {
+		t.Error("no role file is no proof")
+	}
+	plantRole(t, root, sidW, "role: peer\nset: 2026-09-26T10:00:00Z\n")
+	if _, _, ok := RoleProof(root, sidW); ok {
+		t.Error("a pid-less (legacy) role file is no proof")
+	}
+}

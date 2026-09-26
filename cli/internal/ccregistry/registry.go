@@ -57,10 +57,13 @@ func (l Liveness) String() string {
 // Snapshot is one read of the registry. Entries are live pids parsed under
 // peerProtocol 1 with a valid session id; Unrecognized holds live pids that could
 // not be read: pid -> "peerProtocol=2" | "peerProtocol=absent" | "unparseable" |
-// "sessionId invalid".
+// "sessionId invalid". Loose is best-effort: session id -> pid of every live
+// entry under another peerProtocol whose JSON still parsed with a valid session id
+// - enough to say that session runs, never enough to address it.
 type Snapshot struct {
 	Entries      []Entry
 	Unrecognized map[int]string
+	Loose        map[string]int
 	Degraded     *Degraded
 }
 
@@ -89,7 +92,7 @@ func Read(claudeDir string) Snapshot {
 		return Snapshot{Degraded: &Degraded{Reason: "registry_absent"}}
 	}
 	files, _ := filepath.Glob(filepath.Join(dir, "*.json"))
-	s := Snapshot{Unrecognized: map[int]string{}}
+	s := Snapshot{Unrecognized: map[int]string{}, Loose: map[string]int{}}
 	for _, f := range files {
 		pid, err := strconv.Atoi(strings.TrimSuffix(filepath.Base(f), ".json"))
 		if err != nil || pid <= 0 || !ProcAlive(pid) {
@@ -102,6 +105,9 @@ func Read(claudeDir string) Snapshot {
 		}
 		if e.PeerProtocol == nil || *e.PeerProtocol != 1 {
 			s.Unrecognized[pid] = protoString(e.PeerProtocol)
+			if ValidSession(e.SessionID) {
+				s.Loose[e.SessionID] = pid
+			}
 			continue
 		}
 		// After the protocol check: a renamed field under a new protocol is counted

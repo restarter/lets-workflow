@@ -127,7 +127,7 @@ fi
 # Warn on EVERY fallback, not only on a sid mismatch - a silent fallback is how a stale boundary
 # became a confident number (lets-370mx).
 case "$TRUST" in
-  prior-session) echo "NOTE: boundary is from a previous session (no /lets:start this session) - counts are best-effort." >&2 ;;
+  prior-session) echo "NOTE: boundary was recorded by another session - possibly one still live (see the SessionStart Notice) - so this range may include work that is not this session's; counts are best-effort. /lets:start here rewrites it." >&2 ;;
   estimate)      echo "NOTE: no session boundary recorded - range estimated from the branch point off {LETS_MERGE_BRANCH}." >&2 ;;
   none)          echo "NOTE: no usable session boundary - commit counts are unknown." >&2 ;;
 esac

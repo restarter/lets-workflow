@@ -290,3 +290,105 @@ func TestMergeWrite_RefreshLeavesNoTrace(t *testing.T) {
 		t.Errorf("a refresh of a missing file must not create %s (err=%v)", letsDir, err)
 	}
 }
+
+const (
+	gsOwn     = "aaaaaaaa-0000-4000-8000-000000000001"
+	gsForeign = "bbbbbbbb-0000-4000-8000-000000000002"
+	gsThird   = "cccccccc-0000-4000-8000-000000000003"
+)
+
+func sessionState(sid string) State {
+	if sid == "" {
+		return State{Task: "lets-x"}
+	}
+	return State{Task: "lets-x", Session: "1111111 " + sid}
+}
+
+func TestMaySetSession(t *testing.T) {
+	live := func(v Liveness) func(string) Liveness {
+		return func(string) Liveness { return v }
+	}
+	rot := func(to string) func(string) (string, bool) {
+		return func(string) (string, bool) { return to, to != "" }
+	}
+	lead := func(ok bool) func(string) (bool, string) {
+		return func(string) (bool, string) { return ok, "snake-lead (session cccccccc)" }
+	}
+	cases := []struct {
+		name   string
+		stored string
+		op     SessionOp
+		g      SessionGuard
+		want   error  // nil, ErrSessionUnchanged or ErrSessionHeld
+		reason string // HeldError reason when held
+	}{
+		{"empty", "", OpRefresh, SessionGuard{Liveness: live(LiveAlive)}, nil, ""},
+		{"own", gsOwn, OpRefresh, SessionGuard{Liveness: live(LiveAlive)}, ErrSessionUnchanged, ""},
+		{"dead", gsForeign, OpRefresh, SessionGuard{Liveness: live(LiveDead)}, nil, ""},
+		{"live-foreign", gsForeign, OpRefresh, SessionGuard{Liveness: live(LiveAlive)}, ErrSessionHeld, HeldLive},
+		{"degraded", gsForeign, OpRefresh, SessionGuard{Liveness: live(LiveUnknown)}, ErrSessionHeld, HeldUnknown},
+		{"rotated-own", gsForeign, OpRefresh, SessionGuard{Liveness: live(LiveDead), Rotated: rot(gsOwn)}, nil, ""},
+		{"rotated-foreign", gsForeign, OpRefresh, SessionGuard{Liveness: live(LiveDead), Rotated: rot(gsThird)}, ErrSessionHeld, HeldRotatedForeign},
+		{"carry-proven", gsForeign, OpCarry, SessionGuard{Liveness: live(LiveDead), Rotated: rot(gsOwn)}, nil, ""},
+		{"carry-no-proof", gsForeign, OpCarry, SessionGuard{Liveness: live(LiveDead)}, ErrSessionHeld, HeldNoProof},
+		{"carry-no-proof-nil-guard", gsForeign, OpCarry, SessionGuard{}, ErrSessionHeld, HeldNoProof},
+		{"carry-foreign-live", gsForeign, OpCarry, SessionGuard{Liveness: live(LiveAlive)}, ErrSessionHeld, HeldLive},
+		{"carry-nothing-recorded", "", OpCarry, SessionGuard{}, ErrSessionUnchanged, ""},
+		{"lead-refused", "", OpRefresh, SessionGuard{Lead: lead(false)}, ErrSessionHeld, HeldLead},
+		{"lead-refused-even-own", gsOwn, OpRefresh, SessionGuard{Lead: lead(false)}, ErrSessionHeld, HeldLead},
+		{"lead-allowed-dead", gsForeign, OpRefresh, SessionGuard{Lead: lead(true), Liveness: live(LiveDead)}, nil, ""},
+		{"lead-allowed-live-foreign", gsForeign, OpRefresh, SessionGuard{Lead: lead(true), Liveness: live(LiveAlive)}, ErrSessionHeld, HeldLive},
+	}
+	for _, c := range cases {
+		err := MaySetSession(sessionState(c.stored), true, gsOwn, c.op, c.g)
+		if !errors.Is(err, c.want) || (c.want == nil && err != nil) {
+			t.Errorf("%s: err=%v, want %v", c.name, err, c.want)
+			continue
+		}
+		var held *HeldError
+		if c.reason != "" && (!errors.As(err, &held) || held.Reason != c.reason) {
+			t.Errorf("%s: err=%v, want reason %s", c.name, err, c.reason)
+		}
+	}
+	// A malformed recorded line guards nothing: it is treated as empty.
+	if err := MaySetSession(State{Session: "OLDSHA OLDSID"}, true, gsOwn, OpRefresh,
+		SessionGuard{Liveness: live(LiveAlive)}); err != nil {
+		t.Errorf("malformed line: err=%v", err)
+	}
+}
+
+// No session registry (a Claude Code without one): nil Liveness keeps today's
+// refresh - a recorded foreign session is replaced.
+func TestMaySetSession_RegistryAbsentWrites(t *testing.T) {
+	if err := MaySetSession(sessionState(gsForeign), true, gsOwn, OpRefresh, SessionGuard{}); err != nil {
+		t.Errorf("err=%v, want the unguarded write", err)
+	}
+}
+
+// An unparseable live registry entry might be the holder: unknown, so held.
+func TestMaySetSession_UnparseableHeld(t *testing.T) {
+	g := SessionGuard{Liveness: func(string) Liveness { return LiveUnknown }}
+	var held *HeldError
+	if err := MaySetSession(sessionState(gsForeign), true, gsOwn, OpRefresh, g); !errors.As(err, &held) || held.Reason != HeldUnknown {
+		t.Errorf("err=%v, want held (unknown)", err)
+	}
+}
+
+// park / park_team are known keys: validated, merged and deleted like the others,
+// and a park_team line is never read as park.
+func TestParkKeys(t *testing.T) {
+	letsDir := t.TempDir()
+	for _, bad := range []map[string]string{{"park": "not-a-sha"}, {"park_team": "Bad Team"}, {"park_team": "run-abc"}} {
+		if _, err := MergeWrite(letsDir, "b", WriteOpts{Set: bad, Create: true}); !errors.Is(err, ErrInvalidValue) {
+			t.Errorf("%v: err=%v, want ErrInvalidValue", bad, err)
+		}
+	}
+	st, err := MergeWrite(letsDir, "b", WriteOpts{Set: map[string]string{"task": "lets-a1", "park": "abc1234", "park_team": "snake"}, Create: true})
+	if err != nil || st.Park != "abc1234" || st.ParkTeam != "snake" || st.Task != "lets-a1" || len(st.Other) != 0 {
+		t.Fatalf("state = %+v, %v", st, err)
+	}
+	st, err = MergeWrite(letsDir, "b", WriteOpts{Set: map[string]string{"park": "", "park_team": ""}})
+	if err != nil || st.Park != "" || st.ParkTeam != "" || st.Task != "lets-a1" {
+		t.Errorf("after delete: %+v, %v", st, err)
+	}
+}

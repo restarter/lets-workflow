@@ -19,6 +19,7 @@ import (
 	"github.com/restarter/lets-workflow/cli/internal/letsconfig"
 	"github.com/restarter/lets-workflow/cli/internal/taskid"
 	"github.com/restarter/lets-workflow/cli/internal/taskstate"
+	"github.com/restarter/lets-workflow/cli/internal/teamfile"
 	"github.com/restarter/lets-workflow/cli/internal/trackeradapter"
 )
 
@@ -202,7 +203,8 @@ func headOf(ctx context.Context, dir string) string {
 
 // adoptTask resolves and records the worktree's task. First hit wins, every id
 // through taskid.Valid: --task, the existing .task file, the convention on the
-// branch name, the convention on the directory name. A name-derived id is an
+// branch name, the convention on the directory name. A standing team's worktree
+// (teamWorktree) derives no id from its names. A name-derived id is an
 // unconfirmed candidate (`origin:`) when it came from an accept: shape or the
 // directory; a created shape (branch: / worktree-branch:) needs no marker.
 func adoptTask(ctx context.Context, mainRoot, wtRoot, branch, tracker, pluginRoot string, o AdoptOptions, add func(status, msg string)) (*TaskInfo, *Error) {
@@ -230,6 +232,10 @@ func adoptTask(ctx context.Context, mainRoot, wtRoot, branch, tracker, pluginRoo
 		case hasFile && existing.Task != "":
 			info = &TaskInfo{ID: existing.Task, Source: "task_file", Origin: existing.Origin}
 		default:
+			if status, msg, team := teamWorktree(ctx, mainRoot, wtRoot, branch, add); team {
+				skipStatus, skipMsg = status, msg
+				return nil, errSkip
+			}
 			conv, _ := trackeradapter.LoadConvention(mainRoot, tracker, pluginRoot)
 			if !conv.Declared {
 				skipStatus, skipMsg = StepSkip, "convention_undeclared: no task id derived from the branch name"
@@ -302,4 +308,29 @@ func adoptTask(ctx context.Context, mainRoot, wtRoot, branch, tracker, pluginRoo
 	}
 	add(StepOK, msg)
 	return info, nil
+}
+
+// teamWorktree reports whether wtRoot belongs to a standing team, whose branch and
+// directory name a team, never a task: a `team_` branch or directory (checked before
+// any adapter grammar, so no id: / accept: can re-match it), or a team file that
+// claims the worktree. A team file that cannot be read cleanly counts as a team too
+// (fail-safe): the error is returned as a warn step naming the file, and the name is
+// never guessed from. Warnings about files that claim other worktrees become warn
+// steps and change nothing here.
+func teamWorktree(ctx context.Context, mainRoot, wtRoot, branch string, add func(status, msg string)) (status, msg string, team bool) {
+	if strings.HasPrefix(branch, "team_") || strings.HasPrefix(filepath.Base(wtRoot), "team_") {
+		return StepSkip, "team_worktree: a team_ branch or directory names a team, not a task; no task id derived", true
+	}
+	gitDir, _ := exec.CommandContext(ctx, "git", "-C", wtRoot, "rev-parse", "--absolute-git-dir").Output()
+	name, ok, warnings, err := teamfile.FindByWorktree(filepath.Join(mainRoot, ".lets", "teams"), wtRoot, strings.TrimSpace(string(gitDir)))
+	for _, w := range warnings {
+		add(StepWarn, w)
+	}
+	switch {
+	case err != nil:
+		return StepWarn, fmt.Sprintf("team_file_error: %v; no task id derived from the worktree's names - fix or remove the team file", err), true
+	case ok:
+		return StepSkip, fmt.Sprintf("team_worktree: team %s owns this worktree; no task id derived from its names", name), true
+	}
+	return "", "", false
 }

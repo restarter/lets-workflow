@@ -153,14 +153,14 @@ Stay alert to recurring themes across a session — repeated topics, related ide
 
 ## AUTO MODE
 
-AUTO MODE (autonomous execution: `/loop`, `/lets:execute --auto`, `/lets:team` parallel runs, scheduled agents, or system-reminder "Auto mode active") does NOT override approval gates for state-changing or shared-state operations. "Execute immediately" means low-risk read/edit work, not destructive or externally-visible actions.
+AUTO MODE (autonomous execution: `/loop`, `/lets:execute --auto`, delegated `/lets:execute --implementers` runs, `/lets:team run` worker sessions, scheduled agents, or system-reminder "Auto mode active") does NOT override approval gates for state-changing or shared-state operations. "Execute immediately" means low-risk read/edit work, not destructive or externally-visible actions.
 
 **Always requires explicit user approval (even in AUTO MODE):**
 - bd state changes: `bd close`, `bd update --status`, `bd dolt push`. Read-only ops (search, show, ready, list) are free. **Carve-out (spawn entry claim):** the ONE exception is the spawn-time `take-task` claim (`bd update --status=in_progress`) that *starts* an autonomous spawned session (e.g. `/lets:plan-workflow <id>` / `/lets:execute --auto <id>` launched into a fresh worktree) — that entry claim is the authorized first action and proceeds without a gate. Every *later* bd state change stays gated.
 - Git push / PR ops: `git push`, `gh pr create`, `gh pr merge`, `gh pr review approve`.
 - Destructive ops: `rm`, `git reset --hard`, `git push --force`, `git branch -D`, worktree removal.
 - External-facing actions: Slack / email / posting to external services.
-- Peer sends: `/lets:orc ask` / `ping` / `tell`, `/lets:peer`, `lets peers tell`, `SendMessage` - only on the user's request in this turn. SendMessage between members of one agent team (`/lets:team`, a team session) is team routing, not a peer send.
+- Peer sends: `/lets:orc ask` / `ping` / `tell`, `/lets:peer`, `lets peers tell`, `SendMessage` - only on the user's request in this turn. SendMessage between members of one agent team (`/lets:team`, a team session) is team routing, not a peer send - while the team link holds; a member reached as a cross-session peer (`link: peer`) is a peer send, and members do not message each other then.
 - Hub actions in another project: `lets orca wake` (a new Claude process) and `lets peers ask-ro` (a headless fork) - only on the user's `/lets:hub` request.
 - New task creation: must go via `create-task` skill (own approval gate).
 
@@ -194,6 +194,7 @@ AUTO MODE (autonomous execution: `/loop`, `/lets:execute --auto`, `/lets:team` p
 - `lets:actor` is a special meta-agent: requires explicit user request + personality source (URL or file path). Never auto-select. Use `actor-fetch-personality` skill to fetch personality before dispatch.
 - Never use `general-purpose` or other non-lets subagent types for expert work
 - **Agent reports travel by file.** Every agent dispatched through the Task / Agent tool gets a `REPORT_FILE` from the `agent-report` skill and writes its report there; the orchestrator reads every report in full and never treats a missing report as "no findings" - it is a loud gap in the output and in the saved artifact. `--workflow` paths are exempt (their agents return through StructuredOutput).
+- Implementers and standing-team members are spawned, messaged and dismissed only through the `member-run` skill, with `lets members` as the registry of who is live
 
 ### Directed Search vs Exploration
 
@@ -329,6 +330,7 @@ GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
 - **Adopt / release.** A worktree LETS did not create (Orca, a teammate, `git worktree add`) becomes a LETS worktree through `lets worktree adopt`: Orca's `orca.yaml` setup hook runs it, and the SessionStart hook adopts an unlinked worktree of an initialized project before LETS Config is built (never without `<main>/.lets/.env`, never under `.claude/worktrees/`); `/lets:start` Step 0.5 is only the fallback. Adopt never deletes a pre-existing `.lets`: a cache-only one moves to `.lets.pre-adopt[-N]` (safe to delete by hand), anything else stops with exit 22. `lets worktree release` (Orca's archive hook) removes the task-state file and leaves a `released-<task-id>` marker for `/lets:start --main` Reopen
 - Per-branch task-state file: `.task-worktree-<name>` (fields `task:` / `start:` / `session: <sha> <sid>` / `origin:` (adopt derived the id from the branch or directory name; cleared on claim) / `orc:` (worker binding, never on the merge-branch); keyed by branch-slug so parallel sessions don't collide). It's a validated cache: detect-task is file-first (file `task:` outranks the frozen branch name, so several tasks can share one worktree; an `origin:` id is probed once before use), `/lets:done` reads `start:`, `/lets:end` reads `session:` - each reader cross-checks against a live anchor (tracker status on the merge-branch, git ancestry, the session-id) and degrades loudly. Written through `lets worktree task-state` (merge-write under a lock); a writer without the binary replaces only the keys it owns and keeps every other line. `/lets:start` rewrites it; the SessionStart hook refreshes `session:` on a new session
 - `$LETS_PROJECT_ROOT` is the worktree path (not main repo)
+- **Standing-team worktree.** `team_<callsign>` (dir and branch), created by `/lets:team create` and claimed by `.lets/teams/<callsign>.md`; its lead session is `<callsign>-lead`, recorded by `lets members` and claimed by `/lets:start`. It outlives its tasks: `/lets:start <id>` moves it to the task's branch through `lets worktree switch` (a new branch is cut from `origin/<merge>`), uncommitted work is committed or parked as `wip(<id>): park` - never stashed - and unparked when the task comes back. It is removed only by `/lets:team disband`
 - **Glob tool does NOT follow symlinks.** Always use Bash (`ls`, `cat`) to find/read files in `.lets/` and `.beads/` - never use Glob for symlinked paths
 
 **What NOT to do in a worktree:**
@@ -371,7 +373,8 @@ Main mode (no task):  /lets:start --main -> triage / groom / route (no edits) ->
 Worktree:  /lets:worktree create -> `cd .worktrees/<name>/ && claude` -> /lets:start -> Work -> /lets:done -> /lets:end -> /lets:worktree remove (main repo)
 Orca:      /lets:worktree create (LETS_LAUNCHER=orca) -> Orca pane runs /lets:start <id> (adopt already linked it) -> Work -> /lets:done -> /lets:end -> archive in Orca (lets worktree release)
 
-Team:      /lets:plan -> /lets:team run [--backend orca|agents] -> monitor -> /lets:review --local -> /lets:done   (orca: each task a visible session in an Orca child worktree; never both backends over one task)
+Team:      /lets:team run [--tasks A,B] -> one visible worker session per task on any launcher, bound via /lets:orc -> each worker /lets:start ... /lets:done   (orca: an Orca child worktree per task; --backend agents is refused)
+Standing team:  /lets:team create [<callsign>] --area <a> (from the main checkout) -> the lead <callsign>-lead opens in team_<callsign> -> /lets:start <id> claims the lead and switches the branch (uncommitted work: commit or park, never stash) -> work -> /lets:done -> next task -> /lets:team disband <callsign>
 
 Orchestrators:  /lets:start --main [--scope "<part>"] (several per repo, unique per session name) -> /lets:worktree create <id> binds each spawned worker (--orc) -> a worker chat opened by hand: /lets:start <id> --orc=<name> -> worker and orchestrator talk via /lets:orc
 
@@ -381,7 +384,7 @@ PR review:  /lets:github-pr <PR> -> discuss -> post -> /lets:github-pr --follow-
 PR respond: /lets:github-pr --respond <PR> -> triage -> fix -> reply
 ```
 
-If a plan exists from `/lets:plan`, the user runs `/lets:execute` to implement it here, or `/lets:handoff --execute --send [<tab>]` to have an agent tab of this worktree implement it - nothing else starts implementation, and the model never starts it on its own. Execute runs inline in native plan mode (its approval is the code-write gate), or delegates to implementer agents (its Start gate is, and each chunk is committed only after you accept it); use `/lets:commit` at natural commit points.
+If a plan exists from `/lets:plan`, the user runs `/lets:execute` to implement it here, or `/lets:handoff --execute --send [<tab>]` to have an agent tab of this worktree implement it - nothing else starts implementation, and the model never starts it on its own. Execute runs inline in native plan mode (its approval is the code-write gate), or delegates to implementer agents (its Start gate is, and each chunk is committed only after it is accepted - by you, or by the team check under the gate policy you pick at Start: `per-commit` | `high-only` | `at-end`; the one exception is `--pipelined`, where Start approves the implementer's local commits); use `/lets:commit` at natural commit points.
 
 Two separate lifecycles:
 - **Session:** `/lets:start` ... `/lets:end` (one conversation)
@@ -507,14 +510,14 @@ Every response ends with exactly ONE footer - never mix two. Pick the type by wh
 | `/lets:backlog` | Planning | Backlog review (multi-agent; `--workflow` = off-context) + `--fast` quick no-agent pulse + interactive cleanup triage |
 | `/lets:plan` | Planning | Structured planning with agents - architecture + implementation plan (`--fast` = orchestrator-only, skips explorer/architect/expert subagents; `--idea` = a concept document, no code exploration, never executed) |
 | `/lets:plan-workflow` | Planning | **PREVIEW** - autonomous planning via a Dynamic Workflow (goal + rubric up front, off-context, approve at end); folds into native `/lets:plan` later (lets-jsw00); `--fast` = lean budget (~7 agents, still off-context, heavy review pass skipped, quick plan-check kept) - distinct from `/lets:plan --fast` (orchestrator-only, no subagents) |
-| `/lets:execute` | Planning | Execute plan from /lets:plan - inline in native plan mode, or delegated to named implementer agents you review and correct (`--implementers`) |
+| `/lets:execute` | Planning | Execute plan from /lets:plan - inline in native plan mode, or delegated (`--implementers`): one persistent implementer by default, `--parallel` isolated groups joined by `lets integrate`, a gate policy picked at Start |
 | `/lets:status` | Utility | Read-only orient snapshot - where you are, what's in flight, what's next (tracker-universal) |
 | `/lets:worktree` | Utility | Create/manage interactive worktrees for parallel work |
 | `/lets:orc` | Utility | Talk to this chat's orchestrator or a named peer session - `ask` / `ping` / `read` / `tell` / `who`; the only sender of peer messages |
 | `/lets:peer` | Utility | Alias: `/lets:peer <name> <verb> [text]` = `/lets:orc` with a target |
 | `/lets:hub` | Utility | Orca addon (needs `LETS_LAUNCHER=orca`): every project's orchestrators, a read-only answer from a stopped one, wake one for gated work |
 | `/lets:statusline` | Utility | Manage & persist statusline appearance - light/dark, compact, hidden rows (writes personal `.claude/settings.local.json`) |
-| `/lets:team` | Utility | Parallel implementation with Agent Teams (run, status, stop) |
+| `/lets:team` | Utility | Team management - `run` (one visible session per task, any launcher), `create` / `disband` a standing team, `spawn` / `dismiss` / `roster` its members, `status`, `stop` |
 | `/lets:note` | Utility | Add note to active task (`--session`, aliases `--snapshot` / `--pre-compact` / `--compact` = resume snapshot on request, one path) |
 | `/lets:init`    | Setup | Per-project initialization. Re-run for self-heal (drift fix) or to change config; offers the user-scope global-rules install (`lets init --user`) when the plugin is user-scoped |
 | `/lets:update`  | Setup | Sync project with the current release - `.lets/.env` + rules self-heal, plus version status for the `lets` binary and the plugin; the global rules are only reported (the session hook keeps them current) |

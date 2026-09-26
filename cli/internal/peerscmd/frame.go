@@ -19,8 +19,12 @@ type Header struct {
 }
 
 var (
-	msgIDRe      = regexp.MustCompile(`^[0-9a-f]{16}$`)
-	crossWrapper = regexp.MustCompile(`^\s*<cross-session-message[^>]*>\s*`)
+	msgIDRe = regexp.MustCompile(`^[0-9a-f]{16}$`)
+	// crossWrapper is Claude Code's wrapper around a delivered cross-session message.
+	// A SendMessage delivered to another session lands in its transcript as a user
+	// text that opens with ONE exact prefix line before the wrapper (lets-rry3c,
+	// recorded live 2026-09-25); the prefix is accepted only when the wrapper follows.
+	crossWrapper = regexp.MustCompile(`^\s*(?:Another Claude session sent a message:\s*)?<cross-session-message[^>]*>\s*`)
 )
 
 // ValidKind reports whether k is a peer message kind.
@@ -82,7 +86,10 @@ func ParseHeader(line string) (Header, bool) {
 }
 
 // leadingHeader parses a header at the very start of a message body, after an
-// optional Claude Code `<cross-session-message ...>` wrapper.
+// optional Claude Code `<cross-session-message ...>` wrapper - itself optionally
+// preceded by Claude Code's delivery prefix "Another Claude session sent a
+// message:". Any other text before the header, or the prefix without the wrapper,
+// is not a header.
 func leadingHeader(text string) (Header, bool) {
 	text = crossWrapper.ReplaceAllString(text, "")
 	line, _, _ := strings.Cut(strings.TrimLeft(text, " \t\r\n"), "\n")
