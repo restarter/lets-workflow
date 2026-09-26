@@ -191,6 +191,56 @@ func delegatedContractProblems(f map[string]string) []string {
 		}
 	}
 
+	dispatch := between(exec, "### 5-D.4 Dispatch - in plan order", "### 5-D.5 Review")
+	spawnAt := strings.Index(dispatch, `args: "op=spawn scope=run-{RUN}`)
+	nextAt := strings.Index(dispatch, `args: "op=next scope=run-{RUN}`)
+	if spawnAt < 0 || nextAt < 0 || nextAt < spawnAt || !strings.Contains(dispatch, "`impl-{RUN}`") {
+		add("5-D.4 must spawn the persistent impl-{RUN} once and hand every later chunk over with op=next")
+	}
+	if !strings.Contains(dispatch, "the shape the 4.7 proposal usually picks") || soloByDefault.MatchString(exec) {
+		add("the solo shape must be worded as the one the 4.7 proposal usually picks, never a default allocation")
+	}
+	if !strings.Contains(dispatch, "`agent_gone`") || !strings.Contains(dispatch, "visibly new name") {
+		add("an agent_gone on op=next must go to the 5-D.7 replacement under a visibly new name")
+	}
+	startGate := sectionSpan(exec, "### 5-D.2 Start - the one code-write approval")
+	if n := strings.Count(startGate, `{ label: "`); n != 4 || !strings.Contains(startGate, `label: "Change the launch plan"`) {
+		add(fmt.Sprintf("the Start gate must offer exactly 4 options including Change the launch plan, found %d", n))
+	}
+	if strings.Contains(exec, "auto-commit low-risk") {
+		add("the label auto-commit low-risk must appear nowhere")
+	}
+	record := sectionSpan(exec, "### 5-D.3 Run record")
+	for _, field := range []string{"shape", "gate_policy", "members_scope", "risk", "base", "agent_branch", "agent_worktree_path", "picked_sha", "patch_path", "accepted_by", "committed_by", "integrated_source", "allowlist_amendments"} {
+		if !strings.Contains(record, `"`+field+`":`) {
+			add("the run record must list " + field)
+		}
+	}
+	if !strings.Contains(record, "it moves only after the lead's commit") {
+		add("integrated_source must move only after the lead's commit")
+	}
+	if !strings.Contains(record, "missing = high") {
+		add("the run record must read a missing Risk as high")
+	}
+	if bareIntegrated.MatchString(exec) {
+		add("execute.md must carry no bare integrated field - integrated_source only")
+	}
+	review := between(exec, "### 5-D.5 Review - one report at a time", "### 5-D.6 ")
+	for _, need := range []string{"Does the fix need a file outside the chunk's allowlist?", "`## Allowlist addendum`", "`allowlist_amendments[]`", "by: {architect|owner}", "never a fifth option"} {
+		if !strings.Contains(review, need) {
+			add("the Correct path must route an out-of-allowlist path through the addendum: " + need)
+		}
+	}
+	recovery := sectionSpan(exec, "### 5-D.7 Recovery (a run record exists)")
+	for _, need := range []string{"`unknown_pre_upgrade`", "`members_scope`", "members-run-{RUN}.json", "never messaged"} {
+		if !strings.Contains(recovery, need) {
+			add("5-D.7 must treat a pre-upgrade record's agents as gone and never message them: " + need)
+		}
+	}
+	if strings.Contains(recovery, "SendMessage(") {
+		add("5-D.7 must reach a member only through member-run, never a bare SendMessage")
+	}
+
 	if strings.Contains(exec, predecessor) || strings.Contains(exec, "chunk-file=") {
 		add("execute.md must call member-run with brief-file= - not its predecessor, no chunk-file=")
 	}
@@ -277,6 +327,14 @@ func TestMemberRun(t *testing.T) {
 		{"brief loses CI CHECKS", "execute", "\nCI CHECKS: ", "\nCHECKS: ", "CI CHECKS:"},
 		{"plan.workflow.js drops Risk in review", "planWorkflowJS", "every task with a commit point states **Risk:** high|low", "every task with a commit point states a risk", "planReviewPrompt"},
 		{"plan.md drops the Risk template line", "plan", "**Risk:** {high|low}", "**Risk:** {level}", "Risk field"},
+		{"dispatch respawns every chunk", "execute", `args: "op=next scope=run-{RUN}`, `args: "op=spawn scope=run-{RUN}`, "op=next"},
+		{"solo becomes a default allocation", "execute", "the shape the 4.7 proposal usually picks", "by default one implementer", "usually picks"},
+		{"Start gate loses Change the launch plan", "execute", `{ label: "Change the launch plan", `, `{ label: "Adjust", `, "Change the launch plan"},
+		{"record drops members_scope", "execute", `"members_scope": "run-{RUN}",`, "", "members_scope"},
+		{"integrated_source moves on a report", "execute", "it moves only after the lead's commit", "it moves on each report", "only after the lead's commit"},
+		{"bare integrated field", "execute", `"integrated_source": null`, `"integrated": null`, "bare integrated"},
+		{"addendum heading dropped", "execute", "`## Allowlist addendum`", "`## Extra paths`", "addendum"},
+		{"pre-upgrade member messaged", "execute", "such a member is never messaged", "such a member is asked to report", "pre-upgrade"},
 		{"unscoped gate sentence returns", "rules", "inside it the gate is plan mode for an inline run", "inside it the plan-mode approval is the gate", "still asserts"},
 	}
 	for _, m := range mutants {
@@ -298,6 +356,35 @@ func TestMemberRun(t *testing.T) {
 		})
 	}
 }
+
+// memberRunCall matches a member-run Skill call's args, or a member-run op
+// written in prose with its role; roleModelPin matches a model named by value in one.
+var (
+	memberRunCall = regexp.MustCompile("(args: \"op=[^\"]*\"|`op=[^`]*role=[^`]*`|`role=[^`]*`)")
+	roleModelPin  = regexp.MustCompile(`model=(opus|fable|sonnet|haiku)\b`)
+)
+
+// between returns the text from the heading from up to the heading to - a
+// section whose fenced templates hold headings of their own, which sectionSpan
+// would end at; "" when either is missing or out of order.
+func between(s, from, to string) string {
+	a := strings.Index(s, from)
+	if a < 0 {
+		return ""
+	}
+	b := strings.Index(s[a:], to)
+	if b < 0 {
+		return ""
+	}
+	return s[a : a+b]
+}
+
+// soloByDefault matches the solo shape worded as a fixed default - 4.7 applies no
+// allocation by default, so no other step may state one.
+var soloByDefault = regexp.MustCompile(`(?i)(by default,? (one|a single) implementer|default is (one|a single) implementer)`)
+
+// bareIntegrated matches a record field named integrated rather than integrated_source.
+var bareIntegrated = regexp.MustCompile("(\"integrated\"\\s*:|`integrated`)")
 
 // fixedAllocation matches a hardcoded implementer count - the launch plan is
 // reasoned per plan, never a fixed rule.
@@ -392,6 +479,134 @@ func TestExecuteLaunchPlan(t *testing.T) {
 				t.Fatalf("mutant cannot apply: %q is not in execute.md - update the mutant with the text it guards", m.old)
 			}
 			for _, problem := range launchPlanProblems(strings.Replace(exec, m.old, m.repl, 1)) {
+				if strings.Contains(problem, m.want) {
+					return
+				}
+			}
+			t.Errorf("mutant produced no problem containing %q - that guard cannot fail", m.want)
+		})
+	}
+}
+
+// gatePolicyProblems returns every way execute.md breaks the delegated gate
+// policy contract (lets-7dwc1); an empty result means none.
+func gatePolicyProblems(exec string) []string {
+	var p []string
+	add := func(s string) { p = append(p, s) }
+
+	picker := sectionSpan(exec, "## Step 4.5: Choose Execution Mode")
+	if !strings.Contains(picker, "`--gate <per-commit|high-only|at-end>`") || !strings.Contains(picker, "under `--auto` any value other than `per-commit` is REFUSED") {
+		add("--gate must name the three values and be refused under --auto unless per-commit")
+	}
+	if n := strings.Count(exec, "| gate_policy | risk |"); n != 1 {
+		add(fmt.Sprintf("the gate policy must dispatch from exactly one table, found %d", n))
+	}
+	review := between(exec, "### 5-D.5 Review - one report at a time", "### 5-D.6 ")
+	if !strings.Contains(review, "**Accept dispatch - the ONE table.**") {
+		add("the dispatch table must live in 5-D.5")
+	}
+	seen := map[string]bool{}
+	for _, line := range strings.Split(review, "\n") {
+		cells := strings.Split(line, "|")
+		if len(cells) != 9 {
+			continue
+		}
+		policy := strings.TrimSpace(cells[1])
+		name := ""
+		for _, v := range []string{"per-commit", "high-only", "at-end"} {
+			if strings.HasPrefix(policy, "`"+v+"`") {
+				name = v
+			}
+		}
+		if name == "" {
+			continue
+		}
+		seen[name] = true
+		risk, check, skeptic := strings.TrimSpace(cells[2]), strings.TrimSpace(cells[3]), strings.TrimSpace(cells[4])
+		if check != "yes" {
+			add("the CHECK must run in every row, not in " + name + " / " + risk)
+		}
+		if (strings.Contains(risk, "high") || risk == "any") && !strings.HasPrefix(skeptic, "yes") {
+			add("the skeptic must run on Risk high or missing in every policy, not in " + name + " / " + risk)
+		}
+		if name == "per-commit" && !strings.Contains(policy, "(default)") {
+			add("per-commit must be the default policy")
+		}
+	}
+	for _, v := range []string{"per-commit", "high-only", "at-end"} {
+		if !seen[v] {
+			add("the dispatch table must carry a row for " + v)
+		}
+	}
+	for _, need := range []string{"a new policy is a new row, never a new code path", "The skeptic runs whenever Risk is high or missing, in every policy.", "**Hard stops and deviations halt at once in every policy**, `at-end` included"} {
+		if !strings.Contains(review, need) {
+			add("5-D.5 must state: " + need)
+		}
+	}
+	for _, call := range memberRunCall.FindAllString(exec, -1) {
+		if roleModelPin.MatchString(call) {
+			add("a member-run call pins a model by name - roles inherit the session model; only the implementer's panel-chosen model=<m> is passed: " + call)
+		}
+	}
+	team := between(review, "**Who checks.**", "- **CHECK**")
+	for _, need := range []string{"`worktree.team`", "`op=next scope=<callsign> name=explorer|skeptic`", "Only when the team has no live one", "`explorer-{RUN}` / `skeptic-{RUN}`"} {
+		if !strings.Contains(team, need) {
+			add("in a team worktree the team check must reuse the standing team's live explorer / skeptic first: " + need)
+		}
+	}
+	const runReview = "### 5-D.8 Run review (`at-end` and `high-only`)"
+	rr := sectionSpan(exec, runReview)
+	if rr == "" || strings.Index(exec, runReview) > strings.Index(exec, "### 5-D.9 Completion") {
+		add("the 5-D.8 run review for at-end and high-only must precede the 5-D.9 Completion")
+	}
+	for _, need := range []string{`label: "Accept run`, `label: "Correct"`, `label: "Stop"`, "`op=next`", "git revert", "Nothing here pushes"} {
+		if !strings.Contains(rr, need) {
+			add("the 5-D.8 run review must carry " + need)
+		}
+	}
+	record := sectionSpan(exec, "### 5-D.3 Run record")
+	for _, need := range []string{`"gate_policy": "per-commit"`, "`accepted_by` is `owner` or `team`", `"committed_by":`} {
+		if !strings.Contains(record, need) {
+			add("the run record must hold " + need)
+		}
+	}
+	if !strings.Contains(sectionSpan(exec, "### 5-D.2 Start - the one code-write approval"), "explicit, recorded approval for the lead's commits") {
+		add("Start with high-only or at-end must be the owner's recorded approval for the lead's commits")
+	}
+	return p
+}
+
+// TestExecuteGatePolicy pins the gate policy of a delegated run on the real
+// execute.md, then proves each guard can fail on an in-memory mutant.
+func TestExecuteGatePolicy(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join(pluginDir(t), "commands", "execute.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	exec := string(b)
+	for _, problem := range gatePolicyProblems(exec) {
+		t.Error(problem)
+	}
+
+	mutants := []struct{ name, old, repl, want string }{
+		{"--gate allowed under --auto", "under `--auto` any value other than `per-commit` is REFUSED", "under `--auto` any value is accepted", "refused under --auto"},
+		{"second dispatch table", "**Accept dispatch - the ONE table.**", "| gate_policy | risk |\n**Accept dispatch - the ONE table.**", "exactly one table"},
+		{"skeptic skipped for at-end high", "| `at-end` | high / missing | yes | yes |", "| `at-end` | high / missing | yes | no |", "skeptic must run"},
+		{"CHECK skipped", "| `high-only` | low | yes | no |", "| `high-only` | low | no | no |", "CHECK must run"},
+		{"per-commit not default", "| `per-commit` (default) |", "| `per-commit` |", "default policy"},
+		{"at-end no longer halts", "**Hard stops and deviations halt at once in every policy**", "**Deviations wait for the run review**", "Hard stops"},
+		{"run review dropped", "### 5-D.8 Run review (`at-end` and `high-only`)", "### 5-D.8 Wrap-up", "5-D.8 run review"},
+		{"extension point lost", "a new policy is a new row, never a new code path", "a new policy gets its own step", "new row"},
+		{"skeptic pinned to a model", "`role=lets:skeptic`", "`role=lets:skeptic model=opus`", "pins a model"},
+		{"team explorer not reused", "`op=next scope=<callsign> name=explorer|skeptic`", "`op=spawn scope=run-{RUN}`", "standing team"},
+		{"accepted_by loses team", "`accepted_by` is `owner` or `team`", "`accepted_by` is `owner`", "accepted_by"},
+	}
+	for _, m := range mutants {
+		t.Run(m.name, func(t *testing.T) {
+			if !strings.Contains(exec, m.old) {
+				t.Fatalf("mutant cannot apply: %q is not in execute.md - update the mutant with the text it guards", m.old)
+			}
+			for _, problem := range gatePolicyProblems(strings.Replace(exec, m.old, m.repl, 1)) {
 				if strings.Contains(problem, m.want) {
 					return
 				}

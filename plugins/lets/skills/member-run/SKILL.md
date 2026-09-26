@@ -20,7 +20,7 @@ One operation on one named member. The caller (`/lets:execute` Step 5-D, `/lets:
 | `dismiss` | `scope=<s> name=<n>` | Step 4 |
 
 - `scope` - the team's callsign, or `run-<RUN>` for an execute run.
-- `name` - the member name, `[a-z0-9-]{1,40}`: the bare roster name in a team scope (`architect`, `architect-2`), `impl-<RUN>-<chunk>` in an execute scope.
+- `name` - the member name, `[a-z0-9-]{1,40}`: the bare roster name in a team scope (`architect`, `architect-2`), in an execute scope `impl-<RUN>` (a replacement `impl-<RUN>-r<generation>`), `explorer-<RUN>`, `skeptic-<RUN>`, `architect-<RUN>`.
 - `{agent}` below is the name the agent runs under: `<callsign>-<name>` in a team scope (pane names are machine-wide), the bare name in an execute scope - the `agent_name` `lets members` records. Every `SendMessage` and `TaskStop` addresses it.
 - `role` - a shipped `lets:*` agent except `lets:actor`; `lets members add` refuses anything else.
 - `brief-file` / `correct-file` - repo-root-relative paths the caller wrote. Every brief crosses as a file path, never inline.
