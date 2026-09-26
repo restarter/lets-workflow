@@ -415,7 +415,7 @@ fi
 
 if [ ! -f "$F" ]; then
   # No record on disk -> do NOT move HEAD. A failed write is not a reason to strand the user.
-  [ -n "$SH" ] && git stash pop "$(git stash list --format='%gd %H' | awk -v h="$SH" '$2==h{print $1;exit}')"
+  [ -n "$SH" ] && git stash pop "$(git stash list --format='%gd %H' | while read -r i s; do [ "$s" = "$SH" ] && { printf '%s\n' "$i"; break; }; done)"
   echo "STATE WRITE FAILED - not switching, reviewing from the diff"
 else
   HEAD_BEFORE=$(git rev-parse HEAD)
@@ -439,7 +439,7 @@ else
     echo "CHECKOUT PARTIAL - HEAD moved; restore state kept at $F; reviewing from the diff"
   else
     # HEAD provably unchanged - the only state in which popping and deleting are safe.
-    [ -n "$SH" ] && git stash pop "$(git stash list --format='%gd %H' | awk -v h="$SH" '$2==h{print $1;exit}')"
+    [ -n "$SH" ] && git stash pop "$(git stash list --format='%gd %H' | while read -r i s; do [ "$s" = "$SH" ] && { printf '%s\n' "$i"; break; }; done)"
     rm -f "$F"
     echo "CHECKOUT FAILED - staying put, reviewing from the diff"
   fi
@@ -949,7 +949,7 @@ else
     if [ -z "$SH" ]; then
       rm -f "$F"
     # Pop OUR entry by sha, not stash@{0}: refs/stash is shared with every worktree of this repo.
-    elif IDX=$(git stash list --format='%gd %H' | awk -v h="$SH" '$2==h {print $1; exit}') && [ -n "$IDX" ]; then
+    elif IDX=$(git stash list --format='%gd %H' | while read -r i s; do [ "$s" = "$SH" ] && { printf '%s\n' "$i"; break; }; done) && [ -n "$IDX" ]; then
       if git stash pop "$IDX"; then rm -f "$F"; else echo "STASH POP CONFLICTED - entry $SH still in \`git stash list\`; state kept at $F"; fi
     else
       echo "STASH GONE - recorded $SH is no longer in \`git stash list\`; nothing popped; state kept at $F"

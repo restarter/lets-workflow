@@ -387,8 +387,9 @@ For each finding marked as "inline":
 # Filter the diff to the target file's section. Use flag-based state, NOT a range
 # pattern: a range's end pattern is tested against the SAME line that opened it, so
 # `/^diff --git.*f$/,/^diff --git/` collapses to the single header line (0 hunks).
-# Pass the path via -v so its slashes don't terminate an awk /regex/ literal.
-gh pr diff <PR> | awk -v f="{file_path}" '$0 ~ "^diff --git" {p = ($0 ~ f "$")} p'
+# Pass the path via -v so its slashes don't terminate an awk /regex/ literal. The whole line is
+# field z (= 0): Claude Code replaces a dollar sign + digit with a command argument.
+gh pr diff <PR> | awk -v f="{file_path}" -v z=0 '$z ~ "^diff --git" {p = ($z ~ f "$")} p'
 ```
 
 2. Parse diff hunks to determine which new-side line numbers are present:

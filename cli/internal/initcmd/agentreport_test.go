@@ -70,14 +70,13 @@ const skillCall = `Skill(skill: "lets:agent-report"`
 // dispatch carries no subagent_type= and would otherwise slip past the guard.
 var dispatchCall = regexp.MustCompile(`(?m)^\s*(Task|Agent)\(`)
 
-// argPlaceholder matches what Claude Code substitutes in a skill body invoked
-// with args - a dollar sign plus a digit, or dollar-ARGUMENTS - fenced code
-// included. An awk field reference written that way arrives as an argument.
+// argPlaceholder matches what Claude Code substitutes in a command or skill
+// body invoked with args - a dollar sign plus a digit, or dollar-ARGUMENTS -
+// fenced code included (verified 2026-09-26 on commands and skills alike). An
+// awk field reference written that way arrives as an argument: /lets:review 42
+// turned a stash lookup into a syntax error, /lets:handoff --execute turned
+// every plan line into a number.
 var argPlaceholder = regexp.MustCompile(`\$([0-9]|ARGUMENTS)`)
-
-// argSkills are invoked with args on every call, so their bodies must render
-// as written.
-var argSkills = []string{"skills/agent-report/SKILL.md", "skills/artifact-path/SKILL.md"}
 
 // dispatchExempt dispatch agents with a prompt they do not author.
 var dispatchExempt = map[string]string{
@@ -129,9 +128,12 @@ func agentReportProblems(f map[string]string) []string {
 			add("the agent-report skill must carry " + need)
 		}
 	}
-	for _, k := range argSkills {
-		if m := argPlaceholder.FindString(f[k]); m != "" {
-			add(k + " carries the positional placeholder " + m + " - Claude Code replaces it with an argument before the model reads the skill")
+	for k, body := range f {
+		if !strings.HasPrefix(k, "commands/") && !strings.HasPrefix(k, "skills/") {
+			continue
+		}
+		if m := argPlaceholder.FindString(body); m != "" {
+			add(k + " carries the positional placeholder " + m + " - Claude Code replaces it with an argument before the model reads the file")
 		}
 	}
 	ap := f["skills/artifact-path/SKILL.md"]
@@ -353,6 +355,7 @@ func TestAgentReport(t *testing.T) {
 		{"a second call in a section without its own path", "commands/ask.md", "## Step 4: Launch Agent", "\nTask(", "\nTask(\n  subagent_type=\"lets:qa\",\n)\n\nTask(", "Task/Agent calls but only", 1},
 		{"review stops saving coverage", "commands/review.md", "", "## Coverage", "## Scope", "## Coverage section", -1},
 		{"the classifier regains an awk field reference", "skills/agent-report/SKILL.md", "", "# last non-blank line", "# last non-blank line: awk '{print $0}'", "positional placeholder", 1},
+		{"a command regains an awk field reference", "commands/handoff.md", "", "{ line[++n] = $z }", "{ line[++n] = $0 }", "commands/handoff.md carries the positional placeholder", 1},
 	}
 	for _, m := range mutants {
 		t.Run(m.name, func(t *testing.T) {

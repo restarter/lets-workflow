@@ -52,8 +52,10 @@ BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
 # --- READ (session: line, then the legacy SLUGGED ref - never a global one) ---
 TASK_FILE="$LETS_PROJECT_ROOT/.lets/sessions/.task-${BRANCH_SLUG}"
 SESSION_LINE=$(sed -n 's/^session: //p' "$TASK_FILE" 2>/dev/null | head -1)
-START_REF=$(echo "$SESSION_LINE" | awk '{print $1}')
-STORED_SID=$(echo "$SESSION_LINE" | awk '{print $2}')
+# read, not awk field references: Claude Code replaces a dollar sign + digit with a skill argument.
+read -r START_REF STORED_SID _ <<EOF
+$SESSION_LINE
+EOF
 # Shape guard (N1): the boundary is a plugin-written SHA - blank anything non-hex before it expands
 # unquoted into the git range, so a hand-edited state file can't inject git option args. It
 # ANNOUNCES itself: a malformed value means the file was edited, and that is the one input class
@@ -69,7 +71,7 @@ TRUST=prior-session
 [ -n "$START_REF" ] && [ -n "$STORED_SID" ] && [ -n "$CLAUDE_CODE_SESSION_ID" ] \
   && [ "$STORED_SID" = "$CLAUDE_CODE_SESSION_ID" ] && TRUST=exact
 if [ -z "$START_REF" ]; then
-  START_REF=$(cat "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}" 2>/dev/null | head -1 | awk '{print $1}')
+  START_REF=$(head -1 "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}" 2>/dev/null | { read -r a _; printf '%s' "$a"; })
   case "$START_REF" in *[!0-9a-f]*)
     echo "NOTE: legacy ref for ${BRANCH_SLUG} is malformed - ignored." >&2
     START_REF="" ;;
