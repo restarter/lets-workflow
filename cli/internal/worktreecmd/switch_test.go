@@ -538,3 +538,31 @@ func TestSwitch_DetachedHead(t *testing.T) {
 		t.Error("a task-state file with an empty slug was written")
 	}
 }
+
+// Codex: an ignored local file at a path the target branch tracks is never
+// overwritten - the switch fails and the file, the index and HEAD stay as they were.
+func TestSwitch_IgnoredFileNotOverwritten(t *testing.T) {
+	f := newTeamFixture(t)
+	a1 := f.onTask(t, "lets-a1")
+	f.write(t, "config.env", "tracked on lets-a1\n")
+	gitOut(t, f.wt, "add", "config.env")
+	gitOut(t, f.wt, "commit", "-q", "-m", "track config.env")
+	f.onTask(t, "lets-b2") // a new branch from origin/main, without config.env
+	f.write(t, ".gitignore", "config.env\n")
+	gitOut(t, f.wt, "add", ".gitignore")
+	gitOut(t, f.wt, "commit", "-q", "-m", "ignore config.env")
+	const local = "SECRET=local only\n"
+	f.write(t, "config.env", local)
+	if st := gitOut(t, f.wt, "status", "--porcelain", "--untracked-files=all"); st != "" {
+		t.Fatalf("fixture: the ignored file must not show as dirty: %q", st)
+	}
+	before := indexSnap(t, f.wt)
+	_, err := f.sw(SwitchOptions{Task: "lets-a1"})
+	wantKind(t, err, ExitGitFailed, "git_failed")
+	if b, _ := os.ReadFile(filepath.Join(f.wt, "config.env")); string(b) != local {
+		t.Errorf("the ignored file was overwritten: %q", b)
+	}
+	if indexSnap(t, f.wt) != before || gitOut(t, f.wt, "branch", "--show-current") == a1 {
+		t.Error("a refused switch changed the index, HEAD or the branch")
+	}
+}

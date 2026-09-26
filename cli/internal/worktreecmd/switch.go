@@ -231,14 +231,23 @@ func Switch(ctx context.Context, dir string, o SwitchOptions) (*SwitchResult, er
 	}
 	fromState, _ := taskstate.Read(letsDir, slugOf(from))
 
+	// --no-overwrite-ignore: an ignored local file (a .env) the target tracks is never
+	// clobbered - the dirty check above cannot see ignored files.
+	switchFailed := func(what string, err error) *Error {
+		e := gitErr(what, err)
+		if res.Park != nil {
+			e.Message += fmt.Sprintf(" - the park %s on %s is kept, nothing parked is lost", res.Park.Sha, res.Park.Branch)
+		}
+		return e
+	}
 	if created {
-		if _, err := git("switch", "--no-track", "-c", target, base); err != nil {
-			return fail(gitErr("switch -c", err))
+		if _, err := git("switch", "--no-overwrite-ignore", "--no-track", "-c", target, base); err != nil {
+			return fail(switchFailed("switch -c", err))
 		}
 		step(StepOK, fmt.Sprintf("cut %s from origin/%s (%s)", target, merge, base))
 	} else {
-		if _, err := git("switch", target); err != nil {
-			return fail(gitErr("switch", err))
+		if _, err := git("switch", "--no-overwrite-ignore", target); err != nil {
+			return fail(switchFailed("switch", err))
 		}
 		step(StepOK, "switched to "+target)
 	}
