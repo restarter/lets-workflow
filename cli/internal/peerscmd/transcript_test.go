@@ -128,3 +128,40 @@ func TestTranscript_LargeTailUnderCap(t *testing.T) {
 		t.Errorf("read %d bytes, cap is %d + one chunk", bytesRead.Load(), maxTailBytes)
 	}
 }
+
+// A peer message delivered while the receiver is mid-turn is an attachment
+// (queued_command, origin.kind peer) between two queue-operation records: it reads
+// as exactly ONE inbound turn carrying its header (lead's transcript, smoke §3,
+// 2026-09-26; ids and paths are fixture values).
+func TestTranscript_MidTurnQueuedCommandIsInbound(t *testing.T) {
+	recs, d := readAll(fixturePath("delivered-midturn.jsonl"))
+	if d != nil {
+		t.Fatal(d)
+	}
+	if len(recs) != 1 || recs[0].turn.Kind != "INBOUND" || recs[0].turn.Role != "user" || recs[0].turn.TS != "2026-09-26T09:10:02.000Z" {
+		t.Fatalf("records: %+v", recs)
+	}
+	if h := recs[0].header; h == nil || h.ID != midTurnID || h.FromSID != sidMain || h.ToSID != sidWork {
+		t.Errorf("header: %+v", recs[0].header)
+	}
+	// no origin.body: the prompt carries the wrapper, and the header still parses
+	line := []byte(`{"type":"attachment","timestamp":"2026-09-26T09:10:02.000Z","attachment":{"type":"queued_command","prompt":"<cross-session-message from=\"uds:/tmp/cc-socks/1.sock\">\n[lets-peer id=` + midTurnID + ` kind=ask from_sid=` + sidMain + ` to_sid=` + sidWork + ` from=\"W1\" to=\"MAIN\"]\nq","origin":{"kind":"peer"}}}`)
+	if r, ok := parseLine(line); !ok || len(r) != 1 || r[0].header == nil || r[0].header.ID != midTurnID {
+		t.Errorf("prompt fallback: %+v ok=%v", r, ok)
+	}
+}
+
+func TestTranscript_OtherAttachmentIgnored(t *testing.T) {
+	for _, line := range []string{
+		`{"type":"attachment","timestamp":"t","attachment":{"type":"file","prompt":"[lets-peer id=` + midTurnID + ` kind=ask]"}}`,
+		`{"type":"attachment","timestamp":"t","attachment":{"type":"queued_command","prompt":"[lets-peer id=` + midTurnID + ` kind=ask]","origin":{"kind":"user","body":"[lets-peer id=` + midTurnID + ` kind=ask]"}}}`,
+		`{"type":"attachment","timestamp":"t","attachment":{"type":"queued_command","prompt":"hi"}}`,
+		`{"type":"queue-operation","operation":"enqueue","timestamp":"t","content":"<cross-session-message>[lets-peer id=` + midTurnID + ` kind=ask]"}`,
+	} {
+		if r, ok := parseLine([]byte(line)); ok {
+			t.Errorf("must be ignored: %s -> %+v", line, r)
+		}
+	}
+}
+
+const midTurnID = "1a2b3c4d5e6f7081"

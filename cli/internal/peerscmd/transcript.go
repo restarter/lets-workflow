@@ -189,6 +189,16 @@ type rawLine struct {
 		Role    string          `json:"role"`
 		Content json.RawMessage `json:"content"`
 	} `json:"message"`
+	// Attachment is read only for a peer message delivered mid-turn (queued_command
+	// with origin.kind peer); every other attachment is ignored.
+	Attachment *struct {
+		Type   string `json:"type"`
+		Prompt string `json:"prompt"`
+		Origin *struct {
+			Kind string `json:"kind"`
+			Body string `json:"body"`
+		} `json:"origin"`
+	} `json:"attachment"`
 }
 
 type rawBlock struct {
@@ -201,8 +211,12 @@ type rawBlock struct {
 	Content   json.RawMessage `json:"content"`
 }
 
-// parseLine recognizes user / assistant records (text, tool_use, tool_result) and the
-// system turn_duration record. Anything else is not recognized.
+// parseLine recognizes user / assistant records (text, tool_use, tool_result), the
+// system turn_duration record, and a peer message delivered mid-turn - an
+// `attachment` of type `queued_command` whose origin.kind is `peer`, read as the
+// user turn it is (text = origin.body, else prompt; ts = the record's timestamp).
+// Its queue-operation enqueue / remove records are bookkeeping and stay unrecognized
+// (counting them would double the message). Anything else is not recognized.
 func parseLine(line []byte) ([]record, bool) {
 	var l rawLine
 	if json.Unmarshal(line, &l) != nil {
@@ -210,6 +224,20 @@ func parseLine(line []byte) ([]record, bool) {
 	}
 	if l.Type == "system" && l.Subtype == "turn_duration" {
 		return []record{{turn: Turn{TS: l.Timestamp, Kind: "END"}, end: true}}, true
+	}
+	if l.Type == "attachment" {
+		a := l.Attachment
+		if a == nil || a.Type != "queued_command" || a.Origin == nil || a.Origin.Kind != "peer" {
+			return nil, false
+		}
+		text := a.Origin.Body
+		if text == "" {
+			text = a.Prompt
+		}
+		if text == "" {
+			return nil, false
+		}
+		return []record{textRecord("user", l.Timestamp, text)}, true
 	}
 	if (l.Type != "user" && l.Type != "assistant") || l.Message == nil {
 		return nil, false
