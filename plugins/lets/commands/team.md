@@ -213,6 +213,26 @@ TaskUpdate(taskId="{id}", owner="{teammate-name}", status="in_progress")
 
 ### Step R8: Spawn Teammates
 
+**Before the spawn message:**
+1. Open the report run: `Skill(skill: "lets:agent-report", args: "op=open command=team task={task-id} names={task-slug}-{index},...")` - one name per teammate, the same names the Agent calls use. Each teammate's `REPORT_FILE:` line goes into its prompt (template below); the path is absolute, so it reaches this session's `.lets/` from the teammate's isolated worktree.
+2. Persist the RUNNING record - through Bash, like every session-authored `.lets/` file - so a team stopped or orphaned before R10 still has its report directory on record:
+
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel); mkdir -p "$LETS_PROJECT_ROOT/.lets/execution"
+cat > "$LETS_PROJECT_ROOT/.lets/execution/team-{team-name}.json" <<'EOF'
+{
+  "team_name": "lets-team-{timestamp}",
+  "created": "{ISO timestamp}",
+  "base_sha": "{HEAD at team start}",
+  "backend": "agent-teams",
+  "status": "running",
+  "report_dir": "{REPORT_DIR}",
+  "teammates": ["{task-slug}-{index}"],
+  "tasks": [ { "task_id": "{task-id}", "teammate": "{task-slug}-{index}", "status": "running" } ]
+}
+EOF
+```
+
 **CRITICAL: All teammates MUST be spawned in a SINGLE message (parallel launch).**
 
 Teammate naming: `{task-slug}-{index}` (e.g., `fix-auth-1`, `add-search-2`). Numeric suffix guarantees uniqueness.
@@ -238,6 +258,7 @@ Each teammate gets this as their entire context. Fill in all `{placeholders}`.
 ```
 You are implementing a specific task as part of a parallel team.
 You are in an isolated worktree - your changes won't affect other teammates.
+REPORT_FILE: {this teammate's absolute path from op=open}
 
 ## Your Task
 
@@ -258,6 +279,7 @@ You own these areas of the codebase:
 {list of directories/files extracted from task description}
 
 **IMPORTANT: Do NOT modify files outside your boundaries.**
+The one exception: your REPORT_FILE above - write your final report there even though it is outside your worktree.
 If you need changes in shared code, send a message to the team lead describing what you need and why.
 
 ## Project Rules
@@ -290,9 +312,12 @@ If you need changes in shared code, send a message to the team lead describing w
    Task: {task-id}"
    Use conventional commit types: feat, fix, refactor, test, docs, chore.
 
-5. **COMPLETE** - Mark your team task as done:
+5. **REPORT** - write your final report (what changed, each verify command and its output,
+   anything the lead must know) to REPORT_FILE in ONE Write call, last line `REPORT-END`.
+
+6. **COMPLETE** - only after REPORT, mark your team task as done:
    TaskUpdate(taskId="{team-task-id}", status="completed")
-   Then send a completion summary to the lead.
+   Then send the lead `REPORT_WRITTEN <path>` as the completion message.
 
 ## Communication
 
@@ -301,7 +326,7 @@ Use SendMessage to talk to the team lead:
 - **BLOCKED:** "I'm blocked on {issue}. Need {what you need}."
 - **CONFLICT:** "I need to modify {file} which is outside my boundaries. Reason: {why}."
 - **QUESTION:** "Clarification needed: {question about task requirements}."
-- **DONE:** "Task complete. Changed {N} files: {list}. Tests: {pass/fail/none}."
+- **DONE:** "REPORT_WRITTEN <path>"
 
 Do NOT message other teammates directly. Coordinate through the lead.
 
@@ -403,6 +428,8 @@ Completed: 1/2
 
 When all teammates are done (all team tasks `completed` or stopped):
 
+**10.0: Collect the reports while every teammate is still alive.** First inspect without concluding: `Skill(skill: "lets:agent-report", args: "op=peek dir={REPORT_DIR} names={every teammate name}")` - READ EVERY REPORT IN FULL for each `OK` file. Each teammate whose file is not `OK` AND that is still listed and not stopped gets ONE `SendMessage(type="message", recipient="{name}", content="Write your final report to REPORT_FILE {path} now, last line REPORT-END, then reply REPORT_WRITTEN.")`; a stopped or unreachable teammate gets no nudge and goes straight to the final collect. Wait only for the nudged teammates, and only until each has replied or gone idle once without replying. Then the final state once: `Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names={every teammate name} retry=no")` - it reads the newly `OK` files and records a `GAP` for the rest, listed in `## Team execution` and in the Step R11 output as "{name}: no report ({state}) - check its worktree before merging". Shut down only after this step. (Asking a live teammate to write the file it owes is not a re-dispatch - `retry=no` still holds: nothing is re-implemented.)
+
 **10.1: Shutdown all teammates**
 
 For each teammate still active:
@@ -437,6 +464,7 @@ cat > "$LETS_PROJECT_ROOT/.lets/cache/team-exec-<task-id>.md" <<EOF
 ## Team execution $(date +%Y-%m-%d)
 
 Teammate: {name}
+Report: {REPORT_FILE path, or no report ({state})}
 Commits:
 $(git log --oneline {BASE_SHA}..HEAD --grep='Task: {task-id}')
 EOF
@@ -454,7 +482,7 @@ TeamDelete()
 
 **10.5: Save completion record**
 
-Write `.lets/execution/team-{team-name}.json`:
+UPDATE the running record R8 wrote at `.lets/execution/team-{team-name}.json` (through Bash) - keep `report_dir` and `teammates`, set the final status, and add `coverage` and `report_gaps` from 10.0 (`[]` when none). This record is the one saved artifact every teammate appears in, stopped ones included - the 10.3 tracker comment covers completed tasks only:
 
 ```json
 {
@@ -464,6 +492,10 @@ Write `.lets/execution/team-{team-name}.json`:
   "base_sha": "{HEAD at team start}",
   "backend": "agent-teams",
   "status": "completed",
+  "report_dir": "{REPORT_DIR}",
+  "teammates": ["{task-slug}-{index}"],
+  "coverage": { "ok": 2, "expected": 2 },
+  "report_gaps": [ { "teammate": "{name}", "state": "MISSING" } ],
   "tasks": [
     {
       "task_id": "{task-id}",
@@ -487,6 +519,7 @@ Write `.lets/execution/team-{team-name}.json`:
 | **Add search API** (`proj-b2`) | add-search-2 | 5 | done |
 
 All commits landed on current branch ({branch-name}).
+{when any GAP: one line each - {name}: no report ({state}) - check its worktree before merging}
 ```
 
 ```
@@ -551,6 +584,7 @@ Read `~/.claude/teams/{team-name}/config.json` for member list.
 ### Step S3: Recovery Detection
 
 If state file exists with `status: "running"` but team dir is gone:
+- Before marking it orphaned, collect what exists: `Skill(skill: "lets:agent-report", args: "op=collect dir={report_dir from the record} names={teammates from the record} retry=no")` - READ EVERY REPORT IN FULL; no nudge (the team is gone); each `GAP` is `{name}: no report (orphaned, {state})`. Write `coverage` and `report_gaps` into the record with the orphaned status, and show them in the S4 output. A record without `report_dir` -> one loud line `reports not collected - no report directory recorded for {team-name}`.
 - Mark as orphaned
 - Show which tasks were completed vs failed
 - Note: teammate commits are on the branch where the team was started (auto cherry-picked on worktree cleanup)
@@ -602,6 +636,10 @@ AskUserQuestion(
 )
 ```
 
+### Step T2.5: Collect what exists
+
+`Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names={every teammate} retry=no")` over every teammate of the team - `report_dir` and `teammates` come from the running record R8 wrote - READ EVERY REPORT IN FULL. No nudge: the user is stopping the team. Each `GAP` is an interrupted report - `{name}: no report (interrupted, {state})`. No record, or no `report_dir` in it -> one loud line `reports not collected - no report directory recorded for {team-name}` in the output and the saved state, never silence.
+
 ### Step T3: Shutdown Teammates
 
 For each active teammate:
@@ -624,7 +662,7 @@ TeamDelete()
 ### Step T5: Save State
 
 Write/update `.lets/execution/team-{name}.json` with `status: "aborted"`.
-Include list of completed and in-progress tasks for recovery reference.
+Include list of completed and in-progress tasks for recovery reference, plus `coverage` and `report_gaps` from T2.5 (gaps marked `interrupted`).
 
 ### Step T6: Output
 
@@ -632,6 +670,7 @@ Include list of completed and in-progress tasks for recovery reference.
 ## Team Stopped
 
 Teammates stopped: {N}
+{Coverage: {ok}/{expected} reports; one line per gap - {name}: no report (interrupted, {state})}
 Completed commits are on the current branch (auto cherry-picked on worktree cleanup).
 In-progress work from stopped teammates may be lost if they didn't commit before shutdown.
 
