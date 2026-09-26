@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-26
+
 ### Added
 - **Role agents can message each other inside a team (lets-q73zt).** Every hop between two agents of a team used to relay through the lead by hand - an architect answering the implementer went architect -> lead -> implementer. All 14 analyst agents and the implementer now carry `SendMessage`, with one identical constraint line: it reaches only members of your own team, does nothing outside one, and a message is never a write and never approval. The `/lets:team` teammate prompt now allows direct messages (approvals and task state still go through the lead), and the AUTO MODE rule no longer reads team routing as a peer send. One agent definition for every role, not a team variant - the reason is recorded on the task.
 - **A delegated `/lets:execute` run keeps one implementer and lets you pick where you stop (lets-7dwc1).** `--implementers` used to spawn a fresh agent for every chunk, so each one relearned the codebase. A run now keeps ONE persistent implementer and hands it each next chunk as a new brief file; it keeps everything it already knows. Every chunk carries a Risk (`high` when the plan says so or says nothing, else `low`), and before any gate an explorer checks the patch against its brief and, on Risk high, an Opus skeptic tries to refute it. Before Start, a **launch plan** proposes how to run THIS plan - implementers and their chunks, isolation, landing order, pipelining and the **gate policy** - each with its reason: `per-commit` (default: you accept every chunk, as before), `high-only` (you accept Risk-high chunks; the team check accepts the rest) or `at-end` (the team check accepts every chunk and you review the finished run in a new run review). `--gate` fixes it. Deviations, blocked reports and hard stops reach you at once in every policy, and the record says per chunk who accepted and who committed. The split is also checked harder: a path a task's steps touch but its `**Files:**` does not name refuses delegation, and stale anchors, removed symbols and your CI commands show up before Start.
@@ -634,7 +636,8 @@ Initial release with expert agents team.
 - SessionStart hook injecting workflow rules
 - Plugin structure: commands, agents, hooks
 
-[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.9.3...HEAD
+[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/restarter/lets-workflow/compare/v0.9.3...v0.10.0
 [0.9.3]: https://github.com/restarter/lets-workflow/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/restarter/lets-workflow/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/restarter/lets-workflow/compare/v0.9.0...v0.9.1
