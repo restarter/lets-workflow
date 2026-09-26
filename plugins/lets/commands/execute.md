@@ -1,6 +1,6 @@
 ---
 description: Execute implementation plan from /lets:plan - inline in native plan mode, or delegated to named implementer subagents you review and correct
-argument-hint: "[task-id|plan-path] [--status] [--step|--straight|--auto|--implementers] [--parallel] [--gate per-commit|high-only|at-end]"
+argument-hint: "[task-id|plan-path] [--status] [--step|--straight|--auto|--implementers] [--parallel] [--pipelined] [--gate per-commit|high-only|at-end]"
 ---
 
 # Execute Plan
@@ -207,7 +207,7 @@ AskUserQuestion(
 
 ## Step 4.5: Choose Execution Mode
 
-How the approved plan runs is ONE up-front choice. **A mode flag pre-answers it - skip the picker entirely when any is present:** `--auto` (Here · auto), `--implementers` or its alias `--team` (Implementers), `--step` / `--step-by-step` (Here · step-by-step), `--straight` / `--straight-through` (Here · straight-through). `--auto` keeps all its AUTO MODE semantics (Step 1 refuses on `$LETS_MERGE_BRANCH`; hard-stops preserved). Default locus is **Here** (this session, native plan mode); **Implementers** is the only locus switch. **`--auto` together with `--implementers` / `--team` is REFUSED** with one line - a delegated run is interactive by design (its gates wait for you, and an unattended run has nobody to review it): drop `--auto`, or run inline. **`--gate <per-commit|high-only|at-end>`** sets a delegated run's gate policy (Step 4.7 proposes it, 5-D.5 dispatches on it); under `--auto` any value other than `per-commit` is REFUSED with one line - `--auto` runs keep today's gates. **`--parallel`** fixes the parallel shape (Step 4.6, 4.7); it needs `--implementers` / `--team` - alone it is REFUSED with one line - and under `--auto` it is REFUSED like every delegated run.
+How the approved plan runs is ONE up-front choice. **A mode flag pre-answers it - skip the picker entirely when any is present:** `--auto` (Here · auto), `--implementers` or its alias `--team` (Implementers), `--step` / `--step-by-step` (Here · step-by-step), `--straight` / `--straight-through` (Here · straight-through). `--auto` keeps all its AUTO MODE semantics (Step 1 refuses on `$LETS_MERGE_BRANCH`; hard-stops preserved). Default locus is **Here** (this session, native plan mode); **Implementers** is the only locus switch. **`--auto` together with `--implementers` / `--team` is REFUSED** with one line - a delegated run is interactive by design (its gates wait for you, and an unattended run has nobody to review it): drop `--auto`, or run inline. **`--gate <per-commit|high-only|at-end>`** sets a delegated run's gate policy (Step 4.7 proposes it, 5-D.5 dispatches on it); under `--auto` any value other than `per-commit` is REFUSED with one line - `--auto` runs keep today's gates. **`--parallel`** fixes the parallel shape (Step 4.6, 4.7); it needs `--implementers` / `--team` - alone it is REFUSED with one line - and under `--auto` it is REFUSED like every delegated run. **`--pipelined`** fixes the commit policy `pipelined` (implementers commit locally and move on; 5-D.5 "Pipelined run"), solo or with `--parallel`; it too needs `--implementers` / `--team`, and under `--auto` it is REFUSED.
 
 **Bare `/lets:execute` (no mode flag) - ask exactly once:**
 
@@ -307,7 +307,7 @@ The proposal names six choices, each with a one-line reason:
 | Implementers | how many, each by its name, and the blocks or chunks each one owns |
 | Isolation | which implementers run isolated (only file-disjoint groups that run at the same time) and which run in the task worktree |
 | Integration order | the order in which chunks land in the task branch |
-| Pipelined | whether an implementer starts its next chunk before the previous one is accepted |
+| Pipelined | whether an implementer starts its next chunk before the previous one is accepted - the run's commit policy, `pipelined` or `lead`, which the Start preview names |
 | Gate policy | the default: `per-commit` (your Review gate before every commit), `high-only` (your gate on Risk high or missing only) or `at-end` (the team flow accepts, you review the finished run) - 5-D.5 dispatches on it |
 | Overrides | which choices an owner flag fixed |
 
@@ -445,7 +445,7 @@ AskUserQuestion(
 
 Four options is the cap: the parallel shape, pipelining and the gate policy are flags or launch-plan choices, never another option, and this gate carries no orchestrator offer (run mode is session mechanics).
 
-- **Start** -> record the run's `gate_policy`. With `high-only` or `at-end`, this pick is the owner's explicit, recorded approval for the lead's commits in this run - the commits 5-D.5 makes without a Review gate. The model is chosen by the first spawn (the `member-run` panel), after this approval - never before it.
+- **Start** -> record the run's `gate_policy`. With `high-only` or `at-end`, this pick is the owner's explicit, recorded approval for the lead's commits in this run - the commits 5-D.5 makes without a Review gate. With `--pipelined`, Start is also the owner's approval for the implementer's LOCAL commits on the branch it works on (the lead's integration commits, for an isolated group) - the recorded exception to "committed only after Accept"; record `commit_policy: pipelined`. Nothing is ever pushed. The model is chosen by the first spawn (the `member-run` panel), after this approval - never before it.
 - **Change the launch plan** -> the Step 4.7 follow-up questions, then this gate again with the recomputed preview.
 - **Run inline instead** -> Step 5.
 - **Cancel** -> stop; nothing is spawned.
@@ -461,17 +461,19 @@ Before the first spawn, write `.lets/cache/delegated-run-{TASK_ID}.json` (`.lets
   "run": "{RUN}",
   "shape": "solo",
   "gate_policy": "per-commit",
+  "commit_policy": "lead",
+  "pre_rebase_head": null,
   "members_scope": "run-{RUN}",
   "model": null,
   "caller": [ { "task": 0, "state": "pending" } ],
   "groups": [ { "id": "a", "agent": "impl-{RUN}", "generation": 1, "isolation": null, "base": null, "agent_id": null, "agent_branch": null, "agent_worktree_path": null, "integrated_source": null } ],
   "chunks": [
-    { "id": "c1", "tasks": [1, 2], "group": "a", "risk": "high", "allowlist": ["path/a", "path/b"], "allowlist_amendments": [], "agent": "impl-{RUN}", "generation": 1, "base": null, "agent_branch": null, "agent_worktree_path": null, "commit_sha": null, "picked_sha": null, "patch_path": null, "phase": "pending", "round": 0, "report": null, "status": null, "reason": null, "received": null, "patch_sha": null, "check": null, "skeptic": null, "accepted_by": null, "committed_by": null, "commit": null }
+    { "id": "c1", "tasks": [1, 2], "group": "a", "risk": "high", "allowlist": ["path/a", "path/b"], "allowlist_amendments": [], "agent": "impl-{RUN}", "generation": 1, "base": null, "agent_branch": null, "agent_worktree_path": null, "commit_sha": null, "fixups": [], "review_sha": null, "accepted_sha": null, "picked_sha": null, "patch_path": null, "phase": "pending", "round": 0, "report": null, "status": null, "reason": null, "received": null, "patch_sha": null, "check": null, "skeptic": null, "accepted_by": null, "committed_by": null, "commit": null }
   ]
 }
 ```
 
-Run fields: `shape` is `solo` or `parallel` (the launch plan's); `gate_policy` is `per-commit` (default), `high-only` or `at-end` (the Start pick); `members_scope` names the `lets members` scope every agent of the run is registered in. Per group: the agent that owns it now and its `generation`; for an isolated group (`isolation: worktree`) its `base` (the task branch's HEAD at Start), and the `agent_id`, `agent_branch` and `agent_worktree_path` the spawn returned - `agent_id` mirrors the registry's for recovery only, `lets members` stays the record member-run reads; and `integrated_source` - the last agent-branch commit landed in the task branch; it moves only after the lead's commit, never on a report or a pick. Per chunk: `risk` from Step 4.6 (missing = high); `agent_branch`, `agent_worktree_path`, `commit_sha` (the latest `**Commit:**` sha the agent reported), `picked_sha` and `patch_path` belong to an isolated group's integration and stay `null` in the task worktree; `check` and `skeptic` hold the 5-D.5 verdicts; `accepted_by` is `owner` or `team`; `committed_by` is `lead`, or `implementer` only under pipelining; `allowlist_amendments[]` holds `{path, by, reason}` for every path added to the allowlist mid-run (5-D.5 Correct). Liveness is never stored here - `lets members status` is its one judge.
+Run fields: `shape` is `solo` or `parallel` (the launch plan's); `gate_policy` is `per-commit` (default), `high-only` or `at-end` (the Start pick); `commit_policy` is `lead` (default) or `pipelined`, and `pre_rebase_head` is recorded before a 5-D.9 autosquash; `members_scope` names the `lets members` scope every agent of the run is registered in. Per group: the agent that owns it now and its `generation`; for an isolated group (`isolation: worktree`) its `base` (the task branch's HEAD at Start), and the `agent_id`, `agent_branch` and `agent_worktree_path` the spawn returned - `agent_id` mirrors the registry's for recovery only, `lets members` stays the record member-run reads; and `integrated_source` - the last agent-branch commit landed in the task branch; it moves only after the lead's commit, never on a report or a pick. Per chunk: `risk` from Step 4.6 (missing = high); `agent_branch`, `agent_worktree_path`, `commit_sha` (the latest `**Commit:**` sha the agent reported), `picked_sha` and `patch_path` belong to an isolated group's integration and stay `null` in the task worktree; under `pipelined` the record is keyed by sha: `commit_sha`, `fixups[]` (each `git commit --fixup` sha, in order), `review_sha` (the last sha the review showed) and `accepted_sha` (the commit and its fixups, as accepted); `check` and `skeptic` hold the 5-D.5 verdicts; `accepted_by` is `owner` or `team`; `committed_by` is `lead`, or `implementer` only under pipelining; `allowlist_amendments[]` holds `{path, by, reason}` for every path added to the allowlist mid-run (5-D.5 Correct). Liveness is never stored here - `lets members status` is its one judge.
 
 `phase` moves `pending` -> `running` -> `review` -> (`correcting` -> `running` -> `review`)* -> `committing` -> `accepted`. A Stop at a review gate records `paused` (it reopens as `review`); a Stop while an agent works goes through `stopping` to `blocked`; `blocked` always carries a `reason` - `stopped`, `re-plan`, `unreachable` or `unrecognized-commits`. Caller tasks move `pending` -> `running` -> `done`. `report` is the path of the latest round's saved report, `status` and `reason` are read from it, `received` counts reports in arrival order across the run, and `generation` is 1 for the first agent of a chunk and grows with each replacement. Rewrite the record at every transition BEFORE acting on it, so an interrupted session always finds the state it was in.
 
@@ -485,7 +487,7 @@ Walk the Step 4.6 split:
 The brief, `.lets/cache/chunk-{TASK_ID}-{RUN}-{chunk}.md`:
 
 ```
-MODE: {solo | isolated}
+MODE: {solo | isolated | pipelined}
 TASK: {TASK_ID}   PLAN: {plan path}   RUN: {RUN}   CHUNK: {chunk} (group {group})
 GOAL: {the plan's Goal line}
 APPROACH: {the plan's Approach line}
@@ -500,9 +502,10 @@ BASE: {base sha}
 {isolated only, and only in the group's FIRST brief:}
 CALLER_TOPLEVEL: {git rev-parse --show-toplevel of this session}
 MAIN_ROOT: {main_root from lets worktree info --json}
+{isolated or pipelined, in every brief:}
 COMMIT MESSAGE: {the chunk's plan commit message, with its Task: footer}
 TASKS:
-{the chunk's ### Task sections verbatim, each **Commit:** block removed - this session commits after review}
+{the chunk's ### Task sections verbatim, each **Commit:** block removed - its message is COMMIT MESSAGE where the agent commits; in `solo` this session commits after review}
 CI CHECKS: run each from the repository root before your report; a failing one is never `complete`:
 {the Step 4.6 CI commands, one per line}
 PROJECT RULES: read the repository's CLAUDE.md before editing.
@@ -523,7 +526,7 @@ After: `...`
 **Blocked** (blocked only) - What / Why
 ```
 
-In an isolated brief `BASE` is the literal group base - the task branch's HEAD sha at Start - that the agent's guard switches to; `CALLER_TOPLEVEL` is the tree it must never write. A group's later briefs (`op=next`) carry `MODE: isolated` and no base instruction: the agent never switches or resets again. An isolated agent's report adds a `**Commit:** <sha>` line - its chunk's commit, or its fixup's on an amendment.
+In an isolated brief `BASE` is the literal group base - the task branch's HEAD sha at Start - that the agent's guard switches to; `CALLER_TOPLEVEL` is the tree it must never write. A group's later briefs (`op=next`) carry `MODE: isolated` and no base instruction: the agent never switches or resets again. An isolated agent's report adds a `**Commit:** <sha>` line - its chunk's commit, or its fixup's on an amendment. Under `--pipelined` the in-tree group's briefs carry `MODE: pipelined`, and its reports carry the same line.
 
 **One persistent implementer per group.** In the solo shape - the shape the 4.7 proposal usually picks when chunks share files or build on each other - the run has one group and one agent, `impl-{RUN}`, working in this tree (the task worktree). The group's agent is spawned once, for its first chunk; every later chunk of the group goes to the same agent as its next brief, so it keeps its context from chunk to chunk. Each brief is complete on its own - the agent's memory helps, the brief is the contract.
 
@@ -549,6 +552,15 @@ When `{agent}` reports, save it verbatim to `.lets/cache/report-{TASK_ID}-{RUN}-
 4. Success -> run the brief's CI CHECKS here, in this tree, and add their output to the review block; then the tree check below and the Accept dispatch, as for any chunk. `integrated_source` moves to that `--from` sha only after the lead's commit (Accept).
 
 A **Correct**, **Re-plan** or **Stop** that rejects an integrated, uncommitted chunk first takes its patch back out: `lets integrate --revert --patch {patch_path} --json`; exits 58 / 59 are shown as-is and nothing else runs until the tree is sorted out. The agent's fixup then comes back as a new report and is integrated from the same `--since`.
+
+**Pipelined run (`commit_policy: pipelined`) - review by sha.** Start approved local commits, so the review reads commits, never a working diff:
+
+- **Move on at once.** A `complete` report with a `**Commit:**` sha -> record `commit_sha`, then send the group's next chunk (`op=next`) right away - the next chunk starts before this one is accepted - and review this one.
+- **In-tree group** (`MODE: pipelined`, `committed_by: implementer`). The implementer is the only writer of the tree, so this session writes and stages nothing there, and the tree check below is replaced by a check of the commits: the review block is `git show {commit_sha}`, then `git show {each fixup}` - read-only, by sha. Every file they touch must be in the chunk's allowlist, each commit's parent must be the previous chunk's last sha (or `base`), and each message must carry `Task: {TASK_ID}`; anything else -> the `blocked` gate. Record `review_sha` = the last sha shown; it takes the place of `patch_sha`.
+- **Isolated group** (with `--parallel`). The agent commits per chunk and moves on; each report is integrated as the "Isolated chunk" steps above say and committed by the lead at once (`committed_by: lead`, `integrated_source` = that `--from` sha after the commit), then reviewed by `git show` of the lead's commit. An agent's fixup is integrated the same way and committed by the lead as `fixup! <that chunk's commit subject>`, recorded in `fixups[]`.
+- **Correct** -> the AMENDMENT names the sha: "fix `{commit_sha}` - stage only the fix's paths and `git commit --fixup={commit_sha}`". A fix path that the agent's in-progress chunk also changes -> it reports `blocked` with reason `overlap`: wait for that chunk's report (its commit), then send the same amendment again.
+- **Accept makes no commit**: record `accepted_sha` (the commit and its fixups), `accepted_by`, and `[DONE]` as usual. The team check and the Accept dispatch run as for any chunk, on the commits.
+- **A reject no correction can fix** stops the pipeline: no further `op=next`. Once the running chunk has reported (or 5-D.6 stopped it), offer `git revert --no-edit <sha>` for the rejected commit and each of its fixups - a new commit, only on the owner's yes, never a reset.
 
 Check the real tree - the report is the agent's claim, the diff is the fact:
 
@@ -808,7 +820,17 @@ Nothing here pushes - that is `/lets:done`'s job.
 
 ### 5-D.9 Completion
 
-Every chunk `accepted`, every caller task `done`, and - under `at-end` / `high-only` - the 5-D.8 run review accepted -> clean up, then delete `.lets/cache/delegated-run-{TASK_ID}.json` and go to Step 6.
+Every chunk `accepted`, every caller task `done`, and - under `at-end` / `high-only` - the 5-D.8 run review accepted -> autosquash (pipelined only), clean up, then delete `.lets/cache/delegated-run-{TASK_ID}.json` and go to Step 6. The order is Run review -> autosquash -> Completion.
+
+**Autosquash (`commit_policy: pipelined`, any chunk with `fixups[]`).** `{branch}` = `git branch --show-current`; `{start}` = the first chunk's `base`; `{oldest}` = the oldest commit of `{start}..HEAD` (`git rev-list --reverse {start}..HEAD`, its first line).
+
+0. `git rev-list --merges {start}..HEAD` must print nothing: a merge in the range (the lead merged the merge-branch mid-run) brings commits that are already on a remote, and a rebase would re-create them under new shas where the empty-diff check cannot see it. A merge -> stop, no rewrite (the same rule as `lets integrate`), and say why.
+1. `lets worktree pushed --branch {branch} --commit {oldest} --json` (every configured remote) must return `state: not_pushed`. `pushed` or `unverified` -> stop: no rewrite, the fixups stay as commits; say why (`head` / `reason`).
+2. `git version` must be 2.44 or newer (a non-interactive autosquash); older -> stop the same way.
+3. Ask in words, naming `{start}..HEAD` and its fixups; only on the owner's yes: record `pre_rebase_head` = `git rev-parse HEAD`, then `git rebase --autosquash --no-autostash {start}` - non-interactive, never with an editor or a todo list, and never stashing (a `rebase.autoStash` would push onto the stash stack every worktree shares).
+4. `git diff {pre_rebase_head} HEAD` must print nothing.
+
+A rebase conflict -> `git rebase --abort`, stop and report it. A non-empty diff in step 4 -> stop and show it; `pre_rebase_head` is recorded, and nothing is reset.
 
 **Isolated groups' worktrees.** For each isolated group, compare its `integrated_source` with the tip of its `agent_branch` (`git rev-parse {agent_branch}`). Not equal, or the branch is gone -> remove nothing; say which commits were never integrated (`git log --oneline {integrated_source}..{agent_branch}`). Equal -> ask in words, naming the branch and the worktree; only on the user's yes, each a separate command, in this order:
 
@@ -863,9 +885,9 @@ comment-add task=<task-id> body-file=.lets/cache/exec-complete-<task-id>.md
 - **Adapt cosmetically, never structurally** - plan intent matters more than plan text, but an approach change is a deviation, not an adaptation
 - **Stop on deviation** - the Deviation gate (Step 5) runs before every edit; no answer = no edit; under `--auto` it is a hard-stop
 - **NEVER edit before the code-write approval** - inline: `ExitPlanMode` approved by the user (the fallback path with no plan mode asks "Start implementing?" in words first); delegated: the Step 5-D Start gate, before which nothing is spawned
-- **Delegated: the code-write approval is Step 5-D's Start gate** - nothing is spawned before it, and every commit waits for the Accept its gate policy names (5-D.5): the owner's, or the team check's under the `high-only` / `at-end` policy the owner picked at Start
+- **Delegated: the code-write approval is Step 5-D's Start gate** - nothing is spawned before it, and every commit waits for the Accept its gate policy names (5-D.5): the owner's, or the team check's under the `high-only` / `at-end` policy the owner picked at Start. The one exception is `--pipelined`: Start approves the implementer's local commits (the lead's integration commits for an isolated group), and Accept then records `accepted_sha` instead of committing
 - **Delegated: one writer per tree** - a run starts only on a clean tree, this session writes no code while an implementer is running, and a stop is confirmed before anything else writes
-- **Delegated: implementers never push or touch the tracker, and commit only in their own isolated worktree** - the task branch gets its commits from this session, after review
+- **Delegated: implementers never push or touch the tracker, and commit only in their own isolated worktree or, under `--pipelined`, locally in the task worktree** - otherwise the task branch gets its commits from this session, after review; a history rewrite (the autosquash) needs `lets worktree pushed` = `not_pushed` and the owner's yes
 - **Delegated runs are interactive only** - `--auto` with `--implementers` / `--team` is refused
 - Respond in user's language
 

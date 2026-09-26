@@ -57,6 +57,7 @@ func NewWorktreeCmd() *cobra.Command {
 		newWorktreeTaskStateCmd(),
 		newWorktreeBranchNameCmd(),
 		newWorktreeSweepCmd(),
+		newWorktreePushedCmd(),
 	} {
 		sub.SilenceUsage = true
 		sub.SilenceErrors = true
@@ -482,6 +483,29 @@ func newWorktreeBranchNameCmd() *cobra.Command {
 	cmd.Flags().StringVar(&titleFile, "title-file", "", "File holding the task title (the slug is derived from it)")
 	cmd.Flags().BoolVar(&worktree, "worktree", false, "Render the worktree-branch: template")
 	cmd.Flags().StringVar(&pluginRoot, "plugin-root", "", "Plugin root for the tracker adapter fallback (default: $CLAUDE_PLUGIN_ROOT)")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
+	return cmd
+}
+
+func newWorktreePushedCmd() *cobra.Command {
+	var jsonOut bool
+	var o worktreecmd.PushedOptions
+	cmd := &cobra.Command{
+		Use:   "pushed",
+		Short: "Report whether a commit is on any branch of the remote (pushed | not_pushed | unverified)",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return emitErrorEnvelope(cmd.OutOrStdout(), jsonOut, "pushed", &worktreecmd.Error{Code: worktreecmd.ExitFilesystem, Kind: "getwd_failed", Message: err.Error(), Cause: err})
+			}
+			res, runErr := worktreecmd.Pushed(cmd.Context(), cwd, o)
+			return emitJSONOrRender(cmd, jsonOut, false, res, func() { worktreecmd.RenderPushed(cmd.OutOrStdout(), res) }, runErr)
+		},
+	}
+	cmd.Flags().StringVar(&o.Commit, "commit", "", "Commit sha to look for on the remote")
+	cmd.Flags().StringVar(&o.Branch, "branch", "", "Branch the commit belongs to (named in the message; its upstream remote is used)")
+	cmd.Flags().DurationVar(&o.Timeout, "timeout", 0, "Bound for each network step (default 20s)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
 	return cmd
 }

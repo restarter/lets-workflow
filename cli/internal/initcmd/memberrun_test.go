@@ -250,7 +250,7 @@ func delegatedContractProblems(f map[string]string) []string {
 			add("Step 4.6 must declare parallel groups behind a files-disjoint gate: " + need)
 		}
 	}
-	for _, need := range []string{"MODE: {solo | isolated}", "CALLER_TOPLEVEL:", "MAIN_ROOT:", "BASE: {base sha}", "carry `MODE: isolated` and no base instruction"} {
+	for _, need := range []string{"MODE: {solo | isolated | pipelined}", "CALLER_TOPLEVEL:", "MAIN_ROOT:", "BASE: {base sha}", "carry `MODE: isolated` and no base instruction"} {
 		if !strings.Contains(dispatch, need) {
 			add("the isolated brief must carry BASE, CALLER_TOPLEVEL and MAIN_ROOT, and a NEXT no base instruction: " + need)
 		}
@@ -278,6 +278,52 @@ func delegatedContractProblems(f map[string]string) []string {
 	if !strings.Contains(sectionSpan(exec, "### 5-D.7 Recovery (a run record exists)"), "`--from` the chunk's recorded `commit_sha`, never the branch tip") {
 		add("an isolated replacement must integrate from the last reported commit_sha, never the branch tip")
 	}
+	// pipelined run (Task 10b)
+	if !strings.Contains(picker, "**`--pipelined`** fixes the commit policy `pipelined`") || strings.Count(picker, "under `--auto` it is REFUSED") < 2 {
+		add("--pipelined must need --implementers and be refused under --auto")
+	}
+	if !strings.Contains(sectionSpan(exec, "## Step 4.7: Launch plan (proposal)"), "the run's commit policy, `pipelined` or `lead`, which the Start preview names") || !strings.Contains(startGate, "record `commit_policy: pipelined`") {
+		add("the Start preview must name the commit policy, and Start records commit_policy: pipelined")
+	}
+	pipe := between(review, "**Pipelined run (`commit_policy: pipelined`) - review by sha.**", "Check the real tree")
+	for _, need := range []string{"`git show {commit_sha}`", "`git commit --fixup={commit_sha}`", "reason `overlap`", "send the same amendment again", "**Accept makes no commit**", "`git revert --no-edit <sha>`", "never a reset"} {
+		if !strings.Contains(pipe, need) {
+			add("a pipelined chunk must be reviewed by sha, corrected by --fixup, stop on overlap and never reset: " + need)
+		}
+	}
+	for _, field := range []string{"commit_policy", "pre_rebase_head", "commit_sha", "fixups", "review_sha", "accepted_sha"} {
+		if !strings.Contains(record, `"`+field+`":`) {
+			add("the run record must list " + field)
+		}
+	}
+	squash := between(completion, "**Autosquash", "A rebase conflict")
+	mergesAt := strings.Index(squash, "`git rev-list --merges {start}..HEAD` must print nothing")
+	pushedAt := strings.Index(squash, "`lets worktree pushed --branch {branch} --commit {oldest} --json`")
+	yesAt := strings.Index(squash, "only on the owner's yes")
+	rebaseAt := strings.Index(squash, "`git rebase --autosquash --no-autostash {start}`")
+	diffAt := strings.Index(squash, "`git diff {pre_rebase_head} HEAD` must print nothing")
+	if mergesAt < 0 || pushedAt < mergesAt || !strings.Contains(squash, "must return `state: not_pushed`") || yesAt < pushedAt || rebaseAt < yesAt || diffAt < rebaseAt || !strings.Contains(completion, "`git rebase --abort`") {
+		add("autosquash only on a merge-free range, after lets worktree pushed = not_pushed and the owner's yes, never autostashing, then the empty-diff check")
+	}
+	for _, key := range []string{"execute", "agent"} {
+		for _, bad := range []string{"rebase -i", "branch -r --contains"} {
+			if strings.Contains(f[key], bad) {
+				add(key + " must never carry " + bad)
+			}
+		}
+	}
+	rows := map[string]string{}
+	for _, line := range strings.Split(f["agent"], "\n") {
+		for _, mode := range []string{"solo", "isolated", "pipelined"} {
+			if strings.HasPrefix(line, "| `"+mode+"` |") {
+				rows[mode] = line
+			}
+		}
+	}
+	if !strings.Contains(rows["solo"], "NEVER") || !strings.Contains(rows["pipelined"], "`git commit --fixup=<that sha>`") || !strings.Contains(rows["pipelined"], "reason `overlap`") || !strings.Contains(rows["pipelined"], "NEVER push") || !strings.Contains(rows["pipelined"], "only in this mode and `isolated`") {
+		add("implementer.md must commit only in the pipelined and isolated rows, with --fixup and the overlap stop")
+	}
+
 	for _, key := range []string{"execute", "agent"} {
 		if strings.Contains(f[key], "reset --hard") {
 			add(key + " must never carry reset --hard")
@@ -411,6 +457,15 @@ func TestMemberRun(t *testing.T) {
 		{"cleanup forces the remove", "execute", "then `git worktree remove {agent_worktree_path}` - plain", "then `git worktree remove --force {agent_worktree_path}` - plain", "dismiss first"},
 		{"replacement integrates the tip", "execute", "`--from` the chunk's recorded `commit_sha`, never the branch tip", "`--from` the branch tip", "commit_sha"},
 		{"commit guard only checks the caller", "agent", "still equals the path you verified at spawn", "is not the caller's", "verified at spawn"},
+		{"pipelined allowed under auto", "execute", "and under `--auto` it is REFUSED.", "and under `--auto` it is allowed.", "--pipelined must need"},
+		{"review reads the tree", "execute", "the review block is `git show {commit_sha}`", "the review block is `git diff HEAD`", "reviewed by sha"},
+		{"overlap not stopped", "execute", "reports `blocked` with reason `overlap`", "applies it anyway", "reviewed by sha"},
+		{"autosquash without the pushed check", "execute", "`lets worktree pushed --branch {branch} --commit {oldest} --json` (every configured remote) must return `state: not_pushed`", "`git log` must look unpushed", "autosquash only on"},
+		{"interactive rebase", "execute", "`git rebase --autosquash --no-autostash {start}`", "`git rebase -i --autosquash --no-autostash {start}`", "rebase -i"},
+		{"autosquash over a merge", "execute", "0. `git rev-list --merges {start}..HEAD` must print nothing", "0. merges are fine", "merge-free range"},
+		{"autosquash autostashes", "execute", "`git rebase --autosquash --no-autostash {start}`", "`git rebase --autosquash {start}`", "never autostashing"},
+		{"record loses review_sha", "execute", `"review_sha": null, `, "", "review_sha"},
+		{"pipelined row loses fixup", "agent", "`git commit --fixup=<that sha>`", "`git commit --amend`", "--fixup and the overlap stop"},
 		{"unscoped gate sentence returns", "rules", "inside it the gate is plan mode for an inline run", "inside it the plan-mode approval is the gate", "still asserts"},
 	}
 	for _, m := range mutants {
@@ -545,7 +600,7 @@ func TestExecuteLaunchPlan(t *testing.T) {
 		{"reasons dropped", "each with a one-line reason", "each with a value", "one-line reason"},
 		{"at-end policy dropped", "or `at-end` (", "or `after` (", "`at-end`"},
 		{"fixed allocation creeps in", "This is reasoning about THIS plan, not a fixed rule", "Always two implementers, not a fixed rule", "no fixed allocation"},
-		{"pipelined override dropped", "`--pipelined`", "`--pipe`", "`--pipelined`"},
+		{"pipelined override dropped", "`--parallel`, `--pipelined` and `--gate <policy>`", "`--parallel`, `--pipe` and `--gate <policy>`", "`--pipelined`"},
 		{"preview loses the launch plan", `preview: "{the Step 4.7 launch plan`, `preview: "{the plan`, "Start option's preview"},
 		{"spawn before Start", "Nothing is spawned before Start.", "Spawn when ready.", "nothing may spawn"},
 	}
