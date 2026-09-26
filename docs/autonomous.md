@@ -2,7 +2,7 @@
 
 Most LETS work is hands-on: you start a session, pick a task, and drive it through the [day-to-day loop](workflow.md). This page covers the flows that run *with less of you in the loop* — Dynamic Workflows that move multi-agent work off your conversation, and the autonomous task pipeline that spawns a worktree, plans, and executes a task with only two gates for you to answer.
 
-> New here? Read [workflow.md](workflow.md) (the core loop), [plan-execute.md](plan-execute.md) (plan → execute), and [parallel-work.md](parallel-work.md) (`/lets:team`, `/lets:worktree`) first. This page builds on all three.
+> New here? Read [workflow.md](workflow.md) (the core loop), [plan-execute.md](plan-execute.md) (plan → execute), and [parallel-work.md](parallel-work.md) (`/lets:team run`, `/lets:worktree`) first. This page builds on all three.
 
 ## Dynamic Workflows (`--workflow`)
 

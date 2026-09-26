@@ -18,12 +18,12 @@ When the project's `.lets/.env` names Orca, `lets init` also writes `orca.yaml`:
 | Gate notifications | `lets notify` lands as a comment on the card |
 | Peer messages | `/lets:orc` can type straight into a peer's pane when its transcript, screen and Orca all show it idle ([commands/orc.md](commands/orc.md)) |
 | Across projects | `/lets:hub` lists every project's orchestrators, asks a stopped one read-only, or wakes it in a visible terminal ([messaging.md](messaging.md)) |
-| Parallel runs | `/lets:team run --backend orca` runs each task as a visible LETS session in an Orca child worktree ([parallel-work.md](parallel-work.md)) |
+| Parallel runs | `/lets:team run` works on every launcher; with Orca running it becomes the Orca addon (`--backend orca` picks it directly): each task a visible LETS session in an Orca child worktree under Orca's supervised orchestration ([parallel-work.md](parallel-work.md)) |
 | Hand-offs | `/lets:handoff --send` types a brief into a Codex, Antigravity or Claude tab of this worktree and brings the report back; `--open` opens a new Codex tab for it, and `--execute` hands an open tab an approved plan to implement ([commands/handoff.md](commands/handoff.md)) |
 
 ## When Orca is not there
 
-Nothing hard-fails. Orca missing, not running, or refusing a request is a named reason, and each feature degrades on its own: the worktree launcher falls back to cmux, then to the plain `cd … && claude` command; the card and notifications are skipped with a reason; `/lets:hub` and `--send` stop and say why; `/lets:team` uses Agent Teams. On Windows the Orca commands are stubs.
+Nothing hard-fails. Orca missing, not running, or refusing a request is a named reason, and each feature degrades on its own: the worktree launcher falls back to cmux, then to the plain `cd … && claude` command; the card and notifications are skipped with a reason; `/lets:hub` and `--send` stop and say why; `/lets:team run` opens its worker sessions on your other launcher instead (cmux, then the terminal command), and `--backend orca` is refused. On Windows the Orca commands are stubs.
 
 LETS finds the Orca CLI inside the app bundle first (`/Applications/Orca.app/Contents/Resources/bin/orca`) and trusts an `orca` on `PATH` only when it answers like Orca: a broken `/usr/local/bin/orca` symlink and the GNOME screen reader named `orca` both exist in the wild.
 
@@ -42,6 +42,6 @@ Observed with Orca 1.4 (2026-09):
 ## See also
 
 - **[messaging.md](messaging.md)** - the three lanes: peers, hub, hand-offs
-- **[parallel-work.md](parallel-work.md)** - worktrees, adopt / release, `/lets:team --backend orca`
+- **[parallel-work.md](parallel-work.md)** - worktrees, adopt / release, `/lets:team run` and its Orca addon
 - **[configuration.md](configuration.md)** - `LETS_LAUNCHER` and the other launchers
 - `cli/README.md` "## lets orca" - the `lets orca open|notify|status|card|repos|wake` CLI

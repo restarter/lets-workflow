@@ -51,7 +51,7 @@ See **[plan-execute.md](plan-execute.md)** for the full flow.
 
 | Command | What it does |
 |---------|--------------|
-| `/lets:team` | Spawn autonomous agents that implement several tasks at once, each in its own worktree |
+| `/lets:team` | Run several tasks at once - one worktree and one visible LETS session per task, on any launcher - and manage a standing team's members |
 | `/lets:worktree` | Open parallel sessions in separate terminals — you drive each one |
 
 See **[parallel-work.md](parallel-work.md)**.

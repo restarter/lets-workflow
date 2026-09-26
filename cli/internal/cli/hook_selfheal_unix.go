@@ -53,7 +53,7 @@ func selfHeal(root, rulesPath string) string {
 	if _, err := os.Stat(filepath.Join(mainRoot, ".lets", ".env")); err != nil {
 		return ""
 	}
-	// 4. not an agent worktree (/lets:team, Agent isolation)
+	// 4. not an agent worktree (/lets:execute --parallel, Agent isolation)
 	if under(root, filepath.Join(mainRoot, ".claude", "worktrees")) {
 		return ""
 	}

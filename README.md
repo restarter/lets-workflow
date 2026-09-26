@@ -26,7 +26,7 @@ Claude Code is powerful, but without structure it drifts - forgets context betwe
 - **Every change reviewed by the right experts.** 15 specialized agents - the relevant ones select themselves based on what changed - security for auth code, database for migrations, architect for structure. Findings come tiered by severity, so you act on what matters. Plus an *actor* agent — point it at a senior iOS dev's profile, a UX designer's, anyone — and get their take.
 - **You decide, always.** Commit, push, PR, merge - every state-changing step waits for your "go". The AI proposes and explains its reasoning; it never silently switches approach. Transparency by design.
 - **Context that survives.** Tasks, decisions, and discovery notes live in [beads](https://github.com/steveyegge/beads) and outlast conversation compaction and new sessions - pick up exactly where you left off.
-- **Built for teams.** Shared task database via [Dolt](https://github.com/dolthub/dolt), Agent Teams that implement multiple tasks in parallel (each in its own worktree, plan approved by the lead), and worktrees for hands-on parallel sessions.
+- **Built for teams.** Shared task database via [Dolt](https://github.com/dolthub/dolt), team runs that implement multiple tasks in parallel (each in its own worktree and its own visible session, gates pressed by you), and worktrees for hands-on parallel sessions.
 - **GitHub-native PR review.** Agents analyze the PR, you discuss findings, they post inline comments to the exact lines, follow up on fixes, approve or request changes - without leaving the terminal.
 - **Built on the latest Claude Code features.** Ultrathink for deep analysis, interactive UI for decisions, native plan mode for execution.
 
@@ -114,8 +114,8 @@ Then, inside the Claude Code session:
 | `/lets:backlog` | Backlog review (multi-agent, `--workflow` = off-context) + `--fast` quick no-agent pulse + interactive cleanup triage |
 | `/lets:plan` | Structured planning - explore codebase, design architecture, write plan (`--fast` = orchestrator-only, no subagents; `--idea` = concept document, no code) |
 | `/lets:plan-workflow` | PREVIEW - autonomous planning via a Dynamic Workflow: goal + rubric up front, off-context, you approve at the end (`--fast` = lean budget) |
-| `/lets:execute` | Execute plan from `/lets:plan` - inline in native plan mode (straight-through by default, or `--step` / `--auto`), or `--implementers`: named implementer agents you review and correct chunk by chunk |
-| `/lets:team` | Parallel implementation with Agent Teams |
+| `/lets:execute` | Execute plan from `/lets:plan` - inline in native plan mode (straight-through by default, or `--step` / `--auto`), or `--implementers`: one persistent implementer (or `--parallel` isolated groups) you review and correct chunk by chunk, under the gate policy you pick at Start |
+| `/lets:team` | Team management - `run` several tasks at once (one visible session per task, any launcher), `spawn` / `dismiss` / `roster` a standing team's members, `status`, `stop` |
 | `/lets:worktree` | Create/manage worktrees for parallel sessions |
 | `/lets:statusline` | Manage & persist statusline appearance - light/dark, compact, hidden rows |
 
@@ -169,7 +169,7 @@ LETS ships **15 specialized agents**. You don't have to pick them by hand — th
 | pragmatist | ROI analysis, overengineering detection, scope creep |
 | git-historian | Blame analysis, past-decision context, change patterns |
 | explorer | Codebase mapping, pattern discovery (used in `/lets:plan`) |
-| implementer | Full-stack implementation (used by `/lets:execute` delegated runs and `/lets:team`) |
+| implementer | Full-stack implementation (used by `/lets:execute` delegated runs and a standing team's `/lets:team spawn implementer`) |
 | skeptic | Verifier, never a reviewer: tries to refute each `/lets:review` finding and cross-checks each `/lets:research` claim |
 | actor | Any expert personality loaded from a URL or local file |
 
@@ -179,7 +179,7 @@ LETS ships **15 specialized agents**. You don't have to pick them by hand — th
 
 **Modes.** The same agent behaves differently depending on context — *review* for code review, *opinion* for a technical decision, *plan* for evaluating an architecture, *brainstorm* for ideation, *ask* for a direct question. Same expertise, different lens.
 
-**Read-only by default.** Agents analyze; they never touch your code. The one exception is `implementer`, which gets write access behind your approval, with every diff reviewed: `/lets:execute` hands it plan chunks you accept or correct, and `/lets:team` runs it in parallel worktrees.
+**Read-only by default.** Agents analyze; they never touch your code. The one exception is `implementer`, which gets write access behind your approval, with every diff reviewed: `/lets:execute` hands it plan chunks you accept or correct - one persistent implementer, or parallel groups in isolated worktrees whose commits `lets integrate` lands as one verified patch each.
 
 **The actor agent.** Give `actor` a personality — a URL or a local file — and it adopts that persona, then works with LETS's structured output. A senior iOS dev on your Swift code, a UX designer on your components, anyone — point it at their writeup and get their take. It's never auto-selected; you confirm each personality before it's loaded.
 
@@ -214,7 +214,7 @@ A LETS session runs a loop: start, work, commit, finish.
 │  /lets:execute     Claude implements the plan with your approval gates    │
 │                                                                           │
 ├─ Agents work in parallel ─────────────────────────────────────────────────┤
-│  /lets:team        Spawn agents that implement multiple tasks at once     │
+│  /lets:team        Run several tasks at once, one visible session each    │
 │  /lets:worktree    Open parallel sessions in separate terminals           │
 └───────────────────────────────────────────────────────────────────────────┘
 ```
@@ -233,7 +233,7 @@ A LETS session runs a loop: start, work, commit, finish.
 
 **Plan** (`/lets:plan`) - codebase exploration with dynamically-scaled explorer agents, then architecture design with expert evaluation. Small project? One explorer. Large monorepo? Usually up to 10, each mapping a different area (more asks you to confirm). Want a quick talk-through instead? `/lets:plan --fast` skips the subagent phases and plans collaboratively in-session.
 
-**Execute** (`/lets:execute`) - implements the plan in native plan mode. You approve the execution once, then pick how it runs: straight-through (the default - all tasks, commits at the plan's commit points), step-by-step (a pause after each task), auto (unattended), or implementers - named agents write each chunk while you review every diff and send corrections back to the same agent. No surprises.
+**Execute** (`/lets:execute`) - implements the plan in native plan mode. You approve the execution once, then pick how it runs: straight-through (the default - all tasks, commits at the plan's commit points), step-by-step (a pause after each task), auto (unattended), or implementers - one persistent agent writes chunk after chunk (or `--parallel` groups work side by side in isolated worktrees) while you review every diff, or let the team check accept low-risk chunks under the gate policy you pick at Start, and send corrections back to the same agent. No surprises.
 
 **Research** (`/lets:research`) - unlike `/lets:opinion` (project-grounded judgment, no web) or `/lets:ask` (a quick model-knowledge consult), this answers an external or technical question with a CITED synthesis: it searches the web, fetches the best sources, and a cross-check pass flags single-source, contradicted, or stale claims before presenting. The deliverable is a sourced answer with a Sources list and an as-of date. `--workflow` runs it off-context; `--project` grounds findings against this repo.
 ### Code review
@@ -270,13 +270,13 @@ Authors can respond with `/lets:github-pr --respond` - triage comments, auto-fix
 
 Two ways to work on multiple tasks at once:
 
-**Agent Teams (autonomous)** — spawn multiple agents that work in parallel, each in an isolated worktree:
+**Team runs** — run several tasks at once, each in its own worktree and its own visible LETS session:
 
 ```
-/lets:team run    # select tasks, agents start working
+/lets:team run    # select tasks, one worker session opens per task
 ```
 
-Each teammate gets one task, creates a plan, waits for your approval, then implements. Commits are cherry-picked back. Dynamic teammate count - the system scales based on how many tasks you select.
+Each worker runs its own `/lets:start` ... `/lets:done`, and you press its gates in its own terminal; this session is the orchestrator and talks to the workers through `/lets:orc`. It works on every launcher (terminal, cmux, tmux, Orca). A standing team's lead can also `/lets:team spawn` expert members (architect, skeptic, explorer, implementer) that keep working with it across tasks. Inside ONE task, `/lets:execute --implementers --parallel` splits the plan into file-disjoint groups for parallel implementers instead.
 
 **Worktrees (interactive)** — work on multiple tasks yourself in separate terminals:
 
@@ -393,7 +393,7 @@ The README is the tour; **[docs/](docs/)** is the manual.
 | [code-review.md](docs/code-review.md) | Three levels of review — `/lets:check`, `/lets:review`, and `/lets:github-pr` (analyze, post inline, follow up, approve). Dynamic agent selection. |
 | [agents.md](docs/agents.md) | The 15 expert agents, what triggers each, tiered scoring, agent modes, and the actor agent. |
 | [messaging.md](docs/messaging.md) | Talking to other sessions and agents — `/lets:orc` (the repo's orchestrator and peers), `/lets:hub` (other projects), `/lets:handoff` (a brief for Codex, Antigravity or any agent, report brought back and verified). |
-| [parallel-work.md](docs/parallel-work.md) | Working on several tasks at once — `/lets:team` (autonomous agents) and `/lets:worktree` (parallel terminals). |
+| [parallel-work.md](docs/parallel-work.md) | Working on several tasks at once — `/lets:team run` (one session per task), `/lets:worktree` (parallel terminals), and parallel implementers inside one task. |
 | [orca.md](docs/orca.md) | The Orca addon — what `LETS_LAUNCHER=orca` switches on and how it degrades without Orca. |
 | [autonomous.md](docs/autonomous.md) | Hands-off flows — Dynamic Workflows (`--workflow`) and the autonomous task pipeline (spawn → plan → execute, two gates). |
 | [sessions.md](docs/sessions.md) | Session continuity — what `/lets:end` settles, snapshots, trust-labelled commit ranges, `--continue`. |

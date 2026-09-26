@@ -1,6 +1,6 @@
 # Expert agents
 
-LETS ships 15 specialized agents. You don't have to pick them — the commands that use agents (`/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:backlog`, `/lets:research`, `/lets:team`) analyze the situation and select only the ones that fit. The one place you name an expert yourself is `/lets:ask <expert> <question>`.
+LETS ships 15 specialized agents. You don't have to pick them — the commands that use agents (`/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:backlog`, `/lets:research`) analyze the situation and select only the ones that fit; a standing team's lead spawns its members by role with `/lets:team spawn <role>`. The one place you name an expert yourself is `/lets:ask <expert> <question>`.
 
 | Agent | Expertise | Example trigger |
 |-------|-----------|-----------------|
@@ -16,7 +16,7 @@ LETS ships 15 specialized agents. You don't have to pick them — the commands t
 | pragmatist | ROI analysis, overengineering detection | Large changes (over ~200 lines) |
 | git-historian | Blame analysis, change patterns | Changes to existing code |
 | explorer | Codebase mapping, pattern discovery | Used during `/lets:plan` |
-| implementer | Full-stack implementation | Used by `/lets:execute` delegated runs and `/lets:team` |
+| implementer | Full-stack implementation | Used by `/lets:execute` delegated runs and a standing team's `/lets:team spawn implementer` |
 | skeptic | Verifier: tries to refute one finding or claim against the code / sources | The `/lets:review` verify pass and the `/lets:research` cross-check; never picked as a reviewer |
 | actor | Any personality from a URL or file | On explicit request |
 
@@ -28,7 +28,7 @@ LETS ships 15 specialized agents. You don't have to pick them — the commands t
 
 **Multiple modes.** Each agent behaves differently depending on context: *review* mode for code review, *opinion* mode for technical decisions, *plan* mode for evaluating an architecture, *brainstorm* mode for ideation, *ask* mode for a direct question.
 
-**Read-only by default.** Agents analyze; they never modify code. The one exception is `implementer`, which has write access: `/lets:execute` hands it plan chunks you review and correct, and `/lets:team` runs it in parallel worktrees.
+**Read-only by default.** Agents analyze; they never modify code. The one exception is `implementer`, which has write access: `/lets:execute` hands it plan chunks you review and correct. It works in one of two modes, named by its brief: **solo** - in your task worktree, one persistent implementer taking chunk after chunk, never committing (the lead commits after the chunk is accepted; under `--pipelined` it commits locally); **isolated** - with `--parallel`, in its own harness worktree switched once to the task branch's HEAD, committing each chunk there for `lets integrate` to land in your tree. Every implementer and every standing-team member is spawned, messaged and dismissed through one path (the `member-run` skill), with `lets members` recording who is live.
 
 **Agents respond in English.** Commands localize their output to your language (set by `LETS_LANGUAGE` — see [configuration.md](configuration.md)); the agents themselves always work in English.
 
@@ -46,5 +46,5 @@ It's never auto-selected — it needs an explicit request and a personality sour
 
 - **[code-review.md](code-review.md)** — agents in `/lets:review` and `/lets:github-pr`
 - **[plan-execute.md](plan-execute.md)** — explorer and expert agents in `/lets:plan`, the `implementer` agent in delegated `/lets:execute` runs
-- **[parallel-work.md](parallel-work.md)** — the `implementer` agent in `/lets:team`
+- **[parallel-work.md](parallel-work.md)** — parallel implementers inside one task, and a standing team's members
 - **[commands.md](commands.md)** — `/lets:opinion` and `/lets:ask` for decisions and questions
