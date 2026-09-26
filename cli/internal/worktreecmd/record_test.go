@@ -164,3 +164,19 @@ func TestRecordOf_StaleNamesTheNewestSnapshot(t *testing.T) {
 		t.Errorf("stale must name the newest snapshot: %+v", r)
 	}
 }
+
+// Codex r4: a task parked by switch, whose team worktree is then removed, is an
+// orphan with its parked branch named.
+func TestRecord_ParkedBranchIsOrphanAfterRemove(t *testing.T) {
+	f := newTeamFixture(t)
+	a1, _, _ := parkAndLeave(t, f)
+	gitOut(t, f.repo, "worktree", "remove", "--force", f.wt)
+	res, err := TaskRecord(context.Background(), f.repo, RecordOptions{Tasks: []string{"lets-a1"}})
+	if err != nil || len(res.Tasks) != 1 {
+		t.Fatalf("record: %+v, %v", res, err)
+	}
+	tr := res.Tasks[0]
+	if !tr.Orphan || !contains(tr.Branches, a1) {
+		t.Errorf("record = %+v, want orphan=true with %s", tr, a1)
+	}
+}

@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/restarter/lets-workflow/cli/internal/gitutil"
 	"github.com/restarter/lets-workflow/cli/internal/initcmd"
 	"github.com/restarter/lets-workflow/cli/internal/notifycmd"
 	"github.com/restarter/lets-workflow/cli/internal/worktreecmd"
@@ -59,6 +60,8 @@ func NewWorktreeCmd() *cobra.Command {
 		newWorktreeSweepCmd(),
 		newWorktreePushedCmd(),
 		newWorktreeTeamInitCmd(),
+		newWorktreeSwitchCmd(),
+		newWorktreeParkedCmd(),
 	} {
 		sub.SilenceUsage = true
 		sub.SilenceErrors = true
@@ -545,6 +548,67 @@ func newWorktreeTeamInitCmd() *cobra.Command {
 	f.StringVar(&o.OrcaAgent, "orca-agent", "", "Shell command an Orca lead terminal runs (default claude)")
 	f.BoolVar(&o.Suggest, "suggest-callsign", false, "Only propose a free callsign; write nothing")
 	f.BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
+	return cmd
+}
+
+func newWorktreeSwitchCmd() *cobra.Command {
+	var jsonOut bool
+	var o worktreecmd.SwitchOptions
+	cmd := &cobra.Command{
+		Use:   "switch",
+		Short: "Move a team worktree to another task's branch (--park commits the old one as wip; never stashes)",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return emitErrorEnvelope(cmd.OutOrStdout(), jsonOut, "switch", &worktreecmd.Error{Code: worktreecmd.ExitFilesystem, Kind: "getwd_failed", Message: err.Error(), Cause: err})
+			}
+			// The session: line goes through the SessionStart hook's own guard: a
+			// teammate pane in this worktree never takes the lead's boundary.
+			o.Session = os.Getenv("CLAUDE_CODE_SESSION_ID")
+			if o.Session != "" {
+				o.Guard, _ = sessionGuardFn(gitutil.ProjectRoot(cwd, 2*time.Second), o.Session)
+			}
+			res, runErr := worktreecmd.Switch(cmd.Context(), cwd, o)
+			return emitJSONOrRender(cmd, jsonOut, false, res, func() { worktreecmd.RenderSteps(cmd.OutOrStdout(), res.Envelope) }, runErr)
+		},
+	}
+	f := cmd.Flags()
+	f.StringVar(&o.Task, "task", "", "Task to switch to")
+	f.StringVar(&o.Branch, "branch", "", "Its branch (default: the task's local branch, else a new created-shape one)")
+	f.StringVar(&o.TitleFile, "title-file", "", "File holding the task title (the new branch's slug)")
+	f.BoolVar(&o.Park, "park", false, "Commit the old branch's changes as wip(<id>): park")
+	f.StringArrayVar(&o.Include, "include", nil, "A new path to park (repeatable; every untracked or staged-new path needs one)")
+	f.DurationVar(&o.FetchTimeout, "fetch-timeout", 0, "Bound for fetching origin/<merge> (default 20s)")
+	f.BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
+	return cmd
+}
+
+func newWorktreeParkedCmd() *cobra.Command {
+	var jsonOut bool
+	var team string
+	cmd := &cobra.Command{
+		Use:   "parked",
+		Short: "List the branches a team parked (owned) and parks that name no team (unowned)",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return emitErrorEnvelope(cmd.OutOrStdout(), jsonOut, "parked", &worktreecmd.Error{Code: worktreecmd.ExitFilesystem, Kind: "getwd_failed", Message: err.Error(), Cause: err})
+			}
+			res, runErr := worktreecmd.Parked(cmd.Context(), cwd, team)
+			return emitJSONOrRender(cmd, jsonOut, false, res, func() {
+				for _, e := range res.Owned {
+					fmt.Fprintf(cmd.OutOrStdout(), "owned   %s %s %s\n", e.Task, e.Branch, e.ParkSha)
+				}
+				for _, e := range res.Unowned {
+					fmt.Fprintf(cmd.OutOrStdout(), "unowned %s %s %s\n", e.Task, e.Branch, e.ParkSha)
+				}
+			}, runErr)
+		},
+	}
+	cmd.Flags().StringVar(&team, "team", "", "Team callsign")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
 	return cmd
 }
 

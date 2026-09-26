@@ -31,8 +31,12 @@ const (
 	ExitTaskStateLockBusy    = 26 // task-state: the lock was still held at the --wait deadline
 	ExitTeamExists           = 27 // team-init: .lets/teams/<callsign>.md exists (the filesystem refused the link)
 	ExitTemplateMissing      = 28 // team-init: <plugin-root>/templates/team.md is missing
-	// 29..33 reserved.
-	ExitCallsignLive = 34 // team-init: a live session is named <callsign>-lead
+	ExitNotTeamWorktree      = 29 // switch: no team file claims this worktree
+	ExitUntrackedPresent     = 30 // switch --park: a new path (untracked or staged) has no --include
+	ExitNoRemoteBase         = 31 // switch: origin/<merge> is missing, and a new branch is never cut from local <merge>
+	ExitMembersLive          = 32 // switch: a member working in this worktree is still live
+	ExitTargetIsMergeBranch  = 33 // switch: the target branch is the merge-branch
+	ExitCallsignLive         = 34 // team-init: a live session is named <callsign>-lead
 )
 
 // ExitCode maps an error to its numeric exit code via errors.As.

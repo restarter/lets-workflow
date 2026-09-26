@@ -1,10 +1,10 @@
 // Package taskstate is the ONE owner of the per-branch task-state file
 // `.lets/sessions/.task-<branch-slug>` (fields `task:` / `start:` / `session:` /
-// `origin:` / `orc:`). Every Go writer goes through MergeWrite and every markdown
+// `origin:` / `orc:` / `park:` / `park_team:`). Every Go writer goes through MergeWrite and every markdown
 // writer through `lets worktree task-state`, so a writer only ever changes the keys
 // it owns and keeps every other line - including lines a newer LETS added.
 //
-// Leaf package: standard library plus the fsutil, peername and taskid leaves.
+// Leaf package: standard library plus the fsutil, peername, taskid and teamfile leaves.
 package taskstate
 
 import (
@@ -19,10 +19,11 @@ import (
 	"github.com/restarter/lets-workflow/cli/internal/fsutil"
 	"github.com/restarter/lets-workflow/cli/internal/peername"
 	"github.com/restarter/lets-workflow/cli/internal/taskid"
+	"github.com/restarter/lets-workflow/cli/internal/teamfile"
 )
 
 // Keys is the canonical order of the known keys; new keys are appended in it.
-var Keys = []string{"task", "start", "session", "origin", "orc"}
+var Keys = []string{"task", "start", "session", "origin", "orc", "park", "park_team"}
 
 var (
 	// ErrInvalidValue: a value in WriteOpts.Set failed validation; nothing was written.
@@ -49,7 +50,10 @@ func Slug(branch string) (string, bool) {
 // State is the parsed file. Other holds unknown lines verbatim.
 type State struct {
 	Task, Start, Session, Origin, Orc string
-	Other                             []string
+	// Park is the sha of the `wip(<id>): park` commit `lets worktree switch --park`
+	// made on this branch; ParkTeam is the standing team that parked it.
+	Park, ParkTeam string
+	Other          []string
 }
 
 func (s *State) set(key, value string) {
@@ -64,6 +68,10 @@ func (s *State) set(key, value string) {
 		s.Origin = value
 	case "orc":
 		s.Orc = value
+	case "park":
+		s.Park = value
+	case "park_team":
+		s.ParkTeam = value
 	}
 }
 
@@ -153,6 +161,10 @@ func Validate(key, value string) error {
 		ok = value == "branch" || value == "dir"
 	case "orc":
 		ok = peername.Valid(value)
+	case "park":
+		ok = shaRe.MatchString(value)
+	case "park_team":
+		ok = teamfile.ValidName(value)
 	default:
 		return fmt.Errorf("%w: unknown key %q", ErrInvalidValue, key)
 	}

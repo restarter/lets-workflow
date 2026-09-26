@@ -373,3 +373,22 @@ func TestMaySetSession_UnparseableHeld(t *testing.T) {
 		t.Errorf("err=%v, want held (unknown)", err)
 	}
 }
+
+// park / park_team are known keys: validated, merged and deleted like the others,
+// and a park_team line is never read as park.
+func TestParkKeys(t *testing.T) {
+	letsDir := t.TempDir()
+	for _, bad := range []map[string]string{{"park": "not-a-sha"}, {"park_team": "Bad Team"}, {"park_team": "run-abc"}} {
+		if _, err := MergeWrite(letsDir, "b", WriteOpts{Set: bad, Create: true}); !errors.Is(err, ErrInvalidValue) {
+			t.Errorf("%v: err=%v, want ErrInvalidValue", bad, err)
+		}
+	}
+	st, err := MergeWrite(letsDir, "b", WriteOpts{Set: map[string]string{"task": "lets-a1", "park": "abc1234", "park_team": "snake"}, Create: true})
+	if err != nil || st.Park != "abc1234" || st.ParkTeam != "snake" || st.Task != "lets-a1" || len(st.Other) != 0 {
+		t.Fatalf("state = %+v, %v", st, err)
+	}
+	st, err = MergeWrite(letsDir, "b", WriteOpts{Set: map[string]string{"park": "", "park_team": ""}})
+	if err != nil || st.Park != "" || st.ParkTeam != "" || st.Task != "lets-a1" {
+		t.Errorf("after delete: %+v, %v", st, err)
+	}
+}
