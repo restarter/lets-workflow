@@ -329,7 +329,7 @@ show task=<id>   # title + description for the worker spec
 
 ## Members
 
-Spawn, Roster and Dismiss manage a standing team: the `lets:*` agents its lead session runs, defined by the team file's roster. Continuity is files only - the harness restores no member after a lead restart, so a member is respawned from the team file, never resumed from memory. Every spawn and dismiss goes through the member-run skill; this command never calls an agent tool itself.
+Spawn, Roster and Dismiss manage a standing team: the `lets:*` agents its lead session runs, defined by the team file's roster. Continuity is files only - the harness restores no member after a lead restart, so a member is respawned from the team file, never resumed from memory. Every spawn and dismiss goes through the member-run skill; this command never calls an agent tool itself. Every member writes its report to a REPORT_FILE the lead names through the `agent-report` skill and reads in full (Step M5). With `link: peer` (lead restarted) members do not message each other; the lead restores the team with `spawn --roster` (D2, owner 2026-09-26).
 
 ### Step M0: Team
 
@@ -371,15 +371,16 @@ AskUserQuestion(
 ```
 
    **Fresh name** -> `lets members dismiss --scope '<c>' --name '<name>' --json` (the survivor is recorded dismissed, so no brief ever reaches it again; its session keeps running until someone closes it by hand), then continue with `<name>-2`.
-5. **Brief.** Write `.lets/cache/member-<c>-<name>.md` with the Write tool: "Read .lets/teams/<c>.md and the Resume artefacts listed in its section 7. You are <name> (lets:<role>) of team <c>. Continue from those files; do not redo finished work. Answer in the team file's message format."
-6. **Spawn.**
+5. **Report file.** Look for a `Reports: <dir>` line in the team file's `## 7. Current task` - the latest one when there are several. None, or it was opened by an earlier lead session (a new lead session for the same task opens a NEW directory and APPENDS a second `Reports:` line, never reusing the old one) -> `Skill(skill: "lets:agent-report", args: "op=open command=team task={task-id} names={name}")`, then write `Reports: <REPORT_DIR>` into `## 7. Current task`. Present -> `Skill(skill: "lets:agent-report", args: "op=add dir=<dir> names={name}")`; a later round of the same member -> `op=add names={name}-n{k}`. The echoed `REPORT_FILE {name}=<path>` is this round's report file; the member's prompt carries it as its own line `REPORT_FILE: <path>`.
+6. **Brief.** Write `.lets/cache/member-<c>-<name>.md` with the Write tool: "Read .lets/teams/<c>.md and the Resume artefacts listed in its section 7. You are <name> (lets:<role>) of team <c>. Continue from those files; do not redo finished work. Answer in the team file's message format. Message another teammate directly when you need its input - its area, an answer only it has. Approvals, task state, and anything outside your boundaries still go through the lead. A decision you reach with another teammate goes into your REPORT_FILE. With `link: peer` (the lead was restarted) send no member-to-member messages - the lead respawns the roster (`/lets:team spawn --roster`) to restore the team."
+7. **Spawn.**
 
 ```
-Skill(skill: "lets:member-run", args: "op=spawn scope=<c> name=<name> role=lets:<role> brief-file=.lets/cache/member-<c>-<name>.md model=<model>")
+Skill(skill: "lets:member-run", args: "op=spawn scope=<c> name=<name> role=lets:<role> brief-file=.lets/cache/member-<c>-<name>.md report-file=<path> model=<model>")
 ```
 
-   Drop `model=` when Step 3 found none. `name_live` -> Step 4. `no_lead` -> "no live recorded lead - /lets:start in the team's lead session claims it"; stop.
-7. **New role.** A role with no roster row -> after the spawn, show the row `| <name> | <role> | lets:<role> | <model> | |` and ask the lead in words; append it to the Roster table only on the lead's OK.
+   Drop `model=` when Step 3 found none. `name_live` -> Step 4. `no_lead` -> "no live recorded lead - /lets:start in the team's lead session claims it"; stop. The report arrives as a `REPORT_WRITTEN` pointer - read it through Step M5, never from the message.
+8. **New role.** A role with no roster row -> after the spawn, show the row `| <name> | <role> | lets:<role> | <model> | |` and ask the lead in words; append it to the Roster table only on the lead's OK.
 
 ### Step M2: The Whole Roster (`spawn --roster`)
 
@@ -403,7 +404,7 @@ AskUserQuestion(
 ```
 
    Offer **Re-use panes** only when Step 2 found a pane that may be re-used.
-4. **Respawn all** -> Step M1 for each candidate with the row's name and model; a surviving pane under that name meets the Step M1.4 refusal. **Re-use panes** -> nothing is spawned for a re-usable row: that pane stays a peer session, reached through the orc skill; every other candidate goes through Step M1.
+4. **Respawn all** -> first ONE `Skill(skill: "lets:agent-report", args: "op=open command=team task={task-id} names=<every name to spawn>")` (or `op=add dir=<Reports dir> names=...` when this lead session already opened one) for every name at once - each member's prompt then carries its own `REPORT_FILE: <path>` line - then Step M1 for each candidate with the row's name and model, skipping M1.5; a surviving pane under that name meets the Step M1.4 refusal. **Re-use panes** -> nothing is spawned for a re-usable row: that pane stays a peer session, reached through the orc skill; every other candidate goes through Step M1.
 
 ---
 
@@ -448,9 +449,19 @@ lets members lead --scope '<c>' --json
 `lead.session` is not `$CLAUDE_CODE_SESSION_ID`, or `lead.status` is not `live` / `rotated` -> **Refused:** "only the team's lead session dismisses its members". Stop.
 
 - `dismiss <name>` -> `Skill(skill: "lets:member-run", args: "op=dismiss scope=<c> name=<name>")`.
-- `dismiss --all` -> the same call for every registry member not already dismissed.
+- `dismiss --all` -> first `Skill(skill: "lets:agent-report", args: "op=collect dir=<Reports dir> names=<each live member's current round file> retry=no")` - READ EVERY REPORT IN FULL, and every `GAP` line goes into the team file's `## 8. Decisions` - then the same call for every registry member not already dismissed.
 
 One line per member with member-run's return.
+
+### Step M5: Member reports
+
+On EVERY notification from a member - a message, an idle notification, a completion, empty ones included:
+
+1. `Skill(skill: "lets:agent-report", args: "op=peek dir=<Reports dir> names=<its current round file>")` - READ EVERY REPORT IN FULL. `OK` -> that file IS the report, whatever the message says.
+2. Not `OK` and the message carries a `REPORT_WRITTEN` pointer, or the member has stopped -> ONE nudge: write `.lets/cache/nudge-<c>-<name>.md` ("Write your final report to REPORT_FILE {path} now, last line REPORT-END, then reply REPORT_WRITTEN.") and send it through `Skill(skill: "lets:member-run", args: "op=next scope=<c> name=<name> brief-file=.lets/cache/nudge-<c>-<name>.md report-file={path}")`. Never a second nudge for the same round.
+3. Its next notification still not `OK` -> conclude: `Skill(skill: "lets:agent-report", args: "op=collect dir=<Reports dir> names=<its current round file> retry=no")` for a member that changes the tree (an implementer), plain `op=collect` (the one analyst retry) for any other role.
+
+Every `GAP` line goes into the team file's `## 8. Decisions` as `{name}: no report ({state})` - a missing report is never read as "nothing to report". The order is fixed: peek, nudge once, collect.
 
 ---
 

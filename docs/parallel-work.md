@@ -22,7 +22,7 @@ This is the right tool when you have several independent, well-scoped tasks. For
 
 ## A standing team — a workspace that outlives its tasks
 
-A **standing team** owns an area of the repo for longer than one task: its own worktree, a lead session, `lets:*` members (architect, skeptic, explorer, implementer) and a team file that remembers what it learned. Continuity is files only: the harness restores no member after the lead restarts, so every decision and finding that matters is written to the team file (`.lets/teams/<callsign>.md`) or a file it lists, and members are respawned from it, never resumed from memory.
+A **standing team** owns an area of the repo for longer than one task: its own worktree, a lead session, `lets:*` members (architect, skeptic, explorer, implementer) and a team file that remembers what it learned. Continuity is files only: the harness restores no member after the lead restarts, so every decision and finding that matters is written to the team file (`.lets/teams/<callsign>.md`) or a file it lists, and members are respawned from it, never resumed from memory. Every implementer and member writes its report to a file the lead reads in full; a missing report is a loud gap, never an empty result.
 
 **Create.** From the main checkout:
 

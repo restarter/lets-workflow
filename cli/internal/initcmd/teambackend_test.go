@@ -499,3 +499,37 @@ func TestTeamBackend_CreateDisband(t *testing.T) {
 
 // goldenT2 is the Go T2 block of worktree.md at 8b36520 - the non-orca path is unchanged by fix-5.
 const goldenT2 = "\nFetch as `lets worktree switch` does: `git fetch --no-tags origin {LETS_MERGE_BRANCH}` bounded to 20 s; it fails and `origin/{LETS_MERGE_BRANCH}` exists -> go on with a one-line staleness warning; no `origin/{LETS_MERGE_BRANCH}` -> stop (`no_remote_base`) - the local merge-branch is never a base. Then:\n\n```bash\nLETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)\ncd \"$LETS_PROJECT_ROOT\"\nlets worktree create \"team_<c>\" --branch \"team_<c>\" --new-branch --base \"origin/{LETS_MERGE_BRANCH}\" --plugin-root \"${CLAUDE_PLUGIN_ROOT}\" --json\n```\n\n`ok=false` -> surface `error.message` and stop. Assert, then go on: `worktree.path` ends in `/team_<c>`, and `git -C \"<path>\" branch --show-current` prints `team_<c>`; anything else -> stop and show both.\n\n"
+
+// membersLinkProblems pins D1-D3 (owner, 2026-09-26) on team.md's member sections.
+func membersLinkProblems(team string) []string {
+	var p []string
+	intro := between(team, "\n## Members\n", "### Step M0: Team")
+	if !strings.Contains(intro, "`link: peer`") || !strings.Contains(intro, "`spawn --roster`") || !strings.Contains(intro, "members do not message each other") {
+		p = append(p, "the ## Members intro must state D2: with link: peer members do not message each other, the lead respawns the roster")
+	}
+	m1 := sectionSpan(team, "### Step M1: One Member (`spawn <role> [name]`)")
+	for _, need := range []string{"Message another teammate directly when you need its input", "A decision you reach with another teammate goes into your REPORT_FILE.", "With `link: peer` (the lead was restarted) send no member-to-member messages", "APPENDS a second `Reports:` line"} {
+		if !strings.Contains(m1, need) {
+			p = append(p, "Step M1 must carry "+need)
+		}
+	}
+	return p
+}
+
+func TestTeamBackend_MembersLink(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join(pluginDir(t), "commands", "team.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	team := string(b)
+	for _, problem := range membersLinkProblems(team) {
+		t.Error(problem)
+	}
+	const d2 = "With `link: peer` (lead restarted) members do not message each other; the lead restores the team with `spawn --roster` (D2, owner 2026-09-26)."
+	if !strings.Contains(team, d2) {
+		t.Fatal("mutant cannot apply: the D2 line is missing")
+	}
+	if len(membersLinkProblems(strings.Replace(team, d2, "", 1))) == 0 {
+		t.Error("removing the D2 line must fail the pin")
+	}
+}

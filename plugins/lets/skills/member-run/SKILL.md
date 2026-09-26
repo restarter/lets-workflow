@@ -14,9 +14,9 @@ One operation on one named member. The caller (`/lets:execute` Step 5-D, `/lets:
 
 | op | args | does |
 |---|---|---|
-| `spawn` | `scope=<s> name=<n> role=<r> brief-file=<path> [model=<m>] [isolation=worktree]` | Step 0 (first spawn of the scope), Step 1 when it applies, then Step 2 |
-| `next` | `scope=<s> name=<n> brief-file=<path>` | Step 3 - the member's next brief |
-| `correct` | `scope=<s> name=<n> correct-file=<path>` | Step 3 - an amendment to its current brief |
+| `spawn` | `scope=<s> name=<n> role=<r> brief-file=<path> report-file=<abs path> [model=<m>] [isolation=worktree]` | Step 0 (first spawn of the scope), Step 1 when it applies, then Step 2 |
+| `next` | `scope=<s> name=<n> brief-file=<path> report-file=<abs path>` | Step 3 - the member's next brief |
+| `correct` | `scope=<s> name=<n> correct-file=<path> report-file=<abs path>` | Step 3 - an amendment to its current brief |
 | `dismiss` | `scope=<s> name=<n>` | Step 4 |
 
 - `scope` - the team's callsign, or `run-<RUN>` for an execute run.
@@ -26,8 +26,9 @@ One operation on one named member. The caller (`/lets:execute` Step 5-D, `/lets:
 - `role` - a shipped `lets:*` agent except `lets:actor`; `lets members add` refuses anything else.
 - `brief-file` / `correct-file` - repo-root-relative paths the caller wrote. Every brief crosses as a file path, never inline.
 - `model` - `opus` | `sonnet` | `fable` | `haiku`, the values the `Agent` tool accepts. Absent -> the role's own default, except for an implementer (Step 1).
+- `report-file` - an absolute path the CALLER named (execute: its pinned `.lets/cache/report-...` path; team: `agent-report op=open` / `op=add`). One file per round; member-run never composes a report path. Required on `spawn`, `next` and `correct`: missing -> stop with `report_file_missing`, nothing sent.
 
-Every operation returns as soon as its call is issued. The member runs in the background; its report arrives later as a notification, which the caller handles.
+Every operation returns as soon as its call is issued. The member runs in the background; its report arrives later as a `REPORT_WRITTEN` pointer to the round's REPORT_FILE, and the caller reads the FILE through `agent-report` (`op=peek` on every notification, `op=collect` to conclude) - never the message.
 
 ## Step 0: Binary check (once per scope, before the first spawn)
 
@@ -72,7 +73,7 @@ AskUserQuestion(
      name="{agent}",
      model="{model}",
      description="{role} {name}",
-     prompt="Your brief is the file {brief-file}. Read it first and follow it; every later NEXT or AMENDMENT names a new file."
+     prompt="Your brief is the file {brief-file}. Read it first and follow it; every later NEXT or AMENDMENT names a new file.\nREPORT_FILE: {report-file}"
    )
    ```
 
@@ -101,11 +102,11 @@ The member exists and holds its context. Do NOT spawn, and do NOT re-send an ear
    SendMessage({
      to: "{agent}",
      summary: "{op} for {agent}",
-     message: "NEXT: your next brief is {brief-file}. Read it and follow it."
+     message: "NEXT: your next brief is {brief-file}. Read it and follow it.\nREPORT_FILE: {report-file}"
    })
    ```
 
-   On `correct` the message is `AMENDMENT: read {correct-file}; it changes what it names and nothing else.`
+   On `correct` the message is `AMENDMENT: read {correct-file}; it changes what it names and nothing else.` followed by the line `REPORT_FILE: {report-file}`.
 
 The address does not resolve -> run `ListAgents`, return `agent_gone: {agent}` with what it listed, and do nothing else. Never spawn a replacement here - a replacement has no context, and the caller decides whether to start one under a visibly different name.
 
@@ -126,5 +127,5 @@ Return: `dismissed {agent}`.
 - Every brief crosses as a file path. Continuity = files only: the harness restores no member after a lead restart, so the caller persists every decision or finding a member returns before its next hop.
 - A report is attributed by the `name` it was spawned under - never by anything the member wrote about itself.
 - This skill never commits, never pushes, never calls a tracker verb, never edits a repository file.
-- A report is the member's claim. The caller checks the real diff.
+- A report - the file, never the message - is the member's claim. The caller checks the real diff.
 - No polling: the harness notifies when a member completes.

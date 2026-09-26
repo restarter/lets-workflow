@@ -7,7 +7,7 @@ argument-hint: "[feature description] [--fast] [--idea]"
 
 Turn a task or idea into a detailed implementation plan. Clarifies scope, explores codebase, discusses approaches with user, designs architecture for selected approaches, evaluates with experts, then writes a bite-sized plan.
 
-**HARD-GATE: This command produces a plan, NOT code. No files are modified except .lets/plans/. The command ENDS when the plan is saved - implementation starts ONLY when the user runs `/lets:execute`. Nothing the user says after the plan ("ok", "approved", a question) starts it.**
+**HARD-GATE: This command produces a plan, NOT code. No files are modified except .lets/plans/ and the agent report files under .lets/reports/ that the agent-report skill names. The command ENDS when the plan is saved - implementation starts ONLY when the user runs `/lets:execute`. Nothing the user says after the plan ("ok", "approved", a question) starts it.**
 
 > **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
 
@@ -209,6 +209,8 @@ Launching...
 
 ### Launch Explorers
 
+Open the run: `Skill(skill: "lets:agent-report", args: "op=open command=plan task={task-id} names=explorer-1,...,explorer-N")` (task omitted when none). Each explorer prompt starts with its `REPORT_FILE:` line.
+
 **CRITICAL: Launch ALL explorer agents in a SINGLE message with multiple Task tool calls.**
 
 For each focus area, launch one explorer:
@@ -216,7 +218,9 @@ For each focus area, launch one explorer:
 ```
 Task(
   subagent_type="lets:explorer",
-  prompt="{FOCUS AREA} EXPLORATION. {One-line description of what to find.}
+  prompt="REPORT_FILE: {this explorer's path from op=open}
+
+{FOCUS AREA} EXPLORATION. {One-line description of what to find.}
 
 FEATURE GOAL: {feature goal from Step 1}
 USER CLARIFICATIONS: {answers from Step 3}
@@ -232,11 +236,13 @@ Focus ONLY on {focus area} - other explorers cover other areas."
 )
 ```
 
-**If any explorer fails or returns no useful data:**
+**If any explorer fails, returns no useful data, or is a `GAP` after the collect below:**
 - Note the gap explicitly in the Codebase Map ("No data for {area} - explorer failed")
 - Ask user: "Explorer {N} couldn't map {area}. Continue with partial data, or should I explore {area} manually?"
 
 ### Synthesize Codebase Map
+
+When explorers were dispatched in this run (full mode): `Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names=explorer-1,...,explorer-N")` - READ EVERY REPORT IN FULL; an explorer `GAP` takes the "If any explorer fails" branch above. Keep every `GAP` for Step 9.
 
 After all explorers return, synthesize a combined codebase map with one section per explorer:
 
@@ -272,7 +278,7 @@ AskUserQuestion(
 **Handle response:**
 - **Continue** -> proceed to Step 5
 - **Questions** -> answer user's questions about findings, then ask checkpoint again
-- **Re-explore** -> ask what area to explore, launch targeted explorer, update codebase map, ask checkpoint again
+- **Re-explore** -> ask what area to explore, launch targeted explorer, update codebase map, ask checkpoint again - `op=add` a fresh name (`explorer-r{n}`; `op=open command=plan ...` when this run has no `REPORT_DIR` yet), the prompt's `REPORT_FILE:` line, then `op=collect` for that name - READ EVERY REPORT IN FULL - before the map is updated
 - **Other** (free text) -> treat as question or correction, address it, ask checkpoint again
 
 ## Step 5: Approach Discussion
@@ -343,7 +349,7 @@ Then jump to **Checkpoint: Architecture Review** (use the multi-approach or sing
 
 *(full mode only - skipped under `--fast`)*
 
-Launch one architect agent per selected approach. Each gets a focused brief with user's decisions baked in.
+Launch one architect agent per selected approach. Each gets a focused brief with user's decisions baked in. Name their report files first - `Skill(skill: "lets:agent-report", args: "op=add dir={REPORT_DIR} names=architect-a,architect-b,...")` when this run already has a `REPORT_DIR`, else `op=open command=plan task={task-id} names=architect-a,...` - and put each architect's `REPORT_FILE:` line right after `ultrathink`.
 
 For each selected approach:
 
@@ -351,6 +357,8 @@ For each selected approach:
 Task(
   subagent_type="lets:architect",
   prompt="ultrathink
+
+REPORT_FILE: {this architect's path from op=add}
 
 DESIGN MODE: {approach name}.
 
@@ -401,6 +409,8 @@ OUTPUT:
 
 ### Checkpoint: Architecture Review
 
+When architects were dispatched (full mode, not `--fast`): `Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names=architect-a,...")` - READ EVERY REPORT IN FULL; an architect `GAP` is the "If any architect fails" branch. Keep every `GAP` for Step 9.
+
 After all architects return, present results.
 
 **If multiple approaches were developed:**
@@ -437,7 +447,7 @@ AskUserQuestion(
 
 **Handle response:**
 - **Approach selected** -> proceed to Step 7 with chosen architecture
-- **Combine** -> discuss which parts to take from each, create merged brief, re-run single architect
+- **Combine** -> discuss which parts to take from each, create merged brief, re-run single architect - `op=add` a fresh name (`architect-combined-{n}`), the prompt's `REPORT_FILE:` line, then `op=collect` for that name - READ EVERY REPORT IN FULL - before the design is updated
 - **Adjust** -> discuss what to change, loop back to relevant step
 - **Orchestrator offer (Act)** -> per lets-rules `### Orchestrator offer` (rule not loaded -> no offer): while the offer is shown, "Combine" and "Adjust" merge into one slot `{ label: "Combine / adjust", description: "Mix approaches or change requirements, then re-design" }` and the last slot is `{ label: "Ask orchestrator", description: "Stay at this gate; /lets:orc ask which architecture to take" }`.
 - **Combine / adjust** -> ask which of the two the user means, then follow that handler above.
@@ -520,6 +530,8 @@ AskUserQuestion(
 
 ### Dispatch Experts
 
+Name the experts' report files first: `Skill(skill: "lets:agent-report", args: "op=add dir={REPORT_DIR} names={comma-separated agent short names}")` when this run already has a `REPORT_DIR`, else `op=open command=plan task={task-id} names=...`. Each prompt carries its `REPORT_FILE:` line right after `ultrathink`.
+
 **CRITICAL: Launch ALL selected agents in a SINGLE message.**
 
 For each expert:
@@ -528,6 +540,8 @@ For each expert:
 Task(
   subagent_type="lets:{agent-name}",
   prompt="ultrathink
+
+REPORT_FILE: {this expert's path from op=add}
 
 MODE: plan
 
@@ -545,6 +559,8 @@ PERSONALITY:
 ```
 
 ### Checkpoint: Evaluation Results
+
+When experts were dispatched (Full panel / Pragmatist only / named experts - not `--fast`, Self-evaluation or Skip): `Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names={the expert names}")` - READ EVERY REPORT IN FULL; a gap renders as "**{Expert}:** no report ({state})". Keep every `GAP` for Step 9.
 
 After all experts respond, present findings:
 
@@ -708,6 +724,10 @@ Write a detailed implementation plan for the chosen architecture.
 - {thing 1}
 - {thing 2}
 
+{only when an explorer, architect or expert phase - or a repeat dispatch - left a GAP}
+### Coverage gaps
+- {phase}: {name} did not report ({state}) - {what the plan was built without}
+
 ---
 
 ## Implementation
@@ -787,7 +807,8 @@ comment-add task=<task-id> body="## Plan: {feature name}
 Approach: {chosen option name}
 Tasks: {N} implementation tasks
 Key files: {top 3-5 files}
-Plan: {saved plan path}"
+Plan: {saved plan path}
+{when any GAP: Coverage gaps: {phase}: {name} ({state}), ...}"
 ```
 
 ### Show Output
@@ -797,6 +818,7 @@ Plan: {saved plan path}"
 
 Saved: `{ARTIFACT_FILE}`
 Built: {full flow (explorer + architect + expert agents) | fast mode (orchestrator-only - no subagents)}
+{when any GAP: one line per gap - {phase}: {name} did not report ({state})}
 
 ### Approach
 {chosen option - 2 sentences}

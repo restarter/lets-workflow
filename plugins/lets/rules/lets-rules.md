@@ -160,7 +160,7 @@ AUTO MODE (autonomous execution: `/loop`, `/lets:execute --auto`, delegated `/le
 - Git push / PR ops: `git push`, `gh pr create`, `gh pr merge`, `gh pr review approve`.
 - Destructive ops: `rm`, `git reset --hard`, `git push --force`, `git branch -D`, worktree removal.
 - External-facing actions: Slack / email / posting to external services.
-- Peer sends: `/lets:orc ask` / `ping` / `tell`, `/lets:peer`, `lets peers tell`, `SendMessage` - only on the user's request in this turn.
+- Peer sends: `/lets:orc ask` / `ping` / `tell`, `/lets:peer`, `lets peers tell`, `SendMessage` - only on the user's request in this turn. SendMessage between members of one agent team (`/lets:team`, a team session) is team routing, not a peer send - while the team link holds; a member reached as a cross-session peer (`link: peer`) is a peer send, and members do not message each other then.
 - Hub actions in another project: `lets orca wake` (a new Claude process) and `lets peers ask-ro` (a headless fork) - only on the user's `/lets:hub` request.
 - New task creation: must go via `create-task` skill (own approval gate).
 
@@ -190,9 +190,10 @@ AUTO MODE (autonomous execution: `/loop`, `/lets:execute --auto`, delegated `/le
 ## Agent Rules
 
 - When launching expert agents for `/lets:review`, `/lets:github-pr`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:backlog`, `/lets:research` - use ONLY `lets:*` agents (`lets:architect`, `lets:security`, etc.)
-- **Carve-out for web data-gatherers:** `/lets:research`'s per-sub-question web fetchers are data gatherers using the default web-capable subagent, NOT expert dispatch - `lets:*` agents have `tools: Read, Grep, Glob, Bash` and no web tools. The lets:*-only rule covers research's `lets:skeptic` cross-check, not its web fetch.
+- **Carve-out for web data-gatherers:** `/lets:research`'s per-sub-question web fetchers are data gatherers using the default web-capable subagent, NOT expert dispatch - `lets:*` agents have no web tools (no WebSearch / WebFetch). The lets:*-only rule covers research's `lets:skeptic` cross-check, not its web fetch.
 - `lets:actor` is a special meta-agent: requires explicit user request + personality source (URL or file path). Never auto-select. Use `actor-fetch-personality` skill to fetch personality before dispatch.
 - Never use `general-purpose` or other non-lets subagent types for expert work
+- **Agent reports travel by file.** Every agent dispatched through the Task / Agent tool gets a `REPORT_FILE` from the `agent-report` skill and writes its report there; the orchestrator reads every report in full and never treats a missing report as "no findings" - it is a loud gap in the output and in the saved artifact. `--workflow` paths are exempt (their agents return through StructuredOutput).
 - Implementers and standing-team members are spawned, messaged and dismissed only through the `member-run` skill, with `lets members` as the registry of who is live
 
 ### Directed Search vs Exploration

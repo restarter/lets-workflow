@@ -126,6 +126,8 @@ Analyzing...
 
 **If `--workflow` was parsed:** skip this step (and Step 4.6 / the in-context aggregation) - go to `## Workflow Mode` below, then resume at Step 5 with the returned aggregate.
 
+Open the run: `Skill(skill: "lets:agent-report", args: "op=open command=opinion task={task-id} names={comma-separated agent short names}")` (task omitted when none). Each prompt carries its agent's `REPORT_FILE:` line.
+
 **CRITICAL:** Launch ALL selected agents in a SINGLE message with multiple Task tool calls.
 
 For each selected agent:
@@ -136,6 +138,7 @@ Task(
   prompt="ultrathink
 
 PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
+REPORT_FILE: {this agent's path from op=open}
 
 MODE: opinion
 
@@ -151,6 +154,8 @@ CONSTRAINTS: {context, time, legacy, etc.}"
 )
 ```
 
+When the panel returns: `Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names={the panel names}")` - READ EVERY REPORT IN FULL; Step 4.6 and Step 5 work over the reports read, never over final texts. An expert `GAP` is shown as "{expert}: no report ({state})" and is not counted in the leading-option tally. **Zero usable reports** (every panel report a `GAP` after the retry) -> show the gaps and offer a re-run with fresh names; select no leading option, run no challenge, give no recommendation.
+
 ## Step 4.6: Challenge the Leading Option (Adversarial)
 
 After the panel returns, identify the leading option - **the one the most experts recommend** (break ties by average score). Recommendation count is the single consensus axis (average score is only a tiebreak), so the option that gets challenged and recommended is always one the panel actually picked. Before finalizing, stress-test it. This is core methodology - it runs in BOTH execution modes; the only difference is WHERE the critics run.
@@ -161,7 +166,7 @@ After the panel returns, identify the leading option - **the one the most expert
 
 **Conditional (do not over-spend):** run the challenge ONLY when consensus is weak - the experts are split OR any expert reported low confidence. If every expert recommends the same option at medium/high confidence, the decision is clear: skip the challenge and say so ("strong consensus -> challenge skipped").
 
-**Per challenge:** re-dispatch the SAME experts via the Task tool with an anti-leading prompt - "make the strongest case AGAINST option {leading}, regardless of your earlier pick; would_change_pick only if the panel should move off it." Each returns `{strongest_counter, severity, would_change_pick, better_option}`.
+**Per challenge:** name the critics' files first - `Skill(skill: "lets:agent-report", args: "op=add dir={REPORT_DIR} names={agent}-challenge,...")` (a re-run after a failed challenge takes fresh names: `{agent}-challenge-2`) - then re-dispatch the SAME experts via the Task tool with an anti-leading prompt whose first line after `ultrathink` is the literal `REPORT_FILE: {this critic's path}` - "make the strongest case AGAINST option {leading}, regardless of your earlier pick; would_change_pick only if the panel should move off it." Each writes `{strongest_counter, severity, would_change_pick, better_option}` to its report file. When the critics return (only when this run dispatched a challenge): `Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names={the critic names}")` - READ EVERY REPORT IN FULL. A critic `GAP` is an errored critic.
 
 **Asymmetric rule (a weak critique never silently flips the pick):**
 - Confirm the leading option UNLESS a majority `would_change_pick` at `high` severity.
@@ -183,6 +188,7 @@ After all agents respond, synthesize:
 ```
 **Recommendation:** Option X
 **One-liner:** {why in 10 words or less}
+{if any GAP} Coverage: {ok}/{expected} reports - {name}: no report ({state}), ...
 ```
 
 ### Expert Opinions

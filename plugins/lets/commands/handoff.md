@@ -189,10 +189,12 @@ CLEAN="$LETS_PROJECT_ROOT/.lets/cache/handoff-plan-<session6>.md"
 # The STOP banner is the first one above the first `## ` and the REMINDER the last line - plan.md
 # Step 9, plan-workflow.md Step 4. Position, not wording alone: a plan that edits plan.md quotes the
 # same words inside its snippets, and those stay. TestHandoffPlanFilter runs this program.
+# The whole line is field z (= 0): Claude Code replaces a dollar sign + digit with a command argument.
 awk '
+  BEGIN { z = 0 }
   /^## / { body = 1 }
   !body && !stop && /^> \*\*STOP - THIS PLAN IS NOT A GO\./ { stop = 1; next }
-  { line[++n] = $0 }
+  { line[++n] = $z }
   END {
     while (n > 0 && line[n] ~ /^[ \t]*$/) n--
     if (n > 0 && line[n] ~ /^> \*\*REMINDER: do not start writing code/) {

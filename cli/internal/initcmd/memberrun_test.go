@@ -85,6 +85,15 @@ func delegatedContractProblems(f map[string]string) []string {
 		if status := strings.Index(next, "lets members status"); status < 0 || send < 0 || status > send {
 			add("Step 3 must run lets members status before every SendMessage")
 		}
+		if !strings.Contains(call, `\nREPORT_FILE: {report-file}"`) {
+			add("the Step 2 Agent prompt must carry a REPORT_FILE line")
+		}
+		if !strings.Contains(next, `\nREPORT_FILE: {report-file}"`) || !strings.Contains(next, "followed by the line `REPORT_FILE: {report-file}`") {
+			add("Step 3's NEXT and AMENDMENT must each carry a REPORT_FILE line")
+		}
+		if !strings.Contains(skill, "`REPORT_WRITTEN` pointer") || !strings.Contains(skill, "report_file_missing") {
+			add("member-run must read the report as a REPORT_WRITTEN pointer to a file, and refuse a missing report-file")
+		}
 		if strings.Count(skill, "SendMessage(") != strings.Count(next, "SendMessage(") {
 			add("every SendMessage must live in Step 3, behind its lets members status")
 		}
@@ -184,11 +193,23 @@ func delegatedContractProblems(f map[string]string) []string {
 		if !strings.Contains(delegated, "\nCI CHECKS: ") {
 			add("the chunk brief template must carry CI CHECKS:")
 		}
-		for _, need := range []string{`Skill(skill: "lets:member-run"`, "brief-file=", "scope=run-{RUN}", "TaskStop(", "git ls-files --others --exclude-standard", "--untracked-files=all", "git diff HEAD", "git diff --cached --name-only", `args: "approved=review-accept"`, "patch_sha", "**Render review**", "**What is a report.**", "malformed-report", "Write a report with the Write tool", "| `pending` |", "| `review` / `paused` |", "| `committing` |", "AMENDMENT to chunk"} {
+		for _, need := range []string{`Skill(skill: "lets:member-run"`, "brief-file=", "scope=run-{RUN}", "TaskStop(", "git ls-files --others --exclude-standard", "--untracked-files=all", "git diff HEAD", "git diff --cached --name-only", `args: "approved=review-accept"`, "patch_sha", "**Render review**", "**What is a report.**", "malformed-report", "REPORT_WRITTEN", "missing-report", "READ EVERY REPORT IN FULL", "retry=no", "| `pending` |", "| `review` / `paused` |", "| `committing` |", "AMENDMENT to chunk"} {
 			if !strings.Contains(delegated, need) {
 				add("Step 5-D must contain " + need)
 			}
 		}
+		if !strings.Contains(delegated, "EMPTY ones included") || !strings.Contains(delegated, "op=peek") {
+			add("Step 5-D.5 must peek at the REPORT_FILE on every notification, EMPTY ones included - the final text is not the completion gate")
+		}
+		if !strings.Contains(delegated, "Never wait for a later `/lets:execute` to notice a stopped agent") {
+			add("Step 5-D.5 must nudge once and then record a gap for a stopped agent with no report, in the same session")
+		}
+	}
+	if !strings.Contains(exec, "a replacement never writes an earlier generation's report") {
+		add("the replacement brief must name the new generation's round-0 REPORT_FILE as its only REPORT_FILE")
+	}
+	if !strings.Contains(exec, "rehydration") {
+		add("5-D.7 must rehydrate a recorded round whose report file no longer peeks OK, without counting a new report")
 	}
 
 	dispatch := between(exec, "### 5-D.4 Dispatch - in plan order", "### 5-D.5 Review")
@@ -365,6 +386,9 @@ func delegatedContractProblems(f map[string]string) []string {
 	}
 
 	agent := f["agent"]
+	if !strings.Contains(agent, "REPORT_FILE") {
+		add("implementer.md must write its report to the REPORT_FILE its brief names")
+	}
 	status := sectionSpan(agent, "## Status")
 	for _, s := range []string{"`complete`", "`deviation-stopped`", "`blocked`"} {
 		if !strings.Contains(status, s) {
@@ -431,53 +455,62 @@ func TestMemberRun(t *testing.T) {
 		t.Error(problem)
 	}
 
-	mutants := []struct{ name, key, old, repl, want string }{
-		{"picker loses Implementers", "execute", `label: "Implementers"`, `label: "Implementer"`, "Implementers locus"},
-		{"correct spawns", "skill", "SendMessage(", "Agent(", "Correct must"},
-		{"status after the send", "skill", "1. `lets members status --scope {scope} --name {name} --json`, before every message.", "1. Check the member before every message.", "before every SendMessage"},
-		{"add before the Agent call", "skill", "   lets members add --scope", "   lets memberz add --scope", "right after the Agent call"},
-		{"execute back on the old skill", "execute", `Skill(skill: "lets:member-run", args: "op=spawn`, "Skill(skill: \"lets:implementer" + "-run\", args: \"op=spawn", "not its predecessor"},
-		{"a Review gate is dropped", "execute", `header: "Review"`, `header: "Reviewed"`, "Review gates"},
-		{"files audit becomes a warning", "execute", "**Files audit - a GATE.**", "**Files audit - a WARNING.**", "Files audit as a gate"},
-		{"files audit drops bare-name resolution", "execute", "a bare name (no `/`) resolves", "a bare name (no `/`) is refused", "resolve paths before it refuses"},
-		{"bare name always inherits", "execute", "a bare name (no `/`) resolves, in this order: to the directory of the previous path on the same Files line only when the file exists there at BASE or the task creates it there", "a bare name (no `/`) inherits the directory of the previous path on the same Files line", "resolve paths before it refuses"},
-		{"unresolvable name refuses", "execute", "resolves ambiguously, is a warning", "resolves ambiguously, refuses delegation", "resolve paths before it refuses"},
-		{"removed-symbol check refuses", "execute", "it never refuses delegation", "it refuses delegation", "warning only"},
-		{"anchor check adds an option", "execute", "adds no gate and no option", "adds an option", "anchor check"},
-		{"brief loses CI CHECKS", "execute", "\nCI CHECKS: ", "\nCHECKS: ", "CI CHECKS:"},
-		{"plan.workflow.js drops Risk in review", "planWorkflowJS", "every task with a commit point states **Risk:** high|low", "every task with a commit point states a risk", "planReviewPrompt"},
-		{"plan.md drops the Risk template line", "plan", "**Risk:** {high|low}", "**Risk:** {level}", "Risk field"},
-		{"dispatch respawns every chunk", "execute", `args: "op=next scope=run-{RUN}`, `args: "op=spawn scope=run-{RUN}`, "op=next"},
-		{"solo becomes a default allocation", "execute", "the shape the 4.7 proposal usually picks", "by default one implementer", "usually picks"},
-		{"Start gate loses Change the launch plan", "execute", `{ label: "Change the launch plan", `, `{ label: "Adjust", `, "Change the launch plan"},
-		{"record drops members_scope", "execute", `"members_scope": "run-{RUN}",`, "", "members_scope"},
-		{"integrated_source moves on a report", "execute", "it moves only after the lead's commit", "it moves on each report", "only after the lead's commit"},
-		{"bare integrated field", "execute", `"integrated_source": null`, `"integrated": null`, "bare integrated"},
-		{"addendum heading dropped", "execute", "`## Allowlist addendum`", "`## Extra paths`", "addendum"},
-		{"pre-upgrade member messaged", "execute", "such a member is never messaged", "such a member is asked to report", "pre-upgrade"},
-		{"parallel allowed alone", "execute", "it needs `--implementers` / `--team`", "it runs alone", "--parallel must need"},
-		{"groups inferred", "execute", "The shape is never inferred", "The shape is inferred", "declare parallel groups"},
-		{"isolated brief loses CALLER_TOPLEVEL", "execute", "CALLER_TOPLEVEL: {git rev-parse", "TOPLEVEL: {git rev-parse", "CALLER_TOPLEVEL"},
-		{"no revert on reject", "execute", "first takes its patch back out: `lets integrate --revert --patch {patch_path}", "first takes its patch back out: `git checkout -- {patch_path}", "reverted on a reject"},
-		{"cleanup without the tip check", "execute", "compare its `integrated_source` with the tip of its `agent_branch`", "look at its `agent_branch`", "integrated_source is its tip"},
-		{"guard switches first", "agent", "At spawn only, before any edit,", "At spawn only, first `git switch -C <branch> {BASE}`, then before any edit,", "before git switch -C"},
-		{"reset --hard creeps in", "agent", "NEVER push.", "NEVER push; git reset --hard on a bad start.", "reset --hard"},
-		{"step 3 sends by name", "skill", "   - Read the entry's `agent_id`: set -> the `to:` below is that id, not the name.\n", "", "agent_id when it is set"},
-		{"cleanup deletes before dismissing", "execute", "1. `member-run` `op=dismiss` FIRST", "1. `member-run` `op=dismiss` last", "dismiss first"},
-		{"cleanup forces the remove", "execute", "then `git worktree remove {agent_worktree_path}` - plain", "then `git worktree remove --force {agent_worktree_path}` - plain", "dismiss first"},
-		{"replacement integrates the tip", "execute", "`--from` the chunk's recorded `commit_sha`, never the branch tip", "`--from` the branch tip", "commit_sha"},
-		{"commit guard only checks the caller", "agent", "still equals the path you verified at spawn", "is not the caller's", "verified at spawn"},
-		{"pipelined allowed under auto", "execute", "and under `--auto` it is REFUSED.", "and under `--auto` it is allowed.", "--pipelined must need"},
-		{"review reads the tree", "execute", "the review block is `git show {commit_sha}`", "the review block is `git diff HEAD`", "reviewed by sha"},
-		{"overlap not stopped", "execute", "reports `blocked` with reason `overlap`", "applies it anyway", "reviewed by sha"},
-		{"autosquash without the pushed check", "execute", "`lets worktree pushed --branch {branch} --commit {oldest} --json` (every configured remote) must return `state: not_pushed`", "`git log` must look unpushed", "autosquash only on"},
-		{"interactive rebase", "execute", "`git rebase --autosquash --no-autostash {start}`", "`git rebase -i --autosquash --no-autostash {start}`", "rebase -i"},
-		{"autosquash over a merge", "execute", "0. `git rev-list --merges {start}..HEAD` must print nothing", "0. merges are fine", "merge-free range"},
-		{"autosquash autostashes", "execute", "`git rebase --autosquash --no-autostash {start}`", "`git rebase --autosquash {start}`", "never autostashing"},
-		{"record loses review_sha", "execute", `"review_sha": null, `, "", "review_sha"},
-		{"pipelined row loses fixup", "agent", "`git commit --fixup=<that sha>`", "`git commit --amend`", "--fixup and the overlap stop"},
-		{"isolated pipelined commits at once", "execute", "4. **Only then the lead's commit**", "0. **Committed by the lead at once**", "before the lead's commit"},
-		{"unscoped gate sentence returns", "rules", "inside it the gate is plan mode for an inline run", "inside it the plan-mode approval is the gate", "still asserts"},
+	// n is strings.Replace's count: 1 for one occurrence, -1 when a mutant must rewrite
+	// every occurrence for its guard to see the change.
+	mutants := []struct {
+		name, key, old, repl, want string
+		n                          int
+	}{
+		{"picker loses Implementers", "execute", `label: "Implementers"`, `label: "Implementer"`, "Implementers locus", 1},
+		{"correct spawns", "skill", "SendMessage(", "Agent(", "Correct must", 1},
+		{"status after the send", "skill", "1. `lets members status --scope {scope} --name {name} --json`, before every message.", "1. Check the member before every message.", "before every SendMessage", 1},
+		{"add before the Agent call", "skill", "   lets members add --scope", "   lets memberz add --scope", "right after the Agent call", 1},
+		{"execute back on the old skill", "execute", `Skill(skill: "lets:member-run", args: "op=spawn`, "Skill(skill: \"lets:implementer" + "-run\", args: \"op=spawn", "not its predecessor", 1},
+		{"a Review gate is dropped", "execute", `header: "Review"`, `header: "Reviewed"`, "Review gates", 1},
+		{"files audit becomes a warning", "execute", "**Files audit - a GATE.**", "**Files audit - a WARNING.**", "Files audit as a gate", 1},
+		{"files audit drops bare-name resolution", "execute", "a bare name (no `/`) resolves", "a bare name (no `/`) is refused", "resolve paths before it refuses", 1},
+		{"bare name always inherits", "execute", "a bare name (no `/`) resolves, in this order: to the directory of the previous path on the same Files line only when the file exists there at BASE or the task creates it there", "a bare name (no `/`) inherits the directory of the previous path on the same Files line", "resolve paths before it refuses", 1},
+		{"unresolvable name refuses", "execute", "resolves ambiguously, is a warning", "resolves ambiguously, refuses delegation", "resolve paths before it refuses", 1},
+		{"removed-symbol check refuses", "execute", "it never refuses delegation", "it refuses delegation", "warning only", 1},
+		{"anchor check adds an option", "execute", "adds no gate and no option", "adds an option", "anchor check", 1},
+		{"brief loses CI CHECKS", "execute", "\nCI CHECKS: ", "\nCHECKS: ", "CI CHECKS:", 1},
+		{"plan.workflow.js drops Risk in review", "planWorkflowJS", "every task with a commit point states **Risk:** high|low", "every task with a commit point states a risk", "planReviewPrompt", 1},
+		{"plan.md drops the Risk template line", "plan", "**Risk:** {high|low}", "**Risk:** {level}", "Risk field", 1},
+		{"dispatch respawns every chunk", "execute", `args: "op=next scope=run-{RUN}`, `args: "op=spawn scope=run-{RUN}`, "op=next", 1},
+		{"solo becomes a default allocation", "execute", "the shape the 4.7 proposal usually picks", "by default one implementer", "usually picks", 1},
+		{"Start gate loses Change the launch plan", "execute", `{ label: "Change the launch plan", `, `{ label: "Adjust", `, "Change the launch plan", 1},
+		{"record drops members_scope", "execute", `"members_scope": "run-{RUN}",`, "", "members_scope", 1},
+		{"integrated_source moves on a report", "execute", "it moves only after the lead's commit", "it moves on each report", "only after the lead's commit", 1},
+		{"bare integrated field", "execute", `"integrated_source": null`, `"integrated": null`, "bare integrated", 1},
+		{"addendum heading dropped", "execute", "`## Allowlist addendum`", "`## Extra paths`", "addendum", 1},
+		{"pre-upgrade member messaged", "execute", "such a member is never messaged", "such a member is asked to report", "pre-upgrade", 1},
+		{"parallel allowed alone", "execute", "it needs `--implementers` / `--team`", "it runs alone", "--parallel must need", 1},
+		{"groups inferred", "execute", "The shape is never inferred", "The shape is inferred", "declare parallel groups", 1},
+		{"isolated brief loses CALLER_TOPLEVEL", "execute", "CALLER_TOPLEVEL: {git rev-parse", "TOPLEVEL: {git rev-parse", "CALLER_TOPLEVEL", 1},
+		{"no revert on reject", "execute", "first takes its patch back out: `lets integrate --revert --patch {patch_path}", "first takes its patch back out: `git checkout -- {patch_path}", "reverted on a reject", 1},
+		{"cleanup without the tip check", "execute", "compare its `integrated_source` with the tip of its `agent_branch`", "look at its `agent_branch`", "integrated_source is its tip", 1},
+		{"guard switches first", "agent", "At spawn only, before any edit,", "At spawn only, first `git switch -C <branch> {BASE}`, then before any edit,", "before git switch -C", 1},
+		{"reset --hard creeps in", "agent", "NEVER push.", "NEVER push; git reset --hard on a bad start.", "reset --hard", 1},
+		{"step 3 sends by name", "skill", "   - Read the entry's `agent_id`: set -> the `to:` below is that id, not the name.\n", "", "agent_id when it is set", 1},
+		{"cleanup deletes before dismissing", "execute", "1. `member-run` `op=dismiss` FIRST", "1. `member-run` `op=dismiss` last", "dismiss first", 1},
+		{"cleanup forces the remove", "execute", "then `git worktree remove {agent_worktree_path}` - plain", "then `git worktree remove --force {agent_worktree_path}` - plain", "dismiss first", 1},
+		{"replacement integrates the tip", "execute", "`--from` the chunk's recorded `commit_sha`, never the branch tip", "`--from` the branch tip", "commit_sha", 1},
+		{"commit guard only checks the caller", "agent", "still equals the path you verified at spawn", "is not the caller's", "verified at spawn", 1},
+		{"pipelined allowed under auto", "execute", "and under `--auto` it is REFUSED.", "and under `--auto` it is allowed.", "--pipelined must need", 1},
+		{"review reads the tree", "execute", "the review block is `git show {commit_sha}`", "the review block is `git diff HEAD`", "reviewed by sha", 1},
+		{"overlap not stopped", "execute", "reports `blocked` with reason `overlap`", "applies it anyway", "reviewed by sha", 1},
+		{"autosquash without the pushed check", "execute", "`lets worktree pushed --branch {branch} --commit {oldest} --json` (every configured remote) must return `state: not_pushed`", "`git log` must look unpushed", "autosquash only on", 1},
+		{"interactive rebase", "execute", "`git rebase --autosquash --no-autostash {start}`", "`git rebase -i --autosquash --no-autostash {start}`", "rebase -i", 1},
+		{"autosquash over a merge", "execute", "0. `git rev-list --merges {start}..HEAD` must print nothing", "0. merges are fine", "merge-free range", 1},
+		{"autosquash autostashes", "execute", "`git rebase --autosquash --no-autostash {start}`", "`git rebase --autosquash {start}`", "never autostashing", 1},
+		{"record loses review_sha", "execute", `"review_sha": null, `, "", "review_sha", 1},
+		{"pipelined row loses fixup", "agent", "`git commit --fixup=<that sha>`", "`git commit --amend`", "--fixup and the overlap stop", 1},
+		{"isolated pipelined commits at once", "execute", "4. **Only then the lead's commit**", "0. **Committed by the lead at once**", "before the lead's commit", 1},
+		{"unscoped gate sentence returns", "rules", "inside it the gate is plan mode for an inline run", "inside it the plan-mode approval is the gate", "still asserts", 1},
+		{"a replacement keeps the old report path", "execute", "a replacement never writes an earlier generation's report", "keep the copied lines", "new generation's round-0 REPORT_FILE", 1},
+		{"the final text gates the report again", "execute", "EMPTY ones included", "non-empty ones", "EMPTY ones included", 1},
+		{"interim notifications conclude a gap", "execute", "op=peek", "op=collect", "EMPTY ones included", -1},
+		{"spawn loses REPORT_FILE", "skill", `\nREPORT_FILE: {report-file}"`, `"`, "REPORT_FILE line", 1},
 	}
 	for _, m := range mutants {
 		t.Run(m.name, func(t *testing.T) {
@@ -488,7 +521,7 @@ func TestMemberRun(t *testing.T) {
 			for k, v := range files {
 				mutated[k] = v
 			}
-			mutated[m.key] = strings.Replace(files[m.key], m.old, m.repl, 1)
+			mutated[m.key] = strings.Replace(files[m.key], m.old, m.repl, m.n)
 			for _, problem := range delegatedContractProblems(mutated) {
 				if strings.Contains(problem, m.want) {
 					return
