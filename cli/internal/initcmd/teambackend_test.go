@@ -315,3 +315,79 @@ func TestTeamBackend_WorktreeTeam(t *testing.T) {
 		t.Error("C1 takes the dir name from branch-name's dir field, never hand-built from slug")
 	}
 }
+
+// TestTeamBackend_TeamTaskFlow pins take-task / start / done in a team worktree
+// (lets-0rgnd): take-task parks and switches through `lets worktree switch` and
+// never stashes, start offers the roster respawn only in a team worktree, and done
+// warns about park commits and asks - never refuses.
+func TestTeamBackend_TeamTaskFlow(t *testing.T) {
+	read := func(parts ...string) string {
+		t.Helper()
+		b, err := os.ReadFile(filepath.Join(append([]string{pluginDir(t)}, parts...)...))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	take := read("skills", "take-task", "SKILL.md")
+	route := strings.Index(take, "Skip the generic question below and go to **Step 2T**")
+	stash := strings.Index(take, `label: "Stash"`)
+	if route < 0 || stash < 0 || route > stash {
+		t.Error("a team worktree must be routed to Step 2T before the generic Stash question")
+	}
+	step2t := sectionSpan(take, "### Step 2T: Team worktree - park, then switch")
+	if step2t == "" {
+		t.Fatal("take-task Step 2T missing")
+	}
+	if strings.Contains(step2t, "Stash") || strings.Contains(step2t, "git stash") {
+		t.Error("the team path must never offer or run a stash")
+	}
+	for _, want := range []string{`label: "Commit first"`, `label: "Park"`, `label: "Stay"`, "lets worktree switch --task", "--include '<path>' per confirmed new path", "names only the paths the user confirmed", "`## 7. Current task`", "so Step 5's own write - its `--session-sha`, unguarded - is skipped on this path", "operation_in_progress", "Ignored files are never parked"} {
+		if !strings.Contains(step2t, want) {
+			t.Errorf("take-task Step 2T must carry %q", want)
+		}
+	}
+	sw := strings.Index(step2t, "lets worktree switch --task")
+	tail := strings.Index(step2t, "lets worktree task-state set --clear-origin {ORC_FLAG} --json")
+	role := strings.Index(step2t, `lets peers role set worker --task "<task-id>"`)
+	if sw < 0 || tail < sw || role < tail {
+		t.Error("Step 2T runs Step 5's tail (clear origin + orc, worker role) after the switch")
+	}
+	if strings.Contains(step2t, "--session-sha") && !strings.Contains(step2t, "its `--session-sha`, unguarded - is skipped") {
+		t.Error("Step 2T must never write session: unguarded")
+	}
+	if strings.Count(step2t, "lets worktree task-state set") != 1 || strings.Contains(step2t, "task-state set --task") {
+		t.Error("the team path's task-state write passes only what switch did not write")
+	}
+	if !strings.Contains(sectionSpan(take, "### Step 3: Worktree Check"), "never reaches here - its branch comes from `lets worktree switch`") {
+		t.Error("take-task Step 3 must not use a team worktree's branch as-is")
+	}
+
+	start := read("commands", "start.md")
+	step5 := sectionSpan(start, "## Step 5: What do we do? (task selection - MANDATORY)")
+	team := strings.Index(step5, "**Team worktree**")
+	respawn := strings.Index(step5, "**Respawn roster**")
+	if team < 0 || respawn < team || !strings.Contains(step5, `Skill(skill: "lets:team", args: "spawn --roster")`) || !strings.Contains(step5, "Outside a team worktree the moves stay as above - no roster offer.") {
+		t.Error("start.md Step 5 offers Respawn roster only in a team worktree, after the lead claim")
+	}
+	for _, l := range strings.Split(start, "\n") {
+		if strings.Contains(l, "spawn --roster") && !strings.Contains(l, "Respawn roster") && !strings.Contains(l, "No `team` -> skip") {
+			t.Errorf("a roster offer outside the team paths: %s", strings.TrimSpace(l))
+		}
+	}
+
+	done := read("commands", "done.md")
+	park := strings.Index(done, "**Park commits.**")
+	gate := strings.Index(done, `header: "Park commit"`)
+	confirm := strings.Index(done, "## Step 6: Confirm with User")
+	if park < 0 || gate < park || confirm < gate || !strings.Contains(done, "never a refusal") || !strings.Contains(done, `label: "Push them anyway"`) {
+		t.Error("done.md warns about park commits and asks before Step 6 - never refuses")
+	}
+	know := sectionSpan(done, "### Team worktree: promote to Standing knowledge")
+	if !strings.Contains(know, "Only when `lets worktree info --json` reports a `team`") || !strings.Contains(know, "`## 9. Standing knowledge`") || !strings.Contains(know, "multiSelect: true") {
+		t.Error("done.md promotes to Standing knowledge only in a team worktree, as a separate multi-select question")
+	}
+	if n := strings.Count(know, `{ label: "`); n > 4 || !strings.Contains(know, `{ label: "None", description: "Promote nothing" }`) || !strings.Contains(know, "at most 3 candidates") {
+		t.Errorf("the knowledge question offers at most 3 facts plus None (%d options)", n)
+	}
+}

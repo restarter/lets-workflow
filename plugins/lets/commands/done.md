@@ -174,6 +174,24 @@ git log ${RANGE} --oneline
 git diff --stat ${RANGE}
 ```
 
+**Park commits.** A `wip(<id>): park` (or `wip: park`) subject in `git log --format='%h %s' ${RANGE}` is a commit `lets worktree switch --park` made and never unparked. It is a WARNING, never a refusal - name each one (`<sha> <subject>`). A pushed park commit can only be removed by a force push, so pushing or merging it is the owner's explicit call, asked once, before Step 6:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "The range holds {N} park commit(s): {sha subject, ...}. Push / merge them as they are?",
+    header: "Park commit",
+    options: [
+      { label: "Keep working", description: "Stop; fold or drop the park commits first" },
+      { label: "Push them anyway", description: "Finish with the park commits in history for good" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**Keep working** -> stop, return to work. **Push them anyway** -> continue; the Step 6 gate still asks as usual. No park commit -> nothing here.
+
 Show summary:
 ```
 ## Task Summary
@@ -341,6 +359,27 @@ EOF
 ```lets-tracker
 comment-add task=<task-id> body-file=.lets/cache/comment-<task-id>.md
 ```
+
+### Team worktree: promote to Standing knowledge
+
+Only when `lets worktree info --json` reports a `team`; otherwise skip this subsection. Before the close in Step 8, list the candidate facts - from the team file's `## 8. Decisions` and this task's notes and comments - that a future task of this team should know, then one separate question - at most 3 candidates (more -> the 3 strongest, the rest named in the question text) and a last "None" option:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Promote any of these to the team's Standing knowledge?",
+    header: "Knowledge",
+    options: [
+      { label: "{fact 1, one line}", description: "{where it came from}" },
+      { label: "{fact 2, one line}", description: "{where it came from}" },
+      { label: "None", description: "Promote nothing" }
+    ],
+    multiSelect: true
+  }]
+)
+```
+
+The lead appends each picked fact to the team file's `## 9. Standing knowledge` (`.lets/teams/<team>.md`; the lead is its only writer). "None" (or nothing picked) -> nothing written. It never blocks the close.
 
 ## Step 8: Finish Task
 

@@ -160,6 +160,12 @@ The orient snapshot (Step 3) already shows In flight + Next up - don't repeat th
 - Inform user: "Created task XX, working in feature branch"
 - This keeps traceability without friction
 
+**Team worktree** (`lets worktree info --json` reports a `team`): run Step 6's lead claim FIRST, before offering the moves - a `lead_held` stops the session there. Once this session is the lead, the moves gain one more:
+
+> - **Respawn roster** -> `Skill(skill: "lets:team", args: "spawn --roster")`; the members of the team file's roster come back, then pick the task here.
+
+Outside a team worktree the moves stay as above - no roster offer.
+
 **Wait for user to select, create, or describe work.**
 
 ## Step 6: Take Task
@@ -174,7 +180,7 @@ lets members lead --claim --scope '<team>' --json
 - `lead_held` -> stop, naming the live lead (`lead.name`, `lead.session`, `lead.status`): continue in that session, or close it and run `/lets:start` again. take-task does not run.
 - Any other failure (`registry_unavailable` included, or no `lets` binary) -> one warning line naming it, then continue.
 
-No `team` -> skip this paragraph.
+Already claimed in Step 5 (the team path) -> do not claim again. A task id passed on the argument skipped Step 5: after take-task, print one line - `Respawn the roster?  /lets:team spawn --roster`. No `team` -> skip this paragraph.
 
 After task is selected, delegate to the **take-task** skill to claim it and prepare the branch: `Skill(skill: "lets:take-task", args: "<task-id>")`.
 
