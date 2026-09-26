@@ -52,6 +52,32 @@ var (
 // closing `---`; the team file's frontmatter is a dozen lines.
 const maxFrontmatterLines = 64
 
+// Callsigns are the names a standing team is created under, in the order
+// FreeCallsign offers them. Each passes ValidName; TestCallsigns_AllValid pins it.
+var Callsigns = []string{
+	"snake", "frog", "otter", "falcon", "badger", "heron", "lynx", "marten",
+	"raven", "gecko", "bison", "crane", "dingo", "egret", "ferret", "gazelle",
+	"hare", "ibis", "jackal", "koala", "lemur", "moose", "newt", "ocelot",
+	"panda", "quail", "robin", "salmon", "tapir", "urchin", "viper", "walrus",
+	"yak", "zebra", "beaver", "cobra", "dolphin", "eagle", "fox", "gibbon",
+}
+
+// FreeCallsign returns the first callsign with no team file in teamsDir and no
+// live session `<callsign>-lead` (live answers for a session name). ok=false when
+// every callsign is taken.
+func FreeCallsign(teamsDir string, live func(name string) bool) (string, bool) {
+	for _, c := range Callsigns {
+		if _, err := os.Lstat(filepath.Join(teamsDir, c+".md")); err == nil || !errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if live != nil && live(c+"-lead") {
+			continue
+		}
+		return c, true
+	}
+	return "", false
+}
+
 // ValidName reports whether s is a usable team name (the callsign): lowercase
 // letters, digits and hyphens, 1-40 characters. The `run-` prefix is reserved for
 // execute scopes (`run-{RUN}`).

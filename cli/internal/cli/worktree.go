@@ -58,6 +58,7 @@ func NewWorktreeCmd() *cobra.Command {
 		newWorktreeBranchNameCmd(),
 		newWorktreeSweepCmd(),
 		newWorktreePushedCmd(),
+		newWorktreeTeamInitCmd(),
 	} {
 		sub.SilenceUsage = true
 		sub.SilenceErrors = true
@@ -507,6 +508,43 @@ func newWorktreePushedCmd() *cobra.Command {
 	cmd.Flags().StringVar(&o.Branch, "branch", "", "Branch the commit belongs to (named in the message; its upstream remote is used)")
 	cmd.Flags().DurationVar(&o.Timeout, "timeout", 0, "Bound for each network step (default 20s)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
+	return cmd
+}
+
+func newWorktreeTeamInitCmd() *cobra.Command {
+	var jsonOut bool
+	var o worktreecmd.TeamInitOptions
+	cmd := &cobra.Command{
+		Use:   "team-init",
+		Short: "Write a standing team's file .lets/teams/<callsign>.md (never overwritten), or propose a free callsign",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return emitErrorEnvelope(cmd.OutOrStdout(), jsonOut, "team-init", &worktreecmd.Error{Code: worktreecmd.ExitFilesystem, Kind: "getwd_failed", Message: err.Error(), Cause: err})
+			}
+			res, runErr := worktreecmd.TeamInit(cmd.Context(), cwd, o)
+			return emitJSONOrRender(cmd, jsonOut, false, res, func() {
+				switch {
+				case res.Suggested:
+					fmt.Fprintln(cmd.OutOrStdout(), res.Callsign)
+				case res.OK:
+					fmt.Fprintln(cmd.OutOrStdout(), res.TeamFile)
+				default:
+					worktreecmd.RenderSteps(cmd.OutOrStdout(), res.Envelope)
+				}
+			}, runErr)
+		},
+	}
+	f := cmd.Flags()
+	f.StringVar(&o.Callsign, "callsign", "", "Team callsign (snake, frog, ...)")
+	f.StringVar(&o.Area, "area", "", "What the team owns, in one line")
+	f.StringVar(&o.Worktree, "worktree", "", "Absolute path of the team's worktree")
+	f.StringVar(&o.PluginRoot, "plugin-root", "", "Plugin root holding templates/team.md (default: $CLAUDE_PLUGIN_ROOT)")
+	f.StringVar(&o.AgentCommand, "agent-command", "", "How the lead is launched (default claude)")
+	f.StringVar(&o.OrcaAgent, "orca-agent", "", "Shell command an Orca lead terminal runs (default claude)")
+	f.BoolVar(&o.Suggest, "suggest-callsign", false, "Only propose a free callsign; write nothing")
+	f.BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
 	return cmd
 }
 

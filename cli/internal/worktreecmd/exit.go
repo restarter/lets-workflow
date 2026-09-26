@@ -29,7 +29,10 @@ const (
 	ExitStoreLinkFailed      = 24 // a declared store link could not be made (foreign file at the link path)
 	ExitTaskFileConflict     = 25 // adopt: .task-<slug> already names a different task
 	ExitTaskStateLockBusy    = 26 // task-state: the lock was still held at the --wait deadline
-	// 27..29 reserved.
+	ExitTeamExists           = 27 // team-init: .lets/teams/<callsign>.md exists (the filesystem refused the link)
+	ExitTemplateMissing      = 28 // team-init: <plugin-root>/templates/team.md is missing
+	// 29..33 reserved.
+	ExitCallsignLive = 34 // team-init: a live session is named <callsign>-lead
 )
 
 // ExitCode maps an error to its numeric exit code via errors.As.

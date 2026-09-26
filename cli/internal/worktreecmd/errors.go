@@ -58,3 +58,19 @@ func ErrBranchCheckedOutInMain(branch string) *Error {
 		Remediation: "git switch $LETS_MERGE_BRANCH in main repo, then retry; or pass --switch-main-if-needed (requires clean tree)",
 	}
 }
+
+// ErrTeamExists - team-init found (or the filesystem's link refused over) a team
+// file of that callsign; it is never overwritten.
+func ErrTeamExists(path string) *Error {
+	return &Error{Code: ExitTeamExists, Kind: "team_exists", Message: fmt.Sprintf("team file %s already exists", path), Remediation: "pick another callsign (--suggest-callsign)"}
+}
+
+// ErrTemplateMissing - team-init cannot read the plugin's team template.
+func ErrTemplateMissing(path string) *Error {
+	return &Error{Code: ExitTemplateMissing, Kind: "template_missing", Message: fmt.Sprintf("team template %s is missing", path), Remediation: "pass --plugin-root <plugins/lets>"}
+}
+
+// ErrCallsignLive - a live session already runs as the callsign's lead.
+func ErrCallsignLive(callsign string) *Error {
+	return &Error{Code: ExitCallsignLive, Kind: "callsign_live", Message: fmt.Sprintf("a live session is named %s-lead", callsign), Remediation: "pick another callsign (--suggest-callsign)"}
+}

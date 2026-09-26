@@ -343,3 +343,36 @@ func TestFindByWorktree_MissingDir(t *testing.T) {
 		t.Errorf("name=%q ok=%v warns=%v err=%v, want nothing", name, ok, warns, err)
 	}
 }
+
+func TestCallsigns_AllValid(t *testing.T) {
+	seen := map[string]bool{}
+	for _, c := range teamfile.Callsigns {
+		if !teamfile.ValidName(c) {
+			t.Errorf("callsign %q fails ValidName", c)
+		}
+		if seen[c] {
+			t.Errorf("callsign %q listed twice", c)
+		}
+		seen[c] = true
+	}
+	if len(teamfile.Callsigns) < 30 {
+		t.Errorf("only %d callsigns", len(teamfile.Callsigns))
+	}
+}
+
+func TestFreeCallsign_SkipsFileAndLiveLead(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, teamfile.Callsigns[0]+".md"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	live := func(name string) bool { return name == teamfile.Callsigns[1]+"-lead" }
+	if c, ok := teamfile.FreeCallsign(dir, live); !ok || c != teamfile.Callsigns[2] {
+		t.Errorf("FreeCallsign = %q, %v; want %q (file and live lead skipped)", c, ok, teamfile.Callsigns[2])
+	}
+	if c, ok := teamfile.FreeCallsign(filepath.Join(dir, "missing"), nil); !ok || c != teamfile.Callsigns[0] {
+		t.Errorf("a missing teams dir: %q, %v", c, ok)
+	}
+	if _, ok := teamfile.FreeCallsign(dir, func(string) bool { return true }); ok {
+		t.Error("every lead live must leave no callsign")
+	}
+}
