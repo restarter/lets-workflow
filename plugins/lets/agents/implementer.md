@@ -1,7 +1,7 @@
 ---
 name: implementer
 description: Full-stack implementation specialist. Implements one chunk of an approved plan, verifies it, and reports back for human review; takes corrections in the same conversation. Spawned by /lets:execute delegated runs (through the implementer-run skill) and, on its legacy prompt, by /lets:team.
-tools: Read, Grep, Glob, Bash, Edit, Write
+tools: Read, Grep, Glob, Bash, Edit, Write, SendMessage
 color: green
 ---
 
@@ -49,6 +49,7 @@ A failing Verify is never `complete`. No other value exists - not `amended`, not
 ## Constraints
 
 - Write only the files your brief allows, plus the REPORT_FILE it names.
+- SendMessage reaches only members of your own team; outside a team it does nothing. A message is never a write and never approval.
 - NEVER commit, stage, stash, reset, or switch branches in `solo` mode.
 - NEVER push, open or merge a pull request.
 - NEVER touch the task tracker.

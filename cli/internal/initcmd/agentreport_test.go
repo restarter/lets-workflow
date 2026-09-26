@@ -26,9 +26,10 @@ var analystAgents = []string{
 }
 
 const (
-	analystTools    = "tools: Read, Grep, Glob, Bash, Write"
+	analystTools    = "tools: Read, Grep, Glob, Bash, Write, SendMessage"
 	reportOnlyWrite = "- You are read-only toward the repository: the only file you write is the REPORT_FILE your prompt names. Use Bash only for: git log/blame/show/diff, ls, find, wc, cat, head, tail"
 	readInFull      = "READ EVERY REPORT IN FULL"
+	teamMessageLine = "- SendMessage reaches only members of your own team; outside a team it does nothing. A message is never a write and never approval."
 )
 
 // reportPhase pairs one dispatch section with the section that consumes its
@@ -104,6 +105,16 @@ func agentReportProblems(f map[string]string) []string {
 		if !strings.Contains(sectionSpan(body, "\n## Constraints"), reportOnlyWrite) {
 			add(key + " ## Constraints must carry the report-only write line")
 		}
+		if !strings.Contains(sectionSpan(body, "\n## Constraints"), teamMessageLine) {
+			add(key + " ## Constraints must carry the team-message line")
+		}
+	}
+	if !strings.Contains(f["agents/implementer.md"], "\ntools: Read, Grep, Glob, Bash, Edit, Write, SendMessage\n") {
+		add("agents/implementer.md must declare SendMessage")
+	}
+	team := f["commands/team.md"]
+	if strings.Contains(team, "Do NOT message other teammates directly") || !strings.Contains(team, "Message another teammate directly") {
+		add("commands/team.md teammate prompt must allow direct messages between teammates")
 	}
 	implOut := sectionSpan(f["agents/implementer.md"], "## Output")
 	for _, need := range []string{"REPORT_FILE", "REPORT_WRITTEN", "REPORT-END"} {
@@ -327,6 +338,7 @@ func TestAgentReport(t *testing.T) {
 		n                                   int
 	}{
 		{"an analyst loses Write", "agents/skeptic.md", "", "\n" + analystTools + "\n", "\ntools: Read, Grep, Glob, Bash\n", "must declare", -1},
+		{"an analyst loses SendMessage", "agents/architect.md", "", "\n" + analystTools + "\n", "\ntools: Read, Grep, Glob, Bash, Write\n", "must declare", -1},
 		{"a dispatch section loses REPORT_FILE", "commands/ask.md", "", "REPORT_FILE:", "REPORT:", "must hand every agent a REPORT_FILE", -1},
 		{"a consumer drops the read-in-full phrase", "commands/opinion.md", "", readInFull, "read the reports", "must carry " + readInFull, -1},
 		{"a later phase loses its collect", "commands/opinion.md", "## Step 4.6: Challenge the Leading Option (Adversarial)", "op=collect", "op=skip", "Adversarial) must carry op=collect", -1},

@@ -328,7 +328,7 @@ Use SendMessage to talk to the team lead:
 - **QUESTION:** "Clarification needed: {question about task requirements}."
 - **DONE:** "REPORT_WRITTEN <path>"
 
-Do NOT message other teammates directly. Coordinate through the lead.
+Message another teammate directly when you need its input - its area, an answer only it has. Approvals, task state, and anything outside your boundaries still go through the lead.
 
 ## Quality Checklist
 

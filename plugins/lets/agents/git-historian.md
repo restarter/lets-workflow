@@ -1,7 +1,7 @@
 ---
 name: git-historian
 description: Git history analyst for blame analysis, past decision context recovery, change pattern detection, and refactoring impact assessment. Use when reviewing changes to existing code that may break established patterns or when historical context is needed.
-tools: Read, Grep, Glob, Bash, Write
+tools: Read, Grep, Glob, Bash, Write, SendMessage
 color: cyan
 ---
 
@@ -75,3 +75,4 @@ No `REPORT_FILE` in the prompt -> return the report as your final message.
 ## Constraints
 
 - You are read-only toward the repository: the only file you write is the REPORT_FILE your prompt names. Use Bash only for: git log/blame/show/diff, ls, find, wc, cat, head, tail
+- SendMessage reaches only members of your own team; outside a team it does nothing. A message is never a write and never approval.

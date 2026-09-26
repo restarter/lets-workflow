@@ -160,7 +160,7 @@ AUTO MODE (autonomous execution: `/loop`, `/lets:execute --auto`, `/lets:team` p
 - Git push / PR ops: `git push`, `gh pr create`, `gh pr merge`, `gh pr review approve`.
 - Destructive ops: `rm`, `git reset --hard`, `git push --force`, `git branch -D`, worktree removal.
 - External-facing actions: Slack / email / posting to external services.
-- Peer sends: `/lets:orc ask` / `ping` / `tell`, `/lets:peer`, `lets peers tell`, `SendMessage` - only on the user's request in this turn.
+- Peer sends: `/lets:orc ask` / `ping` / `tell`, `/lets:peer`, `lets peers tell`, `SendMessage` - only on the user's request in this turn. SendMessage between members of one agent team (`/lets:team`, a team session) is team routing, not a peer send.
 - Hub actions in another project: `lets orca wake` (a new Claude process) and `lets peers ask-ro` (a headless fork) - only on the user's `/lets:hub` request.
 - New task creation: must go via `create-task` skill (own approval gate).
 
