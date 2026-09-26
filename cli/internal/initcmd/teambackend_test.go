@@ -77,7 +77,8 @@ func TestTeamBackend(t *testing.T) {
 		if strings.Contains(l, "--command") && !strings.Contains(l, "--name") {
 			t.Errorf("every --command carries --name: %s", strings.TrimSpace(l))
 		}
-		if strings.Contains(l, "worktree create") && !strings.Contains(l, `--base "origin/`) {
+		// a route to /lets:worktree create --team is not a create; a bare create on the same line still is
+		if bare := strings.ReplaceAll(l, "/lets:worktree create --team", ""); strings.Contains(bare, "worktree create") && !strings.Contains(bare, `--base "origin/`) {
 			t.Errorf("a worker worktree is cut from origin/<merge> only: %s", strings.TrimSpace(l))
 		}
 	}
@@ -389,5 +390,78 @@ func TestTeamBackend_TeamTaskFlow(t *testing.T) {
 	}
 	if n := strings.Count(know, `{ label: "`); n > 4 || !strings.Contains(know, `{ label: "None", description: "Promote nothing" }`) || !strings.Contains(know, "at most 3 candidates") {
 		t.Errorf("the knowledge question offers at most 3 facts plus None (%d options)", n)
+	}
+}
+
+// TestTeamBackend_CreateDisband pins /lets:team create (a route only) and disband:
+// the lead from the lets members record, never a kill, the in-progress refusal, the
+// team's parked branches from lets worktree parked (owned vs UNOWNED), removal through
+// /lets:worktree remove for every launcher, and the file kept as history.
+func TestTeamBackend_CreateDisband(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join(pluginDir(t), "commands", "team.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	team := string(b)
+	if !strings.Contains(strings.Split(team, "\n")[2], "|create|disband]") {
+		t.Error("the argument-hint must offer create|disband")
+	}
+	for _, route := range []string{"- `create [<callsign>] --area <a>` -> go to Create", "- `disband <callsign>` -> go to Disband"} {
+		if !strings.Contains(team, route) {
+			t.Errorf("Step 1 must route %q", route)
+		}
+	}
+	create := sectionSpan(team, "\n## Create\n")
+	if !strings.Contains(create, `Skill(skill: "lets:worktree", args: "create --team [<callsign>] --area <a>")`) || !strings.Contains(create, "`/lets:worktree create --team`") {
+		t.Error("create routes to /lets:worktree create --team")
+	}
+	for _, dup := range []string{"team-init", "lets worktree create", "lets orca", "lets cmux", "lets tmux"} {
+		if strings.Contains(create, dup) {
+			t.Errorf("create duplicates the worktree flow: %q", dup)
+		}
+	}
+
+	disband := sectionSpan(team, "\n## Disband\n")
+	if disband == "" {
+		t.Fatal("## Disband section missing")
+	}
+	if !strings.Contains(disband, "lets members lead --scope '<c>' --json") || !strings.Contains(disband, "never counted or guessed") || strings.Contains(disband, "exactly one session") {
+		t.Error("disband reads the lead from the lets members record, never a session count")
+	}
+	if strings.Contains(disband, "TaskStop(") || !strings.Contains(disband, "no `TaskStop`") {
+		t.Error("disband never kills a session")
+	}
+	tellGate := strings.Index(disband, `label: "Tell the lead (Recommended)"`)
+	tell := strings.Index(disband, `Skill(skill: "lets:orc", args: "verb=tell`)
+	if tellGate < 0 || tell < tellGate {
+		t.Error("the tell to a live lead is gated")
+	}
+	if !strings.Contains(disband, "`lead.status` `live`, `rotated` or `unknown`") || !strings.Contains(disband, "No lead record, or its lead is `gone` ->") {
+		t.Error("an unknown lead is asked about like a live one, never treated as gone")
+	}
+	wrapped := strings.Index(disband, `label: "Lead has wrapped up"`)
+	if wrapped < 0 || !strings.Contains(disband, "- **Lead has wrapped up** -> go on to D2") || !strings.Contains(disband, "then end with /lets:end") {
+		t.Error("a live lead's gate must offer going on to D2, and the tell asks the lead to /lets:end")
+	}
+	if !strings.Contains(disband, "`status` is `in_progress` -> **Refused:**") {
+		t.Error("disband refuses a team branch with a task in progress")
+	}
+	for _, want := range []string{"lets worktree parked --team '<c>' --json", "**UNOWNED**", "never resolved or counted as this team's", "Parks of another callsign are not listed", "`/lets:start --main`", "**Disband never proceeds silently past a parked branch:**", "a resolved branch drops out of `owned[]`"} {
+		if !strings.Contains(disband, want) {
+			t.Errorf("disband's parked step must carry %q", want)
+		}
+	}
+	parked := strings.Index(disband, "### Step D3: Parked tasks")
+	remove := strings.Index(disband, `Skill(skill: "lets:worktree", args: "remove team_<c>")`)
+	if parked < 0 || remove < parked || !strings.Contains(disband, "every launcher removes it the same way") {
+		t.Error("disband removes through /lets:worktree remove for every launcher, after the parked check")
+	}
+	for _, banned := range []string{"--force", "git worktree remove", "rm -rf"} {
+		if strings.Contains(disband, banned) {
+			t.Errorf("disband must not carry %q", banned)
+		}
+	}
+	if !strings.Contains(disband, "run it only on the user's yes") || !strings.Contains(disband, "kept as history - never deleted") || !strings.Contains(disband, "`## 8. Decisions`") {
+		t.Error("the teardown hook is gated and the team file is retired, kept as history")
 	}
 }

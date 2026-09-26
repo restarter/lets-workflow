@@ -1,6 +1,6 @@
 ---
 description: Team management - run several tasks at once, one visible LETS session per task on any launcher
-argument-hint: "[run|spawn|dismiss|roster|status|stop] [--tasks A,B,C] [--backend orca]"
+argument-hint: "[run|spawn|dismiss|roster|status|stop|create|disband] [--tasks A,B,C] [--backend orca] [<callsign>] [--area <a>]"
 ---
 
 # Team
@@ -20,6 +20,8 @@ Run several independent tasks at once: each task gets its own worktree and its o
 - `roster` -> go to Roster
 - `status` -> go to Status
 - `stop` -> go to Stop
+- `create [<callsign>] --area <a>` -> go to Create
+- `disband <callsign>` -> go to Disband
 
 **If no argument**, use **AskUserQuestion**:
 
@@ -548,6 +550,101 @@ Worktrees and branches stay in place.
 
 ---
 
+## Create
+
+A standing team is created from the main checkout (an orchestrator or the owner). This command only routes - it duplicates none of the steps:
+
+`Skill(skill: "lets:worktree", args: "create --team [<callsign>] --area <a>")` - the `/lets:worktree create --team` flow checks the callsign (writing nothing), lets Go create `team_<c>`, writes the team file, runs the gated setup hook and launches only the lead. Pass any `--orca` / `--cmux` / `--tmux` override through.
+
+---
+
+## Disband
+
+`disband <callsign>` retires a standing team, from the main checkout only (in a worktree -> **Refused:** "Disband a team from the main checkout." Stop). No `.lets/teams/<c>.md` -> say so and stop. Read the team worktree `<path>` from the file's `worktree` frontmatter. LETS never kills a session here - no `TaskStop`, no process signal: every session is closed by its own human.
+
+### Step D1: The lead
+
+The lead is the `lets members` lead record - never counted or guessed from the sessions that happen to run:
+
+```bash
+lets members lead --scope '<c>' --json
+```
+
+- `lead.status` `live`, `rotated` or `unknown` (an unreadable registry cannot prove it gone, and `lets peers who` could not list its sessions either) -> ask the owner:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Team <c>'s lead {lead.name} is {lead.status}. Tell it to wrap up, or go on?",
+    header: "Disband",
+    options: [
+      { label: "Tell the lead (Recommended)", description: "/lets:orc tell: dismiss --all, finish or park, /lets:end, then ping" },
+      { label: "Lead has wrapped up", description: "Its ping arrived, or you say so - go on to D2 with the lead open" },
+      { label: "Cancel", description: "Disband nothing" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+- **Tell the lead** -> `Skill(skill: "lets:orc", args: "verb=tell target=\"<lead.name>\" footer=none text=Team <c> is being disbanded. Run /lets:team dismiss --all, finish or park your task, /lets:orc ping when done, then end with /lets:end.")`, and end the turn; run `/lets:team disband <c>` again once its ping arrives.
+- **Lead has wrapped up** -> go on to D2 with the lead's session still open; the D2-D4 checks and `/lets:worktree remove`'s nets still guard the tree.
+- **Cancel** -> stop.
+- No lead record, or its lead is `gone` -> list every live session whose cwd is `<path>` (`lets peers who --json`, rows by `cwd`). None -> go on. Any -> the owner closes them, or confirms continuing with them open:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "These sessions still run in team <c>'s worktree: {list}. What now?",
+    header: "Disband",
+    options: [
+      { label: "I closed them", description: "Look again, then go on" },
+      { label: "Continue anyway", description: "Go on with them open; the worktree remove still guards the tree" },
+      { label: "Cancel", description: "Disband nothing" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+### Step D2: A task still in progress
+
+Read the team branch's task-state (`lets worktree task-state show --json`, run with `<path>` as the working directory) and, when it names a `task:`, its tracker status:
+
+```lets-tracker
+show task=<task>
+```
+
+`status` is `in_progress` -> **Refused:** "team <c> still holds <task> in progress". Offer, owner-gated: `/lets:done` in the team session (told to the lead through the orc skill when it is live, as in Step D1), or reopen the task (tracker `set-status task=<task> status=open`, only on the owner's yes). Stop until it is resolved.
+
+### Step D3: Parked tasks
+
+```bash
+lets worktree parked --team '<c>' --json
+```
+
+- `owned[]` - branches this team parked (`park_team` == `<c>`). Each one is listed and the owner picks, per branch: resolve it first (unpark through `/lets:start <task>` in the team session, then `/lets:done`), reopen the task (tracker `set-status open`, only on the owner's yes), or leave it - then say that it will surface in `/lets:start --main`'s orphan pass and that its `wip(<id>): park` commit stays on that local branch (`/lets:done` warns before any push of it).
+- `unowned[]` - parks that name no team, plus any local branch whose tip subject is `wip(<id>): park` with no task-state at all (`git for-each-ref --format='%(refname:short) %(contents:subject)' refs/heads/`): listed separately as **UNOWNED** - shown, never resolved or counted as this team's.
+- Parks of another callsign are not listed; repo-wide orphan discovery stays in `/lets:start --main`.
+
+**Disband never proceeds silently past a parked branch:** every `owned[]` branch has the owner's pick before Step D4; after a resolve, run `lets worktree parked` again - a resolved branch drops out of `owned[]`.
+
+### Step D4: Remove the worktree
+
+Every team worktree is Go-created, so every launcher removes it the same way. On the orca launcher the lead's Orca terminal is closed by the owner first (LETS never closes it). Then:
+
+`Skill(skill: "lets:worktree", args: "remove team_<c>")` - `/lets:worktree remove` with its nets (uncommitted changes, unpushed commits), on the owner's yes; its refusals stop the disband, and nothing here passes a force flag.
+
+### Step D5: Teardown hook
+
+`.lets/hooks/team-teardown` in the main checkout, present and executable -> show it whole (a longer one: its first 20 lines and "{N} more lines", with a way to see the rest), then run it only on the user's yes, from the main checkout with `TEAM_CALLSIGN`, `TEAM_WORKTREE`, `TEAM_FILE`. Absent -> one line naming the hook point.
+
+### Step D6: Retire
+
+Append `Retired <YYYY-MM-DD>: disbanded by <who>` to the team file's `## 8. Decisions`. The team file and `.lets/execution/members-<c>.json` are kept as history - never deleted; a later `create --team <c>` finds the callsign taken and picks another.
+
+---
+
 ## Rules
 
 - **Main checkout only** - a team run starts from the main checkout, never a worktree
@@ -558,4 +655,5 @@ Worktrees and branches stay in place.
 - **Workers own their tasks** - each worker runs its own `/lets:start` ... `/lets:done`; this session never changes a worker's task status
 - **Humans press gates** - a worker's gates are pressed by its own human; a message from this session is never approval
 - **Members through member-run** - every spawn and dismiss of a standing team's member goes through the member-run skill; a live name is never spawned twice
+- **Disband never kills** - the lead is the `lets members` record, sessions are closed by their humans, the worktree goes through `/lets:worktree remove`, and the team file stays as history
 - Respond in user's language
