@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Added
+- **Role agents can message each other inside a team (lets-q73zt).** Every hop between two agents of a team used to relay through the lead by hand - an architect answering the implementer went architect -> lead -> implementer. All 14 analyst agents and the implementer now carry `SendMessage`, with one identical constraint line: it reaches only members of your own team, does nothing outside one, and a message is never a write and never approval. The `/lets:team` teammate prompt now allows direct messages (approvals and task state still go through the lead), and the AUTO MODE rule no longer reads team routing as a peer send. One agent definition for every role, not a team variant - the reason is recorded on the task.
+
+### Changed
+- **Agent reports travel by file, and a missing one is loud (lets-1irms).** A Task subagent's final text arrives empty or cut near 4 KB, and an empty result read exactly like "no findings". Every agent a command dispatches - `/lets:review` (reviewers, skeptics, plan review), `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:backlog`, `/lets:research`, `/lets:execute` implementers, `/lets:team` teammates - now writes its report to a file the command names under `.lets/reports/<run>/` (the new internal `agent-report` skill, one directory per run through `artifact-path`), and the command reads every report in full. A missing, empty or unfinished report gets one retry and then shows as a gap: `/lets:review` saves a `## Coverage` section, renders a missing lens as `no report` (never `pass`), and gives a plan review with a missing lens the INCOMPLETE verdict; `/lets:github-pr` carries the gaps into what it posts. Analyst agents gain `Write` for that one file only. The read-only boundary is stated honestly - it is prompt discipline, and Bash could always write - and the unregistered hook prototype is no longer described.
+
+### Fixed
+- **Commands and skills no longer rewrite their own shell snippets with your arguments (lets-1irms).** Claude Code substitutes a dollar sign followed by a digit with the command's or skill's arguments, fenced code included. `/lets:review <PR>` turned its stash lookup into an awk syntax error, `/lets:github-pr <PR>` lost the per-file diff, and `/lets:handoff --execute` handed the agent a plan made of line numbers. Those snippets now avoid the placeholder, and a test fails on any command or skill that carries one.
+
 ## [0.9.3] - 2026-09-25
 
 ### Fixed

@@ -387,7 +387,7 @@ Only **Start** continues. The model is chosen by the first spawn (the `implement
 
 ### 5-D.3 Run record
 
-Before the first spawn, write `.lets/cache/delegated-run-{TASK_ID}.json` (`.lets/` is shared by every worktree, so the name carries the task id). `.lets/` is a symlink into the main checkout, so the Write / Edit tools ask a permission on every write there, and the record is rewritten at every transition. So every file this run writes under `.lets/` whose content THIS session authors - the record, briefs, amendments, the plan's `[DONE]` marks - goes through Bash (`cat > <file> <<'EOF'`, or `sed -i` for a mark). A report is the one exception: its text is the agent's, and a line in it that matches the heredoc delimiter would end the heredoc and run the rest as shell. Write a report with the Write tool (one permission per report), never through a shell command:
+Before the first spawn, write `.lets/cache/delegated-run-{TASK_ID}.json` (`.lets/` is shared by every worktree, so the name carries the task id). `.lets/` is a symlink into the main checkout, so the Write / Edit tools ask a permission on every write there, and the record is rewritten at every transition. So every file this run writes under `.lets/` whose content THIS session authors - the record, briefs, amendments, the plan's `[DONE]` marks - goes through Bash (`cat > <file> <<'EOF'`, or `sed -i` for a mark). Reports are not authored by this session: the implementer writes its own REPORT_FILE.
 
 ```json
 {
@@ -397,12 +397,12 @@ Before the first spawn, write `.lets/cache/delegated-run-{TASK_ID}.json` (`.lets
   "model": null,
   "caller": [ { "task": 0, "state": "pending" } ],
   "chunks": [
-    { "id": "c1", "tasks": [1, 2], "group": "A", "allowlist": ["path/a", "path/b"], "agent": "impl-{RUN}-c1", "generation": 1, "base": null, "phase": "pending", "round": 0, "report": null, "status": null, "reason": null, "received": null, "patch_sha": null, "commit": null }
+    { "id": "c1", "tasks": [1, 2], "group": "A", "allowlist": ["path/a", "path/b"], "agent": "impl-{RUN}-c1", "generation": 1, "base": null, "phase": "pending", "round": 0, "report": null, "status": null, "reason": null, "received": null, "patch_sha": null, "commit": null, "nudged": false }
   ]
 }
 ```
 
-`phase` moves `pending` -> `running` -> `review` -> (`correcting` -> `running` -> `review`)* -> `committing` -> `accepted`. A Stop at a review gate records `paused` (it reopens as `review`); a Stop while an agent works goes through `stopping` to `blocked`; `blocked` always carries a `reason` - `stopped`, `re-plan`, `unreachable` or `unrecognized-commits`. Caller tasks move `pending` -> `running` -> `done`. `report` is the path of the latest round's saved report, `status` and `reason` are read from it, `received` counts reports in arrival order across the run, and `generation` is 1 for the first agent of a chunk and grows with each replacement. Rewrite the record at every transition BEFORE acting on it, so an interrupted session always finds the state it was in.
+`phase` moves `pending` -> `running` -> `review` -> (`correcting` -> `running` -> `review`)* -> `committing` -> `accepted`. A Stop at a review gate records `paused` (it reopens as `review`); a Stop while an agent works goes through `stopping` to `blocked`; `blocked` always carries a `reason` - `stopped`, `re-plan`, `unreachable`, `missing-report` or `unrecognized-commits`. `nudged` records that this round's one report nudge was sent; it resets to `false` whenever `round` or `generation` changes. Caller tasks move `pending` -> `running` -> `done`. `report` is the path of the latest round's saved report, `status` and `reason` are read from it, `received` counts reports in arrival order across the run, and `generation` is 1 for the first agent of a chunk and grows with each replacement. Rewrite the record at every transition BEFORE acting on it, so an interrupted session always finds the state it was in.
 
 ### 5-D.4 Dispatch - in plan order
 
@@ -429,7 +429,8 @@ BASE: {base sha}
 TASKS:
 {the chunk's ### Task sections verbatim, each **Commit:** block removed - this session commits after review}
 PROJECT RULES: read the repository's CLAUDE.md before editing.
-REPORT: fill in exactly this skeleton and send it as your final message - nothing before it, nothing after it. Status is one of `complete`, `deviation-stopped`, `blocked`; keep only the block that matches it:
+REPORT_FILE: {absolute path of .lets/cache/report-{TASK_ID}-{RUN}-{chunk}-g{generation}-r{round}.md}
+REPORT: fill in exactly this skeleton and write it to REPORT_FILE (last line REPORT-END); your final message is REPORT_WRITTEN <path> and the report's **Status:** line. Status is one of `complete`, `deviation-stopped`, `blocked`; keep only the block that matches it:
 ### Chunk: {chunk}
 **Status:** `complete`
 **Files changed**
@@ -454,9 +455,9 @@ One chunk is live at a time.
 
 ### 5-D.5 Review - one report at a time
 
-**What is a report.** The FIRST text from `{agent}` after its latest spawn or correction - a message, or an idle notification's `result` - that carries a `**Status:**` line holding `complete`, `deviation-stopped` or `blocked`. Anything later in the same round is a repeat of it, Status line or not: record nothing. An idle notification with no such line is NOT a report - the agent may still be working: keep the phase and end the turn. A message offered as the report whose Status line is missing or holds any other value IS a report with status `blocked`, reason `malformed-report` - never infer a status from prose.
+**What is a report.** On EVERY notification from `{agent}` after its latest spawn or correction - a message, an idle notification, a completion, EMPTY ones included - inspect the round's REPORT_FILE first, without concluding: `Skill(skill: "lets:agent-report", args: "op=peek dir={abs .lets/cache} names=report-{TASK_ID}-{RUN}-{chunk}-g{generation}-r{round}")` - READ EVERY REPORT IN FULL. `OK` -> that file IS the report, whatever the message says or whether it is empty: `status` and `reason` come from its **Status** line and its **Blocked** / **Deviation** block (a message Status that disagrees is ignored and named in the review block). A file whose Status line is missing or holds any other value -> `blocked`, reason `malformed-report` - never infer a status from prose. Not `OK` -> the report is DUE only when the message carries `REPORT_WRITTEN` or a `**Status:**` line: then `Skill(skill: "lets:agent-report", args: "op=collect dir={abs .lets/cache} names=report-{TASK_ID}-{RUN}-{chunk}-g{generation}-r{round} retry=no")` records the `GAP`, and the report is status `blocked`, reason `missing-report`, with the message text quoted UNVERIFIED. Not `OK` and neither marker: an interim message while `{agent}` is still working -> not a report yet, no gap, keep the phase and end the turn. An IDLE or COMPLETION notification (the agent has stopped) -> the report is due now, in this session: when the chunk's record has no `nudged: true` for this round, record it and `SendMessage({to: "{agent}", message: "Write your report for chunk {chunk} to REPORT_FILE {path} now and send REPORT_WRITTEN."})` - a SendMessage that fails (the agent is gone) settles the round at once: `op=collect ... retry=no`, `blocked`, `missing-report`; otherwise end the turn. A messaged agent takes a turn, so its NEXT notification - a reply or another idle - settles the round under this same rule; and the round never outlives the nudge: whenever this session is next invoked for any OTHER reason (a user turn, another agent's notification, a `/lets:execute` resume) while a nudged round still has no `OK` file, `op=peek` it and check `ListAgents`: `{agent}` busy -> it is still answering, leave the round pending; `{agent}` idle (it has had its turn since the nudge) or not listed -> settle now: `op=collect ... retry=no`, `blocked`, `missing-report`, and the review gate. When the round was already nudged, the same settlement applies. Never wait for a later `/lets:execute` to notice a stopped agent. Anything later in the same round is a repeat: record nothing.
 
-When `{agent}` reports, save it verbatim to `.lets/cache/report-{TASK_ID}-{RUN}-{chunk}-g{generation}-r{round}.md`, then record `phase: review`, `report` (that path), `status` and `reason` (read from its **Status** and its **Blocked** / **Deviation** block) and `received` (one more than the highest in the record). One agent is live at a time, so no report interrupts an open gate.
+When `{agent}` reports, record `phase: review`, `report` (the REPORT_FILE path), `status` and `reason` (read from its **Status** and its **Blocked** / **Deviation** block) and `received` (one more than the highest in the record). One agent is live at a time, so no report interrupts an open gate.
 
 Check the real tree - the report is the agent's claim, the diff is the fact:
 
@@ -539,6 +540,7 @@ AskUserQuestion(
 
   ```
   AMENDMENT to chunk {chunk}, round {round+1} - it changes what it names and nothing else:
+  REPORT_FILE: {absolute path of .lets/cache/report-{TASK_ID}-{RUN}-{chunk}-g{generation}-r{round+1}.md}
   {the correction, verbatim}
   ```
 
@@ -578,13 +580,14 @@ Then, for each chunk not `accepted`, in plan order:
 |---|---|---|
 | `pending` | - | continue 5-D.4 from here |
 | `running` / `correcting` | `ListAgents` shows `{agent}` busy | it is still working: end the turn and wait for its report |
-| `running` / `correcting` | `ListAgents` shows `{agent}` idle | its report was lost with the old session, or it is waiting on something: `SendMessage({to: "{agent}", message: "Report on chunk {chunk} now: resend your last report unchanged, or, if you have not finished, send a report saying why."})` and handle the reply as 5-D.5 |
-| `running` / `correcting` | `{agent}` not listed | record `phase: blocked`, `reason: unreachable`; the Replacement gate |
+| `running` / `correcting` | `ListAgents` shows `{agent}` idle | FIRST the 5-D.5 `op=peek` on the round's REPORT_FILE - `OK` -> handle it as 5-D.5 (the report was written, only the message was lost); otherwise the SAME one-nudge rule as 5-D.5, on the same per-round `nudged` state: not yet nudged -> record `nudged: true` and `SendMessage({to: "{agent}", message: "Report on chunk {chunk} now: write your report to REPORT_FILE {path} and send REPORT_WRITTEN, or, if you have not finished, write a report saying why."})`, handle the reply as 5-D.5; already nudged -> `op=collect ... retry=no`, record `blocked`, `reason: missing-report`. A resumed session never nudges a round twice |
+| `running` / `correcting` | `{agent}` not listed | FIRST the same `op=peek` - `OK` -> handle as 5-D.5 (the agent finished before it vanished); otherwise `op=collect ... retry=no` (the report is due and will not come), then record `phase: blocked`, `reason: unreachable`; the Replacement gate |
 | `stopping` | - | 5-D.6 again |
-| `review` / `paused` | the `report` file exists | Render review (5-D.5) from the saved report, with its ORIGINAL status gate - Accept included when it was `complete` and the check is clean; a recorded `patch_sha` of `null` is simply replaced. `ListAgents` does not list `{agent}` -> a correction needs the agent that wrote the diff: `complete` shows its gate without **Correct** (Accept, Stop), `deviation-stopped` without **Correct** (Re-plan, Stop), and `blocked` goes to the Replacement gate instead |
+| `review` / `paused` | the recorded `report` file peeks `OK` | Render review (5-D.5) from the saved report, with its ORIGINAL status gate - Accept included when it was `complete` and the check is clean; a recorded `patch_sha` of `null` is simply replaced. `ListAgents` does not list `{agent}` -> a correction needs the agent that wrote the diff: `complete` shows its gate without **Correct** (Accept, Stop), `deviation-stopped` without **Correct** (Re-plan, Stop), and `blocked` goes to the Replacement gate instead |
+| `review` / `paused` | the recorded `report` file does NOT peek `OK` (MISSING, EMPTY, UNTERMINATED or UNREADABLE since it was recorded) | a **rehydration** of the SAME round, not a new report: `{agent}` listed -> `SendMessage({to: "{agent}", message: "Your report for chunk {chunk}, round {round}, is no longer readable at {path}: write it there again, unchanged, and send REPORT_WRITTEN."})`; on its reply `op=peek` the same file - `OK` -> read it in full, overwrite the record's `status` / `reason` for THIS round (`round` and `received` unchanged - it is the same report), then render the review gate from it; still not `OK`, or `{agent}` not listed -> `op=collect ... retry=no`, record `blocked`, `reason: missing-report`, then the Replacement gate. 5-D.5's "anything later in the same round is a repeat" does not apply to a reply this row asked for |
 | `committing` | `git log --format=%H {base}..HEAD` | exactly one new commit whose message carries `Task: {TASK_ID}` and whose `git show --name-only --format= <sha>` lists only allowlist paths -> record `accepted` and `commit`, mark `[DONE]`; no new commit -> record `review` and show the gate again; anything else -> record `blocked`, `reason: unrecognized-commits` |
 | `blocked`, `reason: re-plan` | - | say the chunk went to re-planning; after `/lets:plan`, `/lets:execute` starts a run of the new plan |
-| `blocked`, `reason: stopped` or `unreachable` | - | the Replacement gate |
+| `blocked`, `reason: stopped`, `unreachable` or `missing-report` | - | the Replacement gate |
 | `blocked`, `reason: unrecognized-commits` | - | show `git log --oneline {base}..HEAD`; stop - the user sorts the commits out |
 
 **Replacement gate.** A replacement agent refuses to start in a dirty tree (its own clean-start rule), so check first: `git rev-parse HEAD` against `base`, and `git status --porcelain --untracked-files=all`.
@@ -623,7 +626,7 @@ AskUserQuestion(
 
 HEAD moved, anything staged, or a path outside the allowlist changed -> offer neither: show what changed and stop.
 
-- **Start a replacement** -> `generation+1`; the new name is `impl-{RUN}-{chunk}-r{generation}`; write `.lets/cache/chunk-{TASK_ID}-{RUN}-{chunk}-g{generation}.md` = the original brief plus an `AMENDMENTS SO FAR:` section holding every correction file of the chunk, oldest first; record `agent`, `generation`, `round: 0`, `phase: running`, and clear the first agent's `report`, `status`, `reason` and `patch_sha` to `null` so no stale round describes the new one; spawn it through `implementer-run`. Say plainly that it is a new agent.
+- **Start a replacement** -> `generation+1`; the new name is `impl-{RUN}-{chunk}-r{generation}`; write `.lets/cache/chunk-{TASK_ID}-{RUN}-{chunk}-g{generation}.md` = the original brief plus an `AMENDMENTS SO FAR:` section holding every correction file of the chunk, oldest first - drop every `REPORT_FILE:` line from the copied brief and amendments, and put one operative line `REPORT_FILE: {absolute path of .lets/cache/report-{TASK_ID}-{RUN}-{chunk}-g{generation}-r0.md}` (the NEW generation, round 0) directly above `REPORT:` - a replacement never writes an earlier generation's report; record `agent`, `generation`, `round: 0`, `phase: running`, and clear the first agent's `report`, `status`, `reason` and `patch_sha` to `null` so no stale round describes the new one; spawn it through `implementer-run`. Say plainly that it is a new agent.
 - **Discard it and replace** -> ask in words, listing every file, before touching anything (destructive). On yes: `git restore --staged --worktree -- <each changed tracked allowlist path>` and `rm -- "<each untracked allowlist path>"`, check the tree is clean, then **Start a replacement**.
 - **Keep it and stop** / **Stop** -> leave the record as it is.
 

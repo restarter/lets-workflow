@@ -28,7 +28,7 @@ LETS ships 15 specialized agents. You don't have to pick them — the commands t
 
 **Multiple modes.** Each agent behaves differently depending on context: *review* mode for code review, *opinion* mode for technical decisions, *plan* mode for evaluating an architecture, *brainstorm* mode for ideation, *ask* mode for a direct question.
 
-**Read-only by default.** Agents analyze; they never modify code. The one exception is `implementer`, which has write access: `/lets:execute` hands it plan chunks you review and correct, and `/lets:team` runs it in parallel worktrees.
+**Read-only by default.** Agents analyze; they never modify code. The one exception is `implementer`, which has write access: `/lets:execute` hands it plan chunks you review and correct, and `/lets:team` runs it in parallel worktrees. Each agent writes its report to a file under `.lets/reports/` that the command reads in full, so a long report is never cut and a report that never arrives is shown as a gap, not as a clean result; the only file an analyst writes is that report.
 
 **Agents respond in English.** Commands localize their output to your language (set by `LETS_LANGUAGE` — see [configuration.md](configuration.md)); the agents themselves always work in English.
 

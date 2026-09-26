@@ -1,6 +1,6 @@
 ---
 name: artifact-path
-description: Internal skill for commands. Resolve a unique, task-scoped, collision-safe path for an artifact written under .lets/ (plans, reviews, session snapshots, hand-off briefs). Do not trigger on user conversation - only when a command is about to write an artifact.
+description: Internal skill for commands. Resolve a unique, task-scoped, collision-safe path for an artifact written under .lets/ (plans, reviews, session snapshots, hand-off briefs, per-run agent report directories). Do not trigger on user conversation - only when a command is about to write an artifact.
 user-invocable: false
 ---
 
@@ -8,7 +8,7 @@ user-invocable: false
 
 `.lets/` is ONE directory shared by every worktree of the repo (whole-dir symlink). Two sessions writing the same artifact kind on the same day used to overwrite each other (lets-05c4s - a plan review was lost). This skill is the single place that names an artifact and guarantees the path is free.
 
-**Contract:** args `kind=<kind> ext=<md|json> [task=<task-id>]`. Output: ONE echoed line `ARTIFACT_FILE=<absolute path>`. The caller writes to that path VERBATIM - never recomputes the stamp, never strips the `-vN` suffix, never writes anywhere else.
+**Contract:** args `kind=<kind> ext=<md|json|dir> [task=<task-id>]`. Output: ONE echoed line `ARTIFACT_FILE=<absolute path>`. The caller writes to that path VERBATIM - never recomputes the stamp, never strips the `-vN` suffix, never writes anywhere else. `ext=dir` CREATES the directory (the `mkdir` is the claim) and echoes its path; a file kind only names a free path.
 
 ## Name shape
 
@@ -21,6 +21,7 @@ user-invocable: false
 | `review-local`, `review-branch`, `review-pr-<n>`, `review-plan` | `.lets/reviews/` |
 | `snapshot` | `.lets/sessions/` |
 | `handoff` | `.lets/handoffs/` |
+| `reports-<command>` (with `ext=dir`) | `.lets/reports/` - one directory per dispatching run, filled by the `agent-report` skill |
 
 `ID` is the task id when one is active (MANDATORY whenever a task exists - same rule as the branch named by the active tracker convention). With no task: `{branch-slug}-{6hex}`, 6hex = first 6 chars of `$CLAUDE_CODE_SESSION_ID`, so two taskless sessions on `main` still get distinct names. `-vN` (v2, v3, ...) is appended whenever the path already exists - for task and taskless alike.
 
@@ -38,6 +39,7 @@ case "$KIND" in
   review-*) DIR=reviews ;;
   snapshot*) DIR=sessions ;;
   handoff) DIR=handoffs ;;
+  reports-*) DIR=reports ;;
   *) echo "artifact-path: unknown kind '$KIND'"; exit 1 ;;
 esac
 mkdir -p "$LETS_PROJECT_ROOT/.lets/$DIR"
@@ -49,8 +51,18 @@ else
   ID="$(git branch --show-current | tr '/' '-')-${HEX}"
 fi
 BASE="$LETS_PROJECT_ROOT/.lets/$DIR/${STAMP}-${ID}-${KIND}"
-ARTIFACT_FILE="${BASE}.${EXT}"; N=2
-while [ -e "$ARTIFACT_FILE" ]; do ARTIFACT_FILE="${BASE}-v${N}.${EXT}"; N=$((N+1)); done
+N=2
+if [ "$EXT" = dir ]; then
+  # mkdir without -p is atomic: two sessions in the same minute get two directories, never one shared
+  ARTIFACT_FILE="$BASE"
+  until mkdir "$ARTIFACT_FILE" 2>/dev/null; do
+    [ -e "$ARTIFACT_FILE" ] || { echo "artifact-path: cannot create $ARTIFACT_FILE"; exit 1; }
+    ARTIFACT_FILE="${BASE}-v${N}"; N=$((N+1))
+  done
+else
+  ARTIFACT_FILE="${BASE}.${EXT}"
+  while [ -e "$ARTIFACT_FILE" ]; do ARTIFACT_FILE="${BASE}-v${N}.${EXT}"; N=$((N+1)); done
+fi
 echo "ARTIFACT_FILE=$ARTIFACT_FILE"
 ```
 
@@ -61,6 +73,7 @@ Return the echoed `ARTIFACT_FILE` to the caller. If the echo is missing or `exit
 ## Rules
 
 - NEVER overwrite: the loop is the guard; the caller never "fixes" a path by hand.
+- `ext=dir`: the directory exists when the echo returns; the caller never creates or renames it.
 - NEVER compute a second `date` in the caller - the stamp is captured here once.
 - Task id in the name is mandatory when a task is active.
 - No tracker calls here beyond `detect-task`.

@@ -21,7 +21,7 @@ One operation on one named implementer. The caller (`/lets:execute` Step 5-D) ow
 - `chunk-file` / `correct-file` - repo-root-relative paths the caller wrote. Multi-line text crosses as a file, never inline.
 - `model` - `opus` | `sonnet` | `fable` | `haiku`, the values the `Agent` tool accepts.
 
-Both operations return as soon as the call is issued. The agent runs in the background; its report arrives later as a notification, which the caller handles.
+Both operations return as soon as the call is issued. The agent runs in the background; its report arrives later as a `REPORT_WRITTEN` pointer to the file its brief named; the caller reads the file.
 
 ## Step 1: Model panel (first spawn of a run only)
 
@@ -84,5 +84,5 @@ The name does not resolve -> run `ListAgents`, return `agent_gone: {name}` with 
 - One agent per `name`: `spawn` once, `correct` any number of times; `correct` never spawns.
 - A report is attributed by the `name` it was spawned under - never by anything the agent wrote about itself.
 - This skill never commits, never pushes, never calls a tracker verb, never edits a repository file.
-- A report is the agent's claim. The caller checks the real diff.
+- A report - the file, never the message - is the agent's claim. The caller checks the real diff.
 - No polling: the harness notifies when an agent completes.

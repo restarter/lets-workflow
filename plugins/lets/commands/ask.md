@@ -89,7 +89,7 @@ Also check if the question references specific files - if so, note the file path
 
 ## Step 4: Launch Agent
 
-Use the Task tool to spawn the selected agent:
+Open the run: `Skill(skill: "lets:agent-report", args: "op=open command=ask task={task-id} names={agent short name}")` (task omitted when none), then use the Task tool to spawn the selected agent with its REPORT_FILE line:
 
 ```
 Task(
@@ -97,6 +97,7 @@ Task(
   prompt="ultrathink
 
 PROJECT_ROOT: {LETS_PROJECT_ROOT from LETS Config}. Do NOT read or search files outside this directory.
+REPORT_FILE: {the agent's path from op=open}
 
 MODE: ask
 
@@ -112,6 +113,8 @@ QUESTION: {user_question}"
 ```
 
 ## Step 5: Present Results
+
+`Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names={agent short name}")` - READ EVERY REPORT IN FULL; show the report file's content (without the `REPORT-END` line) under `## {Agent Name} says:`. A `GAP` after the retry -> say plainly that the expert's report did not arrive ({state}); show any final text only marked UNVERIFIED.
 
 Show the agent's response:
 
