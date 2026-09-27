@@ -69,6 +69,8 @@ Then gather the backlog-specific extras the snapshot doesn't cover:
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 ```
 
+**Tracker protocol:** `Skill(skill: "lets:protocol-tracker")` before this and any later `lets-tracker` block here, unless its text is in your current context.
+
 ```lets-tracker
 list-by-status status=open limit=30
 ```
@@ -161,6 +163,8 @@ AskUserQuestion(
 **Handle response:** Standard -> standard path (Phase 3 below); Workflow -> treat as if `--workflow` was set (go to `## Workflow Mode` after Phase 2); Other -> honor a named path else default to Standard.
 
 ### Phase 1: Explorer - Gather Context
+
+Read `${CLAUDE_PLUGIN_ROOT}/protocol/agents.md` before this step unless its text is in your current context.
 
 The tracker half of this profile is the orchestrator's job - it holds the adapter; the explorer does not. Gather it first. This is the same shape Cleanup Mode's Step C1 already uses; the duplication is accepted (two modes, two budgets) rather than factored.
 
@@ -529,7 +533,7 @@ If backlog is clean, say so and suggest `/lets:backlog review` or `/lets:backlog
 
 ### Step C3: Interactive Triage
 
-For each group, walk through items and ask. Add the "Ask orchestrator" option per lets-rules `### Orchestrator offer` (Act shape; rule not loaded -> no offer). Resolved once for the whole triage run, not per item.
+For each group, walk through items and ask. Add the "Ask orchestrator" option per the Orchestrator offer protocol (Act shape; load `Skill(skill: "lets:protocol-orchestrator-offer")` here unless its text is in your current context; not loaded -> no offer). Resolved once for the whole triage run, not per item.
 
 ```
 AskUserQuestion(

@@ -89,6 +89,8 @@ Also check if the question references specific files - if so, note the file path
 
 ## Step 4: Launch Agent
 
+Read `${CLAUDE_PLUGIN_ROOT}/protocol/agents.md` before this step unless its text is in your current context.
+
 Open the run: `Skill(skill: "lets:agent-report", args: "op=open command=ask task={task-id} names={agent short name}")` (task omitted when none), then use the Task tool to spawn the selected agent with its REPORT_FILE line:
 
 ```
@@ -129,6 +131,8 @@ Show the agent's response:
 Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detect-task")`.
 If multiple tasks found, skip the tracker comment.
 If active task found:
+
+**Tracker protocol:** `Skill(skill: "lets:protocol-tracker")` before this and any later `lets-tracker` block here, unless its text is in your current context.
 
 ```lets-tracker
 comment-add task=<task-id> body="Asked {agent-name}: {question summary}. Answer: {1-sentence key takeaway}"

@@ -44,6 +44,8 @@ If no active task or multiple tasks found - ask user which task to add a note to
 
 ## Step 2: Review Current State
 
+**Tracker protocol:** `Skill(skill: "lets:protocol-tracker")` before this and any later `lets-tracker` block here, unless its text is in your current context.
+
 ```lets-tracker
 show task=<task-id>          # returns {id,title,status,url,description}
 comment-list task=<task-id>
@@ -75,7 +77,7 @@ AskUserQuestion(
 
 ## Step 4: Add Note
 
-The orchestrator composes the note body into a temp file, then submits it via `body-file=` (lets-rules "Tracker Adapters"):
+The orchestrator composes the note body into a temp file, then submits it via `body-file=` (`lets:protocol-tracker` "Bodies"):
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel); mkdir -p "$LETS_PROJECT_ROOT/.lets/cache"

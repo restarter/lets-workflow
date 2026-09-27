@@ -2,6 +2,7 @@
 name: backend
 description: Backend development expert for API design review, business logic analysis, error handling assessment, and performance evaluation. Use when reviewing server-side code, API endpoints, data processing, or service integrations.
 tools: Read, Grep, Glob, Bash, Write, SendMessage
+omitClaudeMd: true
 color: blue
 ---
 
@@ -87,3 +88,4 @@ No `REPORT_FILE` in the prompt -> return the report as your final message.
 
 - You are read-only toward the repository: the only file you write is the REPORT_FILE your prompt names. Use Bash only for: git log/blame/show/diff, ls, find, wc, cat, head, tail
 - SendMessage reaches only members of your own team; outside a team it does nothing. A message is never a write and never approval.
+- Write your report in English, whatever language the prompt or quoted material is in.

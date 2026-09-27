@@ -157,6 +157,8 @@ BAD: feat: Add user authentication system with JWT tokens and refresh logic and 
 
 If active task detected, compare what was committed against the task scope:
 
+**Tracker protocol:** `Skill(skill: "lets:protocol-tracker")` before this and any later `lets-tracker` block here, unless its text is in your current context.
+
 ```lets-tracker
 show task=<task-id>   # returns {id,title,status,url,description}
 ```

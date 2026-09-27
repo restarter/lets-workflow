@@ -50,6 +50,8 @@ Idea template:
 
 When a task is active:
 
+**Tracker protocol:** `Skill(skill: "lets:protocol-tracker")` before this and any later `lets-tracker` block here, unless its text is in your current context.
+
 ```lets-tracker
 comment-add task=<task-id> body="Idea document: .lets/plans/<ARTIFACT basename>"
 ```
@@ -209,6 +211,8 @@ Launching...
 
 ### Launch Explorers
 
+Read `${CLAUDE_PLUGIN_ROOT}/protocol/agents.md` before this step unless its text is in your current context.
+
 Open the run: `Skill(skill: "lets:agent-report", args: "op=open command=plan task={task-id} names=explorer-1,...,explorer-N")` (task omitted when none). Each explorer prompt starts with its `REPORT_FILE:` line.
 
 **CRITICAL: Launch ALL explorer agents in a SINGLE message with multiple Task tool calls.**
@@ -333,7 +337,7 @@ AskUserQuestion(
 **Handle response:**
 - **1+ approaches selected** -> proceed to Step 6 with selected approaches
 - **Discuss first** -> open discussion, user asks questions or suggests modifications, then present updated approaches and ask again
-- **Orchestrator offer (Act)** -> per lets-rules `### Orchestrator offer` (rule not loaded -> no offer): while the offer is shown, the last slot is `{ label: "Ask orchestrator", description: "Stay at this gate; /lets:orc ask which approaches to develop" }` instead of "Discuss first" - **Other** (free text) already opens the same discussion.
+- **Orchestrator offer (Act)** -> per the Orchestrator offer protocol (load `Skill(skill: "lets:protocol-orchestrator-offer")` here unless its text is in your current context; not loaded -> no offer): while the offer is shown, the last slot is `{ label: "Ask orchestrator", description: "Stay at this gate; /lets:orc ask which approaches to develop" }` instead of "Discuss first" - **Other** (free text) already opens the same discussion.
 - **Ask orchestrator** (alone or with approaches picked) -> `Skill(skill: "lets:orc", args: "verb=ask footer=none text=Planning {goal}. Approaches: {names with one-line trade-offs}. Which would you develop?")` first. After the reply is relayed, show this gate again without that option ("Discuss first" is back) - the user picks.
 - **Other** (free text) -> treat as new approach idea or modification, incorporate and re-present
 
@@ -449,7 +453,7 @@ AskUserQuestion(
 - **Approach selected** -> proceed to Step 7 with chosen architecture
 - **Combine** -> discuss which parts to take from each, create merged brief, re-run single architect - `op=add` a fresh name (`architect-combined-{n}`), the prompt's `REPORT_FILE:` line, then `op=collect` for that name - READ EVERY REPORT IN FULL - before the design is updated
 - **Adjust** -> discuss what to change, loop back to relevant step
-- **Orchestrator offer (Act)** -> per lets-rules `### Orchestrator offer` (rule not loaded -> no offer): while the offer is shown, "Combine" and "Adjust" merge into one slot `{ label: "Combine / adjust", description: "Mix approaches or change requirements, then re-design" }` and the last slot is `{ label: "Ask orchestrator", description: "Stay at this gate; /lets:orc ask which architecture to take" }`.
+- **Orchestrator offer (Act)** -> per the Orchestrator offer protocol (load `Skill(skill: "lets:protocol-orchestrator-offer")` here unless its text is in your current context; not loaded -> no offer): while the offer is shown, "Combine" and "Adjust" merge into one slot `{ label: "Combine / adjust", description: "Mix approaches or change requirements, then re-design" }` and the last slot is `{ label: "Ask orchestrator", description: "Stay at this gate; /lets:orc ask which architecture to take" }`.
 - **Combine / adjust** -> ask which of the two the user means, then follow that handler above.
 - **Ask orchestrator** -> `Skill(skill: "lets:orc", args: "verb=ask footer=none text=Planning {goal}. Designs: {names with the key trade-off each}. Which one?")`. After the reply is relayed, show this gate again without that option (the original four) - the user picks.
 - **Other** (free text) -> treat as modification request, adapt
@@ -575,7 +579,7 @@ After all experts respond, present findings:
 {consolidated list of actionable items from all experts}
 ```
 
-Then (add the "Ask orchestrator" option per lets-rules `### Orchestrator offer` - Act shape; rule not loaded -> no offer):
+Then (add the "Ask orchestrator" option per the Orchestrator offer protocol - Act shape; load `Skill(skill: "lets:protocol-orchestrator-offer")` here unless its text is in your current context; not loaded -> no offer):
 
 ```
 AskUserQuestion(

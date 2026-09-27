@@ -33,6 +33,8 @@ First find the active task: use the **detect-task** skill - `Skill(skill: "lets:
 
 Then, **only if detect-task returned a task**, read its STATUS - S2 and S3 both gate on it, and detect-task's own liveness probe runs only on `$LETS_MERGE_BRANCH`, so off the merge-branch nothing here knows the status yet. No task means no read and no id to substitute; skip straight to the state block below:
 
+**Tracker protocol:** `Skill(skill: "lets:protocol-tracker")` before this and any later `lets-tracker` block here, unless its text is in your current context.
+
 ```lets-tracker
 show task=<task-id>   # returns {id,title,status}; read status
 ```
@@ -127,7 +129,7 @@ Write the session-level snapshot that bootstraps the next `/lets:start`, via the
 
 ### 3b. Progress comment (only when "Post progress" was picked)
 
-**If "Post progress" was picked in Step 2** (3a passed `pointer=off`): write the `## Session progress` comment. **MANDATORY:** the `Claude session: $CLAUDE_CODE_SESSION_ID` line MUST appear between `## Session progress` and `### Range` (bash expands the env var at runtime in the heredoc, so the tracker gets the literal UUID). The commit LIST is intentionally dropped (git owns it); keep a range pointer. End the comment with a `### Snapshot` line pointing at 3a's file - this IS the task-side pointer, so do NOT also write a standalone one. The bash block writes the body to a temp file; the `comment-add` verb submits it via `body-file=` (lets-rules "Tracker Adapters" - the orchestrator fills the `{...}` narrative fields first):
+**If "Post progress" was picked in Step 2** (3a passed `pointer=off`): write the `## Session progress` comment. **MANDATORY:** the `Claude session: $CLAUDE_CODE_SESSION_ID` line MUST appear between `## Session progress` and `### Range` (bash expands the env var at runtime in the heredoc, so the tracker gets the literal UUID). The commit LIST is intentionally dropped (git owns it); keep a range pointer. End the comment with a `### Snapshot` line pointing at 3a's file - this IS the task-side pointer, so do NOT also write a standalone one. The bash block writes the body to a temp file; the `comment-add` verb submits it via `body-file=` (`lets:protocol-tracker` "Bodies" - the orchestrator fills the `{...}` narrative fields first):
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel); mkdir -p "$LETS_PROJECT_ROOT/.lets/cache"
@@ -173,7 +175,7 @@ Output-time, never a prompt - a session tidy in git can still end with leftovers
 
 Offer only when BOTH hold, otherwise say nothing:
 - 3a's snapshot has real items under `### Remaining + NEXT STEP` - not the `- (none)` stub, and not only a `NEXT:` line that says the work is finished.
-- a live orchestrator resolves, per the resolution and silence conditions of lets-rules `### Orchestrator offer` (rule not loaded -> no offer). This is a `ping` - a notification - so that rule's selection test does not apply, exactly as for the `/lets:done` PR ping.
+- a live orchestrator resolves, per the resolution and silence conditions of the Orchestrator offer protocol (load `Skill(skill: "lets:protocol-orchestrator-offer")` here unless its text is in your current context; not loaded -> no offer). This is a `ping` - a notification - so that rule's selection test does not apply, exactly as for the `/lets:done` PR ping.
 
 - **Orchestrator ping (Nav)** -> one Output line right after `Snapshot:` - `Leftovers for {target.name}?  /lets:orc ping`. The name appears only when `source` is `bound` / `single`; on `ambiguous` there is no single target, so the line reads `Leftovers for an orchestrator?  /lets:orc ping` and the orc skill asks which - never print a guessed name. The user types it; the orc skill builds the message from the snapshot just written and previews it. This command sends nothing and asks nothing.
 

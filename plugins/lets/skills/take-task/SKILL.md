@@ -17,6 +17,8 @@ Multiple flows need "claim task + prepare branch": /lets:start, mid-session task
 
 ### Step 1: Resolve Task
 
+**Tracker protocol:** `Skill(skill: "lets:protocol-tracker")` before this and any later `lets-tracker` block here, unless its text is in your current context.
+
 ```lets-tracker
 show task=<task-id>
 ```
@@ -62,6 +64,8 @@ Handle response:
 If staying on current branch (worktree, already correct) or no changes - skip this step.
 
 ### Step 2T: Team worktree - park, then switch
+
+Read `${CLAUDE_PLUGIN_ROOT}/protocol/worktrees.md` before this step unless its text is in your current context (standing-team worktree, park never stash).
 
 A team worktree never stashes. `git status --short`; changes present -> list them, and list separately every NEW path a park would need to name - untracked (`git ls-files --others --exclude-standard`) and staged additions (`git diff --cached --diff-filter=ACR --name-only HEAD`). Ignored files are never parked; they stay on disk. Then:
 

@@ -84,6 +84,8 @@ STATE the boundary explicitly: reads stay inside `$LETS_PROJECT_ROOT`, and **fet
 
 ### Research (per-sub-question fan-out via the DEFAULT web subagent)
 
+Read `${CLAUDE_PLUGIN_ROOT}/protocol/agents.md` before this step unless its text is in your current context.
+
 Open the run first: `Skill(skill: "lets:agent-report", args: "op=open command=research task={task-id} names=fetch-1,...,fetch-N")` (one name per sub-question; task omitted when none). Then launch ONE Task subagent **per sub-question, all in a single message** (the house pattern - review's standard path already fans out multiple Task calls at once).
 
 Each fetcher prompt carries its own line `REPORT_FILE: {this fetcher's path from op=open}` and the instruction: write your structured findings to that file in ONE Write call, last line `REPORT-END`, and make your final message `REPORT_WRITTEN <path>` (the default subagent has no `## Report` section, so the instruction travels in the prompt). When the fetchers return: `Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names=fetch-1,...,fetch-N")` - READ EVERY REPORT IN FULL before merging claims. A fetcher `GAP` -> that sub-question is reported as unanswered in Step 4, never silently merged away.

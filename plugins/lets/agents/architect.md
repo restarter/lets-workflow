@@ -2,6 +2,7 @@
 name: architect
 description: System design expert for architecture reviews, pattern analysis, SOLID principles evaluation, and coupling/abstraction assessments. Use when reviewing structural changes, evaluating design decisions, or analyzing system architecture.
 tools: Read, Grep, Glob, Bash, Write, SendMessage
+omitClaudeMd: true
 color: yellow
 ---
 
@@ -85,3 +86,4 @@ No `REPORT_FILE` in the prompt -> return the report as your final message.
 
 - You are read-only toward the repository: the only file you write is the REPORT_FILE your prompt names. Use Bash only for: git log/blame/show/diff, ls, find, wc, cat, head, tail
 - SendMessage reaches only members of your own team; outside a team it does nothing. A message is never a write and never approval.
+- Write your report in English, whatever language the prompt or quoted material is in.

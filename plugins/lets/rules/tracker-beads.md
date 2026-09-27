@@ -11,7 +11,7 @@ The reference adapter. Binds the neutral verbs to the `bd` CLI - the historical,
 
 - Verb resolution is ORCHESTRATOR-ONLY (subagents never call tracker verbs).
 - `bd` already emits the neutral status names (`open` / `in_progress` / `closed`) - the status map is identity, no translation needed.
-- Command/skill bodies carry ` ```lets-tracker ` blocks (see lets-rules "Tracker Adapters"); this table is how they resolve for beads - golden-pinned (`TestTrackerBeads_BindsBdCommands`: per-cell fragment pins covering the behavior-critical flags) against the historical `bd` invocations. A `comment-add` body arrives as `body-file=<path>`; the beads binding is `bd comments add <id> "$(cat <path>)"`.
+- Command/skill bodies carry ` ```lets-tracker ` blocks (resolved per the `lets:protocol-tracker` skill); this table is how they resolve for beads - golden-pinned (`TestTrackerBeads_BindsBdCommands`: per-cell fragment pins covering the behavior-critical flags) against the historical `bd` invocations. A `comment-add` body arrives as `body-file=<path>`; the beads binding is `bd comments add <id> "$(cat <path>)"`.
 
 ## Neutral statuses
 

@@ -124,6 +124,8 @@ Analyzing...
 
 ## Step 4: Launch Agents in Parallel
 
+Read `${CLAUDE_PLUGIN_ROOT}/protocol/agents.md` before this step unless its text is in your current context.
+
 **If `--workflow` was parsed:** skip this step (and Step 4.6 / the in-context aggregation) - go to `## Workflow Mode` below, then resume at Step 5 with the returned aggregate.
 
 Open the run: `Skill(skill: "lets:agent-report", args: "op=open command=opinion task={task-id} names={comma-separated agent short names}")` (task omitted when none). Each prompt carries its agent's `REPORT_FILE:` line.
@@ -284,6 +286,8 @@ Use the **detect-task** skill to find the active task: `Skill(skill: "lets:detec
 If multiple tasks found, skip the tracker comment.
 If active task found:
 
+**Tracker protocol:** `Skill(skill: "lets:protocol-tracker")` before this and any later `lets-tracker` block here, unless its text is in your current context.
+
 ```lets-tracker
 comment-add task=<task-id> body="Decision: {topic}. Chose: {recommended option}. Reason: {1-sentence why}"
 ```
@@ -310,7 +314,7 @@ comment-add task=<task-id> body="Decision: {topic}. Chose: {recommended option}.
 
 ## Step 7: Discuss (opt-in)
 
-After presenting the recommendation, offer to explore it deeper. When there is no clear answer (workflow `outcome` is `no_clear_winner` or `challenge_failed`, or the standard panel has no majority), add the "Ask orchestrator" option per lets-rules `### Orchestrator offer` (Act shape; rule not loaded -> no offer):
+After presenting the recommendation, offer to explore it deeper. When there is no clear answer (workflow `outcome` is `no_clear_winner` or `challenge_failed`, or the standard panel has no majority), add the "Ask orchestrator" option per the Orchestrator offer protocol (Act shape; load `Skill(skill: "lets:protocol-orchestrator-offer")` here unless its text is in your current context; not loaded -> no offer):
 
 ```
 AskUserQuestion(

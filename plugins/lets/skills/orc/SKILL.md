@@ -23,6 +23,8 @@ Talk to the repo's orchestrator or a named peer session: `ask` / `ping` / `read`
 
 ## Step 1: Resolve the target
 
+Read `${CLAUDE_PLUGIN_ROOT}/protocol/peers.md` before this step unless its text is in your current context (boundary carve-outs: bound sibling sessions, hub).
+
 Every later call addresses the returned **session id** (`target.session`), never the name again.
 
 **Another project's session** (`session=` + `repo_index=` given) -> no resolution and no name match (a name matches only inside this repo): that session is the target, `target` its display name. Add `--repo-index <n>` to every `tell` and `tail` below; `frame` and `wait` take the session id as is.
@@ -87,6 +89,8 @@ Then, only when this branch's `.task` has a `task:` line and HEAD is not `{LETS_
 1. `lets peers frame --to-session <sid> --kind <ask|ping|tell> --json` -> `header`, `msgid`, `sent_at`, `handoff_path`.
 2. **ask** brief: the task line, then branch, 2-3 context lines, the question. Task: `Skill(skill: "lets:detect-task", args: "fallback=no")`, then
 
+**Tracker protocol:** `Skill(skill: "lets:protocol-tracker")` before this and any later `lets-tracker` block here, unless its text is in your current context.
+
 ```lets-tracker
 show task=<TASK_ID from the gate>   # returns {id,title,status}; none/absent -> "task <id> (no tracker)" or "no task"
 ```
@@ -132,4 +136,4 @@ Every MANDATORY line is printed even under `footer=none` - they are not a footer
 
 ## Footer
 
-Close type: one prose line - what was sent, relayed, or is still waiting; nothing after `who` / `read`. Emit it only when `footer=none` is absent (the outermost invocation: `/lets:orc`, or the `/lets:peer` alias, whose own body emits nothing). Every touchpoint (lets-rules `### Orchestrator offer`, the `/lets:done` ping) and the hub pass `footer=none`.
+Close type: one prose line - what was sent, relayed, or is still waiting; nothing after `who` / `read`. Emit it only when `footer=none` is absent (the outermost invocation: `/lets:orc`, or the `/lets:peer` alias, whose own body emits nothing). Every touchpoint (an Orchestrator offer, which loads `lets:protocol-orchestrator-offer`; the `/lets:done` ping) and the hub pass `footer=none`.

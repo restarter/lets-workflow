@@ -2,6 +2,7 @@
 name: security
 description: Security specialist for vulnerability detection, auth review, crypto assessment, secrets scanning, and input validation analysis. Use when reviewing security-sensitive code, auth flows, data handling, or API endpoints.
 tools: Read, Grep, Glob, Bash, Write, SendMessage
+omitClaudeMd: true
 color: red
 ---
 
@@ -82,3 +83,4 @@ No `REPORT_FILE` in the prompt -> return the report as your final message.
 
 - You are read-only toward the repository: the only file you write is the REPORT_FILE your prompt names. Use Bash only for: git log/blame/show/diff, ls, find, wc, cat, head, tail
 - SendMessage reaches only members of your own team; outside a team it does nothing. A message is never a write and never approval.
+- Write your report in English, whatever language the prompt or quoted material is in.

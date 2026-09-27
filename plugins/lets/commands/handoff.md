@@ -220,6 +220,8 @@ Print the brief inside ONE fenced block so it copies cleanly. Then one line nami
 
 ## Step 7: Deliver (`--send` / `--open` / `--codex` only)
 
+Read `${CLAUDE_PLUGIN_ROOT}/protocol/handoff-lane.md` before this step unless its text is in your current context.
+
 Without a delivery flag the command ends at Step 6. The three lanes are mutually exclusive - two given: stop and say so.
 
 | Lane | Flag | Review brief | Execution brief |
@@ -358,7 +360,7 @@ Two things here are restatements of `/lets:review`, not independent decisions: t
 
 - The brief is the deliverable - review nothing yourself, never edit the repository except through `--fix` (7.4). Without a delivery flag write no file (not `.lets/`, not the tracker); with one, files only under `.lets/handoffs/` (7.1; Go writes the rest), plus the two 5b scratch files under `.lets/cache/` with `--execute`
 - `--execute` authorizes the receiving agent, not this session: what it commits stays UNVERIFIED until `/lets:review --branch`. That review compensates for the Deviation gate `/lets:execute` runs before every edit, which cannot cross into another agent - it is not an equivalent of it
-- The handoff lane is not the peer lane: a brief never goes through `/lets:orc`, `lets peers`, `SendMessage` or `ListAgents` (`lets-rules.md` `### Handoff lane`); `lets handoff` is its only sender
+- The handoff lane is not the peer lane: a brief never goes through `/lets:orc`, `lets peers`, `SendMessage` or `ListAgents` (`${CLAUDE_PLUGIN_ROOT}/protocol/handoff-lane.md`); `lets handoff` is its only sender
 - Conversation in the user's language; the brief's English is stated at Compose
 - Absolute paths and internal task ids **belong** in the brief - the audience is an agent on the same machine, not an external channel
 - No `.lets/` -> skip plan lookup; `--plan <path>` with an explicit path still works
