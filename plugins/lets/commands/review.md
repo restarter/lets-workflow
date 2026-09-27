@@ -546,6 +546,8 @@ Not a cost optimization - a reliability one. The tracker may be remote (beads on
 
 **Fetch the spec** (skip when no id resolved):
 
+**Tracker protocol:** `Skill(skill: "lets:protocol-tracker")` before this and any later `lets-tracker` block here, unless its text is in your current context.
+
 ```lets-tracker
 show task=<task-id>   # returns {id, title, status, url, description}
 ```
@@ -674,6 +676,8 @@ Skipped for file mode:
 **RULE: Default is INCLUDE. Only skip if clearly irrelevant.**
 
 ## Step 5: Launch Selected Agents (Parallel)
+
+Read `${CLAUDE_PLUGIN_ROOT}/protocol/agents.md` before this step unless its text is in your current context.
 
 **If `--workflow` was parsed:** skip this step and Step 6 - go to the `## Workflow Mode (--workflow)` section below, then resume at Step 6.5. The rest of Step 5 is the standard Task-based path.
 
@@ -1231,6 +1235,8 @@ Selected agents ({N}):
 
 ### P4: Launch Plan Review Agents (Parallel)
 
+Read `${CLAUDE_PLUGIN_ROOT}/protocol/agents.md` before this step unless its text is in your current context.
+
 Open the run: `Skill(skill: "lets:agent-report", args: "op=open command=review task={task-id} names=architect,pragmatist,{domain agent short names}")`. Each prompt below carries its agent's `REPORT_FILE:` line right after `ultrathink`.
 
 **CRITICAL: Launch ALL selected agents in a SINGLE message.**
@@ -1453,7 +1459,7 @@ Whatever the verdict, this command ends here. **A plan-review verdict - APPROVED
 
 **If needs revision:** No box. With `--fix`, P6.5's output stands in its place. List action items to fix in the plan file (and only there) first. Do not touch code.
 
-- **Orchestrator offer (Nav)** -> per lets-rules `### Orchestrator offer` (rule not loaded -> no offer): on NEEDS REVISION add one prose line "Disagree with the verdict? `/lets:orc ask`".
+- **Orchestrator offer (Nav)** -> per the Orchestrator offer protocol (load `Skill(skill: "lets:protocol-orchestrator-offer")` here unless its text is in your current context; not loaded -> no offer): on NEEDS REVISION add one prose line "Disagree with the verdict? `/lets:orc ask`".
 
 ---
 
@@ -1509,7 +1515,7 @@ Work -> /lets:commit -> Push -> PR -> /lets:review <PR>
 
 **If changes requested:** No box. List issues to fix first.
 
-- **Orchestrator offer (Nav)** -> per lets-rules `### Orchestrator offer` (rule not loaded -> no offer), local modes only - never PR mode, `--file` or `--json`: on APPROVED WITH SUGGESTIONS add a third box line; on CHANGES REQUESTED add one prose line "Disagree with a finding? `/lets:orc ask`". Never on a clean APPROVED.
+- **Orchestrator offer (Nav)** -> per the Orchestrator offer protocol (load `Skill(skill: "lets:protocol-orchestrator-offer")` here unless its text is in your current context; not loaded -> no offer), local modes only - never PR mode, `--file` or `--json`: on APPROVED WITH SUGGESTIONS add a third box line; on CHANGES REQUESTED add one prose line "Disagree with a finding? `/lets:orc ask`". Never on a clean APPROVED.
 
 ```
 ┌─ LETS ───────────────────────┐

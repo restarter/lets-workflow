@@ -22,6 +22,8 @@ Invoke `Skill(skill: "lets:detect-task")` -> an id or None. (A skill may invoke 
 
 When Step 1 yields an id, get its title with the tracker's `show`:
 
+**Tracker protocol:** `Skill(skill: "lets:protocol-tracker")` before this and any later `lets-tracker` block here, unless its text is in your current context.
+
 ```lets-tracker
 show task=<id>   # returns {id, title, status, url}
 ```

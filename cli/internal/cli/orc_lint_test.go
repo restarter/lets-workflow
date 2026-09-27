@@ -157,8 +157,11 @@ func optionCounts(body string) []int {
 	return counts
 }
 
-// lintOrcOffers pins the orchestrator offer (lets-rules "Orchestrator offer"): one label,
-// a pointer at the rule instead of a restated rule, an ask that goes through the orc skill,
+// offerProtocolSkill holds the Orchestrator offer protocol - the one place the rule is stated.
+const offerProtocolSkill = "skills/protocol-orchestrator-offer/SKILL.md"
+
+// lintOrcOffers pins the orchestrator offer (the lets:protocol-orchestrator-offer skill): one label,
+// a load of the protocol skill instead of a restated rule, an ask that goes through the orc skill,
 // and no gate above four options. A ping is a notification and needs no pointer.
 func lintOrcOffers(files map[string]string) []string {
 	var bad []string
@@ -177,8 +180,9 @@ func lintOrcOffers(files map[string]string) []string {
 			}
 		}
 		labels := strings.Count(body, `label: "Ask orchestrator"`)
-		if (labels > 0 || strings.Contains(body, "/lets:orc ask")) && !strings.Contains(body, "Orchestrator offer") {
-			bad = append(bad, rel+": an orchestrator offer must point at lets-rules \"Orchestrator offer\"")
+		// the protocol skill IS the offer rule; every other offer loads it at the offer (lets-nobb5)
+		if rel != offerProtocolSkill && (labels > 0 || strings.Contains(body, "/lets:orc ask")) && !strings.Contains(body, `Skill(skill: "lets:protocol-orchestrator-offer")`) {
+			bad = append(bad, rel+": an orchestrator offer must load `Skill(skill: \"lets:protocol-orchestrator-offer\")`")
 		}
 		// one handler per offer: a file-level "some verb=ask exists" would let a gate lose its handler
 		// while another gate in the same file still has one (execute.md carries two, plan.md three)
@@ -197,7 +201,7 @@ func lintOrcOffers(files map[string]string) []string {
 
 // TestOrcLint pins where peer messages may be sent from: only the orc skill sends,
 // touchpoints only offer, and a delegated orc run never adds a second footer. An offer
-// points at the rule, uses one label, and no gate exceeds four options.
+// loads the protocol skill, uses one label, and no gate exceeds four options.
 func TestOrcLint(t *testing.T) {
 	pluginDir := filepath.Join("..", "..", "..", "plugins", "lets")
 	files := orcLintFiles(t, pluginDir)
@@ -258,9 +262,18 @@ func TestOrcLint(t *testing.T) {
 		t.Error("mutation: an orc call without footer=none must fail the lint")
 	}
 	if len(mutate("commands/note.md", "```\nAskUserQuestion(\n    options: [\n      { label: \"Ask orchestrator\", description: \"x\" }\n    ]\n```")) == 0 {
-		t.Error("mutation: an Ask orchestrator option with no rule pointer and no handler must fail the lint")
+		t.Error("mutation: an Ask orchestrator option with no protocol load and no handler must fail the lint")
 	}
-	// execute.md already points at the rule, so only the one-handler-per-offer count can catch this
+	// an offer that still points at the old lets-rules section, without loading the protocol skill
+	noLoad := map[string]string{}
+	for k, v := range files {
+		noLoad[k] = v
+	}
+	noLoad["commands/review-round.md"] = strings.ReplaceAll(files["commands/review-round.md"], `Skill(skill: "lets:protocol-orchestrator-offer")`, "lets-rules `### Orchestrator offer`")
+	if len(lintOrcOffers(noLoad)) == 0 {
+		t.Error("mutation: an offer that does not load lets:protocol-orchestrator-offer must fail the lint")
+	}
+	// execute.md already loads the protocol skill, so only the one-handler-per-offer count can catch this
 	if len(mutate("commands/execute.md", "```\nAskUserQuestion(\n    options: [\n      { label: \"Ask orchestrator\", description: \"x\" }\n    ]\n```")) == 0 {
 		t.Error("mutation: an Ask orchestrator offer without its own verb=ask handler must fail the lint")
 	}

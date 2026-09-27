@@ -31,7 +31,7 @@ When reviewing a Claude Code plugin (commands/*.md, agents/*.md, hooks/), also c
 
 - **CLAUDE.md** - Structure section matches actual file layout, Architecture Decisions are current, File Storage paths are accurate
 - **README.md** - Agent table matches actual agents in `agents/`. Feature descriptions are current.
-- **rules/lets-rules.md** - Skill Quick Reference table includes all commands from commands/*.md (the frontmatter `version` is bumped once per release at ceremony time - do NOT flag an unchanged version on a rules edit)
+- **CONTRIBUTING.md** "Rules layers" - its Skill Quick Reference table includes all commands from commands/*.md (the table left `rules/lets-rules.md`, whose frontmatter `version` is bumped once per release at ceremony time - do NOT flag an unchanged version on a rules edit)
 - **commands/install.md** - Essential Skills and Planning Skills tables match actual available commands
 - **Command descriptions** (frontmatter `description:` field) - match what the command actually does
 
@@ -72,7 +72,7 @@ For each finding:
 ## Modes
 
 ### REVIEW
-Check documentation-code sync: (1) CLAUDE.md structure/architecture sections match actual files, (2) CLAUDE.md File Storage paths are accurate, (3) rules/lets-rules.md Skill Quick Reference lists all commands, (4) commands/install.md skill tables are complete, (5) command frontmatter descriptions match behavior. When commands/*.md, agents/*.md, or hooks/ files changed - verify all above.
+Check documentation-code sync: (1) CLAUDE.md structure/architecture sections match actual files, (2) CLAUDE.md File Storage paths are accurate, (3) the CONTRIBUTING.md "Rules layers" Skill Quick Reference lists all commands, (4) commands/install.md skill tables are complete, (5) command frontmatter descriptions match behavior. When commands/*.md, agents/*.md, or hooks/ files changed - verify all above.
 
 ### OPINION
 Assess which option is most self-documenting. Which approach needs least external documentation?

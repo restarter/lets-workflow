@@ -87,6 +87,8 @@ Otherwise (no PR, or `gh` unavailable) continue to Step 3 - normal flow.
 
 **Before closing - verify ALL requirements from the task description are met.**
 
+**Tracker protocol:** `Skill(skill: "lets:protocol-tracker")` before this and any later `lets-tracker` block here, unless its text is in your current context.
+
 ```lets-tracker
 show task=<task-id>   # returns {id,title,status,url,description}; read description - plus any field the adapter's `show` declares (beads: `type`) - to verify scope
 ```
@@ -113,7 +115,7 @@ All requirements met. Proceeding.
 Missing: {list}. Fix first or update task scope?
 ```
 
-**If any requirement is missing**, use **AskUserQuestion**. Add the "Ask orchestrator" option per lets-rules `### Orchestrator offer` (Act shape; rule not loaded -> no offer).
+**If any requirement is missing**, use **AskUserQuestion**. Add the "Ask orchestrator" option per the Orchestrator offer protocol (Act shape; load `Skill(skill: "lets:protocol-orchestrator-offer")` here unless its text is in your current context; not loaded -> no offer).
 
 ```
 AskUserQuestion(
@@ -324,7 +326,7 @@ Add completion comment to the task. **MANDATORY:** the `Claude session: $CLAUDE_
 
 **Self-contained bash** — computes `RANGE` locally so the comment body is correct regardless of whether Step 4's `START` is still in scope (each Bash tool call is a fresh shell — no cross-Step env). Range from the task's `start:` boundary (uniform, with the same ancestry guard as Step 4); falls back to `$LETS_MERGE_BRANCH..HEAD` on a feature/worktree branch when no `start:` is recorded (on trunk Step 4 already aborted if it was empty). Git operations use bash `$(...)` substitution; only the narrative fields stay as orchestrator-filled `{...}` templates.
 
-The bash block computes the body to a temp file; the `comment-add` verb then submits it via `body-file=` (lets-rules "Tracker Adapters" - no multi-line value crosses into the block; the orchestrator fills the `{...}` narrative fields before running):
+The bash block computes the body to a temp file; the `comment-add` verb then submits it via `body-file=` (`lets:protocol-tracker` "Bodies" - no multi-line value crosses into the block; the orchestrator fills the `{...}` narrative fields before running):
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
@@ -621,7 +623,7 @@ Do NOT delete the branch or remove the worktree here - `/lets:worktree remove` h
 
 `pointer=off` - this command writes the task-side record itself. Print one line `Session record: {snapshot path}` (the skill's Return), then the variant's output. "End session" still runs `/lets:end`, whose `kind=end` snapshot supersedes this one.
 
-**Orca worktrees.** When `{LETS_LAUNCHER}` is `orca`, every "`/lets:worktree remove {name}`" reminder below reads "archive the worktree in Orca - its hook records the release": `remove` refuses a worktree outside `.worktrees/` (`worktree_external`). This command's own `gh pr merge --delete-branch` is safe - gh leaves the current and the main worktree in place; only a merge run from another checkout removes a worker's linked worktree (lets-rules `## Worktrees`).
+**Orca worktrees.** When `{LETS_LAUNCHER}` is `orca`, every "`/lets:worktree remove {name}`" reminder below reads "archive the worktree in Orca - its hook records the release": `remove` refuses a worktree outside `.worktrees/` (`worktree_external`). This command's own `gh pr merge --delete-branch` is safe - gh leaves the current and the main worktree in place; only a merge run from another checkout removes a worker's linked worktree (Read `${CLAUDE_PLUGIN_ROOT}/protocol/worktrees.md` "A worktree can vanish outside Orca" before any merge of a worker's PR run from another checkout).
 
 **Orca card on a confirmed close.** Wherever a handler below (or the merged-PR shortcut) ran `close` and it returned `closed` - not an advance, not a failure:
 

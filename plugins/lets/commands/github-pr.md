@@ -531,6 +531,8 @@ Log to the tracker:
 
 Skip if `task_id` is null.
 
+**Tracker protocol:** `Skill(skill: "lets:protocol-tracker")` before this and any later `lets-tracker` block here, unless its text is in your current context.
+
 ```lets-tracker
 comment-add task={task_id} body="PR review posted on #<PR>: {N} inline comments, {M} summary items. Verdict: {verdict}"
 ```

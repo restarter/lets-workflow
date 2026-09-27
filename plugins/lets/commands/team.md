@@ -119,6 +119,8 @@ Two input modes:
 
 **1. Interactive (default):** Show ready tasks and let user pick.
 
+**Tracker protocol:** `Skill(skill: "lets:protocol-tracker")` before this and any later `lets-tracker` block here, unless its text is in your current context.
+
 ```lets-tracker
 ready limit=10
 ```
@@ -328,6 +330,8 @@ show task=<id>   # title + description for the worker spec
 ---
 
 ## Members
+
+Read `${CLAUDE_PLUGIN_ROOT}/protocol/agents.md` before this step unless its text is in your current context (members only through member-run).
 
 Spawn, Roster and Dismiss manage a standing team: the `lets:*` agents its lead session runs, defined by the team file's roster. Continuity is files only - the harness restores no member after a lead restart, so a member is respawned from the team file, never resumed from memory. Every spawn and dismiss goes through the member-run skill; this command never calls an agent tool itself. Every member writes its report to a REPORT_FILE the lead names through the `agent-report` skill and reads in full (Step M5). With `link: peer` (lead restarted) members do not message each other; the lead restores the team with `spawn --roster` (D2, owner 2026-09-26).
 
@@ -570,6 +574,8 @@ A standing team is created from the main checkout (an orchestrator or the owner)
 ---
 
 ## Disband
+
+Read `${CLAUDE_PLUGIN_ROOT}/protocol/worktrees.md` before this step unless its text is in your current context (standing-team worktree, parks, remove safety nets).
 
 `disband <callsign>` retires a standing team, from the main checkout only (in a worktree -> **Refused:** "Disband a team from the main checkout." Stop). No `.lets/teams/<c>.md` -> say so and stop. Read the team worktree `<path>` from the file's `worktree` frontmatter. LETS never kills a session here - no `TaskStop`, no process signal: every session is closed by its own human.
 

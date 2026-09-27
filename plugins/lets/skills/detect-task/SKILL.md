@@ -59,6 +59,8 @@ This prints a CANDIDATE, not an answer - it is a value read off disk, and nothin
 
 **`origin=branch` or `origin=dir`** (checked first) - `lets worktree adopt` derived this id from an `accept:` branch shape or the directory name of a worktree Orca or a teammate created; nobody confirmed it. Gate it, then probe once:
 
+**Tracker protocol:** `Skill(skill: "lets:protocol-tracker")` before this and any later `lets-tracker` block here, unless its text is in your current context.
+
 ```lets-tracker
 show task=<TASK_ID from the gate>   # returns {id,title,status,url}; read status
 ```

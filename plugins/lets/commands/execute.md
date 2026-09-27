@@ -140,6 +140,8 @@ PLAN=""
 echo "Plan: ${PLAN:-(none found)}"
 ```
 
+**Tracker protocol:** `Skill(skill: "lets:protocol-tracker")` before this and any later `lets-tracker` block here, unless its text is in your current context.
+
 ```lets-tracker
 show task=<task-id>
 ```
@@ -181,7 +183,7 @@ Quick check before entering plan mode:
 **If all OK:**
 Present plan summary (title, task count, key files), then proceed to Step 4.5.
 
-**If drift detected** (files missing, already created, etc.), use AskUserQuestion. Not under `--auto`, add the "Ask orchestrator" option per lets-rules `### Orchestrator offer` (Act shape; rule not loaded -> no offer).
+**If drift detected** (files missing, already created, etc.), use AskUserQuestion. Not under `--auto`, add the "Ask orchestrator" option per the Orchestrator offer protocol (Act shape; load `Skill(skill: "lets:protocol-orchestrator-offer")` here unless its text is in your current context; not loaded -> no offer).
 
 ```
 AskUserQuestion(
@@ -359,7 +361,7 @@ Call `EnterPlanMode`.
 
 **Progress tracking:** After completing each plan task, append `[DONE]` to its `### Task N:` heading in the plan file. This makes resume self-documenting - on re-entry, skip tasks already marked `[DONE]`.
 
-**Deviation gate (every mode, every task).** Before each edit, compare reality with the plan step. A deviation is anything that changes the plan's approach rather than a line of code: a dependency/tool behaving differently than the plan assumed (other API, parameters, version); a step infeasible as described; a file/module the plan never names becoming necessary; a task's Verify not matching its Expected. On a deviation: STOP - no further edits - and show what the plan expected, what reality is, and what each option would change. Not under `--auto`, add the "Ask orchestrator" option per lets-rules `### Orchestrator offer` (Act shape; rule not loaded -> no offer). Then:
+**Deviation gate (every mode, every task).** Before each edit, compare reality with the plan step. A deviation is anything that changes the plan's approach rather than a line of code: a dependency/tool behaving differently than the plan assumed (other API, parameters, version); a step infeasible as described; a file/module the plan never names becoming necessary; a task's Verify not matching its Expected. On a deviation: STOP - no further edits - and show what the plan expected, what reality is, and what each option would change. Not under `--auto`, add the "Ask orchestrator" option per the Orchestrator offer protocol (Act shape; load `Skill(skill: "lets:protocol-orchestrator-offer")` here unless its text is in your current context; not loaded -> no offer). Then:
 
 ```
 AskUserQuestion(
@@ -478,6 +480,8 @@ Run fields: `shape` is `solo` or `parallel` (the launch plan's); `gate_policy` i
 `phase` moves `pending` -> `running` -> `review` -> (`correcting` -> `running` -> `review`)* -> `committing` -> `accepted`. A Stop at a review gate records `paused` (it reopens as `review`); a Stop while an agent works goes through `stopping` to `blocked`; `blocked` always carries a `reason` - `stopped`, `re-plan`, `unreachable`, `missing-report` or `unrecognized-commits`. `nudged` records that this round's one report nudge was sent; it resets to `false` whenever `round` or `generation` changes. Caller tasks move `pending` -> `running` -> `done`. `report` is the path of the latest round's saved report, `status` and `reason` are read from it, `received` counts reports in arrival order across the run, and `generation` is 1 for the first agent of a chunk and grows with each replacement. Rewrite the record at every transition BEFORE acting on it, so an interrupted session always finds the state it was in.
 
 ### 5-D.4 Dispatch - in plan order
+
+Read `${CLAUDE_PLUGIN_ROOT}/protocol/agents.md` before this step unless its text is in your current context.
 
 Walk the Step 4.6 split:
 
@@ -617,7 +621,7 @@ The stat is validation; the patch is what the user reviews. Record `patch_sha` -
 
 **Render review** = the tree check, a fresh `patch_sha`, then the status gate carrying the heading, the report verbatim and the full patch as its first option's `preview` - always in that order. Every path that shows a review gate runs it: a new report, a 5-D.7 recovery of `review` / `paused`, and an Accept that found the patch changed. No path asks a Review gate without first recording the sha of what it showed.
 
-- **Orchestrator offer** - when it applies (lets-rules `### Orchestrator offer`, Act shape; rule not loaded -> no offer), add as the last option `{ label: "Ask orchestrator", description: "Stay at this gate; /lets:orc ask with the report and the patch" }`
+- **Orchestrator offer** - when it applies (the Orchestrator offer protocol, Act shape; load `Skill(skill: "lets:protocol-orchestrator-offer")` here unless its text is in your current context; not loaded -> no offer), add as the last option `{ label: "Ask orchestrator", description: "Stay at this gate; /lets:orc ask with the report and the patch" }`
 
 **`complete`, every Verify `pass`, diff check clean:**
 

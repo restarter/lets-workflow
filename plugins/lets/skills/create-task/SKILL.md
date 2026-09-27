@@ -47,6 +47,8 @@ Labels are project-specific. ALWAYS discover them dynamically - never hardcode.
 
 ### Step L1: Discover Existing Labels
 
+**Tracker protocol:** `Skill(skill: "lets:protocol-tracker")` before this and any later `lets-tracker` block here, unless its text is in your current context.
+
 ```lets-tracker
 label   # list all labels; filter the result for `epic:*`. On a tracker that marks `label` absent, skip label discovery (no epic suggestions - propose a label by hand).
 ```
@@ -93,7 +95,7 @@ From the user's input, derive only the fields the adapter's `create` declares in
 
 ### Step 3: Present for Approval
 
-Show the full task `create` before executing. The multi-line description is written to a temp file and passed as `description-file=` (lets-rules "Tracker Adapters"); the short fields go inline:
+Show the full task `create` before executing. The multi-line description is written to a temp file and passed as `description-file=` (`lets:protocol-tracker` "Bodies"); the short fields go inline:
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel); mkdir -p "$LETS_PROJECT_ROOT/.lets/cache"

@@ -339,7 +339,7 @@ func TestTrackerRules_FieldsDeclared(t *testing.T) {
 
 // TestTrackerBeads_BindsBdCommands pins each beads verb to the bd invocation its
 // binding CELL resolves to. Command/skill bodies carry neutral ```lets-tracker
-// blocks (lets-rules "Tracker Adapters"); for beads every verb resolves through
+// blocks (resolved per the lets:protocol-tracker skill); for beads every verb resolves through
 // THIS table, so a drifted binding cell silently changes what /lets:* actually
 // runs. Each verb pins one or more cell-scoped fragments covering the
 // behavior-critical spans (--reason, --status=, --json, the create field flags,
@@ -404,8 +404,8 @@ func TestTrackerBeads_BindsBdCommands(t *testing.T) {
 }
 
 // TestTrackerAdapters_VerbVocabInSync pins the canonical neutral-verb list against
-// BOTH the reference adapter (a table row) AND the lets-rules "Tracker Adapters"
-// verb list (a backticked mention), so the two can't diverge - a verb renamed in
+// BOTH the reference adapter (a table row) AND the verb list of the protocol-tracker
+// skill (a backticked mention; it left lets-rules "Tracker Adapters" in lets-nobb5), so the two can't diverge - a verb renamed in
 // the table but not the rule (or vice versa) fails here. The list itself is the
 // source of truth. One-directional containment (not strict set-equality) because
 // the rule prose groups `ready`/`stats` with slashes; command-body verb spelling
@@ -416,16 +416,16 @@ func TestTrackerAdapters_VerbVocabInSync(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rules, err := os.ReadFile(filepath.Join(dir, "lets-rules.md"))
+	proto, err := os.ReadFile(filepath.Join(pluginDir(t), "skills", "protocol-tracker", "SKILL.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	beadsVerbs := tableVerbs(capsTable(string(beads)))
-	// Scope to the "### Tracker Adapters" section - a whole-file Contains is
-	// satisfiable by unrelated backticked mentions (S9: `label` had 5).
-	rulesStr := sectionSpan(string(rules), "### Tracker Adapters")
+	// Scope to the adapter section that carries the verb tiers - a whole-file Contains
+	// is satisfiable by unrelated backticked mentions (S9: `label` had 5).
+	rulesStr := sectionSpan(string(proto), "## 1. Find the adapter")
 	if rulesStr == "" {
-		t.Fatal(`lets-rules.md: "### Tracker Adapters" section not found`)
+		t.Fatal(`skills/protocol-tracker/SKILL.md: "## 1. Find the adapter" section not found`)
 	}
 	for _, v := range []string{
 		"create", "show", "comment-add", "set-status", "close",
@@ -437,7 +437,7 @@ func TestTrackerAdapters_VerbVocabInSync(t *testing.T) {
 		}
 		for _, part := range strings.Split(v, "/") {
 			if !strings.Contains(rulesStr, "`"+part+"`") {
-				t.Errorf("neutral verb %q (part %q) not named in lets-rules \"Tracker Adapters\" verb list", v, part)
+				t.Errorf("neutral verb %q (part %q) not named in the protocol-tracker skill verb list", v, part)
 			}
 		}
 	}

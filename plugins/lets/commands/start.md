@@ -68,7 +68,7 @@ if [ "$(git rev-parse --path-format=absolute --git-dir)" != "$(git rev-parse --p
 fi
 ```
 
-No output -> a main checkout or an already linked worktree; continue silently. Otherwise:
+No output -> a main checkout or an already linked worktree; continue silently - nothing is read. When the block printed anything (an adopt envelope or `LETS_BINARY_MISSING`), Read `${CLAUDE_PLUGIN_ROOT}/protocol/worktrees.md` unless its text is in your current context (adopt, task-state file), then handle it:
 - **`ok=true`:** when `moved_aside` is set, one line naming the moved directory (safe to delete by hand); when `task.origin` is `branch` or `dir`, one line `task <id> derived from the <branch|directory> name - take-task confirms it`; a step warning `adapter_not_in_checkout` / `board_not_in_checkout` -> one line each (this session did not load that file: commit `.claude/rules` or restart). Then one line: this session's LETS Config was computed before the worktree was linked - `/clear` re-injects it.
 - **Any error envelope** (exit 22, 23, 24, 25, 17, 19 or anything else): print `error.kind` + `error.remediation` and STOP. Never retry with a force flag - adopt deletes nothing and the conflict is the user's to resolve.
 - **`LETS_BINARY_MISSING`:** STOP and print the manual steps: symlink `.lets` to the main checkout's `.lets`, then create each link the active tracker adapter's `## Worktree` `links:` declares (beads: `.beads/.env` -> the main checkout's, mode 0600).
@@ -117,7 +117,7 @@ done
 
 Report: branch, uncommitted changes, recent commits. **On a `STRAY REVIEW RESTORE` line**, tell the user in one line: a PR review did not finish restoring, `git checkout <ref>` returns them, and a listed `stash:` is still in `git stash list`. Report only - never act: `.lets/` is shared by every worktree of this repo, so the stray may belong to a session that is still running. **If the repo has no commits yet** (the `else` branch above fires), that's fine — say so in plain text; offer `git commit --allow-empty -m "chore: initial setup"` if the user wants an anchor for `git log` to work later. **Don't** raise `/lets:init` here (it's a separate concern) and **don't** treat the missing HEAD as a fatal error.
 
-**Orchestrator pointer (worktree only).** Only when `git rev-parse --path-format=absolute --git-dir` differs from `git rev-parse --path-format=absolute --git-common-dir`, and never in a spawned `--flow` / `--auto` run (a `.lets/cache/pipeline-state-<id>` marker exists, or AUTO MODE is active):
+**Orchestrator pointer (worktree only).** Only when `git rev-parse --path-format=absolute --git-dir` differs from `git rev-parse --path-format=absolute --git-common-dir`, and never in a spawned `--flow` / `--auto` run (a `.lets/cache/pipeline-state-<id>` marker exists, or AUTO MODE is active). When it runs, Read `${CLAUDE_PLUGIN_ROOT}/protocol/peers.md` first unless its text is in your current context (bound sibling sessions, `--repo-index`):
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
@@ -187,6 +187,8 @@ After task is selected, delegate to the **take-task** skill to claim it and prep
 The take-task skill handles: setting task to `in_progress`, uncommitted changes check, worktree detection, branch creation/switching, offering worktree option, context recovery, saving session start ref.
 
 **Orca card (only when `{LETS_LAUNCHER}` is `orca`; otherwise skip this whole paragraph - no `lets` call, no `show`).** Reuse the title take-task already resolved. Only when that title is not in context:
+
+**Tracker protocol:** `Skill(skill: "lets:protocol-tracker")` before this and any later `lets-tracker` block here, unless its text is in your current context.
 
 ```lets-tracker
 show task=<id>   # returns {id,title,status}; <id> already passed the detect-task gate

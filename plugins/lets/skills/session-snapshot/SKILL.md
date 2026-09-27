@@ -88,7 +88,7 @@ Write `$SNAP_FILE` (the echoed path) via the Write tool with the template below,
 
 ## Step 4: One-line task pointer (conditional)
 
-If `pointer=auto` AND a task is unambiguously active, compose the one-line pointer to a temp file (the heading date is `$(date +%Y-%m-%d)`; the snapshot basename is the `SNAP_BASENAME` echoed in Step 3 - reuse it VERBATIM, do NOT recompute the minute-precise timestamp, or the pointer drifts off the file actually written), then submit it via the tracker `comment-add` verb with `body-file=` (lets-rules "Tracker Adapters"):
+If `pointer=auto` AND a task is unambiguously active, compose the one-line pointer to a temp file (the heading date is `$(date +%Y-%m-%d)`; the snapshot basename is the `SNAP_BASENAME` echoed in Step 3 - reuse it VERBATIM, do NOT recompute the minute-precise timestamp, or the pointer drifts off the file actually written), then submit it via the tracker `comment-add` verb with `body-file=` (`lets:protocol-tracker` "Bodies"):
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel); mkdir -p "$LETS_PROJECT_ROOT/.lets/cache"
@@ -96,6 +96,8 @@ cat > "$LETS_PROJECT_ROOT/.lets/cache/pointer-<task-id>.md" <<EOF
 ## RESUME $(date +%Y-%m-%d) - snapshot: .lets/sessions/<SNAP_BASENAME echoed in Step 3>
 EOF
 ```
+
+**Tracker protocol:** `Skill(skill: "lets:protocol-tracker")` before this and any later `lets-tracker` block here, unless its text is in your current context.
 
 ```lets-tracker
 comment-add task=<task-id> body-file=.lets/cache/pointer-<task-id>.md
