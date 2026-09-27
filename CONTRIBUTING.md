@@ -50,6 +50,172 @@ To run the plugin from a local checkout in Claude Code: `/plugin marketplace add
 
 Likewise: the **frontmatter `version`** in `lets-rules.md` (and `plugin.json`, `marketplace.json`) is bumped **once per release** at ceremony time (`scripts/release/bump-version.sh`) — not per change. A rules edit on a feature branch accumulates under the current target version. Don't bump it in your PR.
 
+## Rules layers
+
+LETS instructions live in five layers. Only the first one is loaded on every turn and into every session; everything else is loaded when a step needs it, or never (this file). Before lets-nobb5 the whole rule set (62 KB) plus the tracker adapter (~6 KB) rode along on every turn, next to the project's own CLAUDE.md and rules.
+
+| layer | where | loaded | holds |
+|---|---|---|---|
+| core | `plugins/lets/rules/lets-rules.md` -> installed to `.claude/rules/` (or `~/.claude/rules/`) | every turn (project instructions) | what applies in free conversation, outside any command: language, boundaries, approval gates, AUTO MODE, peer trust, task references and tracker essentials, worktree essentials, the flow table, the response footer, AskUserQuestion essentials, context-window rules |
+| protocol skills | `plugins/lets/skills/protocol-tracker/`, `plugins/lets/skills/protocol-orchestrator-offer/` (internal, `user-invocable: false`) | by a command or skill via `Skill(...)` right before the step that needs it, "unless its text is in your current context" | tracker verb resolution (adapter lookup, neutral read shape, bodies, degradation, preflight, trust); the orchestrator offer (select, resolve once, Act / Nav shapes) |
+| protocol files | `plugins/lets/protocol/{worktrees,peers,handoff-lane,agents}.md` | Read via `${CLAUDE_PLUGIN_ROOT}/protocol/<topic>.md` at the step that needs it, same condition | worktree detail (adopt / release, task-state file, standing teams, remove nets, lifecycles, vanishing worktrees); boundary carve-outs and the team link; the handoff lane; agent dispatch, reports and members |
+| tracker adapter | `plugins/lets/rules/tracker-<name>.md` (+ user-owned `.board.md`) | today auto-loaded from `.claude/rules/`; after the adapter move, Read by `lets:protocol-tracker` | the verb bindings of one tracker |
+| CONTRIBUTING | this file | never by the model | rationale, worked examples, the full flow diagrams, the Skill Quick Reference table |
+
+The load condition is the context, not the session: after `/compact` or `/clear` a protocol loaded earlier is gone, so every load point says "unless its text is in your current context". `cli/internal/cli/protocol_lint_test.go` keeps the wiring honest (a `lets-tracker` block loads `lets:protocol-tracker` first; every `protocol/<x>.md` reference resolves and every file is referenced; no pointer to a section that left core; every remaining `lets-rules` heading pointer names a heading core still has). `orc_lint_test.go` asserts the orchestrator-offer load.
+
+### Budgets
+
+| file | budget |
+|---|---|
+| core `lets-rules.md` | 16,384 B |
+| tracker adapter `tracker-<name>.md` | 8,192 B |
+| board profile `tracker-<name>.board.md` | 4,096 B |
+
+**Why the core is 16k, not the 10k first targeted.** The first target (8-10 KB) assumed the response footer and the AskUserQuestion conventions could leave core. They cannot: both apply to every response, including free conversation outside any command. A complete dense draft of the always-on rows then measured 15,779 B: the safety and approval sections (boundaries, slash-command discipline, development-workflow gates, AUTO MODE, peer trust, tracker and worktree essentials) alone are 8,478 B, and the always-on non-safety sections (preamble, language, notice, agents and search, discovery, patterns, architecture, flow table + footer, AskUserQuestion, context window) 7,301 B. Dropping Discovery / Pattern / Architecture entirely would have saved only 1,318 B, and safety wording is never compressed to meet a number - so the owner raised the pin to 16,384 B. The core is still a quarter of the old 62 KB. Raising it again is an owner decision recorded here.
+
+### Where does a new rule go?
+
+1. Does it apply in free conversation, outside any command, or on every response (a gate, a boundary, a trust rule, an output format)? -> **core**, as one dense line or table row. Safety wording is never cut for size.
+2. Does it apply only while a command runs a specific step? -> a **protocol skill** when it is a procedure several commands share and it carries structured calls (verbs, gates), a **protocol file** when it is reference detail; add the load at each step that needs it (the lint enforces it).
+3. Does it apply to one command only? -> that **command** or its **skill**.
+4. Does it bind a tracker? -> the **adapter**.
+5. Is it an explanation, a history, an example? -> **here**.
+
+### Rationale behind core rules
+
+- **Artifacts in English (L5).** Everything the project stores and searches - code, commits, tracker content, `.lets/` plans, reviews and briefs, PR descriptions - is read and grepped long after the conversation by people and agents who do not share the author's language. A PR description lands in history beside the commit message, which is why it is an artifact and not a reply.
+- **Reply in kind (L7).** Answering a person in a language they did not choose is worse service, not better hygiene. What decides is the text being answered, not a config value, so nothing has to be configured.
+- **No hard-wrap (L11).** Markdown renders an in-paragraph newline as a space and editors soft-wrap visually, so column-wrapping changes nothing in the rendered output - but it produces noisy diffs (a one-word edit reflows many lines) and makes editing painful.
+- **Installed copies (B9).** The project copy is refreshed by `/lets:init` / `/lets:update`; the global `~/.claude/rules/lets-rules.md` is refreshed by the session hook at every start, and a hand-edited global copy is saved to `.bak[-N]` before it is replaced - so own rules go in a separate `.md`.
+- **Slash command discipline (D3).** State changes between commands (files appear and disappear, dotfiles are invisible to plain `ls`, sessions span editor and filesystem). The pre-checks exist because shortcutting them produced wrong branches and wrong outputs.
+- **Pattern examples (P9).** Typical one-line surfacings: "Це 3-тя річ про X сьогодні - варто винести в окремий таск або epic?"; "Це 3-й раз на цей блокер - давай розберемось чому, замість обходити."; "На гілці зараз X + Y + Z - split на окремі PR'и?".
+- **Directed search vs exploration (R8).** Sequential direct reads burn context-window tokens; one agent call returns a focused summary. Examples: directed - find a function definition, check a config value, read a specific file; exploration - understand how a feature works across files, compare patterns, find all places affected by a change.
+- **Discovery suggestion (G4).** One line, e.g. "Це варто зафіксувати в задачі - `/lets:note`?". The note itself records full context (decision + reasoning, `file:line`, links, nuances) with no length limit - that is `/lets:note`'s job.
+- **Tracker adapter trust (K11), for adapter authors.** An adapter file is trusted instruction; its binding cells execute as written. Installing a third-party adapter equals running its code - review every binding. The contract test pins table shape, not binding safety. A token belongs only in the transport's own config (the MCP server env, a gitignored 0600 file) - never in `tracker-*.md`, a `.board.md` or `.lets/.env`.
+
+### AskUserQuestion - worked examples
+
+Substitution (core: "substitute every `{LETS_FOO}` before the call"):
+
+```
+❌ BAD:  description: "Switch to $LETS_MERGE_BRANCH, pick another task"  →  user sees literal "$LETS_MERGE_BRANCH" (broken)
+✅ GOOD: description: "Switch to {LETS_MERGE_BRANCH}, pick another task"  →  user sees "Switch to main, pick another task"
+```
+
+Worked example with Rule 7 follow-through:
+
+```python
+AskUserQuestion(
+  questions=[{
+    question: "You have uncommitted changes. What to do?",   # in $LETS_LANGUAGE at runtime
+    header: "Uncommitted",                                    # 4-12 chars, topic chip
+    options: [
+      { label: "Commit first (Recommended)", description: "Run /lets:commit, then continue" },
+      { label: "Defer",       description: "Run /lets:commit later if needed" },
+      { label: "Skip",        description: "Warn and continue without committing" },
+      { label: "Cancel",      description: "Stop and return to the task" }
+    ],
+    multiSelect: false
+  }]
+)
+
+# If user picks "Commit first" → Rule 7 fires: Skill(skill: "lets:commit").
+# If user picks "Defer" → /lets:commit appears but qualified by "later if needed" → Exception (a), no auto-execute (prose hint).
+# If user picks "Skip" → no /lets:* in label/description → no auto-execute; proceed inline.
+# If user picks "Cancel" → same.
+```
+
+### Session Flow - full diagrams
+
+Core keeps one flow table (one row per phase). The full diagrams and the review guidance it replaced:
+
+```
+$LETS_PR_FLOW=local   /lets:start -> Work -> /lets:check -> /lets:commit -> /lets:done (merge) -> /lets:end
+$LETS_PR_FLOW=github  /lets:start -> Work -> /lets:check -> /lets:commit -> /lets:done (push + PR) -> /lets:end
+$LETS_PR_FLOW=bitbucket  /lets:start -> Work -> /lets:check -> /lets:commit -> /lets:done (push + PR via bbb) -> /lets:end
+
+Trunk-mode (any $LETS_PR_FLOW): /lets:start (pick "Stay on current branch") -> Work -> /lets:check -> /lets:commit -> /lets:done (push + close, no PR) -> /lets:end
+
+Main mode (no task):  /lets:start --main -> triage / groom / route (no edits) -> /lets:start <id> when coding starts -> /lets:end
+
+Worktree:  /lets:worktree create -> `cd .worktrees/<name>/ && claude` -> /lets:start -> Work -> /lets:done -> /lets:end -> /lets:worktree remove (main repo)
+Orca:      /lets:worktree create (LETS_LAUNCHER=orca) -> Orca pane runs /lets:start <id> (adopt already linked it) -> Work -> /lets:done -> /lets:end -> archive in Orca (lets worktree release)
+
+Team:      /lets:team run [--tasks A,B] -> one visible worker session per task on any launcher, bound via /lets:orc -> each worker /lets:start ... /lets:done   (orca: an Orca child worktree per task; --backend agents is refused)
+Standing team:  /lets:team create [<callsign>] --area <a> (from the main checkout) -> the lead <callsign>-lead opens in team_<callsign> -> /lets:start <id> claims the lead and switches the branch (uncommitted work: commit or park, never stash) -> work -> /lets:done -> next task -> /lets:team disband <callsign>
+
+Orchestrators:  /lets:start --main [--scope "<part>"] (several per repo, unique per session name) -> /lets:worktree create <id> binds each spawned worker (--orc) -> a worker chat opened by hand: /lets:start <id> --orc=<name> -> worker and orchestrator talk via /lets:orc
+
+Auto-pipeline:  /lets:worktree create <id> --flow plan-workflow --auto -> [GATE1 clarify] -> auto-plan (plan-workflow) -> [GATE2 approve] -> /lets:execute --auto -> stop at push/PR -> /lets:done
+
+PR review:  /lets:github-pr <PR> -> discuss -> post -> /lets:github-pr --follow-up -> /lets:github-pr --approve
+PR respond: /lets:github-pr --respond <PR> -> triage -> fix -> reply
+```
+
+If a plan exists from `/lets:plan`, the user runs `/lets:execute` to implement it here, or `/lets:handoff --execute --send [<tab>]` to have an agent tab of this worktree implement it - nothing else starts implementation, and the model never starts it on its own. Execute runs inline in native plan mode (its approval is the code-write gate), or delegates to implementer agents (its Start gate is, and each chunk is committed only after it is accepted - by you, or by the team check under the gate policy you pick at Start: `per-commit` | `high-only` | `at-end`; the one exception is `--pipelined`, where Start approves the implementer's local commits); use `/lets:commit` at natural commit points.
+
+Two separate lifecycles:
+- **Session:** `/lets:start` ... `/lets:end` (one conversation)
+- **Task:** picked at start ... `/lets:done` (may span multiple sessions)
+
+**Review options:**
+- `/lets:check` - the orchestrator reviews inline, no subagents; same target flags as `/lets:review` - before any commit, or a fast first pass on a PR
+- `/lets:review` - selected expert subagents review, then an adversarial verify pass; works locally OR on GitHub PR
+
+**When to use which:**
+- Small change -> `/lets:check` -> commit
+- Significant change -> `/lets:check` -> `/lets:review --local` -> fix -> commit -> PR
+- PR already exists -> `/lets:review <PR>` -> comment on PR
+- Full PR lifecycle -> `/lets:github-pr <PR>` -> discuss -> post inline -> follow-up -> approve
+- Existing file quality -> `/lets:review --file <path>`
+- Quick plan check -> `/lets:check --plan`
+- Autonomous task (spawn + plan + execute, you gate twice) -> `/lets:worktree create <id> --flow plan-workflow --auto` (PREVIEW; see docs/autonomous.md)
+
+### Skill Quick Reference
+
+The maintained per-command table (core keeps only the flow table and the auto-triggered skill names; each command's own frontmatter `description` is what the model sees in the skill list). Update it when a command is added, renamed or removed.
+
+| Skill | Category | When |
+|-------|----------|------|
+| `/lets:start` | Session | Beginning of session; `--orc=<name>` binds a worker chat to an orchestrator, `--main --scope "<part>"` registers one |
+| `/lets:end` | Session | End of session - settlement pass (commit / push / progress / snapshot, auto-skips when tidy). It REFERS an open task to `/lets:done` and never finishes one itself. `--session` (aliases `--snapshot`, `--pre-compact`, `--compact`) skips settlement and only writes the shared snapshot, keeping the session going |
+| `/lets:done` | Task | Task is complete |
+| `/lets:commit` | Code | Ready to commit (also auto-triggers on "commit", "закоміть") |
+| `/lets:check` | Code | Inline 6-lens reviewed by the orchestrator alone, no subagents; same targets as `/lets:review` (local/staged/last-commit/branch/PR/`--file`/`--plan`/`--json`); `--fix` verifies each finding inline and applies the fixes when nothing needs deciding |
+| `/lets:review` | Code | Expert subagents review, then an adversarial verify pass; `<PR>` offers a `gh pr checkout` so agents read the real tree - it stashes on a dirty tree and restores the branch at the end; `--fix` applies the verified fixes when nothing needs deciding |
+| `/lets:github-pr` | Code | GitHub PR review lifecycle (review, respond, follow-up, approve) |
+| `/lets:review-round` | Code | Work through a RECEIVED review round - triage N comments, decisions->task, artifact FROZEN, one final edit-pass (inverse of `/lets:review`) |
+| `/lets:handoff` | Code | Hand the current state OUT - one self-contained brief another agent (fresh session, Codex, Antigravity, external reviewer) can act on with no context; same target selectors as `/lets:review`, plus handoff-only `--commits` / `--range`. `--send` types it into an agent's Orca tab, `--open` opens a new Codex tab for it, `--codex` runs it through Codex headless; the report comes back UNVERIFIED and is checked against the code. `--execute` hands an approved plan to an open agent tab to implement - its commits come back UNVERIFIED for `/lets:review --branch`. `--fix` applies the report's verified fixes here when nothing needs deciding. Deprecated alias: `/lets:review-handoff` |
+| `/lets:opinion` | Expert | Technical decision (dynamic agent count; `--workflow` = off-context fan-out + adversarial challenge) |
+| `/lets:ask` | Expert | Quick expert consultation (1 agent) |
+| `/lets:research` | Expert | Web-sourced CITED answer to an external/technical question; cross-check pass flags single-source/contradicted/stale claims (`--workflow` = off-context; `--project` = repo-grounded) |
+| `/lets:backlog` | Planning | Backlog review (multi-agent; `--workflow` = off-context) + `--fast` quick no-agent pulse + interactive cleanup triage |
+| `/lets:plan` | Planning | Structured planning with agents - architecture + implementation plan (`--fast` = orchestrator-only, skips explorer/architect/expert subagents; `--idea` = a concept document, no code exploration, never executed) |
+| `/lets:plan-workflow` | Planning | **PREVIEW** - autonomous planning via a Dynamic Workflow (goal + rubric up front, off-context, approve at end); folds into native `/lets:plan` later (lets-jsw00); `--fast` = lean budget (~7 agents, still off-context, heavy review pass skipped, quick plan-check kept) - distinct from `/lets:plan --fast` (orchestrator-only, no subagents) |
+| `/lets:execute` | Planning | Execute plan from /lets:plan - inline in native plan mode, or delegated (`--implementers`): one persistent implementer by default, `--parallel` isolated groups joined by `lets integrate`, a gate policy picked at Start |
+| `/lets:status` | Utility | Read-only orient snapshot - where you are, what's in flight, what's next (tracker-universal) |
+| `/lets:worktree` | Utility | Create/manage interactive worktrees for parallel work |
+| `/lets:orc` | Utility | Talk to this chat's orchestrator or a named peer session - `ask` / `ping` / `read` / `tell` / `who`; the only sender of peer messages |
+| `/lets:peer` | Utility | Alias: `/lets:peer <name> <verb> [text]` = `/lets:orc` with a target |
+| `/lets:hub` | Utility | Orca addon (needs `LETS_LAUNCHER=orca`): every project's orchestrators, a read-only answer from a stopped one, wake one for gated work |
+| `/lets:statusline` | Utility | Manage & persist statusline appearance - light/dark, compact, hidden rows (writes personal `.claude/settings.local.json`) |
+| `/lets:team` | Utility | Team management - `run` (one visible session per task, any launcher), `create` / `disband` a standing team, `spawn` / `dismiss` / `roster` its members, `status`, `stop` |
+| `/lets:note` | Utility | Add note to active task (`--session`, aliases `--snapshot` / `--pre-compact` / `--compact` = resume snapshot on request, one path) |
+| `/lets:init`    | Setup | Per-project initialization. Re-run for self-heal (drift fix) or to change config; offers the user-scope global-rules install (`lets init --user`) when the plugin is user-scoped |
+| `/lets:update`  | Setup | Sync project with the current release - `.lets/.env` + rules self-heal, plus version status for the `lets` binary and the plugin; the global rules are only reported (the session hook keeps them current) |
+
+#### Auto-triggered Skills
+
+These skills fire automatically when you describe the action in conversation:
+
+| Skill | Triggers on |
+|-------|-------------|
+| `create-task` | "create task", "new task", "bd create" and variations |
+| `commit` | "commit", "закоміть", "git commit" and variations |
+| `take-task` | "take task X", "візьми таск", "work on X", "claim task" and variations |
+| `orc` | "ask the orchestrator", "спитай у оркестратора", "message <name>", "who is working" and variations |
+
 ## Audience of plugin source
 
 `commands/`, `skills/`, `agents/`, `rules/` are read by Claude (the model), never by humans. Write for the model: terse, structured, parseable; tables and bullets over prose; `MANDATORY` / `NEVER` / `IMPORTANT` markers where a constraint must be locked onto. Match the existing style. Human-facing docs live in `README.md` and `CLAUDE.md`.
@@ -64,7 +230,7 @@ Update these files:
 
 | File | What to update |
 |------|----------------|
-| `plugins/lets/rules/lets-rules.md` | Skill Quick Reference table. Edit ONLY here, never the installed `.claude/rules/lets-rules.md`. **Do NOT bump frontmatter `version` per change** — it's bumped once per release at ceremony time (`scripts/release/bump-version.sh`; see `RELEASING.md`). A rules edit on a feature branch accumulates under the current target version. |
+| `plugins/lets/rules/lets-rules.md` | The core flow table (`## Session Flow`) when a command changes a phase - the per-command Skill Quick Reference table now lives in "## Rules layers" above; keep the core within its budget. Edit ONLY here, never the installed `.claude/rules/lets-rules.md`. **Do NOT bump frontmatter `version` per change** — it's bumped once per release at ceremony time (`scripts/release/bump-version.sh`; see `RELEASING.md`). A rules edit on a feature branch accumulates under the current target version. |
 | `commands/install-deprecated.md` | Essential Skills / Planning Skills tables |
 | `CLAUDE.md` Key Concepts | If adding a new skill |
 | `docs/commands.md` (+ the relevant `docs/<topic>.md`) | A new command, a renamed command, or a **new user-facing flag**. This row exists because it was missing: `--pre-compact`, `--session` and `/lets:start --main` all shipped while the human-facing reference kept claiming those commands take no flags. The plugin-source rows above do not cover `docs/` — nothing else does either. |
@@ -73,8 +239,9 @@ Update these files:
 | `commands/end.md` + `commands/done.md` + `skills/session-snapshot/SKILL.md` session-id references | Channel per context (the rule): **inside a bash command** → `$CLAUDE_CODE_SESSION_ID` (Bash subprocess env var; bash expands it at runtime) — used by `done.md` Step 7, `end.md` Step 3b progress-comment heredoc (body-filed via the tracker `comment-add`), and the `session-snapshot` skill Step 2 (`SID=$CLAUDE_CODE_SESSION_ID` + `find ... "${CLAUDE_CODE_SESSION_ID}.jsonl"`) which writes the snapshot's `- ID:` line from that single bash channel. **The `${CLAUDE_SESSION_ID}` command-load-time template channel is intentionally NOT used in the snapshot skill** (fragile inside a multiline Write arg — lets-bdkvd QA #13). No `SESSION_ID=` alias anywhere. Verify with `grep -rn "SESSION_ID" plugins/lets/commands/ plugins/lets/skills/`. Background + remaining adoption scope (subagents, statusline, `/lets:team` records): see `lets-bdkvd`. |
 | `cli/internal/initcmd/reviewspec_test.go` | If touching `commands/review.md`, `commands/check.md` or `skills/review-workflow/review.workflow.js`. Go tests read that markdown from `../../../plugins/` and pin the SPEC blocks, the `--workflow` args wiring, the one-shell PR switch (which they also EXECUTE against a stub `gh`), the restore fence and the no-worktree boundary. **Run with `-count=1`** — Go's test cache does not track files reached through `../../../plugins/`, so a markdown-only edit serves a stale PASS. Same caveat applies to `trackerbodies_test.go` / `trackerrules_test.go`. |
 | `cli/internal/cli/<name>.go` + register in `cli/internal/cli/root.go` | If adding a Go subcommand. Add `<name>_test.go` (`package cli_test`). Use `cmd.OutOrStdout()`. Domain logic goes in `cli/internal/<name>/` (see `initcmd/`, `updatecmd/`, `worktreecmd/`, `sessionstart/`, `statusline/`, `frontmatter/` for patterns). If the package needs platform-specific primitives (`syscall.Flock` etc.), gate with `//go:build unix` and add a `<name>_stub.go` (`//go:build !unix`) per the `worktreecmd` pattern so cross-platform builds keep working. Update `cli/README.md` "Adding a subcommand" recipe if pattern changes. |
-| Any `commands/*.md` or `skills/*/SKILL.md` invoking `AskUserQuestion` | Follow `## AskUserQuestion Conventions` in `plugins/lets/rules/lets-rules.md` (header chip 4-12 chars descriptive, `(Recommended)` in label, `multiSelect` per rule, follow-through via `Skill` tool per Rule 7, `{LETS_FOO}` substitution per Rule 9). Spec strings hardcoded in English; orchestrator translates to `$LETS_LANGUAGE` at runtime. |
-| Any `commands/*.md` or `skills/*/SKILL.md` that **offers the orchestrator** | A pointer at lets-rules `### Orchestrator offer` in its Act shape (an "Ask orchestrator" option + a `Skill(lets:orc, verb=ask footer=none)` handler + re-show the gate) or its Nav shape (a `- **Orchestrator offer (Nav)**` handle line; `/lets:orc ask` only in a LETS box or on a handle line) - never a restated rule, never a fifth option. `TestOrcLint` (`cli/internal/cli/orc_lint_test.go`) enforces it; a file that only REFERENCES `/lets:orc` goes into its `orcOfferExempt` list. |
+| Any `commands/*.md` or `skills/*/SKILL.md` invoking `AskUserQuestion` | Follow `## AskUserQuestion Conventions` in `plugins/lets/rules/lets-rules.md` (header chip 4-12 chars descriptive, `(Recommended)` in label, `multiSelect` per rule, follow-through via `Skill` tool per Rule 7, `{LETS_FOO}` substitution). Spec strings hardcoded in English; orchestrator translates to `$LETS_LANGUAGE` at runtime. |
+| Any `commands/*.md` or `skills/*/SKILL.md` that **offers the orchestrator** | Loads `Skill(skill: "lets:protocol-orchestrator-offer")` at the offer (see "## Rules layers") and follows its Act shape (an "Ask orchestrator" option + a `Skill(lets:orc, verb=ask footer=none)` handler + re-show the gate) or its Nav shape (a `- **Orchestrator offer (Nav)**` handle line; `/lets:orc ask` only in a LETS box or on a handle line) - never a restated rule, never a fifth option. `TestOrcLint` (`cli/internal/cli/orc_lint_test.go`) enforces it; a file that only REFERENCES `/lets:orc` goes into its `orcOfferExempt` list. |
+| Any `commands/*.md` or `skills/*/SKILL.md` that **runs a tracker verb or needs protocol detail** | Loads `Skill(skill: "lets:protocol-tracker")` before its first ```` ```lets-tracker ```` block, and Reads `${CLAUDE_PLUGIN_ROOT}/protocol/<topic>.md` at the step that needs worktree / peers / handoff / agent-dispatch detail - each "unless its text is in your current context" (see "## Rules layers"). `TestProtocolLint` (`cli/internal/cli/protocol_lint_test.go`) enforces it. |
 | Any `commands/*.md` or `skills/*/SKILL.md` that **writes a file under `.lets/plans`, `.lets/reviews`, `.lets/sessions` or `.lets/handoffs`** | Resolve the path via `Skill(skill: "lets:artifact-path", args: "kind=<kind> ext=<ext> [task=<id>]")` and write to the echoed `ARTIFACT_FILE` VERBATIM; register a new `<kind>` in `skills/artifact-path/SKILL.md`'s kinds table. Never `date`+`ls` a path by hand - `.lets/` is one symlinked dir shared by every worktree, and a hand-built name overwrote another session's file (lets-05c4s). Go-owned state files (`.task-*`, `peers/*.role`, `cache/released-*`) are exempt: they are not artifacts, and markdown writes them only through their owner's CLI. So are transient `.lets/cache/peer-msg/<msgid>.txt` handoffs (0700 directory): created by `lets peers frame`, written by the orc skill or `/lets:hub` (its ask-ro prompts use the same handoffs), deleted by `lets peers tell` / `ask-ro`. |
 | Adding a **Dynamic Workflow asset** (a `Workflow`-tool script) | Follow `## Dynamic Workflow Assets (authoring standard)` in `CLAUDE.md`. Ship as `skills/<name>-workflow/` (`<name>.workflow.js` + `user-invocable: false` `SKILL.md`); invoke from the command via `Workflow({scriptPath: "${CLAUDE_PLUGIN_ROOT}/skills/<name>-workflow/<name>.workflow.js", args})`; obey the 6 conventions + runtime must-obey list; validate via a live smoke test (no committed unit test — runtime-blocked); degrade gracefully when an `agentType` can't resolve. `skills/review-workflow/` is the reference example. |
 
@@ -106,13 +273,13 @@ Every command response ends with exactly ONE footer of the right type - the runt
 
 - [ ] Response ends with exactly one footer of the right type (Act/Nav/Close - see the Response Footer rule)
 - [ ] Nav-box shortcuts follow the guidance above (next step + lighter alt + escape hatch; no `/lets:start` mid-task); all boxes in the file are the same display-column width (python recipe)
-- [ ] Updates Skill Quick Reference in `plugins/lets/rules/lets-rules.md` (do NOT bump frontmatter `version` per change — once per release at ceremony, see the version-coherence rule above)
+- [ ] Updates the Skill Quick Reference in `CONTRIBUTING.md` "## Rules layers", and the core flow table in `plugins/lets/rules/lets-rules.md` when a phase changes (do NOT bump frontmatter `version` per change — once per release at ceremony, see the version-coherence rule above)
 - [ ] Updates `/lets:install` Essential Skills / Planning Skills tables
 - [ ] Follows session flow (start -> work -> commit -> done -> end)
 - [ ] Description is clear and actionable
 - [ ] **Dispatches agents?** Use the `agent-report` protocol (`REPORT_FILE` per agent, `op=collect`, READ EVERY REPORT IN FULL) and register the dispatch -> consumer pair in `reportPhases` - `TestAgentReport` fails on an unregistered `subagent_type=`
 - [ ] **If file invokes any deferred tool** (`AskUserQuestion`, `EnterPlanMode`, `WebFetch`, etc.), include the `> **IMPORTANT:**` deferred-tool callout right after the file's brief description, before the first `## Step` (or first major section). Wording: see existing commands/skills for the standard block (search for `IMPORTANT:** If the spec below`)
-- [ ] **If file invokes `AskUserQuestion`**, follow `## AskUserQuestion Conventions` in `plugins/lets/rules/lets-rules.md` — header chip 4-12 chars descriptive (never `"LETS"`; command name is OK when it names the topic), `(Recommended)` in label not description, follow-through via `Skill` tool (Rule 7) when an option names a `/lets:*` command, **substitute `{LETS_FOO}` placeholders before tool call (Rule 9)** — never use `$LETS_FOO` inside `label`/`description`/`question` strings
+- [ ] **If file invokes `AskUserQuestion`**, follow `## AskUserQuestion Conventions` in `plugins/lets/rules/lets-rules.md` — header chip 4-12 chars descriptive (never `"LETS"`; command name is OK when it names the topic), `(Recommended)` in label not description, follow-through via `Skill` tool (Rule 7) when an option names a `/lets:*` command, **substitute `{LETS_FOO}` placeholders before tool call** — never use `$LETS_FOO` inside `label`/`description`/`question` strings
 
 ### Adding a new config key
 
