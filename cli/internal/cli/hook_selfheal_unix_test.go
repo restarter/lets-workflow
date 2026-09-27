@@ -410,3 +410,83 @@ func TestHookSessionStart_TeamFileErrorNamesFix(t *testing.T) {
 		t.Errorf("the Notice must name the team file and the fix:\n%s", out)
 	}
 }
+
+// healSettingsDirs returns permissions.additionalDirectories of wt's settings.local.json.
+func healSettingsDirs(t *testing.T, wt string) []string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(wt, ".claude", "settings.local.json"))
+	if err != nil {
+		t.Fatalf("read settings.local.json: %v", err)
+	}
+	var s struct {
+		Permissions struct {
+			AdditionalDirectories []string `json:"additionalDirectories"`
+		} `json:"permissions"`
+	}
+	if err := json.Unmarshal(data, &s); err != nil {
+		t.Fatalf("settings.local.json is not JSON: %v\n%s", err, data)
+	}
+	return s.Permissions.AdditionalDirectories
+}
+
+const healStartup = `{"session_id":"0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d","source":"startup"}`
+
+func healLink(t *testing.T, repo, wt string) {
+	t.Helper()
+	if err := os.Symlink(filepath.Join(repo, ".lets"), filepath.Join(wt, ".lets")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSelfHeal_BackfillsLinkedWorktree(t *testing.T) {
+	repo, wt := healRepo(t, true)
+	healLink(t, repo, wt)
+	out := runSessionStart(t, wt, healStartup)
+	if got := healSettingsDirs(t, wt); len(got) != 1 || got[0] != filepath.Join(repo, ".lets") {
+		t.Errorf("additionalDirectories = %v\n%s", got, out)
+	}
+	if strings.Contains(out, "settings_local_") {
+		t.Errorf("a successful backfill must emit no Notice:\n%s", out)
+	}
+}
+
+func TestSelfHeal_BackfillNoticeOnMalformedSettings(t *testing.T) {
+	repo, wt := healRepo(t, true)
+	healLink(t, repo, wt)
+	healWrite(t, filepath.Join(wt, ".claude", "settings.local.json"), "{not json")
+	out := runSessionStart(t, wt, healStartup)
+	if !strings.Contains(out, "settings_local_unreadable") {
+		t.Errorf("no Notice for an unreadable settings.local.json:\n%s", out)
+	}
+	if data, _ := os.ReadFile(filepath.Join(wt, ".claude", "settings.local.json")); string(data) != "{not json" {
+		t.Errorf("malformed settings.local.json was rewritten: %s", data)
+	}
+}
+
+// S1 (architect) / Codex #5: an unlinked worktree gets the Notice on its FIRST start.
+func TestSelfHeal_AdoptPathNoticeOnFirstStart(t *testing.T) {
+	_, wt := healRepo(t, true)
+	healWrite(t, filepath.Join(wt, ".claude", "settings.local.json"), "{not json")
+	out := runSessionStart(t, wt, healStartup)
+	if fi, err := os.Lstat(filepath.Join(wt, ".lets")); err != nil || fi.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf(".lets is not linked after the first start (err=%v)\n%s", err, out)
+	}
+	if !strings.Contains(out, "settings_local_unreadable") {
+		t.Errorf("the first start must surface the settings warning:\n%s", out)
+	}
+}
+
+func TestSelfHeal_TrackedSettingsNoNotice(t *testing.T) {
+	repo, wt := healRepo(t, true)
+	healLink(t, repo, wt)
+	healWrite(t, filepath.Join(wt, ".claude", "settings.local.json"), "{}\n")
+	healGit(t, wt, "add", "-f", ".claude/settings.local.json")
+	healGit(t, wt, "commit", "-q", "-m", "track it")
+	out := runSessionStart(t, wt, healStartup)
+	if strings.Contains(out, "settings_local_") {
+		t.Errorf("a tracked settings file must not raise a Notice:\n%s", out)
+	}
+	if data, _ := os.ReadFile(filepath.Join(wt, ".claude", "settings.local.json")); string(data) != "{}\n" {
+		t.Errorf("tracked settings.local.json was rewritten: %s", data)
+	}
+}

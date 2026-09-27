@@ -41,7 +41,11 @@ var rulesSyncFn = func(rulesPath string) string {
 //   - reads the stdin payload FIRST, and on source startup|resume|clear self-heals
 //     an unlinked linked worktree of an initialized LETS project (selfHeal: an
 //     Orca worktree whose setup hook did not run) BEFORE LETS Config is built, so
-//     the Config comes from the linked main .lets/.env. compact never self-heals,
+//     the Config comes from the linked main .lets/.env. In every linked worktree
+//     (just adopted, or linked earlier) it then declares the main .lets/ in the
+//     worktree's .claude/settings.local.json permissions.additionalDirectories
+//     (lets-urmfa) - effective from the next session, since settings load before
+//     this hook; compact never self-heals,
 //     and PreCompact never reads the payload at all;
 //   - on source startup|resume|clear, restores this session's peer role
 //     (peersHeal): a role file carried to a re-minted id, or the role rebuilt from
