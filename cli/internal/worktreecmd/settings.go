@@ -21,16 +21,18 @@ import (
 const settingsLocalRel = ".claude/settings.local.json"
 
 // The kinds EnsureLetsAdditionalDir names in a warning. The self-heal keys its
-// Notice policy on them (SettingsLocalTracked is not a Notice).
+// Notice policy on them (SettingsLocalTracked and SettingsLocalNotIgnored are not
+// Notices - the project's own choice).
 const (
-	SettingsLocalSymlink     = "settings_local_symlink"
-	SettingsLocalUnreadable  = "settings_local_unreadable"
-	SettingsLocalShape       = "settings_local_shape"
-	SettingsLocalGitFailed   = "settings_local_git_failed"
-	SettingsLocalTracked     = "settings_local_tracked"
-	SettingsLocalChanged     = "settings_local_changed"
-	SettingsLocalWriteFailed = "settings_local_write_failed"
-	SettingsLocalNotIgnored  = "settings_local_not_ignored"
+	SettingsLocalSymlink       = "settings_local_symlink"
+	SettingsLocalUnreadable    = "settings_local_unreadable"
+	SettingsLocalShape         = "settings_local_shape"
+	SettingsLocalGitFailed     = "settings_local_git_failed"
+	SettingsLocalTracked       = "settings_local_tracked"
+	SettingsLocalChanged       = "settings_local_changed"
+	SettingsLocalWriteFailed   = "settings_local_write_failed"
+	SettingsLocalNotIgnored    = "settings_local_not_ignored"
+	SettingsLocalExcludeFailed = "settings_local_exclude_failed"
 )
 
 // EnsureLetsAdditionalDir declares the main checkout's .lets/ as an additional
@@ -110,20 +112,26 @@ func EnsureLetsAdditionalDir(ctx context.Context, wtRoot, mainRoot string) (Step
 	// Keep the personal file out of git: a machine-wide ignore or a .gitignore entry
 	// already may; otherwise the shared info/exclude (lets-x5ucf). A .gitignore
 	// negation beats info/exclude, so the result is checked, never assumed.
-	ignoreNote := ""
+	ignoreNote, ignoreKind := "", ""
 	if !settingsIgnored(ctx, wtRoot) {
 		if err := ensureWorktreeExcludes(ctx, mainRoot, []string{settingsLocalRel}); err != nil {
-			ignoreNote = fmt.Sprintf("; %s: could not add it to info/exclude (%v) - it shows as untracked", SettingsLocalNotIgnored, err)
+			ignoreNote = fmt.Sprintf("; %s: could not add it to info/exclude (%v) - it shows as untracked", SettingsLocalExcludeFailed, err)
+			ignoreKind = SettingsLocalExcludeFailed
 		} else if !settingsIgnored(ctx, wtRoot) {
 			ignoreNote = fmt.Sprintf("; %s: still not ignored after info/exclude (a .gitignore negation?) - it shows as untracked", SettingsLocalNotIgnored)
+			ignoreKind = SettingsLocalNotIgnored
 		}
 	}
 	status, kind := StepOK, ""
-	if ignoreNote != "" {
-		status, kind = StepWarn, SettingsLocalNotIgnored
+	if ignoreKind != "" {
+		status, kind = StepWarn, ignoreKind
 	}
 	if present != "" {
-		return Step{Status: status, Message: settingsLocalRel + " already lists " + want + "; added it to info/exclude" + ignoreNote}, kind
+		msg := settingsLocalRel + " already lists " + want
+		if ignoreKind == "" {
+			msg += "; added it to info/exclude"
+		}
+		return Step{Status: status, Message: msg + ignoreNote}, kind
 	}
 
 	perms["additionalDirectories"] = append(dirs, want)
