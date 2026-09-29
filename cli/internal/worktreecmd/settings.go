@@ -35,6 +35,10 @@ const (
 	SettingsLocalExcludeFailed = "settings_local_exclude_failed"
 )
 
+// settingsStage is a test seam: a no-op the tests replace to act between the helper's
+// steps ("after-exclude", "before-reread").
+var settingsStage = func(string) {}
+
 // EnsureLetsAdditionalDir declares the main checkout's .lets/ as an additional
 // working directory of the worktree at wtRoot (lets-urmfa). A worktree reaches .lets/
 // through a symlink whose target lies outside the session's working directory, so
@@ -95,8 +99,14 @@ func EnsureLetsAdditionalDir(ctx context.Context, wtRoot, mainRoot string) (Step
 		}
 	}
 
-	if present != "" && settingsIgnored(ctx, wtRoot) {
-		return Step{Status: StepSkip, Message: settingsLocalRel + " already lists " + want + " in permissions.additionalDirectories"}, ""
+	if present != "" {
+		ignored, err := settingsIgnored(ctx, wtRoot)
+		if err != nil {
+			return warn(SettingsLocalGitFailed, "could not tell whether git ignores it: "+err.Error())
+		}
+		if ignored {
+			return Step{Status: StepSkip, Message: settingsLocalRel + " already lists " + want + " in permissions.additionalDirectories"}, ""
+		}
 	}
 	tracked, err := settingsTracked(ctx, wtRoot)
 	if err != nil {
@@ -113,13 +123,24 @@ func EnsureLetsAdditionalDir(ctx context.Context, wtRoot, mainRoot string) (Step
 	// already may; otherwise the shared info/exclude (lets-x5ucf). A .gitignore
 	// negation beats info/exclude, so the result is checked, never assumed.
 	ignoreNote, ignoreKind := "", ""
-	if !settingsIgnored(ctx, wtRoot) {
+	ignored, err := settingsIgnored(ctx, wtRoot)
+	if err != nil {
+		return warn(SettingsLocalGitFailed, "could not tell whether git ignores it: "+err.Error())
+	}
+	if !ignored {
 		if err := ensureWorktreeExcludes(ctx, mainRoot, []string{settingsLocalRel}); err != nil {
 			ignoreNote = fmt.Sprintf("; %s: could not add it to info/exclude (%v) - it shows as untracked", SettingsLocalExcludeFailed, err)
 			ignoreKind = SettingsLocalExcludeFailed
-		} else if !settingsIgnored(ctx, wtRoot) {
-			ignoreNote = fmt.Sprintf("; %s: still not ignored after info/exclude (a .gitignore negation?) - it shows as untracked", SettingsLocalNotIgnored)
-			ignoreKind = SettingsLocalNotIgnored
+		} else {
+			settingsStage("after-exclude")
+			ignoredNow, err := settingsIgnored(ctx, wtRoot)
+			if err != nil {
+				return warn(SettingsLocalGitFailed, "could not tell whether git ignores it after info/exclude: "+err.Error())
+			}
+			if !ignoredNow {
+				ignoreNote = fmt.Sprintf("; %s: still not ignored after info/exclude (a .gitignore negation?) - it shows as untracked", SettingsLocalNotIgnored)
+				ignoreKind = SettingsLocalNotIgnored
+			}
 		}
 	}
 	status, kind := StepOK, ""
@@ -145,7 +166,12 @@ func EnsureLetsAdditionalDir(ctx context.Context, wtRoot, mainRoot string) (Step
 	}
 	// A lost update is not a torn file: Claude Code may have written the file since the
 	// read above. Re-read right before the rename; a change means no write this time.
-	if now, err := os.ReadFile(path); (err == nil) != (original != nil) || !bytes.Equal(now, original) {
+	settingsStage("before-reread")
+	now, err := os.ReadFile(path)
+	switch {
+	case err != nil && !errors.Is(err, os.ErrNotExist):
+		return warn(SettingsLocalChanged, "could not re-read it before writing ("+err.Error()+"); the next session start retries")
+	case (err == nil) != (original != nil) || !bytes.Equal(now, original):
 		return warn(SettingsLocalChanged, "it changed while LETS merged it; the next session start retries")
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -211,8 +237,16 @@ func settingsTracked(ctx context.Context, wtRoot string) (bool, error) {
 	return strings.TrimSpace(string(out)) != "", nil
 }
 
-// settingsIgnored reports whether git ignores the settings file in wtRoot; any
-// failure counts as not ignored (the caller then tries info/exclude and checks again).
-func settingsIgnored(ctx context.Context, wtRoot string) bool {
-	return exec.CommandContext(ctx, "git", "-C", wtRoot, "check-ignore", "-q", settingsLocalRel).Run() == nil
+// settingsIgnored reports whether git ignores the settings file in wtRoot: exit 0 is
+// ignored, exit 1 is not; any other failure is an error - never read as "not ignored".
+func settingsIgnored(ctx context.Context, wtRoot string) (bool, error) {
+	err := exec.CommandContext(ctx, "git", "-C", wtRoot, "check-ignore", "-q", settingsLocalRel).Run()
+	if err == nil {
+		return true, nil
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+		return false, nil
+	}
+	return false, err
 }
