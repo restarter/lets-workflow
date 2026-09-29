@@ -265,3 +265,36 @@ func TestEnsureLetsAdditionalDir_GitFailureFailsClosed(t *testing.T) {
 		t.Errorf("file was rewritten under a failed git probe: %s", data)
 	}
 }
+
+func TestEnsureLetsAdditionalDir_PresentEntryNegatedMessage(t *testing.T) {
+	repo, wt, want := settingsRepo(t)
+	mustWrite(t, filepath.Join(wt, ".gitignore"), "!.claude/settings.local.json\n", 0o644)
+	mustWrite(t, settingsPath(wt), `{"permissions":{"additionalDirectories":["`+want+`"]}}`, 0o644)
+	st, kind := ensure(wt, repo)
+	if st.Status != worktreecmd.StepWarn || kind != worktreecmd.SettingsLocalNotIgnored {
+		t.Errorf("step = %s %q kind %q, want warn %s", st.Status, st.Message, kind, worktreecmd.SettingsLocalNotIgnored)
+	}
+	if strings.Contains(st.Message, "added it to info/exclude") {
+		t.Errorf("the message claims the exclude worked: %q", st.Message)
+	}
+}
+
+func TestEnsureLetsAdditionalDir_ExcludeWriteFailed(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	repo, wt, want := settingsRepo(t)
+	info := filepath.Join(repo, ".git", "info")
+	mustMkdir(t, info)
+	if err := os.Chmod(info, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(info, 0o755) })
+	st, kind := ensure(wt, repo)
+	if st.Status != worktreecmd.StepWarn || kind != worktreecmd.SettingsLocalExcludeFailed {
+		t.Errorf("step = %s %q kind %q, want warn %s", st.Status, st.Message, kind, worktreecmd.SettingsLocalExcludeFailed)
+	}
+	if got := settingsDirs(t, wt); len(got) != 1 || got[0] != want {
+		t.Errorf("additionalDirectories = %v, want [%s]", got, want)
+	}
+}

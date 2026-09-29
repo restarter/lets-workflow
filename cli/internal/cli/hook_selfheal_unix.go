@@ -35,8 +35,8 @@ var selfHealFn = selfHeal
 // lets-urmfa), declares the main .lets/ as an additional directory so the NEXT session
 // writes .lets/ without a prompt. Gates run cheapest first, and any miss returns "" with
 // no file touched. It returns a Notice only when adopt failed or waited out its lock, or
-// when the declaration could not be made (a tracked settings file excepted - the
-// project's choice, reported once by create / adopt).
+// when the declaration could not be made (a tracked settings file or a .gitignore
+// negation excepted - the project's choice, reported by create / adopt when they run).
 func selfHeal(root, rulesPath string) string {
 	if root == "" {
 		return ""
@@ -66,7 +66,7 @@ func selfHeal(root, rulesPath string) string {
 	}
 	// 5. linked: the main .lets/ as an additional directory (lets-urmfa). After an adopt
 	//    that already declared it this is one read and one check-ignore.
-	if st, kind := worktreecmd.EnsureLetsAdditionalDir(ctx, root, mainRoot); st.Status == worktreecmd.StepWarn && kind != worktreecmd.SettingsLocalTracked {
+	if st, kind := worktreecmd.EnsureLetsAdditionalDir(ctx, root, mainRoot); st.Status == worktreecmd.StepWarn && kind != worktreecmd.SettingsLocalTracked && kind != worktreecmd.SettingsLocalNotIgnored {
 		return st.Message
 	}
 	return ""

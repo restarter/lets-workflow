@@ -490,3 +490,36 @@ func TestSelfHeal_TrackedSettingsNoNotice(t *testing.T) {
 		t.Errorf("tracked settings.local.json was rewritten: %s", data)
 	}
 }
+
+func TestSelfHeal_GitignoreNegationNoNotice(t *testing.T) {
+	repo, wt := healRepo(t, true)
+	healLink(t, repo, wt)
+	healWrite(t, filepath.Join(wt, ".gitignore"), "!.claude/settings.local.json\n")
+	out := runSessionStart(t, wt, healStartup)
+	if strings.Contains(out, "settings_local_") {
+		t.Errorf("a .gitignore negation must not raise a Notice:\n%s", out)
+	}
+	if got := healSettingsDirs(t, wt); len(got) != 1 || got[0] != filepath.Join(repo, ".lets") {
+		t.Errorf("additionalDirectories = %v\n%s", got, out)
+	}
+}
+
+func TestSelfHeal_ExcludeWriteFailedIsANotice(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	repo, wt := healRepo(t, true)
+	healLink(t, repo, wt)
+	info := filepath.Join(repo, ".git", "info")
+	if err := os.MkdirAll(info, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(info, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(info, 0o755) })
+	out := runSessionStart(t, wt, healStartup)
+	if !strings.Contains(out, "settings_local_exclude_failed") {
+		t.Errorf("a failed info/exclude write must be a Notice:\n%s", out)
+	}
+}
