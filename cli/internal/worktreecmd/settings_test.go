@@ -298,3 +298,50 @@ func TestEnsureLetsAdditionalDir_ExcludeWriteFailed(t *testing.T) {
 		t.Errorf("additionalDirectories = %v, want [%s]", got, want)
 	}
 }
+
+func TestEnsureLetsAdditionalDir_ChangedDuringMergeNotOverwritten(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		mode os.FileMode
+	}{{"appeared readable", 0o644}, {"appeared unreadable", 0o000}} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.mode == 0 && os.Geteuid() == 0 {
+				t.Skip("root reads any file")
+			}
+			repo, wt, _ := settingsRepo(t)
+			restore := worktreecmd.SetSettingsStage(func(stage string) {
+				if stage == "before-reread" {
+					mustWrite(t, settingsPath(wt), `{"model":"x"}`, tc.mode)
+				}
+			})
+			defer restore()
+			st, kind := ensure(wt, repo)
+			if st.Status != worktreecmd.StepWarn || kind != worktreecmd.SettingsLocalChanged {
+				t.Errorf("step = %s %q kind %q, want warn %s", st.Status, st.Message, kind, worktreecmd.SettingsLocalChanged)
+			}
+			_ = os.Chmod(settingsPath(wt), 0o644)
+			if data, _ := os.ReadFile(settingsPath(wt)); string(data) != `{"model":"x"}` {
+				t.Errorf("the file another writer created was overwritten: %s", data)
+			}
+		})
+	}
+}
+
+func TestEnsureLetsAdditionalDir_FinalIgnoreProbeFailsClosed(t *testing.T) {
+	repo, wt, _ := settingsRepo(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	restore := worktreecmd.SetSettingsStage(func(stage string) {
+		if stage == "after-exclude" {
+			cancel()
+		}
+	})
+	defer restore()
+	st, kind := worktreecmd.EnsureLetsAdditionalDir(ctx, wt, repo)
+	if st.Status != worktreecmd.StepWarn || kind != worktreecmd.SettingsLocalGitFailed {
+		t.Errorf("step = %s %q kind %q, want warn %s", st.Status, st.Message, kind, worktreecmd.SettingsLocalGitFailed)
+	}
+	if _, err := os.Stat(settingsPath(wt)); !os.IsNotExist(err) {
+		t.Errorf("settings.local.json was written after a failed ignore probe (err=%v)", err)
+	}
+}

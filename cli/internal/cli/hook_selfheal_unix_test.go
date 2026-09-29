@@ -509,6 +509,9 @@ func TestSelfHeal_ExcludeWriteFailedIsANotice(t *testing.T) {
 		t.Skip("root ignores directory permissions")
 	}
 	repo, wt := healRepo(t, true)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	healLink(t, repo, wt)
 	info := filepath.Join(repo, ".git", "info")
 	if err := os.MkdirAll(info, 0o755); err != nil {
