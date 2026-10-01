@@ -1,6 +1,6 @@
 # Protocol: agents - dispatch, reports, members
 
-Loaded by: `/lets:ask`, `/lets:backlog`, `/lets:execute`, `/lets:opinion`, `/lets:plan`, `/lets:research`, `/lets:review`, `/lets:team` - Read before the first dispatch step. Core rules keep the always-on part: never `general-purpose` or another non-`lets:*` subagent type for expert work; directed search vs exploration.
+Loaded by: `/lets:ask`, `/lets:backlog`, `/lets:execute`, `/lets:opinion`, `/lets:plan`, `/lets:research`, `/lets:review`, `/lets:team` - Read before the first dispatch step. Core rules keep the always-on part: never `general-purpose` or another non-`lets:*` subagent type for expert work; the who-does-what line (directed search vs exploration is the FACT route of `protocol/roles.md`).
 
 | rule | detail |
 |---|---|

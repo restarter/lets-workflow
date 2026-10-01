@@ -149,6 +149,8 @@ Then jump to **Checkpoint: Exploration Review**.
 
 Decide how many explorers to launch and what each should focus on.
 
+The explorer's role across LETS is the FACT route of `protocol/roles.md`; here it maps, and the command decides.
+
 **Inputs for decision:**
 
 ```bash
@@ -354,6 +356,8 @@ Then jump to **Checkpoint: Architecture Review** (use the multi-approach or sing
 *(full mode only - skipped under `--fast`)*
 
 Launch one architect agent per selected approach. Each gets a focused brief with user's decisions baked in. Name their report files first - `Skill(skill: "lets:agent-report", args: "op=add dir={REPORT_DIR} names=architect-a,architect-b,...")` when this run already has a `REPORT_DIR`, else `op=open command=plan task={task-id} names=architect-a,...` - and put each architect's `REPORT_FILE:` line right after `ultrathink`.
+
+The architect's role across LETS is the PLAN-CHANGE route of `protocol/roles.md`.
 
 For each selected approach:
 

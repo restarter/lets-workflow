@@ -23,7 +23,7 @@ One operation on one named member. The caller (`/lets:execute` Step 5-D, `/lets:
 - `name` - the member name, `[a-z0-9-]{1,40}`: the bare roster name in a team scope (`architect`, `architect-2`), in an execute scope `impl-<RUN>` (a replacement `impl-<RUN>-r<generation>`), `explorer-<RUN>`, `skeptic-<RUN>`, `architect-<RUN>`.
 - `{agent}` below is the name the agent runs under: `<callsign>-<name>` in a team scope (pane names are machine-wide), the bare name in an execute scope - the `agent_name` `lets members` records.
 - A member with a recorded `agent_id` - an isolated member, which the harness runs as a background agent reachable only by the id its `Agent` call returned, never by name - is addressed by that id: every `SendMessage` and `TaskStop` below puts the `agent_id` where it says `{agent}`.
-- `role` - a shipped `lets:*` agent except `lets:actor`; `lets members add` refuses anything else.
+- `role` - a shipped `lets:*` agent except `lets:actor` and `lets:lead`; `lets members add` refuses anything else.
 - `brief-file` / `correct-file` - repo-root-relative paths the caller wrote. Every brief crosses as a file path, never inline.
 - `model` - `opus` | `sonnet` | `fable` | `haiku`, the values the `Agent` tool accepts. Absent -> the role's own default, except for an implementer (Step 1).
 - `report-file` - an absolute path the CALLER named (execute: its pinned `.lets/cache/report-...` path; team: `agent-report op=open` / `op=add`). One file per round; member-run never composes a report path. Required on `spawn`, `next` and `correct`: missing -> stop with `report_file_missing`, nothing sent.
@@ -63,9 +63,17 @@ AskUserQuestion(
 ## Step 2: Spawn
 
 1. `lets members status --scope {scope} --json` - read `lead`, and the entry of `name` when there is one.
-   - A team scope (not `run-*`) whose `lead` is null or not `live` / `rotated`, or whose `lead.session` is not `$CLAUDE_CODE_SESSION_ID` -> stop: `no_lead: {scope} has no live lead, or this session is not it - /lets:start in the team's lead session claims it`. Nothing is spawned. (The registry's add in item 3 refuses the same caller with `lead_held`.)
+   - A team scope (not `run-*`) whose `lead` is null or not `live` / `rotated`, or whose `lead.session` is not `$CLAUDE_CODE_SESSION_ID` -> stop: `no_lead: {scope} has no live lead, or this session is not it - /lets:start in the team's lead session claims it`. Nothing is spawned. (The registry's add in item 4 refuses the same caller with `lead_held`.)
    - An entry of that name that is `live`, `rotated` or `unknown` -> stop: `name_live: {name}`. The caller picks another name.
-2. The Agent call:
+2. The routes. A member never runs `/lets:start`, which loads them, so it gets the LETS routes as a file of its own - the caller's brief is never changed:
+
+   ```bash
+   R="${CLAUDE_PLUGIN_ROOT}/protocol/roles.md"; D='.lets/cache/routes-{scope}.md'
+   if [ -s "$R" ] && cp "$R" "$D"; then echo ROLES_OK; else echo ROLES_FAILED; fi
+   ```
+
+   `ROLES_FAILED` -> stop: name the missing or empty `protocol/roles.md` and `/lets:update`; nothing is spawned. The Agent call below names that file; `next` / `correct` do not repeat it - the member keeps the routes from its spawn.
+3. The Agent call:
 
    ```
    Agent(
@@ -73,12 +81,12 @@ AskUserQuestion(
      name="{agent}",
      model="{model}",
      description="{role} {name}",
-     prompt="Your brief is the file {brief-file}. Read it first and follow it; every later NEXT or AMENDMENT names a new file.\nREPORT_FILE: {report-file}"
+     prompt="Your brief is the file {brief-file}. Read it first and follow it; then read .lets/cache/routes-{scope}.md - the LETS routes, who does what. Every later NEXT or AMENDMENT names a new file.\nREPORT_FILE: {report-file}"
    )
    ```
 
    Add `isolation="worktree"` only when `isolation=worktree` was passed. Pass no team or permission-mode parameter: the harness documents both as deprecated and ignores them.
-3. Right after the Agent call, record it:
+4. Right after the Agent call, record it:
 
    ```bash
    lets members add --scope {scope} --name {name} --role {role} --json

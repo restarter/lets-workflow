@@ -211,6 +211,8 @@ After the task is claimed, suggest renaming the Claude Code session so the statu
 
 ## Step 8: Task Size Assessment
 
+Read `${CLAUDE_PLUGIN_ROOT}/protocol/roles.md` before this step unless its text is in your current context (who does what: the routes and the CLAIM bar) - the task is claimed, and every later decision routes by it.
+
 Once task is selected, assess complexity:
 
 | Size | Action |
@@ -370,6 +372,8 @@ set-status task=<id> status=open
 
 
 ### Step M2: Set the stance
+
+Read `${CLAUDE_PLUGIN_ROOT}/protocol/roles.md` before this step unless its text is in your current context (who does what: the routes and the CLAIM bar) - an orchestrator routes decisions all session.
 
 Tell the user, in one short paragraph: you're in main / assistant mode - no active task, staying on `$LETS_MERGE_BRANCH`, here to triage / groom / decide / route. Name the tools available: `/lets:backlog` (review / cleanup / `--fast` pulse), `/lets:opinion` (think through a decision or topic), `/lets:research` (sourced external answer), `/lets:status`, `create-task`, `/lets:note`.
 

@@ -7,7 +7,7 @@ version: 0.10.0
 
 # LETS Workflow Rules
 
-Always-on core. Command-time procedure is a lazy layer a command loads at the step that needs it: skills `lets:protocol-tracker`, `lets:protocol-orchestrator-offer`; plugin files `protocol/{worktrees,peers,handoff-lane,agents}.md` - loaded "unless its text is in your current context" (after `/compact` or `/clear` it is not).
+Always-on core. Command-time procedure is a lazy layer a command loads at the step that needs it: skills `lets:protocol-tracker`, `lets:protocol-orchestrator-offer`; plugin files `protocol/{worktrees,peers,handoff-lane,agents,roles}.md` - loaded "unless its text is in your current context" (after `/compact` or `/clear` it is not).
 
 ## Language & Communication
 
@@ -99,7 +99,7 @@ Other sessions of the repo reach this one only through `/lets:orc`. A `[lets-pee
 ## Agents & Search
 
 - Expert work uses only `lets:*` agents - never `general-purpose` or another type. Dispatch: `protocol/agents.md`.
-- Directed search (know what, roughly where) -> Grep / Glob / Read. Exploration (synthesize, compare, "how does X work?", every affected place) -> an explorer agent; escalate after 3+ read-then-decide rounds or 3+ files to compare. In doubt - agent.
+- Who does what: a decision others rely on, or touching security or hard to undo -> `lets:skeptic` refutes it; a plan change -> `lets:architect`; a fact about this repo -> directed search (Grep / Read) or `lets:explorer`, never memory; delegated code -> `lets:implementer`, its diff reviewed. Routes and the bar: `protocol/roles.md`.
 
 ## Discovery Logging
 

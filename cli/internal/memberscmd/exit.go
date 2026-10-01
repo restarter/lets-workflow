@@ -11,7 +11,7 @@ const (
 	ExitInvalidScope        = 40 // --scope is neither a team name nor run-<RUN>
 	ExitNameInvalid         = 41 // --name fails the grammar, or names no member of the scope
 	ExitNameLive            = 42 // a member of that name is live, rotated or unknown
-	ExitRoleNotAllowed      = 43 // --role is not a shipped lets:* agent (actor excluded)
+	ExitRoleNotAllowed      = 43 // --role is not a shipped lets:* agent (actor and lead excluded)
 	ExitLeadHeld            = 44 // another session holds the lead and is live, rotated or unknown
 	ExitNoLead              = 45 // the scope has no recorded lead
 	ExitLockBusy            = 46 // members-<scope>.lock stayed busy past the deadline

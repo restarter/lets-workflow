@@ -857,6 +857,8 @@ Systemic findings go into a separate section in the final report (see Step 9).
 
 ## Step 6.6: Verify Findings (Adversarial)
 
+The skeptic's role across LETS is the CLAIM route of `protocol/roles.md`; this pass runs on its own terms - the bar does not apply here.
+
 Cut false positives before reporting: each finding gets a refutation pass from the `lets:skeptic` agent. This is core review methodology - it runs in BOTH execution modes; the only difference is WHERE the skeptics run.
 
 **Workflow mode:** this step already ran inside the workflow (its Stage 3) - the returned aggregate is already verified. Skip to Step 7.
