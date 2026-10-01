@@ -45,29 +45,20 @@ A definition, not a record of live sessions: the lead respawns the roster from t
 |---|---|---|---|---|
 | lead | team lead | (the lead session) | (inherited) | |
 
-Available roles: `architect` (`lets:architect`) - the plan, its edits, positions on open design questions. `skeptic` (`lets:skeptic`) - tries to refute every claim; verdict CONFIRMED / REFUTED / UNVERIFIABLE with evidence. `explorer` (`lets:explorer`) - facts from the codebase and git, and the mechanical checker. `implementer` (`lets:implementer`) - executes the approved plan in this worktree, never commits.
+Available roles: `architect` (`lets:architect`), `skeptic` (`lets:skeptic`), `explorer` (`lets:explorer`), `implementer` (`lets:implementer`). What each one does, and where a decision goes, is the LETS routes table every member brief carries.
 
 ## 4. Flows
 
-| Flow | Trigger | Route | Done when |
-|---|---|---|---|
-| CLAIM | anyone states "it is so", "green", "safe", "not affected" | author -> `skeptic` -> verdict back to the author | CONFIRMED with evidence, or REFUTED and withdrawn |
-| PLAN-CHANGE | any change to the plan, a brief, a contract | proposer -> `architect` -> `skeptic` -> lead | the architect's version CONFIRMED; logged in Decisions |
-| CHECK | mechanical verification: a planted RED, a grep scan, a counter | -> `explorer`; anything non-mechanical it finds -> `skeptic` | the evidence file exists |
-| FACT | "where / what / since when" about code, git, docs | -> `explorer` | an answer with `file:line` or a sha |
-| ACCEPT | an implementer reports a chunk done | implementer -> CHECK -> `skeptic` on the diff -> lead | CONFIRMED at the depth the risk calls for |
-| OWNER | a decision only the owner can make | member -> `FOR lead` -> lead asks the owner -> Decisions | logged |
-| CROSS-TASK | another task, a rule change, anything other sessions will see | lead -> `/lets:orc ask` | answered |
+The routes - CLAIM, PLAN-CHANGE, FACT, CHECK, ACCEPT, INDEPENDENT, OWNER, CROSS-TASK - and the CLAIM bar are the LETS routing law: every member brief carries it whole, and the lead loads it at `/lets:start`. It is not restated here. Team-specific additions - a stricter bar for one area, an extra route - go below this paragraph, and only there.
 
 ## 5. Message format
 
 ```
 STATUS: <one line>
 RESULT: <<= 10 lines, or the path of the file holding the detail>
-FOR <role>: <FLOW> - <the ask> - <evidence path>      (zero or more)
 ```
 
-A skeptic verdict is `CONFIRMED | REFUTED | UNVERIFIABLE - <claim> - <evidence>`.
+A request to another role is the `FOR <role>:` line of the routes.
 
 ## 6. Boundaries
 

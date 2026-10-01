@@ -603,6 +603,8 @@ For each untracked path, show it as a patch: `git diff --no-index -- /dev/null "
 | `at-end` | high / missing | yes | yes | team | lead | the 5-D.8 run review |
 | `at-end` | low | yes | no | team | lead | the 5-D.8 run review |
 
+This is the ACCEPT route of `protocol/roles.md`; the `Risk:` label is this command's depth rule, not the CLAIM bar.
+
 The table is the extension point: a new policy is a new row, never a new code path. The skeptic runs whenever Risk is high or missing, in every policy. `committed_by: implementer` exists only under pipelining.
 
 - **owner** -> Render review and the status gate below; its Accept records `accepted_by: owner`.
