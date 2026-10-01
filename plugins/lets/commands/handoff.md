@@ -216,7 +216,12 @@ echo "title_block_go=$(awk '/^## /{exit} /NOT A GO/{c++} END{print c+0}' "$CLEAN
 
 ## Step 6: Deliver
 
-Print the brief inside ONE fenced block so it copies cleanly. Then one line naming what was inferred as the target, so the user can correct it. With a delivery flag, skip this step - 7.1 prints the brief.
+Print the brief inside ONE fenced block so it copies cleanly, ending with this section - `${CLAUDE_PLUGIN_ROOT}` is already an absolute path here, so the agent it is pasted into can open it:
+
+    ## Division of labour
+    Before you start, read `${CLAUDE_PLUGIN_ROOT}/protocol/roles.md` - how this project routes decisions, facts and plan changes. Name a route in your report where one applies; dispatch nothing yourself.
+
+Then one line naming what was inferred as the target, so the user can correct it. With a delivery flag, skip this step - 7.1 prints the brief.
 
 ## Step 7: Deliver (`--send` / `--open` / `--codex` only)
 
@@ -234,7 +239,7 @@ Delivery writes files, all under `.lets/handoffs/`: the brief (7.1), and sibling
 
 ### 7.1 Save the brief
 
-With `--execute`, 5b already resolved `ARTIFACT_FILE` and assembled the brief: skip this subsection's path call and Write, and print as its last paragraph says.
+With `--execute`, 5b already resolved `ARTIFACT_FILE` and assembled the brief: skip this subsection's path call and Write, run the routes step below, and print as its last paragraph says.
 
 `Skill(skill: "lets:artifact-path", args: "kind=handoff ext=md task=<id from Step 4>")` (omit `task=` when Step 4 found none). With `--send` or `--open`, end a review brief with this section (`<base>` = `ARTIFACT_FILE` without `.md`):
 
@@ -243,7 +248,27 @@ With `--execute`, 5b already resolved `ARTIFACT_FILE` and assembled the brief: s
 Write your complete final report to <base>-agent-report.md, then create the empty file <base>-agent-report.done. These two files are the only files you may write. If you cannot write files, print the report and stop.
 ```
 
-Write the brief - the text, not the fence - to `ARTIFACT_FILE` verbatim. Print it in one fenced block as Step 6 would, then one line naming where it goes: `-> Codex, read-only sandbox` or `-> <agent> tab <title>` - when the tab is still to be picked, that line waits for the pick in 7.3, which is the first point the title is known. The explicit flag is the go-ahead; ask nothing more.
+Write the brief - the text, not the fence - to `ARTIFACT_FILE` verbatim.
+
+Every brief - review and `--execute` alike - then carries the LETS routes, because the receiving agent never loads the rules. Insert them before the brief's last `## When you finish`, or append them when there is none (`--codex`):
+
+```bash
+F='<ARTIFACT_FILE>'; R="${CLAUDE_PLUGIN_ROOT}/protocol/roles.md"; T="$F.roles.tmp"
+if [ -s "$R" ] && awk -v r="$R" '
+  BEGIN { z = 0 }
+  { l[NR] = $z } /^## When you finish$/ { w = NR }
+  END {
+    for (i = 1; i <= NR; i++) {
+      if (i == w) { while ((getline x < r) > 0) print x; print "" }
+      print l[i]
+    }
+    if (!w) { print ""; while ((getline x < r) > 0) print x }
+  }' "$F" > "$T" && mv -f "$T" "$F"; then echo ROLES_OK; else rm -f "$T"; echo ROLES_FAILED; fi
+```
+
+`ROLES_FAILED` -> stop before printing or sending: name the missing or empty `protocol/roles.md` and `/lets:update`; the brief is not delivered.
+
+Print it in one fenced block as Step 6 would, then one line naming where it goes: `-> Codex, read-only sandbox` or `-> <agent> tab <title>` - when the tab is still to be picked, that line waits for the pick in 7.3, which is the first point the title is known. The explicit flag is the go-ahead; ask nothing more.
 
 With `--execute`, print the contract in one fenced block - not the plan, which is prepended verbatim - then one line `cleaned plan prepended: <plan_lines> lines, <N> tasks to do, <K> left marked [DONE]; banner removed: stop=<0|1> reminder=<0|1>`, then the `->` line with ` - leave this worktree to the agent until the report is back, and answer its permission prompts in that tab` appended. Both halves are load-bearing: 7.5 matches commits to tasks by the files they touch, not by author, and a sandboxed agent that asks to be allowed to commit waits in its own tab, where the background `await` cannot see it and would time out.
 
