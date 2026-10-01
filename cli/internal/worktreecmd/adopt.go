@@ -126,6 +126,13 @@ func Adopt(ctx context.Context, dir string, o AdoptOptions) (*AdoptResult, error
 	if err := ensureWorktreeExcludes(ctx, mainRoot, excludes); err != nil {
 		add(StepWarn, fmt.Sprintf("could not update info/exclude (%s): %v", strings.Join(excludes, ", "), err))
 	}
+	// The main .lets/ as an additional directory (lets-urmfa): an Orca or teammate
+	// worktree's sessions then write .lets/ without an approval prompt. Also on a
+	// re-adopt of a linked worktree - idempotent, a present entry writes nothing.
+	if out.LetsLinked {
+		st, _ := EnsureLetsAdditionalDir(ctx, wtRoot, mainRoot)
+		res.Steps = append(res.Steps, st)
+	}
 	for _, f := range []struct{ name, kind string }{
 		{"tracker-" + tracker + ".md", "adapter_not_in_checkout"},
 		{"tracker-" + tracker + ".board.md", "board_not_in_checkout"},

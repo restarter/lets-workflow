@@ -352,3 +352,25 @@ func TestAdopt_UnrelatedMalformedIgnored(t *testing.T) {
 		t.Errorf("task file:\n%s", got)
 	}
 }
+
+func TestAdopt_DeclaresLetsAdditionalDir(t *testing.T) {
+	isolateGitIgnore(t)
+	repo, wt := adoptRepo(t, "ext-urmfa")
+	ctx := context.Background()
+	if res, err := worktreecmd.Adopt(ctx, wt, worktreecmd.AdoptOptions{LinksOnly: true}); err != nil || !res.OK {
+		t.Fatalf("Adopt: %v", err)
+	}
+	if got := settingsDirs(t, wt); len(got) != 1 || got[0] != filepath.Join(repo, ".lets") {
+		t.Errorf("additionalDirectories = %v", got)
+	}
+	if !settingsIgnored(wt) {
+		t.Errorf("git does not ignore settings.local.json in the adopted worktree")
+	}
+	first, _ := os.ReadFile(settingsPath(wt))
+	if res, err := worktreecmd.Adopt(ctx, wt, worktreecmd.AdoptOptions{LinksOnly: true}); err != nil || !res.OK {
+		t.Fatalf("re-Adopt: %v", err)
+	}
+	if second, _ := os.ReadFile(settingsPath(wt)); string(second) != string(first) {
+		t.Errorf("re-adopt changed settings.local.json:\n%s\n---\n%s", first, second)
+	}
+}
