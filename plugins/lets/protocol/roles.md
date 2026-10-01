@@ -1,6 +1,6 @@
 # Protocol: roles - who does what, and where a decision goes
 
-Loaded by: `/lets:start` (once the task is claimed, and in main mode) - Read "unless its text is in your current context". Every member's spawn brief (`member-run`: `/lets:team` members, `/lets:execute` implementers and checkers) and every `/lets:handoff` brief carry it whole: none of those agents runs `/lets:start`, which loads it. Core rules keep the always-on part: the who-does-what line in `## Agents & Search`.
+Loaded by: `/lets:start` (once the task is claimed, and in main mode) - Read "unless its text is in your current context". Every member gets a copy at spawn (`member-run`: `/lets:team` members, `/lets:execute` implementers and checkers), and every `/lets:handoff` brief carries it whole: none of those agents runs `/lets:start`, which loads it. Core rules keep the always-on part: the who-does-what line in `## Agents & Search`.
 
 The division of labour in every LETS session - solo, orchestrator, worker, standing-team lead or member, an agent reached through `/lets:handoff`. Commands that dispatch these agents own their mechanics; this file is the only statement of who does what.
 

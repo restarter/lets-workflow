@@ -13,8 +13,9 @@ import (
 
 // lets-me9qt: the division of labour lives in ONE file, protocol/roles.md. The
 // core carries a one-line pointer; /lets:start loads the file on both entry
-// paths; member-run (every member of every caller) and /lets:handoff paste it
-// whole into the brief, because those agents never load the rules.
+// paths; member-run hands every member of every caller a copy at spawn and
+// /lets:handoff pastes it whole into the brief, because none of those agents
+// runs /lets:start.
 // rolesProblems reads only its arguments, so the test feeds it mutants.
 
 const rolesFile = "protocol/roles.md"
@@ -32,8 +33,11 @@ var (
 		{"commands/handoff.md", "\n### 7.1 Save the brief", "\n### "},
 		{"commands/handoff.md", "\n## Step 6: Deliver", "\n## "}, // print-only: a pointer, no file to insert into
 	}
-	claimMode = regexp.MustCompile(`(?s)\n## Modes\n.*\n### CLAIM \(.*\n## Report\n`)
-	bashFence = regexp.MustCompile("(?s)```bash\n(.*?)```")
+	// memberRoutes is the copy member-run makes at spawn; its Step 2 names it twice:
+	// the copy and the Agent prompt.
+	memberRoutes = ".lets/cache/routes-{scope}.md"
+	claimMode    = regexp.MustCompile(`(?s)\n## Modes\n.*\n### CLAIM \(.*\n## Report\n`)
+	bashFence    = regexp.MustCompile("(?s)```bash\n(.*?)\n[ \t]*```[ \t]*(?:\n|$)")
 )
 
 // region returns the text from the first `from` to the next `to` after it ("" when absent).
@@ -103,6 +107,9 @@ func rolesProblems(files map[string]string) []string {
 			bad = append(bad, l.file+" "+strings.TrimSpace(l.from)+" must load or deliver "+rolesLoad)
 		}
 	}
+	if n := strings.Count(region(files["skills/member-run/SKILL.md"], "\n## Step 2: Spawn", "\n## "), memberRoutes); n != 2 {
+		bad = append(bad, "skills/member-run/SKILL.md Step 2 must name "+memberRoutes+" twice (the copy and the Agent prompt)")
+	}
 	if !claimMode.MatchString(files["agents/skeptic.md"]) {
 		bad = append(bad, "agents/skeptic.md needs a ### CLAIM mode inside ## Modes, before ## Report")
 	}
@@ -151,6 +158,7 @@ func TestRolesLint(t *testing.T) {
 		"print-only handoff lost its pointer":       mutate("commands/handoff.md", "\n## Step 6: Deliver", rolesLoad, x),
 		"skeptic CLAIM mode gone":                   mutate("agents/skeptic.md", "", "### CLAIM (", "### CLAIMS-GONE ("),
 		"lead no longer points at the routes":       mutate("agents/lead.md", "", rolesFile, "protocol/x.md"),
+		"member prompt no longer names the routes":  mutate("skills/member-run/SKILL.md", "\n## Step 2: Spawn", "then read "+memberRoutes+" - ", ""),
 	} {
 		if len(rolesProblems(m)) == 0 {
 			t.Errorf("mutant %q was not caught", name)
@@ -170,7 +178,6 @@ func TestRolesDelivery(t *testing.T) {
 		t.Fatal(err)
 	}
 	law := string(lawBytes)
-	routesMark := "<!-- lets:routes -->\n"
 	head := strings.SplitN(law, "\n", 2)[0]
 	snippet := func(rel string) string {
 		b, err := os.ReadFile(filepath.Join(pluginDir, rel))
@@ -202,52 +209,68 @@ func TestRolesDelivery(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(emptyLaw, rolesFile), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
+	failRoots := map[string]string{"missing law": missing, "empty law": emptyLaw}
 
-	for _, s := range []struct {
-		rel, placeholder, marker string
-	}{
-		{"commands/handoff.md", "<ARTIFACT_FILE>", "## When you finish"},
-		{"skills/member-run/SKILL.md", "{brief-file}", "REPORT_FILE: /abs/report.md"},
+	// /lets:handoff: the brief is a fresh file; the routes go before its last marker.
+	const handoffRel, placeholder, marker = "commands/handoff.md", "<ARTIFACT_FILE>", "## When you finish"
+	code := snippet(handoffRel)
+	for name, c := range map[string]struct{ in, want string }{
+		"inserted before the last marker": {
+			in:   "# Brief\n\n" + marker + "\nquoted\n\n" + marker + "\nlast\n",
+			want: "# Brief\n\n" + marker + "\nquoted\n\n" + law + "\n" + marker + "\nlast\n",
+		},
+		"appended without a marker": {
+			in:   "# Brief\nbody\n",
+			want: "# Brief\nbody\n\n" + law,
+		},
+		"a quoted heading is still delivered": {
+			in:   "# Brief\n\n```\n" + head + "\n```\n\n" + marker + "\nlast\n",
+			want: "# Brief\n\n```\n" + head + "\n```\n\n" + law + "\n" + marker + "\nlast\n",
+		},
 	} {
-		code := snippet(s.rel)
-		for name, c := range map[string]struct{ in, want string }{
-			"inserted before the last marker": {
-				in:   "# Brief\n\n" + s.marker + "\nquoted\n\n" + s.marker + "\nlast\n",
-				want: "# Brief\n\n" + s.marker + "\nquoted\n\n" + routesMark + law + "\n" + s.marker + "\nlast\n",
-			},
-			"appended without a marker": {
-				in:   "# Brief\nbody\n",
-				want: "# Brief\nbody\n\n" + routesMark + law,
-			},
-			"already carries the law": {
-				in:   "# Brief\n\n" + routesMark + law + "\n" + s.marker + "\nlast\n",
-				want: "# Brief\n\n" + routesMark + law + "\n" + s.marker + "\nlast\n",
-			},
-			"a quoted heading is not a delivery": {
-				in:   "# Brief\n\n```\n" + head + "\n```\n\n" + s.marker + "\nlast\n",
-				want: "# Brief\n\n```\n" + head + "\n```\n\n" + routesMark + law + "\n" + s.marker + "\nlast\n",
-			},
-		} {
-			f := filepath.Join(t.TempDir(), "brief.md")
-			if err := os.WriteFile(f, []byte(c.in), 0o600); err != nil {
-				t.Fatal(err)
-			}
-			if tok, diag := run(strings.ReplaceAll(code, s.placeholder, f), pluginDir); tok != "ROLES_OK" {
-				t.Fatalf("%s %s: %q (stderr %q)", s.rel, name, tok, diag)
-			}
-			if b, _ := os.ReadFile(f); string(b) != c.want {
-				t.Errorf("%s %s: got\n%q\nwant\n%q", s.rel, name, b, c.want)
-			}
+		f := filepath.Join(t.TempDir(), "brief.md")
+		if err := os.WriteFile(f, []byte(c.in), 0o600); err != nil {
+			t.Fatal(err)
 		}
-		for name, root := range map[string]string{"missing law": missing, "empty law": emptyLaw} {
-			f := filepath.Join(t.TempDir(), "brief.md")
-			_ = os.WriteFile(f, []byte("# Brief\n"), 0o600)
-			if tok, diag := run(strings.ReplaceAll(code, s.placeholder, f), root); tok != "ROLES_FAILED" {
-				t.Errorf("%s %s: %q (stderr %q), want ROLES_FAILED", s.rel, name, tok, diag)
-			}
-			if b, _ := os.ReadFile(f); string(b) != "# Brief\n" {
-				t.Errorf("%s %s changed the brief: %q", s.rel, name, b)
-			}
+		if tok, diag := run(strings.ReplaceAll(code, placeholder, f), pluginDir); tok != "ROLES_OK" {
+			t.Fatalf("%s %s: %q (stderr %q)", handoffRel, name, tok, diag)
+		}
+		if b, _ := os.ReadFile(f); string(b) != c.want {
+			t.Errorf("%s %s: got\n%q\nwant\n%q", handoffRel, name, b, c.want)
+		}
+	}
+	for name, root := range failRoots {
+		f := filepath.Join(t.TempDir(), "brief.md")
+		_ = os.WriteFile(f, []byte("# Brief\n"), 0o600)
+		if tok, diag := run(strings.ReplaceAll(code, placeholder, f), root); tok != "ROLES_FAILED" {
+			t.Errorf("%s %s: %q (stderr %q), want ROLES_FAILED", handoffRel, name, tok, diag)
+		}
+		if b, _ := os.ReadFile(f); string(b) != "# Brief\n" {
+			t.Errorf("%s %s changed the brief: %q", handoffRel, name, b)
+		}
+	}
+
+	// member-run: the routes are copied to a file of their own; the brief is never touched.
+	const memberRel = "skills/member-run/SKILL.md"
+	member := strings.ReplaceAll(snippet(memberRel), "{scope}", "frog")
+	inDir := func(dir string) string { return "cd '" + dir + "' && " + member }
+	newRepo := func() string {
+		dir := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(dir, ".lets", "cache"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		return dir
+	}
+	dir := newRepo()
+	if tok, diag := run(inDir(dir), pluginDir); tok != "ROLES_OK" {
+		t.Fatalf("%s: %q (stderr %q)", memberRel, tok, diag)
+	}
+	if b, err := os.ReadFile(filepath.Join(dir, ".lets", "cache", "routes-frog.md")); err != nil || string(b) != law {
+		t.Errorf("%s: routes-frog.md = %q (err %v), want the law", memberRel, b, err)
+	}
+	for name, root := range failRoots {
+		if tok, diag := run(inDir(newRepo()), root); tok != "ROLES_FAILED" {
+			t.Errorf("%s %s: %q (stderr %q), want ROLES_FAILED", memberRel, name, tok, diag)
 		}
 	}
 }

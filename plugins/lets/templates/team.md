@@ -45,11 +45,11 @@ A definition, not a record of live sessions: the lead respawns the roster from t
 |---|---|---|---|---|
 | lead | team lead | (the lead session) | (inherited) | |
 
-Available roles: `architect` (`lets:architect`), `skeptic` (`lets:skeptic`), `explorer` (`lets:explorer`), `implementer` (`lets:implementer`). What each one does, and where a decision goes, is the LETS routes table every member brief carries.
+Available roles: `architect` (`lets:architect`), `skeptic` (`lets:skeptic`), `explorer` (`lets:explorer`), `implementer` (`lets:implementer`). What each one does, and where a decision goes, is the LETS routes table every member gets at spawn.
 
 ## 4. Flows
 
-The routes - CLAIM, PLAN-CHANGE, FACT, CHECK, ACCEPT, INDEPENDENT, OWNER, CROSS-TASK - and the CLAIM bar are the LETS routing law: every member brief carries it whole, and the lead loads it at `/lets:start`. It is not restated here. Team-specific additions - a stricter bar for one area, an extra route - go below this paragraph, and only there.
+The routes - CLAIM, PLAN-CHANGE, FACT, CHECK, ACCEPT, INDEPENDENT, OWNER, CROSS-TASK - and the CLAIM bar are the LETS routing law: every member gets it at spawn, and the lead loads it at `/lets:start`. It is not restated here. Team-specific additions - a stricter bar for one area, an extra route - go below this paragraph, and only there.
 
 ## 5. Message format
 

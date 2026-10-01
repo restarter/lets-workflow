@@ -251,16 +251,15 @@ Every brief - review and `--execute` alike - then carries the LETS routes, becau
 
 ```bash
 F='<ARTIFACT_FILE>'; R="${CLAUDE_PLUGIN_ROOT}/protocol/roles.md"; T="$F.roles.tmp"
-if [ -s "$R" ] && grep -qxF '<!-- lets:routes -->' "$F"; then echo ROLES_OK
-elif [ -s "$R" ] && awk -v r="$R" '
+if [ -s "$R" ] && awk -v r="$R" '
   BEGIN { z = 0 }
   { l[NR] = $z } /^## When you finish$/ { w = NR }
   END {
     for (i = 1; i <= NR; i++) {
-      if (i == w) { print "<!-- lets:routes -->"; while ((getline x < r) > 0) print x; print "" }
+      if (i == w) { while ((getline x < r) > 0) print x; print "" }
       print l[i]
     }
-    if (!w) { print ""; print "<!-- lets:routes -->"; while ((getline x < r) > 0) print x }
+    if (!w) { print ""; while ((getline x < r) > 0) print x }
   }' "$F" > "$T" && mv -f "$T" "$F"; then echo ROLES_OK; else rm -f "$T"; echo ROLES_FAILED; fi
 ```
 
