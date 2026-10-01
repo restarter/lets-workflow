@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -30,6 +31,12 @@ const (
 
 // agentsReadingRules must name CLAUDE.md in a Read step of their body.
 var agentsReadingRules = []string{"compliance", "docs", "skeptic"}
+
+// sessionAgents run a whole session (`claude --agent lets:<name>`), not a
+// subagent: they keep CLAUDE.md and the rules, and they may not edit files.
+var sessionAgents = []string{"lead"}
+
+const disallowEditLine = "disallowedTools: Edit"
 
 // readStepClaudeMd matches a body line that tells the agent to Read CLAUDE.md.
 var readStepClaudeMd = regexp.MustCompile(`(?m)^.*\bRead\b.*CLAUDE\.md.*$`)
@@ -72,6 +79,18 @@ func agentsOmitProblems(f map[string]string) []string {
 		if name == "implementer" {
 			if omits || strings.Contains(fm, "omitClaudeMd") {
 				add(key + " must NOT declare omitClaudeMd - it writes code under the project's rules")
+			}
+			continue
+		}
+		if slices.Contains(sessionAgents, name) {
+			if strings.Contains(fm, "omitClaudeMd") {
+				add(key + " must NOT declare omitClaudeMd - a session agent needs CLAUDE.md and the rules")
+			}
+			if !hasLine(fm, disallowEditLine) {
+				add(key + " must declare `" + disallowEditLine + "` - the lead never edits files")
+			}
+			if strings.Contains(body, "REPORT_FILE") {
+				add(key + " must not carry the analyst REPORT_FILE contract - it is a session, not a subagent")
 			}
 			continue
 		}
@@ -123,9 +142,12 @@ func TestAgentsOmitClaudeMd(t *testing.T) {
 	for _, a := range analystAgents {
 		want["agents/"+a+".md"] = true
 	}
+	for _, a := range sessionAgents {
+		want["agents/"+a+".md"] = true
+	}
 	for key := range f {
 		if !want[key] {
-			t.Errorf("%s is not in analystAgents nor implementer - classify it", key)
+			t.Errorf("%s is not in analystAgents, sessionAgents nor implementer - classify it", key)
 		}
 	}
 	for key := range want {
@@ -160,6 +182,9 @@ func TestAgentsOmitClaudeMd(t *testing.T) {
 		{"compliance without Read step", mutate("agents/compliance.md", "Read the project's `CLAUDE.md`", "Check the project's `CLAUDE.md`")},
 		{"docs without Read step", mutate("agents/docs.md", "Read the project's `CLAUDE.md`", "Check the project's `CLAUDE.md`")},
 		{"skeptic without Read step", mutate("agents/skeptic.md", "Read the project's `CLAUDE.md`", "Check the project's `CLAUDE.md`")},
+		{"lead with omitClaudeMd", mutate("agents/lead.md", "\ncolor: ", "\n"+omitClaudeMdLine+"\ncolor: ")},
+		{"lead without disallowedTools: Edit", mutate("agents/lead.md", disallowEditLine+"\n", "")},
+		{"lead with the analyst REPORT_FILE contract", mutate("agents/lead.md", "## Where the rest lives", "REPORT_FILE: x\n\n## Where the rest lives")},
 	}
 	for _, m := range mutants {
 		if len(agentsOmitProblems(m.f)) == 0 {

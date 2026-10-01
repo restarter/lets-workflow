@@ -163,7 +163,7 @@ func TestShippedRoles_MatchAgents(t *testing.T) {
 	}
 	var want []string
 	for _, f := range files {
-		if name := strings.TrimSuffix(filepath.Base(f), ".md"); name != "actor" {
+		if name := strings.TrimSuffix(filepath.Base(f), ".md"); name != "actor" && name != "lead" {
 			want = append(want, name)
 		}
 	}
@@ -171,7 +171,7 @@ func TestShippedRoles_MatchAgents(t *testing.T) {
 	sort.Strings(want)
 	sort.Strings(got)
 	if !slices.Equal(got, want) {
-		t.Errorf("ShippedRoles = %v, agents/*.md minus actor = %v", got, want)
+		t.Errorf("ShippedRoles = %v, agents/*.md minus actor and lead = %v", got, want)
 	}
 }
 

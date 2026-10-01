@@ -31,7 +31,7 @@ import (
 )
 
 // ShippedRoles are the agents a member may run as: every shipped lets:* agent
-// except actor (a meta-agent that needs an explicit personality). Pinned against
+// except actor (a meta-agent that needs an explicit personality) and lead (the lead is the session itself, never a member). Pinned against
 // plugins/lets/agents/*.md by TestShippedRoles_MatchAgents.
 var ShippedRoles = []string{
 	"architect", "backend", "compliance", "database", "devops", "docs", "explorer", "frontend",
@@ -323,7 +323,7 @@ func Add(o Options, a AddOptions) (*AddResult, error) {
 	role, ok := normalizeRole(a.Role)
 	if !ok {
 		return res, fail(&res.Envelope, &Error{Code: ExitRoleNotAllowed, Kind: "role_not_allowed",
-			Message: fmt.Sprintf("--role %q is not a shipped lets:* agent (actor excluded)", a.Role), Remediation: "one of lets:" + strings.Join(ShippedRoles, ", lets:")})
+			Message: fmt.Sprintf("--role %q is not a shipped lets:* agent (actor and lead excluded)", a.Role), Remediation: "one of lets:" + strings.Join(ShippedRoles, ", lets:")})
 	}
 	link := a.Link
 	if link == "" {
