@@ -69,7 +69,8 @@ AskUserQuestion(
 
    ```bash
    F='{brief-file}'; R="${CLAUDE_PLUGIN_ROOT}/protocol/roles.md"; T="$F.roles.tmp"
-   if [ -s "$R" ] && awk -v r="$R" '
+   if [ -s "$R" ] && grep -qxF "$(head -n 1 "$R")" "$F"; then echo ROLES_OK
+   elif [ -s "$R" ] && awk -v r="$R" '
      BEGIN { z = 0 }
      { l[NR] = $z } /^REPORT_FILE: / { w = NR }
      END {
@@ -81,7 +82,7 @@ AskUserQuestion(
      }' "$F" > "$T" && mv -f "$T" "$F"; then echo ROLES_OK; else rm -f "$T"; echo ROLES_FAILED; fi
    ```
 
-   `ROLES_FAILED` -> stop: name the missing or empty `protocol/roles.md` and `/lets:update`; nothing is spawned. `next` / `correct` do not repeat it - the member keeps the routes from its spawn.
+   `ROLES_FAILED` -> stop: name the missing or empty `protocol/roles.md` and `/lets:update`; nothing is spawned. `next` / `correct` do not repeat it - the member keeps the routes from its spawn. A brief that already carries the routes (a 5-D.7 replacement copies the original) is left as it is.
 3. The Agent call:
 
    ```

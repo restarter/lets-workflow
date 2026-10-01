@@ -1,6 +1,6 @@
 # Expert agents
 
-LETS ships 15 specialized agents. You don't have to pick them — the commands that use agents (`/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:backlog`, `/lets:research`) analyze the situation and select only the ones that fit; a standing team's lead spawns its members by role with `/lets:team spawn <role>`. The one place you name an expert yourself is `/lets:ask <expert> <question>`.
+LETS ships 15 specialized agents, plus `lead` - the agent a standing team's lead session runs as. You don't have to pick them — the commands that use agents (`/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:backlog`, `/lets:research`) analyze the situation and select only the ones that fit; a standing team's lead spawns its members by role with `/lets:team spawn <role>`. The one place you name an expert yourself is `/lets:ask <expert> <question>`.
 
 | Agent | Expertise | Example trigger |
 |-------|-----------|-----------------|

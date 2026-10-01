@@ -217,6 +217,10 @@ func TestRolesDelivery(t *testing.T) {
 				in:   "# Brief\nbody\n",
 				want: "# Brief\nbody\n\n" + law,
 			},
+			"already carries the law": {
+				in:   "# Brief\n\n" + law + "\n" + s.marker + "\nlast\n",
+				want: "# Brief\n\n" + law + "\n" + s.marker + "\nlast\n",
+			},
 		} {
 			f := filepath.Join(t.TempDir(), "brief.md")
 			if err := os.WriteFile(f, []byte(c.in), 0o600); err != nil {

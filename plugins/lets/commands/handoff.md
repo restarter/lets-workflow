@@ -254,7 +254,8 @@ Every brief - review and `--execute` alike - then carries the LETS routes, becau
 
 ```bash
 F='<ARTIFACT_FILE>'; R="${CLAUDE_PLUGIN_ROOT}/protocol/roles.md"; T="$F.roles.tmp"
-if [ -s "$R" ] && awk -v r="$R" '
+if [ -s "$R" ] && grep -qxF "$(head -n 1 "$R")" "$F"; then echo ROLES_OK
+elif [ -s "$R" ] && awk -v r="$R" '
   BEGIN { z = 0 }
   { l[NR] = $z } /^## When you finish$/ { w = NR }
   END {
