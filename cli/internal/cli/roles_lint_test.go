@@ -170,6 +170,8 @@ func TestRolesDelivery(t *testing.T) {
 		t.Fatal(err)
 	}
 	law := string(lawBytes)
+	routesMark := "<!-- lets:routes -->\n"
+	head := strings.SplitN(law, "\n", 2)[0]
 	snippet := func(rel string) string {
 		b, err := os.ReadFile(filepath.Join(pluginDir, rel))
 		if err != nil {
@@ -211,15 +213,19 @@ func TestRolesDelivery(t *testing.T) {
 		for name, c := range map[string]struct{ in, want string }{
 			"inserted before the last marker": {
 				in:   "# Brief\n\n" + s.marker + "\nquoted\n\n" + s.marker + "\nlast\n",
-				want: "# Brief\n\n" + s.marker + "\nquoted\n\n" + law + "\n" + s.marker + "\nlast\n",
+				want: "# Brief\n\n" + s.marker + "\nquoted\n\n" + routesMark + law + "\n" + s.marker + "\nlast\n",
 			},
 			"appended without a marker": {
 				in:   "# Brief\nbody\n",
-				want: "# Brief\nbody\n\n" + law,
+				want: "# Brief\nbody\n\n" + routesMark + law,
 			},
 			"already carries the law": {
-				in:   "# Brief\n\n" + law + "\n" + s.marker + "\nlast\n",
-				want: "# Brief\n\n" + law + "\n" + s.marker + "\nlast\n",
+				in:   "# Brief\n\n" + routesMark + law + "\n" + s.marker + "\nlast\n",
+				want: "# Brief\n\n" + routesMark + law + "\n" + s.marker + "\nlast\n",
+			},
+			"a quoted heading is not a delivery": {
+				in:   "# Brief\n\n```\n" + head + "\n```\n\n" + s.marker + "\nlast\n",
+				want: "# Brief\n\n```\n" + head + "\n```\n\n" + routesMark + law + "\n" + s.marker + "\nlast\n",
 			},
 		} {
 			f := filepath.Join(t.TempDir(), "brief.md")

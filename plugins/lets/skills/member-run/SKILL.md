@@ -65,24 +65,24 @@ AskUserQuestion(
 1. `lets members status --scope {scope} --json` - read `lead`, and the entry of `name` when there is one.
    - A team scope (not `run-*`) whose `lead` is null or not `live` / `rotated`, or whose `lead.session` is not `$CLAUDE_CODE_SESSION_ID` -> stop: `no_lead: {scope} has no live lead, or this session is not it - /lets:start in the team's lead session claims it`. Nothing is spawned. (The registry's add in item 4 refuses the same caller with `lead_held`.)
    - An entry of that name that is `live`, `rotated` or `unknown` -> stop: `name_live: {name}`. The caller picks another name.
-2. The routes. A member never loads the rules, so its brief carries the LETS routes whole - inserted before the brief's last `REPORT_FILE:` line, appended when it has none:
+2. The routes. A member never runs `/lets:start`, which loads them, so its brief carries the LETS routes whole - inserted before the brief's last `REPORT_FILE:` line, appended when it has none:
 
    ```bash
    F='{brief-file}'; R="${CLAUDE_PLUGIN_ROOT}/protocol/roles.md"; T="$F.roles.tmp"
-   if [ -s "$R" ] && grep -qxF "$(head -n 1 "$R")" "$F"; then echo ROLES_OK
+   if [ -s "$R" ] && grep -qxF '<!-- lets:routes -->' "$F"; then echo ROLES_OK
    elif [ -s "$R" ] && awk -v r="$R" '
      BEGIN { z = 0 }
      { l[NR] = $z } /^REPORT_FILE: / { w = NR }
      END {
        for (i = 1; i <= NR; i++) {
-         if (i == w) { while ((getline x < r) > 0) print x; print "" }
+         if (i == w) { print "<!-- lets:routes -->"; while ((getline x < r) > 0) print x; print "" }
          print l[i]
        }
-       if (!w) { print ""; while ((getline x < r) > 0) print x }
+       if (!w) { print ""; print "<!-- lets:routes -->"; while ((getline x < r) > 0) print x }
      }' "$F" > "$T" && mv -f "$T" "$F"; then echo ROLES_OK; else rm -f "$T"; echo ROLES_FAILED; fi
    ```
 
-   `ROLES_FAILED` -> stop: name the missing or empty `protocol/roles.md` and `/lets:update`; nothing is spawned. `next` / `correct` do not repeat it - the member keeps the routes from its spawn. A brief that already carries the routes (a 5-D.7 replacement copies the original) is left as it is.
+   `ROLES_FAILED` -> stop: name the missing or empty `protocol/roles.md` and `/lets:update`; nothing is spawned. `next` / `correct` do not repeat it - the member keeps the routes from its spawn. A brief that already carries the routes - its `<!-- lets:routes -->` line; a 5-D.7 replacement copies the original - is left as it is; a quoted heading is not a delivery.
 3. The Agent call:
 
    ```

@@ -216,10 +216,7 @@ echo "title_block_go=$(awk '/^## /{exit} /NOT A GO/{c++} END{print c+0}' "$CLEAN
 
 ## Step 6: Deliver
 
-Print the brief inside ONE fenced block so it copies cleanly, ending with this section - `${CLAUDE_PLUGIN_ROOT}` is already an absolute path here, so the agent it is pasted into can open it:
-
-    ## Division of labour
-    Before you start, read `${CLAUDE_PLUGIN_ROOT}/protocol/roles.md` - how this project routes decisions, facts and plan changes. Name a route in your report where one applies; dispatch nothing yourself.
+Print the brief inside ONE fenced block so it copies cleanly, ending with a `## Division of labour` section that holds the text of `${CLAUDE_PLUGIN_ROOT}/protocol/roles.md` whole - Read it now; the agent the brief is pasted into may not be able to open a file outside the project.
 
 Then one line naming what was inferred as the target, so the user can correct it. With a delivery flag, skip this step - 7.1 prints the brief.
 
@@ -250,20 +247,20 @@ Write your complete final report to <base>-agent-report.md, then create the empt
 
 Write the brief - the text, not the fence - to `ARTIFACT_FILE` verbatim.
 
-Every brief - review and `--execute` alike - then carries the LETS routes, because the receiving agent never loads the rules. Insert them before the brief's last `## When you finish`, or append them when there is none (`--codex`):
+Every brief - review and `--execute` alike - then carries the LETS routes, because the receiving agent never runs `/lets:start`, which loads them. Insert them before the brief's last `## When you finish`, or append them when there is none (`--codex`):
 
 ```bash
 F='<ARTIFACT_FILE>'; R="${CLAUDE_PLUGIN_ROOT}/protocol/roles.md"; T="$F.roles.tmp"
-if [ -s "$R" ] && grep -qxF "$(head -n 1 "$R")" "$F"; then echo ROLES_OK
+if [ -s "$R" ] && grep -qxF '<!-- lets:routes -->' "$F"; then echo ROLES_OK
 elif [ -s "$R" ] && awk -v r="$R" '
   BEGIN { z = 0 }
   { l[NR] = $z } /^## When you finish$/ { w = NR }
   END {
     for (i = 1; i <= NR; i++) {
-      if (i == w) { while ((getline x < r) > 0) print x; print "" }
+      if (i == w) { print "<!-- lets:routes -->"; while ((getline x < r) > 0) print x; print "" }
       print l[i]
     }
-    if (!w) { print ""; while ((getline x < r) > 0) print x }
+    if (!w) { print ""; print "<!-- lets:routes -->"; while ((getline x < r) > 0) print x }
   }' "$F" > "$T" && mv -f "$T" "$F"; then echo ROLES_OK; else rm -f "$T"; echo ROLES_FAILED; fi
 ```
 
