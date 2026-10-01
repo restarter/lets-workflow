@@ -17,8 +17,9 @@ LETS ships 15 specialized agents. You don't have to pick them — the commands t
 | git-historian | Blame analysis, change patterns | Changes to existing code |
 | explorer | Codebase mapping, pattern discovery | Used during `/lets:plan` |
 | implementer | Full-stack implementation | Used by `/lets:execute` delegated runs and a standing team's `/lets:team spawn implementer` |
-| skeptic | Verifier: tries to refute one finding or claim against the code / sources | The `/lets:review` verify pass and the `/lets:research` cross-check; never picked as a reviewer |
+| skeptic | Verifier: tries to refute one finding or claim against the code / sources | The `/lets:review` verify pass, the `/lets:research` cross-check, and a session decision that meets the CLAIM bar; never picked as a reviewer |
 | actor | Any personality from a URL or file | On explicit request |
+| lead | The standing team's lead: coordinates, routes, never edits repository files | Runs a whole lead session (`claude --agent lets:lead`), never a subagent |
 
 ## How agents work
 
