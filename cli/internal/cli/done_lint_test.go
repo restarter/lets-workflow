@@ -160,6 +160,9 @@ func donePRProblems(done string) []string {
 			if !strings.Contains(l, "git push origin") {
 				bad = append(bad, f+"same repository: the "+forge+" lookup must keep only PRs whose head is the repository git push origin updates")
 			}
+			if !strings.Contains(l, "get-url --push origin") {
+				bad = append(bad, f+"push url: the "+forge+" lookup must take origin's owner/name from its push URL (git remote get-url --push origin), not the fetch URL")
+			}
 			if strings.Contains(l, "isCrossRepository") {
 				bad = append(bad, f+"push identity: the "+forge+" lookup must bind the head repository to origin, not to the forge's default repository (isCrossRepository)")
 			}
@@ -169,14 +172,15 @@ func donePRProblems(done string) []string {
 		}
 	}
 	// (iii) a lookup that ran and failed, came back incomplete or cannot tell a PR's
-	// source repository stops; it never reads as "no PR"
+	// source repository - or origin has more than one push URL - stops; it never reads
+	// as "no PR"
 	errRows := doneLines(guard, "|", "ran and failed")
 	if len(errRows) == 0 {
 		bad = append(bad, f+"lookup error: the forge table has no failed-lookup row")
 	}
 	for _, r := range errRows {
-		if !strings.Contains(r, doneStop) || strings.Contains(r, "continue") || !strings.Contains(r, "incomplete") || !strings.Contains(r, "source repository") {
-			bad = append(bad, f+"lookup error: a failed, incomplete or source-unknown lookup must "+doneStop+" and never continue")
+		if !strings.Contains(r, doneStop) || strings.Contains(r, "continue") || !strings.Contains(r, "incomplete") || !strings.Contains(r, "source repository") || !strings.Contains(r, "more than one push URL") {
+			bad = append(bad, f+"lookup error: a failed, incomplete or source-unknown lookup, or origin with more than one push URL, must "+doneStop+" and never continue")
 		}
 	}
 	// (iv) commits, not names: holds HEAD is HEAD into the PR head, never the merge-branch
@@ -236,6 +240,19 @@ func donePRProblems(done string) []string {
 		}
 		if !strings.Contains(doneParagraph(sec, doneRecheck), "same PR number") {
 			bad = append(bad, f+"re-check identity: Step 8 "+s.name+" must compare the PR number, not only the outcome")
+		}
+		// a fresh github PR names its base: without --base gh falls back to the repository
+		// default, and the guard's next run stops on its own PR as "another base"
+		if s.name == "github" {
+			creates := doneLines(sec, "gh pr create", "")
+			if len(creates) == 0 {
+				bad = append(bad, f+"fresh base: Step 8 github has no gh pr create")
+			}
+			for _, l := range creates {
+				if !strings.Contains(l, `--base "{LETS_MERGE_BRANCH}"`) {
+					bad = append(bad, f+"fresh base: Step 8 github's gh pr create must name --base \"{LETS_MERGE_BRANCH}\"")
+				}
+			}
 		}
 	}
 	// (vii) the shipped outcome closes the task in Step 8
@@ -359,11 +376,13 @@ func TestDoneExistingPRLint(t *testing.T) {
 		// (ii) symptom (a): the lookup sees only some states
 		{"github lookup back to merged-only", in(doneGuardHead, h2, repl("--state all", "--state merged")), "all states: the github lookup"},
 		{"bitbucket lookup OPEN-only", in(doneGuardHead, h2, repl("asking for every state (Bitbucket lists only OPEN otherwise)", "asking for OPEN PRs only")), "all states: the bitbucket lookup"},
-		{"fork PR counted", in(doneGuardHead, h2, repl(", keeping only those whose head repository is the one `git push origin` updates (`headRepository` `nameWithOwner` equal to the owner/name parsed from `git remote get-url origin` - gh may be set to query another repository by default, so never trust a same-repository flag)", "")), "same repository: the github lookup"},
-		{"identity bound to the forge default, not origin", in(doneGuardHead, h2, repl("`headRepository` `nameWithOwner` equal to the owner/name parsed from `git remote get-url origin`", "`isCrossRepository` false")), "push identity: the github lookup"},
+		{"fork PR counted", in(doneGuardHead, h2, repl(", keeping only those whose head repository is the one `git push origin` updates (`headRepository` `nameWithOwner` equal to the owner/name parsed from `git remote get-url --push origin` - gh may be set to query another repository by default, so never trust a same-repository flag)", "")), "same repository: the github lookup"},
+		{"identity bound to the forge default, not origin", in(doneGuardHead, h2, repl("`headRepository` `nameWithOwner` equal to the owner/name parsed from `git remote get-url --push origin`", "`isCrossRepository` false")), "push identity: the github lookup"},
+		{"identity from the fetch URL", in(doneGuardHead, h2, repl("owner/name parsed from `git remote get-url --push origin` - gh may be set", "owner/name parsed from `git remote get-url origin` - gh may be set")), "push url: the github lookup"},
 		{"github first page only", in(doneGuardHead, h2, repl(" All of them: pass a `--limit` well above the count you expect; a result count equal to the limit may be incomplete.", "")), "complete: the github lookup"},
 		{"bitbucket first page only", in(doneGuardHead, h2, repl("following every page (the response's `next` link) until there is none", "reading the first page")), "complete: the bitbucket lookup"},
 		// (iii) a failed lookup read as "no PR" - the duplicate path
+		{"several push URLs not stopped", in(doneGuardHead, h2, repl(", or origin has more than one push URL |", " |")), "lookup error:"},
 		{"failed lookup reads as no PR", in(doneGuardHead, h2, repl(`**STOP before any push:** "Could not get`, `Treat it as no PR and continue: "Could not get`)), "lookup error:"},
 		// (iv) commits, not names
 		{"holds-HEAD definition reversed", in(doneGuardHead, h2, repl("--is-ancestor HEAD <pr-head>", "--is-ancestor <pr-head> HEAD")), "holds HEAD:"},
@@ -371,6 +390,8 @@ func TestDoneExistingPRLint(t *testing.T) {
 		// (v) Step 8: the duplicate PR, a forced push, a stale state
 		{"github open path creates", in(doneGitHubFinish, h3, repl("never `gh pr create`", "then `gh pr create` as below")), "open creates: Step 8 github"},
 		{"bitbucket open path creates", in(doneBbFinish, h3, repl("never create a PR", "then create a PR as below")), "open creates: Step 8 bitbucket"},
+		{"fresh PR into a fixed base", in(doneGitHubFinish, h3, repl(`--base "{LETS_MERGE_BRANCH}"`, "--base main")), "fresh base: Step 8 github"},
+		{"fresh PR without a base", in(doneGitHubFinish, h3, repl(`gh pr create --base "{LETS_MERGE_BRANCH}" `, "gh pr create ")), "fresh base: Step 8 github"},
 		{"open path force-pushes", in(doneGitHubFinish, h3, repl("never `--force`", "with `--force` when rejected")), "force: Step 8 github"},
 		{"re-check after the push", in(doneGitHubFinish, h3, paraBefore("**Re-check before any push.**", "**Outcome `fresh`:**")), "re-check: Step 8 github"},
 		{"re-check compares category only", in(doneGitHubFinish, h3, repl("The same outcome and the same PR number as Step 6 confirmed", "The same outcome as Step 6 confirmed")), "re-check identity: Step 8 github"},

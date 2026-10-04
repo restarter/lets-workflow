@@ -76,15 +76,15 @@ A branch can already have a PR: still open (a re-run after "Stay on branch"), me
 
 A PR **holds HEAD** when its head is HEAD (an abbreviated hash: a prefix of HEAD) or HEAD is an ancestor of it: `git merge-base --is-ancestor HEAD <pr-head>`. Only a merged PR is asked, and the answer is yes, no, or cannot tell (its head does not resolve locally - on github fetch `refs/pull/<number>/head` first). An open PR needs no such test: Step 8's plain push decides.
 
-**Lookup** - read-only, after `git fetch origin --quiet`. Only PRs whose head lives in the repository `git push origin` updates count - parse its owner/name from `git remote get-url origin`; a PR from any other repository that shares the branch name is not this branch's PR and is ignored:
+**Lookup** - read-only, after `git fetch origin --quiet`. Only PRs whose head lives in the repository `git push origin` updates count - parse its owner/name from `git remote get-url --push origin` (the push URL - the fetch URL can name another repository); origin with more than one push URL cannot be vouched for (`git remote get-url --push --all origin` lists them). A PR from any other repository that shares the branch name is not this branch's PR and is ignored:
 
-- `github` - every PR whose head is this branch, in all states, keeping only those whose head repository is the one `git push origin` updates (`headRepository` `nameWithOwner` equal to the owner/name parsed from `git remote get-url origin` - gh may be set to query another repository by default, so never trust a same-repository flag), with number, URL, state, base and head sha. All of them: pass a `--limit` well above the count you expect; a result count equal to the limit may be incomplete. Light example: `gh pr list --head "$(git branch --show-current)" --state all --limit 200 --json number,url,state,baseRefName,headRefOid,headRepository`.
-- `bitbucket` - `bbb pr list` has no branch filter, so read-only `bbb raw` GETs on the repository-relative `pullrequests` endpoint, filtered by source branch name and asking for every state (Bitbucket lists only OPEN otherwise), following every page (the response's `next` link) until there is none, keeping only PRs whose source repository full name is the workspace/slug parsed from `git remote get-url origin` (the repository `git push origin` updates). Read each PR's id, state, URL, destination branch and source commit hash (it may be abbreviated - resolve it with `git rev-parse --verify`). Current syntax: `bbb help raw`.
+- `github` - every PR whose head is this branch, in all states, keeping only those whose head repository is the one `git push origin` updates (`headRepository` `nameWithOwner` equal to the owner/name parsed from `git remote get-url --push origin` - gh may be set to query another repository by default, so never trust a same-repository flag), with number, URL, state, base and head sha. All of them: pass a `--limit` well above the count you expect; a result count equal to the limit may be incomplete. Light example: `gh pr list --head "$(git branch --show-current)" --state all --limit 200 --json number,url,state,baseRefName,headRefOid,headRepository`.
+- `bitbucket` - `bbb pr list` has no branch filter, so read-only `bbb raw` GETs on the repository-relative `pullrequests` endpoint, filtered by source branch name and asking for every state (Bitbucket lists only OPEN otherwise), following every page (the response's `next` link) until there is none, keeping only PRs whose source repository full name is the workspace/slug parsed from `git remote get-url --push origin` (the repository `git push origin` updates). Read each PR's id, state, URL, destination branch and source commit hash (it may be abbreviated - resolve it with `git rev-parse --verify`). Current syntax: `bbb help raw`.
 
 | Forge CLI | Then |
 |---|---|
 | `gh` / `bbb` not installed, or `gh` not logged in | No lookup - continue. Nothing can open a PR without it; Step 8's own check offers local merge or cancel. |
-| A lookup that ran and failed, came back incomplete or unreadable, or cannot tell a PR's source repository - or origin's URL does not parse into owner/name | **STOP before any push:** "Could not get every PR of this branch from {GitHub / Bitbucket} - nothing pushed. Fix the lookup and re-run `/lets:done`." A failed lookup never reads as "no PR" - that is how the duplicate PR happened. |
+| A lookup that ran and failed, came back incomplete or unreadable, or cannot tell a PR's source repository - or origin's push URL does not parse into owner/name, or origin has more than one push URL | **STOP before any push:** "Could not get every PR of this branch from {GitHub / Bitbucket} - nothing pushed. Fix the lookup and re-run `/lets:done`." A failed lookup never reads as "no PR" - that is how the duplicate PR happened. |
 | Answered, complete | The decision table below. |
 
 Decision over the PRs the lookup kept - first matching row wins, so an open PR always wins. Carry the outcome, the PR number and its URL to Steps 5, 6, 8 and 9:
@@ -521,7 +521,7 @@ AskUserQuestion(
 git push -u origin <branch>
 
 # Create PR
-gh pr create --title "<type>: <task title>" --body "$(cat <<'EOF'
+gh pr create --base "{LETS_MERGE_BRANCH}" --title "<type>: <task title>" --body "$(cat <<'EOF'
 ## Summary
 {task description from the tracker}
 
