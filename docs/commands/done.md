@@ -8,7 +8,7 @@
 |-------|--------------|
 | Active task | Found from the branch's task-state file. No task - nothing to finish. An **epic** is not closed automatically: epics stay open for future tasks. |
 | Uncommitted changes | Commit first (`/lets:commit`), skip, or cancel. |
-| Already merged (GitHub) | If the branch's PR was merged elsewhere - a parallel session, the browser - it skips the push and the PR and goes straight to the completion comment and close. |
+| Existing PR (GitHub, Bitbucket) | Before anything is pushed it asks the forge for every PR of this branch - only those from the repository it pushes to (origin); a PR from another fork with the same branch name is ignored - and compares commits, not the branch name. An **open** PR is reused: new commits are pushed to it, no second PR is opened, and **Merge & close** acts on it. A PR **merged** into the merge branch that already holds every commit means the work shipped (a parallel session, the browser): after the scope check and **Finish** it is closed - nothing pushed. A **declined** PR, one merged into another branch, or a merged one the branch has moved past (new work on a reused branch) gets a fresh PR, and the confirmation says why. If the lookup runs and fails, or comes back incomplete, it stops before pushing; without `gh` / `bbb` it skips the check, since nothing can open a PR then. |
 | Scope | Each requirement in the task description is ticked against the code. Anything missing asks: **Fix first** (stop and implement it), **Update scope** (the task changes to match what was built) or **PR only, keep open** (ship this part, the task stays open for the rest). |
 | CHANGELOG | With a `CHANGELOG.md` at the project root and a user-visible change, it drafts a one-line `[Unreleased]` entry from the task title and commits - **Add entry**, **Edit first** or **Skip** - and commits it so it lands in the same PR. No file, or pure infra / tests / refactor: skipped, and it says so. |
 
@@ -18,8 +18,8 @@ Then one confirmation - **Finish** or **Keep working** - worded for the flow bel
 
 | Flow | What **Finish** does | The task afterwards |
 |------|----------------------|---------------------|
-| `github` | Pushes the branch and opens a PR with `gh` | Stays open until the PR merges |
-| `bitbucket` | Pushes the branch and opens a PR with `bbb` | Stays open until the reviewer merges |
+| `github` | Pushes the branch and opens a PR with `gh` - or pushes to the branch's open PR | Stays open until the PR merges |
+| `bitbucket` | Pushes the branch and opens a PR with `bbb` - or pushes to the branch's open PR | Stays open until the reviewer merges |
 | `local` (or any unrecognized value) | Merges into the merge branch locally and deletes the branch | Closed |
 | Trunk-mode (you are on the merge branch) | Pushes the merge branch - no PR, since source and target are the same | Closed |
 
@@ -45,6 +45,7 @@ Picking an option that names a `/lets:*` command runs that command, with its own
 ## What it never does
 
 - It never pushes, merges or closes without the **Finish** confirmation - including under AUTO MODE.
+- It never opens a second PR for a branch that already has an open one, on either forge - and when a lookup fails or comes back incomplete, it stops before pushing rather than guess.
 - It never reports a PR it has not read back, or a close that did not happen: a tracker call that fails is reported as a failure.
 - `/lets:end` never runs it for you - it only refers you here.
 
