@@ -32,7 +32,7 @@ Several steps below have a conditional branch for **trunk-mode** — when HEAD i
 
 In trunk-mode the following gates fire:
 - Step 4 commit range: `start:..HEAD` (the task boundary from `.task-<slug>`, not `$LETS_MERGE_BRANCH..HEAD`, which is empty when HEAD IS the merge-branch)
-- Already-Merged Guard: **skip** (PR on same-source-target is not a valid PR, nothing to detect)
+- Existing-PR Guard: **skip** (PR on same-source-target is not a valid PR, nothing to detect)
 - Step 6 confirm: trunk-mode wording (push + close, no PR)
 - Step 7 completion comment: commit range uses `start:..HEAD` (same reason as Step 4)
 - Step 8 finish: upstream-aware push + close (tracker `close` verb; no PR, no merge, no `git branch -d`)
@@ -68,20 +68,33 @@ AskUserQuestion(
 - **Skip** -> warn and continue
 - **Cancel** -> stop, return to work
 
-## Already-Merged Guard
+## Existing-PR Guard
 
-**Skip this entire guard if HEAD == `$LETS_MERGE_BRANCH` (trunk-mode):** PR on same-source-target is not a valid PR. Nothing to detect, nothing to short-circuit — proceed directly to Step 3.
+**Skip this entire guard if HEAD == `$LETS_MERGE_BRANCH` (trunk-mode):** PR on same-source-target is not a valid PR. Nothing to detect, nothing to short-circuit — proceed directly to Step 3. Skip it too when `$LETS_PR_FLOW` is neither `github` nor `bitbucket` (a local merge opens no PR).
 
-If `$LETS_PR_FLOW == github`, the branch may already be merged - the PR was created and merged in a parallel session, so Step 8's `git push` + `gh pr create` would crash with `GraphQL: No commits between ...`.
+A branch can already have a PR: still open (a re-run after "Stay on branch"), merged (a parallel session or the browser shipped it, or the branch is reused for new work), or declined. Ask the forge for EVERY PR of this branch before anything is pushed, and decide by COMMITS - never by the branch name, never against `{LETS_MERGE_BRANCH}` (a squash merge leaves the branch's commits outside it).
 
-```bash
-git fetch origin --quiet 2>/dev/null
-gh pr list --head "$(git branch --show-current)" --state merged --json number,url --limit 1 2>/dev/null
-```
+A PR **holds HEAD** when its head is HEAD (an abbreviated hash: a prefix of HEAD) or HEAD is an ancestor of it: `git merge-base --is-ancestor HEAD <pr-head>`. Only a merged PR is asked, and the answer is yes, no, or cannot tell (its head does not resolve locally - on github fetch `refs/pull/<number>/head` first). An open PR needs no such test: Step 8's plain push decides.
 
-If this returns a merged PR, the work already shipped: skip Steps 3-8 and finish via Step 9's "After PR" Merge & close handling - with one change, since the PR is already merged, do NOT run `gh pr merge`; do Step 7's completion comment, then close (tracker `close` verb) + (if not in a worktree) `git checkout {LETS_MERGE_BRANCH} && git pull`. Report the PR number/URL.
+**Lookup** - read-only, after `git fetch origin --quiet`. Only PRs whose head lives in the repository `git push origin` updates count - parse its owner/name from `git remote get-url --push origin` (the push URL - the fetch URL can name another repository); origin with more than one push URL cannot be vouched for (`git remote get-url --push --all origin` lists them). A PR from any other repository that shares the branch name is not this branch's PR and is ignored:
 
-Otherwise (no PR, or `gh` unavailable) continue to Step 3 - normal flow.
+- `github` - every PR whose head is this branch, in all states, keeping only those whose head repository is the one `git push origin` updates (`headRepository` `nameWithOwner` equal to the owner/name parsed from `git remote get-url --push origin` - gh may be set to query another repository by default, so never trust a same-repository flag), with number, URL, state, base and head sha. All of them: pass a `--limit` well above the count you expect; a result count equal to the limit may be incomplete. Light example: `gh pr list --head "$(git branch --show-current)" --state all --limit 200 --json number,url,state,baseRefName,headRefOid,headRepository`.
+- `bitbucket` - `bbb pr list` has no branch filter, so read-only `bbb raw` GETs on the repository-relative `pullrequests` endpoint, filtered by source branch name and asking for every state (Bitbucket lists only OPEN otherwise), following every page (the response's `next` link) until there is none, keeping only PRs whose source repository full name is the workspace/slug parsed from `git remote get-url --push origin` (the repository `git push origin` updates). Read each PR's id, state, URL, destination branch and source commit hash (it may be abbreviated - resolve it with `git rev-parse --verify`). Current syntax: `bbb help raw`.
+
+| Forge CLI | Then |
+|---|---|
+| `gh` / `bbb` not installed, or `gh` not logged in | No lookup - continue. Nothing can open a PR without it; Step 8's own check offers local merge or cancel. |
+| A lookup that ran and failed, came back incomplete or unreadable, or cannot tell a PR's source repository - or origin's push URL does not parse into owner/name, or origin has more than one push URL | **STOP before any push:** "Could not get every PR of this branch from {GitHub / Bitbucket} - nothing pushed. Fix the lookup and re-run `/lets:done`." A failed lookup never reads as "no PR" - that is how the duplicate PR happened. |
+| Answered, complete | The decision table below. |
+
+Decision over the PRs the lookup kept - first matching row wins, so an open PR always wins. Carry the outcome, the PR number and its URL to Steps 5, 6, 8 and 9:
+
+| PRs of this branch | Outcome | Then |
+|---|---|---|
+| Exactly one open PR, into `{LETS_MERGE_BRANCH}` | `open` #N | Continue to Step 3. Step 8 pushes to PR #N and never opens a second one; #N is the PR Step 9 acts on. |
+| More than one open PR, or the only open one targets another base | stop | Name them: "This branch already has an open PR `/lets:done` will not reuse (another base, or more than one) - close or retarget it and re-run." Never open a second PR, never force-push. |
+| No open PR; a merged PR into `{LETS_MERGE_BRANCH}` holds HEAD | `shipped` #N | Every commit already shipped. Continue to Step 3; Step 5 and Step 8's push and create are skipped, and Step 8 closes the task after Finish. |
+| Anything else: no PR, a declined / closed-unmerged one, a merged one into another base (a stacked PR - not shipped to `{LETS_MERGE_BRANCH}`), a merged one that does not hold HEAD (new work on a reused branch), or a merged one whose head cannot be resolved (cannot tell - never close what is not proven shipped) | `fresh` | Continue to Step 3. Step 8 opens a new PR; Step 6 names any earlier PR and why. |
 
 ## Step 3: Verify Task Scope
 
@@ -136,7 +149,7 @@ AskUserQuestion(
 **Handle response:**
 - **Fix first** -> stop, do NOT proceed to closing
 - **Update scope** -> update the task description via the tracker's `set-field` verb, then proceed
-- **PR only, keep open** -> proceed to Step 4. In Step 8, create PR but do NOT close the task. In Step 9, skip "Merge & close" option - user explicitly chose to keep the task open for remaining work.
+- **PR only, keep open** -> proceed to Step 4. In Step 8, create the PR (or push to the open one the Existing-PR Guard found; on its `shipped` outcome nothing is pushed) but do NOT close the task. In Step 9, skip "Merge & close" option - user explicitly chose to keep the task open for remaining work.
 - **Ask orchestrator** -> `Skill(skill: "lets:orc", args: "verb=ask footer=none text=Closing {task-id} with requirements missing: {list}. Fix first, update the scope, or PR and keep open?")`. After the reply is relayed, show this gate again without that option - the user picks.
 
 **Only continue to Step 4 when all requirements are verified OR user chose "PR only, keep open".**
@@ -209,6 +222,10 @@ Files: X changed, Y insertions, Z deletions
 
 Keep `CHANGELOG.md` in sync with merged work so release notes don't have to be back-filled later. This step runs before the branch is pushed/merged, so the CHANGELOG commit lands in the same PR as the task work.
 
+**If the Existing-PR Guard's outcome is `shipped`:** skip this step - nothing can be added to a merged PR.
+
+**If `[Unreleased]` already has an entry naming this task id** (a re-run - e.g. more commits for an open PR): show that entry and ask only whether to update it (**Edit first**) or leave it (**Skip**) - drop **Add entry**; never write a second entry for the same task.
+
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 test -f "$LETS_PROJECT_ROOT/CHANGELOG.md" && echo "has-changelog" || echo "no-changelog"
@@ -245,6 +262,8 @@ AskUserQuestion(
 Show what will happen based on `$LETS_PR_FLOW` from LETS Config:
 
 > **Note:** Three cases below - `github` (push + PR via `gh`), `bitbucket` (push + PR via `bbb`, mirrors github), and `local` (local merge). `local` is also the **fallback** for any unrecognized `LETS_PR_FLOW` value, so an unknown value never routes nowhere.
+
+**Existing-PR Guard outcome** (github / bitbucket). `open` -> the Finish description reads `Push any new commits to PR #{number} - no new PR`. `shipped` -> `Close the task - PR #{number} is already merged, nothing to push`. `fresh` after an earlier PR -> append ` - PR #{old} was declined, this opens a new one` / ` - PR #{old} merged earlier, this is new work` / ` - PR #{old} merged into {base}, not {LETS_MERGE_BRANCH}` / ` - PR #{old} could not be checked against HEAD`. Header and labels stay `Finish` / `Keep working`.
 
 ### If HEAD == `$LETS_MERGE_BRANCH` (trunk-mode):
 
@@ -451,6 +470,16 @@ fi
 
 After this, skip the `### If $LETS_PR_FLOW == github / == bitbucket / == local` blocks below — they don't apply in trunk-mode.
 
+### If the Existing-PR Guard's outcome is `shipped`:
+
+PR #{number} is merged into `{LETS_MERGE_BRANCH}` and holds every commit - nothing is pushed, no PR is created. Close the task - skip only the close when Step 3 chose "PR only, keep open" (the task keeps its remaining scope):
+
+```lets-tracker
+close task=<task-id> reason="Shipped in merged PR #{number}"
+```
+
+Read the status `close` returned exactly as the local-merge block below does (`closed` / advanced / no tracker / HARD-FAIL). If not in a worktree: `git checkout {LETS_MERGE_BRANCH} && git pull`. Then skip the `### If $LETS_PR_FLOW == github / == bitbucket / == local` blocks below.
+
 ### If $LETS_PR_FLOW == github (PR flow):
 
 **Guard: verify gh CLI first**
@@ -479,14 +508,20 @@ AskUserQuestion(
 - **Local merge** -> jump to the "If $LETS_PR_FLOW == local / fallback (local merge)" section below
 - **Cancel** -> stop, return to work
 
-**If gh is available, proceed with PR:**
+**If gh is available, proceed with PR.**
+
+**Re-check before any push.** Repeat the Existing-PR Guard's lookup (read-only) - the gates since it ran can take minutes, and a PR may have been opened, merged or replaced meanwhile. The same outcome and the same PR number as Step 6 confirmed (for `fresh`: still no PR this branch could reuse) -> go on; a new local commit, such as Step 5's CHANGELOG entry, does not change the outcome by itself. Anything else - another outcome, another PR number, or no answer -> STOP before any push, nothing pushed: "PR state changed since you confirmed (now: {outcome} #N) - re-run `/lets:done`." Never loop back into an earlier step.
+
+**Outcome `open` (PR #N):** never `gh pr create`. Push with a plain `git push origin <branch>`, never `--force`: "Everything up-to-date" means nothing to push; a non-fast-forward rejection means STOP here with git's message. PR #N is the PR from here on - the read-back below runs on it.
+
+**Outcome `fresh`:** push the branch and create the PR:
 
 ```bash
 # Push branch
 git push -u origin <branch>
 
 # Create PR
-gh pr create --title "<type>: <task title>" --body "$(cat <<'EOF'
+gh pr create --base "{LETS_MERGE_BRANCH}" --title "<type>: <task title>" --body "$(cat <<'EOF'
 ## Summary
 {task description from the tracker}
 
@@ -505,7 +540,7 @@ EOF
 **Read back what was actually created (MANDATORY - never report a PR you have not looked at).** A URL from `gh pr create` proves the PR exists, not that it can be merged or even built: a PR born CONFLICTING gets no merge ref, `pull_request` workflows run against that ref, so **not one check ever starts** and `gh pr checks` answers "no checks reported" - indistinguishable from a repo with no CI. That state survived a full `/lets:done` and two more pushes before anyone noticed (lets-ufiam, PR #153).
 
 ```bash
-PR=<number from the create output>
+PR=<number from the create output, or the open PR's number from the guard>
 # Mergeability is computed asynchronously - UNKNOWN right after create is normal, not clean.
 # Retry a couple of times; a persistent UNKNOWN is "could not determine", NEVER "fine".
 for i in 1 2 3; do
@@ -533,9 +568,9 @@ Orca card, best effort (single-quoted values):
 [ "{LETS_LAUNCHER}" = "orca" ] && lets orca card --phase pr --comment 'PR #{number} {PR URL}' --json 2>/dev/null || true
 ```
 
-After PR created:
+Record the PR on the task:
 ```lets-tracker
-comment-add task=<task-id> body="PR #XX created: <PR URL>"
+comment-add task=<task-id> body="PR #XX: <PR URL>"
 ```
 
 The task is now waiting on review rather than being worked on. Advance it ONLY if the active adapter's `## Neutral statuses` section names `in_review`:
@@ -552,12 +587,18 @@ Task stays **open** until PR is merged.
 
 ### If $LETS_PR_FLOW == bitbucket (PR flow):
 
-Mirror the github flow via `bbb`. First check bbb is available (its `pr list` takes only `--state`/`--author` - there is no `--limit`, so don't pass one). If it isn't, offer the same fallback github does: fall back to a local merge (warn it bypasses review) or cancel and fix bbb first.
+Mirror the github flow via `bbb`. First check bbb is available (its `pr list` takes only `--state`/`--author` - there is no `--limit` and no branch filter, so don't pass one). If it isn't, offer the same fallback github does: fall back to a local merge (warn it bypasses review) or cancel and fix bbb first.
 
-If bbb is available: push the branch, then create the PR with bbb targeting `{LETS_MERGE_BRANCH}` - a title and a body built from the task, the same content the github branch builds. Record the PR URL on the task:
+**Re-check before any push.** Repeat the Existing-PR Guard's lookup exactly as the github branch does: the same outcome and the same PR number as Step 6 confirmed -> go on; another outcome, another PR number, or no answer -> STOP before any push, nothing pushed, and ask for a re-run of `/lets:done`.
+
+**Outcome `open` (PR #N):** never create a PR. Push with a plain `git push origin <branch>`, never `--force`: "Everything up-to-date" means nothing to push; a non-fast-forward rejection means STOP here with git's message. PR #N and its URL are the PR from here on.
+
+**Outcome `fresh`:** push the branch, then create the PR with bbb targeting `{LETS_MERGE_BRANCH}` - a title and a body built from the task, the same content the github branch builds - and take its id and URL from what bbb returns.
+
+Record the PR on the task:
 
 ```lets-tracker
-comment-add task=<task-id> body="Bitbucket PR created: <PR URL>"
+comment-add task=<task-id> body="Bitbucket PR #XX: <PR URL>"
 ```
 
 The task is now waiting on review rather than being worked on. Advance it ONLY if the active adapter's `## Neutral statuses` section names `in_review`:
@@ -625,11 +666,13 @@ Do NOT delete the branch or remove the worktree here - `/lets:worktree remove` h
 
 **Orca worktrees.** When `{LETS_LAUNCHER}` is `orca`, every "`/lets:worktree remove {name}`" reminder below reads "archive the worktree in Orca - its hook records the release": `remove` refuses a worktree outside `.worktrees/` (`worktree_external`). This command's own `gh pr merge --delete-branch` is safe - gh leaves the current and the main worktree in place; only a merge run from another checkout removes a worker's linked worktree (Read `${CLAUDE_PLUGIN_ROOT}/protocol/worktrees.md` "A worktree can vanish outside Orca" before any merge of a worker's PR run from another checkout).
 
-**Orca card on a confirmed close.** Wherever a handler below (or the merged-PR shortcut) ran `close` and it returned `closed` - not an advance, not a failure:
+**Orca card on a confirmed close.** Wherever a handler below (or Step 8 on the Existing-PR Guard's `shipped` outcome) ran `close` and it returned `closed` - not an advance, not a failure:
 
 ```bash
 [ "{LETS_LAUNCHER}" = "orca" ] && lets orca card --phase closed --comment 'task {task-id} closed' --json 2>/dev/null || true
 ```
+
+**Which PR.** In every "After PR" variant below, `#{number}` / `{PR URL}` is the PR Step 8 created - or, on the Existing-PR Guard's `open` outcome, the open PR it pushed to (the number the Step 8 re-check confirmed); never a second one. Its `PR:` line then reads `#{number} - {PR URL} (existing PR)`, and "Merge & close" merges that PR. On the `shipped` outcome there is no "After PR" variant: use the matching `### After local merge` one, and replace its `Merged to ...` and `Branch ... deleted` lines with `PR: #{number} - {PR URL} (already merged)` - this path merged and deleted nothing. When Step 3 chose "PR only, keep open", no close ran: its Task line reads `- kept open (remaining scope)` instead of a close status.
 
 ### After trunk-mode finish (HEAD == `$LETS_MERGE_BRANCH`):
 
@@ -743,7 +786,7 @@ Worktree: {worktree path}
 ```
 AskUserQuestion(
   questions=[{
-    question: "PR created. What's next?",
+    question: "PR #{number} ready. What's next?",
     header: "Next step",
     options: [
       { label: "Merge & close", description: "Merge PR #{number}, close task" },
@@ -771,7 +814,7 @@ No "Next task" option - can't switch branches in a worktree. To start a new task
 
 ```
 Task: **{title}** ({task-id})
-PR: {PR URL}
+PR: #{number} - {PR URL}
 Status: {in_review if the advance ran, else open} (the reviewer merges on Bitbucket)
 ```
 
@@ -801,7 +844,7 @@ AskUserQuestion(
 
 ```
 Task: **{title}** ({task-id})
-PR: {PR URL}
+PR: #{number} - {PR URL}
 Status: {in_review if the advance ran, else open} (the reviewer merges on Bitbucket)
 Worktree: {worktree path}
 ```
@@ -811,7 +854,7 @@ No "Merge & close" (reviewer merges on Bitbucket), no "Next task" (can't switch 
 ```
 AskUserQuestion(
   questions=[{
-    question: "PR created. What's next?",
+    question: "PR #{number} ready. What's next?",
     header: "Next step",
     options: [
       { label: "Stay here", description: "Stay in this worktree for PR fixes or follow-up" },
@@ -887,10 +930,11 @@ AskUserQuestion(
 ## Rules
 
 - **NEVER push or create PR without user approval**
+- **NEVER open a second PR for a branch that already has an open one** - the Existing-PR Guard's `open` outcome pushes to it; a lookup that ran and failed (or came back incomplete) STOPS before any push and never reads as "no PR"
 - **NEVER report a created PR without reading it back** - a CONFLICTING PR runs no CI at all and looks identical to a passing one
 - **NEVER merge without user approval**
 - Document BEFORE finishing (Step 7 before Step 8)
-- If PR flow: task stays open, user closes after merge
+- If PR flow: task stays open, user closes after merge - or the Existing-PR Guard's `shipped` outcome closes it after Finish
 - If local merge: task closes immediately
 - If HEAD == `$LETS_MERGE_BRANCH` (trunk-mode): skip PR creation (same-source-target is not a valid PR), push (upstream-aware) + close (tracker `close` verb) instead — regardless of `$LETS_PR_FLOW`
 - Respond in user's language
