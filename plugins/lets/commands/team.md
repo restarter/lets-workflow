@@ -254,7 +254,7 @@ For each task, in order:
 lets worktree branch-name --task '<task-id>' --title-file .lets/cache/title-<session6>-<task-id>.txt --worktree --plugin-root "${CLAUDE_PLUGIN_ROOT}" --json
 ```
 
-   `branch` is the worker's branch, `dir` its worktree directory - never assemble either yourself. `ok=false` (`dir_collision` names the task already holding that dir; `dir_name_invalid`; ...) -> skip this task with `error.message`, state `skipped`.
+   `branch` is the worker's branch, `dir` its worktree directory - never assemble either yourself. Print each `warn` step's `message` from `steps[]` as one line in the run report, once per distinct message (it repeats for every task). `ok=false` (`dir_collision` names the task already holding that dir; `dir_name_invalid`; ...) -> skip this task with `error.message`, state `skipped`.
 3. **Worktree.**
 
 ```bash

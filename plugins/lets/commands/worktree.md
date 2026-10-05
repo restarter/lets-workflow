@@ -76,7 +76,7 @@ AskUserQuestion(
 lets worktree branch-name --task '<task-id>' --title-file '<title-file>' --worktree --plugin-root "${CLAUDE_PLUGIN_ROOT}" --json
 ```
 
-Take `branch` (the adapter's `worktree-branch:` shape, default `worktree-<task-id>-<slug>`) as `$BRANCH_REF` and the `dir` field as the dir `<name>` (e.g. `lets-hpi.3-worktree-start`) - never hand-built from the id and `slug`: Go lowers and hash-suffixes an id that is not a valid worktree name (an uppercase id). With the default templates these are exactly today's names. On `ok=false` surface `error.message` and stop.
+Take `branch` (the adapter's `worktree-branch:` shape, default `worktree-<task-id>-<slug>`) as `$BRANCH_REF` and the `dir` field as the dir `<name>` (e.g. `lets-hpi.3-worktree-start`) - never hand-built from the id and `slug`: Go lowers and hash-suffixes an id that is not a valid worktree name (an uppercase id). With the default templates these are exactly today's names. Print each `warn` step's `message` from `steps[]` as one line. On `ok=false` surface `error.message` and stop.
 
 **Custom:** Use provided text. Slugify: lowercase, spaces to hyphens, remove special chars, max 50 chars (the Go validator allows up to 64; the skill pre-truncates to 50 to leave headroom for `worktree-` prefixes and tmux pane labels). `lets worktree create` will reject invalid names with exit 2.
 
@@ -88,7 +88,7 @@ Resolve the launcher: an explicit `--orca` / `--no-orca` override, else `$LETS_L
 
 **orca** (`$LETS_LAUNCHER=orca` or `--orca`): Orca creates the worktree itself and opens Claude in its own pane, so this session never moves into it - do NOT ask Step C3; "Switch to worktree" would behave exactly like "Stay on current branch".
 
-- **Name.** Orca turns `/` into `-` in `--name` and has no branch option (spike 1.0), so pass the `/`-free `<task-id>-<slug>` (same `lets worktree branch-name` call as C1, without `--worktree`; use its `slug`). Say in one line: "Orca names the branch after the worktree: `<task-id>-<slug>`; `lets worktree adopt` recognizes that shape". Taskless: the custom `<name>`.
+- **Name.** Orca turns `/` into `-` in `--name` and has no branch option (spike 1.0), so pass the `/`-free `<task-id>-<slug>` (same `lets worktree branch-name` call as C1, without `--worktree`; use its `slug`, print its `warn` steps as in C1). Say in one line: "Orca names the branch after the worktree: `<task-id>-<slug>`; `lets worktree adopt` recognizes that shape". Taskless: the custom `<name>`.
 - **Prompt.** `/lets:start <task-id>`; `--flow plan` -> `/lets:plan <task-id>`, `--flow plan-workflow` -> `/lets:plan-workflow <task-id>`. Taskless: no `--prompt`.
 - **`--auto`.** Orca launches Claude with the user's configured Orca agent command and accepts no agent arguments (spike 1.0 item 5), so `--permission-mode auto` cannot reach it: print one line `orca_auto_unsupported - Orca cannot pass --permission-mode auto; opening without Orca` and go to C2 (the cmux / terminal paths honor `--auto`).
 

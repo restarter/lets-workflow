@@ -98,7 +98,8 @@ lets worktree switch --task '<task-id>' --title-file .lets/cache/title-<session6
 (The title file is written as in Step 4, with the Write tool.) Render the result:
 
 - `ok=true` -> "Switched to `{branch}`" (`created` -> "cut from `{base}`", with the staleness warning when `base_stale`); `park` -> name the park commit; `unpark` -> `unparked` (the parked changes are staged again), `parked_pushed` / `parked_unverified` / `parked_kept` (the park stays a commit - say why).
-- A refusal -> show `error.kind` and `error.message`, change nothing, stop: `dirty_worktree`, `index_unmerged`, `operation_in_progress`, `detached_head` (exit 14 - the tree must be sorted out first), `untracked_present` (list `new_paths`, back to the Park question), `members_live` (a live implementer writes in this tree - wait for it or dismiss it), `no_remote_base`, `target_is_merge_branch`, `session_held` (switch from the team's lead session).
+- Every `warn` step in `steps[]` -> print its `message` as one line, on success and on refusal - a `convention_*` / `adapter_missing` / `board_not_in_main_checkout` line names a naming declaration the tracker convention could not use, and the fix. Never drop one.
+- A refusal -> show `error.kind` and `error.message`, change nothing, stop: `dirty_worktree`, `index_unmerged`, `operation_in_progress`, `detached_head` (exit 14 - the tree must be sorted out first), `untracked_present` (list `new_paths`, back to the Park question), `members_live` (a live implementer writes in this tree - wait for it or dismiss it), `no_remote_base`, `target_is_merge_branch`, `session_held` (switch from the team's lead session), `convention_declaration_invalid` (a naming declaration cannot be read - fix the line it names, or pass `--branch`).
 
 `lets worktree switch` wrote the target branch's task-state (`task`, `start`, `session` through the session guard, `orc` carried from the old branch), so Step 5's own write - its `--session-sha`, unguarded - is skipped on this path. Its tail still runs on the new branch, passing only what switch did not write:
 
@@ -136,7 +137,7 @@ GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
 lets worktree branch-name --task '<task-id>' --title-file .lets/cache/title-<session6>.txt --plugin-root "${CLAUDE_PLUGIN_ROOT}" --json
 ```
 
-Use `branch` (e.g. `feature/proj-ch15-fix-proxy-config`; a board file can declare `feature/PWA-45122-fix-login`). No `lets` binary: the documented default `feature/<task-id>-<slug>` (slug: lowercase, spaces to hyphens, special chars removed, max 50 chars).
+Use `branch` (e.g. `feature/proj-ch15-fix-proxy-config`; a board file can declare `feature/PWA-45122-fix-login`). Print each `warn` step's `message` from `steps[]` as one line - it names a naming declaration the convention could not use, and the fix. `ok=false` with `convention_declaration_invalid` -> show `error.message` and `error.remediation`, stop. No `lets` binary: the documented default `feature/<task-id>-<slug>` (slug: lowercase, spaces to hyphens, special chars removed, max 50 chars).
 
 Check current state:
 - Already on correct branch -> do nothing, continue to Step 5
