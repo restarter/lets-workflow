@@ -173,6 +173,16 @@ func TestTaskCandidateFor(t *testing.T) {
 	if res, _ := worktreecmd.TaskCandidateFor(context.Background(), wt, "", ""); res.TaskCandidate.Reason != "convention_undeclared" {
 		t.Errorf("undeclared: %+v", res.TaskCandidate)
 	}
+	// a board template without id: names new branches but reads no id back (lets-puvic):
+	// detect-task's legacy fallback keys on convention_undeclared.
+	boardFile := filepath.Join(repo, ".claude", "rules", "tracker-beads.board.md")
+	mustWrite(t, boardFile, "## Worktree\n\nbranch: `feature/{id}-{slug}`.\n", 0o644)
+	if res, _ := worktreecmd.TaskCandidateFor(context.Background(), wt, "", ""); res.TaskCandidate.ID != "" || res.TaskCandidate.Reason != "convention_undeclared" {
+		t.Errorf("undeclared with a board template: %+v", res.TaskCandidate)
+	}
+	if err := os.Remove(boardFile); err != nil {
+		t.Fatal(err)
+	}
 	// an installed copy that predates ## Worktree falls back to the plugin's adapter
 	plugin := fakePluginRoot(t, beadsConvention)
 	if res, _ := worktreecmd.TaskCandidateFor(context.Background(), wt, "", plugin); res.TaskCandidate.ID != "lets-abc" {

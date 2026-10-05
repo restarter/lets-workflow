@@ -109,6 +109,12 @@ func TestTaskIDFor(t *testing.T) {
 			branch: "feature/lets-abc-x", want: ""},
 		{name: "undeclared adapter keeps legacy", env: "LETS_TRACKER=beads\n", adapterName: "beads", adapter: "# Tracker adapter: beads\n",
 			branch: "fix/lets-abc-foo", want: "lets-abc"},
+		// lets-puvic: a board template without id: names new branches but is no
+		// grammar - the task-state names the task, else the legacy answer is unchanged.
+		{name: "board template without id, task file", env: "LETS_TRACKER=planfix-mcp\n", adapterName: "planfix-mcp", adapter: "# adapter\n",
+			board: "## Worktree\n\nbranch: `feature/pwa-{id}`.\n", branch: "feature/pwa-49514", task: "49514", want: "49514"},
+		{name: "board template without id, no task file", env: "LETS_TRACKER=planfix-mcp\n", adapterName: "planfix-mcp", adapter: "# adapter\n",
+			board: "## Worktree\n\nbranch: `feature/pwa-{id}`.\n", branch: "feature/pwa-49514", want: legacyTaskID("feature/pwa-49514")},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
