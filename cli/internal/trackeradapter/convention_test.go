@@ -1,6 +1,7 @@
 package trackeradapter
 
 import (
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -329,8 +330,107 @@ func TestOneLine(t *testing.T) {
 	if got := oneLine("a\x1bb\nc"); got != "a?b?c" {
 		t.Errorf("oneLine = %q", got)
 	}
+	if got := oneLine("a\u0085b\u2028c\u2029d"); got != "a?b?c?d" {
+		t.Errorf("oneLine(C1 + separators) = %q", got)
+	}
 	got := oneLine(strings.Repeat("x", 300))
 	if len(got) != 203 || !strings.HasSuffix(got, "...") {
 		t.Errorf("oneLine(300 bytes) = %d bytes %q", len(got), got[len(got)-5:])
+	}
+}
+
+// TestLoadConvention_NearMissesAreLoud pins lets-puvic's strictness: a naming line
+// that is almost a declaration refuses, an unreadable file refuses, a naming line
+// LETS does not read is named, and prose that mentions a key stays prose.
+func TestLoadConvention_NearMissesAreLoud(t *testing.T) {
+	const dir = "<dir>"
+	board := func(body string) string { return "# board\n\n## Worktree\n\n" + body + "\n" }
+	boardRel, adapterRel := ".claude/rules/tracker-planfix-mcp.board.md: ", ".claude/rules/tracker-planfix-mcp.md: "
+	isFallback := func(t *testing.T, c Convention) {
+		t.Helper()
+		if c.Declared || c.Branch != DefaultBranch || c.WorktreeBranch != DefaultWorktreeBranch || c.Source["branch"] != SourceDefault {
+			t.Errorf("want the fallback convention: %+v", c)
+		}
+	}
+	invalidAt := func(prefix string) func(*testing.T, Convention, Diagnosis) {
+		return func(t *testing.T, c Convention, d Diagnosis) {
+			if !strings.HasPrefix(d.Invalid, prefix) || !slices.Contains(d.Reasons, ReasonConventionDeclarationInvalid) {
+				t.Errorf("invalid = %q (want prefix %q), reasons = %v", d.Invalid, prefix, d.Reasons)
+			}
+			isFallback(t, c)
+		}
+	}
+	unreadIn := func(rel string) func(*testing.T, Convention, Diagnosis) {
+		return func(t *testing.T, c Convention, d Diagnosis) {
+			if d.Invalid != "" || !slices.Contains(d.Reasons, ReasonLinesUnread) {
+				t.Errorf("invalid = %q, reasons = %v", d.Invalid, d.Reasons)
+			}
+			if len(d.Warnings) != 1 || !strings.HasPrefix(d.Warnings[0], ReasonLinesUnread+": "+rel) {
+				t.Errorf("warnings = %q", d.Warnings)
+			}
+			if c.Branch != DefaultBranch {
+				t.Errorf("an unread line must not take effect: %+v", c)
+			}
+		}
+	}
+	declared := func(t *testing.T, c Convention, d Diagnosis) {
+		if d.Invalid != "" || !c.Declared || c.Branch != "feature/pwa-{id}" || c.Source["branch"] != SourceBoard || len(d.Warnings) != 0 {
+			t.Errorf("prose must stay prose: %+v invalid=%q warnings=%q", c, d.Invalid, d.Warnings)
+		}
+	}
+	cases := []struct {
+		name, adapter, board string
+		check                func(*testing.T, Convention, Diagnosis)
+	}{
+		{"no period", "", board("branch: `feature/pwa-{id}`"), func(t *testing.T, c Convention, d Diagnosis) {
+			invalidAt(boardRel)(t, c, d)
+			if !strings.Contains(d.Invalid, "branch:") {
+				t.Errorf("invalid = %q must name the key", d.Invalid)
+			}
+		}},
+		{"no backticks", "", board("branch: feature/pwa-{id}."), invalidAt(boardRel)},
+		{"list marker", "", board("- branch: `feature/pwa-{id}`."), invalidAt(boardRel)},
+		{"other heading", "", "# board\n\n## Branches\n\nbranch: `feature/pwa-{id}`.\n", unreadIn(".claude/rules/tracker-planfix-mcp.board.md")},
+		{"second Worktree section", "", "# board\n\n## Worktree\n\nnothing.\n\n## Worktree\n\nbranch: `feature/pwa-{id}`.\n", unreadIn(".claude/rules/tracker-planfix-mcp.board.md")},
+		{"adapter other heading", "# adapter\n\n## Branches\n\nbranch: `task/{id}`.\n", "", unreadIn(".claude/rules/tracker-planfix-mcp.md")},
+		{"board is a directory", "", dir, invalidAt(boardRel)},
+		{"adapter is a directory", dir, "", func(t *testing.T, c Convention, d Diagnosis) {
+			invalidAt(adapterRel)(t, c, d)
+			if slices.Contains(d.Reasons, ReasonAdapterMissing) {
+				t.Errorf("an unreadable adapter is not a missing one: %v", d.Reasons)
+			}
+		}},
+		{"control byte in parser error", "", board("id: `[\x1b`."), func(t *testing.T, c Convention, d Diagnosis) {
+			invalidAt(boardRel)(t, c, d)
+			if strings.ContainsFunc(d.Invalid, func(r rune) bool { return r < 0x20 }) {
+				t.Errorf("invalid = %q carries a control byte", d.Invalid)
+			}
+		}},
+		{"beads adapter prose", "", board("`branch:` / `worktree-branch:` are the names LETS creates.\nid: `[0-9]+`.\nbranch: `feature/pwa-{id}`."), declared},
+		{"TEMPLATE bullets", "", board("- **`id:`** - one RE2 fragment matching a task id.\n- **`branch:`** / **`worktree-branch:`** - the branches LETS creates.\nid: `[0-9]+`.\nbranch: `feature/pwa-{id}`."), declared},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			main := t.TempDir()
+			put := func(path, content string) {
+				if content == dir {
+					if err := os.MkdirAll(path, 0o755); err != nil {
+						t.Fatal(err)
+					}
+					return
+				}
+				writeFile(t, path, content)
+			}
+			adapter := tc.adapter
+			if adapter == "" {
+				adapter = "# adapter\n"
+			}
+			put(adapterFile(main, "planfix-mcp"), adapter)
+			if tc.board != "" {
+				put(boardFile(main, "planfix-mcp"), tc.board)
+			}
+			c, d := LoadConventionDiagnosed(main, "planfix-mcp", "")
+			tc.check(t, c, d)
+		})
 	}
 }

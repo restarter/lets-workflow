@@ -7,6 +7,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"unicode"
 )
 
 // ErrConventionInvalid: an id / branch / worktree-branch / accept declaration does
@@ -73,6 +74,13 @@ var (
 	backticked = regexp.MustCompile("`([^`]*)`")
 )
 
+// nearMissRe: a line that starts with a bare naming key (optionally behind a list
+// marker or indentation). One that declRe does not match is a mistake, not prose -
+// reading past it would drop the user's naming in silence (lets-puvic). A key in
+// backticks is prose ("`branch:` / `worktree-branch:` are the names ...", the
+// TEMPLATE's "- **`id:`**" bullets) and never matches.
+var nearMissRe = regexp.MustCompile(`^\s*(?:[-*+]\s+)?(id|branch|worktree-branch|accept)\s*:`)
+
 // rawConvention is one file's declarations before overlay and defaults.
 type rawConvention struct {
 	keys map[string]string // id | branch | worktree-branch | accept -> raw value
@@ -83,6 +91,12 @@ func parseRaw(content string) (rawConvention, error) {
 	decls, dup := declarations(section(content, "## Worktree"))
 	if dup != "" && dup != "links" {
 		return rawConvention{}, fmt.Errorf("%w: %s declared twice", ErrConventionInvalid, dup)
+	}
+	for _, l := range strings.Split(section(content, "## Worktree"), "\n") {
+		l = strings.TrimRight(l, " \t\r")
+		if m := nearMissRe.FindStringSubmatch(l); m != nil && !declRe.MatchString(l) {
+			return rawConvention{}, fmt.Errorf("%w: %s: line %q is not a declaration - one per line, `%s: ` then the value in backticks, ending with a period", ErrConventionInvalid, m[1], l, m[1])
+		}
 	}
 	raw := rawConvention{keys: map[string]string{}}
 	for _, k := range []string{"id", "branch", "worktree-branch", "accept"} {
@@ -285,6 +299,12 @@ func LoadConventionDiagnosed(mainRoot, tracker, pluginRoot string) (Convention, 
 		d.Invalid = rel + ": " + oneLine(strings.TrimPrefix(err.Error(), ErrConventionInvalid.Error()+": "))
 		return fallback(), d
 	}
+	unread := func(rel, content string) {
+		if n := linesOutsideSection(content, "## Worktree"); n > 0 {
+			d.Reasons = append(d.Reasons, ReasonLinesUnread)
+			warn(ReasonLinesUnread, fmt.Sprintf("%s has %d line(s) starting with id: / branch: / worktree-branch: / accept: that LETS does not read - naming is read only under the first `## Worktree` heading", rel, n))
+		}
+	}
 	if !NameRe.MatchString(tracker) {
 		d.Reasons = append(d.Reasons, ReasonTrackerNameInvalid)
 		warn(ReasonTrackerNameInvalid, "LETS_TRACKER is not a valid adapter name - the default naming is used. Fix LETS_TRACKER in .lets/.env")
@@ -325,6 +345,7 @@ func LoadConventionDiagnosed(mainRoot, tracker, pluginRoot string) (Convention, 
 			return invalid(adapterRel, err)
 		}
 		base = raw
+		unread(adapterRel, string(data))
 		if _, declared := raw.keys["id"]; !declared {
 			if praw, ok := loadPlugin(); ok {
 				if declaresKeys(raw, "branch", "worktree-branch") {
@@ -351,6 +372,7 @@ func LoadConventionDiagnosed(mainRoot, tracker, pluginRoot string) (Convention, 
 			d.Reasons = append(d.Reasons, ReasonBoardLinksIgnored)
 			warn(ReasonBoardLinksIgnored, "links: in "+boardRel+" is ignored - store links come from the adapter only")
 		}
+		unread(boardRel, string(data))
 	}
 	c, err := build(base, board, baseSource)
 	if err != nil {
@@ -368,6 +390,40 @@ func LoadConventionDiagnosed(mainRoot, tracker, pluginRoot string) (Convention, 
 		}
 	}
 	return c, d
+}
+
+// linesOutsideSection counts lines that start with a bare naming key outside the
+// span section(content, heading) returns - the first heading's body, up to the
+// next `## `. It mirrors section() line for line, so "unread" means exactly "not
+// parsed": a key under another heading, before the section, or in a second
+// section with the same heading.
+func linesOutsideSection(content, heading string) int {
+	lines := strings.Split(content, "\n")
+	start, end := -1, len(lines)
+	for i, l := range lines {
+		if strings.TrimRight(l, " \t\r") == heading {
+			start = i + 1
+			break
+		}
+	}
+	if start >= 0 {
+		for i := start; i < len(lines); i++ {
+			if strings.HasPrefix(lines[i], "## ") {
+				end = i
+				break
+			}
+		}
+	}
+	n := 0
+	for i, l := range lines {
+		if start >= 0 && i >= start && i < end {
+			continue
+		}
+		if nearMissRe.MatchString(strings.TrimRight(l, " \t\r")) {
+			n++
+		}
+	}
+	return n
 }
 
 // declaresKeys reports whether raw carries any of keys.
@@ -410,10 +466,11 @@ func sourceFile(src, tracker string) string {
 }
 
 // oneLine makes untrusted text (a parser error quoting a user file) safe for one
-// warning line in model context: control characters become `?`, at most 200 bytes.
+// warning line in model context: control characters (C0, DEL, C1) and the Unicode
+// line / paragraph separators become `?`, at most 200 bytes.
 func oneLine(s string) string {
 	s = strings.Map(func(r rune) rune {
-		if r < 0x20 || r == 0x7f {
+		if unicode.IsControl(r) || r == 0x2028 || r == 0x2029 {
 			return '?'
 		}
 		return r
