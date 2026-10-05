@@ -33,6 +33,8 @@ branch: `feature/{id}-{slug}`.
 
 `/lets:start PWA-45122` then creates `feature/PWA-45122-fix-login`, and detect-task and the statusline read `PWA-45122` back off that branch. Upgrading from an adapter copy without the section: run `/lets:update` so the installed file carries it (until then LETS keeps its old beads-shaped guess).
 
+`branch:` and `worktree-branch:` also work on their own: a board with only `` branch: `feature/pwa-{id}`. `` names new branches `feature/pwa-49514`, but without `id:` LETS cannot read the id back off a branch - detect-task, adopt, sweep and the statusline keep their old guesses (the task-state file still names the task) - and `/lets:start` prints a `convention_templates_without_id` line saying so until you add `id:`. Each key stands alone: a board with only `branch:` still gets the default `worktree-{id}-{slug}` from `/lets:worktree create` - declare `worktree-branch:` too. Every declaration goes under the `## Worktree` heading of the main checkout's `.claude/rules/tracker-<name>.board.md`, one per line, value in backticks, ending with a period; a line LETS cannot read stops `/lets:start` with `convention_declaration_invalid` naming the file, and one outside the section is named as unread.
+
 ## Choosing a tracker
 
 `lets init` (via `/lets:init`) prompts for the tracker on a fresh project and installs the matching adapter file. To change it later, edit `LETS_TRACKER` in `.lets/.env` and run `/lets:update` (which re-syncs the adapter file). A non-beads tracker skips `bd init`.

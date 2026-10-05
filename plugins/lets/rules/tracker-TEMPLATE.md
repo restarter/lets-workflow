@@ -59,7 +59,7 @@ How a worktree shares this tracker's store and how tasks and branches are named.
 - **`branch:`** / **`worktree-branch:`** - the branches LETS creates (take-task / `lets orca open`, and `/lets:worktree create <id>`): exactly one `{id}`, at most one `{slug}`, literal text only `[A-Za-z0-9/._-]`. Default `feature/{id}-{slug}` / `worktree-{id}-{slug}`.
 - **`accept:`** (optional) - comma-separated extra shapes LETS never creates but `adopt` recognizes (e.g. `{id}-{slug}`).
 
-A `branch:` / `worktree-branch:` shape is that task's branch by construction; an `accept:` shape is an unconfirmed candidate (`origin: branch`) that detect-task / take-task confirm first. No `id:` line at all = an adapter predating this section (`convention_undeclared`, previous behavior). A board file's own `## Worktree` may override `id:` / `branch:` / `worktree-branch:` / `accept:` per key (never `links:`), read from the main checkout only - e.g. tasks `PWA-45122` on branches `feature/PWA-45122-short-title`: `` id: `PWA-[0-9]+`. `` and `` branch: `feature/{id}-{slug}`. ``.
+A `branch:` / `worktree-branch:` shape is that task's branch by construction; an `accept:` shape is an unconfirmed candidate (`origin: branch`) that detect-task / take-task confirm first. No `id:` = no id is read off a name (`convention_undeclared`); `branch:` / `worktree-branch:` still render. A board file's own `## Worktree` may override `id:` / `branch:` / `worktree-branch:` / `accept:` per key (never `links:`), read from the main checkout only - e.g. tasks `PWA-45122` on branches `feature/PWA-45122-short-title`: `` id: `PWA-[0-9]+`. `` and `` branch: `feature/{id}-{slug}`. ``.
 
 ## Claim hygiene
 
