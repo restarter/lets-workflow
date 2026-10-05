@@ -196,7 +196,7 @@ func TaskRecord(ctx context.Context, dir string, o RecordOptions) (*RecordResult
 	if err != nil {
 		return fail(&Error{Code: ExitFilesystem, Kind: "trace_unreadable", Message: err.Error(), Remediation: "fix the file's permissions or content, then run record again"})
 	}
-	branches, grammar, err := branchesByTask(ctx, mainRoot)
+	branches, grammar, err := branchesByTask(ctx, mainRoot, loadConvention(mainRoot))
 	if err != nil {
 		return fail(&Error{Code: ExitGitFailed, Kind: "git_failed", Message: "git for-each-ref failed: " + err.Error()})
 	}
@@ -267,9 +267,8 @@ func taskStatesByTask(letsDir string) (map[string][]string, error) {
 // the convention declares no id grammar, so no branch name can be read as an id -
 // guessing one would false-match (a numeric-id tracker's feature/48647-lifecycle-test
 // under the beads shape reads as `lifecycle-test`).
-func branchesByTask(ctx context.Context, mainRoot string) (out map[string][]string, grammar bool, err error) {
+func branchesByTask(ctx context.Context, mainRoot string, conv trackeradapter.Convention) (out map[string][]string, grammar bool, err error) {
 	out = map[string][]string{}
-	conv := loadConvention(mainRoot)
 	if !conv.Declared || conv.ID == nil {
 		return out, false, nil
 	}

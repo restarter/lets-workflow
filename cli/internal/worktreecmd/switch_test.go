@@ -6,9 +6,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -28,7 +30,7 @@ type teamFixture struct {
 
 func newTeamFixture(t *testing.T) teamFixture {
 	t.Helper()
-	t.Setenv("HOME", t.TempDir())
+	isolateEnv(t)
 	repo, letsDir := recordRepo(t)
 	if err := os.WriteFile(filepath.Join(repo, "a.txt"), []byte("one\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -564,5 +566,170 @@ func TestSwitch_IgnoredFileNotOverwritten(t *testing.T) {
 	}
 	if indexSnap(t, f.wt) != before || gitOut(t, f.wt, "branch", "--show-current") == a1 {
 		t.Error("a refused switch changed the index, HEAD or the branch")
+	}
+}
+
+func (f teamFixture) swTitle(t *testing.T, task, title string) (*SwitchResult, error) {
+	t.Helper()
+	tf := filepath.Join(t.TempDir(), "title.txt")
+	if err := os.WriteFile(tf, []byte(title), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return f.sw(SwitchOptions{Task: task, TitleFile: tf})
+}
+
+// mustSwitch switches to task and fails the test unless it lands on want.
+func (f teamFixture) mustSwitch(t *testing.T, task, title, want string) *SwitchResult {
+	t.Helper()
+	res, err := f.swTitle(t, task, title)
+	if err != nil || !res.OK || res.Branch != want {
+		t.Fatalf("switch %s (%q): want %s, got err=%v res=%+v", task, title, want, err, res)
+	}
+	return res
+}
+
+func (f teamFixture) sessionFile(t *testing.T, slug, body string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(f.letsDir, "sessions", ".task-"+slug), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func switchWarns(res *SwitchResult, prefix string) int {
+	n := 0
+	for _, s := range res.Steps {
+		if s.Status == StepWarn && strings.HasPrefix(s.Message, prefix) {
+			n++
+		}
+	}
+	return n
+}
+
+const pwaBoard = "## Worktree\n\nbranch: `feature/pwa-{id}-{slug}`.\n"
+
+// TestSwitch_BoardTemplateWithoutID: a board's branch: names the new branch with
+// no id: declared, and the return trip finds the task's branch by its task-state.
+func TestSwitch_BoardTemplateWithoutID(t *testing.T) {
+	f := newTeamFixture(t)
+	writeTracker(t, f.repo, "planfix-mcp", planfixAdapter, pwaBoard)
+	f.sessionFile(t, "main", "task: 49514\n") // the merge-branch never qualifies
+	const fix = "feature/pwa-49514-fix-login"
+
+	// 1. a new branch in the board's shape, and the caller is told why.
+	res := f.mustSwitch(t, "49514", "Fix login", fix)
+	if !res.Created || gitOut(t, f.wt, "branch", "--show-current") != fix {
+		t.Errorf("1: created=%v head=%s", res.Created, gitOut(t, f.wt, "branch", "--show-current"))
+	}
+	if n := switchWarns(res, "convention_templates_without_id: "); n != 1 {
+		t.Errorf("1: want one templates-without-id warn, got %d: %+v", n, res.Steps)
+	}
+	// 2. an empty title renders the task slug.
+	f.mustSwitch(t, "777", "", "feature/pwa-777-task")
+	// 3. a renamed title returns to the task's own branch.
+	if res := f.mustSwitch(t, "49514", "Renamed in the tracker", fix); res.Created {
+		t.Errorf("3: the return trip must not cut a branch")
+	}
+	// 4. the team's own branch never qualifies.
+	f.mustSwitch(t, "777", "", "feature/pwa-777-task")
+	f.sessionFile(t, "team_snake", "task: 49514\n")
+	f.mustSwitch(t, "49514", "Again", fix)
+	// 5. a slug collision is ambiguous, and the warning survives the refusal.
+	f.mustSwitch(t, "777", "", "feature/pwa-777-task")
+	gitOut(t, f.repo, "branch", "feature-pwa/49514-fix-login")
+	res, err := f.swTitle(t, "49514", "Third")
+	wantKind(t, err, ExitUsage, "branch_ambiguous")
+	if n := switchWarns(res, "convention_templates_without_id: "); n != 1 {
+		t.Errorf("5: want one templates-without-id warn on a refusal, got %d: %+v", n, res.Steps)
+	}
+	// 6. --branch consults no convention.
+	res, err = f.sw(SwitchOptions{Task: "888", Branch: "feature/x"})
+	if err != nil || !res.OK {
+		t.Fatalf("6: err=%v res=%+v", err, res)
+	}
+	if n := switchWarns(res, "convention_"); n != 0 {
+		t.Errorf("6: --branch must not warn about the convention: %+v", res.Steps)
+	}
+}
+
+// TestSwitch_UnreadableTaskStateRefuses: without an id grammar the task-state files
+// are the authority, so an unreadable one refuses instead of cutting a second branch.
+func TestSwitch_UnreadableTaskStateRefuses(t *testing.T) {
+	f := newTeamFixture(t)
+	writeTracker(t, f.repo, "planfix-mcp", planfixAdapter, pwaBoard)
+	f.mustSwitch(t, "49514", "Fix login", "feature/pwa-49514-fix-login")
+	f.mustSwitch(t, "777", "", "feature/pwa-777-task")
+
+	link := filepath.Join(f.letsDir, "sessions", ".task-unreadable")
+	if err := os.Symlink(".task-unreadable", link); err != nil {
+		t.Fatalf("fixture: %v", err)
+	}
+	slugs, err := taskstate.Slugs(f.letsDir)
+	if err != nil || !slices.Contains(slugs, "unreadable") {
+		t.Fatalf("fixture: Slugs = %v, %v", slugs, err)
+	}
+	if _, err := taskstate.Read(f.letsDir, "unreadable"); err == nil || errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("fixture: Read must fail with something other than not-exist: %v", err)
+	}
+
+	_, err = f.swTitle(t, "49514", "Renamed")
+	wantKind(t, err, ExitFilesystem, "task_state_unreadable")
+	if head := gitOut(t, f.wt, "branch", "--show-current"); head != "feature/pwa-777-task" {
+		t.Errorf("HEAD moved to %s", head)
+	}
+	if revParse(context.Background(), f.repo, "refs/heads/feature/pwa-49514-renamed") != "" {
+		t.Error("a second branch was cut")
+	}
+}
+
+// TestSwitch_IdNothingReturnTrip: id: nothing (the none tracker) returns to the
+// task's branch by its task-state instead of cutting a second one.
+func TestSwitch_IdNothingReturnTrip(t *testing.T) {
+	f := newTeamFixture(t)
+	body := "# Tracker adapter: beads\n\n## Worktree\n\nid: nothing.\nbranch: `feature/{id}-{slug}`.\n"
+	if err := os.WriteFile(filepath.Join(f.repo, ".claude", "rules", "tracker-beads.md"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f.mustSwitch(t, "49514", "Fix login", "feature/49514-fix-login")
+	f.mustSwitch(t, "777", "", "feature/777-task")
+	res := f.mustSwitch(t, "49514", "Renamed", "feature/49514-fix-login")
+	if res.Created {
+		t.Error("the return trip must not cut a branch")
+	}
+	if n := switchWarns(res, "convention_templates_without_id: "); n != 0 {
+		t.Errorf("id: nothing is a declaration: %+v", res.Steps)
+	}
+}
+
+// TestSwitch_InvalidDeclarationRefuses: an unparsable board refuses the switch, and
+// a task-state hit must not hide it.
+func TestSwitch_InvalidDeclarationRefuses(t *testing.T) {
+	f := newTeamFixture(t)
+	broken := "## Worktree\n\nbranch: `feature/pwa-{id}-{slug}`\n"
+
+	// (a) a new task: nothing is cut.
+	writeTracker(t, f.repo, "planfix-mcp", planfixAdapter, "## Worktree\n\nbranch: `feature/pwa-{id}`\n")
+	_, err := f.swTitle(t, "49514", "Fix login")
+	wantKind(t, err, ExitUsage, "convention_declaration_invalid")
+	if head := gitOut(t, f.wt, "branch", "--show-current"); head != "team_snake" {
+		t.Errorf("a: HEAD moved to %s", head)
+	}
+	if m, _ := filepath.Glob(filepath.Join(f.letsDir, "sessions", ".task-feature-*49514*")); len(m) != 0 {
+		t.Errorf("a: task-state written: %v", m)
+	}
+
+	// (b) the return trip refuses too.
+	writeTracker(t, f.repo, "planfix-mcp", planfixAdapter, pwaBoard)
+	if res := f.mustSwitch(t, "49514", "Fix login", "feature/pwa-49514-fix-login"); !res.Created {
+		t.Fatal("b: the first switch must cut the branch")
+	}
+	f.mustSwitch(t, "777", "", "feature/pwa-777-task")
+	writeTracker(t, f.repo, "planfix-mcp", planfixAdapter, broken)
+	res, err := f.swTitle(t, "49514", "Fix login")
+	wantKind(t, err, ExitUsage, "convention_declaration_invalid")
+	if res.Error == nil || !strings.Contains(res.Error.Message, ".claude/rules/tracker-planfix-mcp.board.md") {
+		t.Errorf("b: error must name the board: %+v", res.Error)
+	}
+	if head := gitOut(t, f.wt, "branch", "--show-current"); head != "feature/pwa-777-task" {
+		t.Errorf("b: HEAD moved to %s", head)
 	}
 }
