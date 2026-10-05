@@ -477,6 +477,13 @@ func newWorktreeBranchNameCmd() *cobra.Command {
 			}
 			res, runErr := worktreecmd.BranchName(cmd.Context(), cwd, worktreecmd.BranchNameOptions{Task: task, TitleFile: titleFile, Worktree: worktree, PluginRoot: pluginRoot})
 			return emitJSONOrRender(cmd, jsonOut, false, res, func() {
+				// stdout stays the bare branch (a script captures it); a declaration the
+				// convention could not use is said on stderr (lets-puvic).
+				for _, s := range res.Steps {
+					if s.Status == worktreecmd.StepWarn {
+						fmt.Fprintln(cmd.ErrOrStderr(), "lets: "+s.Message)
+					}
+				}
 				if res.OK {
 					fmt.Fprintln(cmd.OutOrStdout(), res.Branch)
 				}
