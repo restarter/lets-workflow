@@ -11,10 +11,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/restarter/lets-workflow/cli/internal/gitutil"
-	"github.com/restarter/lets-workflow/cli/internal/initcmd"
-	"github.com/restarter/lets-workflow/cli/internal/letsconfig"
 	"github.com/restarter/lets-workflow/cli/internal/taskid"
 	"github.com/restarter/lets-workflow/cli/internal/taskstate"
 	"github.com/restarter/lets-workflow/cli/internal/trackeradapter"
@@ -64,9 +63,51 @@ func Slugify(title string) string {
 	return s
 }
 
+// invalidDeclaration is the refusal for a convention whose naming declarations
+// could not be read or parsed (diag.Invalid) - one construction for branch-name
+// and switch.
+func invalidDeclaration(diag trackeradapter.Diagnosis) *Error {
+	return &Error{Code: ExitUsage, Kind: trackeradapter.ReasonConventionDeclarationInvalid,
+		Message:     diag.Invalid + " - the tracker naming convention cannot be read, so no branch is chosen",
+		Remediation: "fix that line under ## Worktree (one declaration per line, value in backticks, ending with a period), or pass --branch"}
+}
+
+// renderBranch renders task's created-shape branch under conv: the slug from the
+// untrusted title file, the template and its source, checked by git
+// check-ref-format. A convention whose declarations could not be read
+// (diag.Invalid) is refused - LETS never guesses a name the user declared otherwise.
+func renderBranch(ctx context.Context, conv trackeradapter.Convention, diag trackeradapter.Diagnosis, task, titleFile string, worktree bool) (name, slug, tmpl, source string, e *Error) {
+	if diag.Invalid != "" {
+		return "", "", "", "", invalidDeclaration(diag)
+	}
+	title := ""
+	if titleFile != "" {
+		data, err := os.ReadFile(titleFile)
+		if err != nil {
+			return "", "", "", "", &Error{Code: ExitUsage, Kind: "title_file_unreadable", Message: err.Error(), Cause: err}
+		}
+		title = string(data)
+	}
+	key, tmpl := "branch", conv.Branch
+	if worktree {
+		key, tmpl = "worktree-branch", conv.WorktreeBranch
+	}
+	slug = Slugify(title)
+	name, err := conv.Render(tmpl, task, slug)
+	if err != nil {
+		return "", "", "", "", &Error{Code: ExitUsage, Kind: "branch_render_failed", Message: err.Error(), Cause: err}
+	}
+	if exec.CommandContext(ctx, "git", "check-ref-format", "--branch", name).Run() != nil {
+		return "", "", "", "", &Error{Code: ExitUsage, Kind: "branch_name_invalid", Message: fmt.Sprintf("%q is not a valid branch name", name)}
+	}
+	return name, slug, tmpl, conv.Source[key], nil
+}
+
 // BranchName renders the branch LETS creates for a task under the active
 // convention. It is the ONE renderer: markdown calls it and never assembles a branch
-// name itself. An undeclared convention renders the default templates.
+// name itself. branch: / worktree-branch: render with or without id: (default
+// templates when undeclared); every drop is a warn step, and an unreadable or
+// invalid declaration refuses (convention_declaration_invalid).
 func BranchName(ctx context.Context, dir string, o BranchNameOptions) (*BranchNameResult, error) {
 	res := &BranchNameResult{Envelope: Envelope{SchemaVersion: SchemaVersion, Subcommand: "branch-name", Steps: []Step{}}}
 	fail := func(e *Error) (*BranchNameResult, error) {
@@ -77,52 +118,20 @@ func BranchName(ctx context.Context, dir string, o BranchNameOptions) (*BranchNa
 	if !taskid.Valid(o.Task) {
 		return fail(&Error{Code: ExitUsage, Kind: "task_invalid", Message: fmt.Sprintf("--task %q is not a task id", o.Task)})
 	}
-	title := ""
-	if o.TitleFile != "" {
-		data, err := os.ReadFile(o.TitleFile)
-		if err != nil {
-			return fail(&Error{Code: ExitUsage, Kind: "title_file_unreadable", Message: err.Error(), Cause: err})
-		}
-		title = string(data)
-	}
 	_, mainRoot := gitutil.DetectInsideWorktreeAt(dir)
 	if mainRoot == "" {
 		return fail(&Error{Code: ExitNotInRepo, Kind: "not_in_repo", Message: "not inside a git repository"})
 	}
 	res.ProjectRoot = mainRoot
-	home, _ := os.UserHomeDir()
-	tracker := letsconfig.ResolvedEnv(mainRoot, home, nil)["LETS_TRACKER"]
-	if tracker == "" {
-		tracker = "beads"
+	root := gitutil.ProjectRoot(dir, 2*time.Second)
+	conv, diag := conventionOf(root, mainRoot, o.PluginRoot)
+	res.Reasons = diag.Reasons
+	for _, w := range diag.Warnings {
+		res.Steps = append(res.Steps, Step{Status: StepWarn, Message: w})
 	}
-	pluginRoot, err := initcmd.DetectPluginRoot(o.PluginRoot)
-	if err != nil {
-		pluginRoot = ""
-	}
-	conv, reasons := trackeradapter.LoadConvention(mainRoot, tracker, pluginRoot)
-	res.Reasons = reasons
-	key, tmpl := "branch", trackeradapter.DefaultBranch
-	if o.Worktree {
-		key, tmpl = "worktree-branch", trackeradapter.DefaultWorktreeBranch
-	}
-	source := trackeradapter.SourceDefault
-	if conv.Declared {
-		if o.Worktree {
-			tmpl = conv.WorktreeBranch
-		} else {
-			tmpl = conv.Branch
-		}
-		source = conv.Source[key]
-	} else {
-		conv = trackeradapter.Convention{}
-	}
-	slug := Slugify(title)
-	name, err := conv.Render(tmpl, o.Task, slug)
-	if err != nil {
-		return fail(&Error{Code: ExitUsage, Kind: "branch_render_failed", Message: err.Error(), Cause: err})
-	}
-	if exec.CommandContext(ctx, "git", "check-ref-format", "--branch", name).Run() != nil {
-		return fail(&Error{Code: ExitUsage, Kind: "branch_name_invalid", Message: fmt.Sprintf("%q is not a valid branch name", name)})
+	name, slug, tmpl, source, e := renderBranch(ctx, conv, diag, o.Task, o.TitleFile, o.Worktree)
+	if e != nil {
+		return fail(e)
 	}
 	wtDir := dirName(o.Task, slug)
 	var dirErr *Error

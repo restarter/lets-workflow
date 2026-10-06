@@ -20,6 +20,7 @@ import (
 	"github.com/restarter/lets-workflow/cli/internal/taskid"
 	"github.com/restarter/lets-workflow/cli/internal/taskstate"
 	"github.com/restarter/lets-workflow/cli/internal/teamfile"
+	"github.com/restarter/lets-workflow/cli/internal/trackeradapter"
 )
 
 // SwitchOptions configures Switch. Task is the task the team worktree moves to;
@@ -180,7 +181,10 @@ func Switch(ctx context.Context, dir string, o SwitchOptions) (*SwitchResult, er
 	from := currentBranchOf(ctx, root)
 	res.From = from
 	merge := mergeBranch(mainRoot)
-	target, created, e := switchTarget(ctx, root, mainRoot, o)
+	target, created, convWarns, e := switchTarget(ctx, root, mainRoot, team, o)
+	for _, w := range convWarns {
+		step(StepWarn, w)
+	}
 	if e != nil {
 		return fail(e)
 	}
@@ -311,34 +315,102 @@ func slugOf(branch string) string {
 	return s
 }
 
-// switchTarget resolves the branch: --branch, else the task's one existing local
-// branch in a created or accepted shape, else a new created-shape name.
-func switchTarget(ctx context.Context, root, mainRoot string, o SwitchOptions) (string, bool, *Error) {
+// switchTarget resolves the branch: --branch; else the task's own local branch;
+// else a new created-shape name. warns are the convention's drops - returned even
+// with an error, nil on the --branch path (no convention consulted).
+func switchTarget(ctx context.Context, root, mainRoot, team string, o SwitchOptions) (target string, created bool, warns []string, e *Error) {
 	exists := func(b string) bool { return revParse(ctx, root, "refs/heads/"+b) != "" }
 	if o.Branch != "" {
 		if exec.CommandContext(ctx, "git", "check-ref-format", "--branch", o.Branch).Run() != nil {
-			return "", false, &Error{Code: ExitUsage, Kind: "branch_name_invalid", Message: fmt.Sprintf("%q is not a valid branch name", o.Branch)}
+			return "", false, nil, &Error{Code: ExitUsage, Kind: "branch_name_invalid", Message: fmt.Sprintf("%q is not a valid branch name", o.Branch)}
 		}
-		return o.Branch, !exists(o.Branch), nil
+		return o.Branch, !exists(o.Branch), nil, nil
 	}
-	if byTask, _, err := branchesByTask(ctx, mainRoot); err == nil {
-		switch b := byTask[o.Task]; len(b) {
-		case 0:
-		case 1:
-			return b[0], false, nil
-		default:
-			return "", false, &Error{Code: ExitUsage, Kind: "branch_ambiguous", Message: fmt.Sprintf("task %s has several branches: %s", o.Task, strings.Join(b, ", ")), Remediation: "pass --branch"}
+	conv, diag := conventionOf(root, mainRoot, "")
+	warns = diag.Warnings
+	// Before any lookup: an unreadable convention has no trustworthy shape to look
+	// up by, and a hit must not hide it (Codex round 1).
+	if diag.Invalid != "" {
+		return "", false, warns, invalidDeclaration(diag)
+	}
+	if b, e := taskBranch(ctx, mainRoot, team, conv, o.Task); e != nil || b != "" {
+		return b, false, warns, e
+	}
+	name, _, _, _, e := renderBranch(ctx, conv, diag, o.Task, o.TitleFile, false)
+	if e != nil {
+		return "", false, warns, e
+	}
+	return name, !exists(name), warns, nil
+}
+
+// taskBranch returns task's one local branch, "" when none. With an id grammar:
+// the branch in a created or accepted shape (branchesByTask, as before; a git
+// failure falls through to a new name, as before). Without one (no id:, or
+// id: nothing): ownBranches. More than one is branch_ambiguous.
+func taskBranch(ctx context.Context, mainRoot, team string, conv trackeradapter.Convention, task string) (string, *Error) {
+	var b []string
+	if conv.Declared && conv.ID != nil {
+		byTask, _, err := branchesByTask(ctx, mainRoot, conv)
+		if err != nil {
+			return "", nil
 		}
-	}
-	bn, err := BranchName(ctx, root, BranchNameOptions{Task: o.Task, TitleFile: o.TitleFile})
-	if err != nil {
+		b = byTask[task]
+	} else {
 		var e *Error
-		if errors.As(err, &e) {
-			return "", false, e
+		if b, e = ownBranches(ctx, mainRoot, team, task); e != nil {
+			return "", e
 		}
-		return "", false, &Error{Code: ExitUsage, Kind: "branch_render_failed", Message: err.Error(), Cause: err}
 	}
-	return bn.Branch, !exists(bn.Branch), nil
+	switch len(b) {
+	case 0:
+		return "", nil
+	case 1:
+		return b[0], nil
+	default:
+		return "", &Error{Code: ExitUsage, Kind: "branch_ambiguous", Message: fmt.Sprintf("task %s has several branches: %s", task, strings.Join(b, ", ")), Remediation: "pass --branch"}
+	}
+}
+
+// ownBranches lists, without an id grammar, the local branches whose task-state
+// names task - the authority over a branch name (lets-puvic). The merge-branch and
+// the team's own team_<callsign> branch never qualify (take-task's "Stay" can write
+// a task: line there). The branch -> file map is many-to-one (feature/a-b and
+// feature-a/b share .task-feature-a-b): both branches qualify, so the caller sees
+// branch_ambiguous rather than a guess. An incomplete inventory is not an absence:
+// a task-state file that cannot be read, or a failed ref listing, refuses before
+// anything is touched - otherwise a renamed task would get a second branch exactly
+// when the authority is unreadable (Codex round 1).
+func ownBranches(ctx context.Context, mainRoot, team, task string) ([]string, *Error) {
+	byTask, err := taskStatesByTask(filepath.Join(mainRoot, ".lets"))
+	if err != nil {
+		return nil, &Error{Code: ExitFilesystem, Kind: "task_state_unreadable", Message: "cannot tell which branch is task " + task + "'s: " + err.Error(), Cause: err,
+			Remediation: "fix or remove the unreadable .lets/sessions/.task-* file, or pass --branch"}
+	}
+	if len(byTask[task]) == 0 {
+		return nil, nil
+	}
+	slugs := map[string]bool{}
+	for _, s := range byTask[task] {
+		slugs[s] = true
+	}
+	refs, err := forEachRef(ctx, mainRoot)
+	if err != nil {
+		return nil, &Error{Code: ExitGitFailed, Kind: "git_failed", Message: "for-each-ref refs/heads/: " + err.Error(), Cause: err}
+	}
+	skip := map[string]bool{mergeBranch(mainRoot): true}
+	if team != "" {
+		skip["team_"+team] = true
+	}
+	var out []string
+	for _, b := range strings.Split(strings.TrimSpace(string(refs)), "\n") {
+		if b == "" || skip[b] {
+			continue
+		}
+		if s, ok := taskstate.Slug(b); ok && slugs[s] {
+			out = append(out, b)
+		}
+	}
+	return out, nil
 }
 
 // remoteBase fetches origin/<merge> under the timeout and returns its sha. A failed

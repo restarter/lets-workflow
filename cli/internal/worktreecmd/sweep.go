@@ -3,10 +3,12 @@
 package worktreecmd
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/restarter/lets-workflow/cli/internal/gitutil"
@@ -15,18 +17,37 @@ import (
 	"github.com/restarter/lets-workflow/cli/internal/trackeradapter"
 )
 
-// loadConvention loads the active tracker convention for a main checkout.
-func loadConvention(mainRoot string) trackeradapter.Convention {
+// conventionOf loads the active tracker convention of a main checkout with its
+// diagnosis. callerRoot (the caller's checkout, "" = mainRoot) adds one warning
+// when a board file there differs from the main checkout's - LETS reads only the
+// main checkout's .claude/rules. pluginRoot "" reads $CLAUDE_PLUGIN_ROOT.
+func conventionOf(callerRoot, mainRoot, pluginRoot string) (trackeradapter.Convention, trackeradapter.Diagnosis) {
 	home, _ := os.UserHomeDir()
 	tracker := letsconfig.ResolvedEnv(mainRoot, home, nil)["LETS_TRACKER"]
 	if tracker == "" {
 		tracker = "beads"
 	}
-	pluginRoot, err := initcmd.DetectPluginRoot("")
+	pr, err := initcmd.DetectPluginRoot(pluginRoot)
 	if err != nil {
-		pluginRoot = ""
+		pr = ""
 	}
-	c, _ := trackeradapter.LoadConvention(mainRoot, tracker, pluginRoot)
+	c, d := trackeradapter.LoadConventionDiagnosed(mainRoot, tracker, pr)
+	if callerRoot != "" && callerRoot != mainRoot && trackeradapter.NameRe.MatchString(tracker) {
+		rel := filepath.Join(".claude", "rules", "tracker-"+tracker+".board.md")
+		mine, err := os.ReadFile(filepath.Join(callerRoot, rel))
+		if err == nil {
+			theirs, terr := os.ReadFile(filepath.Join(mainRoot, rel))
+			if terr != nil || !bytes.Equal(mine, theirs) {
+				d.Warnings = append(d.Warnings, "board_not_in_main_checkout: "+rel+" in this worktree differs from the main checkout's - LETS reads naming only from "+filepath.Join(mainRoot, rel)+". Copy or commit it there")
+			}
+		}
+	}
+	return c, d
+}
+
+// loadConvention loads the active tracker convention for a main checkout.
+func loadConvention(mainRoot string) trackeradapter.Convention {
+	c, _ := conventionOf("", mainRoot, "")
 	return c
 }
 
@@ -67,6 +88,21 @@ func Sweep(ctx context.Context, dir string, apply bool) (*SweepResult, error) {
 		res.OK = true
 		res.Steps = append(res.Steps, Step{Status: StepSkip, Message: "the convention declares id: nothing - no branch is a task branch"})
 		return res, nil
+	}
+	if !conv.Declared {
+		// Templates without id: still name new branches; say so only when sweep's
+		// legacy prefixes cannot see them (those branches accumulate).
+		for _, k := range []string{"branch", "worktree-branch"} {
+			tmpl := conv.Branch
+			if k == "worktree-branch" {
+				tmpl = conv.WorktreeBranch
+			}
+			p := templatePrefix(tmpl)
+			if conv.Source[k] == trackeradapter.SourceDefault || strings.HasPrefix(p, "feature/") || strings.HasPrefix(p, "worktree-") {
+				continue
+			}
+			res.Steps = append(res.Steps, Step{Status: StepWarn, Message: "convention_templates_without_id: no id: is declared, so sweep only looks at feature/ and worktree- branches - branches named by " + tmpl + " are never swept. Declare id: to sweep them"})
+		}
 	}
 	merged, unmerged := SweepCandidates(ctx, mainRoot, merge, prefixes)
 	for _, b := range merged {

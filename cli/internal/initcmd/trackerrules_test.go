@@ -692,6 +692,41 @@ func TestTrackerRules_WorktreeConvention(t *testing.T) {
 	}
 }
 
+// TestConventionWarningsPrinted: every markdown consumer of branch-name / switch
+// prints the warn steps - a naming declaration the convention could not use is
+// never dropped in silence (lets-puvic).
+func TestConventionWarningsPrinted(t *testing.T) {
+	cases := []struct {
+		file, heading string
+		refusal       bool
+	}{
+		{"skills/take-task/SKILL.md", "### Step 2T", true},
+		{"skills/take-task/SKILL.md", "### Step 4: Branch Logic", false},
+		{"commands/worktree.md", "### Step C1: Get Name", false},
+		{"commands/team.md", "### Step N2: Launch Each Worker", false},
+	}
+	for _, c := range cases {
+		raw, err := os.ReadFile(filepath.Join(pluginDir(t), c.file))
+		if err != nil {
+			t.Fatal(err)
+		}
+		sec := sectionSpan(string(raw), c.heading)
+		if sec == "" {
+			t.Fatalf("%s: section %q not found", c.file, c.heading)
+		}
+		found := false
+		for _, l := range strings.Split(sec, "\n") {
+			if strings.Contains(l, "`warn` step") && strings.Contains(l, "rint") && (!c.refusal || strings.Contains(l, "refusal")) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("%s %s: must tell the model to print each `warn` step (refusal too: %v)", c.file, c.heading, c.refusal)
+		}
+	}
+}
+
 // TestConventionConsumersUseGo pins that the markdown consumers of the task id /
 // branch convention ask Go (`lets worktree info --task-candidate`, `lets worktree
 // branch-name`) instead of matching a regex or rendering a template by eye, and that

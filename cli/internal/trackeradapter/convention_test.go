@@ -1,6 +1,7 @@
 package trackeradapter
 
 import (
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -75,6 +76,9 @@ func TestParseConvention_NoneFakeUndeclared(t *testing.T) {
 	undeclared := mustParse(t, "links: `.beads/.env` (0600).")
 	if undeclared.Declared {
 		t.Error("no id: line must be undeclared")
+	}
+	if undeclared.Branch != DefaultBranch || undeclared.WorktreeBranch != DefaultWorktreeBranch {
+		t.Errorf("an undeclared parse still renders: %+v", undeclared)
 	}
 }
 
@@ -152,36 +156,281 @@ func TestLoadConvention_Reasons(t *testing.T) {
 	}
 }
 
-// TestLoadConvention_KeysIgnoredNoID pins the silent-drop diagnosis: a board file
-// that declares branch: while nothing declares id: loses every naming key, and the
-// caller must be told why its template did not take effect.
-func TestLoadConvention_KeysIgnoredNoID(t *testing.T) {
+// TestLoadConvention_TemplatesWithoutID pins lets-puvic: a board's branch: names
+// new branches even when nothing declares id:, parsing stays off, and the caller
+// is told why.
+func TestLoadConvention_TemplatesWithoutID(t *testing.T) {
 	main := t.TempDir()
-	// A user-authored adapter with no ## Worktree section at all.
 	writeFile(t, adapterFile(main, "planfix-mcp"), "# adapter\n\n## Capabilities\n\nnothing here.\n")
 	writeFile(t, boardFile(main, "planfix-mcp"), "# board\n\n## Worktree\n\nbranch: `feature/pwa-{id}`.\n")
 
-	c, reasons := LoadConvention(main, "planfix-mcp", "")
-	if c.Declared {
-		t.Fatalf("a convention without id: must stay undeclared: %+v", c)
+	c, d := LoadConventionDiagnosed(main, "planfix-mcp", "")
+	if c.Declared || c.ID != nil {
+		t.Fatalf("no id: -> must stay undeclared: %+v", c)
 	}
-	if !slices.Contains(reasons, ReasonKeysIgnoredNoID) {
-		t.Errorf("reasons %v must name %s - otherwise the board file is ignored in silence", reasons, ReasonKeysIgnoredNoID)
+	if c.Branch != "feature/pwa-{id}" || c.Source["branch"] != SourceBoard {
+		t.Fatalf("board branch: must be honoured: %+v", c)
 	}
-	if !slices.Contains(reasons, ReasonConventionUndeclared) {
-		t.Errorf("reasons %v must still name convention_undeclared", reasons)
+	if c.WorktreeBranch != DefaultWorktreeBranch || c.Source["worktree-branch"] != SourceDefault {
+		t.Errorf("undeclared worktree-branch: must stay default: %+v", c)
+	}
+	if want := []string{ReasonConventionUndeclared, ReasonTemplatesWithoutID}; !slices.Equal(d.Reasons, want) {
+		t.Errorf("reasons = %v, want %v", d.Reasons, want)
+	}
+	if len(d.Warnings) != 1 || !strings.HasPrefix(d.Warnings[0], ReasonTemplatesWithoutID+": ") ||
+		!strings.Contains(d.Warnings[0], ".claude/rules/tracker-planfix-mcp.board.md") || !strings.Contains(d.Warnings[0], "id:") {
+		t.Errorf("warnings = %q", d.Warnings)
+	}
+	if got, err := c.Render(c.Branch, "49514", "x"); err != nil || got != "feature/pwa-49514" {
+		t.Errorf("render = %q, %v", got, err)
+	}
+	if _, _, ok := c.ParseBranch("feature/pwa-49514", CreatedAndAccepted); ok {
+		t.Error("parsing must stay off without id:")
 	}
 
-	// With id: added, the board's branch: takes effect and the reason is gone.
+	// accept: without id: is ignored and named.
+	writeFile(t, boardFile(main, "planfix-mcp"), "# board\n\n## Worktree\n\nbranch: `feature/pwa-{id}`.\naccept: `{id}`.\n")
+	c, d = LoadConventionDiagnosed(main, "planfix-mcp", "")
+	if c.Accept != nil || !slices.Contains(d.Reasons, ReasonKeysIgnoredNoID) {
+		t.Errorf("accept: without id: must be ignored and named: %+v %v", c, d.Reasons)
+	}
+
+	// With id: the board applies, no no-id reason.
 	writeFile(t, boardFile(main, "planfix-mcp"), "# board\n\n## Worktree\n\nid: `[0-9]+`.\nbranch: `feature/pwa-{id}`.\n")
-	c, reasons = LoadConvention(main, "planfix-mcp", "")
-	if !c.Declared || c.Branch != "feature/pwa-{id}" || c.Source["branch"] != SourceBoard {
-		t.Fatalf("board branch must apply once id: is declared: %+v %v", c, reasons)
+	c, d = LoadConventionDiagnosed(main, "planfix-mcp", "")
+	if !c.Declared || c.Branch != "feature/pwa-{id}" || c.Source["branch"] != SourceBoard || len(d.Warnings) != 0 {
+		t.Fatalf("declared board: %+v %v %q", c, d.Reasons, d.Warnings)
 	}
-	if slices.Contains(reasons, ReasonKeysIgnoredNoID) {
-		t.Errorf("reasons %v must not name %s once the keys are used", reasons, ReasonKeysIgnoredNoID)
+	if slices.Contains(d.Reasons, ReasonTemplatesWithoutID) || slices.Contains(d.Reasons, ReasonKeysIgnoredNoID) {
+		t.Errorf("reasons %v must not name a no-id drop", d.Reasons)
 	}
-	if got, err := c.Render(c.Branch, "49514", "ignored"); err != nil || got != "feature/pwa-49514" {
-		t.Errorf("render = %q, %v; want feature/pwa-49514", got, err)
+}
+
+// TestLoadConvention_AdapterTemplatesWithoutID: an installed adapter's own branch:
+// is honoured without id:, unless a plugin copy that declares id: replaces it -
+// then the drop is named.
+func TestLoadConvention_AdapterTemplatesWithoutID(t *testing.T) {
+	cases := []struct {
+		name, tracker string
+		plugin        bool
+		check         func(t *testing.T, c Convention, d Diagnosis)
+	}{
+		{"installed, no plugin", "planfix-mcp", false, func(t *testing.T, c Convention, d Diagnosis) {
+			if c.Declared || c.Branch != "task/{id}" || c.Source["branch"] != SourceInstalled {
+				t.Errorf("installed branch: must be honoured: %+v", c)
+			}
+			if !slices.Contains(d.Reasons, ReasonTemplatesWithoutID) {
+				t.Errorf("reasons = %v", d.Reasons)
+			}
+			if len(d.Warnings) != 1 || !strings.HasPrefix(d.Warnings[0], ReasonTemplatesWithoutID+": ") ||
+				!strings.Contains(d.Warnings[0], ".claude/rules/tracker-planfix-mcp.md") {
+				t.Errorf("warnings = %q", d.Warnings)
+			}
+		}},
+		{"installed lags plugin", "beads", true, func(t *testing.T, c Convention, d Diagnosis) {
+			if !c.Declared || c.Source["id"] != SourcePlugin || c.Branch != DefaultBranch {
+				t.Errorf("plugin must be used: %+v", c)
+			}
+			if len(d.Warnings) != 1 || !strings.HasPrefix(d.Warnings[0], ReasonAdapterLagsPlugin+": ") ||
+				!strings.Contains(d.Warnings[0], ".claude/rules/tracker-beads.md") {
+				t.Errorf("warnings = %q", d.Warnings)
+			}
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			main, plugin := t.TempDir(), ""
+			writeFile(t, adapterFile(main, tc.tracker), sectionWith("branch: `task/{id}`."))
+			if tc.plugin {
+				plugin = t.TempDir()
+				writeFile(t, filepath.Join(plugin, "rules", "tracker-"+tc.tracker+".md"), sectionWith(beadsWorktree))
+			}
+			c, d := LoadConventionDiagnosed(main, tc.tracker, plugin)
+			tc.check(t, c, d)
+		})
+	}
+}
+
+// TestLoadConventionDiagnosed_FailuresFallBack: every failed load renders the
+// defaults (BranchName relies on it), and says why in one voice.
+func TestLoadConventionDiagnosed_FailuresFallBack(t *testing.T) {
+	reasons := []string{
+		ReasonConventionUndeclared, ReasonConventionDeclarationInvalid, ReasonBoardLinksIgnored,
+		ReasonTemplatesWithoutID, ReasonKeysIgnoredNoID, ReasonLinesUnread,
+		ReasonTrackerNameInvalid, ReasonAdapterMissing, ReasonAdapterLagsPlugin,
+	}
+	cases := []struct {
+		name, tracker, adapter, board string
+		warnPrefix, invalidPrefix     string
+	}{
+		{"tracker path", "../x", "", "", ReasonTrackerNameInvalid + ": ", ""},
+		{"tracker case", "Planfix-MCP", "", "", ReasonTrackerNameInvalid + ": ", ""},
+		{"invalid board", "beads", sectionWith(beadsWorktree), "# board\n\n## Worktree\n\nbranch: `feature/{slug}`.\n", "", ".claude/rules/tracker-beads.board.md: "},
+		{"invalid adapter", "beads", sectionWith("id: `^bad`."), "", "", ".claude/rules/tracker-beads.md: "},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			main := t.TempDir()
+			if tc.adapter != "" {
+				writeFile(t, adapterFile(main, tc.tracker), tc.adapter)
+			}
+			if tc.board != "" {
+				writeFile(t, boardFile(main, tc.tracker), tc.board)
+			}
+			c, d := LoadConventionDiagnosed(main, tc.tracker, "")
+			if c.Branch != DefaultBranch || c.WorktreeBranch != DefaultWorktreeBranch || c.Source["branch"] != SourceDefault || c.Declared {
+				t.Errorf("a failed load must fall back to the defaults: %+v", c)
+			}
+			for _, w := range d.Warnings {
+				if strings.Contains(w, "\n") || !slices.ContainsFunc(reasons, func(r string) bool { return strings.HasPrefix(w, r+": ") }) {
+					t.Errorf("warning %q is not one kind-prefixed line", w)
+				}
+			}
+			if tc.warnPrefix != "" {
+				if len(d.Warnings) != 1 || !strings.HasPrefix(d.Warnings[0], tc.warnPrefix) || d.Invalid != "" {
+					t.Errorf("warnings = %q, invalid = %q", d.Warnings, d.Invalid)
+				}
+				return
+			}
+			if len(d.Warnings) != 0 {
+				t.Errorf("an invalid declaration speaks only through Invalid: %q", d.Warnings)
+			}
+			if !strings.HasPrefix(d.Invalid, tc.invalidPrefix) || strings.Contains(d.Invalid, "convention declaration invalid") {
+				t.Errorf("invalid = %q, want prefix %q without the sentinel text", d.Invalid, tc.invalidPrefix)
+			}
+			if tc.name == "invalid board" && !strings.Contains(d.Invalid, "exactly one {id}") {
+				t.Errorf("invalid = %q must name the parser error", d.Invalid)
+			}
+			if !slices.Contains(d.Reasons, ReasonConventionDeclarationInvalid) {
+				t.Errorf("reasons = %v", d.Reasons)
+			}
+		})
+	}
+}
+
+// TestLoadConventionDiagnosed_AdapterMissing: a missing adapter is named only when
+// no plugin copy stands in for it.
+func TestLoadConventionDiagnosed_AdapterMissing(t *testing.T) {
+	main, plugin := t.TempDir(), t.TempDir()
+	_, d := LoadConventionDiagnosed(main, "beads", "")
+	if want := []string{ReasonAdapterMissing, ReasonConventionUndeclared}; !slices.Equal(d.Reasons, want) {
+		t.Errorf("reasons = %v, want %v", d.Reasons, want)
+	}
+	if len(d.Warnings) != 1 || !strings.HasPrefix(d.Warnings[0], ReasonAdapterMissing+": ") ||
+		!strings.Contains(d.Warnings[0], ".claude/rules/tracker-beads.md") {
+		t.Errorf("warnings = %q", d.Warnings)
+	}
+	writeFile(t, filepath.Join(plugin, "rules", "tracker-beads.md"), sectionWith(beadsWorktree))
+	if c, d := LoadConventionDiagnosed(main, "beads", plugin); !c.Declared || len(d.Warnings) != 0 {
+		t.Errorf("plugin stands in: %+v %q", c, d.Warnings)
+	}
+}
+
+func TestOneLine(t *testing.T) {
+	if got := oneLine("a\x1bb\nc"); got != "a?b?c" {
+		t.Errorf("oneLine = %q", got)
+	}
+	if got := oneLine("a\u0085b\u2028c\u2029d"); got != "a?b?c?d" {
+		t.Errorf("oneLine(C1 + separators) = %q", got)
+	}
+	got := oneLine(strings.Repeat("x", 300))
+	if len(got) != 203 || !strings.HasSuffix(got, "...") {
+		t.Errorf("oneLine(300 bytes) = %d bytes %q", len(got), got[len(got)-5:])
+	}
+}
+
+// TestLoadConvention_NearMissesAreLoud pins lets-puvic's strictness: a naming line
+// that is almost a declaration refuses, an unreadable file refuses, a naming line
+// LETS does not read is named, and prose that mentions a key stays prose.
+func TestLoadConvention_NearMissesAreLoud(t *testing.T) {
+	const dir = "<dir>"
+	board := func(body string) string { return "# board\n\n## Worktree\n\n" + body + "\n" }
+	boardRel, adapterRel := ".claude/rules/tracker-planfix-mcp.board.md: ", ".claude/rules/tracker-planfix-mcp.md: "
+	isFallback := func(t *testing.T, c Convention) {
+		t.Helper()
+		if c.Declared || c.Branch != DefaultBranch || c.WorktreeBranch != DefaultWorktreeBranch || c.Source["branch"] != SourceDefault {
+			t.Errorf("want the fallback convention: %+v", c)
+		}
+	}
+	invalidAt := func(prefix string) func(*testing.T, Convention, Diagnosis) {
+		return func(t *testing.T, c Convention, d Diagnosis) {
+			if !strings.HasPrefix(d.Invalid, prefix) || !slices.Contains(d.Reasons, ReasonConventionDeclarationInvalid) {
+				t.Errorf("invalid = %q (want prefix %q), reasons = %v", d.Invalid, prefix, d.Reasons)
+			}
+			isFallback(t, c)
+		}
+	}
+	unreadIn := func(rel string) func(*testing.T, Convention, Diagnosis) {
+		return func(t *testing.T, c Convention, d Diagnosis) {
+			if d.Invalid != "" || !slices.Contains(d.Reasons, ReasonLinesUnread) {
+				t.Errorf("invalid = %q, reasons = %v", d.Invalid, d.Reasons)
+			}
+			if len(d.Warnings) != 1 || !strings.HasPrefix(d.Warnings[0], ReasonLinesUnread+": "+rel) {
+				t.Errorf("warnings = %q", d.Warnings)
+			}
+			if c.Branch != DefaultBranch {
+				t.Errorf("an unread line must not take effect: %+v", c)
+			}
+		}
+	}
+	declared := func(t *testing.T, c Convention, d Diagnosis) {
+		if d.Invalid != "" || !c.Declared || c.Branch != "feature/pwa-{id}" || c.Source["branch"] != SourceBoard || len(d.Warnings) != 0 {
+			t.Errorf("prose must stay prose: %+v invalid=%q warnings=%q", c, d.Invalid, d.Warnings)
+		}
+	}
+	cases := []struct {
+		name, adapter, board string
+		check                func(*testing.T, Convention, Diagnosis)
+	}{
+		{"no period", "", board("branch: `feature/pwa-{id}`"), func(t *testing.T, c Convention, d Diagnosis) {
+			invalidAt(boardRel)(t, c, d)
+			if !strings.Contains(d.Invalid, "branch:") {
+				t.Errorf("invalid = %q must name the key", d.Invalid)
+			}
+		}},
+		{"no backticks", "", board("branch: feature/pwa-{id}."), invalidAt(boardRel)},
+		{"list marker", "", board("- branch: `feature/pwa-{id}`."), invalidAt(boardRel)},
+		{"other heading", "", "# board\n\n## Branches\n\nbranch: `feature/pwa-{id}`.\n", unreadIn(".claude/rules/tracker-planfix-mcp.board.md")},
+		{"second Worktree section", "", "# board\n\n## Worktree\n\nnothing.\n\n## Worktree\n\nbranch: `feature/pwa-{id}`.\n", unreadIn(".claude/rules/tracker-planfix-mcp.board.md")},
+		{"adapter other heading", "# adapter\n\n## Branches\n\nbranch: `task/{id}`.\n", "", unreadIn(".claude/rules/tracker-planfix-mcp.md")},
+		{"board is a directory", "", dir, invalidAt(boardRel)},
+		{"adapter is a directory", dir, "", func(t *testing.T, c Convention, d Diagnosis) {
+			invalidAt(adapterRel)(t, c, d)
+			if slices.Contains(d.Reasons, ReasonAdapterMissing) {
+				t.Errorf("an unreadable adapter is not a missing one: %v", d.Reasons)
+			}
+		}},
+		{"control byte in parser error", "", board("id: `[\x1b`."), func(t *testing.T, c Convention, d Diagnosis) {
+			invalidAt(boardRel)(t, c, d)
+			if strings.ContainsFunc(d.Invalid, func(r rune) bool { return r < 0x20 }) {
+				t.Errorf("invalid = %q carries a control byte", d.Invalid)
+			}
+		}},
+		{"beads adapter prose", "", board("`branch:` / `worktree-branch:` are the names LETS creates.\nid: `[0-9]+`.\nbranch: `feature/pwa-{id}`."), declared},
+		{"TEMPLATE bullets", "", board("- **`id:`** - one RE2 fragment matching a task id.\n- **`branch:`** / **`worktree-branch:`** - the branches LETS creates.\nid: `[0-9]+`.\nbranch: `feature/pwa-{id}`."), declared},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			main := t.TempDir()
+			put := func(path, content string) {
+				if content == dir {
+					if err := os.MkdirAll(path, 0o755); err != nil {
+						t.Fatal(err)
+					}
+					return
+				}
+				writeFile(t, path, content)
+			}
+			adapter := tc.adapter
+			if adapter == "" {
+				adapter = "# adapter\n"
+			}
+			put(adapterFile(main, "planfix-mcp"), adapter)
+			if tc.board != "" {
+				put(boardFile(main, "planfix-mcp"), tc.board)
+			}
+			c, d := LoadConventionDiagnosed(main, "planfix-mcp", "")
+			tc.check(t, c, d)
+		})
 	}
 }

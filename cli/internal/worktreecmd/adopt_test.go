@@ -220,6 +220,18 @@ func TestAdoptTask_BoardConventionAndUndeclared(t *testing.T) {
 	if _, err := os.Stat(taskFile(repo2, "lets-abc-something")); !os.IsNotExist(err) {
 		t.Error("undeclared convention must write no task file")
 	}
+
+	// a board template without id: is no grammar - adopt reads no id off the branch (lets-puvic).
+	repo3, wt3 := adoptRepo(t, "feature/lets-abc-something")
+	installAdapter(t, repo3, "beads", "links: `.beads/.env` (0600).")
+	mustWrite(t, filepath.Join(repo3, ".claude", "rules", "tracker-beads.board.md"), "## Worktree\n\nbranch: `feature/{id}-{slug}`.\n", 0o644)
+	res, err = worktreecmd.Adopt(context.Background(), wt3, worktreecmd.AdoptOptions{})
+	if err != nil || res.Task != nil {
+		t.Errorf("board template without id: err=%v task=%+v", err, res.Task)
+	}
+	if _, err := os.Stat(taskFile(repo3, "feature/lets-abc-something")); !os.IsNotExist(err) {
+		t.Error("a board template without id: must write no task file")
+	}
 }
 
 func TestAdoptTask_DetachedHeadWritesNothing(t *testing.T) {

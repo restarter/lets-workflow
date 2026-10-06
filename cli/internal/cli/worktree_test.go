@@ -219,3 +219,67 @@ func TestWorktreeCreate_FailureExitCode(t *testing.T) {
 	// Silence unused-import warning in some Go toolchains.
 	_ = fmt.Sprintf
 }
+
+// TestWorktreeBranchName_WarnsOnStderr: human mode keeps stdout the bare branch and
+// says each dropped declaration on stderr; --json carries it in steps[] (lets-puvic).
+func TestWorktreeBranchName_WarnsOnStderr(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("CLAUDE_PLUGIN_ROOT", "")
+	repo := initTestRepo(t)
+	rules := filepath.Join(repo, ".claude", "rules")
+	if err := os.MkdirAll(rules, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for path, body := range map[string]string{
+		filepath.Join(repo, ".lets", ".env"):                 "LETS_TRACKER=planfix-mcp\n",
+		filepath.Join(rules, "tracker-planfix-mcp.md"):       "# adapter\n",
+		filepath.Join(rules, "tracker-planfix-mcp.board.md"): "# board\n\n## Worktree\n\nbranch: `feature/pwa-{id}`.\n",
+	} {
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	title := filepath.Join(t.TempDir(), "title.txt")
+	if err := os.WriteFile(title, []byte("Fix login"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	const warn = "convention_templates_without_id: "
+
+	stdout, stderr, err := runWorktreeCmd(t, repo, "branch-name", "--task", "49514", "--title-file", title)
+	if err != nil {
+		t.Fatalf("err=%v stderr=%s", err, stderr)
+	}
+	if stdout != "feature/pwa-49514\n" {
+		t.Errorf("stdout = %q, want the bare branch", stdout)
+	}
+	if !strings.Contains(stderr, "lets: "+warn) {
+		t.Errorf("stderr = %q, want the templates-without-id warning", stderr)
+	}
+
+	stdout, stderr, err = runWorktreeCmd(t, repo, "branch-name", "--task", "49514", "--title-file", title, "--json")
+	if err != nil {
+		t.Fatalf("--json: err=%v stderr=%s", err, stderr)
+	}
+	if stderr != "" {
+		t.Errorf("--json: stderr = %q, want empty", stderr)
+	}
+	var got map[string]any
+	if err := json.Unmarshal([]byte(stdout), &got); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout)
+	}
+	steps, _ := got["steps"].([]any)
+	found := false
+	for _, s := range steps {
+		m, _ := s.(map[string]any)
+		msg, _ := m["message"].(string)
+		if m["status"] == "warn" && strings.HasPrefix(msg, warn) {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("--json: steps %v hold no %s warn", steps, warn)
+	}
+}

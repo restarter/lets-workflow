@@ -78,6 +78,8 @@ func TestRecord_UndeclaredConventionSkipsBranchesLoudly(t *testing.T) {
 	repo := initRepo(t)
 	mustMkdir(t, filepath.Join(repo, ".lets", "sessions"))
 	installAdapter(t, repo, "beads", "links: `.beads/.env` (0600).") // no id: - undeclared
+	// a board template without id: is no grammar either (lets-puvic)
+	mustWrite(t, filepath.Join(repo, ".claude", "rules", "tracker-beads.board.md"), "## Worktree\n\nbranch: `feature/{id}-{slug}`.\n", 0o644)
 	runIn(t, repo, "git", "branch", "feature/lets-und1-work")
 	mustWrite(t, taskFile(repo, "feature/lets-und1-work"), "task: lets-und1\n", 0o600)
 	res, err := worktreecmd.TaskRecord(context.Background(), repo, worktreecmd.RecordOptions{Tasks: []string{"lets-und1"}})
