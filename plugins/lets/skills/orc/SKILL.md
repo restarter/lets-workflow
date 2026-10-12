@@ -11,7 +11,7 @@ Talk to the repo's orchestrator or a named peer session: `ask` / `ping` / `read`
 
 ## Args
 
-`verb=ask|ping|read|tell|who|standing target="<name>" text=<rest> [footer=none] [--yes] [via=hub]` - `target` is optional for `ask` / `ping` (default: this chat's orchestrator) and REQUIRED for `tell`, quoted. `--yes` (the user typed it) skips the Send? question in Step 4, not the message itself - see the Preview gate. `via=hub` is passed only by `/lets:hub`, never typed or inferred. `session=` / `repo_index=` (an older caller) are ignored: a peer is addressed by name. From natural language: map the request to a verb (a question for an answer -> `ask`; an FYI -> `ping` or `tell`; "what did X say" -> `read`; "who is working" -> `who`; "let workers talk to me without asking" / "stop that" -> `standing on` / `standing off`). Any other verb: say so and stop.
+`verb=ask|ping|read|tell|who|standing target="<name>" text=<rest> [footer=none] [--yes] [via=hub]` - `target` is optional for `ask` / `ping` (default: this chat's orchestrator) and REQUIRED for `tell`, quoted. `--yes` (the user typed it) skips the Send? question in Step 4, not the message itself - see the Preview gate. `via=hub` is passed only by `/lets:hub`, never typed or inferred. An older caller's session / repo-index args are ignored: a peer is addressed by name. From natural language: map the request to a verb (a question for an answer -> `ask`; an FYI -> `ping` or `tell`; "what did X say" -> `read`; "who is working" -> `who`; "let workers talk to me without asking" / "stop that" -> `standing on` / `standing off`). Any other verb: say so and stop.
 
 | verb | sends | waits | target required |
 |---|---|---|---|

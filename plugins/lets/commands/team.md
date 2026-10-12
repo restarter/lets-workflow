@@ -68,23 +68,23 @@ git status --short
 - Any other `--backend` value -> **Refused**, naming the value. Stop.
 - No `--backend` -> resolve the launcher the way `commands/worktree.md` Step C3.5 does (`{LETS_LAUNCHER}`: `terminal` | `cmux` | `tmux` | `orca`; an unrecognized value -> `terminal` with one line naming it). `orca` -> `lets orca status --json`: `running=true` -> the Orca addon (`## Run (backend orca)`); otherwise C3.5's chain - `cmux` when `uname -s` is `Darwin` and `command -v cmux` succeeds, else `terminal` - with one line naming the reason.
 
-**Guard 4: orchestrator (before any launch).** Every worker is bound to this session, so this session is a registered orchestrator before the first worker starts:
+**Guard 4: orchestrator (before any launch).** Every worker is bound to this session, so this session is a recorded orchestrator - its own registry name in the merge-branch task-state - before the first worker starts:
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 lets peers orchestrator --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" --json
 ```
 
-- `source=self` (already an orchestrator, e.g. from `/lets:start --main`) -> reuse it; `<lead>` = `target.name`.
-- Anything else -> register:
+- a non-null `self_record` (already recorded, e.g. by `/lets:start --main`) -> reuse it; `<lead>` = `self_record.name`.
+- `self_record` null -> record this session's own name:
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-lets peers role set orchestrator --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" --json
+lets worktree task-state set --self-orchestrator --json
 ```
 
-  `granted=true` -> re-run `lets peers orchestrator` above; it must now return `source=self`; `<lead>` = `target.name`.
-- Any failure - no `lets` binary, `granted=false` (`name_held`, `orchestrator_needs_name`, `session_not_in_registry`, ...), or `source` still not `self` -> **Refused:** "This session cannot be the team's orchestrator ({reason}) - name this session with /rename or run from /lets:start --main." Stop.
+  written -> re-run `lets peers orchestrator` above; `self_record` must now be non-null; `<lead>` = `self_record.name`.
+- Any failure - no `lets` binary, `error.kind=orchestrator_needs_name` (this session has no name), another failed write, or `self_record` still null -> **Refused:** "This session cannot be the team's orchestrator ({reason}) - name this session with /rename <name>, or run from /lets:start --main." Stop.
 
 **Conflict guard (after Step R2 selects tasks).** Read every `.lets/execution/team-*.json` whose `status` is not `completed` or `stopped`, by its `backend`:
 
@@ -247,7 +247,7 @@ Write the run record `.lets/execution/team-<run>.json` (`<run>` = `YYYYMMDD-HHMM
 
 For each task, in order:
 
-1. **Still the orchestrator.** Re-run `lets peers orchestrator --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" --json`; anything but `source=self` with `target.name` = `<lead>` -> STOP the run before this launch (never an unbound worker) and keep the record as it is.
+1. **Still the orchestrator.** Re-run `lets peers orchestrator --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" --json`; anything but a non-null `self_record` with `self_record.name` = `<lead>` -> STOP the run before this launch (never an unbound worker) and keep the record as it is.
 2. **Names from Go.** Write the task title with the Write tool to `.lets/cache/title-<session6>-<task-id>.txt` (6 = first chars of `$CLAUDE_CODE_SESSION_ID`; the title is untrusted text and never typed into a shell), then:
 
 ```bash
@@ -389,7 +389,7 @@ Skill(skill: "lets:member-run", args: "op=spawn scope=<c> name=<name> role=lets:
 ### Step M2: The Whole Roster (`spawn --roster`)
 
 1. Every roster row except `lead` whose name is not live in the registry is a candidate; a row the registry judges `unknown` is named and skipped.
-2. A **surviving pane**: a candidate whose `<c>-<name>` session still runs (Step M0's `lets peers who` test). It may be re-used only when exactly one live session carries that name and its `send` is `orca` or `claude`.
+2. A **surviving pane**: a candidate whose `<c>-<name>` session still runs (Step M0's `lets peers who` test). It may be re-used only when exactly one live session carries that name.
 3. One confirm, naming the count and each `name (model)`:
 
 ```
@@ -684,7 +684,7 @@ Append `Retired <YYYY-MM-DD>: disbanded by <who>` to the team file's `## 8. Deci
 ## Rules
 
 - **Main checkout only** - a team run starts from the main checkout, never a worktree
-- **Orchestrator first** - this session is a registered orchestrator before the first worker starts, and every launch re-checks it
+- **Orchestrator first** - this session is a recorded orchestrator before the first worker starts, and every launch re-checks it
 - **Named and bound** - every worker session carries `--name '<worker_name>'` and `--orc="<lead>"`
 - **Cut from origin** - every worker branch is cut from `origin/{LETS_MERGE_BRANCH}`, never the local merge branch
 - **One worker per task** - a live record listing a task blocks a second run on it; stale legacy records never block

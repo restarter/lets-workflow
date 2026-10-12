@@ -13,9 +13,10 @@ var (
 	orcSkillCall = regexp.MustCompile(`Skill\(\s*skill:\s*"lets:orc"\s*,\s*args:\s*"((?:[^"\\]|\\.)*)"`)
 	orcVerbArg   = regexp.MustCompile(`\bverb=([a-z-]+|<verb>)`)
 	peerSendSM   = regexp.MustCompile(`SendMessage\(\s*\{?\s*to\s*[:=]\s*"([^"]*)"`)
-	// peerSendBanned are retired send forms - forbidden in EVERY file, the orc skill
-	// included (lets-0xsw2): a peer message goes through SendMessage only.
-	peerSendBanned = []string{"lets peers tell", "terminal send"}
+	// peerSendBanned are retired send forms and v0.10.0 steps - forbidden in EVERY
+	// file, the orc skill included (lets-0xsw2): a peer message goes through
+	// SendMessage only, and a reply arrives as a cross-session message.
+	peerSendBanned = []string{"lets peers tell", "terminal send", "lets peers frame", "lets peers wait"}
 	// peerSendLits are send forms that live only in the orc skill.
 	peerSendLits = []string{"notify_when_idle"}
 	// orcSkillMust are the orc skill's contract lines: the native send with its idle
@@ -24,9 +25,6 @@ var (
 	// the targets that never use the grant).
 	orcSkillMust = []string{"SendMessage(", "notify_when_idle", "ListAgents", "held for approval in", "refused by", "expired unapproved in",
 		"(<n>/3)", "only the harness envelope", "who --orc", "never use the grant"}
-	// orcSkillBanned are v0.10.0 steps the orc skill no longer runs (hub.md and
-	// artifact-path still name frame until the hub moves off it).
-	orcSkillBanned = []string{"lets peers frame", "lets peers wait"}
 
 	orcOfferLabel  = regexp.MustCompile(`label:\s*"([^"]*[Oo]rchestrator[^"]*)"`)
 	orcOptionsOpen = regexp.MustCompile(`options:\s*\[`)
@@ -134,16 +132,11 @@ func lintOrcFiles(files map[string]string) []string {
 			bad = append(bad, rel+": the alias delegates to the orc skill and sends nothing itself")
 		}
 		// 6: the orc skill's contract: the native send, the liveness check, the
-		// delivery-notice result lines and the standing-grant guards; no v0.10.0 step
+		// delivery-notice result lines and the standing-grant guards
 		if rel == "skills/orc/SKILL.md" {
 			for _, must := range orcSkillMust {
 				if !strings.Contains(body, must) {
 					bad = append(bad, rel+": the orc skill must hold "+must)
-				}
-			}
-			for _, gone := range orcSkillBanned {
-				if strings.Contains(body, gone) {
-					bad = append(bad, rel+": the orc skill no longer runs "+gone)
 				}
 			}
 		}
@@ -267,6 +260,12 @@ func TestOrcLint(t *testing.T) {
 	}
 	if len(mutate("skills/orc/SKILL.md", "lets peers frame --to-session x")) == 0 {
 		t.Error("mutation: a frame step in the orc skill must fail the lint")
+	}
+	if len(mutate("commands/hub.md", "lets peers frame --to-session x")) == 0 {
+		t.Error("mutation: a frame step in hub.md must fail the lint")
+	}
+	if len(mutate("commands/start.md", "lets peers wait --to-session x")) == 0 {
+		t.Error("mutation: a wait step in any command must fail the lint")
 	}
 	if len(mutate("commands/done.md", "lets peers tell x")) == 0 {
 		t.Error("mutation: a peer send in done.md must fail the lint")

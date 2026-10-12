@@ -117,17 +117,17 @@ done
 
 Report: branch, uncommitted changes, recent commits. **On a `STRAY REVIEW RESTORE` line**, tell the user in one line: a PR review did not finish restoring, `git checkout <ref>` returns them, and a listed `stash:` is still in `git stash list`. Report only - never act: `.lets/` is shared by every worktree of this repo, so the stray may belong to a session that is still running. **If the repo has no commits yet** (the `else` branch above fires), that's fine — say so in plain text; offer `git commit --allow-empty -m "chore: initial setup"` if the user wants an anchor for `git log` to work later. **Don't** raise `/lets:init` here (it's a separate concern) and **don't** treat the missing HEAD as a fatal error.
 
-**Orchestrator pointer (worktree only).** Only when `git rev-parse --path-format=absolute --git-dir` differs from `git rev-parse --path-format=absolute --git-common-dir`, and never in a spawned `--flow` / `--auto` run (a `.lets/cache/pipeline-state-<id>` marker exists, or AUTO MODE is active). When it runs, Read `${CLAUDE_PLUGIN_ROOT}/protocol/peers.md` first unless its text is in your current context (bound sibling sessions, `--repo-index`):
+**Orchestrator pointer (worktree only).** Only when `git rev-parse --path-format=absolute --git-dir` differs from `git rev-parse --path-format=absolute --git-common-dir`, and never in a spawned `--flow` / `--auto` run (a `.lets/cache/pipeline-state-<id>` marker exists, or AUTO MODE is active). When it runs, Read `${CLAUDE_PLUGIN_ROOT}/protocol/peers.md` first unless its text is in your current context (the peers carve-out):
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 command -v lets >/dev/null 2>&1 && lets peers orchestrator --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" --json 2>/dev/null
 ```
 
-- `bound` / `single` with a live target: `lets peers tail --to-session <target.session> [--repo-index <target.repo_index>] --addressed-to-session "$CLAUDE_CODE_SESSION_ID" --count-only --json 2>/dev/null` (the index only when the target carries one - a bound orchestrator in a sibling repo) returns `addressed_to_me{count, last_at}` and no text. Render `Orchestrator: {name} ({bound | the only one alive}, {target.state})`, plus `{N} message(s) from {name} - /lets:orc read` when the count is non-zero. No peer text enters this session unless the user asks.
+- `bound` / `single` with a `target`: render `Orchestrator: {target.name} ({bound | the only one alive}, {target.state})`. No peer text enters this session unless the user asks (`/lets:orc read`).
 - `ambiguous`: `Orchestrators: {name (scope)}, ... - this branch is not bound; /lets:start <id> --orc="<name>" binds it`.
 - bound but not alive: `Orchestrator: {name} (bound, not alive)`. `none`: `no orchestrator alive`. No binary or a stub reason: say nothing.
-- a `refused[]` entry with no `target`: `Orchestrator: {name} ({reason})` plus the `hint` when present. Nothing is sent and no offer is shown.
+- a `refused[]` entry with no `target`: `Orchestrator: {refused[0].name} ({refused[0].reason})`, then `remediation` verbatim. Nothing is sent and no offer is shown.
 - `source=none` with `reason=budget_exhausted` or `reason=branch_unreadable`: resolution did not complete (not the same as no orchestrator being alive). Render `Orchestrator: resolution did not complete ({reason})`. Nothing is sent and no offer is shown.
 
 ## Step 3: Orient
@@ -289,34 +289,51 @@ if [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ]; then
 fi
 ```
 
-**Register as an orchestrator (merge-branch only, after the boundary write).** `{SCOPE_FLAG}` is `--scope '<text>'` when `--scope` was given (single-quoted, `'\''` escaping), else empty:
+**Record as an orchestrator (merge-branch only, after the boundary write).** An orchestrator is a recorded NAME: this records THIS session's own registry name - whatever the owner named it - as an `orchestrator:` line of the merge-branch task-state, shared by every worktree. `{SCOPE_FLAG}` is `--orchestrator-scope '<text>'` when `--scope` was given (single-quoted, `'\''` escaping), else empty (an existing scope is kept):
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-command -v lets >/dev/null 2>&1 && lets peers role set orchestrator --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" {SCOPE_FLAG} --json || echo "LETS_BINARY_MISSING"
+if command -v lets >/dev/null 2>&1; then
+  lets worktree task-state set --self-orchestrator {SCOPE_FLAG} --json
+else
+  echo "LETS_BINARY_MISSING"
+fi
 ```
 
-- `granted=true`: nothing to say.
-- `granted=false reason=name_held`: another live session already holds this name (name the holder's `alive` when it is `unknown`):
+- `error.kind=orchestrator_needs_name` (this session has no name): one line - `error.remediation` verbatim (name it with `/rename <name>`, then `/lets:start --main` again); main mode continues unrecorded.
+- any other failed envelope: one line naming `error.kind`; main mode continues unrecorded.
+- `LETS_BINARY_MISSING` or a `not_supported` stub reason: one line, then continue.
+- written: read the record back -
+
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+lets peers orchestrator --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" --json 2>/dev/null
+```
+
+  `self_record.standing` is `on` or `off` (an existing record keeps its grant): one line - `Standing authorization for workers bound to {self_record.name}: {on|off} (/lets:orc standing on|off changes it)`. `self_record.standing` is `""` (a new record, never asked) - ONE question:
 
 ```
 AskUserQuestion(
   questions=[{
-    question: "Session {holder.name} ({holder.session6}, {holder.alive}) is already the orchestrator under this name. What now?",
-    header: "Role",
+    question: "Workers bound to {self_record.name} talk to it without per-message confirmation?",
+    header: "Standing",
     options: [
-      { label: "Rename this session (Recommended)", description: "/rename to another name, then /lets:start --main again; unregistered until then" },
-      { label: "Take over {holder.name}", description: "The other session becomes a plain peer; nothing is sent to it" }
+      { label: "Allow (Recommended)", description: "Bound workers' sends and in-direction replies skip the Send? question; hard gates stay" },
+      { label: "Ask per message", description: "Every message to or from a bound worker asks this session's user first" }
     ],
     multiSelect: false
   }]
 )
 ```
 
-  **Take over** -> rerun `lets peers role set orchestrator --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" {SCOPE_FLAG} --takeover --json`, then the prose hint `/lets:orc tell {holder.name} ...` (tell it, if it should know). **Rename** -> stop registering; main mode continues unregistered.
-- `orchestrator_needs_name`: one line - `role.remediation` verbatim; main mode continues unregistered.
-- `session_not_in_registry`: one line - `role.remediation` verbatim; main mode continues unregistered.
-- `LETS_BINARY_MISSING` or a `not_supported` stub reason: one line, then continue.
+  **Allow** -> `lets worktree task-state set --self-orchestrator --standing on --json`; **Ask per message** -> `lets worktree task-state set --self-orchestrator --standing off --json`. A failed write: one line, the grant stays unasked. The full rule: `${CLAUDE_PLUGIN_ROOT}/protocol/peers.md` `## Standing authorization`.
+
+Then record this session's /clear proof (until lets-gbfpd) - its result is read only for a non-ok envelope, printed as one line:
+
+```bash
+LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
+command -v lets >/dev/null 2>&1 && lets peers role set orchestrator --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" --json
+```
 
 Invoke `Skill(skill: "lets:orient", args: "caller=start")` - with no active task it degrades to branch + no-task + In flight + Next up + Project, which IS the PM triage surface. Keep it short - if the tracker has a deeper native dashboard, point the user at it in one line.
 

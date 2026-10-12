@@ -52,20 +52,9 @@ func newPeersWhoCmd() *cobra.Command {
 			return err
 		},
 	}
-	// v0.10.0 flags (--role, --prune, --probe-orca, --repo) are accepted and ignored:
-	// declared hidden (a markdown invocation still names them until the commands are
-	// updated), and any other unknown flag passes the whitelist.
+	// v0.10.0 flags (--role, --prune, --probe-orca, --repo) pass the whitelist and are ignored.
 	whitelist(cmd)
 	f := cmd.Flags()
-	var ignoredStr string
-	var ignoredBool bool
-	f.StringVar(&ignoredStr, "role", "", "Ignored (v0.10.0)")
-	f.BoolVar(&ignoredBool, "prune", false, "Ignored (v0.10.0)")
-	f.BoolVar(&ignoredBool, "probe-orca", false, "Ignored (v0.10.0)")
-	f.StringVar(&ignoredStr, "repo", "", "Ignored (v0.10.0)")
-	for _, name := range []string{"role", "prune", "probe-orca", "repo"} {
-		_ = f.MarkHidden(name)
-	}
 	f.StringVar(&o.Cwd, "cwd", "", "Checkout to inspect (default: current directory)")
 	f.StringVar(&o.Orc, "orc", "", "Only the sessions whose branch is bound to this orchestrator name")
 	f.StringVar(&o.ExcludeSession, "exclude-session", "", "Leave this session id out")

@@ -43,11 +43,10 @@ The caller passes `caller=status|start|backlog` (default `status`).
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-ls "$LETS_PROJECT_ROOT/.lets/sessions/peers/"*.role >/dev/null 2>&1 && echo PEER_EVIDENCE=roles
 lets peers who --exclude-session "$CLAUDE_CODE_SESSION_ID" --timeout-ms 2500 --json 2>/dev/null || echo '{"ok":false}'
 ```
 
-Evidence = `PEER_EVIDENCE=roles`, or at least one row in `peers`. With evidence: render `## Peers` (Step 6) plus one line per `degraded[]` entry. Without evidence: caller `status` prints only the degraded line(s) (nothing when every source is healthy); callers `start` / `backlog` omit the block. `{"ok":false}` (no binary, a stub) counts as no evidence and no degraded line.
+Evidence = at least one row in `peers`. With evidence: render `## Peers` (Step 6) plus one line per `degraded[]` entry. Without evidence: caller `status` prints only the degraded line(s) (nothing when every source is healthy); callers `start` / `backlog` omit the block. `{"ok":false}` (no binary, a stub) counts as no evidence and no degraded line.
 
 ## Step 3: In flight
 

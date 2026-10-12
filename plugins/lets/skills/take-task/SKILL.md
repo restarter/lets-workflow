@@ -110,7 +110,7 @@ lets worktree task-state set --clear-origin {ORC_FLAG} --json
 lets peers role set worker --task "<task-id>" --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" --json
 ```
 
-The first clears `origin:` and applies a requested orchestrator binding (an explicit `--orc` wins over the carried one); the second registers this session as the task's worker. Each failure is Step 5's one-line report - never hidden. Then rewrite the team file's `## 7. Current task` section (`.lets/teams/<team>.md`; the lead is its only writer): the task as **Title** (`id`), its branch, the phase, the next step, and `Resume artefacts:`. Then Step 6.
+The first clears `origin:` and applies a requested orchestrator binding (an explicit `--orc` wins over the carried one); the second records this session's /clear proof (until lets-gbfpd). Each failure is Step 5's one-line report - never hidden. Then rewrite the team file's `## 7. Current task` section (`.lets/teams/<team>.md`; the lead is its only writer): the task as **Title** (`id`), its branch, the phase, the next step, and `Resume artefacts:`. Then Step 6.
 
 ### Step 3: Worktree Check
 
@@ -210,7 +210,7 @@ fi
 On `ok=false` surface `error.message` - the claim succeeded but the boundary file did not, so `/lets:done` cannot measure the task until it is fixed.
 
 - **Orchestrator binding (`orc="<name>"` in the args, from detect-task's `--orc` strip).** Pass it as `{ORC_FLAG}`; Go validates the name and a refusal is one line with nothing written. A trunk-mode claim (HEAD is `{LETS_MERGE_BRANCH}`) ignores it with one line - the merge-branch never carries a binding. When the envelope reports `rebound.from`, say in one line that this branch moved from that orchestrator to the new one.
-- **Worker role.** The second call registers this session as the task's worker so orchestrators see it in `lets peers who`. A non-ok envelope (e.g. `session_not_in_registry`) is one line - never hidden, a silent failure leaves the worker unregistered. Without the binary the no-binary branch skips it; say so in one line.
+- **Session proof.** The second call records this session's /clear proof (until lets-gbfpd): the SessionStart hook proves a later `/clear` re-mint with it. Orchestrators see the worker through the registry and its branch's `orc:` binding, not through this call. A non-ok envelope (e.g. `session_not_in_registry`) is one line - never hidden, a silent failure leaves the next `/clear` unprovable. Without the binary the no-binary branch skips it; say so in one line.
 
 ### Step 6: Context Recovery (existing branch)
 
