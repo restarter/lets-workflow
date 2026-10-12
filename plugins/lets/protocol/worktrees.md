@@ -39,13 +39,14 @@ A worktree may live anywhere: `lets worktree create` puts it in `.worktrees/`, O
 | `session: <sha> <sid>` | read by `/lets:end`; refreshed by the SessionStart hook on a new session |
 | `origin:` | adopt derived the id from the branch or directory name; probed once before use; cleared on claim |
 | `orc:` | a worker's orchestrator binding; never on the merge-branch |
+| `session_proof: <sid> <pid> <started-ms>` | the process that held `session:` when Go wrote it - the proof a `/clear` carry needs; written only by Go beside every Go `session:` write, never by markdown |
 
 - detect-task reads the file first; every reader cross-checks against a live anchor (tracker status on the merge-branch, git ancestry, the session-id) and degrades loudly.
 - Written only through `lets worktree task-state` (merge-write under a lock); a writer without the binary replaces only the keys it owns and keeps every other line. `/lets:start` rewrites it.
 
 ## Standing-team worktree
 
-`team_<callsign>` (dir and branch), created by `/lets:team create`, claimed by `.lets/teams/<callsign>.md`; its lead session is `<callsign>-lead`, recorded by `lets members` and claimed by `/lets:start`. It outlives its tasks: `/lets:start <id>` moves it to the task's branch through `lets worktree switch` (a new branch is cut from `origin/<merge>`); uncommitted work is committed or parked as `wip(<id>): park` - never stashed - and unparked when the task comes back. Removed only by `/lets:team disband`.
+`team_<callsign>` (dir and branch), created by `/lets:team create`, claimed by `.lets/teams/<callsign>.md`; its lead session is named by the team file's `lead_name` (`<repo>-<callsign>-lead` for a new team); `lets worktree info` reports `team_lead`. It outlives its tasks: `/lets:start <id>` moves it to the task's branch through `lets worktree switch` (a new branch is cut from `origin/<merge>`); uncommitted work is committed or parked as `wip(<id>): park` - never stashed - and unparked when the task comes back. Removed only by `/lets:team disband`.
 
 ## Remove safety nets
 

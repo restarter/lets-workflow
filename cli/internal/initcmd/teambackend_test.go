@@ -225,14 +225,15 @@ func TestTeamBackend_Members(t *testing.T) {
 		t.Fatal(err)
 	}
 	step6 := sectionSpan(string(s), "\n## Step 6: Take Task\n")
-	claim := strings.Index(step6, "lets members lead --claim --scope")
+	roster := strings.Index(step6, "`Respawn the roster?  /lets:team spawn --roster`")
 	take := strings.Index(step6, `Skill(skill: "lets:take-task"`)
-	if claim < 0 || take < 0 || claim > take {
-		t.Errorf("start.md claims the team lead before take-task (claim=%d take=%d)", claim, take)
+	if roster < 0 || take < 0 || roster > take || strings.Contains(step6, "lets members") || strings.Contains(step6, "lead_held") {
+		t.Errorf("start.md Step 6 claims no lead - the roster hint stays, then take-task (roster=%d take=%d)", roster, take)
 	}
-	for _, want := range []string{"`lead_held` -> stop", "`registry_unavailable` included", "then continue"} {
-		if !strings.Contains(step6, want) {
-			t.Errorf("start.md's lead claim must state %q", want)
+	step5 := sectionSpan(string(s), "\n## Step 5: ")
+	for _, want := range []string{"`team_lead`", "/rename {team_lead.name}", "never blocking", "**Respawn roster**"} {
+		if !strings.Contains(step5, want) {
+			t.Errorf("start.md Step 5's team paragraph must state %q", want)
 		}
 	}
 }
@@ -313,8 +314,8 @@ func TestTeamBackend_WorktreeTeam(t *testing.T) {
 			t.Errorf("every team --command passes \"$CMD\" from a quoted heredoc: %s", strings.TrimSpace(l))
 		}
 		if strings.Contains(l, "CMD=$(cat <<") {
-			if !strings.Contains(l, "<<'EOF'") || i+1 >= len(teamLines) || !strings.Contains(teamLines[i+1], "--name '<c>-lead' '/lets:start'") {
-				t.Errorf("a CMD heredoc must be quoted and carry --name '<c>-lead': %s", strings.TrimSpace(l))
+			if !strings.Contains(l, "<<'EOF'") || i+1 >= len(teamLines) || !strings.Contains(teamLines[i+1], "--name '<lead_name>' '/lets:start'") {
+				t.Errorf("a CMD heredoc must be quoted and carry --name '<lead_name>': %s", strings.TrimSpace(l))
 			}
 		}
 	}
@@ -364,7 +365,7 @@ func TestTeamBackend_TeamTaskFlow(t *testing.T) {
 	if strings.Contains(step2t, "Stash") || strings.Contains(step2t, "git stash") {
 		t.Error("the team path must never offer or run a stash")
 	}
-	for _, want := range []string{`label: "Commit first"`, `label: "Park"`, `label: "Stay"`, "lets worktree switch --task", "--include '<path>' per confirmed new path", "names only the paths the user confirmed", "`## 7. Current task`", "so Step 5's own write - its `--session-sha`, unguarded - is skipped on this path", "operation_in_progress", "Ignored files are never parked"} {
+	for _, want := range []string{`label: "Commit first"`, `label: "Park"`, `label: "Stay"`, "lets worktree switch --task", "--include '<path>' per confirmed new path", "names only the paths the user confirmed", "`## 7. Current task`", "so Step 5's own session write is skipped on this path", "operation_in_progress", "Ignored files are never parked"} {
 		if !strings.Contains(step2t, want) {
 			t.Errorf("take-task Step 2T must carry %q", want)
 		}
@@ -375,8 +376,8 @@ func TestTeamBackend_TeamTaskFlow(t *testing.T) {
 	if sw < 0 || tail < sw || role < tail {
 		t.Error("Step 2T runs Step 5's tail (clear origin + orc, worker role) after the switch")
 	}
-	if strings.Contains(step2t, "--session-sha") && !strings.Contains(step2t, "its `--session-sha`, unguarded - is skipped") {
-		t.Error("Step 2T must never write session: unguarded")
+	if strings.Contains(step2t, "--session-sha") || !strings.Contains(step2t, "so Step 5's own session write is skipped on this path") {
+		t.Error("Step 2T never writes session: - switch wrote it through the session guard")
 	}
 	if strings.Count(step2t, "lets worktree task-state set") != 1 || strings.Contains(step2t, "task-state set --task") {
 		t.Error("the team path's task-state write passes only what switch did not write")

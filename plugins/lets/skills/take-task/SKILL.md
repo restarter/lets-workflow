@@ -105,7 +105,7 @@ lets worktree switch --task '<task-id>' --title-file .lets/cache/title-<session6
 - `already_on_target` -> "already on it - nothing to switch; the tail below and Step 5 run".
 - `task_state_failed` -> the worktree IS on `{branch}` - say so, then show `error.remediation` (the command that records the task from the session owning the line).
 
-`lets worktree switch` wrote the target branch's task-state (`task`, `start`, `session` through the session guard, `orc` carried from the old branch), so Step 5's own write - its `--session-sha`, unguarded - is skipped on this path. Its tail still runs on the new branch, passing only what switch did not write:
+`lets worktree switch` wrote the target branch's task-state (`task`, `start`, `session` through the session guard, `orc` carried from the old branch), so Step 5's own session write is skipped on this path. Its tail still runs on the new branch, passing only what switch did not write:
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
@@ -211,7 +211,7 @@ else
 fi
 ```
 
-On `ok=false` surface `error.message` - the claim succeeded but the boundary file did not, so `/lets:done` cannot measure the task until it is fixed.
+On `ok=false` surface `error.message` - the claim succeeded but the boundary file did not, so `/lets:done` cannot measure the task until it is fixed. `session_held` (exit 35) -> "another live session owns this task's boundary (`error.message` names it) - the task is claimed, its boundary is not; run /lets:start in that session or after it ends".
 
 - **Orchestrator binding (`orc="<name>"` in the args, from detect-task's `--orc` strip).** Pass it as `{ORC_FLAG}`; Go validates the name and a refusal is one line with nothing written. A trunk-mode claim (HEAD is `{LETS_MERGE_BRANCH}`) ignores it with one line - the merge-branch never carries a binding. When the envelope reports `rebound.from`, say in one line that this branch moved from that orchestrator to the new one.
   - **Worker name.** On a bound claim (`orc=` present, not trunk-mode), read this session's own name with `lets peers who --session "$CLAUDE_CODE_SESSION_ID" --json` (`self.name`, `repo_slug`). When `self.name` is empty or differs from `<repo_slug>-<task-id>`, print ONE line: "Name this session: /rename <repo_slug>-<task-id> - the orchestrator addresses workers by name." Never rename and never block; no binary or a failed call -> say nothing. (A worker an orchestrator launched through Orca cannot be given `--name` at launch - Orca takes no agent arguments.)

@@ -291,7 +291,7 @@ Symlinks: lets={worktree.lets_symlinked} store={worktree.store_linked} ({store_l
 
 ## Create a team
 
-A standing team's worktree `team_<c>` on branch `team_<c>` (`<c>` = the callsign), its team file `.lets/teams/<c>.md`, and ONE session: the lead, named `<c>-lead`, which claims the lead through `/lets:start`. On the orca launcher with Orca running, Orca creates the worktree (so Orca registers it) and opens the lead's terminal (Step T2-orca); every other launcher, and orca when Orca is not running, gets the worktree from Go (Step T2) and a launcher only opens the lead. Members are spawned later by the lead (`/lets:team spawn`).
+A standing team's worktree `team_<c>` on branch `team_<c>` (`<c>` = the callsign), its team file `.lets/teams/<c>.md`, and ONE session: the lead, named `<lead_name>` (`<repo>-<c>-lead` for a new team), which the team file records as its `lead_name`. On the orca launcher with Orca running, Orca creates the worktree (so Orca registers it) and opens the lead's terminal (Step T2-orca); every other launcher, and orca when Orca is not running, gets the worktree from Go (Step T2) and a launcher only opens the lead. Members are spawned later by the lead (`/lets:team spawn`).
 
 ### Step T1: Callsign
 
@@ -301,7 +301,7 @@ A `<callsign>` on the argument is used as given. Otherwise:
 lets worktree team-init --suggest-callsign --json
 ```
 
-Offer its `callsign`; the owner accepts it or types another (a callsign is `[a-z0-9-]`, 1-40 characters, not `run-*`). `--area <a>` is required: missing -> ask in words for one line on what the team owns.
+Offer its `callsign` and its `lead_name`; the owner accepts it or types another (a callsign is `[a-z0-9-]`, 1-40 characters, not `run-*`). `--area <a>` is required: missing -> ask in words for one line on what the team owns.
 
 Before anything is created, check the callsign - a given one and a suggested one alike; it writes nothing:
 
@@ -309,7 +309,7 @@ Before anything is created, check the callsign - a given one and a suggested one
 lets worktree team-init --check --callsign '<c>' --json
 ```
 
-`team_exists` (27) -> the callsign has a team file: its worktree is on disk -> "Reopen a team" below; otherwise (a disbanded team keeps its file as history) pick another callsign. `callsign_live` (34) or a usage error (2) -> pick another callsign. Only an `ok=true` goes on to T2.
+`team_exists` (27) -> the callsign has a team file: its worktree is on disk -> "Reopen a team" below; otherwise (a disbanded team keeps its file as history) pick another callsign. `callsign_live` (34) or a usage error (2) -> pick another callsign. Only an `ok=true` goes on to T2; read its `lead_name` (and print its `warn` step when the long form did not fit) - `<lead_name>` below.
 
 ### Step T2-orca: Create the worktree through Orca
 
@@ -353,7 +353,7 @@ lets worktree create "team_<c>" --branch "team_<c>" --new-branch --base "origin/
 lets worktree team-init --callsign '<c>' --area '<a>' --worktree "<path>" --plugin-root "${CLAUDE_PLUGIN_ROOT}" --json
 ```
 
-`team_exists` (27) or `callsign_live` (34) here means another writer took the callsign after the T1 check (a race): say so and stop, and name the cleanup of the worktree T2 created - `/lets:worktree remove team_<c>`. Read `agent_command` and `orca_agent` from the written file's frontmatter (both default `claude`).
+`team_exists` (27) or `callsign_live` (34) here means another writer took the callsign after the T1 check (a race): say so and stop, and name the cleanup of the worktree T2 created - `/lets:worktree remove team_<c>`. Read `agent_command` and `orca_agent` from the written file's frontmatter (both default `claude`); `<lead_name>` is the envelope's `lead_name` (the file records the same).
 
 ### Step T4: Setup hook
 
@@ -380,36 +380,36 @@ The hook runs only after that yes: cwd = the team worktree, env `TEAM_CALLSIGN=<
 
 ### Step T5: Launch the lead
 
-The launcher resolves as in Step C3.5 (an override, else `$LETS_LAUNCHER`). The lead's command is `{agent_command} --name '<c>-lead' '/lets:start'`; the orca path uses `{orca_agent}` in its place. `agent_command` / `orca_agent` come from the shared, writable team file, so they never go inside a double-quoted argument of this session's own Bash call (a `$(...)`, a backtick or a `"` there would expand here): they cross through a quoted heredoc.
+The launcher resolves as in Step C3.5 (an override, else `$LETS_LAUNCHER`). The lead's command is `{agent_command} --name '<lead_name>' '/lets:start'`; the orca path uses `{orca_agent}` in its place. When this session is a registered orchestrator - the same test as **Orchestrator binding** above: `lets peers orchestrator --session "$CLAUDE_CODE_SESSION_ID" --json` answers `source=self` - the slash command becomes `'/lets:start --orc="<target.name>"'` in every form below (the lead's task branches carry that `orc:` across `lets worktree switch`). `agent_command` / `orca_agent` come from the shared, writable team file, so they never go inside a double-quoted argument of this session's own Bash call (a `$(...)`, a backtick or a `"` there would expand here): they cross through a quoted heredoc.
 
 - **cmux / tmux** (`<launcher>`):
 
   ```bash
   CMD=$(cat <<'EOF'
-  {agent_command} --name '<c>-lead' '/lets:start'
+  {agent_command} --name '<lead_name>' '/lets:start'
   EOF
   )
-  lets <launcher> open "<path>" --name "<c>-lead" --command "$CMD" --json
+  lets <launcher> open "<path>" --name "<lead_name>" --command "$CMD" --json
   ```
 
-- **terminal:** print, for the human to run in a new terminal: `cd "<path>" && {agent_command} --name '<c>-lead' '/lets:start'`
+- **terminal:** print, for the human to run in a new terminal: `cd "<path>" && {agent_command} --name '<lead_name>' '/lets:start'`
 - **orca** (a worktree from T2-orca): the lead's terminal opens in the Orca worktree T2-orca created (now attachable):
 
   ```bash
   CMD=$(cat <<'EOF'
-  {orca_agent} --name '<c>-lead' '/lets:start'
+  {orca_agent} --name '<lead_name>' '/lets:start'
   EOF
   )
-  lets orca terminal --worktree "<path>" --title '<c>-lead' --command "$CMD" --json
+  lets orca terminal --worktree "<path>" --title '<lead_name>' --command "$CMD" --json
   ```
 
   `terminal.launched=true` -> record `terminal.handle` in the team file's Workspace section (`Orca lead terminal: <handle>`). `launched=false` (Orca absent, not running or refusing) -> print its `fallback_command` for a terminal, prefixed with one line naming `reason` - never a worktree create.
 
-cmux / tmux `launched=false` -> print their `fallback_command` the same way. A second lead from an ambiguous success is harmless: its `/lets:start` gets `lead_held` and stops.
+cmux / tmux `launched=false` -> print their `fallback_command` the same way. A second lead from an ambiguous success shares the name; the session guard keeps the boundary with whichever recorded it first.
 
 ### Reopen a team
 
-`/lets:worktree create --team <c>` for a team whose file exists (T3 `team_exists`, or `.lets/teams/<c>.md` present with its worktree on disk) reopens it instead: read `agent_command` / `orca_agent` from the file, show the T5 command for the resolved launcher verbatim, and run it - through the same quoted heredoc - only after the user's yes.
+`/lets:worktree create --team <c>` for a team whose file exists (T3 `team_exists`, or `.lets/teams/<c>.md` present with its worktree on disk) reopens it instead: read `agent_command` / `orca_agent` and `lead_name` from the file (a team file without `lead_name` -> `<c>-lead`), show the T5 command for the resolved launcher verbatim, and run it - through the same quoted heredoc - only after the user's yes.
 
 On orca the T5 orca command applies when `lets orca team-create`'s ps check (or `orca worktree ps`) lists `team_<c>`; a team worktree Orca does not list (created by Go) gets the printed command. The gate:
 
@@ -430,7 +430,7 @@ AskUserQuestion(
 
 A last T4 run that failed makes "Run the setup hook first" the recommended option; that pick goes through T4's display and gate, so the hook still runs only on its own yes.
 
-> **Keep in sync:** the lead's `--name '<c>-lead'` is the session name `lets members` and `/lets:start` read as the team's lead; `lets orca terminal` mirrors `orcacmd.OpenTerminal` (`cli/internal/orcacmd/terminal.go`) and never creates a worktree; `lets orca team-create` mirrors `orcacmd.TeamCreate` (`teamcreate.go`) and is the only Orca create in the team flow.
+> **Keep in sync:** `--name '<lead_name>'` is the session name `lets worktree info` (`team_lead`) and `/lets:team` read as the team's lead; `team-init` derives it; `lets orca terminal` mirrors `orcacmd.OpenTerminal` (`cli/internal/orcacmd/terminal.go`) and never creates a worktree; `lets orca team-create` mirrors `orcacmd.TeamCreate` (`teamcreate.go`) and is the only Orca create in the team flow.
 
 ---
 

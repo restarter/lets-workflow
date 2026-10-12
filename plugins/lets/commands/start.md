@@ -160,7 +160,7 @@ The orient snapshot (Step 3) already shows In flight + Next up - don't repeat th
 - Inform user: "Created task XX, working in feature branch"
 - This keeps traceability without friction
 
-**Team worktree** (`lets worktree info --json` reports a `team`): run Step 6's lead claim FIRST, before offering the moves - a `lead_held` stops the session there. Once this session is the lead, the moves gain one more:
+**Team worktree** (`lets worktree info --json` reports a `team`): read its `team_lead` - `match` `lead` or `unknown` -> nothing; `other` -> one line "This session is `{team_lead.self|unnamed}`, not the team's lead `{team_lead.name}` - /rename {team_lead.name} if it is the lead", never blocking. The moves gain one more:
 
 > - **Respawn roster** -> `Skill(skill: "lets:team", args: "spawn --roster")`; the members of the team file's roster come back, then pick the task here.
 
@@ -170,17 +170,7 @@ Outside a team worktree the moves stay as above - no roster offer.
 
 ## Step 6: Take Task
 
-**Team worktree: claim the lead first.** When `lets worktree info --json` reports a `team`, this session claims that team's lead before take-task:
-
-```bash
-lets members lead --claim --scope '<team>' --json
-```
-
-- `claimed=true` -> continue.
-- `lead_held` -> stop, naming the live lead (`lead.name`, `lead.session`, `lead.status`): continue in that session, or close it and run `/lets:start` again. take-task does not run.
-- Any other failure (`registry_unavailable` included, or no `lets` binary) -> one warning line naming it, then continue.
-
-Already claimed in Step 5 (the team path) -> do not claim again. A task id passed on the argument skipped Step 5: after take-task, print one line - `Respawn the roster?  /lets:team spawn --roster`. No `team` -> skip this paragraph.
+**Team worktree.** A task id passed on the argument skipped Step 5: after take-task, print one line - `Respawn the roster?  /lets:team spawn --roster`. No `team` -> skip this paragraph.
 
 After task is selected, delegate to the **take-task** skill to claim it and prepare the branch: `Skill(skill: "lets:take-task", args: "<task-id>")`.
 
@@ -289,6 +279,8 @@ if [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ]; then
   fi
 fi
 ```
+
+The write can answer exit 35 `session_held`: several orchestrators share `.task-{LETS_MERGE_BRANCH}`, and the session guard keeps it for the live session that recorded it first. Then render one line "the {LETS_MERGE_BRANCH} boundary belongs to `{holder}` - /lets:end in this session will report an approximate range" (`{holder}` from `error.message`), and continue - main mode never stops on it.
 
 **The orchestrator record** (merge-branch only; the envelope of the call above):
 
