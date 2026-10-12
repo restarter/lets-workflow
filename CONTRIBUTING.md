@@ -335,15 +335,15 @@ A `--json` subcommand package owns its typed exit codes (`exit.go`, with a `Test
 
 | Package | Command | Range |
 |---|---|---|
-| `worktreecmd` | `lets worktree` | 10-26; 27-34 reserved for the standing-team verbs |
-| `memberscmd` | `lets members` | 40-49 |
+| `worktreecmd` | `lets worktree` | 10-26; 27-35 reserved for the standing-team verbs |
+| `memberscmd` (retired) | `lets members` (deprecated stub) | 40-49 retired, never reused |
 | `integratecmd` | `lets integrate` | 50-59 (full: a new failure class reuses 55 with its own `error.kind`) |
 
 `0` ok, `1` generic and `2` usage are shared. A new package takes the next free decade and adds a row here.
 
 ### Spawning an agent that writes or persists
 
-An implementer, or any member of a standing team, is spawned, messaged and dismissed ONLY through `skills/member-run/SKILL.md`, with `lets members` as the registry of who is live. A command never calls the `Agent` tool for such a member itself (`TestMemberRun`, `cli/internal/initcmd/memberrun_test.go`, pins the contract; `TestOrcLint` exempts only member-run's and execute.md's own `{agent}` recipient from the peer-send rule). One-shot analysis subagents (`/lets:review`, `/lets:opinion`, ...) are not members.
+An implementer, or any member of a standing team, is spawned, messaged and dismissed ONLY through `skills/member-run/SKILL.md`; `ListAgents` judges who is live and the caller's run record / team file holds `agent_id` and dismissals. A command never calls the `Agent` tool for such a member itself (`TestMemberRun`, `cli/internal/initcmd/memberrun_test.go`, pins the contract; `TestOrcLint` exempts only member-run's and execute.md's own `{agent}` recipient from the peer-send rule). One-shot analysis subagents (`/lets:review`, `/lets:opinion`, ...) are not members.
 
 ### Leaf packages and import direction
 
