@@ -17,7 +17,7 @@ The public source of truth for this standing team. Every member reads it at spaw
 
 **Continuity = files only.** The harness restores no teammate after a lead restart - a member's context dies with it. Every member finding that must survive lands in a file the lead writes (this file, or a path listed under Resume artefacts); a finding that lives only in a reply is lost.
 
-The frontmatter is written once by `lets worktree team-init`. Go reads only `worktree` and `git_dir` (which worktree this team owns, and that the path was not reused); the model reads the rest. Never edit `team`, `worktree` or `git_dir` by hand.
+The frontmatter is written once by `lets worktree team-init`. Go reads only `worktree` and `git_dir` (which worktree this team owns, and that the path was not reused) and `lead_name` (the lead session's name); the model reads the rest. Never edit `team`, `worktree` or `git_dir` by hand.
 
 ## 1. Charter
 

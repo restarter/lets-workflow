@@ -23,6 +23,9 @@ LETS_LAUNCHER=terminal
 
 # Where the workflow rules come from: project | user
 LETS_RULES_SCOPE=project
+
+# How the sessions LETS launches start: default | auto | all-in (empty = default)
+LETS_LAUNCH_MODE=
 ```
 
 | Key | Purpose |
@@ -32,6 +35,7 @@ LETS_RULES_SCOPE=project
 | `LETS_PR_FLOW` | `github` — `/lets:done` pushes and opens a PR via `gh`. `bitbucket` — `/lets:done` pushes and opens a PR via `bbb`; the task stays open until the reviewer merges. `local` — no PR; `/lets:done` merges locally. |
 | `LETS_TRACKER` | The task tracker **adapter**: `beads` (default) or `none`. Selects the `.claude/rules/tracker-<name>.md` that `lets init` installs; commands resolve verbs through it. See [trackers.md](trackers.md). |
 | `LETS_LAUNCHER` | How `/lets:worktree create` opens a new worktree session: `terminal` (default — prints a `cd … && claude` command), `cmux` (a cmux workspace, macOS only), `tmux` (a tmux window/session, Linux + macOS), or `orca` (an [Orca](https://github.com/stablyai/orca) workspace). A preference, not a guarantee: each falls back to `terminal` when its binary/platform is absent (orca falls back to cmux, then terminal). `orca` is an opt-in addon and the one switch for everything Orca-related — the launcher, card status, `/lets:hub`, the team orca backend and `/lets:handoff --send`; with any other value LETS never looks for an Orca binary. `/lets:init` marks a launcher it finds installed as `(detected)` and never offers cmux on Linux. Picking `orca` makes `lets init` write `orca.yaml` (commit it). See [orca.md](orca.md). |
+| `LETS_LAUNCH_MODE` | How the sessions LETS launches - a worker from `/lets:worktree create` or `/lets:team run`, a team's lead - start: `default` (plain `claude`; also what an empty value means), `auto` (`claude --permission-mode auto`) or `all-in` (`claude --permission-mode bypassPermissions` - no harness permission prompts in that session). A `--launch-mode <m>` / `--auto` / `--all-in` flag on the launch beats it. LETS never writes a value on its own (a regen keeps it empty), and `all-in` is only ever your explicit choice - never inferred, never a fallback, never the default; every all-in launch is announced in one line first, and LETS's own gates (push, PR, merge, close, peer sends) still ask. Claude Code holds a message between two sessions when exactly one of them runs in the bypass class, and a session cannot read its own mode - so set this to the class your orchestrator runs in. `/lets:start --main` reminds you when it is unset. You can also set it in `~/.lets/.env` for every project. |
 | `LETS_RULES_SCOPE` | Where this project's workflow rules come from: `project` (its own `.claude/rules/lets-rules.md` copy — the default) or `user` (deliberately no project copy; rules come from the global `~/.claude/rules/lets-rules.md`). Set automatically by `/lets:init` when you pick "Rely on global"; `/lets:update` then leaves the project copy uncreated (`delegated`) instead of restoring it. Any value other than `user` behaves as `project`. |
 
 The first line of the file is `LETS_ENV_VERSION` — that's metadata (which `lets` version last wrote the file), not something you set. Keys you add yourself are preserved across `/lets:init` and `/lets:update`, kept under a `# User-added keys` separator.

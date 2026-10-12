@@ -224,6 +224,9 @@ func bgRow(kind, jobID string) string {
 	return string(b)
 }
 
+// selfParkedBgRow is one background-job row whose parkedJobId equals its own jobId.
+var selfParkedBgRow = `{"sessionId":"` + parkedSID + `","name":"snake-lead","peerProtocol":1,"kind":"bg","jobId":"deadbeef","parkedJobId":"deadbeef"}`
+
 func TestRead_DecodesJobFields(t *testing.T) {
 	plain := `{"sessionId":"` + bgSID + `","name":"MAIN","peerProtocol":1,"startedAt":1760000100000}`
 	s := writeRows(t, map[int]string{3001: parkedRow("bbbbbbbb"), 3002: plain})
@@ -241,6 +244,10 @@ func TestRead_DecodesJobFields(t *testing.T) {
 	s = writeRows(t, map[int]string{3002: bgRow("bg", "bbbbbbbb")})
 	if c, _ = s.Find(bgSID); c.Kind != "bg" || c.JobID != "bbbbbbbb" || c.ParkedJobID != "" {
 		t.Errorf("bg row: %+v", c)
+	}
+	s = writeRows(t, map[int]string{3001: selfParkedBgRow})
+	if e, _ := s.Find(parkedSID); e.Kind != "bg" || e.JobID != "deadbeef" || e.ParkedJobID != "deadbeef" {
+		t.Errorf("row with all three job keys: %+v", e)
 	}
 }
 
@@ -275,7 +282,9 @@ func TestContinuedIn(t *testing.T) {
 		{"parkedJobId is own sid prefix, own has no jobId", map[int]string{3001: parkedRow(bgSID[:8]), 3002: bgRow("bg", "")}, parkedSID, bgSID, false},
 		{"sid not listed", map[int]string{3002: bgRow("bg", "deadbeef")}, other, bgSID, false},
 		{"own not listed", map[int]string{3001: parkedRow("deadbeef")}, parkedSID, other, false},
-		{"sid == own", map[int]string{3001: parkedRow("deadbeef"), 3002: bgRow("bg", "deadbeef")}, parkedSID, parkedSID, false},
+		// a bg row that carries its own job id as parkedJobId: every field matches, so
+		// only the sid == own guard makes it false
+		{"sid == own", map[int]string{3001: selfParkedBgRow}, parkedSID, parkedSID, false},
 	}
 	for _, c := range cases {
 		if got := writeRows(t, c.rows).ContinuedIn(c.sid, c.own); got != c.want {

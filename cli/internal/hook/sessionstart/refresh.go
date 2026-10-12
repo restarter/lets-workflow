@@ -112,8 +112,9 @@ func CarrySession(projectRoot, sessionID string, g taskstate.SessionGuard) (Outc
 // RefreshProof re-records this process in session_proof on resume (`claude -r`: the
 // same id in a new process), so a later /clear in this process still carries. It
 // writes ONLY session_proof (the session: line and its sha stay) and only when the
-// line already names sessionID and g.OwnProof names a pid other than the stored
-// proof's. No file, another session's line, or registry lag writes nothing; it never
+// line already names sessionID and g.OwnProof names another process than the
+// stored proof - another pid, or the same pid with another startedAt (a reused
+// pid). No file, another session's line, or registry lag writes nothing; it never
 // returns a Notice.
 func RefreshProof(projectRoot, sessionID string, g taskstate.SessionGuard) Outcome {
 	if projectRoot == "" || sessionID == "" {
@@ -133,7 +134,7 @@ func RefreshProof(projectRoot, sessionID string, g taskstate.SessionGuard) Outco
 			if own == nil {
 				return nil, errProofSkip
 			}
-			if stored, ok := taskstate.StoredProof(cur); ok && stored.Pid == own.Pid {
+			if stored, ok := taskstate.StoredProof(cur); ok && stored.Pid == own.Pid && stored.Started.Equal(own.Started) {
 				return nil, taskstate.ErrSessionUnchanged
 			}
 			return map[string]string{"session_proof": own.Value()}, nil

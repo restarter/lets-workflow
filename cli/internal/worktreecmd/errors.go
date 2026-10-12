@@ -95,8 +95,9 @@ func ErrNoRemoteBase(merge string) *Error {
 	return &Error{Code: ExitNoRemoteBase, Kind: "no_remote_base", Message: fmt.Sprintf("origin/%s is missing; a new branch is never cut from the local %s", merge, merge), Remediation: "add the origin remote and fetch " + merge}
 }
 
-// ErrSessionHeld - a live foreign session holds the session: line of branch; nothing
-// was written.
+// ErrSessionHeld - the session: line of branch is held by another session, or by one
+// the registry cannot prove ended (switch refuses on any held reason; task-state set
+// only on a live foreign holder); nothing was written.
 func ErrSessionHeld(held *taskstate.HeldError, branch string) *Error {
 	return &Error{Code: ExitSessionHeld, Kind: "session_held", Message: fmt.Sprintf("the session: line of %s is held (%s) by %s", branch, held.Reason, held.Holder), Remediation: held.Holder + " still owns this task's boundary: run this from that session, after it ends, or pick another task", Cause: held}
 }

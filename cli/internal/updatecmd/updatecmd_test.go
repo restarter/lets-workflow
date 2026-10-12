@@ -56,7 +56,7 @@ func scaffold(t *testing.T, envVer, rulesVer, pluginVer, binVer string) (project
 		}
 		// Full canonical key set so Artifact 1's RegenerateEnv reports in-sync
 		// (a missing key would diff → `updated`, not the `in-sync` these tests want).
-		body := "# LETS plugin config\nLETS_ENV_VERSION=" + envVer + "\nLETS_LANGUAGE=English\nLETS_MERGE_BRANCH=main\nLETS_PR_FLOW=local\nLETS_TRACKER=beads\nLETS_LAUNCHER=terminal\nLETS_RULES_SCOPE=project\nLETS_LAUNCH_MODE=default\n"
+		body := "# LETS plugin config\nLETS_ENV_VERSION=" + envVer + "\nLETS_LANGUAGE=English\nLETS_MERGE_BRANCH=main\nLETS_PR_FLOW=local\nLETS_TRACKER=beads\nLETS_LAUNCHER=terminal\nLETS_RULES_SCOPE=project\n"
 		if err := os.WriteFile(filepath.Join(envDir, ".env"), []byte(body), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -1052,7 +1052,7 @@ func TestRun_TrackerRulesUserAuthored_Delegated(t *testing.T) {
 	// copy exists -> a user-authored adapter: emit a delegated (green) tracker-rules
 	// row "left as-is", not silence, not an error (parity with init Step 8b).
 	pr, plug := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0")
-	body := "# LETS plugin config\nLETS_ENV_VERSION=0.6.0\nLETS_LANGUAGE=English\nLETS_MERGE_BRANCH=main\nLETS_PR_FLOW=local\nLETS_TRACKER=custom\nLETS_LAUNCHER=terminal\nLETS_RULES_SCOPE=project\nLETS_LAUNCH_MODE=default\n"
+	body := "# LETS plugin config\nLETS_ENV_VERSION=0.6.0\nLETS_LANGUAGE=English\nLETS_MERGE_BRANCH=main\nLETS_PR_FLOW=local\nLETS_TRACKER=custom\nLETS_LAUNCHER=terminal\nLETS_RULES_SCOPE=project\n"
 	if err := os.WriteFile(filepath.Join(pr, ".lets", ".env"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1075,7 +1075,7 @@ func TestRun_TrackerRulesInvalidName_NoArtifact(t *testing.T) {
 	// A path-traversal LETS_TRACKER is rejected by ValidTrackerName before any
 	// filepath.Join -> no row (Artifact-6 mirrors init Step 8b's guard).
 	pr, plug := scaffold(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0")
-	body := "# LETS plugin config\nLETS_ENV_VERSION=0.6.0\nLETS_LANGUAGE=English\nLETS_MERGE_BRANCH=main\nLETS_PR_FLOW=local\nLETS_TRACKER=../evil\nLETS_LAUNCHER=terminal\nLETS_RULES_SCOPE=project\nLETS_LAUNCH_MODE=default\n"
+	body := "# LETS plugin config\nLETS_ENV_VERSION=0.6.0\nLETS_LANGUAGE=English\nLETS_MERGE_BRANCH=main\nLETS_PR_FLOW=local\nLETS_TRACKER=../evil\nLETS_LAUNCHER=terminal\nLETS_RULES_SCOPE=project\n"
 	if err := os.WriteFile(filepath.Join(pr, ".lets", ".env"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1118,7 +1118,7 @@ func scopeFixture(t *testing.T, scope, projVer, globalVer string) (projectRoot, 
 	if err := os.MkdirAll(envDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	body := "LETS_ENV_VERSION=dev\nLETS_LANGUAGE=English\nLETS_MERGE_BRANCH=main\nLETS_PR_FLOW=local\nLETS_TRACKER=beads\nLETS_LAUNCHER=terminal\nLETS_LAUNCH_MODE=default\n"
+	body := "LETS_ENV_VERSION=dev\nLETS_LANGUAGE=English\nLETS_MERGE_BRANCH=main\nLETS_PR_FLOW=local\nLETS_TRACKER=beads\nLETS_LAUNCHER=terminal\n"
 	if scope != "" {
 		body += "LETS_RULES_SCOPE=" + scope + "\n"
 	}
@@ -1230,9 +1230,8 @@ func TestRun_RulesScopeKeyMigration(t *testing.T) {
 	if err := os.MkdirAll(envDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	// At-current version .env but WITHOUT LETS_RULES_SCOPE (a pre-6th-key file;
-	// LETS_LAUNCH_MODE present, so exactly the one missing key is migrated).
-	old := "LETS_ENV_VERSION=0.6.0\nLETS_LANGUAGE=English\nLETS_MERGE_BRANCH=main\nLETS_PR_FLOW=local\nLETS_TRACKER=beads\nLETS_LAUNCHER=terminal\nLETS_LAUNCH_MODE=default\n"
+	// At-current version .env but WITHOUT LETS_RULES_SCOPE (a pre-6th-key file).
+	old := "LETS_ENV_VERSION=0.6.0\nLETS_LANGUAGE=English\nLETS_MERGE_BRANCH=main\nLETS_PR_FLOW=local\nLETS_TRACKER=beads\nLETS_LAUNCHER=terminal\n"
 	if err := os.WriteFile(filepath.Join(envDir, ".env"), []byte(old), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1278,7 +1277,7 @@ func TestRun_TrackerSwitch_StaleAdapterRemoved(t *testing.T) {
 	pr, plug := scaffoldWithTracker(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0", "beads", "0.6.0", "0.6.0")
 	trackerFile(t, filepath.Join(plug, "rules", "tracker-none.md"), "none", "0.6.0")
 	// The user switches to none by editing .env (the documented path).
-	env := "# LETS plugin config\nLETS_ENV_VERSION=0.6.0\nLETS_LANGUAGE=English\nLETS_MERGE_BRANCH=main\nLETS_PR_FLOW=local\nLETS_TRACKER=none\nLETS_LAUNCHER=terminal\nLETS_RULES_SCOPE=project\nLETS_LAUNCH_MODE=default\n"
+	env := "# LETS plugin config\nLETS_ENV_VERSION=0.6.0\nLETS_LANGUAGE=English\nLETS_MERGE_BRANCH=main\nLETS_PR_FLOW=local\nLETS_TRACKER=none\nLETS_LAUNCHER=terminal\nLETS_RULES_SCOPE=project\n"
 	if err := os.WriteFile(filepath.Join(pr, ".lets", ".env"), []byte(env), 0o644); err != nil {
 		t.Fatal(err)
 	}

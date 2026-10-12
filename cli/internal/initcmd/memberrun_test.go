@@ -331,7 +331,7 @@ func delegatedContractProblems(f map[string]string) []string {
 		}
 	}
 	recovery := sectionSpan(exec, "### 5-D.7 Recovery (a run record exists)")
-	for _, need := range []string{"**Liveness comes from `ListAgents`**", "never from the record", "`dismissed`", "never messaged"} {
+	for _, need := range []string{"**Liveness comes from `ListAgents`**", "never from the record", "`dismissed`", "never messaged", "`{agent}` not listed (a recorded `agent_id` -> first the idle row's path through member-run with `id={agent_id}`; `agent_gone` -> this row)", "and no `agent_id` is recorded (or a correction by `id={agent_id}` returns `agent_gone`)", "or an `agent_id` recorded (sent by id)"} {
 		if !strings.Contains(recovery, need) {
 			add("5-D.7 must judge liveness by ListAgents and never message a dismissed member: " + need)
 		}
@@ -566,6 +566,7 @@ func TestMemberRun(t *testing.T) {
 		{"integrated_source moves on a report", "execute", "it moves only after the lead's commit", "it moves on each report", "only after the lead's commit", 1},
 		{"bare integrated field", "execute", `"integrated_source": null`, `"integrated": null`, "bare integrated", 1},
 		{"addendum heading dropped", "execute", "`## Allowlist addendum`", "`## Extra paths`", "addendum", 1},
+		{"a recorded id is never tried", "execute", "`{agent}` not listed (a recorded `agent_id` -> first the idle row's path through member-run with `id={agent_id}`; `agent_gone` -> this row)", "`{agent}` not listed", "judge liveness by ListAgents", 1},
 		{"dismissed member messaged", "execute", "A member recorded `dismissed` is never messaged.", "A member recorded `dismissed` is asked to report.", "never message a dismissed member", 1},
 		{"parallel allowed alone", "execute", "it needs `--implementers` / `--team`", "it runs alone", "--parallel must need", 1},
 		{"groups inferred", "execute", "The shape is never inferred", "The shape is inferred", "declare parallel groups", 1},

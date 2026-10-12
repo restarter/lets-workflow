@@ -385,6 +385,15 @@ func TestRefreshProof_Resume(t *testing.T) {
 	if o := RefreshProof(dir, sidOwn, guardFor(nil, nil)); o != OutcomeSkipped || readFile(t, p) != body {
 		t.Errorf("registry lag: outcome=%v file:\n%s", o, readFile(t, p))
 	}
+	// the same pid with another startedAt is another process (a reused pid): rewritten
+	reused := guardFor(nil, nil)
+	reused.Self = func(own string) (taskstate.Proof, bool) {
+		return taskstate.Proof{Session: own, Pid: 4242, Started: time.UnixMilli(proofMs + 5000)}, true
+	}
+	if o := RefreshProof(dir, sidOwn, reused); o != OutcomeWritten || !strings.Contains(readFile(t, p), "session_proof: "+sidOwn+" 4242 1790797666911\n") {
+		t.Errorf("same pid, other startedAt: outcome=%v file:\n%s", o, readFile(t, p))
+	}
+	writeTaskFile(t, dir, branch, body)
 	if o := RefreshProof(dir, sidOwn, withSelf(guardFor(nil, nil), ownPid)); o != OutcomeWritten {
 		t.Fatalf("resume: outcome=%v", o)
 	}

@@ -198,6 +198,7 @@ After the task is claimed, suggest renaming the Claude Code session so the statu
 
 - Slug: short, lowercase, dash-separated, derived from the task title (e.g. **Add CHANGELOG step to /lets:done** -> `changelog-step-done`). Keep under ~30 chars; compress long titles to the 2-4 most distinctive words.
 - This is a one-line suggestion, not a gate — continue regardless of whether the user runs it.
+- **Team worktree** (`lets worktree info --json` reports a `team`): never suggest `/rename {slug}` - it would rename the lead away from the team file's `lead_name`, and `team_lead` would read `other` everywhere. Suggest `/rename {team_lead.name}` only when `team_lead.match` is not `lead`; otherwise suggest nothing.
 
 ## Step 8: Task Size Assessment
 
@@ -324,7 +325,7 @@ LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 command -v lets >/dev/null 2>&1 && lets peers role set orchestrator --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" --json
 ```
 
-**Launch mode (lets-d3wu3).** `LETS_LAUNCH_MODE` absent from LETS Config -> one line: "LETS_LAUNCH_MODE is unset - the sessions this orchestrator launches start in `default`; set it to the class this session runs in (`all-in` only when it runs with `--permission-mode bypassPermissions`) - `/lets:init`". A session cannot read its own permission mode, so nothing is inferred; set -> nothing.
+**Launch mode (lets-d3wu3).** `LETS_LAUNCH_MODE` absent from LETS Config (unset or empty - an empty value is never injected) -> one line: "LETS_LAUNCH_MODE is unset - the sessions this orchestrator launches start in `default`; set it to the class this session runs in (`all-in` only when it runs with `--permission-mode bypassPermissions`) - `/lets:init`". A session cannot read its own permission mode, so nothing is inferred; set -> nothing.
 
 Invoke `Skill(skill: "lets:orient", args: "caller=start")` - with no active task it degrades to branch + no-task + In flight + Next up + Project, which IS the PM triage surface. Keep it short - if the tracker has a deeper native dashboard, point the user at it in one line.
 

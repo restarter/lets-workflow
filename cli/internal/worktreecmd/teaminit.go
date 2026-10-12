@@ -67,10 +67,10 @@ func TeamInit(ctx context.Context, dir string, o TeamInitOptions) (*TeamInitResu
 	teamsDir := filepath.Join(mainRoot, ".lets", "teams")
 	leadLive := liveLeads(res, mainRoot)
 	setLead := func(c string) {
-		name, ok := leadName(mainRoot, c)
+		name, why := leadName(mainRoot, c)
 		res.LeadName = name
-		if !ok {
-			res.Steps = append(res.Steps, Step{Status: StepWarn, Message: fmt.Sprintf("the lead name <repo>-%s-lead would exceed the session-name grammar; this team's lead is %s", c, name)})
+		if why != "" {
+			res.Steps = append(res.Steps, Step{Status: StepWarn, Message: why})
 		}
 	}
 

@@ -369,3 +369,26 @@ func TestTeamInit_LaunchMode(t *testing.T) {
 		t.Error("an unknown launch mode wrote a team file")
 	}
 }
+
+// A main checkout whose basename yields no repo slug gets the short <callsign>-lead,
+// and the warn step names that cause, not the grammar.
+func TestTeamInit_NoRepoSlugShortLeadName(t *testing.T) {
+	repo, wt, pluginRoot := teamSetupIn(t, "___")
+	res, err := teamInit(repo, wt, pluginRoot, "snake")
+	if err != nil || res.LeadName != "snake-lead" {
+		t.Fatalf("write: %+v, %v", res, err)
+	}
+	warned := false
+	for _, s := range res.Steps {
+		if s.Status != worktreecmd.StepWarn {
+			continue
+		}
+		if strings.Contains(s.Message, "session-name grammar") {
+			t.Errorf("a missing slug is not a grammar problem: %q", s.Message)
+		}
+		warned = warned || strings.Contains(s.Message, `no repo slug derives from "___"; this team's lead is snake-lead`)
+	}
+	if !warned {
+		t.Errorf("no warn step naming the missing slug: %+v", res.Steps)
+	}
+}

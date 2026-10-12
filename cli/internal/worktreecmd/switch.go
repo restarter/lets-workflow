@@ -97,9 +97,10 @@ var parkSubjectRe = regexp.MustCompile(`^wip(\([^)]*\))?: park$`)
 // before touching anything: not a team worktree (29), an unmerged index
 // (index_unmerged), an operation in progress (operation_in_progress), a detached
 // HEAD (detached_head), the merge-branch as target (33), a dirty tree without --park
-// (14), a new branch with no origin/<merge> (31), a session: line a live foreign
-// session holds (35). A park inventories every new path first
-// and refuses any without --include (30) with the index and HEAD untouched; only
+// (14), a new branch with no origin/<merge> (31), a session: line another session
+// holds, or the registry cannot prove ended (35) - stricter than task-state set,
+// since a switch moves the tree. A park inventories every new path first and
+// refuses any without --include (30) with the index and HEAD untouched; only
 // then does it commit. A new branch is cut from origin/<merge> (never the local
 // merge-branch) with --no-track. Arriving on a parked branch, the park commit is
 // undone with `reset --soft HEAD~1` only when it is HEAD, its subject matches and

@@ -43,6 +43,20 @@ func launchModeProblems(f map[string]string) []string {
 	if ann, cmd := strings.Index(n2, "launching <worker_name> "+launchAnnounce), strings.Index(n2, "CMD=$(cat <<"); ann < 0 || cmd < ann || !strings.Contains(n2, "neither -> `default`") {
 		p = append(p, "team.md N2 must resolve the workers' launch mode (neither -> default) and announce an all-in worker before its launch")
 	}
+	for _, need := range []string{"carries `--permission-mode bypassPermissions` or `--dangerously-skip-permissions`, print the all-in announce line"} {
+		if !strings.Contains(t5, need) {
+			p = append(p, "worktree.md T5 must announce on either bypass form: "+need)
+		}
+	}
+	if !strings.Contains(n2, "carries `--permission-mode bypassPermissions` or `--dangerously-skip-permissions`, first print one line") {
+		p = append(p, "team.md N2 must announce on either bypass form")
+	}
+	if !strings.Contains(n2, "the team's agent_command fixes the workers' launch (<value>); --<flag> is not applied") {
+		p = append(p, "team.md N2 must say a typed launch-mode flag is not applied over a team file's agent_command")
+	}
+	if !strings.Contains(sectionSpan(team, "\n## Run (backend orca)\n"), "orca_launch_mode_unsupported") {
+		p = append(p, "team.md Run (backend orca) must name orca_launch_mode_unsupported for a non-default mode")
+	}
 	if !strings.Contains(f["init"], `{ label: "Default (Recommended)"`) || !strings.Contains(f["init"], "--launch-mode={LAUNCH_MODE}") {
 		p = append(p, "init.md must recommend the default launch mode and pass --launch-mode")
 	}
@@ -71,6 +85,9 @@ func TestLaunchModeContract(t *testing.T) {
 		{"init labels all-in recommended", "init", `{ label: "All-in", `, `{ label: "All-in (Recommended)", `, "never be a default or a fallback"},
 		{"team worker launches all-in unannounced", "team", "first print one line: \"launching <worker_name> " + launchAnnounce + "\"", "launch it", "announce an all-in worker"},
 		{"the lead launches all-in unannounced", "worktree", "print the all-in announce line", "launch", "T5 must print the all-in announce line"},
+		{"T5 misses the dangerously flag", "worktree", "carries `--permission-mode bypassPermissions` or `--dangerously-skip-permissions`, print", "carries `--permission-mode bypassPermissions`, print", "either bypass form"},
+		{"N2 misses the dangerously flag", "team", "carries `--permission-mode bypassPermissions` or `--dangerously-skip-permissions`, first", "carries `--permission-mode bypassPermissions`, first", "either bypass form"},
+		{"N2 silently drops a typed flag", "team", "the team's agent_command fixes the workers' launch (<value>); --<flag> is not applied", "the team's command wins", "not applied over a team file"},
 		{"start stops naming an unset key", "start", "LETS_LAUNCH_MODE is unset", "launch mode", "LETS_LAUNCH_MODE is unset"},
 	}
 	for _, m := range mutants {
