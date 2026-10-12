@@ -29,6 +29,29 @@ type Entry struct {
 	Version      string `json:"version"`
 	StartedAt    int64  `json:"startedAt"` // ms since epoch; unchanged across /clear (same process)
 	PeerProtocol *int   `json:"peerProtocol"`
+	// Kind, JobID and ParkedJobID are read when present (Claude Code writes them for
+	// background jobs and parked sessions); any other JSON type is ignored, never an error.
+	Kind        string `json:"-"`
+	JobID       string `json:"-"`
+	ParkedJobID string `json:"-"`
+}
+
+// jobFields is the lenient side decode of Entry's job keys: a typed string field
+// would turn a future non-string value into an unparseable entry and degrade the
+// whole registry.
+type jobFields struct {
+	Kind        json.RawMessage `json:"kind"`
+	JobID       json.RawMessage `json:"jobId"`
+	ParkedJobID json.RawMessage `json:"parkedJobId"`
+}
+
+// rawString is m's value when m is a JSON string, else "".
+func rawString(m json.RawMessage) string {
+	var s string
+	if len(m) == 0 || json.Unmarshal(m, &s) != nil {
+		return ""
+	}
+	return s
 }
 
 // Degraded names why the registry could not be read in full.
@@ -99,9 +122,14 @@ func Read(claudeDir string) Snapshot {
 			continue
 		}
 		var e Entry
-		if b, err := os.ReadFile(f); err != nil || json.Unmarshal(b, &e) != nil {
+		b, err := os.ReadFile(f)
+		if err != nil || json.Unmarshal(b, &e) != nil {
 			s.Unrecognized[pid] = "unparseable"
 			continue
+		}
+		var jf jobFields
+		if json.Unmarshal(b, &jf) == nil {
+			e.Kind, e.JobID, e.ParkedJobID = rawString(jf.Kind), rawString(jf.JobID), rawString(jf.ParkedJobID)
 		}
 		if e.PeerProtocol == nil || *e.PeerProtocol != 1 {
 			s.Unrecognized[pid] = protoString(e.PeerProtocol)
@@ -186,6 +214,32 @@ func (s Snapshot) Rotated(sid string, pid int, set time.Time) (string, bool) {
 		return "", false
 	}
 	return e.SessionID, true
+}
+
+// SameProcess reports whether the registry lists pid with exactly startedMs as its
+// startedAt - the same process, never a pid reused later.
+func (s Snapshot) SameProcess(pid int, startedMs int64) bool {
+	e, ok := s.FindPid(pid)
+	return ok && startedMs > 0 && e.StartedAt == startedMs
+}
+
+// ContinuedIn reports whether session sid was parked into the background job that
+// runs as session own (lets-56ymc): sid's row carries parkedJobId, own's row is a
+// background job (kind bg, or no kind) with that jobId. Missing fields, an empty
+// pair, or sid == own prove nothing.
+func (s Snapshot) ContinuedIn(sid, own string) bool {
+	if sid == "" || own == "" || sid == own {
+		return false
+	}
+	p, ok1 := s.Find(sid)
+	c, ok2 := s.Find(own)
+	if !ok1 || !ok2 || p.ParkedJobID == "" || c.JobID == "" {
+		return false
+	}
+	if c.Kind != "" && c.Kind != "bg" {
+		return false
+	}
+	return p.ParkedJobID == c.JobID
 }
 
 // Liveness of one session; pid is the holder's recorded pid (0 when unknown).
