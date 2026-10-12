@@ -60,6 +60,9 @@ func launchModeProblems(f map[string]string) []string {
 	if !strings.Contains(f["init"], `{ label: "Default (Recommended)"`) || !strings.Contains(f["init"], "--launch-mode={LAUNCH_MODE}") {
 		p = append(p, "init.md must recommend the default launch mode and pass --launch-mode")
 	}
+	if !strings.Contains(f["init"], "binds `$LAUNCH_MODE` to that CURRENT value - empty when unset, never `default`") || strings.Contains(f["init"], "`default` when unset") {
+		p = append(p, "init.md Keep current must keep an unset LETS_LAUNCH_MODE unset - bind the current value, empty when unset, never default")
+	}
 	if !strings.Contains(f["start"], "LETS_LAUNCH_MODE is unset") {
 		p = append(p, "start.md main mode must say when LETS_LAUNCH_MODE is unset")
 	}
@@ -88,6 +91,7 @@ func TestLaunchModeContract(t *testing.T) {
 		{"T5 misses the dangerously flag", "worktree", "carries `--permission-mode bypassPermissions` or `--dangerously-skip-permissions`, print", "carries `--permission-mode bypassPermissions`, print", "either bypass form"},
 		{"N2 misses the dangerously flag", "team", "carries `--permission-mode bypassPermissions` or `--dangerously-skip-permissions`, first", "carries `--permission-mode bypassPermissions`, first", "either bypass form"},
 		{"N2 silently drops a typed flag", "team", "the team's agent_command fixes the workers' launch (<value>); --<flag> is not applied", "the team's command wins", "not applied over a team file"},
+		{"keep current materializes default", "init", "\"(unset = default)\" when it is absent, and binds `$LAUNCH_MODE` to that CURRENT value - empty when unset, never `default` (`--launch-mode=` keeps the key unset)", "`default` when unset", "Keep current must keep an unset"},
 		{"start stops naming an unset key", "start", "LETS_LAUNCH_MODE is unset", "launch mode", "LETS_LAUNCH_MODE is unset"},
 	}
 	for _, m := range mutants {

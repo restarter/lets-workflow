@@ -347,7 +347,7 @@ An implementer, or any member of a standing team, is spawned, messaged and dismi
 
 ### Leaf packages and import direction
 
-`trackeradapter`, `taskid`, `fsutil`, `peername`, `taskstate`, `redact`, `ccregistry`, `agentrun`, `teamfile`, `memberscmd`, `integratecmd` and `gitutil` are leaves (the test's table is authoritative): they import the standard library or another leaf, nothing else, so any command package can use them without an import cycle. `TestLeafPackages` (`cli/internal/cli/leaf_packages_test.go`) holds the table - append a directory when a new leaf lands - and `TestDeniedImports` forbids the edges that would compile but invert the layering (`worktreecmd` never imports `orcacmd` or `peerscmd`; `orcacmd` never imports `peerscmd`). A package that owns a file format (`taskstate` owns `.task-<branch-slug>`) is the only writer; markdown writes through its CLI.
+`trackeradapter`, `taskid`, `fsutil`, `peername`, `taskstate`, `redact`, `ccregistry`, `agentrun`, `teamfile`, `integratecmd` and `gitutil` are leaves (the test's table is authoritative): they import the standard library or another leaf, nothing else, so any command package can use them without an import cycle. `TestLeafPackages` (`cli/internal/cli/leaf_packages_test.go`) holds the table - append a directory when a new leaf lands - and `TestDeniedImports` forbids the edges that would compile but invert the layering (`worktreecmd` never imports `orcacmd` or `peerscmd`; `orcacmd` never imports `peerscmd`). A package that owns a file format (`taskstate` owns `.task-<branch-slug>`) is the only writer; markdown writes through its CLI.
 
 ## Commits & PRs
 
