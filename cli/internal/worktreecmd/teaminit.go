@@ -16,16 +16,20 @@ import (
 
 	"github.com/restarter/lets-workflow/cli/internal/ccregistry"
 	"github.com/restarter/lets-workflow/cli/internal/gitutil"
+	"github.com/restarter/lets-workflow/cli/internal/letsconfig"
 	"github.com/restarter/lets-workflow/cli/internal/teamfile"
 )
 
 // TeamInitOptions configures TeamInit. AgentCommand is how the lead is launched
 // (default `claude`); OrcaAgent is the shell command an Orca lead terminal runs
-// (default `claude`). Suggest only proposes a free callsign and writes nothing;
+// (default `claude`). LaunchMode (default | auto | all-in, lets-d3wu3) renders both
+// through LaunchCommand when they were not given explicitly - an explicit command
+// wins. Suggest only proposes a free callsign and writes nothing;
 // Check only verifies Callsign is free (valid, no team file, no live lead) and
 // writes nothing - run before a team worktree is created.
 type TeamInitOptions struct {
 	Callsign, Area, Worktree, PluginRoot, AgentCommand, OrcaAgent string
+	LaunchMode                                                    string
 	Suggest, Check                                                bool
 }
 
@@ -100,12 +104,18 @@ func TeamInit(ctx context.Context, dir string, o TeamInitOptions) (*TeamInitResu
 	if strings.TrimSpace(o.Area) == "" || o.Worktree == "" || !filepath.IsAbs(o.Worktree) {
 		return fail(&Error{Code: ExitUsage, Kind: "usage", Message: "--area and an absolute --worktree are required"})
 	}
+	if o.LaunchMode != "" && !letsconfig.ValidLaunchMode(o.LaunchMode) {
+		return fail(&Error{Code: ExitUsage, Kind: "launch_mode_invalid", Message: fmt.Sprintf("--launch-mode %q is not one of %v", o.LaunchMode, letsconfig.LaunchModes)})
+	}
 	agent, orca := o.AgentCommand, o.OrcaAgent
 	if agent == "" {
-		agent = "claude"
+		agent, _ = LaunchCommand(o.LaunchMode, "claude")
 	}
 	if orca == "" {
-		orca = "claude"
+		orca, _ = LaunchCommand(o.LaunchMode, "claude")
+	}
+	if o.LaunchMode == "all-in" {
+		res.Steps = append(res.Steps, Step{Status: StepWarn, Message: "launch mode all-in: the lead starts with --permission-mode bypassPermissions (no harness permission prompts in that session; LETS gates still ask)"})
 	}
 	for _, f := range []struct{ flag, v string }{{"--agent-command", agent}, {"--orca-agent", orca}, {"--area", o.Area}, {"--worktree", o.Worktree}} {
 		if strings.ContainsFunc(f.v, unicode.IsControl) {

@@ -329,3 +329,43 @@ func TestTeamInit_LongRepoShortLeadName(t *testing.T) {
 		t.Errorf("team file lead_name:\n%s", b)
 	}
 }
+
+// --launch-mode renders the lead's agent_command and orca_agent at creation; an
+// explicit --agent-command wins; an unknown mode is refused with nothing written.
+func TestTeamInit_LaunchMode(t *testing.T) {
+	repo, wt, pluginRoot := teamSetup(t)
+	res, err := worktreecmd.TeamInit(context.Background(), repo, worktreecmd.TeamInitOptions{Callsign: "snake", Area: "the CLI", Worktree: wt, PluginRoot: pluginRoot, LaunchMode: "all-in"})
+	if err != nil || !res.OK {
+		t.Fatalf("all-in: %+v, %v", res, err)
+	}
+	b, _ := os.ReadFile(filepath.Join(repo, ".lets", "teams", "snake.md"))
+	for _, line := range []string{`agent_command: "claude --permission-mode bypassPermissions"`, `orca_agent: "claude --permission-mode bypassPermissions"`} {
+		if !strings.Contains(string(b), line) {
+			t.Errorf("team file lacks %s:\n%s", line, b)
+		}
+	}
+	warned := false
+	for _, s := range res.Steps {
+		warned = warned || (s.Status == worktreecmd.StepWarn && strings.Contains(s.Message, "bypassPermissions"))
+	}
+	if !warned {
+		t.Errorf("an all-in team must say so in a warn step: %+v", res.Steps)
+	}
+
+	res, err = worktreecmd.TeamInit(context.Background(), repo, worktreecmd.TeamInitOptions{Callsign: "frog", Area: "docs", Worktree: wt, PluginRoot: pluginRoot, LaunchMode: "auto", AgentCommand: "docker compose run dev claude"})
+	if err != nil || !res.OK {
+		t.Fatalf("explicit agent: %+v, %v", res, err)
+	}
+	b, _ = os.ReadFile(filepath.Join(repo, ".lets", "teams", "frog.md"))
+	if !strings.Contains(string(b), `agent_command: "docker compose run dev claude"`) || !strings.Contains(string(b), `orca_agent: "claude --permission-mode auto"`) {
+		t.Errorf("an explicit --agent-command must win, orca_agent rendered:\n%s", b)
+	}
+
+	_, err = worktreecmd.TeamInit(context.Background(), repo, worktreecmd.TeamInitOptions{Callsign: "otter", Area: "x", Worktree: wt, PluginRoot: pluginRoot, LaunchMode: "bypassPermissions"})
+	if worktreecmd.ExitCode(err) != worktreecmd.ExitUsage {
+		t.Errorf("unknown mode: exit %d (%v), want %d", worktreecmd.ExitCode(err), err, worktreecmd.ExitUsage)
+	}
+	if _, err := os.Stat(filepath.Join(repo, ".lets", "teams", "otter.md")); !os.IsNotExist(err) {
+		t.Error("an unknown launch mode wrote a team file")
+	}
+}

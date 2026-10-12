@@ -198,6 +198,25 @@ AskUserQuestion(
 
 Bind label (lowercased, first word, drop a trailing ` (detected)`) to `$LAUNCHER`: "Terminal"→"terminal", "cmux"→"cmux", "tmux"→"tmux", "Orca"→"orca". No launcher needs extra setup — each degrades to the terminal flow when its binary (or platform) is absent (the `lets cmux` / `lets tmux` / `lets orca` launcher handles the fallback; Orca falls back to cmux, then terminal). On **Orca**, tell the user in one line: `lets init` writes `orca.yaml` (its setup hook runs `lets worktree adopt`, its archive hook `lets worktree release`) - commit it, and approve it once in Orca when Orca asks to trust the file.
 
+### 2c-ter-b. Launch mode
+
+How the sessions LETS launches (workers, a team's lead) start (lets-d3wu3). The harness holds a message between two sessions when exactly ONE of them runs with `--permission-mode bypassPermissions`, so pick the class your orchestrator sessions run in; a session cannot detect its own mode.
+
+AskUserQuestion(
+  questions=[{
+    question: "How should the sessions LETS launches start?",
+    header: "Launch mode",
+    options: [
+      { label: "Default (Recommended)", description: "Plain claude - the harness asks its permission prompts as usual" },
+      { label: "Auto", description: "claude --permission-mode auto - low-risk work auto-approved; LETS gates still ask" },
+      { label: "All-in", description: "claude --permission-mode bypassPermissions - no harness prompts; choose only if your orchestrator runs that way" }
+    ],
+    multiSelect: false
+  }]
+)
+
+Bind the label to `$LAUNCH_MODE`: "Default"→"default", "Auto"→"auto", "All-in"→"all-in". `all-in` is only ever this explicit pick - never a fallback. `crossSessionInbound` is never written.
+
 ### 2c-quater. Task tracker adapter
 
 AskUserQuestion(
@@ -261,11 +280,12 @@ lets init --json \
   --merge-branch={BRANCH} \
   --pr-flow={FLOW} \
   --launcher={LAUNCHER} \
+  --launch-mode={LAUNCH_MODE} \
   --tracker={TRACKER} \
   {SKIP_BEADS_FLAG} {RULES_SCOPE_FLAG}
 ```
 
-The `{...}` values are orchestrator bindings from Steps 2a-2c-quater ({LANGUAGE} = the English language name bound in 2a; {BRANCH}/{FLOW}/{LAUNCHER}/{TRACKER}; and the two flag fragments {SKIP_BEADS_FLAG}/{RULES_SCOPE_FLAG}, each either empty or its flag) — substitute each literal BEFORE running. NEVER leave a `$`-var: `$LANG` is the POSIX locale env var (`en_US.UTF-8`) and bash would expand it, poisoning `LETS_LANGUAGE` in `.lets/.env`.
+The `{...}` values are orchestrator bindings from Steps 2a-2c-quater ({LANGUAGE} = the English language name bound in 2a; {BRANCH}/{FLOW}/{LAUNCHER}/{LAUNCH_MODE}/{TRACKER}; and the two flag fragments {SKIP_BEADS_FLAG}/{RULES_SCOPE_FLAG}, each either empty or its flag) — substitute each literal BEFORE running. NEVER leave a `$`-var: `$LANG` is the POSIX locale env var (`en_US.UTF-8`) and bash would expand it, poisoning `LETS_LANGUAGE` in `.lets/.env`.
 
 Capture stdout (JSON object).
 
@@ -362,7 +382,7 @@ AskUserQuestion(
 
 If "Keep current" picked, substitute `$LANG = $CURRENT_LANG`. Else use selected label. "Other" free-text (auto-added by tool) → use the **ENGLISH name** of the language (Chinese, Polish, German, Russian, Japanese, ...). If the user types a native-script name (`Русский`, `Українська`, `日本語`, `中文`, `Deutsch`, ...), **normalise it to the English name** before binding — same rule as Step 2a; every value in `.lets/.env` is in English.
 
-Repeat for MergeBranch (`$BRANCH`), PRFlow (`$FLOW`), and Launcher (`$LAUNCHER` — "Keep current" shows `$LETS_LAUNCHER` from LETS Config, plus options terminal / cmux / tmux / orca — apply the same detection-aware filtering as 2c-ter: omit cmux off macOS, mark a launcher `(detected)` when its binary is on PATH (Orca: when `lets orca status --json` reports `status.bin`); picking orca gets the same `orca.yaml` line).
+Repeat for MergeBranch (`$BRANCH`), PRFlow (`$FLOW`), and Launcher (`$LAUNCHER` — "Keep current" shows `$LETS_LAUNCHER` from LETS Config, plus options terminal / cmux / tmux / orca — apply the same detection-aware filtering as 2c-ter: omit cmux off macOS, mark a launcher `(detected)` when its binary is on PATH (Orca: when `lets orca status --json` reports `status.bin`); picking orca gets the same `orca.yaml` line), and LaunchMode (`$LAUNCH_MODE` — "Keep current" shows `$LETS_LAUNCH_MODE` from LETS Config, `default` when unset, plus the three options of 2c-ter-b; never a recommended `all-in`).
 
 **Rules scope** — first run the **Global-rules check** from Step 2d (it computes `SCOPE`/`GLOBAL`/`PROJECT`; the change-config path does not otherwise set them). Then only ask when `GLOBAL=PRESENT` (otherwise there's nothing to rely on; bind `$RULES_SCOPE_FLAG=""`):
 
@@ -389,10 +409,11 @@ lets init --json \
   --merge-branch={BRANCH} \
   --pr-flow={FLOW} \
   --launcher={LAUNCHER} \
+  --launch-mode={LAUNCH_MODE} \
   {RULES_SCOPE_FLAG}
 ```
 
-Same placeholder-substitution rule as Step 2d: substitute {LANGUAGE}/{BRANCH}/{FLOW}/{LAUNCHER}/{RULES_SCOPE_FLAG} literals BEFORE running; never leave a `$`-var (`$LANG` = POSIX locale, would poison `.lets/.env`).
+Same placeholder-substitution rule as Step 2d: substitute {LANGUAGE}/{BRANCH}/{FLOW}/{LAUNCHER}/{LAUNCH_MODE}/{RULES_SCOPE_FLAG} literals BEFORE running; never leave a `$`-var (`$LANG` = POSIX locale, would poison `.lets/.env`).
 
 Passing the prefs flags triggers `env_action.kind=regenerated` (binary detects values differ from existing .env, regenerates while preserving foreign keys + user-customized `LETS_TRACKER`).
 

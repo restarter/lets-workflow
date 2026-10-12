@@ -118,6 +118,15 @@ var Keys = []Key{
 		Comment: "Where this project's workflow rules come from: project (own .claude/rules copy) | user (rely on the ~/.claude/rules global copy)",
 		Default: "project",
 	},
+	{
+		// UserLevel stays false: the hook's MergedEnv already overlays
+		// ~/.lets/.env under the project file for every Names() key, so a
+		// hand-set user-level LETS_LAUNCH_MODE is the fallback, as for
+		// LETS_LAUNCHER; `lets init --user` does not manage it (lets-d3wu3).
+		Name:    "LETS_LAUNCH_MODE",
+		Comment: "How the sessions LETS launches start: default (plain claude) | auto (--permission-mode auto) | all-in (--permission-mode bypassPermissions - set it only on purpose; match the class your orchestrator runs in)",
+		Default: "default",
+	},
 }
 
 // UserKeys returns the subset of Keys that `lets init --user` manages in

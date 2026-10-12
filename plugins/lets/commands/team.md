@@ -1,6 +1,6 @@
 ---
 description: Team management - run several tasks at once, one visible LETS session per task on any launcher
-argument-hint: "[run|spawn|dismiss|roster|status|stop|create|disband] [--tasks A,B,C] [--backend orca] [<callsign>] [--area <a>]"
+argument-hint: "[run|spawn|dismiss|roster|status|stop|create|disband] [--tasks A,B,C] [--backend orca] [--launch-mode default|auto|all-in] [--auto] [--all-in] [<callsign>] [--area <a>]"
 ---
 
 # Team
@@ -14,7 +14,7 @@ Run several independent tasks at once: each task gets its own worktree and its o
 ## Step 1: Determine Subcommand
 
 **If argument provided** (e.g., `/lets:team run`), parse it:
-- `run` -> go to Run (pass remaining flags like `--tasks A,B,C` to Step R2)
+- `run` -> go to Run (pass remaining flags like `--tasks A,B,C` to Step R2; `--launch-mode <m>` / `--auto` / `--all-in` set the workers' launch mode, Step N2)
 - `spawn <role> [name]` / `spawn --roster` -> go to Spawn
 - `dismiss <name>` / `dismiss --all` -> go to Dismiss
 - `roster` -> go to Roster
@@ -260,7 +260,7 @@ Write the run record `.lets/execution/team-<run>.json` (`<run>` = `YYYYMMDD-HHMM
 
 ### Step N2: Launch Each Worker
 
-**Agent command.** `{agent_command}` = the `agent_command` frontmatter value of the team file that claims this checkout (`lets worktree info --json` reports it as `team`; the file is `.lets/teams/<team>.md`), else `claude`. It is an owner-configured shell command and is substituted as is; every other value in the launch stays single-quoted.
+**Agent command.** `{agent_command}` = the `agent_command` frontmatter value of the team file that claims this checkout (`lets worktree info --json` reports it as `team`; the file is `.lets/teams/<team>.md`) - its launch mode was rendered into it at creation; else `claude` rendered for the run's **launch mode**: a flag the user typed in this turn (`--launch-mode <m>`, `--auto` = `auto`, `--all-in` = `all-in`) beats `{LETS_LAUNCH_MODE}`, neither -> `default`; `default` -> `claude`, `auto` -> `claude --permission-mode auto`, `all-in` -> `claude --permission-mode bypassPermissions`. `all-in` is explicit only - never inferred, never a fallback, never the default (`/lets:worktree`'s **Launch mode** contract; `crossSessionInbound` is never written). It is an owner-configured shell command and is substituted as is; every other value in the launch stays single-quoted.
 
 For each task, in order:
 
@@ -281,7 +281,7 @@ lets worktree create '<dir>' --branch '<branch>' --new-branch --base "origin/{LE
 ```
 
    Assert `worktree.path` = `<main checkout>/.worktrees/<dir>` and `worktree.branch` = `<branch>`; a mismatch -> STOP the run. `worktree_path_exists` is the backstop for an occupied dir that branch-name could not attribute: create touched nothing - skip the task naming the path. Any other `ok=false` -> skip with `error.message` and any `rollback.residual` paths.
-4. **Launch.** One launch command for every launcher - the session name and the orchestrator binding travel with it:
+4. **Launch.** One launch command for every launcher - the session name and the orchestrator binding travel with it. When `{agent_command}` carries `--permission-mode bypassPermissions`, first print one line: "launching <worker_name> with all-in (bypassPermissions): no harness permission prompts in that session; LETS gates (push, PR, merge, close, peer sends) still ask".
 
 ```bash
 CMD=$(cat <<'EOF'

@@ -31,6 +31,7 @@ func NewInitCmd() *cobra.Command {
 		flagGithub      bool
 		flagSkipBeads   bool
 		flagRulesScope  string
+		flagLaunchMode  string
 		flagUser        bool
 		flagPluginRoot  string
 		flagJSON        bool
@@ -99,13 +100,17 @@ out with --plugin-root=${CLAUDE_PLUGIN_ROOT} plus the chosen flags.`,
 			if flagLauncher != "" && !letsconfig.ValidLauncher(flagLauncher) {
 				return emit(initcmd.NewResult("", ""), fmt.Errorf("--launcher must be one of %v, got %q", letsconfig.ShippedLaunchers, flagLauncher))
 			}
+			// --launch-mode likewise: an unknown value is never persisted.
+			if flagLaunchMode != "" && !letsconfig.ValidLaunchMode(flagLaunchMode) {
+				return emit(initcmd.NewResult("", ""), fmt.Errorf("--launch-mode must be one of %v, got %q", letsconfig.LaunchModes, flagLaunchMode))
+			}
 
 			// --user: user-scope install (global rules + ~/.lets/.env). Works
 			// from ANY directory - no git project, no worktree guard (those are
 			// project-scope concerns).
 			if flagUser {
-				if flagMergeBranch != "" || flagPRFlow != "" || flagGithub || flagSkipBeads || flagRulesScope != "" {
-					fmt.Fprintln(cmd.ErrOrStderr(), "warning: --merge-branch/--pr-flow/--github/--skip-beads/--rules-scope are project-scope flags - ignored with --user")
+				if flagMergeBranch != "" || flagPRFlow != "" || flagGithub || flagSkipBeads || flagRulesScope != "" || flagLaunchMode != "" {
+					fmt.Fprintln(cmd.ErrOrStderr(), "warning: --merge-branch/--pr-flow/--github/--skip-beads/--rules-scope/--launch-mode are project-scope flags - ignored with --user")
 				}
 				home, herr := os.UserHomeDir()
 				if herr != nil {
@@ -185,6 +190,7 @@ out with --plugin-root=${CLAUDE_PLUGIN_ROOT} plus the chosen flags.`,
 				Tracker:     tracker,
 				Launcher:    flagLauncher,
 				RulesScope:  flagRulesScope,
+				LaunchMode:  flagLaunchMode,
 				SkipBeads:   flagSkipBeads,
 				// Changed reflects the command line (the default-fill above mutates a
 				// local, not the flag), so this is true only on an explicit --tracker.
@@ -203,6 +209,7 @@ out with --plugin-root=${CLAUDE_PLUGIN_ROOT} plus the chosen flags.`,
 	cmd.Flags().BoolVar(&flagGithub, "github", false, "(deprecated) alias for --pr-flow=github")
 	cmd.Flags().BoolVar(&flagSkipBeads, "skip-beads", false, "Skip beads initialization")
 	cmd.Flags().StringVar(&flagRulesScope, "rules-scope", "", "Rules sourcing for this project: project (own copy) | user (rely on ~/.claude/rules)")
+	cmd.Flags().StringVar(&flagLaunchMode, "launch-mode", "", "How the sessions LETS launches start: default | auto | all-in (default default; all-in = --permission-mode bypassPermissions, set it only on purpose)")
 	cmd.Flags().BoolVar(&flagUser, "user", false, "User-scope install: global rules to ~/.claude/rules + defaults to ~/.lets/.env (no project changes)")
 	cmd.Flags().StringVar(&flagPluginRoot, "plugin-root", "", "Plugin install dir (else $CLAUDE_PLUGIN_ROOT, required)")
 	cmd.Flags().BoolVar(&flagJSON, "json", false, "Output machine-readable JSON to stdout (single object, schema_version=1)")

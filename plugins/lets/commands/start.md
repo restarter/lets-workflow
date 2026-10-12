@@ -324,6 +324,8 @@ LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 command -v lets >/dev/null 2>&1 && lets peers role set orchestrator --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" --json
 ```
 
+**Launch mode (lets-d3wu3).** `LETS_LAUNCH_MODE` absent from LETS Config -> one line: "LETS_LAUNCH_MODE is unset - the sessions this orchestrator launches start in `default`; set it to the class this session runs in (`all-in` only when it runs with `--permission-mode bypassPermissions`) - `/lets:init`". A session cannot read its own permission mode, so nothing is inferred; set -> nothing.
+
 Invoke `Skill(skill: "lets:orient", args: "caller=start")` - with no active task it degrades to branch + no-task + In flight + Next up + Project, which IS the PM triage surface. Keep it short - if the tracker has a deeper native dashboard, point the user at it in one line.
 
 **Reopen archived and orphaned claims (merge-branch only).** `lets worktree release` (Orca's archive hook) leaves `.lets/cache/released-<task-id>` with one line `<id>|<branch>|<iso>|dirty=<bool>|unpushed=<bool>[|snapshot=<present|stale|missing>]` (older markers have no `snapshot=`) when a worktree goes away while it still named a task. List those markers oldest first; an id outside the detect-task gate class (`[A-Za-z0-9._-]`, no leading `-`) -> delete that marker with a one-line note. Resolve each remaining id, one block per id:

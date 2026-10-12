@@ -258,8 +258,9 @@ func TestTeamBackend_WorktreeTeam(t *testing.T) {
 			strip = l
 		}
 	}
-	if strip == "" || !strings.Contains(strip, "`--flow` or `--auto`") || !strings.Contains(strip, "from inside a worktree") || !strings.Contains(strip, "**Refused**") {
-		t.Errorf("Step 1 must route create --team and refuse it with --flow / --auto and inside a worktree: %q", strip)
+	if strip == "" || !strings.Contains(strip, "together with `--flow`") || !strings.Contains(strip, "from inside a worktree") || !strings.Contains(strip, "**Refused**") ||
+		!strings.Contains(strip, "the launch-mode flags (`--launch-mode <m>` / `--auto` / `--all-in` - the lead's **Launch mode** below)") {
+		t.Errorf("Step 1 must route create --team, take the launch-mode flags as the lead's launch mode, and refuse it with --flow and inside a worktree: %q", strip)
 	}
 
 	team := sectionSpan(wt, "\n## Create a team\n")

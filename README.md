@@ -341,6 +341,10 @@ LETS_PR_FLOW=github
 
 # Task tracker adapter: beads | none  (selects .claude/rules/tracker-<name>.md; see docs/trackers.md)
 LETS_TRACKER=beads
+
+# How the sessions LETS launches start: default | auto | all-in (bypassPermissions - only on purpose,
+# matching the class your orchestrator runs in)
+LETS_LAUNCH_MODE=default
 ```
 
 All plugin-generated files live under `.lets/` (gitignored); interactive worktrees under `.worktrees/`.

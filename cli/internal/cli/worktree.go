@@ -575,6 +575,7 @@ func newWorktreeTeamInitCmd() *cobra.Command {
 	f.StringVar(&o.PluginRoot, "plugin-root", "", "Plugin root holding templates/team.md (default: $CLAUDE_PLUGIN_ROOT)")
 	f.StringVar(&o.AgentCommand, "agent-command", "", "How the lead is launched (default claude)")
 	f.StringVar(&o.OrcaAgent, "orca-agent", "", "Shell command an Orca lead terminal runs (default claude)")
+	f.StringVar(&o.LaunchMode, "launch-mode", "", "Lead launch mode rendered into agent_command / orca_agent when not given: default | auto | all-in (default default)")
 	f.BoolVar(&o.Suggest, "suggest-callsign", false, "Only propose a free callsign; write nothing")
 	f.BoolVar(&o.Check, "check", false, "Only check that --callsign is free (no team file, no live lead); write nothing")
 	f.BoolVar(&jsonOut, "json", false, "Emit JSON envelope")

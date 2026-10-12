@@ -264,6 +264,7 @@ func mergePrefs(prefs Prefs, existing map[string]string) Prefs {
 	result.PRFlow = pick(prefs.PRFlow, "LETS_PR_FLOW")
 	result.Launcher = pick(prefs.Launcher, "LETS_LAUNCHER")
 	result.RulesScope = pick(prefs.RulesScope, "LETS_RULES_SCOPE")
+	result.LaunchMode = pick(prefs.LaunchMode, "LETS_LAUNCH_MODE")
 	if existingTracker := existing["LETS_TRACKER"]; existingTracker != "" {
 		result.Tracker = existingTracker
 	}
@@ -294,6 +295,9 @@ func diffKeys(old map[string]string, new Prefs) []string {
 	}
 	if old["LETS_RULES_SCOPE"] != new.RulesScope {
 		changed = append(changed, "LETS_RULES_SCOPE")
+	}
+	if old["LETS_LAUNCH_MODE"] != new.LaunchMode {
+		changed = append(changed, "LETS_LAUNCH_MODE")
 	}
 	if len(changed) == 0 {
 		return []string{}
