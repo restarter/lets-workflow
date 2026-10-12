@@ -10,9 +10,10 @@ import (
 )
 
 var (
-	orcSkillCall = regexp.MustCompile(`Skill\(\s*skill:\s*"lets:orc"\s*,\s*args:\s*"((?:[^"\\]|\\.)*)"`)
-	orcVerbArg   = regexp.MustCompile(`\bverb=([a-z-]+|<verb>)`)
-	peerSendSM   = regexp.MustCompile(`SendMessage\(\s*\{?\s*to\s*[:=]\s*"([^"]*)"`)
+	orcSkillCall  = regexp.MustCompile(`Skill\(\s*skill:\s*"lets:orc"\s*,\s*args:\s*"((?:[^"\\]|\\.)*)"`)
+	orcVerbArg    = regexp.MustCompile(`\bverb=([a-z-]+|<verb>)`)
+	orcStandingOn = regexp.MustCompile(`\btext=(?:\\")?on\b`)
+	peerSendSM    = regexp.MustCompile(`SendMessage\(\s*\{?\s*to\s*[:=]\s*"([^"]*)"`)
 	// peerSendBanned are retired send forms and v0.10.0 steps - forbidden in EVERY
 	// file, the orc skill included (lets-0xsw2): a peer message goes through
 	// SendMessage only, and a reply arrives as a cross-session message.
@@ -76,6 +77,10 @@ func lintOrcFiles(files map[string]string) []string {
 			aliasPlaceholder := rel == "commands/peer.md" && v != nil && v[1] == "<verb>" // the alias forwards the user's verb; the skill validates it
 			if !aliasPlaceholder && (v == nil || !map[string]bool{"ask": true, "ping": true, "read": true, "tell": true, "who": true, "standing": true}[v[1]]) {
 				bad = append(bad, rel+": Skill(lets:orc) with no valid verb: "+m[1])
+			}
+			// a standing grant is the user's own request, never a call from another file (F11)
+			if v != nil && v[1] == "standing" && orcStandingOn.MatchString(m[1]) {
+				bad = append(bad, rel+": Skill(lets:orc) may not grant standing (verb=standing text=on) - only the user's own /lets:orc does: "+m[1])
 			}
 			if rel != "commands/peer.md" && !strings.Contains(m[1], "footer=none") {
 				bad = append(bad, rel+": Skill(lets:orc) outside /lets:peer must pass footer=none: "+m[1])
@@ -260,6 +265,12 @@ func TestOrcLint(t *testing.T) {
 	}
 	if len(mutate("skills/orc/SKILL.md", "lets peers frame --to-session x")) == 0 {
 		t.Error("mutation: a frame step in the orc skill must fail the lint")
+	}
+	if len(mutate("commands/start.md", "- **Allow** -> `Skill(skill: \"lets:orc\", args: \"verb=standing text=on footer=none\")`")) == 0 {
+		t.Error("mutation: a Skill(lets:orc) call granting standing must fail the lint")
+	}
+	if len(mutate("commands/start.md", "- **Stop** -> `Skill(skill: \"lets:orc\", args: \"verb=standing text=off footer=none\")`")) != 0 {
+		t.Error("mutation: a Skill(lets:orc) call revoking standing is allowed")
 	}
 	if len(mutate("commands/hub.md", "lets peers frame --to-session x")) == 0 {
 		t.Error("mutation: a frame step in hub.md must fail the lint")

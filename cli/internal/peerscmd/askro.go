@@ -57,7 +57,8 @@ func otherRepo(ctx context.Context, repo string, idx *int) (path string, given b
 	return repo, true, nil
 }
 
-// readQuestionFile reads a question file once and removes it. It must be a regular
+// readQuestionFile reads a question file once and removes it (AskRO calls it before
+// any refusal, so the question never stays behind). It must be a regular
 // file (not a symlink) of at most 8 KiB directly or deeper under root/.lets/cache.
 func readQuestionFile(root, path string) (string, *Error) {
 	refuse := func(msg string) (string, *Error) {
@@ -166,14 +167,25 @@ func AskRO(ctx context.Context, o AskROOptions) (*AskROResult, error) {
 	if (o.QuestionFile == "") == (o.MsgID == "") {
 		return fail(&Error{Code: ExitUsage, Kind: "usage", Message: "ask-ro needs exactly one of --question-file or --msgid"})
 	}
+	root, e := rootOf(o.Cwd)
+	if e != nil {
+		return fail(e)
+	}
+	// The question file is read into memory and removed before any refusal below, so
+	// a run that stops early (a live MAIN, an unknown repo, a claude that cannot narrow)
+	// never leaves the question behind in .lets/cache.
+	var question string
+	if o.QuestionFile != "" {
+		q, qe := readQuestionFile(root, o.QuestionFile)
+		if qe != nil {
+			return fail(qe)
+		}
+		question = q
+	}
 	repo, given, e := otherRepo(ctx, o.Repo, o.RepoIndex)
 	if e == nil && !given {
 		e = &Error{Code: ExitNotInRepo, Kind: "repo_invalid", Message: "--repo is not a directory"}
 	}
-	if e != nil {
-		return fail(e)
-	}
-	root, e := rootOf(o.Cwd)
 	if e != nil {
 		return fail(e)
 	}
@@ -200,15 +212,8 @@ func AskRO(ctx context.Context, o AskROOptions) (*AskROResult, error) {
 			return res, nil
 		}
 	}
-	var prompt string
-	if o.QuestionFile != "" {
-		q, qe := readQuestionFile(root, o.QuestionFile)
-		if qe != nil {
-			res.OK = false
-			return fail(qe)
-		}
-		prompt = q
-	} else {
+	prompt := question
+	if o.QuestionFile == "" {
 		res.Deprecated = deprecatedText
 		p, pe := readHandoff(root, o.MsgID)
 		if pe != nil {

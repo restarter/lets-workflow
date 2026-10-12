@@ -290,6 +290,9 @@ func validateOrchestratorOps(o WriteOpts) error {
 	if o.ClearOrchestrator != "" && !peername.Valid(o.ClearOrchestrator) {
 		return fmt.Errorf("%w: orchestrator %q", ErrInvalidValue, o.ClearOrchestrator)
 	}
+	if p := o.PatchOrchestrator; p != nil && o.ClearOrchestrator != "" && p.Name == o.ClearOrchestrator {
+		return fmt.Errorf("%w: orchestrator %q is both patched and cleared", ErrInvalidValue, p.Name)
+	}
 	return nil
 }
 

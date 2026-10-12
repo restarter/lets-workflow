@@ -234,6 +234,7 @@ func TestWho_OrcaReposReadOnly(t *testing.T) {
 		_ = writeLastSeen(peersDir(a), lastSeen{Session: sidFable, Pid: 9, Name: name})
 	}
 	_ = writeLastSeen(peersDir(b), lastSeen{Session: sidMain, Pid: 8, Name: peername.Orchestrator(peername.RepoSlug(b), "old")})
+	_ = writeLastSeen(peersDir(b), lastSeen{Session: sidWork, Pid: 7, Name: "MAIN-OLD"}) // a v0.10.0-era name: listed while b records none
 	before := map[string]map[string]string{a: treeState(t, filepath.Join(a, ".lets")), b: treeState(t, filepath.Join(b, ".lets"))}
 
 	res := who(t, WhoOptions{OrcaRepos: true})
@@ -253,7 +254,7 @@ func TestWho_OrcaReposReadOnly(t *testing.T) {
 			t.Errorf("a stopped orchestrator carries its repo_index: %+v", lo)
 		}
 	}
-	if strings.Join(stopped, ",") != "STOPPED-A,"+peername.Orchestrator(peername.RepoSlug(b), "old") {
+	if strings.Join(stopped, ",") != "STOPPED-A,MAIN-OLD,"+peername.Orchestrator(peername.RepoSlug(b), "old") {
 		t.Errorf("stopped = %v", stopped)
 	}
 	named := false

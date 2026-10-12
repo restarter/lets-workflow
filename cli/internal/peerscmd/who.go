@@ -245,7 +245,7 @@ func whoRows(ctx context.Context, mainRoot, merge string, entries []ccregistry.E
 
 // whoOrcaRepos is the hub's view: for every repo Orca knows (validated in Go), its
 // live orchestrator rows tagged with repo_index, and the stopped ones from its
-// last-seen files (the recorded names, or the convention when none is recorded),
+// last-seen files (the recorded names, or every file when none is recorded),
 // minus the live ones. Read-only in every repo: no last-seen write there.
 func whoOrcaRepos(ctx context.Context, o WhoOptions) (*WhoResult, error) {
 	res := &WhoResult{Envelope: newEnvelope("who"), Peers: []Peer{}, LastOrchestrators: []LastOrchestrator{}}
@@ -292,10 +292,10 @@ func whoOrcaRepos(ctx context.Context, o WhoOptions) (*WhoResult, error) {
 		for _, rec := range recs {
 			recorded[rec.Name] = true
 		}
-		repo := peername.RepoSlug(r.Path)
 		for _, lo := range readLastSeen(peersDir(r.Path)) {
-			_, convention := peername.ParseOrchestrator(repo, lo.Name)
-			ours := recorded[lo.Name] || (len(recs) == 0 && convention)
+			// A repo with records lists its recorded names; one with none (an
+			// orchestrator from before names were recorded) lists every last-seen file.
+			ours := recorded[lo.Name] || len(recs) == 0
 			if live[lo.Name] || !ours {
 				continue
 			}

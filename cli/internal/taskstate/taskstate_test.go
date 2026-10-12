@@ -547,6 +547,7 @@ func TestOrchestrator_ParseAndValidate(t *testing.T) {
 		{PatchOrchestrator: &OrchestratorPatch{Name: "MAIN", Standing: strp("")}},
 		{PatchOrchestrator: &OrchestratorPatch{Name: "MAIN", Scope: strp("a=b")}},
 		{ClearOrchestrator: "a$b"},
+		{PatchOrchestrator: &OrchestratorPatch{Name: "MAIN"}, ClearOrchestrator: "MAIN"},
 	} {
 		if _, err := MergeWrite(letsDir, "main", WriteOpts{PatchOrchestrator: o.PatchOrchestrator, ClearOrchestrator: o.ClearOrchestrator, Create: true}); !errors.Is(err, ErrInvalidValue) {
 			t.Errorf("%+v: err=%v, want ErrInvalidValue", o, err)

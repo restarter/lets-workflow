@@ -161,6 +161,21 @@ func TestAskRO_QuestionFile(t *testing.T) {
 	if _, err := os.Stat(outside); err != nil {
 		t.Error("a refused file outside .lets/cache is never removed")
 	}
+	// a run that stops early still removes the question (F10): a live MAIN, an unknown repo
+	claudeHome(t, []regRow{{101, sidMain, "HUB", hub}, {4243, sidWork, "MAIN-PWA", foreign}})
+	for _, o := range []AskROOptions{
+		{Cwd: hub, Repo: foreign, Session: sidWork, Pid: 4243},
+		{Cwd: hub, Repo: t.TempDir(), Session: sidWork, Pid: 4243},
+	} {
+		_ = os.WriteFile(q, []byte("still there?"), 0o600)
+		o.QuestionFile = q
+		if res, _ := AskRO(context.Background(), o); res.Answered {
+			t.Errorf("%+v must not answer: %+v", o, res)
+		}
+		if _, err := os.Stat(q); !os.IsNotExist(err) {
+			t.Errorf("%+v: the question file must be removed even when ask-ro stops early", o)
+		}
+	}
 	for _, o := range []AskROOptions{
 		{Cwd: hub, Repo: foreign, Session: sidWork, Pid: 4242},
 		{Cwd: hub, Repo: foreign, Session: sidWork, Pid: 4242, QuestionFile: q, MsgID: msg1},

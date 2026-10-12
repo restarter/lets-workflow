@@ -300,3 +300,20 @@ func TestResolveByName_Budget(t *testing.T) {
 		t.Errorf("an unreadable branch under a spent budget: %+v", r)
 	}
 }
+
+// One orchestrator row beside a registry entry that could not be read is ambiguous,
+// never single: the unreadable entry may be another orchestrator (F8).
+func TestResolveByName_DegradedRegistryNeverSingle(t *testing.T) {
+	root := repoWithLets(t, "")
+	withBranch(t, "feature/x")
+	recordOrchestrators(t, root, "orchestrator: MAIN-LETS\n")
+	claudeHome(t, []regRow{{1, sidM, "MAIN-LETS", root}, {3, sidW, "W", root}}, 77)
+	res, _ := orcEnv(t, root, sidW)
+	if res.Source != "ambiguous" || res.Target != nil || len(res.Candidates) != 1 || res.Candidates[0].Session != sidM {
+		t.Errorf("degraded registry: %+v", res)
+	}
+	claudeHome(t, []regRow{{1, sidM, "MAIN-LETS", root}, {3, sidW, "W", root}})
+	if res, _ := orcEnv(t, root, sidW); res.Source != "single" {
+		t.Errorf("a healthy registry resolves single: %+v", res)
+	}
+}

@@ -230,13 +230,15 @@ func ResolveOrchestrator(ctx context.Context, v *nameView, o ResolveOptions) *Re
 			res.Candidates = append(res.Candidates, Candidate{Name: p.Name, Scope: p.Scope, Alive: p.Alive, Session: p.Session})
 		}
 	}
-	switch len(orchs) {
-	case 0:
+	switch {
+	case len(orchs) == 0:
 		res.Source = "none"
-	case 1:
+	case len(orchs) == 1 && v.snap.Degraded == nil:
 		t := orchs[0]
 		res.Source, res.Target = "single", &t
 	default:
+		// several, or one beside a live registry entry that could not be read (it may
+		// be another orchestrator): never let one candidate outrank the unknown
 		res.Source = "ambiguous"
 	}
 	return res

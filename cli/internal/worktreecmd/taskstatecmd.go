@@ -53,6 +53,8 @@ func selfName(sid string) (string, *Error) {
 	switch {
 	case !ok:
 		return "", &Error{Code: ExitGeneric, Kind: "orchestrator_needs_name", Message: "this session is not in the Claude Code session registry, so it has no name to record", Remediation: remedy}
+	case !e.NameOK && e.Name != "":
+		return "", &Error{Code: ExitGeneric, Kind: "orchestrator_needs_name", Message: fmt.Sprintf("this session has no usable name (%q fails the name grammar)", e.Name), Remediation: remedy}
 	case !e.NameOK:
 		return "", &Error{Code: ExitGeneric, Kind: "orchestrator_needs_name", Message: "this session has no name to record as an orchestrator", Remediation: remedy}
 	}
@@ -60,7 +62,9 @@ func selfName(sid string) (string, *Error) {
 }
 
 // taskStateTarget resolves the task-state file for dir's current HEAD branch. It
-// always acts on HEAD: markdown never types a branch name into this command.
+// always acts on HEAD: markdown never types a branch name into this command. The
+// one exception is TaskStateSet's orchestrator records, which go to the
+// merge-branch file whatever HEAD is.
 func taskStateTarget(ctx context.Context, dir string) (root, branch, letsDir, slug string, e *Error) {
 	root = gitutil.ProjectRoot(dir, 2*time.Second)
 	if root == "" {
@@ -168,22 +172,36 @@ func TaskStateSet(ctx context.Context, dir string, o TaskStateOptions) (*TaskSta
 		return fail(&Error{Code: ExitUsage, Kind: "usage", Message: "nothing to set"})
 	}
 
-	info := &TaskStateInfo{Path: path}
-	res.TaskState = info
 	if o.Orc != "" || orch {
+		// The merge-branch as the writer resolves it, from the main checkout (a worktree
+		// shares its .lets): orchestrator records always live in ITS task-state, whatever
+		// HEAD is - the orc skill's `standing` verb runs from a worktree too.
+		mainRoot := root
+		if _, m := gitutil.DetectInsideWorktreeAt(root); m != "" {
+			mainRoot = m
+		}
 		home, _ := os.UserHomeDir()
-		merge := letsconfig.ResolvedEnv(root, home, func(r string) string { return gitutil.DefaultBranch(r, 2*time.Second) })["LETS_MERGE_BRANCH"]
-		if orch && branch != merge {
-			return fail(&Error{Code: ExitUsage, Kind: "orchestrator_off_merge_branch",
-				Message:     fmt.Sprintf("orchestrator records live only in the merge-branch (%s) task-state; HEAD is %s", merge, branch),
-				Remediation: "run it on " + merge})
+		merge := letsconfig.ResolvedEnv(mainRoot, home, func(r string) string { return gitutil.DefaultBranch(r, 2*time.Second) })["LETS_MERGE_BRANCH"]
+		if orch {
+			ms, ok := taskstate.Slug(merge)
+			if !ok {
+				return fail(&Error{Code: ExitGeneric, Kind: "merge_branch_unknown", Message: "the merge-branch could not be resolved"})
+			}
+			if branch != merge && len(set) > 0 {
+				return fail(&Error{Code: ExitUsage, Kind: "usage",
+					Message: fmt.Sprintf("orchestrator records go to the merge-branch (%s) task-state; this branch's keys cannot be written in the same call from %s", merge, branch)})
+			}
+			letsDir, slug = filepath.Join(mainRoot, ".lets"), ms
+			path = taskstate.Path(letsDir, slug)
 		}
 		if o.Orc != "" && branch == merge {
-			info.Reason = "orc_on_merge_branch"
+			res.TaskState = &TaskStateInfo{Path: path, Reason: "orc_on_merge_branch"}
 			res.OK = true
 			return res, nil
 		}
 	}
+	info := &TaskStateInfo{Path: path}
+	res.TaskState = info
 	var patch *taskstate.OrchestratorPatch
 	if o.Orchestrator != "" || o.SelfOrchestrator {
 		name := o.Orchestrator
@@ -255,8 +273,11 @@ func orchestratorUsage(o TaskStateOptions) *Error {
 		return usage("--clear-orchestrator conflicts with --orchestrator / --self-orchestrator / --orchestrator-scope / --standing")
 	case !named && o.ClearOrchestrator == "":
 		return usage("--orchestrator-scope and --standing need --orchestrator or --self-orchestrator")
-	case o.Orc != "" || o.ClearOrc:
-		return usage("--orc / --clear-orc bind a worker branch; orchestrator records live on the merge-branch")
+	case o.Orc != "":
+		return usage("--orc binds a worker branch; orchestrator records live on the merge-branch")
+	case o.Task != "" || o.Start != "":
+		// a task_mismatch would skip the whole write, the record with it
+		return usage("--task / --start cannot be combined with orchestrator records")
 	}
 	return nil
 }

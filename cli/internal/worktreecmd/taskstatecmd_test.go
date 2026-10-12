@@ -252,25 +252,47 @@ func TestTaskStateSet_OrchestratorRecords(t *testing.T) {
 	}
 }
 
-// Orchestrator records are written only on the merge-branch file.
-func TestTaskStateSet_OrchestratorOffMergeBranch(t *testing.T) {
-	repo := tsRepo(t, "feature/lets-abc-x")
+// Orchestrator records always go to the merge-branch file, whatever HEAD is: from
+// a feature-branch worktree too (F1). That branch's own keys cannot ride along.
+func TestTaskStateSet_OrchestratorFromWorktree(t *testing.T) {
+	repo := tsRepo(t, "main")
+	wt := filepath.Join(filepath.Dir(repo), "wt-feature")
+	runIn(t, repo, "git", "worktree", "add", "-q", "-b", "feature/lets-abc-x", wt)
+	if err := os.Symlink(filepath.Join(repo, ".lets"), filepath.Join(wt, ".lets")); err != nil {
+		t.Fatal(err)
+	}
 	mustWrite(t, taskFile(repo, "feature/lets-abc-x"), "task: lets-abc\n", 0o644)
-	for _, o := range []worktreecmd.TaskStateOptions{
-		{Orchestrator: "MAIN-LETS"},
-		{ClearOrchestrator: "MAIN-LETS"},
-		{SelfOrchestrator: true, Standing: strp("on")},
-	} {
-		res, err := worktreecmd.TaskStateSet(context.Background(), repo, o)
-		if worktreecmd.ExitCode(err) != worktreecmd.ExitUsage || res.Error == nil || res.Error.Kind != "orchestrator_off_merge_branch" {
-			t.Errorf("%+v: err=%v res=%+v", o, err, res.Error)
-		}
+	sid := fakeSelf(t, "MAIN-LETS")
+	res, err := worktreecmd.TaskStateSet(context.Background(), wt, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sid, Standing: strp("on")})
+	if err != nil || !res.TaskState.Written || res.TaskState.Path != taskFile(repo, "main") {
+		t.Fatalf("from a worktree: err=%v res=%+v", err, res.TaskState)
+	}
+	if got := readTask(t, repo, "main"); got != "orchestrator: MAIN-LETS standing=on\n" {
+		t.Errorf("merge-branch file: %q", got)
+	}
+	tsSet(t, wt, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sid, Standing: strp("off")})
+	tsSet(t, wt, worktreecmd.TaskStateOptions{ClearOrchestrator: "OTHER"})
+	if got := readTask(t, repo, "main"); got != "orchestrator: MAIN-LETS standing=off\n" {
+		t.Errorf("standing toggled from the worktree: %q", got)
 	}
 	if got := readTask(t, repo, "feature/lets-abc-x"); got != "task: lets-abc\n" {
-		t.Errorf("file changed: %s", got)
+		t.Errorf("the worktree's own file must not change: %q", got)
 	}
-	if _, err := os.Stat(taskFile(repo, "main")); !os.IsNotExist(err) {
-		t.Error("nothing may be written on the merge-branch file from another branch")
+	_, err = worktreecmd.TaskStateSet(context.Background(), wt, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sid, ClearOrc: true})
+	if worktreecmd.ExitCode(err) != worktreecmd.ExitUsage {
+		t.Errorf("this branch's keys with orchestrator records off the merge-branch: %v, want usage", err)
+	}
+}
+
+// /lets:start --main writes its session boundary, clears orc: and records itself in
+// ONE call on the merge-branch (F2).
+func TestTaskStateSet_MainModeOneCall(t *testing.T) {
+	repo := tsRepo(t, "main")
+	mustWrite(t, taskFile(repo, "main"), "orc: STALE\nfuture: keep\n", 0o644)
+	sid := fakeSelf(t, "MAIN-LETS")
+	tsSet(t, repo, worktreecmd.TaskStateOptions{ClearOrc: true, SessionSHA: "abc1234", SessionID: testSID, Create: true, SelfOrchestrator: true, Session: sid, OrchestratorScope: strp("docs")})
+	if got := readTask(t, repo, "main"); got != "future: keep\nsession: abc1234 "+testSID+"\norchestrator: MAIN-LETS scope=docs\n" {
+		t.Errorf("one call: %q", got)
 	}
 }
 
@@ -283,6 +305,10 @@ func TestTaskStateSet_SelfOrchestrator(t *testing.T) {
 	tsSet(t, repo, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sid, Standing: strp("on")})
 	if got := readTask(t, repo, "main"); got != "orchestrator: MAIN-LETS scope=docs standing=on\n" {
 		t.Errorf("file: %s", got)
+	}
+	bad := fakeSelf(t, "x --auto")
+	if res, _ := worktreecmd.TaskStateSet(context.Background(), repo, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: bad}); res.Error == nil || !strings.Contains(res.Error.Message, "fails the name grammar") {
+		t.Errorf("a registry name failing the grammar is named: %+v", res.Error)
 	}
 	unnamed := fakeSelf(t, "")
 	for _, s := range []string{unnamed, "bbbbbbbb-0000-4000-8000-0000000000bb"} {
@@ -307,6 +333,8 @@ func TestTaskStateSet_OrchestratorUsage(t *testing.T) {
 		{Orchestrator: "A", ClearOrchestrator: "B"},
 		{ClearOrchestrator: "B", Standing: strp("off")},
 		{Orchestrator: "A", Orc: "B"},
+		{Orchestrator: "A", Task: "lets-abc"},
+		{SelfOrchestrator: true, Start: "abc1234"},
 		{Orchestrator: "A", Standing: strp("maybe")},
 		{Orchestrator: "x --auto"},
 		{Orchestrator: "A", OrchestratorScope: strp("a=b")},

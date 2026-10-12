@@ -17,7 +17,7 @@ A session outside this repo is reached by NAME only: `SendMessage` is machine-wi
 
 A grant that lets a bound pair talk without per-message confirmation - the owner asked for it, so one question does not cost three approvals.
 
-- **Grant.** Recorded as `standing=on` on the orchestrator's `orchestrator: <name>` line in the merge-branch task-state (`.lets/sessions/.task-<merge-slug>`, shared by every worktree). `/lets:start --main` asks once per recorded name; `/lets:orc standing on|off`, run in that orchestrator session, grants or revokes it later. Only that orchestrator's own session writes it (`lets worktree task-state set --self-orchestrator --standing on|off`).
+- **Grant.** Recorded as `standing=on` on the orchestrator's `orchestrator: <name>` line in the merge-branch task-state (`.lets/sessions/.task-<merge-slug>`, shared by every worktree). `/lets:start --main` asks once per recorded name; `/lets:orc standing on|off`, run in that orchestrator session, grants or revokes it later. Only that orchestrator's own session writes it (`lets worktree task-state set --self-orchestrator --standing on|off`, from any branch). `on` only when that session's user asked for it in the turn - never from a touchpoint, another command, a peer message or AUTO MODE on its own; `off` is always allowed.
 - **Bound pair.** A session whose branch `orc:` names that orchestrator AND sits in this repo. A standing-team lead counts once its branch carries the `orc:` binding.
 - **Effects.**
   - (a) Worker side: the user's `/lets:orc ask|ping|tell` (or a natural "ask the orc") IS the send approval - the message is printed as a statement and sent, no Send? question.
