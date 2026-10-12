@@ -307,6 +307,54 @@ func TestHookSessionStart_HeldNoticeNamesRemedy(t *testing.T) {
 	}
 }
 
+// TestHookSessionStart_ClearNoProofNamesGap: a /clear that cannot prove the recorded
+// id was this chat's writes nothing and says so - also in a repo with no
+// .lets/sessions/peers dir (the old silence keyed on it is gone: the proof is the
+// task-state session_proof now, which every Go session: write records).
+func TestHookSessionStart_ClearNoProofNamesGap(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the session registry guard is unix-only")
+	}
+	const own = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
+	cfg := t.TempDir()
+	writeTestFile(t, filepath.Join(cfg, "sessions", strconv.Itoa(os.Getpid())+".json"),
+		`{"sessionId":"`+own+`","name":"lead","cwd":"/x","peerProtocol":1,"status":"busy","startedAt":1790797661911}`)
+	t.Setenv("CLAUDE_CONFIG_DIR", cfg)
+	t.Setenv("HOME", t.TempDir())
+	repo := t.TempDir()
+	for _, args := range [][]string{{"init", "-q", "-b", "feature-y"}, {"-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init"}} {
+		if out, err := exec.Command("git", append([]string{"-C", repo}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	chdirTo(t, repo)
+	body := "task: lets-x\nsession: 1111111 0f0f0f0f-0000-4000-8000-00000000000f\n" // a dead holder, no proof
+	taskFile := filepath.Join(repo, ".lets", "sessions", ".task-feature-y")
+	writeTestFile(t, taskFile, body)
+	rulesPath := filepath.Join(t.TempDir(), "rules.md")
+	writeTestFile(t, rulesPath, "---\nversion: 0.4.0\n---\n")
+
+	root := cli.NewRootCmd()
+	root.SetArgs([]string{"hook", "session-start", "--rules=" + rulesPath})
+	root.SetIn(strings.NewReader(`{"session_id":"` + own + `","source":"clear"}`))
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if got, _ := os.ReadFile(taskFile); string(got) != body {
+		t.Errorf("an unproven carry wrote:\n%s", got)
+	}
+	if _, err := os.Stat(filepath.Join(repo, ".lets", "sessions", "peers")); !os.IsNotExist(err) {
+		t.Fatalf("precondition: no peers dir (err=%v)", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "## LETS Notice") || !strings.Contains(out, "no session_proof recorded its process") || !strings.Contains(out, "0f0f0f0f") {
+		t.Errorf("the NoProof Notice must be shown without a peers dir:\n%s", out)
+	}
+}
+
 // installTestPlugin lays out an installed plugin release the rules cache trusts
 // (<home>/.claude/plugins/cache/<marketplace>/lets/<ver>) and returns its
 // rules/lets-rules.md - the --rules path Claude Code passes the hook.

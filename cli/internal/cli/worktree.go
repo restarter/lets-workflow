@@ -11,7 +11,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/restarter/lets-workflow/cli/internal/gitutil"
 	"github.com/restarter/lets-workflow/cli/internal/initcmd"
 	"github.com/restarter/lets-workflow/cli/internal/notifycmd"
 	"github.com/restarter/lets-workflow/cli/internal/worktreecmd"
@@ -590,10 +589,10 @@ func newWorktreeSwitchCmd() *cobra.Command {
 				return emitErrorEnvelope(cmd.OutOrStdout(), jsonOut, "switch", &worktreecmd.Error{Code: worktreecmd.ExitFilesystem, Kind: "getwd_failed", Message: err.Error(), Cause: err})
 			}
 			// The session: line goes through the SessionStart hook's own guard: a
-			// teammate pane in this worktree never takes the lead's boundary.
+			// second live session never takes this boundary (HeldLive).
 			o.Session = os.Getenv("CLAUDE_CODE_SESSION_ID")
 			if o.Session != "" {
-				o.Guard, _ = sessionGuardFn(gitutil.ProjectRoot(cwd, 2*time.Second), o.Session)
+				o.Guard = sessionGuardFn(o.Session)
 			}
 			res, runErr := worktreecmd.Switch(cmd.Context(), cwd, o)
 			return emitJSONOrRender(cmd, jsonOut, false, res, func() { worktreecmd.RenderSteps(cmd.OutOrStdout(), res.Envelope) }, runErr)

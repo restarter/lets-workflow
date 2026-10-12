@@ -373,11 +373,20 @@ func TestSwitch_SessionHeldStops(t *testing.T) {
 	f := newTeamFixture(t)
 	f.onTask(t, "lets-a1")
 	f.write(t, "a.txt", "wip\n")
+	// A fresh target has no task-state file, so nothing is held there: seed the
+	// target's line with a live foreign session.
+	const holder = "11111111-0000-4000-8000-000000000001"
+	f.sessionFile(t, slugOf("feature/lets-b2-task"), "task: lets-b2\nsession: abc1234 "+holder+"\n")
 	before := indexSnap(t, f.wt)
-	g := taskstate.SessionGuard{Lead: func(string) (bool, string) { return false, "snake-lead (session 11111111)" }}
+	g := taskstate.SessionGuard{Liveness: func(sid string) taskstate.Liveness {
+		if sid == holder {
+			return taskstate.LiveAlive
+		}
+		return taskstate.LiveDead
+	}}
 	_, err := f.sw(SwitchOptions{Task: "lets-b2", Park: true, Session: "bbbbbbbb-0000-4000-8000-000000000002", Guard: g})
 	wantKind(t, err, ExitGeneric, "session_held")
-	if !strings.Contains(err.Error(), "snake-lead") {
+	if !strings.Contains(err.Error(), holder) || !strings.Contains(err.Error(), taskstate.HeldLive) {
 		t.Errorf("the refusal must name the holder: %v", err)
 	}
 	if indexSnap(t, f.wt) != before {

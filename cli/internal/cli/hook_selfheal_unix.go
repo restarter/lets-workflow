@@ -7,17 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/restarter/lets-workflow/cli/internal/ccregistry"
 	"github.com/restarter/lets-workflow/cli/internal/gitutil"
-	"github.com/restarter/lets-workflow/cli/internal/memberscmd"
 	"github.com/restarter/lets-workflow/cli/internal/peerscmd"
 	"github.com/restarter/lets-workflow/cli/internal/taskstate"
-	"github.com/restarter/lets-workflow/cli/internal/teamfile"
 	"github.com/restarter/lets-workflow/cli/internal/worktreecmd"
 )
 
@@ -134,60 +131,40 @@ func peersHeal(root, sid string) {
 	peerscmd.CarryProof(ctx, root)
 }
 
-// sessionGuardFn builds the task-state session guard for root, plus the step an
-// allowed pass runs (the recorded lead's pid refresh; nil when sid is not the lead);
-// a var so tests spy.
+// sessionGuardFn builds the task-state session guard for the session sid; a var so
+// tests spy.
 var sessionGuardFn = sessionGuard
 
-// sessionGuard judges from ONE registry snapshot: liveness (sessionLiveness), a
-// same-process re-mint proven by the recorded id's session proof file
-// (peerscmd.RoleProof, read before peersHeal moves it), and - in a team worktree -
-// the recorded lead.
-// No registry at all keeps the unguarded refresh (no registry, no panes); a team
-// file or lead record that cannot be read refuses every write (fail-safe).
-func sessionGuard(root, sid string) (taskstate.SessionGuard, func()) {
-	var g taskstate.SessionGuard
-	if root == "" {
-		return g, nil
-	}
+// sessionGuard judges from ONE registry snapshot: liveness, a re-mint proven by the
+// stored session_proof, a parked session continued in THIS caller (lets-56ymc), and
+// the caller's own proof. No registry at all keeps the unguarded refresh.
+func sessionGuard(sid string) taskstate.SessionGuard {
 	snap := ccregistry.Read(ccregistry.HomeDir())
-	if snap.Degraded == nil || snap.Degraded.Reason != "registry_absent" {
-		g.Liveness = func(s string) taskstate.Liveness { return sessionLiveness(snap, s) }
-		g.Rotated = func(s string) (string, bool) {
-			pid, set, ok := peerscmd.RoleProof(root, s)
-			if !ok {
+	if snap.Degraded != nil && snap.Degraded.Reason == "registry_absent" {
+		return taskstate.SessionGuard{}
+	}
+	return taskstate.SessionGuard{
+		Liveness: func(s string) taskstate.Liveness { return sessionLiveness(snap, s) },
+		Rotated: func(s string, p taskstate.Proof) (string, bool) {
+			if snap.ContinuedIn(s, sid) {
+				return sid, true
+			}
+			if p.Session != s || p.Pid <= 0 {
 				return "", false
 			}
-			return snap.Rotated(s, pid, set)
-		}
+			if !snap.SameProcess(p.Pid, p.Started.UnixMilli()) {
+				return "", false // the proof's process is gone or the pid was reused
+			}
+			return snap.Rotated(s, p.Pid, p.Started)
+		},
+		Self: func(own string) (taskstate.Proof, bool) {
+			e, ok := snap.Find(own)
+			if !ok || e.Pid <= 0 || e.StartedAt <= 0 {
+				return taskstate.Proof{}, false // registry lag: no proof now, a later Go write fills it
+			}
+			return taskstate.Proof{Session: own, Pid: e.Pid, Started: time.UnixMilli(e.StartedAt)}, true
+		},
 	}
-	team, lead, err := teamLead(root)
-	switch {
-	case err != nil:
-		g.Lead = func(string) (bool, string) {
-			return false, "unknown (" + err.Error() + ") - fix or remove the team file"
-		}
-		return g, nil
-	case lead == nil:
-		return g, nil
-	}
-	label := "session " + shortSid(lead.Session)
-	if lead.Name != "" {
-		label = lead.Name + " (" + label + ")"
-	}
-	g.Lead = func(s string) (bool, string) {
-		if s == lead.Session {
-			return true, ""
-		}
-		if to, ok := snap.Rotated(lead.Session, lead.Pid, lead.Set); ok && to == s {
-			return true, ""
-		}
-		return false, label
-	}
-	if sid != lead.Session {
-		return g, nil
-	}
-	return g, func() { _ = memberscmd.RefreshLead(root, team, sid) }
 }
 
 // sessionLiveness: a session runs when the registry lists it, under peerProtocol 1
@@ -213,33 +190,4 @@ func sessionLiveness(snap ccregistry.Snapshot, sid string) taskstate.Liveness {
 		}
 	}
 	return taskstate.LiveDead
-}
-
-// teamLead returns the team owning the worktree at root and its recorded lead (nil
-// when none is recorded). Not a team worktree -> "", nil, nil; the teams dir is
-// checked first so a plain worktree pays one stat.
-func teamLead(root string) (string, *memberscmd.Lead, error) {
-	teams := filepath.Join(root, ".lets", "teams")
-	if _, err := os.Stat(teams); err != nil {
-		return "", nil, nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	gitDir, _ := exec.CommandContext(ctx, "git", "-C", root, "rev-parse", "--absolute-git-dir").Output()
-	team, ok, _, err := teamfile.FindByWorktree(teams, root, strings.TrimSpace(string(gitDir)))
-	if err != nil || !ok {
-		return "", nil, err
-	}
-	lead, err := memberscmd.ReadLead(root, team)
-	if err != nil {
-		return "", nil, err
-	}
-	return team, lead, nil
-}
-
-func shortSid(sid string) string {
-	if len(sid) > 8 {
-		return sid[:8]
-	}
-	return sid
 }

@@ -304,43 +304,65 @@ func sessionState(sid string) State {
 	return State{Task: "lets-x", Session: "1111111 " + sid}
 }
 
+// proofOf is a session_proof value for sid held by pid 4242.
+func proofOf(sid string) string { return sid + " 4242 1790797661911" }
+
 func TestMaySetSession(t *testing.T) {
 	live := func(v Liveness) func(string) Liveness {
 		return func(string) Liveness { return v }
 	}
-	rot := func(to string) func(string) (string, bool) {
-		return func(string) (string, bool) { return to, to != "" }
+	rot := func(to string) func(string, Proof) (string, bool) {
+		return func(string, Proof) (string, bool) { return to, to != "" }
 	}
-	lead := func(ok bool) func(string) (bool, string) {
-		return func(string) (bool, string) { return ok, "snake-lead (session cccccccc)" }
+	// byPid rotates into own whenever the proof names pid 4242, IGNORING its session:
+	// binding the proof to the recorded id is MaySetSession's job.
+	byPid := func(sid string, p Proof) (string, bool) {
+		if p.Pid == 4242 {
+			return gsOwn, true
+		}
+		return "", false
+	}
+	// parked continues gsForeign in own without any proof (ContinuedIn); any other
+	// recorded id proves nothing.
+	parked := func(sid string, p Proof) (string, bool) {
+		if sid == gsForeign && p == (Proof{}) {
+			return gsOwn, true
+		}
+		return "", false
+	}
+	withProof := func(stored, proof string) State {
+		st := sessionState(stored)
+		st.SessionProof = proof
+		return st
 	}
 	cases := []struct {
 		name   string
-		stored string
+		cur    State
 		op     SessionOp
 		g      SessionGuard
 		want   error  // nil, ErrSessionUnchanged or ErrSessionHeld
 		reason string // HeldError reason when held
 	}{
-		{"empty", "", OpRefresh, SessionGuard{Liveness: live(LiveAlive)}, nil, ""},
-		{"own", gsOwn, OpRefresh, SessionGuard{Liveness: live(LiveAlive)}, ErrSessionUnchanged, ""},
-		{"dead", gsForeign, OpRefresh, SessionGuard{Liveness: live(LiveDead)}, nil, ""},
-		{"live-foreign", gsForeign, OpRefresh, SessionGuard{Liveness: live(LiveAlive)}, ErrSessionHeld, HeldLive},
-		{"degraded", gsForeign, OpRefresh, SessionGuard{Liveness: live(LiveUnknown)}, ErrSessionHeld, HeldUnknown},
-		{"rotated-own", gsForeign, OpRefresh, SessionGuard{Liveness: live(LiveDead), Rotated: rot(gsOwn)}, nil, ""},
-		{"rotated-foreign", gsForeign, OpRefresh, SessionGuard{Liveness: live(LiveDead), Rotated: rot(gsThird)}, ErrSessionHeld, HeldRotatedForeign},
-		{"carry-proven", gsForeign, OpCarry, SessionGuard{Liveness: live(LiveDead), Rotated: rot(gsOwn)}, nil, ""},
-		{"carry-no-proof", gsForeign, OpCarry, SessionGuard{Liveness: live(LiveDead)}, ErrSessionHeld, HeldNoProof},
-		{"carry-no-proof-nil-guard", gsForeign, OpCarry, SessionGuard{}, ErrSessionHeld, HeldNoProof},
-		{"carry-foreign-live", gsForeign, OpCarry, SessionGuard{Liveness: live(LiveAlive)}, ErrSessionHeld, HeldLive},
-		{"carry-nothing-recorded", "", OpCarry, SessionGuard{}, ErrSessionUnchanged, ""},
-		{"lead-refused", "", OpRefresh, SessionGuard{Lead: lead(false)}, ErrSessionHeld, HeldLead},
-		{"lead-refused-even-own", gsOwn, OpRefresh, SessionGuard{Lead: lead(false)}, ErrSessionHeld, HeldLead},
-		{"lead-allowed-dead", gsForeign, OpRefresh, SessionGuard{Lead: lead(true), Liveness: live(LiveDead)}, nil, ""},
-		{"lead-allowed-live-foreign", gsForeign, OpRefresh, SessionGuard{Lead: lead(true), Liveness: live(LiveAlive)}, ErrSessionHeld, HeldLive},
+		{"empty", sessionState(""), OpRefresh, SessionGuard{Liveness: live(LiveAlive)}, nil, ""},
+		{"own", sessionState(gsOwn), OpRefresh, SessionGuard{Liveness: live(LiveAlive)}, ErrSessionUnchanged, ""},
+		{"dead", sessionState(gsForeign), OpRefresh, SessionGuard{Liveness: live(LiveDead)}, nil, ""},
+		{"live-foreign", sessionState(gsForeign), OpRefresh, SessionGuard{Liveness: live(LiveAlive)}, ErrSessionHeld, HeldLive},
+		{"degraded", sessionState(gsForeign), OpRefresh, SessionGuard{Liveness: live(LiveUnknown)}, ErrSessionHeld, HeldUnknown},
+		{"rotated-own", sessionState(gsForeign), OpRefresh, SessionGuard{Liveness: live(LiveDead), Rotated: rot(gsOwn)}, nil, ""},
+		{"rotated-foreign", sessionState(gsForeign), OpRefresh, SessionGuard{Liveness: live(LiveDead), Rotated: rot(gsThird)}, ErrSessionHeld, HeldRotatedForeign},
+		{"carry-proven", sessionState(gsForeign), OpCarry, SessionGuard{Liveness: live(LiveDead), Rotated: rot(gsOwn)}, nil, ""},
+		{"carry-no-proof", sessionState(gsForeign), OpCarry, SessionGuard{Liveness: live(LiveDead)}, ErrSessionHeld, HeldNoProof},
+		{"carry-no-proof-nil-guard", sessionState(gsForeign), OpCarry, SessionGuard{}, ErrSessionHeld, HeldNoProof},
+		{"carry-foreign-live", sessionState(gsForeign), OpCarry, SessionGuard{Liveness: live(LiveAlive)}, ErrSessionHeld, HeldLive},
+		{"carry-nothing-recorded", sessionState(""), OpCarry, SessionGuard{}, ErrSessionUnchanged, ""},
+		{"carry-proof-of-another-sid", withProof(gsForeign, proofOf(gsThird)), OpCarry, SessionGuard{Liveness: live(LiveDead), Rotated: byPid}, ErrSessionHeld, HeldNoProof},
+		{"carry-bound-proof", withProof(gsForeign, proofOf(gsForeign)), OpCarry, SessionGuard{Liveness: live(LiveDead), Rotated: byPid}, nil, ""},
+		{"refresh-continued-in", sessionState(gsForeign), OpRefresh, SessionGuard{Liveness: live(LiveAlive), Rotated: parked}, nil, ""},
+		{"carry-continued-in", sessionState(gsForeign), OpCarry, SessionGuard{Liveness: live(LiveAlive), Rotated: parked}, nil, ""},
+		{"unrelated-parked-live-holder", sessionState(gsForeign), OpRefresh, SessionGuard{Liveness: live(LiveAlive), Rotated: rot("")}, ErrSessionHeld, HeldLive},
 	}
 	for _, c := range cases {
-		err := MaySetSession(sessionState(c.stored), true, gsOwn, c.op, c.g)
+		err := MaySetSession(c.cur, true, gsOwn, c.op, c.g)
 		if !errors.Is(err, c.want) || (c.want == nil && err != nil) {
 			t.Errorf("%s: err=%v, want %v", c.name, err, c.want)
 			continue
@@ -354,6 +376,90 @@ func TestMaySetSession(t *testing.T) {
 	if err := MaySetSession(State{Session: "OLDSHA OLDSID"}, true, gsOwn, OpRefresh,
 		SessionGuard{Liveness: live(LiveAlive)}); err != nil {
 		t.Errorf("malformed line: err=%v", err)
+	}
+}
+
+func TestValidate_SessionProof(t *testing.T) {
+	if err := Validate("session_proof", proofOf(gsOwn)); err != nil {
+		t.Errorf("13-digit ms: %v", err)
+	}
+	for _, bad := range []string{
+		gsOwn + " 4242 1790797661",      // seconds, not ms
+		gsOwn + " 4242",                 // a field missing
+		"not-a-uuid 4242 1790797661911", // a non-uuid sid
+		gsOwn + " 0 1790797661911",      // pid 0
+	} {
+		if err := Validate("session_proof", bad); !errors.Is(err, ErrInvalidValue) {
+			t.Errorf("%q: err=%v, want ErrInvalidValue", bad, err)
+		}
+	}
+}
+
+func TestParseProof_Literal(t *testing.T) {
+	v := gsOwn + " 4242 1790797661911"
+	p, ok := ParseProof(v)
+	if !ok || p.Session != gsOwn || p.Pid != 4242 || !p.Started.Equal(time.UnixMilli(1790797661911)) {
+		t.Fatalf("ParseProof = %+v, %v", p, ok)
+	}
+	if got := p.Value(); got != v {
+		t.Errorf("Value() = %q, want %q", got, v)
+	}
+	if _, ok := ParseProof(gsOwn + " 4242 1790797661"); ok {
+		t.Error("a seconds value must not parse")
+	}
+}
+
+func TestStoredProof_BindsToSession(t *testing.T) {
+	st := sessionState(gsForeign)
+	st.SessionProof = proofOf(gsForeign)
+	if p, ok := StoredProof(st); !ok || p.Session != gsForeign || p.Pid != 4242 {
+		t.Errorf("bound proof: %+v, %v", p, ok)
+	}
+	st.SessionProof = proofOf(gsThird) // an older binary rewrote session: and left this
+	if _, ok := StoredProof(st); ok {
+		t.Error("a proof of another session id must not bind")
+	}
+	st.SessionProof = ""
+	if _, ok := StoredProof(st); ok {
+		t.Error("no proof line must not bind")
+	}
+	if _, ok := StoredProof(State{SessionProof: proofOf(gsOwn)}); ok {
+		t.Error("a proof without a session: line must not bind")
+	}
+}
+
+func TestSessionValues_NilProofDeletes(t *testing.T) {
+	letsDir := t.TempDir()
+	p := Proof{Session: sid, Pid: 4242, Started: time.UnixMilli(1790797661911)}
+	set := SessionValues("abc1234", sid, &p)
+	if set["session"] != "abc1234 "+sid || set["session_proof"] != sid+" 4242 1790797661911" {
+		t.Fatalf("with proof: %v", set)
+	}
+	if _, err := MergeWrite(letsDir, "b", WriteOpts{Set: set, Create: true}); err != nil {
+		t.Fatal(err)
+	}
+	set = SessionValues("def5678", sid, nil)
+	if v, ok := set["session_proof"]; !ok || v != "" {
+		t.Fatalf("nil proof must delete: %v", set)
+	}
+	st, err := MergeWrite(letsDir, "b", WriteOpts{Set: set})
+	if err != nil || st.SessionProof != "" || st.Session != "def5678 "+sid {
+		t.Errorf("after nil-proof write: %+v, %v", st, err)
+	}
+	if strings.Contains(read(t, letsDir, "b"), "session_proof") {
+		t.Errorf("file still holds session_proof:\n%s", read(t, letsDir, "b"))
+	}
+}
+
+func TestMergeWrite_KeepsSessionProof(t *testing.T) {
+	letsDir := t.TempDir()
+	write(t, letsDir, "b", "task: lets-a1\nsession: abc1234 "+sid+"\nsession_proof: "+sid+" 4242 1790797661911\n")
+	st, err := MergeWrite(letsDir, "b", WriteOpts{Set: map[string]string{"task": "lets-b2"}})
+	if err != nil || st.Task != "lets-b2" || st.SessionProof != sid+" 4242 1790797661911" || st.Session != "abc1234 "+sid {
+		t.Fatalf("state = %+v, %v", st, err)
+	}
+	if got := read(t, letsDir, "b"); !strings.Contains(got, "\nsession_proof: "+sid+" 4242 1790797661911\n") {
+		t.Errorf("session_proof line lost:\n%s", got)
 	}
 }
 
