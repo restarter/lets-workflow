@@ -42,6 +42,13 @@ func (o TaskStateOptions) orchestratorOps() bool {
 	return o.Orchestrator != "" || o.SelfOrchestrator || o.OrchestratorScope != nil || o.Standing != nil || o.ClearOrchestrator != ""
 }
 
+// orchestratorOnly reports whether o touches orchestrator records and nothing of
+// HEAD's own task-state.
+func (o TaskStateOptions) orchestratorOnly() bool {
+	return o.orchestratorOps() && o.Task == "" && o.Start == "" && o.SessionSHA == "" && o.SessionID == "" && o.Orc == "" &&
+		!o.ClearOrigin && !o.ClearOrc && !o.ClearTask
+}
+
 // selfName is the caller's registry name, or an orchestrator_needs_name refusal.
 func selfName(sid string) (string, *Error) {
 	if !ccregistry.ValidSession(sid) {
@@ -121,10 +128,16 @@ func TaskStateSet(ctx context.Context, dir string, o TaskStateOptions) (*TaskSta
 	}
 	root, branch, letsDir, slug, e := taskStateTarget(ctx, dir)
 	res.ProjectRoot = root
-	if e != nil {
+	// Orchestrator records alone need no HEAD branch: they go to the merge-branch file,
+	// so a detached HEAD refuses only a call that also writes this branch's own keys.
+	recordsOnDetached := e != nil && e.Kind == "detached_head" && o.orchestratorOnly()
+	if e != nil && !recordsOnDetached {
 		return fail(e)
 	}
-	path := taskstate.Path(letsDir, slug)
+	path := ""
+	if slug != "" {
+		path = taskstate.Path(letsDir, slug)
+	}
 
 	set := map[string]string{}
 	if (o.SessionSHA == "") != (o.SessionID == "") {

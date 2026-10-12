@@ -10,10 +10,12 @@ import (
 )
 
 var (
-	orcSkillCall  = regexp.MustCompile(`Skill\(\s*skill:\s*"lets:orc"\s*,\s*args:\s*"((?:[^"\\]|\\.)*)"`)
-	orcVerbArg    = regexp.MustCompile(`\bverb=([a-z-]+|<verb>)`)
-	orcStandingOn = regexp.MustCompile(`\btext=(?:\\")?on\b`)
-	peerSendSM    = regexp.MustCompile(`SendMessage\(\s*\{?\s*to\s*[:=]\s*"([^"]*)"`)
+	orcSkillCall = regexp.MustCompile(`Skill\(\s*skill:\s*"lets:orc"\s*,\s*args:\s*"((?:[^"\\]|\\.)*)"`)
+	orcVerbArg   = regexp.MustCompile(`\bverb=([a-z-]+|<verb>)`)
+	// orcStandingOff is the ONE standing form a Skill(lets:orc) call may carry: text
+	// exactly off (a whitelist - any other text, any case, or none, is a grant attempt).
+	orcStandingOff = regexp.MustCompile(`(?:^|\s)text=(?:\\")?off(?:\\")?(?:\s|$)`)
+	peerSendSM     = regexp.MustCompile(`SendMessage\(\s*\{?\s*to\s*[:=]\s*"([^"]*)"`)
 	// peerSendBanned are retired send forms and v0.10.0 steps - forbidden in EVERY
 	// file, the orc skill included (lets-0xsw2): a peer message goes through
 	// SendMessage only, and a reply arrives as a cross-session message.
@@ -78,9 +80,10 @@ func lintOrcFiles(files map[string]string) []string {
 			if !aliasPlaceholder && (v == nil || !map[string]bool{"ask": true, "ping": true, "read": true, "tell": true, "who": true, "standing": true}[v[1]]) {
 				bad = append(bad, rel+": Skill(lets:orc) with no valid verb: "+m[1])
 			}
-			// a standing grant is the user's own request, never a call from another file (F11)
-			if v != nil && v[1] == "standing" && orcStandingOn.MatchString(m[1]) {
-				bad = append(bad, rel+": Skill(lets:orc) may not grant standing (verb=standing text=on) - only the user's own /lets:orc does: "+m[1])
+			// a standing grant is the user's own request, never a call from another file
+			// (F11): a standing call may only revoke - its text is exactly off
+			if v != nil && v[1] == "standing" && !orcStandingOff.MatchString(m[1]) {
+				bad = append(bad, rel+": Skill(lets:orc) verb=standing may only carry text=off - only the user's own /lets:orc grants: "+m[1])
 			}
 			if rel != "commands/peer.md" && !strings.Contains(m[1], "footer=none") {
 				bad = append(bad, rel+": Skill(lets:orc) outside /lets:peer must pass footer=none: "+m[1])
@@ -269,8 +272,24 @@ func TestOrcLint(t *testing.T) {
 	if len(mutate("commands/start.md", "- **Allow** -> `Skill(skill: \"lets:orc\", args: \"verb=standing text=on footer=none\")`")) == 0 {
 		t.Error("mutation: a Skill(lets:orc) call granting standing must fail the lint")
 	}
+	if len(mutate("commands/start.md", "- **Allow** -> `Skill(skill: \"lets:orc\", args: \"verb=standing text=ON footer=none\")`")) == 0 {
+		t.Error("mutation: a standing grant in another case (text=ON) must fail the lint")
+	}
+	if len(mutate("commands/start.md", "- **Allow** -> `Skill(skill: \"lets:orc\", args: \"verb=standing on footer=none\")`")) == 0 {
+		t.Error("mutation: a standing call without text= must fail the lint")
+	}
 	if len(mutate("commands/start.md", "- **Stop** -> `Skill(skill: \"lets:orc\", args: \"verb=standing text=off footer=none\")`")) != 0 {
 		t.Error("mutation: a Skill(lets:orc) call revoking standing is allowed")
+	}
+
+	// start.md main mode: a refused orchestrator record wrote nothing, the boundary
+	// included - the boundary-alone fallback runs on EVERY failed envelope except
+	// the two where the file itself could not be written (f1 r1)
+	if !startFallbackOK(files["commands/start.md"]) {
+		t.Error("commands/start.md: after a failed record, the boundary-alone fallback must run on every failed envelope except task_state_lock_busy / task_state_write_failed")
+	}
+	if startFallbackOK(strings.Replace(files["commands/start.md"], "every failed envelope except", "an orchestrator_needs_name envelope, not", 1)) {
+		t.Error("mutation: a fallback scoped to one error kind must fail the start.md check")
 	}
 	if len(mutate("commands/hub.md", "lets peers frame --to-session x")) == 0 {
 		t.Error("mutation: a frame step in hub.md must fail the lint")
@@ -318,4 +337,17 @@ func TestOrcLint(t *testing.T) {
 	if len(mutate("commands/check.md", "Then run /lets:orc ask yourself.")) == 0 {
 		t.Error("mutation: /lets:orc in plain prose must fail the lint")
 	}
+}
+
+// startFallbackOK reports whether start.md's main mode names the fallback rule
+// (every failed envelope except the two write failures) and runs the boundary-alone
+// write as the next command after it.
+func startFallbackOK(start string) bool {
+	rule := strings.Index(start, "every failed envelope except `task_state_lock_busy` / `task_state_write_failed`")
+	if rule < 0 {
+		return false
+	}
+	next := strings.Index(start[rule:], "lets worktree task-state set")
+	boundary := `lets worktree task-state set --clear-orc --session-sha "$(git rev-parse HEAD)" --session-id "$CLAUDE_CODE_SESSION_ID" --create --json`
+	return next >= 0 && strings.HasPrefix(start[rule+next:], boundary)
 }

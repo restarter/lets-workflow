@@ -292,13 +292,13 @@ fi
 
 **The orchestrator record** (merge-branch only; the envelope of the call above):
 
-- `error.kind=orchestrator_needs_name` (this session has no name): nothing was written, the boundary included. One line - `error.remediation` verbatim (name it with `/rename <name>`, then `/lets:start --main` again) - then save the boundary alone and continue unrecorded:
+- **A failed envelope** - every failed envelope except `task_state_lock_busy` / `task_state_write_failed`: nothing was written, the boundary included (`orchestrator_needs_name` when this session has no name, `invalid_value` for a `--scope` outside the name grammar, ...). Save the boundary alone, then print one line naming `error.kind` - plus `error.remediation` verbatim when present (for `orchestrator_needs_name`: name it with `/rename <name>`, then `/lets:start --main` again); main mode continues unrecorded:
 
 ```bash
 lets worktree task-state set --clear-orc --session-sha "$(git rev-parse HEAD)" --session-id "$CLAUDE_CODE_SESSION_ID" --create --json
 ```
 
-- any other failed envelope: nothing was written - one line naming `error.kind`; main mode continues unrecorded.
+- `task_state_lock_busy` / `task_state_write_failed`: the file itself could not be written - one line naming `error.kind`, no retry; main mode continues unrecorded.
 - `LETS_BINARY_MISSING` or a `not_supported` stub reason: one line, then continue.
 - written: read the record back -
 

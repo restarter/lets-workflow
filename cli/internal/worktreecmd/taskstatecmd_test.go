@@ -284,6 +284,25 @@ func TestTaskStateSet_OrchestratorFromWorktree(t *testing.T) {
 	}
 }
 
+// A detached HEAD has no task-state of its own, but orchestrator records alone still
+// go to the merge-branch file; a call that also writes HEAD's keys is refused.
+func TestTaskStateSet_OrchestratorFromDetachedHead(t *testing.T) {
+	repo := tsRepo(t, "main")
+	runIn(t, repo, "git", "checkout", "-q", "--detach")
+	sid := fakeSelf(t, "MAIN-LETS")
+	res, err := worktreecmd.TaskStateSet(context.Background(), repo, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sid, Standing: strp("off")})
+	if err != nil || !res.TaskState.Written || res.TaskState.Path != taskFile(repo, "main") {
+		t.Fatalf("detached HEAD, records only: err=%v res=%+v", err, res.TaskState)
+	}
+	if got := readTask(t, repo, "main"); got != "orchestrator: MAIN-LETS standing=off\n" {
+		t.Errorf("merge-branch file: %q", got)
+	}
+	_, err = worktreecmd.TaskStateSet(context.Background(), repo, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sid, SessionSHA: "abc1234", SessionID: testSID})
+	if worktreecmd.ExitCode(err) != worktreecmd.ExitUsage {
+		t.Errorf("detached HEAD with this branch's keys: %v, want detached_head (usage)", err)
+	}
+}
+
 // /lets:start --main writes its session boundary, clears orc: and records itself in
 // ONE call on the merge-branch (F2).
 func TestTaskStateSet_MainModeOneCall(t *testing.T) {
