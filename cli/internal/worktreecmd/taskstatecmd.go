@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/restarter/lets-workflow/cli/internal/ccregistry"
 	"github.com/restarter/lets-workflow/cli/internal/gitutil"
 	"github.com/restarter/lets-workflow/cli/internal/letsconfig"
 	"github.com/restarter/lets-workflow/cli/internal/taskstate"
@@ -21,6 +22,41 @@ type TaskStateOptions struct {
 	Task, Start, SessionSHA, SessionID, Orc  string
 	ClearOrigin, ClearOrc, ClearTask, Create bool
 	Wait                                     time.Duration // lock deadline (0 = default 5s)
+
+	// The merge-branch `orchestrator:` records. Orchestrator (or SelfOrchestrator:
+	// this session's registry name) names the record to create or patch; a nil
+	// OrchestratorScope / Standing leaves that field as recorded (the CLI sets a
+	// pointer only for a flag that was given). ClearOrchestrator removes a record.
+	Orchestrator      string
+	SelfOrchestrator  bool
+	OrchestratorScope *string
+	Standing          *string // "on" | "off"
+	ClearOrchestrator string
+	// Session is the caller's session id ($CLAUDE_CODE_SESSION_ID, set by the cli
+	// layer), read only by SelfOrchestrator.
+	Session string
+}
+
+// orchestratorOps reports whether o touches an `orchestrator:` record.
+func (o TaskStateOptions) orchestratorOps() bool {
+	return o.Orchestrator != "" || o.SelfOrchestrator || o.OrchestratorScope != nil || o.Standing != nil || o.ClearOrchestrator != ""
+}
+
+// selfName is the caller's registry name, or an orchestrator_needs_name refusal.
+func selfName(sid string) (string, *Error) {
+	if !ccregistry.ValidSession(sid) {
+		return "", &Error{Code: ExitUsage, Kind: "usage", Message: "--self-orchestrator needs this session's id ($CLAUDE_CODE_SESSION_ID)",
+			Remediation: "run inside a Claude Code session"}
+	}
+	remedy := "name this session with /rename <name>, then run /lets:start --main again"
+	e, ok := ccregistry.Read(ccregistry.HomeDir()).Find(sid)
+	switch {
+	case !ok:
+		return "", &Error{Code: ExitGeneric, Kind: "orchestrator_needs_name", Message: "this session is not in the Claude Code session registry, so it has no name to record", Remediation: remedy}
+	case !e.NameOK:
+		return "", &Error{Code: ExitGeneric, Kind: "orchestrator_needs_name", Message: "this session has no name to record as an orchestrator", Remediation: remedy}
+	}
+	return e.Name, nil
 }
 
 // taskStateTarget resolves the task-state file for dir's current HEAD branch. It
@@ -122,20 +158,43 @@ func TaskStateSet(ctx context.Context, dir string, o TaskStateOptions) (*TaskSta
 			return fail(&Error{Code: ExitUsage, Kind: "invalid_value", Message: err.Error(), Cause: err})
 		}
 	}
-	if len(set) == 0 {
+	orch := o.orchestratorOps()
+	if orch {
+		if e := orchestratorUsage(o); e != nil {
+			return fail(e)
+		}
+	}
+	if len(set) == 0 && !orch {
 		return fail(&Error{Code: ExitUsage, Kind: "usage", Message: "nothing to set"})
 	}
 
 	info := &TaskStateInfo{Path: path}
 	res.TaskState = info
-	if o.Orc != "" {
+	if o.Orc != "" || orch {
 		home, _ := os.UserHomeDir()
 		merge := letsconfig.ResolvedEnv(root, home, func(r string) string { return gitutil.DefaultBranch(r, 2*time.Second) })["LETS_MERGE_BRANCH"]
-		if branch == merge {
+		if orch && branch != merge {
+			return fail(&Error{Code: ExitUsage, Kind: "orchestrator_off_merge_branch",
+				Message:     fmt.Sprintf("orchestrator records live only in the merge-branch (%s) task-state; HEAD is %s", merge, branch),
+				Remediation: "run it on " + merge})
+		}
+		if o.Orc != "" && branch == merge {
 			info.Reason = "orc_on_merge_branch"
 			res.OK = true
 			return res, nil
 		}
+	}
+	var patch *taskstate.OrchestratorPatch
+	if o.Orchestrator != "" || o.SelfOrchestrator {
+		name := o.Orchestrator
+		if o.SelfOrchestrator {
+			n, e := selfName(o.Session)
+			if e != nil {
+				return fail(e)
+			}
+			name = n
+		}
+		patch = &taskstate.OrchestratorPatch{Name: name, Scope: o.OrchestratorScope, Standing: o.Standing}
 	}
 
 	wait := o.Wait
@@ -155,8 +214,11 @@ func TaskStateSet(ctx context.Context, dir string, o TaskStateOptions) (*TaskSta
 		}
 		return nil, nil
 	}
-	st, err := taskstate.MergeWrite(letsDir, slug, taskstate.WriteOpts{Set: set, Create: o.Create, Deadline: time.Now().Add(wait), Derive: derive})
+	st, err := taskstate.MergeWrite(letsDir, slug, taskstate.WriteOpts{Set: set, Create: o.Create || patch != nil, Deadline: time.Now().Add(wait), Derive: derive,
+		PatchOrchestrator: patch, ClearOrchestrator: o.ClearOrchestrator})
 	switch {
+	case errors.Is(err, taskstate.ErrInvalidValue):
+		return fail(&Error{Code: ExitUsage, Kind: "invalid_value", Message: err.Error(), Cause: err})
 	case errors.Is(err, errMismatch):
 		info.Reason = "task_mismatch"
 		fillFrom(info, current)
@@ -179,6 +241,24 @@ func TaskStateSet(ctx context.Context, dir string, o TaskStateOptions) (*TaskSta
 	}
 	res.OK = true
 	return res, nil
+}
+
+// orchestratorUsage refuses the orchestrator flag combinations that cannot mean one
+// write.
+func orchestratorUsage(o TaskStateOptions) *Error {
+	usage := func(msg string) *Error { return &Error{Code: ExitUsage, Kind: "usage", Message: msg} }
+	named := o.Orchestrator != "" || o.SelfOrchestrator
+	switch {
+	case o.Orchestrator != "" && o.SelfOrchestrator:
+		return usage("--orchestrator and --self-orchestrator conflict")
+	case o.ClearOrchestrator != "" && (named || o.OrchestratorScope != nil || o.Standing != nil):
+		return usage("--clear-orchestrator conflicts with --orchestrator / --self-orchestrator / --orchestrator-scope / --standing")
+	case !named && o.ClearOrchestrator == "":
+		return usage("--orchestrator-scope and --standing need --orchestrator or --self-orchestrator")
+	case o.Orc != "" || o.ClearOrc:
+		return usage("--orc / --clear-orc bind a worker branch; orchestrator records live on the merge-branch")
+	}
+	return nil
 }
 
 func fillFrom(info *TaskStateInfo, st taskstate.State) {

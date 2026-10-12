@@ -397,6 +397,7 @@ func newWorktreeTaskStateCmd() *cobra.Command {
 	}
 	var o worktreecmd.TaskStateOptions
 	var setJSON, showJSON bool
+	var orchScope, standing string
 	set := &cobra.Command{
 		Use:   "set",
 		Short: "Change only the given keys of the current branch's task-state file",
@@ -405,6 +406,16 @@ func newWorktreeTaskStateCmd() *cobra.Command {
 			cwd, err := os.Getwd()
 			if err != nil {
 				return emitErrorEnvelope(cmd.OutOrStdout(), setJSON, "task-state", &worktreecmd.Error{Code: worktreecmd.ExitFilesystem, Kind: "getwd_failed", Message: err.Error(), Cause: err})
+			}
+			// a pointer only for a flag that was given: a nil field keeps the record's value
+			if cmd.Flags().Changed("orchestrator-scope") {
+				o.OrchestratorScope = &orchScope
+			}
+			if cmd.Flags().Changed("standing") {
+				o.Standing = &standing
+			}
+			if o.SelfOrchestrator {
+				o.Session = os.Getenv("CLAUDE_CODE_SESSION_ID")
 			}
 			res, runErr := worktreecmd.TaskStateSet(cmd.Context(), cwd, o)
 			return emitJSONOrRender(cmd, setJSON, false, res, func() { worktreecmd.RenderTaskState(cmd.OutOrStdout(), res) }, runErr)
@@ -419,6 +430,11 @@ func newWorktreeTaskStateCmd() *cobra.Command {
 	set.Flags().BoolVar(&o.ClearOrc, "clear-orc", false, "Remove orc:")
 	set.Flags().BoolVar(&o.ClearTask, "clear-task", false, "Remove task:, start: and origin: (keeps session: and every other line)")
 	set.Flags().BoolVar(&o.Create, "create", false, "Create the file when it is missing")
+	set.Flags().StringVar(&o.Orchestrator, "orchestrator", "", "Record (or update) this orchestrator name on the merge-branch file")
+	set.Flags().BoolVar(&o.SelfOrchestrator, "self-orchestrator", false, "Record this session's own registry name ($CLAUDE_CODE_SESSION_ID) as an orchestrator")
+	set.Flags().StringVar(&orchScope, "orchestrator-scope", "", "The orchestrator's part of the repo (empty removes it; omitted keeps it)")
+	set.Flags().StringVar(&standing, "standing", "", "Standing send authorization for workers bound to it: on | off (omitted keeps it)")
+	set.Flags().StringVar(&o.ClearOrchestrator, "clear-orchestrator", "", "Remove this orchestrator name's record")
 	set.Flags().DurationVar(&o.Wait, "wait", 5*time.Second, "Lock deadline")
 	set.Flags().BoolVar(&setJSON, "json", false, "Emit JSON envelope")
 	show := &cobra.Command{
