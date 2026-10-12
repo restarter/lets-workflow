@@ -74,9 +74,10 @@ func ErrTemplateMissing(path string) *Error {
 	return &Error{Code: ExitTemplateMissing, Kind: "template_missing", Message: fmt.Sprintf("team template %s is missing", path), Remediation: "pass --plugin-root <plugins/lets>"}
 }
 
-// ErrCallsignLive - a live session already runs as the callsign's lead.
-func ErrCallsignLive(callsign string) *Error {
-	return &Error{Code: ExitCallsignLive, Kind: "callsign_live", Message: fmt.Sprintf("a live session is named %s-lead", callsign), Remediation: "pick another callsign (--suggest-callsign)"}
+// ErrCallsignLive - a live session already carries the callsign's lead name in this
+// repository.
+func ErrCallsignLive(callsign, name string) *Error {
+	return &Error{Code: ExitCallsignLive, Kind: "callsign_live", Message: fmt.Sprintf("a live session is named %s (the lead of team %s)", name, callsign), Remediation: "pick another callsign (--suggest-callsign)"}
 }
 
 // ErrNotTeamWorktree - switch runs only in a standing team's worktree.

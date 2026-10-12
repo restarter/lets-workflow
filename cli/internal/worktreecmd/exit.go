@@ -36,7 +36,7 @@ const (
 	ExitNoRemoteBase         = 31 // switch: origin/<merge> is missing, and a new branch is never cut from local <merge>
 	// 32 retired (members_live, lets-gbfpd) - never reused
 	ExitTargetIsMergeBranch = 33 // switch: the target branch is the merge-branch
-	ExitCallsignLive        = 34 // team-init: a live session is named <callsign>-lead
+	ExitCallsignLive        = 34 // team-init: a live session carries the callsign's lead name
 	ExitSessionHeld         = 35 // task-state set / switch: a live foreign session holds the session: line; nothing was written
 )
 

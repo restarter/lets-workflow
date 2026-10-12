@@ -365,7 +365,7 @@ func TestFreeCallsign_SkipsFileAndLiveLead(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, teamfile.Callsigns[0]+".md"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	live := func(name string) bool { return name == teamfile.Callsigns[1]+"-lead" }
+	live := func(c string) bool { return c == teamfile.Callsigns[1] }
 	if c, ok := teamfile.FreeCallsign(dir, live); !ok || c != teamfile.Callsigns[2] {
 		t.Errorf("FreeCallsign = %q, %v; want %q (file and live lead skipped)", c, ok, teamfile.Callsigns[2])
 	}
@@ -374,5 +374,47 @@ func TestFreeCallsign_SkipsFileAndLiveLead(t *testing.T) {
 	}
 	if _, ok := teamfile.FreeCallsign(dir, func(string) bool { return true }); ok {
 		t.Error("every lead live must leave no callsign")
+	}
+}
+
+// FreeCallsign asks the caller per callsign - the lead-name rule is the caller's: a
+// callsign whose lead runs is skipped, whatever name that lead carries.
+func TestFreeCallsign_PerCallsign(t *testing.T) {
+	dir := t.TempDir()
+	var asked []string
+	leadLive := func(c string) bool {
+		asked = append(asked, c)
+		return c == "snake" || c == "frog"
+	}
+	if c, ok := teamfile.FreeCallsign(dir, leadLive); !ok || c != "otter" {
+		t.Errorf("FreeCallsign = %q, %v; want otter", c, ok)
+	}
+	if strings.Join(asked, ",") != "snake,frog,otter" {
+		t.Errorf("asked %v, want the callsigns in order", asked)
+	}
+}
+
+func TestLeadName(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, body string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name+".md"), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("snake", "---\nteam: \"snake\"\nlead_name: \"lets-workflow-snake-lead\"\n---\nbody lead_name: ignored\n")
+	write("frog", "---\nteam: \"frog\"\n---\n")
+	write("otter", "---\nteam: \"otter\"\nlead_name: \"a\"\nlead_name: \"b\"\n---\n")
+	if got, err := teamfile.LeadName(dir, "snake"); err != nil || got != "lets-workflow-snake-lead" {
+		t.Errorf("present: %q, %v", got, err)
+	}
+	if got, err := teamfile.LeadName(dir, "frog"); err != nil || got != "" {
+		t.Errorf("absent: %q, %v", got, err)
+	}
+	if _, err := teamfile.LeadName(dir, "otter"); err == nil || !strings.Contains(err.Error(), "duplicate key lead_name") {
+		t.Errorf("duplicate key: err=%v", err)
+	}
+	if _, err := teamfile.LeadName(dir, "missing"); err == nil {
+		t.Error("a missing team file must be an error")
 	}
 }

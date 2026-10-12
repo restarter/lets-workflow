@@ -247,6 +247,20 @@ func TestResult_SchemaContract(t *testing.T) {
 		}
 	})
 
+	// team-init reports the lead session name the team gets, in every mode.
+	t.Run("team_init_lead_name", func(t *testing.T) {
+		r := &TeamInitResult{
+			Envelope: Envelope{SchemaVersion: SchemaVersion, OK: true, Subcommand: "team-init", ProjectRoot: "/p", Steps: []Step{}},
+			Callsign: "snake", Suggested: true, LeadName: "lets-workflow-snake-lead",
+		}
+		m := marshalToMap(t, r)
+		requireKeys(t, m, requiredCore...)
+		requireKeys(t, m, "callsign", "suggested", "lead_name")
+		if m["lead_name"] != "lets-workflow-snake-lead" {
+			t.Errorf("lead_name = %v", m["lead_name"])
+		}
+	})
+
 	t.Run("info_in_worktree", func(t *testing.T) {
 		r := &InfoResult{
 			Envelope: Envelope{

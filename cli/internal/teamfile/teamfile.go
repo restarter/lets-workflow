@@ -1,8 +1,8 @@
 // Package teamfile owns the Go side of the standing-team file
 // `.lets/teams/<name>.md`: rendering it from the plugin template
 // (plugins/lets/templates/team.md) and finding the team that owns a worktree.
-// The file is model-read; Go reads only the frontmatter keys `team`, `worktree`
-// and `git_dir`, and never anything below the frontmatter.
+// The file is model-read; Go reads only the frontmatter keys `team`, `worktree`,
+// `git_dir` and `lead_name`, and never anything below the frontmatter.
 //
 // `.lets/teams/` is shared by every worktree of the repo, so one broken file must
 // not affect another worktree: FindByWorktree skips a malformed file that does not
@@ -62,15 +62,15 @@ var Callsigns = []string{
 	"yak", "zebra", "beaver", "cobra", "dolphin", "eagle", "fox", "gibbon",
 }
 
-// FreeCallsign returns the first callsign with no team file in teamsDir and no
-// live session `<callsign>-lead` (live answers for a session name). ok=false when
-// every callsign is taken.
-func FreeCallsign(teamsDir string, live func(name string) bool) (string, bool) {
+// FreeCallsign returns the first callsign with no team file in teamsDir and no live
+// lead (leadLive reports whether a live session carries that callsign's lead name -
+// the caller owns the name rule). ok=false when every callsign is taken.
+func FreeCallsign(teamsDir string, leadLive func(callsign string) bool) (string, bool) {
 	for _, c := range Callsigns {
 		if _, err := os.Lstat(filepath.Join(teamsDir, c+".md")); err == nil || !errors.Is(err, os.ErrNotExist) {
 			continue
 		}
-		if live != nil && live(c+"-lead") {
+		if leadLive != nil && leadLive(c) {
 			continue
 		}
 		return c, true
@@ -111,7 +111,21 @@ func Render(tmpl []byte, v Values) ([]byte, error) {
 
 // header is the part of a team file's frontmatter Go reads.
 type header struct {
-	team, worktree, gitDir string
+	team, worktree, gitDir, leadName string
+}
+
+// LeadName is the lead_name the team file <teamsDir>/<team>.md records ("" when the
+// key is absent). A file that cannot be read, or whose frontmatter is malformed (a
+// duplicate key, a bad value, no closing ---), is an error.
+func LeadName(teamsDir, team string) (string, error) {
+	h, found, err := readHeader(filepath.Join(teamsDir, team+".md"))
+	if err != nil {
+		return "", err
+	}
+	if !found {
+		return "", nil
+	}
+	return h.leadName, nil
 }
 
 // FindByWorktree returns the team whose file in teamsDir claims the worktree at
@@ -220,6 +234,8 @@ func readHeader(path string) (h header, found bool, err error) {
 			dst = &h.worktree
 		case "git_dir":
 			dst = &h.gitDir
+		case "lead_name":
+			dst = &h.leadName
 		default:
 			continue
 		}
