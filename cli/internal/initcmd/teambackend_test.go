@@ -178,14 +178,21 @@ func TestTeamBackend_Members(t *testing.T) {
 	if !strings.Contains(dismiss, `Skill(skill: "lets:member-run", args: "op=dismiss `) {
 		t.Error("dismiss goes through member-run op=dismiss")
 	}
-	if !strings.Contains(dismiss, "`lead.session` is not `$CLAUDE_CODE_SESSION_ID`") || !strings.Contains(dismiss, "**Refused:**") {
-		t.Error("only the lead's own session dismisses")
+	if !strings.Contains(dismiss, "`team_lead.match`") || !strings.Contains(dismiss, "/rename") || strings.Contains(dismiss, "**Refused:**") {
+		t.Error("dismiss warns with the team_lead /rename line, never refuses")
+	}
+	if rec, call := strings.Index(dismiss, "BEFORE every `op=dismiss`, append `Dismissed: <name> (lead <session6>)`"), strings.Index(dismiss, `args: "op=dismiss `); rec < 0 || call < rec {
+		t.Error("dismiss records `Dismissed: <name>` in the team file before op=dismiss")
 	}
 	members := sectionSpan(team, "\n## Members\n")
-	for _, want := range []string{"lets worktree info --json", "No `team`", "`<c>-<name>`", "`cwd` is the team worktree"} {
+	for _, want := range []string{"lets worktree info --json", "No `team`", "`<c>-<name>`", "`cwd` is the team worktree", "`ListAgents` lists `<c>-<name>`", "`team_lead`", "/rename it if this is the lead", "never refused"} {
 		if !strings.Contains(members, want) {
 			t.Errorf("Step M0 must state %q", want)
 		}
+	}
+	m0 := sectionSpan(team, "### Step M0: Team")
+	if strings.Contains(m0, "lets members") || strings.Contains(m0, "**Refused:**") {
+		t.Error("Step M0 reads ListAgents and team_lead - no lets members, and an unknown or other lead is never refused")
 	}
 	spawn := sectionSpan(team, "\n## Spawn\n")
 	refuse := strings.Index(spawn, "**Same name live -> refused.**")
@@ -193,7 +200,7 @@ func TestTeamBackend_Members(t *testing.T) {
 	if refuse < 0 || call < 0 || refuse > call {
 		t.Error("the same-name live refusal comes before the spawn call")
 	}
-	for _, want := range []string{`label: "Close it first (Recommended)"`, "the survivor is recorded dismissed", "the survivor keeps running - close it by hand", ".lets/cache/member-<c>-<name>.md", "on the lead's OK"} {
+	for _, want := range []string{`label: "Close it first (Recommended)"`, "the survivor is recorded dismissed", "the survivor keeps running - close it by hand", ".lets/cache/member-<c>-<name>.md", "on the lead's OK", "**Fresh name** -> append `Dismissed: <name> (lead <session6>)`", "This gate is the only guard: member-run does not refuse a duplicate name."} {
 		if !strings.Contains(spawn, want) {
 			t.Errorf("spawn must carry %q", want)
 		}
@@ -439,8 +446,8 @@ func TestTeamBackend_CreateDisband(t *testing.T) {
 	if disband == "" {
 		t.Fatal("## Disband section missing")
 	}
-	if !strings.Contains(disband, "lets members lead --scope '<c>' --json") || !strings.Contains(disband, "never counted or guessed") || strings.Contains(disband, "exactly one session") {
-		t.Error("disband reads the lead from the lets members record, never a session count")
+	if !strings.Contains(disband, "lets peers who --json") || !strings.Contains(disband, "the session NAMED by the team file's `lead_name`") || !strings.Contains(disband, "never counted or guessed") || strings.Contains(disband, "exactly one session") || strings.Contains(disband, "lets members lead") {
+		t.Error("disband finds the lead by the team file's lead_name in lets peers who, never a session count")
 	}
 	if strings.Contains(disband, "TaskStop(") || !strings.Contains(disband, "no `TaskStop`") {
 		t.Error("disband never kills a session")
@@ -450,7 +457,7 @@ func TestTeamBackend_CreateDisband(t *testing.T) {
 	if tellGate < 0 || tell < tellGate {
 		t.Error("the tell to a live lead is gated")
 	}
-	if !strings.Contains(disband, "`lead.status` `live`, `rotated` or `unknown`") || !strings.Contains(disband, "No lead record, or its lead is `gone` ->") {
+	if !strings.Contains(disband, "`who` failed or degraded -> the same gate with `{state}` = `unknown`") || !strings.Contains(disband, "never treated as gone") || !strings.Contains(disband, "- No row -> list every live session whose cwd is `<path>`") {
 		t.Error("an unknown lead is asked about like a live one, never treated as gone")
 	}
 	wrapped := strings.Index(disband, `label: "Lead has wrapped up"`)
@@ -524,7 +531,13 @@ func membersLinkProblems(team string) []string {
 	if m2 := sectionSpan(team, "### Step M2: The Whole Roster (`spawn --roster`)"); !strings.Contains(m2, "by Step M1.5's rule") || !strings.Contains(m2, "Each member's brief and prompt then carry its own `REPORT_FILE: <path>` line") {
 		p = append(p, "Step M2 must open or add the report files by Step M1.5's rule and hand each brief its REPORT_FILE")
 	}
+	if m2 := sectionSpan(team, "### Step M2: The Whole Roster (`spawn --roster`)"); !strings.Contains(m2, "that is not live (Step M0) and has no `Dismissed: <name>` line by this lead session is a candidate") {
+		p = append(p, "Step M2 must skip a roster row recorded Dismissed: by this lead session")
+	}
 	m4 := sectionSpan(team, "### Step M4: Dismiss (`dismiss <name>` / `dismiss --all`)")
+	if !strings.Contains(m4, "every roster name `ListAgents` (the harness's agent registry) lists that has no `Dismissed:` line by this lead session") {
+		p = append(p, "Step M4 dismiss --all must cover only the listed roster names with no Dismissed: line by this lead session")
+	}
 	if strings.Contains(m4, "the same call") || strings.Count(m4, `Skill(skill: "lets:member-run", args: "op=dismiss scope=<c> name=<name>")`) != 2 {
 		p = append(p, "Step M4 must name member-run op=dismiss for dismiss <name> and dismiss --all alike")
 	}
@@ -551,7 +564,9 @@ func TestTeamBackend_MembersLink(t *testing.T) {
 		{"a reader takes any Reports line", "Take the line whose `<session6>` is this session's (`$CLAUDE_CODE_SESSION_ID`)", "Take the latest line", "only the Reports line this lead session opened"},
 		{"the brief loses its REPORT_FILE", ", then its own last line `REPORT_FILE: <path>` (Step 5's path)", "", "brief file must carry its REPORT_FILE"},
 		{"M2 skips the M1.5 rule", "first the report files, by Step M1.5's rule, for every name at once", "first the report files for every name at once", "Step M2 must open or add"},
-		{"dismiss --all says the same call again", "then `Skill(skill: \"lets:member-run\", args: \"op=dismiss scope=<c> name=<name>\")` for every registry member", "then the same call for every registry member", "Step M4 must name member-run op=dismiss"},
+		{"dismiss --all says the same call again", "then `Skill(skill: \"lets:member-run\", args: \"op=dismiss scope=<c> name=<name>\")` for every registry member - every roster name", "then the same call for every registry member - every roster name", "Step M4 must name member-run op=dismiss"},
+		{"M2 respawns a dismissed row", " and has no `Dismissed: <name>` line by this lead session is a candidate", " is a candidate", "Step M2 must skip a roster row recorded Dismissed:"},
+		{"dismiss --all forgets Dismissed", " that has no `Dismissed:` line by this lead session.", ".", "Step M4 dismiss --all must cover only"},
 	}
 	for _, m := range mutants {
 		t.Run(m.name, func(t *testing.T) {

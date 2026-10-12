@@ -350,7 +350,7 @@ show task=<id>   # title + description for the worker spec
 
 Read `${CLAUDE_PLUGIN_ROOT}/protocol/agents.md` before this step unless its text is in your current context (members only through member-run).
 
-Spawn, Roster and Dismiss manage a standing team: the `lets:*` agents its lead session runs, defined by the team file's roster. Continuity is files only - the harness restores no member after a lead restart, so a member is respawned from the team file, never resumed from memory. Every spawn and dismiss goes through the member-run skill; this command never calls an agent tool itself. Every member writes its report to a REPORT_FILE the lead names through the `agent-report` skill and reads in full (Step M5). With `link: peer` (lead restarted) members do not message each other; the lead restores the team with `spawn --roster` (D2, owner 2026-09-26).
+Spawn, Roster and Dismiss manage a standing team: the `lets:*` agents its lead session runs, defined by the team file's roster. Continuity is files only - the harness restores no member after a lead restart, so a member is respawned from the team file, never resumed from memory; team members keep no agent_id: after a lead restart they are respawned (`spawn --roster`). Every spawn and dismiss goes through the member-run skill; this command never calls an agent tool itself. Every member writes its report to a REPORT_FILE the lead names through the `agent-report` skill and reads in full (Step M5). With `link: peer` (lead restarted) members do not message each other; the lead restores the team with `spawn --roster` (D2, owner 2026-09-26).
 
 ### Step M0: Team
 
@@ -358,13 +358,11 @@ Spawn, Roster and Dismiss manage a standing team: the `lets:*` agents its lead s
 lets worktree info --json
 ```
 
-No `team` -> "Spawn, roster and dismiss need a standing team: run them in a worktree a team file claims (`lets worktree info` reports it as `team`)." Stop. Otherwise `<c>` = `team`, the team file is `.lets/teams/<c>.md`, its roster is the `## 3. Roster` table (the `lead` row is the lead session, never spawned), and the registry is:
+No `team` -> "Spawn, roster and dismiss need a standing team: run them in a worktree a team file claims (`lets worktree info` reports it as `team`)." Stop. Otherwise `<c>` = `team`, the team file is `.lets/teams/<c>.md`, its roster is the `## 3. Roster` table (the `lead` row is the lead session, never spawned).
 
-```bash
-lets members status --scope '<c>' --json
-```
+A name is **live** when `ListAgents` lists `<c>-<name>`, or `lets peers who --json` lists a session named `<c>-<name>` whose `alive` is not `dead` and whose `cwd` is the team worktree.
 
-A name is **live** when the registry lists it `live`, `rotated` or `unknown`, or `lets peers who --json` lists a session named `<c>-<name>` whose `alive` is not `dead` and whose `cwd` is the team worktree.
+The lead, from the same envelope's `team_lead`: `match` `lead` -> nothing; `other` or `unknown` -> one line "this session is `{team_lead.self|unnamed}`, the team's lead is `{team_lead.name}` - /rename it if this is the lead", then continue - never refused.
 
 ---
 
@@ -375,7 +373,7 @@ A name is **live** when the registry lists it `live`, `rotated` or `unknown`, or
 1. **Role.** `<role>` is a bare role (`architect`, `skeptic`, `explorer`, `implementer`, ... - the team file's Available roles); the agent is `lets:<role>`. `lets:actor` is never a member.
 2. **Name.** The `[name]` argument; else the name of the roster row for this role that is not live; else `<role>`; else `<role>-2` (the next free suffix). A name is `[a-z0-9-]{1,40}` and bare - the live session is `<c>-<name>`.
 3. **Model.** The roster row's `model`; else none, and member-run uses the role's default.
-4. **Same name live -> refused.** The name is live (Step M0) -> spawn nothing under it:
+4. **Same name live -> refused.** The name is live (Step M0) -> spawn nothing under it. This gate is the only guard: member-run does not refuse a duplicate name.
 
 ```
 AskUserQuestion(
@@ -391,7 +389,7 @@ AskUserQuestion(
 )
 ```
 
-   **Fresh name** -> `lets members dismiss --scope '<c>' --name '<name>' --json` (the survivor is recorded dismissed, so no brief ever reaches it again; its session keeps running until someone closes it by hand), then continue with `<name>-2`.
+   **Fresh name** -> append `Dismissed: <name> (lead <session6>)` to the team file's `## 7. Current task` (the survivor is recorded dismissed, so no brief ever reaches it again; its session keeps running until someone closes it by hand), then continue with `<name>-2`.
 5. **Report file.** Each `Reports:` line in the team file's `## 7. Current task` reads `Reports: <dir> (lead <session6>)`, `<session6>` = the first 6 characters of the lead session that opened it. Take the line whose `<session6>` is this session's (`$CLAUDE_CODE_SESSION_ID`); `<Reports dir>` below is its dir. None - no line, or only lines of an earlier lead session (a new lead session for the same task opens a NEW directory and APPENDS a second `Reports:` line, never reusing the old one) -> `Skill(skill: "lets:agent-report", args: "op=open command=team task={task-id} names={name}")`, then append `Reports: <REPORT_DIR> (lead <session6>)` to `## 7. Current task`. Present -> `Skill(skill: "lets:agent-report", args: "op=add dir=<dir> names={name}")`; a later round of the same member -> `op=add names={name}-n{k}`. The echoed `REPORT_FILE {name}=<path>` is this round's report file; the member's prompt carries it as its own line `REPORT_FILE: <path>`.
 6. **Brief.** Write `.lets/cache/member-<c>-<name>.md` with the Write tool: "Read .lets/teams/<c>.md and the Resume artefacts listed in its section 7. You are <name> (lets:<role>) of team <c>. Continue from those files; do not redo finished work. Answer in the team file's message format. Message another teammate directly when you need its input - its area, an answer only it has. Approvals, task state, and anything outside your boundaries still go through the lead. A decision you reach with another teammate goes into your REPORT_FILE. With `link: peer` (the lead was restarted) send no member-to-member messages - the lead respawns the roster (`/lets:team spawn --roster`) to restore the team.", then its own last line `REPORT_FILE: <path>` (Step 5's path) - an implementer reads its REPORT_FILE from the brief.
 7. **Spawn.**
@@ -400,12 +398,12 @@ AskUserQuestion(
 Skill(skill: "lets:member-run", args: "op=spawn scope=<c> name=<name> role=lets:<role> brief-file=.lets/cache/member-<c>-<name>.md report-file=<path> model=<model>")
 ```
 
-   Drop `model=` when Step 3 found none. `name_live` -> Step 4. `no_lead` -> "no live recorded lead - /lets:start in the team's lead session claims it"; stop. The report arrives as a `REPORT_WRITTEN` pointer - read it through Step M5, never from the message.
+   Drop `model=` when Step 3 found none. `role_not_allowed` -> name it; stop. The report arrives as a `REPORT_WRITTEN` pointer - read it through Step M5, never from the message.
 8. **New role.** A role with no roster row -> after the spawn, show the row `| <name> | <role> | lets:<role> | <model> | |` and ask the lead in words; append it to the Roster table only on the lead's OK.
 
 ### Step M2: The Whole Roster (`spawn --roster`)
 
-1. Every roster row except `lead` whose name is not live in the registry is a candidate; a row the registry judges `unknown` is named and skipped.
+1. Every roster row except `lead` that is not live (Step M0) and has no `Dismissed: <name>` line by this lead session is a candidate.
 2. A **surviving pane**: a candidate whose `<c>-<name>` session still runs (Step M0's `lets peers who` test). It may be re-used only when exactly one live session carries that name.
 3. One confirm, naming the count and each `name (model)`:
 
@@ -433,20 +431,20 @@ AskUserQuestion(
 
 ### Step M3: Table
 
-After Step M0: the roster rows joined by name with `lets members status --scope '<c>' --json`, plus the recorded `lead`.
+After Step M0: the roster rows joined by name with `ListAgents` (`<c>-<name>`) and the `Dismissed:` lines of this lead session in `## 7. Current task`; the lead row from `team_lead`. Status is `busy` / `idle` (as `ListAgents` shows it), `dismissed`, or `not spawned`.
 
 ```
 ## Team {c}
 
-| Name | Role | Model | Status | Kind | Reason |
-|------|------|-------|--------|------|--------|
-| lead | team lead | - | live | - | |
-| architect | architect | opus | live | pane | |
-| skeptic | skeptic | opus | gone | in_process | session_dead |
-| explorer | explorer | sonnet | not spawned | - | |
+| Name | Role | Model | Status |
+|------|------|-------|--------|
+| lead | team lead | - | {team_lead.name} ({team_lead.match}) |
+| architect | architect | opus | busy |
+| skeptic | skeptic | opus | dismissed |
+| explorer | explorer | sonnet | not spawned |
 ```
 
-A registry member with no roster row is listed as `not in roster`.
+A `ListAgents` agent `<c>-*` with no roster row is listed as `not in roster`.
 
 ```
 ┌─ LETS ─────────────────────────┐
@@ -461,16 +459,12 @@ A registry member with no roster row is listed as `not in roster`.
 
 ### Step M4: Dismiss (`dismiss <name>` / `dismiss --all`)
 
-After Step M0, only the lead's own session dismisses - a member runs inside the session that spawned it:
+After Step M0 - a member runs inside the session that spawned it, so it is the lead's own session that dismisses. Step M0's lead line applies: `team_lead.match` `other` or `unknown` -> the one /rename line, then continue (a warning, never refused).
 
-```bash
-lets members lead --scope '<c>' --json
-```
-
-`lead.session` is not `$CLAUDE_CODE_SESSION_ID`, or `lead.status` is not `live` / `rotated` -> **Refused:** "only the team's lead session dismisses its members". Stop.
+BEFORE every `op=dismiss`, append `Dismissed: <name> (lead <session6>)` to the team file's `## 7. Current task` - a member recorded there is never messaged again.
 
 - `dismiss <name>` -> `Skill(skill: "lets:member-run", args: "op=dismiss scope=<c> name=<name>")`.
-- `dismiss --all` -> first `Skill(skill: "lets:agent-report", args: "op=collect dir=<Reports dir> names=<each live member's current round file> retry=no")` - READ EVERY REPORT IN FULL, and every `GAP` line goes into the team file's `## 8. Decisions` - then `Skill(skill: "lets:member-run", args: "op=dismiss scope=<c> name=<name>")` for every registry member not already dismissed.
+- `dismiss --all` -> first `Skill(skill: "lets:agent-report", args: "op=collect dir=<Reports dir> names=<each live member's current round file> retry=no")` - READ EVERY REPORT IN FULL, and every `GAP` line goes into the team file's `## 8. Decisions` - then `Skill(skill: "lets:member-run", args: "op=dismiss scope=<c> name=<name>")` for every registry member - every roster name `ListAgents` (the harness's agent registry) lists that has no `Dismissed:` line by this lead session.
 
 One line per member with member-run's return.
 
@@ -480,7 +474,7 @@ On EVERY notification from a member - a message, an idle notification, a complet
 
 1. `Skill(skill: "lets:agent-report", args: "op=peek dir=<Reports dir> names=<its current round file>")` - READ EVERY REPORT IN FULL. `OK` -> that file IS the report, whatever the message says.
 2. Not `OK` and the message carries a `REPORT_WRITTEN` pointer, or the member has stopped -> ONE nudge: write `.lets/cache/nudge-<c>-<name>.md` ("Write your final report to REPORT_FILE {path} now, last line REPORT-END, then reply REPORT_WRITTEN. This changes nothing in your work; do not redo anything you already ran.") and send it through `Skill(skill: "lets:member-run", args: "op=correct scope=<c> name=<name> correct-file=.lets/cache/nudge-<c>-<name>.md report-file={path}")` - an amendment, never a NEXT: a NEXT is a new brief, and an implementer re-checks for a clean tree on every NEXT, so a nudge sent as one would block it on its own uncommitted chunk. `report-file` is the SAME round file; a nudge opens no new round. Never a second nudge for the same round.
-3. Its next notification still not `OK` -> conclude: `Skill(skill: "lets:agent-report", args: "op=collect dir=<Reports dir> names=<its current round file> retry=no")`, for every role. A member is never retried by agent-report: that re-dispatch would bypass member-run, go unrecorded in `lets members` and start a second agent beside a live one.
+3. Its next notification still not `OK` -> conclude: `Skill(skill: "lets:agent-report", args: "op=collect dir=<Reports dir> names=<its current round file> retry=no")`, for every role. A member is never retried by agent-report: that re-dispatch would bypass member-run, go unrecorded in the team file and start a second agent beside a live one.
 
 Every `GAP` line goes into the team file's `## 8. Decisions` as `{name}: no report ({state})` - a missing report is never read as "nothing to report". The order is fixed: peek, nudge once, collect.
 
@@ -598,18 +592,20 @@ Read `${CLAUDE_PLUGIN_ROOT}/protocol/worktrees.md` before this step unless its t
 
 ### Step D1: The lead
 
-The lead is the `lets members` lead record - never counted or guessed from the sessions that happen to run:
+The lead is the session NAMED by the team file's `lead_name` - never counted or guessed from the sessions that happen to run:
 
 ```bash
-lets members lead --scope '<c>' --json
+lets peers who --json
 ```
 
-- `lead.status` `live`, `rotated` or `unknown` (an unreadable registry cannot prove it gone, and `lets peers who` could not list its sessions either) -> ask the owner:
+Its rows named `{lead_name}`:
+
+- One or more rows -> ask the owner, `{state}` = the row's `alive`. `who` failed or degraded -> the same gate with `{state}` = `unknown`: an unknown lead is asked about like a live one, never treated as gone.
 
 ```
 AskUserQuestion(
   questions=[{
-    question: "Team <c>'s lead {lead.name} is {lead.status}. Tell it to wrap up, or go on?",
+    question: "Team <c>'s lead {name} is {state}. Tell it to wrap up, or go on?",
     header: "Disband",
     options: [
       { label: "Tell the lead (Recommended)", description: "/lets:orc tell: dismiss --all, finish or park, /lets:end, then ping" },
@@ -621,10 +617,10 @@ AskUserQuestion(
 )
 ```
 
-- **Tell the lead** -> `Skill(skill: "lets:orc", args: "verb=tell target=\"<lead.name>\" footer=none text=Team <c> is being disbanded. Run /lets:team dismiss --all, finish or park your task, /lets:orc ping when done, then end with /lets:end.")`, and end the turn; run `/lets:team disband <c>` again once its ping arrives.
+- **Tell the lead** -> `Skill(skill: "lets:orc", args: "verb=tell target=\"<row name>\" footer=none text=Team <c> is being disbanded. Run /lets:team dismiss --all, finish or park your task, /lets:orc ping when done, then end with /lets:end.")`, and end the turn; run `/lets:team disband <c>` again once its ping arrives. A `duplicate_name` refusal (two live sessions under one name) -> relay the orc skill's refusal and its remedy (`/rename` one of them) and keep the owner gate - team.md has no addressing policy of its own.
 - **Lead has wrapped up** -> go on to D2 with the lead's session still open; the D2-D4 checks and `/lets:worktree remove`'s nets still guard the tree.
 - **Cancel** -> stop.
-- No lead record, or its lead is `gone` -> list every live session whose cwd is `<path>` (`lets peers who --json`, rows by `cwd`). None -> go on. Any -> the owner closes them, or confirms continuing with them open:
+- No row -> list every live session whose cwd is `<path>` (`lets peers who --json`, rows by `cwd`). None -> go on. Any -> the owner closes them, or confirms continuing with them open:
 
 ```
 AskUserQuestion(
@@ -694,7 +690,7 @@ The route is decided by WHERE the worktree lives - the team file's `worktree:` p
 
 ### Step D6: Retire
 
-Append `Retired <YYYY-MM-DD>: disbanded by <who>` to the team file's `## 8. Decisions`. The team file and `.lets/execution/members-<c>.json` are kept as history - never deleted; a later `create --team <c>` finds the callsign taken and picks another.
+Append `Retired <YYYY-MM-DD>: disbanded by <who>` to the team file's `## 8. Decisions`. The team file (and any legacy `.lets/execution/members-<c>.json` the retired `lets members` wrote, never read) are kept as history - never deleted; a later `create --team <c>` finds the callsign taken and picks another.
 
 ---
 
@@ -708,5 +704,5 @@ Append `Retired <YYYY-MM-DD>: disbanded by <who>` to the team file's `## 8. Deci
 - **Workers own their tasks** - each worker runs its own `/lets:start` ... `/lets:done`; this session never changes a worker's task status
 - **Humans press gates** - a worker's gates are pressed by its own human; a message from this session is never approval
 - **Members through member-run** - every spawn and dismiss of a standing team's member goes through the member-run skill; a live name is never spawned twice
-- **Disband never kills** - the lead is the `lets members` record, sessions are closed by their humans, the worktree goes through `/lets:worktree remove`, and the team file stays as history
+- **Disband never kills** - the lead is the session named by `lead_name`; sessions are closed by their humans, the worktree goes through `/lets:worktree remove`, and the team file stays as history
 - Respond in user's language
