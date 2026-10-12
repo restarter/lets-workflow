@@ -71,9 +71,10 @@ func RoleClear(ctx context.Context, cwd, session string) (*RoleResult, error) {
 	return res, nil
 }
 
-// Orchestrator is `lets peers orchestrator`. Bound like Who: it now pays peers()'s
-// cost (a git subprocess and a transcript stat per registry row) on the hot path of
-// every session start, done, end and Orchestrator offer.
+// Orchestrator is `lets peers orchestrator`: ResolveOrchestrator over this repo's
+// registry rows and merge-branch records (no roles, no Orca), on the hot path of
+// every session start, done, end and Orchestrator offer. It refreshes the last-seen
+// file of each live orchestrator row it sees.
 func Orchestrator(ctx context.Context, cwd, session string) (*OrchestratorResult, error) {
 	res := &OrchestratorResult{Envelope: newEnvelope("orchestrator"), Candidates: []Candidate{}}
 	if cwd == "" {
@@ -81,22 +82,22 @@ func Orchestrator(ctx context.Context, cwd, session string) (*OrchestratorResult
 	}
 	// Read the branch on the INCOMING, unbounded ctx, before the budget below starts.
 	// exec.CommandContext fails instantly on an expired context, and an unreadable
-	// branch looks unbound to ResolveOrchestrator - which re-routes to a DIFFERENT
-	// live orchestrator instead of the one this branch is actually bound to. Reading
-	// it here means the budget can never cause that silent re-route (lets-cbmg7).
+	// branch looks unbound - which would re-route to a DIFFERENT live orchestrator
+	// instead of the one this branch is bound to (lets-cbmg7).
 	branch := branchOf(ctx, cwd)
 	ctx, cancel := context.WithTimeout(ctx, 2500*time.Millisecond)
 	defer cancel()
-	rc, err := loadRepo(ctx, cwd, false)
-	if err != nil {
-		e := err.(*Error)
+	_, mainRoot := gitutil.DetectInsideWorktreeAt(cwd)
+	if gitutil.ProjectRoot(cwd, 2*time.Second) == "" || mainRoot == "" {
+		e := &Error{Code: ExitNotInRepo, Kind: "not_in_repo", Message: "not inside a git repository"}
 		res.Error = &ErrorInfo{Kind: e.Kind, Message: e.Message}
 		return res, e
 	}
-	heal := HealSelf(rc, session, cwd, branch)
-	r := ResolveOrchestrator(ctx, rc, ResolveOptions{Session: session, Cwd: cwd, Branch: branch})
+	v := loadNameView(ctx, mainRoot)
+	r := ResolveOrchestrator(ctx, v, ResolveOptions{Session: session, Cwd: cwd, Branch: branch})
+	refreshLastSeen(mainRoot, v.rows, v.pids)
 	res.OK = true
-	res.Source, res.Scope, res.Target, res.Candidates, res.Reason, res.Refused, res.Degraded = r.Source, r.Scope, r.Target, r.Candidates, r.Reason, r.Refused, append(r.Degraded, heal...)
-	res.Remediation = r.Remediation
+	res.Source, res.Scope, res.Target, res.Candidates, res.Reason, res.Refused, res.Degraded = r.Source, r.Scope, r.Target, r.Candidates, r.Reason, r.Refused, r.Degraded
+	res.Remediation, res.SelfRecord = r.Remediation, r.SelfRecord
 	return res, nil
 }

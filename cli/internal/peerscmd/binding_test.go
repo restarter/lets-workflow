@@ -4,6 +4,7 @@ package peerscmd
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/restarter/lets-workflow/cli/internal/orcacmd"
+	"github.com/restarter/lets-workflow/cli/internal/peername"
 )
 
 func withBranch(t *testing.T, branch string) {
@@ -36,7 +38,7 @@ func resolveIn(t *testing.T, root, session string) *Resolution {
 	if err != nil {
 		t.Fatalf("loadRepo: %v", err)
 	}
-	return ResolveOrchestrator(context.Background(), rc, ResolveOptions{Session: session, Cwd: root})
+	return resolveOrchestratorLegacy(context.Background(), rc, ResolveOptions{Session: session, Cwd: root})
 }
 
 const sidW = "dddddddd-0000-4000-8000-00000000000d"
@@ -127,7 +129,7 @@ func TestResolveOrchestrator_ExhaustedBudgetNeverRebinds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadRepo: %v", err)
 	}
-	if r := ResolveOrchestrator(cancelled, rc, ResolveOptions{Session: sidB, Cwd: root, Branch: "feature/x"}); r.Source != "bound" || r.Target == nil || r.Target.Session != sidA {
+	if r := resolveOrchestratorLegacy(cancelled, rc, ResolveOptions{Session: sidB, Cwd: root, Branch: "feature/x"}); r.Source != "bound" || r.Target == nil || r.Target.Session != sidA {
 		t.Fatalf("a supplied Branch must resolve the binding even under an exhausted ctx: %+v", r)
 	}
 
@@ -138,7 +140,7 @@ func TestResolveOrchestrator_ExhaustedBudgetNeverRebinds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadRepo: %v", err)
 	}
-	r2 := ResolveOrchestrator(cancelled, rc2, ResolveOptions{Session: sidB, Cwd: root})
+	r2 := resolveOrchestratorLegacy(cancelled, rc2, ResolveOptions{Session: sidB, Cwd: root})
 	if r2.Source != "none" || r2.Reason != "branch_unreadable" || r2.Target != nil {
 		t.Fatalf("an exhausted budget with no Branch must degrade loudly, not silently resolve to ORC-B: %+v", r2)
 	}
@@ -170,7 +172,7 @@ func TestResolveOrchestrator_ExhaustedBudgetOnNamedBranchNeverResolvesSingle(t *
 	if err != nil {
 		t.Fatalf("loadRepo: %v", err)
 	}
-	r := ResolveOrchestrator(cancelled, rc, ResolveOptions{Session: sidB, Cwd: root, Branch: "feature/y"})
+	r := resolveOrchestratorLegacy(cancelled, rc, ResolveOptions{Session: sidB, Cwd: root, Branch: "feature/y"})
 	if r.Source != "none" || r.Reason != "budget_exhausted" || r.Target != nil {
 		t.Fatalf("an exhausted budget on a readable-but-unbound branch must degrade loudly, never resolve single: %+v", r)
 	}
@@ -261,7 +263,7 @@ func TestResolve_EveryReasonHasRemediation(t *testing.T) {
 	if r.Reason != "orchestrator_not_registered" || !strings.Contains(r.Remediation, "/lets:start") || !strings.HasPrefix(r.Remediation, "GONE") {
 		t.Errorf("a dead end must carry its remedy: %+v", r)
 	}
-	for reason := range refusalDetails {
+	for reason := range legacyRefusalDetails {
 		if remedy(reason, "", "X", false, false) == "" || remedy(reason, "", "X", true, false) == "" {
 			t.Errorf("%s has no remedy", reason)
 		}
@@ -464,30 +466,20 @@ func TestResolveOrchestrator_SiblingBudget(t *testing.T) {
 		}
 		return false
 	}
-	// Orca never answers: the 2500ms budget of `lets peers orchestrator` runs out.
-	old := listOrcaRepos
-	listOrcaRepos = func(ctx context.Context) (*orcacmd.ReposInfo, *orcacmd.Failure) {
-		<-ctx.Done()
-		return &orcacmd.ReposInfo{}, &orcacmd.Failure{Reason: "orca_unavailable"}
-	}
-	t.Cleanup(func() { listOrcaRepos = old })
-	res, err := Orchestrator(context.Background(), root, sidW)
-	if err != nil || res.Reason != "budget_exhausted" || len(res.Refused) != 0 {
-		t.Errorf("blocked repo list: %+v %v", res, err)
-	}
+	// (The verb no longer walks Orca repos: `lets peers orchestrator` resolves by name.)
 	// Expiry after the repo list but during the shape-A owner lookup.
 	fakeRepos(t, root)
 	rc, lerr := loadRepo(context.Background(), root, false)
 	if lerr != nil {
 		t.Fatal(lerr)
 	}
-	if r := ResolveOrchestrator(&errAfter{Context: context.Background(), n: 2}, rc, ResolveOptions{Session: sidW, Cwd: root}); !budgeted(r) {
+	if r := resolveOrchestratorLegacy(&errAfter{Context: context.Background(), n: 2}, rc, ResolveOptions{Session: sidW, Cwd: root}); !budgeted(r) {
 		t.Errorf("expiry at the shape-A lookup must be budget_exhausted, not repo_not_in_orca: %+v", r)
 	}
 	// A context already spent before the lookup starts.
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if r := ResolveOrchestrator(ctx, rc, ResolveOptions{Session: sidW, Cwd: root, Branch: "feature/x"}); !budgeted(r) {
+	if r := resolveOrchestratorLegacy(ctx, rc, ResolveOptions{Session: sidW, Cwd: root, Branch: "feature/x"}); !budgeted(r) {
 		t.Errorf("a cancelled context: %+v", r)
 	}
 }
@@ -568,5 +560,229 @@ func TestResolveOrchestrator_SiblingReadOnly(t *testing.T) {
 		if after[p] != s {
 			t.Errorf("%s changed", p)
 		}
+	}
+}
+
+// ---- name resolution (ResolveOrchestrator, `lets peers orchestrator`) ----
+
+// recordOrchestrators writes the merge-branch (main) task-state of root.
+func recordOrchestrators(t *testing.T, root, content string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(root, ".lets", "sessions", ".task-main"), []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// orcEnv runs the verb and returns its result and the emitted JSON envelope.
+func orcEnv(t *testing.T, root, session string) (*OrchestratorResult, map[string]any) {
+	t.Helper()
+	res, err := Orchestrator(context.Background(), root, session)
+	if err != nil || !res.OK {
+		t.Fatalf("orchestrator: %+v %v", res, err)
+	}
+	b, _ := json.Marshal(res)
+	var env map[string]any
+	if err := json.Unmarshal(b, &env); err != nil {
+		t.Fatal(err)
+	}
+	return res, env
+}
+
+// skillStanding is the orc skill's condition for a standing grant: target.standing
+// is the JSON true.
+func skillStanding(env map[string]any) bool {
+	tg, _ := env["target"].(map[string]any)
+	v, present := tg["standing"]
+	return present && v == true
+}
+
+// selfStanding is self_record.standing as the skill reads it; ok=false when
+// self_record is null or absent.
+func selfStanding(env map[string]any) (string, bool) {
+	sr, present := env["self_record"]
+	if !present {
+		panic("self_record must always be in the envelope")
+	}
+	m, ok := sr.(map[string]any)
+	if !ok {
+		return "", false
+	}
+	st, _ := m["standing"].(string)
+	return st, true
+}
+
+func TestResolveByName_Self(t *testing.T) {
+	root := repoWithLets(t, "")
+	withBranch(t, "feature/x")
+	recordOrchestrators(t, root, "orchestrator: MAIN-LETS scope=docs standing=on\n")
+	claudeHome(t, []regRow{{1, sidM, "MAIN-LETS", root}})
+	res, env := orcEnv(t, root, sidM)
+	if res.Source != "self" || res.Target == nil || res.Target.Session != sidM || !skillStanding(env) {
+		t.Errorf("self: %+v", res)
+	}
+	if res.SelfRecord == nil || *res.SelfRecord != (SelfRecord{Name: "MAIN-LETS", Scope: "docs", Standing: "on"}) {
+		t.Errorf("self_record: %+v", res.SelfRecord)
+	}
+}
+
+// bound wins first, even for a session that is itself a recorded orchestrator;
+// self_record still says it is one.
+func TestResolveByName_BoundFirst(t *testing.T) {
+	root := repoWithLets(t, "")
+	withBranch(t, "feature/x")
+	bindBranch(t, root, "feature/x", "OTHER")
+	recordOrchestrators(t, root, "orchestrator: MAIN-LETS\n")
+	claudeHome(t, []regRow{{1, sidM, "MAIN-LETS", root}, {2, sidN, "OTHER", root}})
+	res, env := orcEnv(t, root, sidM)
+	if res.Source != "bound" || res.Target == nil || res.Target.Session != sidN {
+		t.Errorf("bound first: %+v", res)
+	}
+	if st, ok := selfStanding(env); !ok || st != "" {
+		t.Errorf("self_record keeps the unset standing: %q %v", st, ok)
+	}
+}
+
+// target.standing is true only for a record's standing=on; self_record.standing
+// keeps the string. Checked on the emitted envelope, as the skill reads it.
+func TestResolveByName_Standing(t *testing.T) {
+	root := repoWithLets(t, "")
+	withBranch(t, "feature/x")
+	bindBranch(t, root, "feature/x", "MAIN-PWA")
+	claudeHome(t, []regRow{{1, sidM, "MAIN-PWA", root}, {3, sidW, "W", root}})
+	for line, want := range map[string]struct {
+		target bool
+		self   string
+	}{
+		"orchestrator: MAIN-PWA standing=on\n":  {true, "on"},
+		"orchestrator: MAIN-PWA standing=off\n": {false, "off"},
+		"orchestrator: MAIN-PWA\n":              {false, ""},
+	} {
+		recordOrchestrators(t, root, line)
+		res, env := orcEnv(t, root, sidW)
+		tg, _ := env["target"].(map[string]any)
+		if _, present := tg["standing"]; res.Source != "bound" || skillStanding(env) != want.target || !present {
+			t.Errorf("%q: worker sees target.standing=%v (present=%v), want %v", line, tg["standing"], present, want.target)
+		}
+		if st, ok := selfStanding(env); ok {
+			t.Errorf("%q: the worker has no record of its own: %q", line, st)
+		}
+		_, env = orcEnv(t, root, sidM)
+		if st, ok := selfStanding(env); !ok || st != want.self || skillStanding(env) != want.target {
+			t.Errorf("%q: the orchestrator sees self_record.standing=%q (ok=%v), target.standing=%v", line, st, ok, skillStanding(env))
+		}
+	}
+}
+
+// A bound name whose only live session runs in another directory is the target -
+// by name, with its cwd, no repo_index, and never with standing (cross-repo stays
+// per-message).
+func TestResolveByName_BoundElsewhere(t *testing.T) {
+	root := repoWithLets(t, "")
+	far := gitRepo(t)
+	withBranch(t, "feature/x")
+	bindBranch(t, root, "feature/x", "FAR")
+	recordOrchestrators(t, root, "orchestrator: FAR standing=on\n")
+	claudeHome(t, []regRow{{1, sidM, "FAR", far}, {3, sidW, "W", root}})
+	res, env := orcEnv(t, root, sidW)
+	if res.Source != "bound" || res.Target == nil || res.Target.Session != sidM || res.Target.Cwd != far || res.Target.RepoIndex != nil || res.Reason != "" || len(res.Refused) != 0 {
+		t.Fatalf("cross-repo bound target: %+v", res)
+	}
+	if skillStanding(env) {
+		t.Errorf("a cross-repo target never carries standing: %+v", env["target"])
+	}
+}
+
+func TestResolveByName_BoundRefusals(t *testing.T) {
+	root := repoWithLets(t, "")
+	withBranch(t, "feature/x")
+	bindBranch(t, root, "feature/x", "GONE")
+	claudeHome(t, []regRow{{3, sidW, "W", root}})
+	res, _ := orcEnv(t, root, sidW)
+	if res.Source != "bound" || res.Target != nil || res.Reason != "target_not_alive" || len(res.Refused) != 1 || res.Refused[0].Name != "GONE" ||
+		!strings.Contains(res.Remediation, "GONE") || !strings.Contains(res.Remediation, "/lets:start") {
+		t.Errorf("bound dead: %+v", res)
+	}
+	bindBranch(t, root, "feature/x", "DUP")
+	claudeHome(t, []regRow{{1, sidM, "DUP", root}, {2, sidN, "DUP", gitRepo(t)}, {3, sidW, "W", root}})
+	res, _ = orcEnv(t, root, sidW)
+	if res.Target != nil || res.Reason != "target_unsendable" || res.Refused[0].Detail != "name_not_unique" || !strings.Contains(res.Remediation, "/rename") {
+		t.Errorf("bound duplicated: %+v", res)
+	}
+	bindBranch(t, root, "feature/x", "HIDDEN")
+	claudeHome(t, []regRow{{3, sidW, "W", root}}, 77)
+	res, _ = orcEnv(t, root, sidW)
+	if res.Target != nil || res.Reason != "target_unsendable" || res.Refused[0].Detail != "liveness_unknown" {
+		t.Errorf("an unreadable registry entry may carry the name: %+v", res)
+	}
+}
+
+func TestResolveByName_Unbound(t *testing.T) {
+	root := repoWithLets(t, "")
+	withBranch(t, "feature/x")
+	conv := peername.Orchestrator(peername.RepoSlug(root), "")
+	for _, c := range []struct {
+		name    string
+		records string
+		rows    []regRow
+		source  string
+		target  string
+	}{
+		{"single recorded", "orchestrator: MAIN-LETS\n", []regRow{{1, sidM, "MAIN-LETS", root}}, "single", sidM},
+		{"two scopes", "orchestrator: MAIN-PWA scope=pwa\norchestrator: MAIN-LIC scope=lic\n", []regRow{{1, sidM, "MAIN-PWA", root}, {2, sidN, "MAIN-LIC", root}}, "ambiguous", ""},
+		{"not recorded, no convention", "", []regRow{{1, sidM, "MAIN-LETS", root}}, "none", ""},
+		{"recorded not live, convention live", "orchestrator: MAIN-GONE\n", []regRow{{1, sidM, "MAIN-LETS", root}, {2, sidN, conv, root}}, "single", sidN},
+		{"recorded live beats the convention", "orchestrator: MAIN-LETS\n", []regRow{{1, sidM, "MAIN-LETS", root}, {2, sidN, conv, root}}, "single", sidM},
+	} {
+		recordOrchestrators(t, root, c.records)
+		claudeHome(t, append(c.rows, regRow{3, sidW, "W", root}))
+		res, env := orcEnv(t, root, sidW)
+		got := ""
+		if res.Target != nil {
+			got = res.Target.Session
+		}
+		if res.Source != c.source || got != c.target {
+			t.Errorf("%s: source=%s target=%s, want %s %s (%+v)", c.name, res.Source, got, c.source, c.target, res)
+		}
+		if c.source == "ambiguous" && (len(res.Candidates) != 2 || res.Candidates[0].Scope == "" || res.Candidates[1].Scope == "") {
+			t.Errorf("%s: candidates %+v", c.name, res.Candidates)
+		}
+		if sr, present := env["self_record"]; !present || sr != nil {
+			t.Errorf("%s: self_record must be null for a worker: %v", c.name, sr)
+		}
+	}
+}
+
+// orc: on the merge-branch file binds nobody.
+func TestResolveByName_MergeBranchOrcIgnored(t *testing.T) {
+	root := repoWithLets(t, "")
+	withBranch(t, "main")
+	recordOrchestrators(t, root, "orc: MAIN-PWA\n")
+	claudeHome(t, []regRow{{1, sidM, "MAIN-PWA", root}, {3, sidW, "W", root}})
+	if res, _ := orcEnv(t, root, sidW); res.Source == "bound" {
+		t.Errorf("orc: on the merge-branch is ignored: %+v", res)
+	}
+}
+
+// A spent budget never falls through to another orchestrator; a branch read before
+// the budget still resolves its binding.
+func TestResolveByName_Budget(t *testing.T) {
+	root := repoWithLets(t, "")
+	bindBranch(t, root, "feature/x", "MAIN-PWA")
+	recordOrchestrators(t, root, "orchestrator: MAIN-PWA\norchestrator: MAIN-LIC\n")
+	claudeHome(t, []regRow{{1, sidM, "MAIN-PWA", root}, {2, sidN, "MAIN-LIC", gitRepo(t)}, {3, sidW, "W", root}})
+	v := loadNameView(context.Background(), root)
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if r := ResolveOrchestrator(cancelled, v, ResolveOptions{Session: sidW, Cwd: root, Branch: "feature/x"}); r.Source != "bound" || r.Target == nil || r.Target.Session != sidM {
+		t.Errorf("a branch read outside the budget keeps its binding: %+v", r)
+	}
+	if r := ResolveOrchestrator(cancelled, v, ResolveOptions{Session: sidW, Cwd: root, Branch: "feature/y"}); r.Source != "none" || r.Target != nil || r.Reason != "budget_exhausted" || r.Remediation == "" {
+		t.Errorf("a spent budget on an unbound branch must not resolve single: %+v", r)
+	}
+	old := branchOf
+	branchOf = func(context.Context, string) string { return "" }
+	t.Cleanup(func() { branchOf = old })
+	if r := ResolveOrchestrator(cancelled, v, ResolveOptions{Session: sidW, Cwd: root}); r.Reason != "branch_unreadable" || r.Target != nil {
+		t.Errorf("an unreadable branch under a spent budget: %+v", r)
 	}
 }

@@ -39,7 +39,23 @@ var capability = map[string]func(reason, detail string, sibling bool) bool{
 var commandRe = regexp.MustCompile(`/lets:[a-z-]+|/rename\b|lets peers who --orca-repos`)
 
 func TestRemedy_NamesOnlyCommandsThatCanAct(t *testing.T) {
+	// the name resolution: one line per pair, never a cross-repo command
 	for reason, details := range refusalDetails {
+		for _, d := range details {
+			line := resolveRemedy(reason, d, "X")
+			if line == "" {
+				t.Errorf("resolveRemedy(%s, %q) is empty", reason, d)
+			}
+			for _, m := range commandRe.FindAllString(line, -1) {
+				can, known := capability[m]
+				if !known || !can(reason, d, false) {
+					t.Errorf("resolveRemedy(%s, %q) names %s, which cannot act on it: %q", reason, d, m, line)
+				}
+			}
+		}
+	}
+	// the old role-file resolution, until the role registry goes
+	for reason, details := range legacyRefusalDetails {
 		for _, d := range details {
 			for _, orca := range []bool{false, true} {
 				for _, sib := range []bool{false, true} {
@@ -63,10 +79,12 @@ func TestRemedy_NamesOnlyCommandsThatCanAct(t *testing.T) {
 // in the resolver's files must be in refusalDetails.
 func TestRemedy_VocabularyCoversSource(t *testing.T) {
 	known := map[string]bool{}
-	for r, ds := range refusalDetails {
-		known[r] = true
-		for _, d := range ds {
-			known[d] = true
+	for _, table := range []map[string][]string{refusalDetails, legacyRefusalDetails} {
+		for r, ds := range table {
+			known[r] = true
+			for _, d := range ds {
+				known[d] = true
+			}
 		}
 	}
 	// Only the places a refusal is built: a Refused{} literal, an assignment to
@@ -128,10 +146,12 @@ func TestRemedy_HubCapabilityMatchesHubSpec(t *testing.T) {
 			t.Errorf("hub.md no longer says %q, but capability still lets remediations send users there", want)
 		}
 	}
-	for reason, details := range refusalDetails {
-		for _, d := range details {
-			if capability["/lets:hub"](reason, d, false) != (reason == "target_not_alive") {
-				t.Errorf("/lets:hub may only be named for a stopped orchestrator, not %s/%q", reason, d)
+	for _, table := range []map[string][]string{refusalDetails, legacyRefusalDetails} {
+		for reason, details := range table {
+			for _, d := range details {
+				if capability["/lets:hub"](reason, d, false) != (reason == "target_not_alive") {
+					t.Errorf("/lets:hub may only be named for a stopped orchestrator, not %s/%q", reason, d)
+				}
 			}
 		}
 	}

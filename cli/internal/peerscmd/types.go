@@ -30,7 +30,7 @@ type Peer struct {
 	// Reason and Repo above are no longer filled by `who`; they go with the old
 	// role / Orca path.
 	Orchestrator bool `json:"orchestrator,omitempty"`   // a recorded orchestrator name, or (none recorded live) <repo>-orc[-scope]
-	Standing     bool `json:"standing,omitempty"`       // its record's standing=on (unset and off are both false)
+	Standing     bool `json:"standing"`                 // its record's standing=on (unset, off and cross-repo are all false)
 	Duplicate    bool `json:"duplicate_name,omitempty"` // another live session anywhere has this name
 }
 
@@ -69,4 +69,12 @@ type Turn struct {
 	// "…[truncated N bytes]" marker on an already-per-turn-capped turn, overcounting
 	// truncated_bytes by the marker's length (lets-cbmg7 FIX E).
 	srcLen int
+}
+
+// SelfRecord is the caller's own recorded `orchestrator:` line of the merge-branch
+// task-state. Standing keeps the record's tri-state ("" never asked, "on", "off").
+type SelfRecord struct {
+	Name     string `json:"name"`
+	Scope    string `json:"scope,omitempty"`
+	Standing string `json:"standing"`
 }

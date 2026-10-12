@@ -112,9 +112,12 @@ type RoleResult struct {
 	Role *RoleInfo `json:"role,omitempty"`
 }
 
-// OrchestratorResult is the resolver's answer.
+// OrchestratorResult is the resolver's answer. SelfRecord ("is this session an
+// orchestrator") is always present - null when the caller has no record; Source /
+// Target answer "whom do my messages go to".
 type OrchestratorResult struct {
 	Envelope
+	SelfRecord  *SelfRecord `json:"self_record"`
 	Source      string      `json:"source"`
 	Scope       string      `json:"scope"`
 	Target      *Peer       `json:"target,omitempty"`
