@@ -44,11 +44,15 @@ func smokeFactProblems(f map[string]string) []string {
 		add("execute.md must run `lets integrate` before the Accept dispatch")
 	}
 
-	// member-run never messages a gone member: its Step 3 returns agent_gone before
-	// any SendMessage.
+	// member-run never messages a gone member: Step 3's "Not listed" branch returns
+	// agent_gone before any SendMessage.
 	next := sectionSpan(f["member-run"], "## Step 3: Next / Correct")
-	gone, send := strings.Index(next, "`gone`"), strings.Index(next, "SendMessage(")
-	if gone < 0 || send < 0 || gone > send || !strings.Contains(next[:send], "agent_gone") || !strings.Contains(next[:send], "Never message it") {
+	notListed, send := strings.Index(next, "Not listed"), strings.Index(next, "SendMessage(")
+	branch := ""
+	if notListed >= 0 && send > notListed {
+		branch = next[notListed:send]
+	}
+	if !strings.Contains(branch, "`gone`") || !strings.Contains(branch, "agent_gone") || !strings.Contains(branch, "Never message it") {
 		add("member-run Step 3 must return agent_gone for a gone member and never message it, before its SendMessage")
 	}
 	return p

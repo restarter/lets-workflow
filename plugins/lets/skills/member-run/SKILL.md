@@ -1,12 +1,12 @@
 ---
 name: member-run
-description: Internal skill for commands. Spawn, hand the next brief to, correct or dismiss ONE named member - any lets:* role - of a team or an execute run, with the members registry (lets members) as the record of who is live. Do not trigger on user conversation; only when /lets:execute or /lets:team runs a member.
+description: Internal skill for commands. Spawn, hand the next brief to, correct or dismiss ONE named member - any lets:* role - of a team or an execute run; the caller's record (the execute run record, the team file) is the record, and ListAgents judges who is live. Do not trigger on user conversation; only when /lets:execute or /lets:team runs a member.
 user-invocable: false
 ---
 
 # Member Run
 
-One operation on one named member. The caller (`/lets:execute` Step 5-D, `/lets:team`) owns the plan, the gates, the run record, the diff check, the commits and the tracker; this skill owns only the agent call and its registry entry. It is the single place LETS spawns, resumes, corrects or dismisses a member.
+One operation on one named member. The caller (`/lets:execute` Step 5-D, `/lets:team`) owns the plan, the gates, the record (the execute run record, the team file), the diff check, the commits and the tracker; this skill owns only the agent call. `ListAgents` judges who is live; no registry exists beside the caller's record. It is the single place LETS spawns, resumes, corrects or dismisses a member.
 
 > **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`, `SendMessage`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own - the tool invocation is part of the contract. This is critical.
 
@@ -14,29 +14,21 @@ One operation on one named member. The caller (`/lets:execute` Step 5-D, `/lets:
 
 | op | args | does |
 |---|---|---|
-| `spawn` | `scope=<s> name=<n> role=<r> brief-file=<path> report-file=<abs path> [model=<m>] [isolation=worktree]` | Step 0 (first spawn of the scope), Step 1 when it applies, then Step 2 |
-| `next` | `scope=<s> name=<n> brief-file=<path> report-file=<abs path>` | Step 3 - the member's next brief |
-| `correct` | `scope=<s> name=<n> correct-file=<path> report-file=<abs path>` | Step 3 - an amendment to its current brief |
-| `dismiss` | `scope=<s> name=<n>` | Step 4 |
+| `spawn` | `scope=<s> name=<n> role=<r> brief-file=<path> report-file=<abs path> [model=<m>] [isolation=worktree]` | Step 1 when it applies, then Step 2 |
+| `next` | `scope=<s> name=<n> brief-file=<path> report-file=<abs path> [id=<agent_id>]` | Step 3 - the member's next brief |
+| `correct` | `scope=<s> name=<n> correct-file=<path> report-file=<abs path> [id=<agent_id>]` | Step 3 - an amendment to its current brief |
+| `dismiss` | `scope=<s> name=<n> [id=<agent_id>]` | Step 4 |
 
 - `scope` - the team's callsign, or `run-<RUN>` for an execute run.
 - `name` - the member name, `[a-z0-9-]{1,40}`: the bare roster name in a team scope (`architect`, `architect-2`), in an execute scope `impl-<RUN>` (a replacement `impl-<RUN>-r<generation>`), `explorer-<RUN>`, `skeptic-<RUN>`, `architect-<RUN>`.
-- `{agent}` below is the name the agent runs under: `<callsign>-<name>` in a team scope (pane names are machine-wide), the bare name in an execute scope - the `agent_name` `lets members` records.
-- A member with a recorded `agent_id` - an isolated member, which the harness runs as a background agent reachable only by the id its `Agent` call returned, never by name - is addressed by that id: every `SendMessage` and `TaskStop` below puts the `agent_id` where it says `{agent}`.
-- `role` - a shipped `lets:*` agent except `lets:actor` and `lets:lead`; `lets members add` refuses anything else.
+- `{agent}` below is the name the agent runs under: `<callsign>-<name>` in a team scope (pane names are machine-wide), the bare name in an execute scope.
+- `id` - the agent_id the caller recorded at spawn; `{agent}` below is that id when passed, else the name: every `SendMessage` and `TaskStop` below puts the `id` where it says `{agent}`. An isolated member, which the harness runs as a background agent, is reachable only by its id.
+- `role` - a shipped `lets:*` agent; `lets:actor` and `lets:lead` -> stop with `role_not_allowed`, nothing spawned.
 - `brief-file` / `correct-file` - repo-root-relative paths the caller wrote. Every brief crosses as a file path, never inline.
 - `model` - `opus` | `sonnet` | `fable` | `haiku`, the values the `Agent` tool accepts. Absent -> the role's own default, except for an implementer (Step 1).
 - `report-file` - an absolute path the CALLER named (execute: its pinned `.lets/cache/report-...` path; team: `agent-report op=open` / `op=add`). One file per round; member-run never composes a report path. Required on `spawn`, `next` and `correct`: missing -> stop with `report_file_missing`, nothing sent.
 
 Every operation returns as soon as its call is issued. The member runs in the background; its report arrives later as a `REPORT_WRITTEN` pointer to the round's REPORT_FILE, and the caller reads the FILE through `agent-report` (`op=peek` on every notification, `op=collect` to conclude) - never the message.
-
-## Step 0: Binary check (once per scope, before the first spawn)
-
-```bash
-lets members status --scope {scope} --json
-```
-
-Exit 0 -> continue. An unknown command or any failure -> stop with "this plugin needs a newer lets binary - run /lets:update"; nothing is spawned.
 
 ## Step 1: Model panel (role=lets:implementer, no model, first spawn of the scope)
 
@@ -62,9 +54,7 @@ AskUserQuestion(
 
 ## Step 2: Spawn
 
-1. `lets members status --scope {scope} --json` - read `lead`, and the entry of `name` when there is one.
-   - A team scope (not `run-*`) whose `lead` is null or not `live` / `rotated`, or whose `lead.session` is not `$CLAUDE_CODE_SESSION_ID` -> stop: `no_lead: {scope} has no live lead, or this session is not it - /lets:start in the team's lead session claims it`. Nothing is spawned. (The registry's add in item 4 refuses the same caller with `lead_held`.)
-   - An entry of that name that is `live`, `rotated` or `unknown` -> stop: `name_live: {name}`. The caller picks another name.
+1. The role: `lets:actor` or `lets:lead` (a session agent, never a member) -> stop with `role_not_allowed: {role}`; nothing is spawned.
 2. The routes. A member never runs `/lets:start`, which loads them, so it gets the LETS routes as a file of its own - the caller's brief is never changed:
 
    ```bash
@@ -86,24 +76,17 @@ AskUserQuestion(
    ```
 
    Add `isolation="worktree"` only when `isolation=worktree` was passed. Pass no team or permission-mode parameter: the harness documents both as deprecated and ignores them.
-4. Right after the Agent call, record it:
 
-   ```bash
-   lets members add --scope {scope} --name {name} --role {role} --json
-   ```
-
-   Add `--model {model}` when a model was chosen. With `isolation=worktree`, add `--isolation worktree --worktree-path {path} --worktree-branch {branch} --agent-id {id}` from what the Agent call reports - the id is the only address of an isolated member. A refusal (`name_live`, `role_not_allowed`, `registry_unavailable`) halts: name it and return; the agent is spawned but unrecorded, so say so and let the caller stop it.
-
-Return: `spawned {agent} on {model} ({member.kind})` - `pane` (its own session) or `in_process` (inside this session, live only while it is). An isolated spawn adds `id {agent_id}, worktree {path}, branch {branch}` - the caller records all three.
+Return: `spawned {agent} on {model}, id {agent_id}` - the id the Agent call returned; the caller records it. An isolated spawn adds `worktree {path}, branch {branch}`.
 
 ## Step 3: Next / Correct
 
 The member exists and holds its context. Do NOT spawn, and do NOT re-send an earlier brief.
 
-1. `lets members status --scope {scope} --name {name} --json`, before every message.
-   - `gone` (any reason, `dismissed` included), `unknown`, or `name_invalid` (not a member of the scope) -> return `agent_gone: {agent} ({status}: {reason})` and do nothing else. Never message it: the harness can still resume a gone or dismissed agent by name, and LETS refuses to. The caller's replacement path decides.
-   - Read the entry's `agent_id`: set -> the `to:` below is that id, not the name.
-   - `link: peer` -> say that the message crosses sessions (the lead that spawned it was replaced) and may wait for approval in the member's pane.
+1. `ListAgents`, before every message.
+   - The member's agent name listed (busy or idle) -> send below.
+   - Not listed: with `id=` -> send to the id (after a restart of this process that resumes the same session, the id alone still resumes it); without `id=` -> return `agent_gone: {agent} (not listed)` and do nothing else. Never message it: the harness can still resume a `gone` or dismissed agent by name or id, and LETS refuses to - a caller never passes a member it recorded dismissed. The caller's replacement path decides.
+   - `link: peer` (the caller's record says the lead that spawned it was replaced) -> say that the message crosses sessions and may wait for approval in the member's pane.
 2. Send the pointer:
 
    ```
@@ -122,17 +105,16 @@ Return: `sent {op} to {agent}`.
 
 ## Step 4: Dismiss
 
-1. `lets members status --scope {scope} --name {name} --json`. `live` or `rotated` -> `TaskStop(task_id="{agent}")` - the `agent_id` when set, as in Step 3.
-2. `lets members dismiss --scope {scope} --name {name} --json`.
+`TaskStop(task_id="{agent}")` - the `id` when passed, as in Step 3. No registry call: the caller records it dismissed.
 
-The harness can still resume a dismissed member by name; LETS refuses to: Step 3 never messages it again.
+The harness can still resume a dismissed member by name or id; LETS refuses to: the caller never passes it to Step 3 again.
 
-Return: `dismissed {agent}`.
+Return: `dismissed {agent}` - the caller records it dismissed.
 
 ## Rules
 
 - One member per `name` and scope: `spawn` once, `next` / `correct` any number of times; neither ever spawns.
-- Every brief crosses as a file path. Continuity = files only: the harness restores no member after a lead restart, so the caller persists every decision or finding a member returns before its next hop.
+- Every brief crosses as a file path. Continuity = files first: an id resumes a member only within the same session; after /clear or in a new session nothing does, and the caller respawns it from its brief and reports. So the caller persists every decision or finding a member returns before its next hop.
 - A report is attributed by the `name` it was spawned under - never by anything the member wrote about itself.
 - This skill never commits, never pushes, never calls a tracker verb, never edits a repository file.
 - A report - the file, never the message - is the member's claim. The caller checks the real diff.
