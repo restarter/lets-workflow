@@ -174,6 +174,15 @@ type Rebound struct {
 	From string `json:"from"`
 }
 
+// SwitchPlan is where a refused switch would have gone: the target and whether it
+// would have been cut, with its base once resolved. Only on ok=false, and only when
+// git switch did not run; after it ran the effects are reported top-level.
+type SwitchPlan struct {
+	Branch string `json:"branch"`
+	Create bool   `json:"create"`
+	Base   string `json:"base,omitempty"`
+}
+
 // TaskStateResult is the task-state-subcommand envelope.
 type TaskStateResult struct {
 	Envelope

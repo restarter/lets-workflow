@@ -94,11 +94,6 @@ func ErrNoRemoteBase(merge string) *Error {
 	return &Error{Code: ExitNoRemoteBase, Kind: "no_remote_base", Message: fmt.Sprintf("origin/%s is missing; a new branch is never cut from the local %s", merge, merge), Remediation: "add the origin remote and fetch " + merge}
 }
 
-// ErrMembersLive - a member working in this worktree would see its tree switch under it.
-func ErrMembersLive(who string) *Error {
-	return &Error{Code: ExitMembersLive, Kind: "members_live", Message: "members still working in this worktree: " + who, Remediation: "dismiss them (/lets:team dismiss) or wait for them, then switch"}
-}
-
 // ErrSessionHeld - a live foreign session holds the session: line of branch; nothing
 // was written.
 func ErrSessionHeld(held *taskstate.HeldError, branch string) *Error {

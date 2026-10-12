@@ -210,6 +210,43 @@ func TestResult_SchemaContract(t *testing.T) {
 		requireKeys(t, marshalToMap(t, r)["removed"].(map[string]any), "already_gone")
 	})
 
+	// A refused switch claims no effect - no branch / base, created false, the
+	// would-be target in planned; an ok one carries no planned.
+	t.Run("switch_refused_and_ok", func(t *testing.T) {
+		refused := &SwitchResult{
+			Envelope: Envelope{SchemaVersion: SchemaVersion, OK: false, Subcommand: "switch", ProjectRoot: "/p", Steps: []Step{},
+				Error: &ErrorInfo{Kind: "session_held", Message: "the session: line is held"}},
+			Team: "snake", From: "feature/lets-a1-x", Task: "lets-b2",
+			Planned: &SwitchPlan{Branch: "feature/lets-b2-y", Create: true, Base: "abc1234"},
+		}
+		m := marshalToMap(t, refused)
+		requireKeys(t, m, requiredCore...)
+		requireKeys(t, m, "created", "planned", "error")
+		for _, k := range []string{"branch", "base"} {
+			if _, ok := m[k]; ok {
+				t.Errorf("a refused switch carries %q: %v", k, m[k])
+			}
+		}
+		if m["created"] != false {
+			t.Errorf("created = %v, want false", m["created"])
+		}
+		plan, ok := m["planned"].(map[string]any)
+		if !ok {
+			t.Fatalf("planned shape = %#v", m["planned"])
+		}
+		requireKeys(t, plan, "branch", "create", "base")
+
+		okRes := &SwitchResult{
+			Envelope: Envelope{SchemaVersion: SchemaVersion, OK: true, Subcommand: "switch", ProjectRoot: "/p", Steps: []Step{}},
+			Team:     "snake", From: "feature/lets-a1-x", Task: "lets-b2", Branch: "feature/lets-b2-y", Created: true, Base: "abc1234",
+		}
+		m = marshalToMap(t, okRes)
+		requireKeys(t, m, "branch", "created", "base")
+		if _, ok := m["planned"]; ok {
+			t.Errorf("an ok switch carries planned: %v", m["planned"])
+		}
+	})
+
 	t.Run("info_in_worktree", func(t *testing.T) {
 		r := &InfoResult{
 			Envelope: Envelope{

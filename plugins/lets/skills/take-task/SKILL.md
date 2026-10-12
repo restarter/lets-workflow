@@ -65,6 +65,8 @@ If staying on current branch (worktree, already correct) or no changes - skip th
 
 ### Step 2T: Team worktree - park, then switch
 
+**Busy writer first.** Before anything else, run `ListAgents`. A busy agent of THIS session that writes in this tree stops the switch: a group agent of `.lets/cache/delegated-run-*.json` with `isolation: null`, or `<team>-<name>` of a roster row whose role is `implementer` -> stop: "`{name}` is still working in this tree - wait for its report, or stop it (`/lets:team dismiss <name>`, or the run's Stop), then `/lets:start` again"; nothing is switched. The same agent idle -> one line "`{name}` is idle and keeps `{branch}`'s context - dismiss it before its next brief", continue. Isolated implementers and read-only roles never block.
+
 Read `${CLAUDE_PLUGIN_ROOT}/protocol/worktrees.md` before this step unless its text is in your current context (standing-team worktree, park never stash).
 
 A team worktree never stashes. `git status --short`; changes present -> list them, and list separately every NEW path a park would need to name - untracked (`git ls-files --others --exclude-standard`) and staged additions (`git diff --cached --diff-filter=ACR --name-only HEAD`). Ignored files are never parked; they stay on disk. Then:
@@ -99,7 +101,9 @@ lets worktree switch --task '<task-id>' --title-file .lets/cache/title-<session6
 
 - `ok=true` -> "Switched to `{branch}`" (`created` -> "cut from `{base}`", with the staleness warning when `base_stale`); `park` -> name the park commit; `unpark` -> `unparked` (the parked changes are staged again), `parked_pushed` / `parked_unverified` / `parked_kept` (the park stays a commit - say why).
 - Every `warn` step in `steps[]` -> print its `message` as one line, on success and on refusal - a `convention_*` / `adapter_missing` / `board_not_in_main_checkout` line names a naming declaration the tracker convention could not use, and the fix. Never drop one.
-- A refusal -> show `error.kind` and `error.message`, change nothing, stop: `dirty_worktree`, `index_unmerged`, `operation_in_progress`, `detached_head` (exit 14 - the tree must be sorted out first), `untracked_present` (list `new_paths`, back to the Park question), `members_live` (a live implementer writes in this tree - wait for it or dismiss it), `no_remote_base`, `target_is_merge_branch`, `session_held` (switch from the team's lead session), `convention_declaration_invalid` (a naming declaration cannot be read - fix the line it names, or pass `--branch`).
+- A refusal -> show `error.kind` and `error.message`, and "would have switched to `{planned.branch}`" when `planned` is set (a refusal never moved the tree), change nothing, stop: `dirty_worktree`, `index_unmerged`, `operation_in_progress`, `detached_head` (exit 14 - the tree must be sorted out first), `untracked_present` (list `new_paths`, back to the Park question), `no_remote_base`, `target_is_merge_branch`, `session_held` (another live session owns this task's boundary (`error.message` names it) - switch from it, after it ends, or pick another task), `convention_declaration_invalid` (a naming declaration cannot be read - fix the line it names, or pass `--branch`).
+- `already_on_target` -> "already on it - nothing to switch; the tail below and Step 5 run".
+- `task_state_failed` -> the worktree IS on `{branch}` - say so, then show `error.remediation` (the command that records the task from the session owning the line).
 
 `lets worktree switch` wrote the target branch's task-state (`task`, `start`, `session` through the session guard, `orc` carried from the old branch), so Step 5's own write - its `--session-sha`, unguarded - is skipped on this path. Its tail still runs on the new branch, passing only what switch did not write:
 
