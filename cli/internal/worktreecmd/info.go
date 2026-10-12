@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/restarter/lets-workflow/cli/internal/ccregistry"
 	"github.com/restarter/lets-workflow/cli/internal/fsutil"
 	"github.com/restarter/lets-workflow/cli/internal/gitutil"
 	"github.com/restarter/lets-workflow/cli/internal/initcmd"
@@ -87,10 +88,40 @@ func Info(ctx context.Context, dir string) (*InfoResult, error) {
 		res.Steps = append(res.Steps, Step{Status: StepWarn, Message: "team: " + err.Error()})
 	} else if ok {
 		res.Team = team
+		res.TeamLead = teamLeadOf(filepath.Join(mainRoot, ".lets", "teams"), team)
 	}
 	res.Worktree = &wt
 	res.OK = true
 	return res, nil
+}
+
+// teamLeadOf compares the team's lead_name with this session's registry name (one
+// registry read). match is unknown when there is no session id, the registry is
+// absent or degraded, or this session is not listed.
+func teamLeadOf(teamsDir, team string) *TeamLead {
+	tl := &TeamLead{Match: "unknown"}
+	if name, err := teamfile.LeadName(teamsDir, team); err == nil && name != "" {
+		tl.Name = name
+	} else {
+		tl.Name = team + "-lead"
+	}
+	sid := os.Getenv("CLAUDE_CODE_SESSION_ID")
+	if sid == "" {
+		return tl
+	}
+	snap := ccregistry.Read(ccregistry.HomeDir())
+	if snap.Degraded != nil {
+		return tl
+	}
+	e, ok := snap.Find(sid)
+	if !ok {
+		return tl
+	}
+	tl.Self, tl.Match = e.Name, "other"
+	if e.Name == tl.Name {
+		tl.Match = "lead"
+	}
+	return tl
 }
 
 // TaskCandidateFor returns ONLY the created-shape task candidate for dir's HEAD
