@@ -539,6 +539,9 @@ func membersLinkProblems(team string) []string {
 	if m2 := sectionSpan(team, "### Step M2: The Whole Roster (`spawn --roster`)"); !strings.Contains(m2, "that is not live (Step M0) and has no `Dismissed: <name>` line by this lead session is a candidate") {
 		p = append(p, "Step M2 must skip a roster row recorded Dismissed: by this lead session")
 	}
+	if m5 := sectionSpan(team, "### Step M5: Member reports"); !strings.Contains(m5, "A member with a `Dismissed: <name> (lead <session6>)` line by this lead session in the team file's `## 7. Current task` is never messaged: no nudge - straight to item 3's `op=collect ... retry=no`") {
+		p = append(p, "Step M5 must never nudge a member recorded Dismissed: by this lead session")
+	}
 	m4 := sectionSpan(team, "### Step M4: Dismiss (`dismiss <name>` / `dismiss --all`)")
 	if !strings.Contains(m1, "else the name of the roster row for this role that is not live and has no `Dismissed: <name>` line by this lead session; else `<role>` under the same condition; else the next free `-N` suffix") || !strings.Contains(m1, "takes Step 4's **Fresh name** path at once") {
 		p = append(p, "Step M1's name choice must skip a name recorded Dismissed: by this lead session")
@@ -575,6 +578,7 @@ func TestTeamBackend_MembersLink(t *testing.T) {
 		{"dismiss --all says the same call again", "then `Skill(skill: \"lets:member-run\", args: \"op=dismiss scope=<c> name=<name>\")` for every registry member - every `<c>-*` agent", "then the same call for every registry member - every `<c>-*` agent", "Step M4 must name member-run op=dismiss"},
 		{"M2 respawns a dismissed row", " and has no `Dismissed: <name>` line by this lead session is a candidate", " is a candidate", "Step M2 must skip a roster row recorded Dismissed:"},
 		{"dismiss --all forgets Dismissed", " that has no `Dismissed:` line by this lead session.", ".", "Step M4 dismiss --all must cover only"},
+		{"M5 nudges a dismissed member", "2. A member with a `Dismissed: <name> (lead <session6>)` line by this lead session in the team file's `## 7. Current task` is never messaged: no nudge - straight to item 3's `op=collect ... retry=no`, and its GAP is recorded. Otherwise, not", "2. Not", "Step M5 must never nudge a member recorded Dismissed:"},
 		{"M1 reuses a dismissed name", "for this role that is not live and has no `Dismissed: <name>` line by this lead session;", "for this role that is not live;", "Step M1's name choice must skip"},
 	}
 	for _, m := range mutants {
