@@ -126,3 +126,47 @@ func TestAskRO_WideningPanics(t *testing.T) {
 		}()
 	}
 }
+
+// --question-file: a file under .lets/cache, read once and removed; anything else is
+// refused and left alone; exactly one of it and --msgid.
+func TestAskRO_QuestionFile(t *testing.T) {
+	hub := repoWithLets(t, "")
+	foreign := gitRepo(t)
+	claudeHome(t, []regRow{{101, sidMain, "HUB", hub}})
+	dir := stubClaude(t, fullHelp)
+	q := filepath.Join(hub, ".lets", "cache", "ask-ro-aaaaaa.txt")
+	_ = os.MkdirAll(filepath.Dir(q), 0o755)
+	_ = os.WriteFile(q, []byte("what is in progress?"), 0o600)
+	res, err := AskRO(context.Background(), AskROOptions{Cwd: hub, Repo: foreign, Session: sidWork, Pid: 4242, QuestionFile: q})
+	if err != nil || !res.Answered || res.Deprecated != "" {
+		t.Fatalf("ask-ro --question-file: %+v %v", res, err)
+	}
+	if stdin, _ := os.ReadFile(filepath.Join(dir, "stdin")); strings.TrimSpace(string(stdin)) != "what is in progress?" {
+		t.Errorf("stdin: %q", stdin)
+	}
+	if _, err := os.Stat(q); !os.IsNotExist(err) {
+		t.Error("the question file is read once and removed")
+	}
+
+	outside := filepath.Join(t.TempDir(), "q.txt")
+	_ = os.WriteFile(outside, []byte("q"), 0o600)
+	link := filepath.Join(hub, ".lets", "cache", "link.txt")
+	_ = os.Symlink(outside, link)
+	for _, path := range []string{outside, link} {
+		res, err := AskRO(context.Background(), AskROOptions{Cwd: hub, Repo: foreign, Session: sidWork, Pid: 4242, QuestionFile: path})
+		if err == nil || res.Error == nil || res.Error.Kind != "question_file_refused" {
+			t.Errorf("%s: %+v %v", path, res, err)
+		}
+	}
+	if _, err := os.Stat(outside); err != nil {
+		t.Error("a refused file outside .lets/cache is never removed")
+	}
+	for _, o := range []AskROOptions{
+		{Cwd: hub, Repo: foreign, Session: sidWork, Pid: 4242},
+		{Cwd: hub, Repo: foreign, Session: sidWork, Pid: 4242, QuestionFile: q, MsgID: msg1},
+	} {
+		if _, err := AskRO(context.Background(), o); err == nil || err.(*Error).Kind != "usage" {
+			t.Errorf("%+v: %v, want usage", o, err)
+		}
+	}
+}

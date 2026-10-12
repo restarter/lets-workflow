@@ -3,6 +3,8 @@
 package peerscmd
 
 import (
+	"encoding/hex"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -14,12 +16,53 @@ import (
 
 // The last-seen files: one per orchestrator name under .lets/sessions/peers/last,
 // read by the hub to wake or ask an orchestrator that is not running. The resolvers
-// (`who`, `orchestrator`) refresh them for every live orchestrator they see; the
-// file layout (lastDir, lastSeenFile, writeLastSeen) is still roles.go's until the
-// role registry is deleted.
+// (`who`, `orchestrator`) refresh them for every live orchestrator row they see.
 
 // lastSeenLockWait bounds the refresh's wait for peers.lock; a miss is silent.
 const lastSeenLockWait = 300 * time.Millisecond
+
+// lastDir holds one last-seen file per orchestrator name.
+func lastDir(peers string) string { return filepath.Join(peers, "last") }
+
+// lastSeenFile names a name's file by the lowercase hex of its UTF-8 bytes, so
+// "MAIN PWA" and "MAIN_PWA" never share a file and no name reaches a path unescaped.
+func lastSeenFile(peers, name string) string {
+	return filepath.Join(lastDir(peers), hex.EncodeToString([]byte(name))+".last")
+}
+
+// lastSeen is one last-seen record.
+type lastSeen struct {
+	Session, Name, Scope, Cwd, Set string
+	Pid                            int
+}
+
+// writeLastSeen records a live orchestrator (so the hub can wake it later),
+// atomically, one file per name; a later write of the same name overwrites only it.
+func writeLastSeen(peers string, l lastSeen) error {
+	if !ccregistry.ValidName(l.Name) {
+		return nil
+	}
+	dir := lastDir(peers)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	body := fmt.Sprintf("session: %s\npid: %d\nname: %s\nscope: %s\ncwd: %s\nset: %s\n", l.Session, l.Pid, l.Name, l.Scope, l.Cwd, l.Set)
+	tmp, err := os.CreateTemp(dir, ".last-*")
+	if err != nil {
+		return err
+	}
+	if _, err := tmp.WriteString(body); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
+		return err
+	}
+	_ = tmp.Chmod(0o600)
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmp.Name())
+		return err
+	}
+	return os.Rename(tmp.Name(), lastSeenFile(peers, l.Name))
+}
 
 // refreshLastSeen writes one last-seen file per orchestrator row of this repo
 // (best-effort: a missing .lets, a busy lock or a failed write is silent). pids maps
@@ -44,7 +87,7 @@ func refreshLastSeen(mainRoot string, rows []Peer, pids map[string]int) {
 	defer unlock()
 	set := now().UTC().Format(time.RFC3339)
 	for _, p := range orch {
-		_ = writeLastSeen(peersDir(mainRoot), roleFile{Session: p.Session, Pid: pids[p.Session], Name: p.Name, Scope: p.Scope, Cwd: p.Cwd, Set: set})
+		_ = writeLastSeen(peersDir(mainRoot), lastSeen{Session: p.Session, Pid: pids[p.Session], Name: p.Name, Scope: p.Scope, Cwd: p.Cwd, Set: set})
 	}
 }
 

@@ -67,13 +67,12 @@ func who(t *testing.T, o WhoOptions) *WhoResult {
 // the branch's task and orc binding - never the merge-branch file's - and none of the
 // old role / Orca fields.
 func TestWho_RowsFromRegistry(t *testing.T) {
-	repo := repoWithLets(t, "orca") // the launcher no longer matters: no Orca lookup
+	repo := repoWithLets(t, "orca") // the launcher no longer matters: who never consults Orca
 	wt := linkedWorktree(t, repo, "feature/w1")
 	elsewhere := gitRepo(t)
 	taskState(t, repo, "feature/w1", "task: lets-abc\norc: MAIN-LETS\n")
 	taskState(t, repo, "main", "task: lets-trunk\norc: SOMEONE\n")
 	claudeHome(t, []regRow{{101, sidMain, "MAIN-LETS", repo}, {102, sidWork, "W1", wt}, {103, sidWork, "W1", wt}, {104, sidFable, "OTHER", elsewhere}})
-	calls := useOrca(t, &fakeOps{})
 
 	res := who(t, WhoOptions{Cwd: wt})
 	if len(res.Peers) != 2 || res.RepoSlug != peername.RepoSlug(repo) || res.RepoSlug == "" {
@@ -87,14 +86,10 @@ func TestWho_RowsFromRegistry(t *testing.T) {
 		t.Errorf("the merge-branch file is never a row's binding: %+v", m)
 	}
 	b, _ := json.Marshal(res.Peers)
-	// "via" has no omitempty until the old fields go: it marshals as null, unfilled
-	for _, gone := range []string{`"role"`, `"send"`, `"via":[`, `"terminal_id"`, `"reason"`, `"repo"`} {
+	for _, gone := range []string{`"role"`, `"send"`, `"via"`, `"terminal_id"`, `"reason"`, `"repo"`} {
 		if strings.Contains(string(b), gone) {
 			t.Errorf("who must not fill %s any more: %s", gone, b)
 		}
-	}
-	if *calls != 0 {
-		t.Errorf("who never looks Orca up (%d calls)", *calls)
 	}
 }
 
@@ -236,9 +231,9 @@ func TestWho_OrcaReposReadOnly(t *testing.T) {
 	convB := peername.Orchestrator(peername.RepoSlug(b), "")
 	claudeHome(t, []regRow{{101, sidMain, "LIVE-A", a}, {102, sidWork, "WORKER-A", a}, {103, sidFable, convB, b}})
 	for _, name := range []string{"LIVE-A", "STOPPED-A", "UNRECORDED-A"} {
-		_ = writeLastSeen(peersDir(a), roleFile{Session: sidFable, Pid: 9, Name: name})
+		_ = writeLastSeen(peersDir(a), lastSeen{Session: sidFable, Pid: 9, Name: name})
 	}
-	_ = writeLastSeen(peersDir(b), roleFile{Session: sidMain, Pid: 8, Name: peername.Orchestrator(peername.RepoSlug(b), "old")})
+	_ = writeLastSeen(peersDir(b), lastSeen{Session: sidMain, Pid: 8, Name: peername.Orchestrator(peername.RepoSlug(b), "old")})
 	before := map[string]map[string]string{a: treeState(t, filepath.Join(a, ".lets")), b: treeState(t, filepath.Join(b, ".lets"))}
 
 	res := who(t, WhoOptions{OrcaRepos: true})

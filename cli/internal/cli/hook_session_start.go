@@ -43,9 +43,9 @@ var rulesSyncFn = func(rulesPath string) string {
 //     Orca worktree whose setup hook did not run) BEFORE LETS Config is built, so
 //     the Config comes from the linked main .lets/.env. compact never self-heals,
 //     and PreCompact never reads the payload at all;
-//   - on source startup|resume|clear, restores this session's peer role
-//     (peersHeal): a role file carried to a re-minted id, or the role rebuilt from
-//     its anchor - best-effort and silent, like selfHeal;
+//   - on source startup|resume|clear, carries the session proof (peersHeal): a
+//     proof file moved to a re-minted id, or refreshed for a resumed pid -
+//     best-effort and silent, like selfHeal;
 //   - on every source, after the self-heal, keeps the global
 //     ~/.claude/rules/lets-rules.md a cache of this session's plugin
 //     (rulesSyncFn, lets-tg008); its outcome joins the Notice;
@@ -69,8 +69,8 @@ func NewHookSessionStartCmd() *cobra.Command {
 			case "startup", "resume", "clear":
 				root := sessionstart.DetectProjectRoot()
 				notices = append(notices, selfHealFn(root, rulesPath))
-				// Before peersHeal: its reconcile moves a re-minted role file to the new
-				// id, and the /clear carry's proof is the OLD id's role file.
+				// Before peersHeal: its carry moves a re-minted proof file to the new id,
+				// and the /clear carry's proof is the OLD id's proof file.
 				sessionNotices = sessionOwnerPass(root, sid, source)
 				peersHealFn(root, sid)
 			}

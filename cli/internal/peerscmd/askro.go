@@ -7,13 +7,17 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/restarter/lets-workflow/cli/internal/ccregistry"
+	"github.com/restarter/lets-workflow/cli/internal/fsutil"
+	"github.com/restarter/lets-workflow/cli/internal/gitutil"
 	"github.com/restarter/lets-workflow/cli/internal/redact"
 )
 
@@ -24,7 +28,71 @@ type AskROOptions struct {
 	RepoIndex *int   // an index from `lets orca repos` (nil = unset)
 	Session   string // the orchestrator's last-seen session
 	Pid       int
-	MsgID     string // from `lets peers frame --kind ask-ro`
+	// The question: QuestionFile (a file under <this checkout>/.lets/cache, read once
+	// and removed) or, from a v0.10.0 hub, MsgID (a `lets peers frame --kind ask-ro`
+	// handoff). Exactly one.
+	QuestionFile string
+	MsgID        string
+}
+
+// otherRepo resolves --repo / --repo-index to another project's main checkout;
+// given=false when the caller named neither.
+func otherRepo(ctx context.Context, repo string, idx *int) (path string, given bool, e *Error) {
+	if repo == "" && idx == nil {
+		return "", false, nil
+	}
+	if repo == "" {
+		p, f := repoByIndex(ctx, *idx)
+		if f != nil {
+			return "", true, &Error{Code: ExitNotInRepo, Kind: "repo_invalid", Message: f.Error()}
+		}
+		repo = p
+	}
+	if fi, err := os.Stat(repo); err != nil || !fi.IsDir() {
+		return "", true, &Error{Code: ExitNotInRepo, Kind: "repo_invalid", Message: "--repo is not a directory"}
+	}
+	if inWt, main := gitutil.DetectInsideWorktreeAt(repo); inWt || main == "" || !fsutil.SameDir(main, repo) {
+		return "", true, &Error{Code: ExitNotInRepo, Kind: "repo_invalid", Message: "--repo is not a main checkout"}
+	}
+	return repo, true, nil
+}
+
+// readQuestionFile reads a question file once and removes it. It must be a regular
+// file (not a symlink) of at most 8 KiB directly or deeper under root/.lets/cache.
+func readQuestionFile(root, path string) (string, *Error) {
+	refuse := func(msg string) (string, *Error) {
+		return "", &Error{Code: ExitGeneric, Kind: "question_file_refused", Message: msg}
+	}
+	cache, err := filepath.EvalSymlinks(filepath.Join(root, ".lets", "cache"))
+	if err != nil {
+		return refuse(".lets/cache does not exist")
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return refuse("not a path")
+	}
+	dir, err := filepath.EvalSymlinks(filepath.Dir(abs))
+	if err != nil {
+		return refuse("its directory does not exist")
+	}
+	if rel, err := filepath.Rel(cache, dir); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return refuse("the question file must be inside .lets/cache/")
+	}
+	real := filepath.Join(dir, filepath.Base(abs))
+	f, err := os.OpenFile(real, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	if err != nil {
+		return refuse("unreadable or a symlink")
+	}
+	defer func() { _ = f.Close(); _ = os.Remove(real) }()
+	fi, err := f.Stat()
+	if err != nil || !fi.Mode().IsRegular() || fi.Size() > handoffMax {
+		return refuse("not a regular file of at most 8 KiB")
+	}
+	b, err := io.ReadAll(io.LimitReader(f, handoffMax+1))
+	if err != nil || len(b) > handoffMax || strings.TrimSpace(string(b)) == "" {
+		return refuse("empty or over 8 KiB")
+	}
+	return string(b), nil
 }
 
 // AskROResult is the ask-ro envelope.
@@ -95,6 +163,9 @@ func AskRO(ctx context.Context, o AskROOptions) (*AskROResult, error) {
 	if !ccregistry.ValidSession(o.Session) || o.Pid < 0 {
 		return fail(&Error{Code: ExitUsage, Kind: "usage", Message: "ask-ro needs --session and a non-negative --pid"})
 	}
+	if (o.QuestionFile == "") == (o.MsgID == "") {
+		return fail(&Error{Code: ExitUsage, Kind: "usage", Message: "ask-ro needs exactly one of --question-file or --msgid"})
+	}
 	repo, given, e := otherRepo(ctx, o.Repo, o.RepoIndex)
 	if e == nil && !given {
 		e = &Error{Code: ExitNotInRepo, Kind: "repo_invalid", Message: "--repo is not a directory"}
@@ -129,22 +200,33 @@ func AskRO(ctx context.Context, o AskROOptions) (*AskROResult, error) {
 			return res, nil
 		}
 	}
-	prompt, pe := readHandoff(root, o.MsgID)
-	if pe != nil {
-		res.OK = false
-		if pe.Kind == "handoff_refused" { // a malformed handoff is not retryable; usage errors touch nothing
-			consumeHandoff(root, o.MsgID)
+	var prompt string
+	if o.QuestionFile != "" {
+		q, qe := readQuestionFile(root, o.QuestionFile)
+		if qe != nil {
+			res.OK = false
+			return fail(qe)
 		}
-		return fail(pe)
-	}
-	if h, ok := leadingHeader(prompt); !ok || h.Kind != "ask-ro" || h.ToSID != o.Session {
-		res.OK = false
+		prompt = q
+	} else {
+		res.Deprecated = deprecatedText
+		p, pe := readHandoff(root, o.MsgID)
+		if pe != nil {
+			res.OK = false
+			if pe.Kind == "handoff_refused" { // a malformed handoff is not retryable; usage errors touch nothing
+				consumeHandoff(root, o.MsgID)
+			}
+			return fail(pe)
+		}
+		if h, ok := leadingHeader(p); !ok || h.Kind != "ask-ro" || h.ToSID != o.Session {
+			res.OK = false
+			consumeHandoff(root, o.MsgID)
+			return fail(&Error{Code: ExitGeneric, Kind: "handoff_refused", Message: "the handoff is not an ask-ro message to this session"})
+		}
+		// ask-ro is one-shot: the prompt becomes the forked process's stdin next.
 		consumeHandoff(root, o.MsgID)
-		return fail(&Error{Code: ExitGeneric, Kind: "handoff_refused", Message: "the handoff is not an ask-ro message to this session"})
+		prompt = p
 	}
-	// ask-ro is one-shot: the prompt becomes the forked process's stdin next, and there
-	// is no separate "nothing was typed" case to keep it retryable for.
-	consumeHandoff(root, o.MsgID)
 	emptyMCP := filepath.Join(root, ".lets", "cache", "ask-ro-mcp-empty.json")
 	if err := os.WriteFile(emptyMCP, []byte(`{"mcpServers":{}}`+"\n"), 0o600); err != nil {
 		res.OK = false

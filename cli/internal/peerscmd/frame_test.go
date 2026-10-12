@@ -5,12 +5,15 @@ package peerscmd
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
 // deliveredLine is the delivered-SendMessage fixture: the one user record a
 // cross-session SendMessage leaves in the receiver's transcript (lets-rry3c,
 // shape recorded live 2026-09-25T12:15:22Z; ids and paths are fixture values).
+func fixturePath(name string) string { return filepath.Join("testdata", "transcripts", name) }
+
 func deliveredLine(t *testing.T) map[string]any {
 	t.Helper()
 	b, err := os.ReadFile(fixturePath("delivered-sendmessage.jsonl"))

@@ -11,8 +11,16 @@ type Options struct {
 	ClaudeDir string    // ccregistry.HomeDir()
 	Cwd       string    // the session's cwd from the registry row
 	Session   string    // the session id
-	Last      int       // 0 = 5 turns; with Since non-zero: up to replyTurnsMax
+	Last      int       // 0 = 5 turns; with Since or SinceMessage: up to replyTurnsMax
 	Since     time.Time // zero = no bound; else only turns timestamped at or after it
+	// SinceMessage + SentAt are the compatibility-release reply read (a v0.10.0
+	// skill's `--since-message`): only the turns after the INBOUND record whose
+	// legacy header id equals SinceMessage exactly, timestamped at or after SentAt.
+	// Not seen yet -> no turns and Note "message not seen yet" - never a time-only
+	// fallback (a held or delayed delivery would relay what happened before the
+	// question). Exclusive with Since.
+	SinceMessage string
+	SentAt       string
 }
 
 // Result is what Read returns: the turns, what the limits left out, and every source
@@ -32,7 +40,7 @@ func Read(o Options) Result {
 	limit := o.Last
 	if limit <= 0 {
 		limit = 5
-		if !o.Since.IsZero() {
+		if !o.Since.IsZero() || o.SinceMessage != "" {
 			limit = replyTurnsMax
 		}
 	}
@@ -47,7 +55,15 @@ func Read(o Options) Result {
 		return res
 	}
 	perTurn := textCapDefault
-	if !o.Since.IsZero() {
+	switch {
+	case o.SinceMessage != "":
+		after, ok := SinceMessage(recs, o.SinceMessage, o.SentAt)
+		if !ok {
+			res.Note = "message not seen yet"
+			return res
+		}
+		recs, perTurn = after, textCapMessage
+	case !o.Since.IsZero():
 		recs = since(recs, o.Since)
 		perTurn = textCapMessage // a reply: the payload IS the point
 	}

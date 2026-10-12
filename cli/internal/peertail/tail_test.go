@@ -248,3 +248,38 @@ func TestRead_SinceSeesNativeDeliveryAndReply(t *testing.T) {
 		t.Errorf("from must be on the JSON surface: %s", b)
 	}
 }
+
+// The compatibility reply read: only the turns after the message with that msgid, at
+// or after SentAt, the whole reply; not seen yet is no turns and a note - never a
+// time-only fallback.
+func TestRead_SinceMessage(t *testing.T) {
+	home := t.TempDir()
+	const id = "0123456789abcdef"
+	head := "[lets-peer id=" + id + " kind=ask from_sid=" + sidMain + " to_sid=" + sidWork + ` from="peer/MAIN" to="W1"]`
+	lines := []map[string]any{
+		assistantText("2026-09-15T10:00:00Z", "before the question"),
+		userText("2026-09-15T10:00:01Z", "Another Claude session sent a message:\n<cross-session-message from=\"uds:/x\" from-name=\"MAIN\">\n"+head+"\nq\n</cross-session-message>"),
+	}
+	for i := 0; i < 7; i++ {
+		lines = append(lines, assistantText(fmt.Sprintf("2026-09-15T10:00:%02dZ", i+2), fmt.Sprintf("part %d", i+1)))
+	}
+	writeTranscript(t, home, tailCwd, sidB, append(lines, turnEnd("2026-09-15T10:00:20Z"))...)
+	o := Options{ClaudeDir: home, Cwd: tailCwd, Session: sidB, SinceMessage: id, SentAt: "2026-09-15T10:00:00Z"}
+	res := Read(o)
+	if len(res.Turns) != 7 || res.Turns[0].Text != "part 1" || res.Omitted != 0 || res.Note != "" {
+		t.Errorf("the whole reply: %+v", res)
+	}
+	o.Last = 3
+	if res := Read(o); len(res.Turns) != 3 || res.Omitted != 4 || res.Turns[2].Text != "part 7" {
+		t.Errorf("Last keeps the newest and counts the rest: %+v", res)
+	}
+	for _, miss := range []Options{
+		{ClaudeDir: home, Cwd: tailCwd, Session: sidB, SinceMessage: "fedcba9876543210", SentAt: "2026-09-15T09:00:00Z"},
+		{ClaudeDir: home, Cwd: tailCwd, Session: sidB, SinceMessage: id, SentAt: "2026-09-15T10:00:02Z"}, // sent after it was seen
+		{ClaudeDir: home, Cwd: tailCwd, Session: sidB, SinceMessage: id, SentAt: "not a time"},
+	} {
+		if res := Read(miss); len(res.Turns) != 0 || res.Note != "message not seen yet" {
+			t.Errorf("%+v: %+v", miss, res)
+		}
+	}
+}

@@ -73,7 +73,7 @@ func TestTail_Since(t *testing.T) {
 		t.Fatalf("--since: %+v %v", res, err)
 	}
 	res, _ = Tail(context.Background(), TailOptions{Cwd: repo, Name: "W1"})
-	if len(res.Turns) != 5 || res.Omitted != 3 || res.TruncatedBytes != len(big)-textCapDefault {
+	if len(res.Turns) != 5 || res.Omitted != 3 || res.TruncatedBytes != len(big)-(2<<10) {
 		t.Errorf("plain read: %d turns, omitted %d, truncated %d", len(res.Turns), res.Omitted, res.TruncatedBytes)
 	}
 	if k := tailErrKind(t, TailOptions{Cwd: repo, Name: "W1", Since: "yesterday"}); k != "usage" {

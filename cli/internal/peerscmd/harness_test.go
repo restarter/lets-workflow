@@ -3,17 +3,13 @@
 package peerscmd
 
 import (
-	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
-	"time"
 
 	"github.com/restarter/lets-workflow/cli/internal/ccregistry"
-	"github.com/restarter/lets-workflow/cli/internal/orcacmd"
 )
 
 type regRow struct {
@@ -45,10 +41,22 @@ func claudeHome(t *testing.T, rows []regRow, unknown ...int) string {
 	return dir
 }
 
+// projectSlug is Claude Code's project directory name for cwd: every byte outside
+// [A-Za-z0-9] becomes '-' (peertail's transcriptSlug).
+func projectSlug(cwd string) string {
+	b := []byte(cwd)
+	for i, c := range b {
+		if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') {
+			b[i] = '-'
+		}
+	}
+	return string(b)
+}
+
 // writeTranscript writes JSONL lines for sid as Claude Code would store them.
 func writeTranscript(t *testing.T, home, cwd, sid string, lines ...map[string]any) string {
 	t.Helper()
-	dir := filepath.Join(home, "projects", transcriptSlug(cwd))
+	dir := filepath.Join(home, "projects", projectSlug(cwd))
 	_ = os.MkdirAll(dir, 0o700)
 	var b strings.Builder
 	for _, l := range lines {
@@ -69,88 +77,28 @@ func userText(ts, text string) map[string]any {
 func assistantText(ts, text string) map[string]any {
 	return map[string]any{"type": "assistant", "timestamp": ts, "message": map[string]any{"role": "assistant", "content": []any{map[string]any{"type": "text", "text": text}}}}
 }
-func toolUse(ts, id, name string) map[string]any {
-	return map[string]any{"type": "assistant", "timestamp": ts, "message": map[string]any{"role": "assistant", "content": []any{map[string]any{"type": "tool_use", "id": id, "name": name, "input": map[string]any{"command": "sleep 1"}}}}}
-}
 func turnEnd(ts string) map[string]any {
 	return map[string]any{"type": "system", "subtype": "turn_duration", "timestamp": ts}
 }
 
-// fakeOps is an in-memory Orca.
-type fakeOps struct {
-	mu         sync.Mutex
-	terms      []orcaTerm
-	source     string
-	screen     []string
-	sends      []string
-	sendResult []*orcacmd.Failure // consumed per Send
-	onSend     func(text string)
-	termsCalls int
+const msg1 = "0123456789abcdef"
+
+// header is a legacy v0.10.0 message header from sidMain to `to`.
+func header(id, to string) string {
+	return "[lets-peer id=" + id + " kind=ask from_sid=" + sidMain + " to_sid=" + to + ` from="peer/MAIN" to="MAIN-FABLE"]`
 }
 
-func (f *fakeOps) Terminals(context.Context) ([]orcaTerm, *orcacmd.Failure) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.termsCalls++
-	return append([]orcaTerm(nil), f.terms...), nil
+// nativeDelivery wraps text the way Claude Code delivers a SendMessage: the prefix
+// line, the cross-session-message wrapper with the sender's name, the text.
+func nativeDelivery(from, text string) string {
+	return "Another Claude session sent a message:\n<cross-session-message from=\"uds:/tmp/cc-socks/1.sock\" from-name=\"" + from + "\" from-mode=\"default\">\n" + text + "\n</cross-session-message>"
 }
-func (f *fakeOps) Screen(context.Context, string) (string, []string, *orcacmd.Failure) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	src := f.source
-	if src == "" {
-		src = "screen"
-	}
-	return src, append([]string(nil), f.screen...), nil
-}
-func (f *fakeOps) Send(_ context.Context, _ string, text string) (orcacmd.Receipt, *orcacmd.Failure) {
-	f.mu.Lock()
-	var fail *orcacmd.Failure
-	if len(f.sendResult) > 0 {
-		fail, f.sendResult = f.sendResult[0], f.sendResult[1:]
-	}
-	if fail == nil {
-		f.sends = append(f.sends, text)
-	}
-	cb := f.onSend
-	f.mu.Unlock()
-	if fail != nil {
-		return orcacmd.Receipt{}, fail
-	}
-	if cb != nil {
-		cb(text)
-	}
-	return orcacmd.Receipt{InputAccepted: true, TurnStarted: true}, nil
-}
-
-func useOrca(t *testing.T, ops orcaOps) *int {
-	t.Helper()
-	calls := 0
-	old := newOrcaOps
-	newOrcaOps = func() (orcaOps, *orcacmd.Failure) { calls++; return ops, nil }
-	t.Cleanup(func() { newOrcaOps = old })
-	return &calls
-}
-
-func fastLoops(t *testing.T) {
-	t.Helper()
-	oldSleep, oldObs, oldWait := sleep, observeTimeout, sendLockWait
-	sleep = func(time.Duration) {}
-	observeTimeout, sendLockWait = 50*time.Millisecond, 2*time.Second
-	oldLock := sendLockDir
-	lock := t.TempDir()
-	sendLockDir = func() string { return lock }
-	t.Cleanup(func() { sleep, observeTimeout, sendLockWait, sendLockDir = oldSleep, oldObs, oldWait, oldLock })
-}
-
-var idleScreen = []string{"⏺ done", "────────", "❯", "────────"}
 
 // repoWithLets is a git repo with a .lets dir and an isolated HOME.
 func repoWithLets(t *testing.T, launcher string) string {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv(orcaTerminalVar, "")
 	repo := gitRepo(t)
 	_ = os.MkdirAll(filepath.Join(repo, ".lets", "sessions"), 0o755)
 	if launcher != "" {
