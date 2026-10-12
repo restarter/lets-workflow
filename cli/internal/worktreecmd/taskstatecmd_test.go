@@ -4,6 +4,7 @@ package worktreecmd_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/restarter/lets-workflow/cli/internal/ccregistry"
 	"github.com/restarter/lets-workflow/cli/internal/fsutil"
+	"github.com/restarter/lets-workflow/cli/internal/taskstate"
 	"github.com/restarter/lets-workflow/cli/internal/worktreecmd"
 )
 
@@ -106,6 +108,112 @@ func TestTaskStateSet_LockBusyExit26(t *testing.T) {
 	_, err = worktreecmd.TaskStateSet(context.Background(), repo, worktreecmd.TaskStateOptions{Orc: "MAIN", Wait: 100 * time.Millisecond})
 	if worktreecmd.ExitCode(err) != worktreecmd.ExitTaskStateLockBusy {
 		t.Errorf("err = %v, want exit 26", err)
+	}
+}
+
+const (
+	tsHolder = "11111111-0000-4000-8000-000000000001"
+	tsOwn    = "aaaaaaaa-0000-4000-8000-00000000000a"
+)
+
+// tsGuard: holder's liveness is v; rotated (when set) is where the holder was
+// re-minted to.
+func tsGuard(v taskstate.Liveness, rotated string) taskstate.SessionGuard {
+	g := taskstate.SessionGuard{Liveness: func(sid string) taskstate.Liveness {
+		if sid == tsHolder {
+			return v
+		}
+		return taskstate.LiveDead
+	}}
+	if rotated != "" {
+		g.Rotated = func(string, taskstate.Proof) (string, bool) { return rotated, true }
+	}
+	return g
+}
+
+// heldBody is a task-state file whose session: line names tsHolder.
+const heldBody = "task: lets-aaa\nstart: abc1234\nsession: abc1234 " + tsHolder + "\n"
+
+// A live foreign holder refuses the whole call - task / start / orc of the same
+// call included - with exit 35 session_held; the file stays byte-identical.
+func TestTaskStateSet_LiveHolderRefused(t *testing.T) {
+	repo := tsRepo(t, "feature/x")
+	mustWrite(t, taskFile(repo, "feature/x"), heldBody, 0o644)
+	res, err := worktreecmd.TaskStateSet(context.Background(), repo, worktreecmd.TaskStateOptions{
+		Task: "lets-bbb", Start: "def5678", Orc: "MAIN", SessionSHA: "def5678", SessionID: tsOwn, Guard: tsGuard(taskstate.LiveAlive, ""),
+	})
+	if worktreecmd.ExitCode(err) != worktreecmd.ExitSessionHeld || res.OK || res.Error == nil || res.Error.Kind != "session_held" {
+		t.Fatalf("err=%v (exit %d) res=%+v", err, worktreecmd.ExitCode(err), res.Error)
+	}
+	if !strings.Contains(err.Error(), tsHolder) || !strings.Contains(res.Error.Remediation, "still owns this task's boundary") {
+		t.Errorf("the refusal must name the holder and the remedy: %v / %q", err, res.Error.Remediation)
+	}
+	if got := readTask(t, repo, "feature/x"); got != heldBody {
+		t.Errorf("a refused call wrote:\n%s", got)
+	}
+}
+
+func TestTaskStateSet_RotatedForeignRefused(t *testing.T) {
+	repo := tsRepo(t, "feature/x")
+	mustWrite(t, taskFile(repo, "feature/x"), heldBody, 0o644)
+	const third = "cccccccc-0000-4000-8000-00000000000c"
+	_, err := worktreecmd.TaskStateSet(context.Background(), repo, worktreecmd.TaskStateOptions{
+		SessionSHA: "def5678", SessionID: tsOwn, Guard: tsGuard(taskstate.LiveDead, third),
+	})
+	if worktreecmd.ExitCode(err) != worktreecmd.ExitSessionHeld || !strings.Contains(err.Error(), third) || !strings.Contains(err.Error(), taskstate.HeldRotatedForeign) {
+		t.Fatalf("err=%v", err)
+	}
+	if got := readTask(t, repo, "feature/x"); got != heldBody {
+		t.Errorf("a refused call wrote:\n%s", got)
+	}
+}
+
+// A dead or unknown holder is the documented remedy's case: the write goes through.
+func TestTaskStateSet_DeadHolderWrites(t *testing.T) {
+	repo := tsRepo(t, "feature/x")
+	mustWrite(t, taskFile(repo, "feature/x"), heldBody, 0o644)
+	res, err := worktreecmd.TaskStateSet(context.Background(), repo, worktreecmd.TaskStateOptions{
+		SessionSHA: "def5678", SessionID: tsOwn, Guard: tsGuard(taskstate.LiveDead, ""),
+	})
+	if err != nil || !res.TaskState.Written || !strings.Contains(readTask(t, repo, "feature/x"), "session: def5678 "+tsOwn+"\n") {
+		t.Fatalf("err=%v res=%+v file:\n%s", err, res.TaskState, readTask(t, repo, "feature/x"))
+	}
+}
+
+func TestTaskStateSet_UnknownWrites(t *testing.T) {
+	repo := tsRepo(t, "feature/x")
+	mustWrite(t, taskFile(repo, "feature/x"), heldBody, 0o644)
+	res, err := worktreecmd.TaskStateSet(context.Background(), repo, worktreecmd.TaskStateOptions{
+		SessionSHA: "def5678", SessionID: tsOwn, Guard: tsGuard(taskstate.LiveUnknown, ""),
+	})
+	if err != nil || !res.TaskState.Written || !strings.Contains(readTask(t, repo, "feature/x"), "session: def5678 "+tsOwn+"\n") {
+		t.Fatalf("err=%v res=%+v", err, res.TaskState)
+	}
+}
+
+func TestTaskStateSet_ProofWritten(t *testing.T) {
+	repo := tsRepo(t, "feature/x")
+	mustWrite(t, taskFile(repo, "feature/x"), "task: lets-aaa\n", 0o644)
+	p := &taskstate.Proof{Session: tsOwn, Pid: 4242, Started: time.UnixMilli(1790797661911)}
+	res, err := worktreecmd.TaskStateSet(context.Background(), repo, worktreecmd.TaskStateOptions{SessionSHA: "def5678", SessionID: tsOwn, Proof: p})
+	want := "task: lets-aaa\nsession: def5678 " + tsOwn + "\nsession_proof: " + tsOwn + " 4242 1790797661911\n"
+	if err != nil || readTask(t, repo, "feature/x") != want {
+		t.Fatalf("err=%v file:\n%s", err, readTask(t, repo, "feature/x"))
+	}
+	if b, _ := json.Marshal(res.TaskState); strings.Contains(string(b), "4242") {
+		t.Errorf("the envelope must not echo the proof: %s", b)
+	}
+}
+
+// A write without a proof removes a stale proof of another session.
+func TestTaskStateSet_NoProofDeletesStale(t *testing.T) {
+	repo := tsRepo(t, "feature/x")
+	mustWrite(t, taskFile(repo, "feature/x"), heldBody+"session_proof: "+tsHolder+" 4242 1790797661911\n", 0o644)
+	if _, err := worktreecmd.TaskStateSet(context.Background(), repo, worktreecmd.TaskStateOptions{SessionSHA: "def5678", SessionID: tsOwn}); err != nil {
+		t.Fatal(err)
+	}
+	if got := readTask(t, repo, "feature/x"); strings.Contains(got, "session_proof") || !strings.Contains(got, "session: def5678 "+tsOwn) {
+		t.Errorf("file:\n%s", got)
 	}
 }
 

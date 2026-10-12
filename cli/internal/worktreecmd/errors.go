@@ -2,7 +2,11 @@
 
 package worktreecmd
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/restarter/lets-workflow/cli/internal/taskstate"
+)
 
 // Error is the typed package error. Use errors.As(err, &e) to inspect.
 // Code maps to one of the Exit* constants; Kind is the snake_case
@@ -93,6 +97,12 @@ func ErrNoRemoteBase(merge string) *Error {
 // ErrMembersLive - a member working in this worktree would see its tree switch under it.
 func ErrMembersLive(who string) *Error {
 	return &Error{Code: ExitMembersLive, Kind: "members_live", Message: "members still working in this worktree: " + who, Remediation: "dismiss them (/lets:team dismiss) or wait for them, then switch"}
+}
+
+// ErrSessionHeld - a live foreign session holds the session: line of branch; nothing
+// was written.
+func ErrSessionHeld(held *taskstate.HeldError, branch string) *Error {
+	return &Error{Code: ExitSessionHeld, Kind: "session_held", Message: fmt.Sprintf("the session: line of %s is held (%s) by %s", branch, held.Reason, held.Holder), Remediation: held.Holder + " still owns this task's boundary: run this from that session, after it ends, or pick another task", Cause: held}
 }
 
 // ErrTargetIsMergeBranch - a team never works on the merge-branch.

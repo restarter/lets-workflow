@@ -35,6 +35,12 @@ type TaskStateOptions struct {
 	// Session is the caller's session id ($CLAUDE_CODE_SESSION_ID, set by the cli
 	// layer), read only by SelfOrchestrator.
 	Session string
+	// Guard judges a --session-id write under the task lock: a live foreign holder
+	// (HeldLive, HeldRotatedForeign) refuses it. A zero guard writes as before.
+	Guard taskstate.SessionGuard
+	// Proof is recorded as session_proof beside the session: line; nil deletes the
+	// line (the caller proves only its own process).
+	Proof *taskstate.Proof
 }
 
 // orchestratorOps reports whether o touches an `orchestrator:` record.
@@ -161,7 +167,10 @@ func TaskStateShow(ctx context.Context, dir string) (*TaskStateResult, error) {
 // make every caller safe by construction: an `orc:` binding is never written on the
 // merge-branch, and a --task that names a different task than the file does is
 // refused unless --start comes with it (take-task always passes both), so a writer
-// can never pair one task's id with another task's start.
+// can never pair one task's id with another task's start. A --session-id write is
+// guarded too: a live foreign holder of the session: line refuses the whole call
+// (exit 35 session_held, nothing written); unknown, dead, no-proof and unchanged
+// holders write - the "/lets:start in this chat rewrites the session" remedy.
 func TaskStateSet(ctx context.Context, dir string, o TaskStateOptions) (*TaskStateResult, error) {
 	res := &TaskStateResult{Envelope: Envelope{SchemaVersion: SchemaVersion, Subcommand: "task-state", Steps: []Step{}}}
 	fail := func(e *Error) (*TaskStateResult, error) {
@@ -288,10 +297,22 @@ func TaskStateSet(ctx context.Context, dir string, o TaskStateOptions) (*TaskSta
 		if exists && o.Task != "" && cur.Task != "" && cur.Task != o.Task && o.Start == "" {
 			return nil, errMismatch
 		}
-		return nil, nil
+		if o.SessionSHA == "" {
+			return nil, nil
+		}
+		if o.Guard.Liveness != nil {
+			err := taskstate.MaySetSession(cur, exists, o.SessionID, taskstate.OpRefresh, o.Guard)
+			var held *taskstate.HeldError
+			if errors.As(err, &held) && (held.Reason == taskstate.HeldLive || held.Reason == taskstate.HeldRotatedForeign) {
+				return nil, ErrSessionHeld(held, branch) // the file is untouched
+			}
+			// nil, unchanged, unknown, no proof: write as before
+		}
+		return taskstate.SessionValues(o.SessionSHA, o.SessionID, o.Proof), nil
 	}
 	st, err := taskstate.MergeWrite(letsDir, slug, taskstate.WriteOpts{Set: set, Create: o.Create || patch != nil, Deadline: time.Now().Add(wait), Derive: derive,
 		PatchOrchestrator: patch, ClearOrchestrator: o.ClearOrchestrator})
+	var we *Error
 	switch {
 	case errors.Is(err, taskstate.ErrInvalidValue):
 		return fail(&Error{Code: ExitUsage, Kind: "invalid_value", Message: err.Error(), Cause: err})
@@ -307,6 +328,8 @@ func TaskStateSet(ctx context.Context, dir string, o TaskStateOptions) (*TaskSta
 	case errors.Is(err, taskstate.ErrLockBusy):
 		return fail(&Error{Code: ExitTaskStateLockBusy, Kind: "task_state_lock_busy",
 			Message: fmt.Sprintf("%s is locked by another writer", path), Remediation: "retry, or raise --wait", Cause: err})
+	case errors.As(err, &we):
+		return fail(we)
 	case err != nil:
 		return fail(&Error{Code: ExitFilesystem, Kind: "task_state_write_failed", Message: err.Error(), Cause: err})
 	}

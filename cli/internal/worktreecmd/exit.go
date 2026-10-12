@@ -37,6 +37,7 @@ const (
 	ExitMembersLive          = 32 // switch: a member working in this worktree is still live
 	ExitTargetIsMergeBranch  = 33 // switch: the target branch is the merge-branch
 	ExitCallsignLive         = 34 // team-init: a live session is named <callsign>-lead
+	ExitSessionHeld          = 35 // task-state set: a live foreign session holds the session: line
 )
 
 // ExitCode maps an error to its numeric exit code via errors.As.

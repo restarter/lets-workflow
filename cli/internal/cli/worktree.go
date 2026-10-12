@@ -413,8 +413,13 @@ func newWorktreeTaskStateCmd() *cobra.Command {
 			if cmd.Flags().Changed("standing") {
 				o.Standing = &standing
 			}
-			if o.SelfOrchestrator {
-				o.Session = os.Getenv("CLAUDE_CODE_SESSION_ID")
+			o.Session = os.Getenv("CLAUDE_CODE_SESSION_ID") // read once; SelfOrchestrator and the proof gate use it
+			if o.SessionID != "" {
+				o.Guard = sessionGuardFn(o.SessionID)
+				// A caller proves only its own process: no proof for another session's id.
+				if o.SessionID == o.Session {
+					o.Proof = o.Guard.OwnProof(o.SessionID)
+				}
 			}
 			res, runErr := worktreecmd.TaskStateSet(cmd.Context(), cwd, o)
 			return emitJSONOrRender(cmd, setJSON, false, res, func() { worktreecmd.RenderTaskState(cmd.OutOrStdout(), res) }, runErr)
