@@ -32,6 +32,8 @@ type WhoResult struct {
 	Self              *Peer              `json:"self,omitempty"`
 	LastOrchestrators []LastOrchestrator `json:"last_orchestrators,omitempty"`
 	Repos             []orcacmd.RepoInfo `json:"repos,omitempty"`
+	// RepoSlug is <repo> of every role name (peername.RepoSlug of the main checkout).
+	RepoSlug string `json:"repo_slug"`
 }
 
 // AddressedCount is `tail --count-only`: how many messages were addressed to a
@@ -58,6 +60,8 @@ type TailResult struct {
 	// whole-turn drop moves both Omitted and this counter - omitted: 0 no longer
 	// implies a complete answer on its own.
 	TruncatedBytes int `json:"truncated_bytes,omitempty"`
+	// Deprecated names a compatibility flag that still works for this release.
+	Deprecated string `json:"deprecated,omitempty"`
 }
 
 // FrameResult is a framed, addressed message slot.

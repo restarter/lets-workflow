@@ -14,11 +14,24 @@ func RenderWho(w io.Writer, res *WhoResult) {
 		fmt.Fprintln(w, "no live peers in this repo")
 	}
 	for _, p := range res.Peers {
-		role := p.Role
-		if role == "" {
-			role = "-"
+		kind := "-"
+		if p.Orchestrator {
+			kind = "orchestrator"
 		}
-		fmt.Fprintf(w, "%-12s %-24s %-8s %-8s send=%-6s %s\n", role, nonEmpty(p.Name, "(no name)"), p.Session6, p.Alive, p.Send, strings.Join(nonEmptyList(p.Task, p.Branch, p.Reason), " "))
+		var marks []string
+		if p.Scope != "" {
+			marks = append(marks, "scope="+p.Scope)
+		}
+		if p.Standing {
+			marks = append(marks, "standing")
+		}
+		if p.Orc != "" {
+			marks = append(marks, "orc="+p.Orc)
+		}
+		if p.Duplicate {
+			marks = append(marks, "duplicate_name")
+		}
+		fmt.Fprintf(w, "%-12s %-24s %-8s %-8s %s\n", kind, nonEmpty(p.Name, "(no name)"), p.Session6, p.Alive, strings.Join(nonEmptyList(append([]string{p.Task, p.Branch}, marks...)...), " "))
 	}
 	for _, d := range res.Degraded {
 		fmt.Fprintf(w, "degraded %s: %s %s\n", d.Source, d.Reason, d.Detail)

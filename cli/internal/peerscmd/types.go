@@ -20,12 +20,18 @@ type Peer struct {
 	State        string   `json:"state,omitempty"` // registry status, or the Orca agent state
 	AgentType    string   `json:"agent_type,omitempty"`
 	LastActivity string   `json:"last_activity,omitempty"`
-	Alive        string   `json:"alive"`          // alive | dead | unknown
+	Alive        string   `json:"alive"`          // alive | dead | unknown (a live registry row is alive)
 	Via          []string `json:"via"`            // claude, orca
 	Send         string   `json:"send,omitempty"` // orca | claude | none (computed in who/peers; absent when not computed)
 	Reason       string   `json:"reason,omitempty"`
 	RepoIndex    *int     `json:"repo_index,omitempty"` // who --orca-repos: which Orca repo this row belongs to
 	Repo         string   `json:"repo,omitempty"`       // that Orca repo's display name - the visible mark of a sibling-repo row
+	// The slim `who` fields (lets-0xsw2). Role, TerminalID, AgentType, Via, Send,
+	// Reason and Repo above are no longer filled by `who`; they go with the old
+	// role / Orca path.
+	Orchestrator bool `json:"orchestrator,omitempty"`   // a recorded orchestrator name, or (none recorded live) <repo>-orc[-scope]
+	Standing     bool `json:"standing,omitempty"`       // its record's standing=on (unset and off are both false)
+	Duplicate    bool `json:"duplicate_name,omitempty"` // another live session anywhere has this name
 }
 
 // LastOrchestrator is an orchestrator that is not running, as the hub needs it to
@@ -37,7 +43,7 @@ type LastOrchestrator struct {
 	Session   string `json:"session,omitempty"`
 	Session6  string `json:"session6,omitempty"`
 	Pid       *int   `json:"pid,omitempty"`
-	Source    string `json:"source"` // last_seen | role_file
+	Source    string `json:"source"` // last_seen | role_file (the old path only)
 	Note      string `json:"note,omitempty"`
 }
 
@@ -53,6 +59,7 @@ type Turn struct {
 	TS             string `json:"ts,omitempty"`
 	Kind           string `json:"kind"` // TEXT | INBOUND | TOOL | RESULT | SCREEN
 	Role           string `json:"role,omitempty"`
+	From           string `json:"from,omitempty"` // an INBOUND native message's from-name (peertail)
 	Tool           string `json:"tool,omitempty"`
 	Text           string `json:"text"`
 	TruncatedBytes int    `json:"truncated_bytes,omitempty"` // bytes this turn's text lost to the per-turn cap

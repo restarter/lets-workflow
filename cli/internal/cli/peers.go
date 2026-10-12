@@ -42,7 +42,7 @@ func newPeersWhoCmd() *cobra.Command {
 	var jsonOut bool
 	var timeoutMs int
 	cmd := &cobra.Command{
-		Use: "who", Short: "List this repo's live peers (Claude registry; Orca when LETS_LAUNCHER=orca or --probe-orca)",
+		Use: "who", Short: "List this repo's live Claude sessions (the Claude Code session registry)",
 		Args: cobra.NoArgs, SilenceUsage: true, SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			o.Timeout = time.Duration(timeoutMs) * time.Millisecond
@@ -51,16 +51,25 @@ func newPeersWhoCmd() *cobra.Command {
 			return err
 		},
 	}
+	// v0.10.0 flags (--role, --prune, --probe-orca, --repo) are accepted and ignored:
+	// declared hidden (a markdown invocation still names them until the commands are
+	// updated), and any other unknown flag passes the whitelist.
+	cmd.FParseErrWhitelist.UnknownFlags = true
 	f := cmd.Flags()
+	var ignoredStr string
+	var ignoredBool bool
+	f.StringVar(&ignoredStr, "role", "", "Ignored (v0.10.0)")
+	f.BoolVar(&ignoredBool, "prune", false, "Ignored (v0.10.0)")
+	f.BoolVar(&ignoredBool, "probe-orca", false, "Ignored (v0.10.0)")
+	f.StringVar(&ignoredStr, "repo", "", "Ignored (v0.10.0)")
+	for _, name := range []string{"role", "prune", "probe-orca", "repo"} {
+		_ = f.MarkHidden(name)
+	}
 	f.StringVar(&o.Cwd, "cwd", "", "Checkout to inspect (default: current directory)")
-	f.StringVar(&o.Role, "role", "", "Only this role: orchestrator | worker | peer")
-	f.StringVar(&o.Orc, "orc", "", "Only the workers bound to this orchestrator name")
+	f.StringVar(&o.Orc, "orc", "", "Only the sessions whose branch is bound to this orchestrator name")
 	f.StringVar(&o.ExcludeSession, "exclude-session", "", "Leave this session id out")
 	f.StringVar(&o.Session, "session", "", "Also report this session as self")
-	f.BoolVar(&o.Prune, "prune", false, "Remove the role files of dead holders")
-	f.BoolVar(&o.ProbeOrca, "probe-orca", false, "Consult Orca even when LETS_LAUNCHER is not orca")
-	f.StringVar(&o.Repo, "repo", "", "Another registered repo's main checkout (read-only; adds last_orchestrators)")
-	f.BoolVar(&o.OrcaRepos, "orca-repos", false, "Every repo Orca knows (validated in Go); rows carry repo_index")
+	f.BoolVar(&o.OrcaRepos, "orca-repos", false, "Every repo Orca knows (validated in Go): orchestrator rows with repo_index")
 	f.IntVar(&timeoutMs, "timeout-ms", 2500, "Total time budget")
 	f.BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
 	return cmd
@@ -82,8 +91,8 @@ func newPeersTailCmd() *cobra.Command {
 	var o peerscmd.TailOptions
 	var repoIndex func() *int
 	cmd := &cobra.Command{
-		Use: "tail [<name>]", Short: "Read a peer's recent output (redacted, capped)",
-		Long: "Read a peer's recent output. Name the peer by its exact live name (positional), --to-session SID, or --to-terminal HANDLE.",
+		Use: "tail [<name>]", Short: "Read a session's recent output (redacted, capped)",
+		Long: "Read a live session of this repo. Name it by its exact live name (positional) or --to-session SID.",
 		Args: cobra.MaximumNArgs(1), SilenceUsage: true, SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 1 {
@@ -98,15 +107,13 @@ func newPeersTailCmd() *cobra.Command {
 	f := cmd.Flags()
 	f.StringVar(&o.Cwd, "cwd", "", "Checkout (default: current directory)")
 	f.StringVar(&o.ToSession, "to-session", "", "Session id of the peer")
-	f.StringVar(&o.ToTerminal, "to-terminal", "", "Orca terminal handle of a non-Claude agent (screen only)")
-	f.IntVar(&o.Last, "last", 0, "Number of turns (default 5; with --since-message the whole reply, up to 100)")
-	f.StringVar(&o.SinceMessage, "since-message", "", "Only the turns after this msgid reached the peer")
-	f.StringVar(&o.SentAt, "sent-at", "", "When that message was sent (RFC 3339)")
-	f.StringVar(&o.AddressedToSession, "addressed-to-session", "", "Only the peer's messages addressed to this session id")
-	f.BoolVar(&o.CountOnly, "count-only", false, "With --addressed-to-session: return the count, no text")
-	f.BoolVar(&o.ProbeOrca, "probe-orca", false, "Consult Orca even when LETS_LAUNCHER is not orca")
-	f.StringVar(&o.Repo, "repo", "", "The peer's project main checkout, when it is not this repo")
-	repoIndex = repoIndexFlag(cmd, "The peer's project: an index from lets orca repos / who --orca-repos")
+	f.IntVar(&o.Last, "last", 0, "Number of turns (default 5; with --since the whole reply, up to 100)")
+	f.StringVar(&o.Since, "since", "", "Only the turns timestamped at or after this time (RFC 3339)")
+	f.StringVar(&o.SinceMessage, "since-message", "", "Deprecated: only the turns after this msgid reached the peer (with --sent-at)")
+	f.StringVar(&o.SentAt, "sent-at", "", "Deprecated: when that message was sent (RFC 3339)")
+	// --repo-index stays so a v0.10.0 cross-repo read gets cross_repo_read_retired.
+	repoIndex = repoIndexFlag(cmd, "Retired: reading another repo's session was removed")
+	_ = f.MarkHidden("repo-index")
 	f.Bool("json", false, "Emit JSON envelope (always on)")
 	return cmd
 }
