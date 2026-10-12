@@ -13,7 +13,20 @@ var (
 	orcSkillCall = regexp.MustCompile(`Skill\(\s*skill:\s*"lets:orc"\s*,\s*args:\s*"((?:[^"\\]|\\.)*)"`)
 	orcVerbArg   = regexp.MustCompile(`\bverb=([a-z-]+|<verb>)`)
 	peerSendSM   = regexp.MustCompile(`SendMessage\(\s*\{?\s*to\s*[:=]\s*"([^"]*)"`)
-	peerSendLits = []string{"lets peers tell", "terminal send", "notify_when_idle"}
+	// peerSendBanned are retired send forms - forbidden in EVERY file, the orc skill
+	// included (lets-0xsw2): a peer message goes through SendMessage only.
+	peerSendBanned = []string{"lets peers tell", "terminal send"}
+	// peerSendLits are send forms that live only in the orc skill.
+	peerSendLits = []string{"notify_when_idle"}
+	// orcSkillMust are the orc skill's contract lines: the native send with its idle
+	// subscription, the liveness check, the delivery-notice result lines, and the
+	// standing-grant guards (the 3-reply cap, provenance, the bound-row check, and
+	// the targets that never use the grant).
+	orcSkillMust = []string{"SendMessage(", "notify_when_idle", "ListAgents", "held for approval in", "refused by", "expired unapproved in",
+		"(<n>/3)", "only the harness envelope", "who --orc", "never use the grant"}
+	// orcSkillBanned are v0.10.0 steps the orc skill no longer runs (hub.md and
+	// artifact-path still name frame until the hub moves off it).
+	orcSkillBanned = []string{"lets peers frame", "lets peers wait"}
 
 	orcOfferLabel  = regexp.MustCompile(`label:\s*"([^"]*[Oo]rchestrator[^"]*)"`)
 	orcOptionsOpen = regexp.MustCompile(`options:\s*\[`)
@@ -63,14 +76,19 @@ func lintOrcFiles(files map[string]string) []string {
 		for _, m := range orcSkillCall.FindAllStringSubmatch(body, -1) {
 			v := orcVerbArg.FindStringSubmatch(m[1])
 			aliasPlaceholder := rel == "commands/peer.md" && v != nil && v[1] == "<verb>" // the alias forwards the user's verb; the skill validates it
-			if !aliasPlaceholder && (v == nil || !map[string]bool{"ask": true, "ping": true, "read": true, "tell": true, "who": true}[v[1]]) {
+			if !aliasPlaceholder && (v == nil || !map[string]bool{"ask": true, "ping": true, "read": true, "tell": true, "who": true, "standing": true}[v[1]]) {
 				bad = append(bad, rel+": Skill(lets:orc) with no valid verb: "+m[1])
 			}
 			if rel != "commands/peer.md" && !strings.Contains(m[1], "footer=none") {
 				bad = append(bad, rel+": Skill(lets:orc) outside /lets:peer must pass footer=none: "+m[1])
 			}
 		}
-		// 2: peer-send forms live only in the orc skill
+		// 2: retired send forms live nowhere; the others only in the orc skill
+		for _, lit := range peerSendBanned {
+			if strings.Contains(body, lit) {
+				bad = append(bad, rel+": retired peer-send form "+lit+" (peer messages go through SendMessage in skills/orc/SKILL.md)")
+			}
+		}
 		if rel != "skills/orc/SKILL.md" {
 			for _, lit := range peerSendLits {
 				if strings.Contains(body, lit) {
@@ -115,17 +133,18 @@ func lintOrcFiles(files map[string]string) []string {
 		if rel == "commands/peer.md" && (strings.Contains(body, "SendMessage") || strings.Contains(body, "lets peers")) {
 			bad = append(bad, rel+": the alias delegates to the orc skill and sends nothing itself")
 		}
-		// 6: the SendMessage fallback is never silent (lets-rry3c): its Step 5 row is MANDATORY
-		// and names the line to print
+		// 6: the orc skill's contract: the native send, the liveness check, the
+		// delivery-notice result lines and the standing-grant guards; no v0.10.0 step
 		if rel == "skills/orc/SKILL.md" {
-			row := ""
-			for _, line := range strings.Split(body, "\n") {
-				if strings.HasPrefix(line, "| `reason=peer_not_ready`, `claude_fallback_allowed=true` |") {
-					row = line
+			for _, must := range orcSkillMust {
+				if !strings.Contains(body, must) {
+					bad = append(bad, rel+": the orc skill must hold "+must)
 				}
 			}
-			if !strings.Contains(row, "**MANDATORY:**") || !strings.Contains(row, "delivered via SendMessage fallback") {
-				bad = append(bad, rel+": the peer_not_ready fallback row must be **MANDATORY:** and print `delivered via SendMessage fallback`")
+			for _, gone := range orcSkillBanned {
+				if strings.Contains(body, gone) {
+					bad = append(bad, rel+": the orc skill no longer runs "+gone)
+				}
 			}
 		}
 	}
@@ -220,15 +239,6 @@ func TestOrcLint(t *testing.T) {
 		}
 	}
 
-	// a repo_index reaches the orc skill only from Go output (lets-th8ti): the skill
-	// names both Go sources, and the start pointer forwards the resolved one
-	if orc := files["skills/orc/SKILL.md"]; !strings.Contains(orc, "target.repo_index") || !strings.Contains(orc, "row.repo_index") || strings.Contains(orc, "only `/lets:hub` passes them") {
-		t.Error("skills/orc/SKILL.md: a repo_index must come from a resolved target or a who --orc row, and not only from /lets:hub")
-	}
-	if !strings.Contains(files["commands/start.md"], "--repo-index <target.repo_index>") {
-		t.Error("commands/start.md: the orchestrator pointer must forward a resolved target's repo_index")
-	}
-
 	// mutation checks on scratch copies
 	mutate := func(rel, add string) []string {
 		c := map[string]string{}
@@ -238,13 +248,25 @@ func TestOrcLint(t *testing.T) {
 		c[rel] += "\n" + add + "\n"
 		return lintOrcFiles(c)
 	}
-	silent := map[string]string{}
-	for k, v := range files {
-		silent[k] = v
+	replaced := func(rel, old, new string) []string {
+		c := map[string]string{}
+		for k, v := range files {
+			c[k] = v
+		}
+		c[rel] = strings.ReplaceAll(files[rel], old, new)
+		return lintOrcFiles(c)
 	}
-	silent["skills/orc/SKILL.md"] = strings.Replace(files["skills/orc/SKILL.md"], "delivered via SendMessage fallback", "sent", 1)
-	if len(lintOrcFiles(silent)) == 0 {
-		t.Error("mutation: a fallback row without its printed line must fail the lint")
+	if len(replaced("skills/orc/SKILL.md", "held for approval in", "waiting in")) == 0 {
+		t.Error("mutation: an orc skill without the held-for-approval result line must fail the lint")
+	}
+	if len(mutate("skills/orc/SKILL.md", "lets peers tell x")) == 0 {
+		t.Error("mutation: lets peers tell in the orc skill itself must fail the lint")
+	}
+	if len(replaced("skills/orc/SKILL.md", "(<n>/3)", "(<n>)")) == 0 {
+		t.Error("mutation: an orc skill without the 3-reply standing cap must fail the lint")
+	}
+	if len(mutate("skills/orc/SKILL.md", "lets peers frame --to-session x")) == 0 {
+		t.Error("mutation: a frame step in the orc skill must fail the lint")
 	}
 	if len(mutate("commands/done.md", "lets peers tell x")) == 0 {
 		t.Error("mutation: a peer send in done.md must fail the lint")
