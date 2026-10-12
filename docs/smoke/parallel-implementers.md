@@ -9,16 +9,16 @@ Before any check: a clean tree, `make build`, and the plugin loaded from this ch
 ## 1. Session-owner guard (Task 4)
 
 1. **Plain worktree, pane teammate.** In a task worktree whose `.task-<slug>` records this session, open a second, named Claude session in the same worktree. Pass: the task-state `session:` line still names the first session, and the second session shows the held Notice naming the holder and "run /lets:start in that chat to rewrite the session".
-2. **Plain worktree, no role file, `/clear`.** In a worktree where no peer role file was ever registered, run `/clear` in the owning session, then open a pane. Pass: the CarrySession Notice naming the missing peer role file appears when `.lets/sessions/peers` exists (and nothing when it does not). Do NOT assert `session:` - this residual gap is accepted.
+2. **Plain worktree, no session proof, `/clear`.** In a worktree where no session proof (`.lets/sessions/peers/<sid>.role`, written by `lets peers role set`) was ever recorded, run `/clear` in the owning session, then open a pane. Pass: the CarrySession Notice naming the missing proof appears when `.lets/sessions/peers` exists (and nothing when it does not). Do NOT assert `session:` - this residual gap is accepted.
 3. **Team worktree.** In a worktree a team file claims, with a recorded lead (`lets members lead --scope <c> --json`), open a pane. Pass: `session:` unchanged, and the Notice names the recorded lead.
 
 ## 2. member-run in a team (Task 5)
 
-In a team worktree with a recorded lead, spawn `<c>-architect` through member-run (`/lets:team spawn architect`). Pass: `lets peers who --json` shows exactly one `<c>-architect`, and `lets members status --scope <c> --json` shows it `live` with `link: team`.
+In a team worktree with a recorded lead, spawn `<c>-architect` through member-run (`/lets:team spawn architect`). Pass: a pane member shows as exactly one `<c>-architect` row in `lets peers who --json` (no `duplicate_name`) and in `ListAgents`; an in-process one only in `ListAgents`; and `lets members status --scope <c> --json` shows it `live` with `link: team`.
 
-## 3. Delivered SendMessage and the fallback line (Task 5b)
+## 3. A message by SendMessage and its result line (Task 5b; lets-0xsw2)
 
-From a worker, `/lets:orc ask` the lead while the lead is mid-turn. Pass: the worker prints `delivered via SendMessage fallback - orca refused: <reason> (<state>)` on its own line, and `lets peers tail --to-session <lead sid> --since-message <msgid> --json` on the receiver shows the message as seen.
+From a worker, `/lets:orc ask` the lead while the lead is mid-turn. Pass: `ListAgents` lists the lead's name before the send; the worker prints exactly one result line - `sent to <lead> - waiting for its reply`, or `held for approval in <lead>` when the two sessions run different permission modes; the lead's next turn opens with the harness's `<cross-session-message ... from-name="<worker>">`; `lets peers tail <worker> --since <send time> --json`, run in the lead's repo, shows the reply turn; and the worker relays the reply whole.
 
 ## 4. Parallel isolated groups (Task 10)
 
@@ -39,7 +39,7 @@ On a scratch branch, a plan with three one-file chunks; run `/lets:execute --imp
 
 ## 6. Team run on a launcher (Task 11)
 
-With `LETS_LAUNCHER=tmux` or `cmux` and two scratch tasks, run `/lets:team run --tasks <a>,<b>` from the main checkout. Pass: two sessions named `<repo>-<id>` appear in `lets peers who --orc <lead> --json`, bound to this lead; the run record goes `launched` -> `open`; `/lets:team stop` asks both workers. Any miss is a deviation.
+With `LETS_LAUNCHER=tmux` or `cmux` and two scratch tasks, run `/lets:team run --tasks <a>,<b>` from the main checkout. Pass: two sessions named `<repo>-<id>` appear in `lets peers who --orc <lead> --json` and in `ListAgents`, bound to this lead (`orc` = `<lead>`, the name `/lets:start --main` recorded); the run record goes `launched` -> `open`; `/lets:team stop` asks both workers. Any miss is a deviation.
 
 ## 7. Standing-team members (Task 12)
 
@@ -51,9 +51,9 @@ In a team worktree: dismiss a pane member, then `/lets:team spawn --roster`. Pas
    - the team worktree's HEAD == `origin/main` after that fetch, and its branch is `team_<c>`;
    - `orca terminal create` ACCEPTS the worktree LETS created (a refusal is recorded - the printed fallback command is then the Orca behaviour);
    - the lead's command ran with cwd == the team worktree;
-   - the `lets peers who --json` row has the name exactly `<c>-lead`, that exact cwd, and `send: orca`.
+   - the `lets peers who --json` row has the name exactly `<c>-lead` and that exact cwd, with no `duplicate_name`, and `ListAgents` lists `<c>-lead`.
 2. **(e) Orca.** The lead spawns one named teammate. Record whether it shows as a pane - a finding, not a gate (that is Claude Code's own setting).
-3. **(b) cmux and tmux.** With each launcher, the lead's command `claude --name <c>-lead '/lets:start'` gives a `lets peers who` row named exactly `<c>-lead`.
+3. **(b) cmux and tmux.** With each launcher, the lead's command `claude --name <c>-lead '/lets:start'` gives a `lets peers who` row (and a `ListAgents` row) named exactly `<c>-lead`.
 4. **(d) Setup hook.** Two teams in one repo whose `.lets/hooks/team-setup` sets them record distinct `DOCKER_PREFIX`, `COMPOSE_PROJECT_NAME` and port blocks in their team files' Workspace sections. The hook runs only after the owner's yes; a hook that fails stops the flow before the lead is launched, and the reopen offers to run it again.
 
 ## 9. Create and disband (lets-0rgnd, Task 18)
