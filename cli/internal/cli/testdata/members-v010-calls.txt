@@ -1,0 +1,41 @@
+# Every `lets members` call of the v0.10.0 plugin (git show v0.10.0:<file>), placeholders
+# replaced by literal values, frozen for the deprecated stub (lets-gbfpd).
+# Format: <cwd> | <args after `lets members`> | <reader condition at that call site>
+# cwd: team = a worktree the team file snake.md claims; main = the main checkout.
+# Conditions: `&&`-joined `<json path> == <value>` (env = $CLAUDE_CODE_SESSION_ID),
+# or `line ~ <text>` for a call without --json (one line of text).
+#
+# skills/member-run/SKILL.md Step 0 (binary check): exit 0
+team | status --scope snake --json | ok == true
+# member-run Step 2.1 (team scope): lead live and this session; no entry of the name -> no name_live
+team | status --scope snake --json | lead.session == env && lead.status == live && members == []
+# member-run Step 2.1 (run scope): no entry of the name
+main | status --scope run-7e3c11b --json | members == []
+# member-run Step 2.3: record the spawn; the return reads member.kind
+team | add --scope snake --name architect --role lets:architect --json | member.kind == in_process && member.agent_name == snake-architect
+main | add --scope run-7e3c11b --name impl-7e3c11b --role lets:implementer --model opus --json | member.kind == in_process && member.model == opus
+main | add --scope run-7e3c11b --name impl-7e3c11b-a --role lets:implementer --model opus --isolation worktree --worktree-path /tmp/agent-wt --worktree-branch worktree-agent-a1b2c3 --agent-id a1b2c3 --json | member.kind == in_process && member.agent_id == a1b2c3 && member.worktree_path == /tmp/agent-wt
+# member-run Step 3.1: live -> the message is sent (to agent_id when set, else the agent name)
+team | status --scope snake --name architect --json | members[0].status == live && members[0].agent_name == snake-architect && members[0].link == team
+main | status --scope run-7e3c11b --name impl-7e3c11b --json | members[0].status == live && members[0].agent_name == impl-7e3c11b
+# member-run Step 4.1: live -> TaskStop; Step 4.2 dismiss continues
+team | status --scope snake --name architect --json | members[0].status == live
+team | dismiss --scope snake --name architect --json | dismissed[0] == architect
+# commands/team.md Step M0: the registry read
+team | status --scope snake --json | ok == true && members == []
+# commands/team.md Step M1 "Fresh name": the survivor recorded dismissed
+team | dismiss --scope snake --name architect --json | ok == true && dismissed[0] == architect
+# commands/team.md Step M4: only the lead's session dismisses - lead.session == env, live
+team | lead --scope snake --json | lead.session == env && lead.status == live
+# commands/team.md Step M4 `dismiss --all` goes through member-run per member
+team | dismiss --scope snake --all --json | dismissed == []
+# commands/team.md Step D1 (disband, run from the main checkout): "No lead record" branch
+main | lead --scope snake --json | lead == null
+# commands/start.md Step 6 (team worktree): claimed=true -> continue
+team | lead --claim --scope snake --json | claimed == true && lead.session == env
+# commands/execute.md 5-D (isolated group integration): live is the normal case
+main | status --scope run-7e3c11b --name impl-7e3c11b --json | members[0].status == live
+# commands/execute.md "Who checks" (no --json): the team's explorer not live/rotated -> the run's own
+team | status --scope snake --name explorer | line ~ explorer live
+# commands/execute.md resume: liveness from the scope's status - no member listed
+main | status --scope run-7e3c11b --json | members == [] && lead.status == live

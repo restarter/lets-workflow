@@ -2,9 +2,9 @@
 
 package integratecmd
 
-// Exit codes for `lets integrate` (the 50-59 range; worktreecmd owns 27-34,
-// memberscmd 40-49). The range is full: a new failure class reuses 55 with its
-// own error.kind.
+// Exit codes for `lets integrate` (the 50-59 range; worktreecmd owns 27-35;
+// memberscmd's 40-49 retired (lets members, lets-gbfpd) - never reused). The range
+// is full: a new failure class reuses 55 with its own error.kind.
 const (
 	ExitOK                    = 0
 	ExitGeneric               = 1
