@@ -14,9 +14,10 @@ var takeTaskBusyWriter = []string{
 	"Before anything else, run `ListAgents`.",
 	"A busy agent of THIS session that writes in this tree stops the switch",
 	"`isolation: null`",
-	"role is `implementer`",
-	"a `<team>-<name>` with NO roster row (a custom name, or an M1 Fresh name like `<name>-2`) whose spawn brief `.lets/cache/member-<team>-<name>.md` says `(lets:implementer)`",
-	"one whose brief cannot be read counts as a writer, never as read-only",
+	"a `<team>-<name>` whose spawn brief `.lets/cache/member-<team>-<name>.md` (\"You are <name> (lets:<role>) of team <c>\") names `lets:implementer`",
+	"every team agent is classified by its spawn brief, never by the roster",
+	"a brief that is missing, unreadable or names no role counts as a writer, never as read-only",
+	"A brief naming any other role is read-only.",
 	"-> stop: \"`{name}` is still working in this tree",
 	"nothing is switched",
 	"The same agent idle -> one line",
@@ -57,6 +58,9 @@ func takeTaskSwitchProblems(md string) []string {
 	if busy, idle := strings.Index(sec, "stops the switch"), strings.Index(sec, "is idle and keeps"); busy < 0 || idle < 0 || busy > idle {
 		probs = append(probs, "the busy agent must stop the switch before the idle one is mentioned")
 	}
+	if strings.Contains(sec, "roster row whose role") {
+		probs = append(probs, "a team agent's role comes from its spawn brief, never from a roster row")
+	}
 	if strings.Contains(sec, "members_live") {
 		probs = append(probs, "members_live is retired (exit 32) - the gate is ListAgents")
 	}
@@ -84,8 +88,9 @@ func TestTakeTask_ListAgentsBeforeSwitch(t *testing.T) {
 			at := strings.Index(m, "- **Park** ->")
 			return m[:at] + para + m[at:]
 		}(),
-		"unrostered implementer ignored": strings.Replace(md, ", or a `<team>-<name>` with NO roster row (a custom name, or an M1 Fresh name like `<name>-2`) whose spawn brief `.lets/cache/member-<team>-<name>.md` says `(lets:implementer)` - and one whose brief cannot be read counts as a writer, never as read-only", "", 1),
-		"members_live back":              strings.Replace(md, "`no_remote_base`, `target_is_merge_branch`", "`members_live` (a live implementer writes here), `no_remote_base`, `target_is_merge_branch`", 1),
+		"classified by the roster role":   strings.Replace(md, "a `<team>-<name>` whose spawn brief `.lets/cache/member-<team>-<name>.md` (\"You are <name> (lets:<role>) of team <c>\") names `lets:implementer` - every team agent is classified by its spawn brief, never by the roster (`/lets:team spawn` may run any role under any name)", "`<team>-<name>` of a roster row whose role is `implementer`", 1),
+		"missing brief read as read-only": strings.Replace(md, "counts as a writer, never as read-only", "counts as read-only", 1),
+		"members_live back":               strings.Replace(md, "`no_remote_base`, `target_is_merge_branch`", "`members_live` (a live implementer writes here), `no_remote_base`, `target_is_merge_branch`", 1),
 	}
 	if park < 0 || len(para) < 20 {
 		t.Fatal("fixture: the paragraph or the Park bullet is missing")

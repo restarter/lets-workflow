@@ -404,7 +404,7 @@ Skill(skill: "lets:member-run", args: "op=spawn scope=<c> name=<name> role=lets:
 
 ### Step M2: The Whole Roster (`spawn --roster`)
 
-1. Every roster row except `lead` that is not live (Step M0) and has no `Dismissed: <name>` line by this lead session is a candidate.
+1. Every roster row except `lead` that `ListAgents` does not list as `<c>-<name>` and that has no `Dismissed: <name>` line by this lead session is a candidate - a surviving peer pane (`lets peers who`) stays a candidate, for item 2's re-use check.
 2. A **surviving pane**: a candidate whose `<c>-<name>` session still runs (Step M0's `lets peers who` test). It may be re-used only when exactly one live session carries that name.
 3. One confirm, naming the count and each `name (model)`:
 

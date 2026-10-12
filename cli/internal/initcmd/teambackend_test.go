@@ -536,7 +536,7 @@ func membersLinkProblems(team string) []string {
 	if m2 := sectionSpan(team, "### Step M2: The Whole Roster (`spawn --roster`)"); !strings.Contains(m2, "by Step M1.5's rule") || !strings.Contains(m2, "Each member's brief and prompt then carry its own `REPORT_FILE: <path>` line") {
 		p = append(p, "Step M2 must open or add the report files by Step M1.5's rule and hand each brief its REPORT_FILE")
 	}
-	if m2 := sectionSpan(team, "### Step M2: The Whole Roster (`spawn --roster`)"); !strings.Contains(m2, "that is not live (Step M0) and has no `Dismissed: <name>` line by this lead session is a candidate") {
+	if m2 := sectionSpan(team, "### Step M2: The Whole Roster (`spawn --roster`)"); !strings.Contains(m2, "that `ListAgents` does not list as `<c>-<name>` and that has no `Dismissed: <name>` line by this lead session is a candidate") || strings.Contains(m2, "not live (Step M0)") {
 		p = append(p, "Step M2 must skip a roster row recorded Dismissed: by this lead session")
 	}
 	if m5 := sectionSpan(team, "### Step M5: Member reports"); !strings.Contains(m5, "A member with a `Dismissed: <name> (lead <session6>)` line by this lead session in the team file's `## 7. Current task` is never messaged: no nudge - straight to item 3's `op=collect ... retry=no`") {
@@ -576,7 +576,8 @@ func TestTeamBackend_MembersLink(t *testing.T) {
 		{"the brief loses its REPORT_FILE", ", then its own last line `REPORT_FILE: <path>` (Step 5's path)", "", "brief file must carry its REPORT_FILE"},
 		{"M2 skips the M1.5 rule", "first the report files, by Step M1.5's rule, for every name at once", "first the report files for every name at once", "Step M2 must open or add"},
 		{"dismiss --all says the same call again", "then `Skill(skill: \"lets:member-run\", args: \"op=dismiss scope=<c> name=<name>\")` for every registry member - every `<c>-*` agent", "then the same call for every registry member - every `<c>-*` agent", "Step M4 must name member-run op=dismiss"},
-		{"M2 respawns a dismissed row", " and has no `Dismissed: <name>` line by this lead session is a candidate", " is a candidate", "Step M2 must skip a roster row recorded Dismissed:"},
+		{"M2 respawns a dismissed row", " and that has no `Dismissed: <name>` line by this lead session is a candidate", " is a candidate", "Step M2 must skip a roster row recorded Dismissed:"},
+		{"M2 drops surviving panes again", "that `ListAgents` does not list as `<c>-<name>` and that has", "that is not live (Step M0) and has", "Step M2 must skip a roster row recorded Dismissed:"},
 		{"dismiss --all forgets Dismissed", " that has no `Dismissed:` line by this lead session.", ".", "Step M4 dismiss --all must cover only"},
 		{"M5 nudges a dismissed member", "2. A member with a `Dismissed: <name> (lead <session6>)` line by this lead session in the team file's `## 7. Current task` is never messaged: no nudge - straight to item 3's `op=collect ... retry=no`, and its GAP is recorded. Otherwise, not", "2. Not", "Step M5 must never nudge a member recorded Dismissed:"},
 		{"M1 reuses a dismissed name", "for this role that is not live and has no `Dismissed: <name>` line by this lead session;", "for this role that is not live;", "Step M1's name choice must skip"},
