@@ -165,14 +165,19 @@ func repoRows(ctx context.Context, mainRoot string) ([]Peer, map[string]int, []D
 	merge := mergeBranchOf(mainRoot)
 	recs, rdeg := orchestratorRecords(mainRoot, merge)
 	degraded = append(degraded, rdeg...)
-	rows, pids := whoRows(ctx, mainRoot, merge, entries, snap, recs)
+	rows, pids := whoRows(ctx, mainRoot, merge, entries, snap, recs, true)
 	return rows, pids, degraded
 }
 
 // whoRows builds one row per session of entries (the first registry row stands for
 // it). Duplicate is judged over the machine-wide snapshot: SendMessage names are
 // machine-wide.
-func whoRows(ctx context.Context, mainRoot, merge string, entries []ccregistry.Entry, snap ccregistry.Snapshot, recs []taskstate.Orchestrator) ([]Peer, map[string]int) {
+//
+// enrich adds what only THIS repo may read: each session's branch, its branch
+// task-state (task, orc) and its transcript mtime. The hub (whoOrcaRepos) passes
+// false: in another repo it classifies orchestrators from the registry and the
+// merge-branch records alone (the hub carve-out, protocol/peers.md).
+func whoRows(ctx context.Context, mainRoot, merge string, entries []ccregistry.Entry, snap ccregistry.Snapshot, recs []taskstate.Orchestrator, enrich bool) ([]Peer, map[string]int) {
 	sessionsOf := map[string]map[string]bool{} // name -> live sessions carrying it
 	for _, e := range snap.Entries {
 		if e.NameOK {
@@ -207,6 +212,10 @@ func whoRows(ctx context.Context, mainRoot, merge string, entries []ccregistry.E
 				p.Orchestrator, p.Scope, p.Standing = true, r.Scope, r.Standing == "on"
 				recordedLive = true
 			}
+		}
+		if !enrich {
+			rows = append(rows, p)
+			continue
 		}
 		p.Branch = branchOf(ctx, e.Cwd)
 		if slug, ok := taskstate.Slug(p.Branch); ok && p.Branch != merge {
@@ -273,7 +282,7 @@ func whoOrcaRepos(ctx context.Context, o WhoOptions) (*WhoResult, error) {
 		entries, _, _, snap, degraded := registryPeers(rctx, r.Path)
 		merge := mergeBranchOf(r.Path)
 		recs, rdeg := orchestratorRecords(r.Path, merge)
-		rows, _ := whoRows(rctx, r.Path, merge, entries, snap, recs)
+		rows, _ := whoRows(rctx, r.Path, merge, entries, snap, recs, false) // classification only: no branch task-state, no transcript
 		cancel()
 		for _, d := range append(degraded, rdeg...) {
 			d.Detail = strings.TrimSpace(name + " " + d.Detail)

@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/restarter/lets-workflow/cli/internal/ccregistry"
 	"github.com/restarter/lets-workflow/cli/internal/orcacmd"
 	"github.com/restarter/lets-workflow/cli/internal/peername"
 )
@@ -235,6 +236,10 @@ func TestWho_OrcaReposReadOnly(t *testing.T) {
 	}
 	_ = writeLastSeen(peersDir(b), lastSeen{Session: sidMain, Pid: 8, Name: peername.Orchestrator(peername.RepoSlug(b), "old")})
 	_ = writeLastSeen(peersDir(b), lastSeen{Session: sidWork, Pid: 7, Name: "MAIN-OLD"}) // a v0.10.0-era name: listed while b records none
+	// a branch task-state and a transcript the hub must never open in another repo
+	withBranch(t, "feature/x")
+	bindBranch(t, a, "feature/x", "SOMEONE")
+	writeTranscript(t, ccregistry.HomeDir(), a, sidMain, assistantText("2026-10-12T12:00:00Z", "private"))
 	before := map[string]map[string]string{a: treeState(t, filepath.Join(a, ".lets")), b: treeState(t, filepath.Join(b, ".lets"))}
 
 	res := who(t, WhoOptions{OrcaRepos: true})
@@ -243,6 +248,11 @@ func TestWho_OrcaReposReadOnly(t *testing.T) {
 	}
 	if p := peerBySession(res.Peers, sidMain); p == nil || p.RepoIndex == nil || *p.RepoIndex != 0 || !p.Standing {
 		t.Errorf("repo a: %+v", p)
+	}
+	for _, p := range res.Peers {
+		if p.Branch != "" || p.Task != "" || p.Orc != "" || p.LastActivity != "" {
+			t.Errorf("hub rows classify only - no branch, task-state or transcript read in another repo: %+v", p)
+		}
 	}
 	if p := peerBySession(res.Peers, sidFable); p == nil || p.RepoIndex == nil || *p.RepoIndex != 2 {
 		t.Errorf("repo b (convention): %+v", p)

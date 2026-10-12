@@ -317,3 +317,22 @@ func TestResolveByName_DegradedRegistryNeverSingle(t *testing.T) {
 		t.Errorf("a healthy registry resolves single: %+v", res)
 	}
 }
+
+// Two live processes share one session id (`claude -r` beside the running original)
+// under different names and repos: a binding to the foreign one's name returns THAT
+// process - its name, its cwd, no standing - never the local row's name or grant.
+func TestResolveByName_BoundTargetIsTheSameProcess(t *testing.T) {
+	root := repoWithLets(t, "")
+	far := gitRepo(t)
+	withBranch(t, "feature/x")
+	bindBranch(t, root, "feature/x", "ORC")
+	recordOrchestrators(t, root, "orchestrator: W-LOCAL standing=on\norchestrator: ORC standing=on\n")
+	claudeHome(t, []regRow{{1, sidM, "W-LOCAL", root}, {2, sidM, "ORC", far}, {3, sidW, "W", root}})
+	res, env := orcEnv(t, root, sidW)
+	if res.Source != "bound" || res.Target == nil || res.Target.Name != "ORC" || res.Target.Cwd != far || res.Target.Standing || res.Target.RepoIndex != nil {
+		t.Fatalf("bound to the foreign process: %+v", res.Target)
+	}
+	if skillStanding(env) {
+		t.Error("the local row's standing must never be substituted")
+	}
+}

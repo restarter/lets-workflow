@@ -119,7 +119,7 @@ func loadNameView(ctx context.Context, mainRoot string) *nameView {
 	recs, rdeg := orchestratorRecords(mainRoot, v.merge)
 	v.recs = recs
 	v.degraded = append(v.degraded, rdeg...)
-	v.rows, v.pids = whoRows(ctx, mainRoot, v.merge, entries, snap, recs)
+	v.rows, v.pids = whoRows(ctx, mainRoot, v.merge, entries, snap, recs, true)
 	return v
 }
 
@@ -244,12 +244,15 @@ func ResolveOrchestrator(ctx context.Context, v *nameView, o ResolveOptions) *Re
 	return res
 }
 
-// boundTarget is the Peer a bound name resolves to: this repo's row when the
-// session runs here, else a bare row with its cwd - another repo, reached by name
-// and always without standing (cross-repo stays per-message).
+// boundTarget is the Peer a bound name resolves to: this repo's row when the SAME
+// process runs here (row session AND row name equal the registry entry's), else a
+// bare row with its cwd - another repo, reached by name and always without standing
+// (cross-repo stays per-message). Two live processes can share one session id
+// (`claude -r` beside a running original) under different names and repos, so a
+// session match alone would hand back another process's name and standing.
 func boundTarget(v *nameView, e ccregistry.Entry) *Peer {
 	for _, p := range v.rows {
-		if p.Session == e.SessionID {
+		if p.Session == e.SessionID && p.Name == e.Name {
 			t := p
 			return &t
 		}
