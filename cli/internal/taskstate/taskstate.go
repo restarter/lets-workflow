@@ -1,6 +1,7 @@
 // Package taskstate is the ONE owner of the per-branch task-state file
 // `.lets/sessions/.task-<branch-slug>` (fields `task:` / `start:` / `session:` /
-// `origin:` / `orc:` / `park:` / `park_team:`). Every Go writer goes through MergeWrite and every markdown
+// `origin:` / `orc:` / `park:` / `park_team:`, plus the repeatable `orchestrator:`
+// lines of the merge-branch file). Every Go writer goes through MergeWrite and every markdown
 // writer through `lets worktree task-state`, so a writer only ever changes the keys
 // it owns and keeps every other line - including lines a newer LETS added.
 //
@@ -22,8 +23,13 @@ import (
 	"github.com/restarter/lets-workflow/cli/internal/teamfile"
 )
 
-// Keys is the canonical order of the known keys; new keys are appended in it.
+// Keys is the canonical order of the known single-valued keys; new keys are appended
+// in it. The repeatable OrchestratorKey is not one of them.
 var Keys = []string{"task", "start", "session", "origin", "orc", "park", "park_team"}
+
+// OrchestratorKey is the one repeatable key: an `orchestrator:` line per recorded
+// orchestrator name, written only on the merge-branch file.
+const OrchestratorKey = "orchestrator"
 
 var (
 	// ErrInvalidValue: a value in WriteOpts.Set failed validation; nothing was written.
@@ -53,7 +59,11 @@ type State struct {
 	// Park is the sha of the `wip(<id>): park` commit `lets worktree switch --park`
 	// made on this branch; ParkTeam is the standing team that parked it.
 	Park, ParkTeam string
-	Other          []string
+	// OrchestratorLines are the values of the `orchestrator:` lines in file order,
+	// raw - a line that does not parse is kept here (and on disk) and skipped by
+	// Orchestrators.
+	OrchestratorLines []string
+	Other             []string
 }
 
 func (s *State) set(key, value string) {
@@ -94,11 +104,21 @@ func splitLine(line string) (key, value string, known bool) {
 	return "", "", false
 }
 
+// orchestratorLine returns the value of an `orchestrator: <value>` line.
+func orchestratorLine(line string) (string, bool) {
+	v, ok := strings.CutPrefix(line, OrchestratorKey+": ")
+	return strings.TrimSpace(v), ok
+}
+
 func parse(content string) State {
 	var s State
 	seen := map[string]bool{}
 	for _, line := range strings.Split(content, "\n") {
 		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		if v, ok := orchestratorLine(line); ok {
+			s.OrchestratorLines = append(s.OrchestratorLines, v)
 			continue
 		}
 		if k, v, ok := splitLine(line); ok {
@@ -136,6 +156,144 @@ type WriteOpts struct {
 	// task - decides here, on what it will overwrite, never on an earlier Read. A
 	// non-nil error writes nothing and is returned as is.
 	Derive func(cur State, exists bool) (map[string]string, error)
+	// PatchOrchestrator creates the `orchestrator:` line of its name, or merges only
+	// its non-nil fields into the recorded one, keeping every other line.
+	PatchOrchestrator *OrchestratorPatch
+	// ClearOrchestrator removes the `orchestrator:` line(s) of this name.
+	ClearOrchestrator string
+}
+
+// Orchestrator is one `orchestrator:` line of the merge-branch task-state:
+// "orchestrator: <name>[ scope=<part>][ standing=on|off]". Several lines, one per
+// name; the merge-write replaces a line by name and keeps every other line.
+type Orchestrator struct {
+	Name     string // peername.Valid
+	Scope    string // optional, peername-grammar words
+	Standing string // "" (never granted or refused - treated as off), "on", "off"
+}
+
+// OrchestratorPatch updates ONE record: a nil field is left as recorded, so
+// re-running --main or changing the scope never touches the grant, and a
+// standing toggle never erases the scope (Codex r4). A non-nil empty Scope removes
+// the scope.
+type OrchestratorPatch struct {
+	Name     string
+	Scope    *string
+	Standing *string // "on" | "off"
+}
+
+// validStanding reports whether v is a recordable standing value.
+func validStanding(v string) bool { return v == "on" || v == "off" }
+
+// parseOrchestrator parses the value of one `orchestrator:` line. A name and a scope
+// are peername words (no `=`), so the name is every word before the first
+// `key=value` word, and a scope runs until the next `key=value` word.
+func parseOrchestrator(value string) (Orchestrator, bool) {
+	words := strings.Split(value, " ")
+	i := 0
+	for i < len(words) && !strings.Contains(words[i], "=") {
+		i++
+	}
+	o := Orchestrator{Name: strings.Join(words[:i], " ")}
+	if !peername.Valid(o.Name) {
+		return Orchestrator{}, false
+	}
+	seen := map[string]bool{}
+	key := ""
+	var scope []string
+	for _, w := range words[i:] {
+		k, v, isKV := strings.Cut(w, "=")
+		if !isKV {
+			if key != "scope" {
+				return Orchestrator{}, false
+			}
+			scope = append(scope, w)
+			continue
+		}
+		if seen[k] {
+			return Orchestrator{}, false
+		}
+		seen[k], key = true, k
+		switch k {
+		case "scope":
+			scope = []string{v}
+		case "standing":
+			if !validStanding(v) {
+				return Orchestrator{}, false
+			}
+			o.Standing = v
+		default:
+			return Orchestrator{}, false
+		}
+	}
+	if seen["scope"] {
+		o.Scope = strings.Join(scope, " ")
+		if !peername.Valid(o.Scope) {
+			return Orchestrator{}, false
+		}
+	}
+	return o, true
+}
+
+// format renders o as the value of its `orchestrator:` line.
+func (o Orchestrator) format() string {
+	v := o.Name
+	if o.Scope != "" {
+		v += " scope=" + o.Scope
+	}
+	if o.Standing != "" {
+		v += " standing=" + o.Standing
+	}
+	return v
+}
+
+// apply merges the patch's non-nil fields into o.
+func (p *OrchestratorPatch) apply(o Orchestrator) Orchestrator {
+	o.Name = p.Name
+	if p.Scope != nil {
+		o.Scope = *p.Scope
+	}
+	if p.Standing != nil {
+		o.Standing = *p.Standing
+	}
+	return o
+}
+
+// Orchestrators returns the recorded lines of st, in file order; a line that does
+// not parse is skipped and named in the second return.
+func Orchestrators(st State) ([]Orchestrator, []string) {
+	var out []Orchestrator
+	var bad []string
+	for _, v := range st.OrchestratorLines {
+		if o, ok := parseOrchestrator(v); ok {
+			out = append(out, o)
+		} else {
+			bad = append(bad, v)
+		}
+	}
+	return out, bad
+}
+
+// validateOrchestratorOps checks the orchestrator fields of o before any lock.
+func validateOrchestratorOps(o WriteOpts) error {
+	if p := o.PatchOrchestrator; p != nil {
+		if !peername.Valid(p.Name) {
+			return fmt.Errorf("%w: orchestrator %q", ErrInvalidValue, p.Name)
+		}
+		if p.Scope != nil && *p.Scope != "" && !peername.Valid(*p.Scope) {
+			return fmt.Errorf("%w: orchestrator scope %q", ErrInvalidValue, *p.Scope)
+		}
+		if p.Standing != nil && !validStanding(*p.Standing) {
+			return fmt.Errorf("%w: standing %q (on | off)", ErrInvalidValue, *p.Standing)
+		}
+	}
+	if o.ClearOrchestrator != "" && !peername.Valid(o.ClearOrchestrator) {
+		return fmt.Errorf("%w: orchestrator %q", ErrInvalidValue, o.ClearOrchestrator)
+	}
+	if p := o.PatchOrchestrator; p != nil && o.ClearOrchestrator != "" && p.Name == o.ClearOrchestrator {
+		return fmt.Errorf("%w: orchestrator %q is both patched and cleared", ErrInvalidValue, p.Name)
+	}
+	return nil
 }
 
 // ErrFileAbsent: the file does not exist and WriteOpts.Create was false.
@@ -211,6 +369,9 @@ func MergeWrite(letsDir, slug string, o WriteOpts) (State, error) {
 			return State{}, err
 		}
 	}
+	if err := validateOrchestratorOps(o); err != nil {
+		return State{}, err
+	}
 	path := Path(letsDir, slug)
 	// Refresh-if-exists must not leave anything behind: without this check the lock
 	// below creates .lets/locks in every repo a SessionStart refresh runs in, LETS or not.
@@ -252,8 +413,26 @@ func MergeWrite(letsDir, slug string, o WriteOpts) (State, error) {
 
 	var out []string
 	applied := map[string]bool{}
+	patched := false
 	for _, line := range strings.Split(string(data), "\n") {
 		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		if v, ok := orchestratorLine(line); ok {
+			rec, parsed := parseOrchestrator(v)
+			switch {
+			case !parsed:
+				out = append(out, line) // kept as written; Orchestrators skips it
+			case rec.Name == o.ClearOrchestrator:
+				// removed
+			case o.PatchOrchestrator != nil && rec.Name == o.PatchOrchestrator.Name:
+				if !patched { // a duplicate line of the patched name is dropped
+					out = append(out, OrchestratorKey+": "+o.PatchOrchestrator.apply(rec).format())
+					patched = true
+				}
+			default:
+				out = append(out, line)
+			}
 			continue
 		}
 		k, _, known := splitLine(line)
@@ -274,6 +453,9 @@ func MergeWrite(letsDir, slug string, o WriteOpts) (State, error) {
 		if v, ok := set[k]; ok && v != "" && !applied[k] {
 			out = append(out, k+": "+v)
 		}
+	}
+	if p := o.PatchOrchestrator; p != nil && !patched {
+		out = append(out, OrchestratorKey+": "+p.apply(Orchestrator{}).format())
 	}
 	content := strings.Join(out, "\n")
 	if content != "" {

@@ -195,7 +195,7 @@ func TestSessionStart_PeersHealOnClearNotCompact(t *testing.T) {
 	runSessionStart(t, dir, `{"source":"clear","session_id":"`+sid+`"}`)
 	runSessionStart(t, dir, `{"source":"compact","session_id":"`+sid+`"}`)
 	if len(got) != 1 || got[0] != sid {
-		t.Errorf("peers heal must run on clear, not compact; got %v", got)
+		t.Errorf("the proof carry must run on clear, not compact; got %v", got)
 	}
 }
 
@@ -290,10 +290,11 @@ func TestHookSessionStart_HeldNotice(t *testing.T) {
 	}
 }
 
-// /clear re-mints the id in the same process: with the old id's role file as proof
-// the boundary is carried (sha kept), and peersHeal still moves that role file to
-// the new id afterwards - the carry read it without touching it. Without a role
-// file nothing is written and the residual gap is named.
+// /clear re-mints the id in the same process: with the old id's proof file (an
+// older binary's role file reads the same) the boundary is carried (sha kept), and
+// peersHeal's CarryProof still moves that file to the new id afterwards - the guard
+// read it without touching it. Without a proof file nothing is written and the
+// residual gap is named.
 func TestHookSessionStart_ClearCarriesWithRoleFile(t *testing.T) {
 	w := newGuardWorld(t)
 	body := "task: lets-abc\nsession: 1111111 " + gSidLead + "\n"
@@ -331,10 +332,10 @@ func TestHookSessionStart_ClearCarriesWithRoleFile(t *testing.T) {
 		t.Errorf("a carry is never silent:\n%s", out)
 	}
 	if _, err := os.Stat(filepath.Join(repo, ".lets", "sessions", "peers", gSidNew+".role")); err != nil {
-		t.Errorf("peersHeal must still move the role file to the new id: %v", err)
+		t.Errorf("peersHeal must still move the proof file to the new id: %v", err)
 	}
 	if _, err := os.Stat(oldRole); !os.IsNotExist(err) {
-		t.Errorf("the old id's role file must be gone after peersHeal: %v", err)
+		t.Errorf("the old id's proof file must be gone after peersHeal: %v", err)
 	}
 }
 

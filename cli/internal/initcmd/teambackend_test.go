@@ -103,8 +103,8 @@ func TestTeamBackend(t *testing.T) {
 		t.Error("the run step must name create's worktree_path_exists backstop")
 	}
 
-	// the orchestrator is registered before the first launch, and re-checked per launch
-	register := strings.Index(team, "lets peers role set orchestrator")
+	// the orchestrator is recorded (its own name) before the first launch, and re-checked per launch
+	register := strings.Index(team, "lets worktree task-state set --self-orchestrator")
 	first := strings.Index(team, `open "<path>"`)
 	if t2 := strings.Index(team, `cd "<path>" &&`); t2 >= 0 && (first < 0 || t2 < first) {
 		first = t2
@@ -113,11 +113,11 @@ func TestTeamBackend(t *testing.T) {
 		first = t3
 	}
 	if register < 0 || first < 0 || register > first {
-		t.Errorf("orchestrator registration (%d) must precede the first launch (%d)", register, first)
+		t.Errorf("orchestrator record (%d) must precede the first launch (%d)", register, first)
 	}
-	recheck := strings.Index(sessions, "source=self")
+	recheck := strings.Index(sessions, "`self_record.name` = `<lead>`")
 	if recheck < 0 || recheck > strings.Index(sessions, `open "<path>"`) {
-		t.Error("every launch re-asserts source=self before it opens a session")
+		t.Error("every launch re-asserts self_record.name = <lead> before it opens a session")
 	}
 
 	// the conflict guard reads the records by backend; legacy ones are stale and never block
@@ -203,8 +203,8 @@ func TestTeamBackend_Members(t *testing.T) {
 	if respawn < 0 || reuse < 0 || respawn > reuse {
 		t.Error("spawn --roster recommends respawn first; re-use is labelled keeps old context")
 	}
-	if !strings.Contains(spawn, "`send` is `orca` or `claude`") || !strings.Contains(spawn, "exactly one live session carries that name") {
-		t.Error("re-use is offered only for a unique surviving pane with an orca or claude send route")
+	if !strings.Contains(spawn, "exactly one live session carries that name") {
+		t.Error("re-use is offered only for a unique surviving pane")
 	}
 	if stop := sectionSpan(team, "\n## Stop\n"); !strings.Contains(stop, "`/lets:team dismiss --all`") {
 		t.Error("stop with no run points to dismiss --all")

@@ -96,14 +96,16 @@ func under(path, dir string) bool {
 	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
-// peersHealFn restores this session's peer role on SessionStart; a var so tests spy.
+// peersHealFn carries the session proof on SessionStart; a var so tests spy.
 var peersHealFn = peersHeal
 
-// peersHeal carries this session's role to a re-minted id and restores it from its
-// anchor, the moment the harness hands the session its id (startup, resume, /clear).
-// Best-effort like selfHeal: bounded, silent, and skipped in a repo that never used
-// peers - the lazy path in every `lets peers` call covers whatever this misses (the
-// registry may not show the new id yet when the hook fires).
+// peersHeal carries the session proof (peerscmd.CarryProof) the moment the harness
+// hands the session its id (startup, resume, /clear): a proof whose id was re-minted
+// in the same process moves to the new id, a resumed one gets its new pid, so the
+// next /clear is provable too. Best-effort like selfHeal: bounded, silent, and
+// skipped in a repo that never wrote a proof - the lazy carry in every `lets peers
+// who`, `orchestrator` and `role set` covers whatever this misses (the registry may
+// not show the new id yet when the hook fires). lets-gbfpd replaces it.
 func peersHeal(root, sid string) {
 	if root == "" || sid == "" {
 		return
@@ -113,7 +115,7 @@ func peersHeal(root, sid string) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	peerscmd.Heal(ctx, root, sid)
+	peerscmd.CarryProof(ctx, root)
 }
 
 // sessionGuardFn builds the task-state session guard for root, plus the step an
@@ -122,8 +124,9 @@ func peersHeal(root, sid string) {
 var sessionGuardFn = sessionGuard
 
 // sessionGuard judges from ONE registry snapshot: liveness (sessionLiveness), a
-// same-process re-mint proven by the recorded id's role file (peerscmd.RoleProof,
-// read before peersHeal moves it), and - in a team worktree - the recorded lead.
+// same-process re-mint proven by the recorded id's session proof file
+// (peerscmd.RoleProof, read before peersHeal moves it), and - in a team worktree -
+// the recorded lead.
 // No registry at all keeps the unguarded refresh (no registry, no panes); a team
 // file or lead record that cannot be read refuses every write (fail-safe).
 func sessionGuard(root, sid string) (taskstate.SessionGuard, func()) {

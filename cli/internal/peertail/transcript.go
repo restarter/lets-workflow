@@ -1,4 +1,4 @@
-package peerscmd
+package peertail
 
 import (
 	"bytes"
@@ -7,12 +7,14 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
 	"github.com/restarter/lets-workflow/cli/internal/ccregistry"
+	"github.com/restarter/lets-workflow/cli/internal/peername"
 	"github.com/restarter/lets-workflow/cli/internal/redact"
 )
 
@@ -282,6 +284,11 @@ func parseLine(line []byte) ([]record, bool) {
 // in turnsOf, which is also where its TruncatedBytes is counted. Capping here too
 // would let redact.Cap cut its own marker and measure the count against the wrong
 // baseline.
+//
+// A user text is INBOUND when it opens with a legacy `[lets-peer ...]` header (at
+// the start, or first inside a `<cross-session-message>` wrapper) - its header is
+// kept on the record - or when it is a native cross-session delivery (see
+// nativeInbound), whose from-name becomes the turn's From.
 func textRecord(typ, ts, text string) record {
 	r := record{turn: Turn{TS: ts, Kind: "TEXT", Role: typ}}
 	if typ == "user" {
@@ -289,9 +296,122 @@ func textRecord(typ, ts, text string) record {
 			r.turn.Kind = "INBOUND"
 			r.header = &h
 		}
+		if from, ok := nativeInbound(text); ok {
+			r.turn.Kind = "INBOUND"
+			r.turn.From = from
+		}
 	}
 	r.turn.Text = redact.Control(redact.Text(text))
 	return r
+}
+
+// nativePrefix is the one line Claude Code puts before a delivered SendMessage.
+const nativePrefix = "Another Claude session sent a message:"
+
+// fromNameRe reads the from-name attribute of the wrapper's opening tag. The closing
+// quote must be followed by whitespace or the tag's end, so a name carrying a quote
+// (`from-name="a"b"`) matches nothing instead of its prefix.
+var fromNameRe = regexp.MustCompile(`from-name="([^"]{1,64})"[\s>]`)
+
+// nativeInbound reports whether text is a native cross-session delivery: it starts
+// with nativePrefix and holds a `<cross-session-message ` wrapper. from is the
+// wrapper's from-name when that is a valid peer name, else "".
+func nativeInbound(text string) (from string, ok bool) {
+	t := strings.TrimLeft(text, " \t\r\n")
+	if !strings.HasPrefix(t, nativePrefix) {
+		return "", false
+	}
+	i := strings.Index(t, "<cross-session-message ")
+	if i < 0 {
+		return "", false
+	}
+	tag := t[i:]
+	if j := strings.IndexByte(tag, '>'); j >= 0 {
+		tag = tag[:j+1]
+	}
+	if m := fromNameRe.FindStringSubmatch(tag); m != nil && peername.Valid(m[1]) {
+		return m[1], true
+	}
+	return "", true
+}
+
+var (
+	msgIDRe = regexp.MustCompile(`^[0-9a-f]{16}$`)
+	// crossWrapper is Claude Code's wrapper around a delivered cross-session message.
+	// A SendMessage delivered to another session lands in its transcript as a user
+	// text that opens with ONE exact prefix line before the wrapper (lets-rry3c,
+	// recorded live 2026-09-25); the prefix is accepted only when the wrapper follows.
+	crossWrapper = regexp.MustCompile(`^\s*(?:Another Claude session sent a message:\s*)?<cross-session-message[^>]*>\s*`)
+)
+
+// ValidKind reports whether k is a legacy peer message kind.
+func ValidKind(k string) bool {
+	switch k {
+	case "ask", "ping", "tell", "ask-ro":
+		return true
+	}
+	return false
+}
+
+// ParseHeader parses a legacy header (a copy of peerscmd's, for the compatibility
+// release): line must START with `[lets-peer `, fields are `key=value` /
+// `key="value"` tokens up to the closing `]`, and every field is validated. A header
+// quoted later inside text is not a header.
+func ParseHeader(line string) (Header, bool) {
+	rest, ok := strings.CutPrefix(line, "[lets-peer ")
+	if !ok {
+		return Header{}, false
+	}
+	fields := map[string]string{}
+	for {
+		rest = strings.TrimLeft(rest, " ")
+		if strings.HasPrefix(rest, "]") {
+			break
+		}
+		eq := strings.IndexByte(rest, '=')
+		if eq <= 0 {
+			return Header{}, false
+		}
+		key := rest[:eq]
+		if strings.ContainsAny(key, " ]\"") {
+			return Header{}, false
+		}
+		rest = rest[eq+1:]
+		var val string
+		if strings.HasPrefix(rest, `"`) {
+			end := strings.IndexByte(rest[1:], '"')
+			if end < 0 {
+				return Header{}, false
+			}
+			val, rest = rest[1:1+end], rest[2+end:]
+		} else {
+			end := strings.IndexAny(rest, " ]")
+			if end < 0 {
+				return Header{}, false
+			}
+			val, rest = rest[:end], rest[end:]
+		}
+		if _, dup := fields[key]; dup {
+			return Header{}, false
+		}
+		fields[key] = val
+	}
+	h := Header{ID: fields["id"], Kind: fields["kind"], FromSID: fields["from_sid"], ToSID: fields["to_sid"], From: fields["from"], To: fields["to"]}
+	if !msgIDRe.MatchString(h.ID) || !ValidKind(h.Kind) || !ccregistry.ValidSession(h.FromSID) || !ccregistry.ValidSession(h.ToSID) {
+		return Header{}, false
+	}
+	return h, true
+}
+
+// leadingHeader parses a legacy header at the very start of a message body, after an
+// optional Claude Code `<cross-session-message ...>` wrapper - itself optionally
+// preceded by Claude Code's delivery prefix "Another Claude session sent a
+// message:". Any other text before the header, or the prefix without the wrapper,
+// is not a header.
+func leadingHeader(text string) (Header, bool) {
+	text = crossWrapper.ReplaceAllString(text, "")
+	line, _, _ := strings.Cut(strings.TrimLeft(text, " \t\r\n"), "\n")
+	return ParseHeader(line)
 }
 
 func resultText(raw json.RawMessage) string {
@@ -373,7 +493,8 @@ func TailTurns(path string, n int) ([]Turn, *Degraded) {
 }
 
 // SinceMessage returns the records after the first INBOUND record timestamped at or
-// after sentAt whose parsed id equals msgid exactly; ok=false when there is none.
+// after sentAt whose parsed legacy header id equals msgid exactly; ok=false when
+// there is none. Kept for the compatibility release (`--since-message`).
 func SinceMessage(recs []record, msgid, sentAt string) ([]record, bool) {
 	since, err := time.Parse(time.RFC3339Nano, sentAt)
 	if err != nil {
@@ -388,24 +509,6 @@ func SinceMessage(recs []record, msgid, sentAt string) ([]record, bool) {
 		}
 	}
 	return nil, false
-}
-
-// AddressedTo returns the TOOL records whose input begins with a header addressed
-// to one of sids (exact session id match).
-func AddressedTo(recs []record, sids ...string) []record {
-	var out []record
-	for _, r := range recs {
-		if r.turn.Kind != "TOOL" || r.header == nil {
-			continue
-		}
-		for _, sid := range sids {
-			if r.header.ToSID == sid {
-				out = append(out, r)
-				break
-			}
-		}
-	}
-	return out
 }
 
 // readAll reads the whole tail window (up to maxTailBytes) in chronological order.

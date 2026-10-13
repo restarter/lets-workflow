@@ -29,9 +29,9 @@ lets peers orchestrator --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT
 
 | answer | offer? |
 |---|---|
-| `source` = `bound` / `single` with `target.alive=alive` | yes |
+| `source` = `bound` / `single` with `target.alive=alive` - a `bound` target in another repo included (reached by name) | yes |
 | `source` = `ambiguous` | yes - the orc skill asks which |
-| `self`, `none`, a dead bound target, a `bound` answer that carries `refused[]` and no `target` (cross-repo outside the bound-sibling carve-out, dead, or present-but-unsendable), no binary, an error, HEAD on `$LETS_MERGE_BRANCH`, main mode | NO offer and NO line about it |
+| `self`, `none`, a dead bound target, a `bound` answer that carries `refused[]` and no `target` (dead, or a name two live sessions share), no binary, an error, HEAD on `$LETS_MERGE_BRANCH`, main mode | NO offer and NO line about it |
 
 ## 3. Shapes
 

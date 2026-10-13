@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/restarter/lets-workflow/cli/internal/ccregistry"
 	"github.com/restarter/lets-workflow/cli/internal/gitutil"
 	"github.com/restarter/lets-workflow/cli/internal/letsconfig"
 	"github.com/restarter/lets-workflow/cli/internal/taskstate"
@@ -21,10 +22,99 @@ type TaskStateOptions struct {
 	Task, Start, SessionSHA, SessionID, Orc  string
 	ClearOrigin, ClearOrc, ClearTask, Create bool
 	Wait                                     time.Duration // lock deadline (0 = default 5s)
+
+	// The merge-branch `orchestrator:` records. Orchestrator (or SelfOrchestrator:
+	// this session's registry name) names the record to create or patch; a nil
+	// OrchestratorScope / Standing leaves that field as recorded (the CLI sets a
+	// pointer only for a flag that was given). ClearOrchestrator removes a record.
+	Orchestrator      string
+	SelfOrchestrator  bool
+	OrchestratorScope *string
+	Standing          *string // "on" | "off"
+	ClearOrchestrator string
+	// Session is the caller's session id ($CLAUDE_CODE_SESSION_ID, set by the cli
+	// layer), read only by SelfOrchestrator.
+	Session string
+}
+
+// orchestratorOps reports whether o touches an `orchestrator:` record.
+func (o TaskStateOptions) orchestratorOps() bool {
+	return o.Orchestrator != "" || o.SelfOrchestrator || o.OrchestratorScope != nil || o.Standing != nil || o.ClearOrchestrator != ""
+}
+
+// orchestratorOnly reports whether o touches orchestrator records and nothing of
+// HEAD's own task-state.
+func (o TaskStateOptions) orchestratorOnly() bool {
+	return o.orchestratorOps() && o.Task == "" && o.Start == "" && o.SessionSHA == "" && o.SessionID == "" && o.Orc == "" &&
+		!o.ClearOrigin && !o.ClearOrc && !o.ClearTask
+}
+
+// selfName is the caller's registry name, or a refusal: orchestrator_needs_name (no
+// usable name), orchestrator_not_own_process (the claimed session does not run this
+// command), orchestrator_name_not_unique (another live session carries the name -
+// checked only when unique is true: a pure --standing off only tightens, so a shared
+// name may still revoke).
+func selfName(sid string, unique bool) (string, *Error) {
+	if !ccregistry.ValidSession(sid) {
+		return "", &Error{Code: ExitUsage, Kind: "usage", Message: "--self-orchestrator needs this session's id ($CLAUDE_CODE_SESSION_ID)",
+			Remediation: "run inside a Claude Code session"}
+	}
+	remedy := "name this session with /rename <name>, then run /lets:start --main again"
+	snap := ccregistry.Read(ccregistry.HomeDir())
+	e, ok := snap.Find(sid)
+	switch {
+	case !ok:
+		return "", &Error{Code: ExitGeneric, Kind: "orchestrator_needs_name", Message: "this session is not in the Claude Code session registry, so it has no name to record", Remediation: remedy}
+	case !e.NameOK && e.Name != "":
+		return "", &Error{Code: ExitGeneric, Kind: "orchestrator_needs_name", Message: fmt.Sprintf("this session has no usable name (%q fails the name grammar)", e.Name), Remediation: remedy}
+	case !e.NameOK:
+		return "", &Error{Code: ExitGeneric, Kind: "orchestrator_needs_name", Message: "this session has no name to record as an orchestrator", Remediation: remedy}
+	}
+	// The session id is only a claim ($CLAUDE_CODE_SESSION_ID can be set by any
+	// subprocess, a nested Claude session included): the record is written only when
+	// the NEAREST Claude Code process above this command is that session. Any doubt -
+	// an unidentified Claude process in between, an unreadable hop, no session at all
+	// - refuses.
+	caller, err := snap.CallerSession()
+	if err != nil || caller.SessionID != sid {
+		msg := fmt.Sprintf("another Claude Code session (%s, pid %d) runs this command, not session %s", caller.SessionID, caller.Pid, sid)
+		if err != nil {
+			msg = fmt.Sprintf("could not prove session %s runs this command: %v", sid, err)
+		}
+		return "", &Error{Code: ExitUsage, Kind: "orchestrator_not_own_process", Message: msg, Cause: err,
+			Remediation: "run it from the orchestrator's own Claude Code session (its Bash tool), not from another process"}
+	}
+	if caller.Name != e.Name { // one session id under two processes (claude -r): the caller's own name counts
+		if !caller.NameOK {
+			return "", &Error{Code: ExitGeneric, Kind: "orchestrator_needs_name", Message: "this session's process has no usable name to record", Remediation: remedy}
+		}
+		e = caller
+	}
+	if !unique {
+		return e.Name, nil
+	}
+	// After the process proof: only the session's own process learns whether its name
+	// is shared. A record is keyed by name, so a second live holder would write the
+	// first one's grant - the same rule as the read side, where a shared name carries
+	// no self_record.
+	holders := 0
+	for _, x := range snap.Entries {
+		if x.NameOK && x.Name == e.Name {
+			holders++
+		}
+	}
+	if holders > 1 {
+		return "", &Error{Code: ExitUsage, Kind: "orchestrator_name_not_unique",
+			Message:     fmt.Sprintf("%d live sessions are named %s - a record is keyed by name, so it cannot be written for one of them", holders, e.Name),
+			Remediation: "rename this session with /rename <name>, then run it again"}
+	}
+	return e.Name, nil
 }
 
 // taskStateTarget resolves the task-state file for dir's current HEAD branch. It
-// always acts on HEAD: markdown never types a branch name into this command.
+// always acts on HEAD: markdown never types a branch name into this command. The
+// one exception is TaskStateSet's orchestrator records, which go to the
+// merge-branch file whatever HEAD is.
 func taskStateTarget(ctx context.Context, dir string) (root, branch, letsDir, slug string, e *Error) {
 	root = gitutil.ProjectRoot(dir, 2*time.Second)
 	if root == "" {
@@ -81,10 +171,16 @@ func TaskStateSet(ctx context.Context, dir string, o TaskStateOptions) (*TaskSta
 	}
 	root, branch, letsDir, slug, e := taskStateTarget(ctx, dir)
 	res.ProjectRoot = root
-	if e != nil {
+	// Orchestrator records alone need no HEAD branch: they go to the merge-branch file,
+	// so a detached HEAD refuses only a call that also writes this branch's own keys.
+	recordsOnDetached := e != nil && e.Kind == "detached_head" && o.orchestratorOnly()
+	if e != nil && !recordsOnDetached {
 		return fail(e)
 	}
-	path := taskstate.Path(letsDir, slug)
+	path := ""
+	if slug != "" {
+		path = taskstate.Path(letsDir, slug)
+	}
 
 	set := map[string]string{}
 	if (o.SessionSHA == "") != (o.SessionID == "") {
@@ -122,20 +218,59 @@ func TaskStateSet(ctx context.Context, dir string, o TaskStateOptions) (*TaskSta
 			return fail(&Error{Code: ExitUsage, Kind: "invalid_value", Message: err.Error(), Cause: err})
 		}
 	}
-	if len(set) == 0 {
+	orch := o.orchestratorOps()
+	if orch {
+		if e := orchestratorUsage(o); e != nil {
+			return fail(e)
+		}
+	}
+	if len(set) == 0 && !orch {
 		return fail(&Error{Code: ExitUsage, Kind: "usage", Message: "nothing to set"})
 	}
 
-	info := &TaskStateInfo{Path: path}
-	res.TaskState = info
-	if o.Orc != "" {
+	if o.Orc != "" || orch {
+		// The merge-branch as the writer resolves it, from the main checkout (a worktree
+		// shares its .lets): orchestrator records always live in ITS task-state, whatever
+		// HEAD is - the orc skill's `standing` verb runs from a worktree too.
+		mainRoot := root
+		if _, m := gitutil.DetectInsideWorktreeAt(root); m != "" {
+			mainRoot = m
+		}
 		home, _ := os.UserHomeDir()
-		merge := letsconfig.ResolvedEnv(root, home, func(r string) string { return gitutil.DefaultBranch(r, 2*time.Second) })["LETS_MERGE_BRANCH"]
-		if branch == merge {
-			info.Reason = "orc_on_merge_branch"
+		merge := letsconfig.ResolvedEnv(mainRoot, home, func(r string) string { return gitutil.DefaultBranch(r, 2*time.Second) })["LETS_MERGE_BRANCH"]
+		if orch {
+			ms, ok := taskstate.Slug(merge)
+			if !ok {
+				return fail(&Error{Code: ExitGeneric, Kind: "merge_branch_unknown", Message: "the merge-branch could not be resolved"})
+			}
+			if branch != merge && len(set) > 0 {
+				return fail(&Error{Code: ExitUsage, Kind: "usage",
+					Message: fmt.Sprintf("orchestrator records go to the merge-branch (%s) task-state; this branch's keys cannot be written in the same call from %s", merge, branch)})
+			}
+			letsDir, slug = filepath.Join(mainRoot, ".lets"), ms
+			path = taskstate.Path(letsDir, slug)
+		}
+		if o.Orc != "" && branch == merge {
+			res.TaskState = &TaskStateInfo{Path: path, Reason: "orc_on_merge_branch"}
 			res.OK = true
 			return res, nil
 		}
+	}
+	info := &TaskStateInfo{Path: path}
+	res.TaskState = info
+	var patch *taskstate.OrchestratorPatch
+	if o.Orchestrator != "" || o.SelfOrchestrator {
+		name := o.Orchestrator
+		if o.SelfOrchestrator {
+			// a pure --standing off only tightens: a shared name may still revoke
+			revokeOnly := o.Standing != nil && *o.Standing == "off" && o.OrchestratorScope == nil
+			n, e := selfName(o.Session, !revokeOnly)
+			if e != nil {
+				return fail(e)
+			}
+			name = n
+		}
+		patch = &taskstate.OrchestratorPatch{Name: name, Scope: o.OrchestratorScope, Standing: o.Standing}
 	}
 
 	wait := o.Wait
@@ -155,8 +290,11 @@ func TaskStateSet(ctx context.Context, dir string, o TaskStateOptions) (*TaskSta
 		}
 		return nil, nil
 	}
-	st, err := taskstate.MergeWrite(letsDir, slug, taskstate.WriteOpts{Set: set, Create: o.Create, Deadline: time.Now().Add(wait), Derive: derive})
+	st, err := taskstate.MergeWrite(letsDir, slug, taskstate.WriteOpts{Set: set, Create: o.Create || patch != nil, Deadline: time.Now().Add(wait), Derive: derive,
+		PatchOrchestrator: patch, ClearOrchestrator: o.ClearOrchestrator})
 	switch {
+	case errors.Is(err, taskstate.ErrInvalidValue):
+		return fail(&Error{Code: ExitUsage, Kind: "invalid_value", Message: err.Error(), Cause: err})
 	case errors.Is(err, errMismatch):
 		info.Reason = "task_mismatch"
 		fillFrom(info, current)
@@ -179,6 +317,31 @@ func TaskStateSet(ctx context.Context, dir string, o TaskStateOptions) (*TaskSta
 	}
 	res.OK = true
 	return res, nil
+}
+
+// orchestratorUsage refuses the orchestrator flag combinations that cannot mean one
+// write, and a standing grant written for a name other than the caller's own.
+func orchestratorUsage(o TaskStateOptions) *Error {
+	usage := func(msg string) *Error { return &Error{Code: ExitUsage, Kind: "usage", Message: msg} }
+	named := o.Orchestrator != "" || o.SelfOrchestrator
+	switch {
+	case o.Orchestrator != "" && o.SelfOrchestrator:
+		return usage("--orchestrator and --self-orchestrator conflict")
+	case o.Standing != nil && *o.Standing == "on" && !o.SelfOrchestrator:
+		// a grant relaxes the orchestrator's own send gate: only its own session
+		// writes it; --standing off and --clear-orchestrator only tighten
+		return usage("--standing on is written only by the orchestrator itself (--self-orchestrator)")
+	case o.ClearOrchestrator != "" && (named || o.OrchestratorScope != nil || o.Standing != nil):
+		return usage("--clear-orchestrator conflicts with --orchestrator / --self-orchestrator / --orchestrator-scope / --standing")
+	case !named && o.ClearOrchestrator == "":
+		return usage("--orchestrator-scope and --standing need --orchestrator or --self-orchestrator")
+	case o.Orc != "":
+		return usage("--orc binds a worker branch; orchestrator records live on the merge-branch")
+	case o.Task != "" || o.Start != "":
+		// a task_mismatch would skip the whole write, the record with it
+		return usage("--task / --start cannot be combined with orchestrator records")
+	}
+	return nil
 }
 
 func fillFrom(info *TaskStateInfo, st taskstate.State) {

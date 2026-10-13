@@ -26,10 +26,10 @@ Not running (`status.running=false` or a `reason`) -> `orca_unavailable` plus th
 ## Step 2: List
 
 ```bash
-lets peers who --orca-repos --role orchestrator --json
+lets peers who --orca-repos --json
 ```
 
-Go validates every repo Orca lists and tags each row with `repo_index`; later calls pass `--repo-index <n>`, never a path. Render one row per orchestrator - live ones from `peers[]`, stopped ones from `last_orchestrators[]`:
+Go validates every repo Orca lists and tags each row with `repo_index`; later calls pass `--repo-index <n>`, never a path. A project's orchestrators are the names recorded in its merge-branch task-state, and only when none of them is live the `<repo>-orc[-<scope>]` convention. Render one row per orchestrator - live ones from `peers[]`, stopped ones from `last_orchestrators[]`:
 
 | project (`repos[index].name`) | orchestrator | scope | alive | last seen |
 
@@ -50,12 +50,12 @@ AskUserQuestion(
 )
 ```
 
-Classify the request, and when unsure treat it as gated. Every message to an orchestrator passes its row's `session` and `repo_index`: the orc skill resolves a bare name only inside the hub's own repo, where another project's orchestrator is missing or a same-named session is the wrong one.
+Classify the request, and when unsure treat it as gated. Every message to a live orchestrator goes by its NAME from this run's listing, with `via=hub`: the orc skill sends outside the hub's own repo only to a row this hub run printed. A row marked `duplicate_name` cannot be addressed by name - say so and stop for it.
 
 | request | target alive | target stopped |
 |---|---|---|
-| read-only (status, backlog, "what is X doing") | `Skill(skill: "lets:orc", args: "target=\"<name>\" session=<session> repo_index=<n> verb=ask footer=none text=<question>")` | Step 4 ask-ro |
-| gated (tracker write, commit, PR, anything else) | `Skill(skill: "lets:orc", args: "target=\"<name>\" session=<session> repo_index=<n> verb=tell footer=none text=<request>")` | wake, then the same tell |
+| read-only (status, backlog, "what is X doing") | `Skill(skill: "lets:orc", args: "target=\"<name>\" via=hub verb=ask footer=none text=<question>")` | Step 4 ask-ro |
+| gated (tracker write, commit, PR, anything else) | `Skill(skill: "lets:orc", args: "target=\"<name>\" via=hub verb=tell footer=none text=<request>")` | wake, then the same tell |
 
 Wake (stopped target, gated request), with the session and pid from its `last_orchestrators[]` row:
 
@@ -63,14 +63,13 @@ Wake (stopped target, gated request), with the session and pid from its `last_or
 lets orca wake --repo-index <n> --session '<session>' --pid <pid> --title '<name>' --json
 ```
 
-`woken=true` -> the tell above with that row's `session` (a resume keeps the session id), then tell the user the gates are pressed in `<name>`'s Orca terminal. `main_alive` -> it is running after all: use the alive column. `liveness_unknown` from wake or ask-ro -> say so and stop for that project; never retry around it.
+`woken=true` -> the tell above to that row's name (a resume keeps the session and its name), then tell the user the gates are pressed in `<name>`'s Orca terminal. `main_alive` -> it is running after all: use the alive column. `liveness_unknown` from wake or ask-ro -> say so and stop for that project; never retry around it.
 
 ## Step 4: ask-ro (stopped target, read-only request)
 
-1. `lets peers frame --to-session '<session>' --to-name '<name>' --kind ask-ro --json` -> `header`, `msgid`, `handoff_path`.
-2. Write `header` + newline + the question with the Write tool to `handoff_path`.
-3. `lets peers ask-ro --repo-index <n> --session '<session>' --pid <pid> --msgid <msgid> --json` (Go consumes the file).
-4. `answered=true` -> relay `answer` whole, marked as that orchestrator's words from a read-only fork. `headless_readonly_unenforceable` -> this `claude` cannot narrow a headless run; say so, offer wake instead. Any other `reason` -> name it.
+1. Write the question with the Write tool to `.lets/cache/ask-ro-<session6>.txt` (`<session6>` = the first 6 chars of the row's `session`).
+2. `lets peers ask-ro --repo-index <n> --session '<session>' --pid <pid> --question-file .lets/cache/ask-ro-<session6>.txt --json` (Go reads the file once and removes it).
+3. `answered=true` -> relay `answer` whole, marked as that orchestrator's words from a read-only fork. `headless_readonly_unenforceable` -> this `claude` cannot narrow a headless run; say so, offer wake instead. Any other `reason` -> name it.
 
 ## Rules
 

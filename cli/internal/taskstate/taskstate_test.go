@@ -392,3 +392,168 @@ func TestParkKeys(t *testing.T) {
 		t.Errorf("after delete: %+v, %v", st, err)
 	}
 }
+
+func strp(s string) *string { return &s }
+
+func orchestratorsOf(t *testing.T, st State) []Orchestrator {
+	t.Helper()
+	recs, bad := Orchestrators(st)
+	if len(bad) != 0 {
+		t.Errorf("unexpected malformed lines: %q", bad)
+	}
+	return recs
+}
+
+// Two names round-trip beside the single-valued keys and an unknown line, in file
+// order; every other line is left exactly as it was.
+func TestOrchestrator_TwoNamesRoundTrip(t *testing.T) {
+	letsDir := t.TempDir()
+	write(t, letsDir, "main", "task: lets-a1\nfuture: keep me\nsession: abc1234 "+sid+"\n")
+	if _, err := MergeWrite(letsDir, "main", WriteOpts{PatchOrchestrator: &OrchestratorPatch{Name: "MAIN-LETS", Scope: strp("docs"), Standing: strp("on")}}); err != nil {
+		t.Fatal(err)
+	}
+	st, err := MergeWrite(letsDir, "main", WriteOpts{PatchOrchestrator: &OrchestratorPatch{Name: "MAIN ETH"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Orchestrator{{Name: "MAIN-LETS", Scope: "docs", Standing: "on"}, {Name: "MAIN ETH"}}
+	if got := orchestratorsOf(t, st); !reflect.DeepEqual(got, want) {
+		t.Errorf("records = %+v, want %+v", got, want)
+	}
+	data, _ := os.ReadFile(Path(letsDir, "main"))
+	wantFile := "task: lets-a1\nfuture: keep me\nsession: abc1234 " + sid + "\norchestrator: MAIN-LETS scope=docs standing=on\norchestrator: MAIN ETH\n"
+	if string(data) != wantFile {
+		t.Errorf("file:\n%s\nwant:\n%s", data, wantFile)
+	}
+	if st.Task != "lets-a1" || st.Session != "abc1234 "+sid || !reflect.DeepEqual(st.Other, []string{"future: keep me"}) {
+		t.Errorf("other keys touched: %+v", st)
+	}
+	// a single-valued write keeps both lines
+	st, err = MergeWrite(letsDir, "main", WriteOpts{Set: map[string]string{"task": "lets-b2"}})
+	if err != nil || st.Task != "lets-b2" || len(orchestratorsOf(t, st)) != 2 {
+		t.Errorf("after a task write: %+v, %v", st, err)
+	}
+	read, _ := Read(letsDir, "main")
+	if !reflect.DeepEqual(orchestratorsOf(t, read), want) {
+		t.Errorf("Read: %+v", read.OrchestratorLines)
+	}
+}
+
+// A patch merges only the fields it carries: re-recording keeps scope and standing,
+// a scope-only patch keeps standing, a standing-only patch keeps scope.
+func TestOrchestrator_PatchKeepsUnsetFields(t *testing.T) {
+	letsDir := t.TempDir()
+	rec := func(p OrchestratorPatch) Orchestrator {
+		t.Helper()
+		st, err := MergeWrite(letsDir, "main", WriteOpts{PatchOrchestrator: &p, Create: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		recs := orchestratorsOf(t, st)
+		if len(recs) != 1 {
+			t.Fatalf("records = %+v", recs)
+		}
+		return recs[0]
+	}
+	if got := rec(OrchestratorPatch{Name: "MAIN-LETS"}); got != (Orchestrator{Name: "MAIN-LETS"}) {
+		t.Errorf("a new name with no standing reads \"\": %+v", got)
+	}
+	if got := rec(OrchestratorPatch{Name: "MAIN-LETS", Scope: strp("docs"), Standing: strp("on")}); got != (Orchestrator{Name: "MAIN-LETS", Scope: "docs", Standing: "on"}) {
+		t.Errorf("full patch: %+v", got)
+	}
+	if got := rec(OrchestratorPatch{Name: "MAIN-LETS"}); got != (Orchestrator{Name: "MAIN-LETS", Scope: "docs", Standing: "on"}) {
+		t.Errorf("re-recording with no fields keeps scope and standing: %+v", got)
+	}
+	if got := rec(OrchestratorPatch{Name: "MAIN-LETS", Scope: strp("cli")}); got != (Orchestrator{Name: "MAIN-LETS", Scope: "cli", Standing: "on"}) {
+		t.Errorf("a scope-only patch keeps standing: %+v", got)
+	}
+	if got := rec(OrchestratorPatch{Name: "MAIN-LETS", Standing: strp("off")}); got != (Orchestrator{Name: "MAIN-LETS", Scope: "cli", Standing: "off"}) {
+		t.Errorf("a standing-only patch keeps scope: %+v", got)
+	}
+	if got := rec(OrchestratorPatch{Name: "MAIN-LETS", Scope: strp("")}); got != (Orchestrator{Name: "MAIN-LETS", Standing: "off"}) {
+		t.Errorf("an empty scope removes it: %+v", got)
+	}
+}
+
+// Clear removes one name and keeps the others; a duplicate line of a patched name
+// collapses into one.
+func TestOrchestrator_ClearAndDuplicates(t *testing.T) {
+	letsDir := t.TempDir()
+	write(t, letsDir, "main", "orchestrator: A standing=on\norchestrator: B scope=docs\norchestrator: A\n")
+	st, err := MergeWrite(letsDir, "main", WriteOpts{ClearOrchestrator: "B"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := orchestratorsOf(t, st); !reflect.DeepEqual(got, []Orchestrator{{Name: "A", Standing: "on"}, {Name: "A"}}) {
+		t.Errorf("after clear B: %+v", got)
+	}
+	st, err = MergeWrite(letsDir, "main", WriteOpts{PatchOrchestrator: &OrchestratorPatch{Name: "A", Scope: strp("cli")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := orchestratorsOf(t, st); !reflect.DeepEqual(got, []Orchestrator{{Name: "A", Scope: "cli", Standing: "on"}}) {
+		t.Errorf("a patched name keeps one line: %+v", got)
+	}
+	st, err = MergeWrite(letsDir, "main", WriteOpts{ClearOrchestrator: "A"})
+	if err != nil || len(st.OrchestratorLines) != 0 {
+		t.Errorf("clear A: %+v, %v", st, err)
+	}
+	if st, err := MergeWrite(letsDir, "main", WriteOpts{ClearOrchestrator: "NOBODY"}); err != nil || len(st.OrchestratorLines) != 0 {
+		t.Errorf("clearing an unrecorded name is a no-op: %+v, %v", st, err)
+	}
+}
+
+// A malformed line stays on disk through every write and is skipped (and named) by
+// Orchestrators.
+func TestOrchestrator_MalformedKeptAndSkipped(t *testing.T) {
+	letsDir := t.TempDir()
+	bad := []string{"MAIN standing=maybe", "-x", "A scope=", "A color=red", "A standing=on standing=off", "A standing=on extra"}
+	var content strings.Builder
+	for _, b := range bad {
+		content.WriteString("orchestrator: " + b + "\n")
+	}
+	write(t, letsDir, "main", content.String())
+	st, err := MergeWrite(letsDir, "main", WriteOpts{PatchOrchestrator: &OrchestratorPatch{Name: "MAIN"}, ClearOrchestrator: "A"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	recs, gotBad := Orchestrators(st)
+	if !reflect.DeepEqual(recs, []Orchestrator{{Name: "MAIN"}}) || !reflect.DeepEqual(gotBad, bad) {
+		t.Errorf("records=%+v bad=%q", recs, gotBad)
+	}
+	data, _ := os.ReadFile(Path(letsDir, "main"))
+	if !strings.HasPrefix(string(data), content.String()) {
+		t.Errorf("malformed lines must stay on disk:\n%s", data)
+	}
+}
+
+// Standing on / off and a multi-word scope parse; anything else is refused before
+// any write.
+func TestOrchestrator_ParseAndValidate(t *testing.T) {
+	for v, want := range map[string]Orchestrator{
+		"MAIN-LETS standing=on":               {Name: "MAIN-LETS", Standing: "on"},
+		"MAIN-LETS standing=off":              {Name: "MAIN-LETS", Standing: "off"},
+		"MAIN PWA scope=web app standing=off": {Name: "MAIN PWA", Scope: "web app", Standing: "off"},
+		"MAIN standing=on scope=docs":         {Name: "MAIN", Scope: "docs", Standing: "on"},
+	} {
+		if got, ok := parseOrchestrator(v); !ok || got != want {
+			t.Errorf("%q: %+v ok=%v, want %+v", v, got, ok, want)
+		}
+	}
+	letsDir := t.TempDir()
+	for _, o := range []WriteOpts{
+		{PatchOrchestrator: &OrchestratorPatch{Name: "x --auto"}},
+		{PatchOrchestrator: &OrchestratorPatch{Name: "MAIN", Standing: strp("yes")}},
+		{PatchOrchestrator: &OrchestratorPatch{Name: "MAIN", Standing: strp("")}},
+		{PatchOrchestrator: &OrchestratorPatch{Name: "MAIN", Scope: strp("a=b")}},
+		{ClearOrchestrator: "a$b"},
+		{PatchOrchestrator: &OrchestratorPatch{Name: "MAIN"}, ClearOrchestrator: "MAIN"},
+	} {
+		if _, err := MergeWrite(letsDir, "main", WriteOpts{PatchOrchestrator: o.PatchOrchestrator, ClearOrchestrator: o.ClearOrchestrator, Create: true}); !errors.Is(err, ErrInvalidValue) {
+			t.Errorf("%+v: err=%v, want ErrInvalidValue", o, err)
+		}
+	}
+	if _, err := os.Stat(Path(letsDir, "main")); !os.IsNotExist(err) {
+		t.Error("a refused value must write nothing")
+	}
+}

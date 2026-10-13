@@ -2,7 +2,10 @@
 
 package peerscmd
 
-import "github.com/restarter/lets-workflow/cli/internal/orcacmd"
+import (
+	"github.com/restarter/lets-workflow/cli/internal/orcacmd"
+	"github.com/restarter/lets-workflow/cli/internal/peertail"
+)
 
 // ErrorInfo is the typed error of a failed envelope.
 type ErrorInfo struct {
@@ -11,12 +14,17 @@ type ErrorInfo struct {
 	Remediation string `json:"remediation,omitempty"`
 }
 
+// deprecatedText is the one line every v0.10.0 compatibility envelope carries.
+const deprecatedText = "removed next release - peer messages go through SendMessage (/lets:orc); run /lets:update to load the matching plugin"
+
 // Envelope is the core of every `lets peers` result. A degraded source keeps ok=true
-// and names itself in degraded[].
+// and names itself in degraded[]. Deprecated is set on a verb (or flag) that still
+// works for this release only.
 type Envelope struct {
 	SchemaVersion int        `json:"schema_version"`
 	OK            bool       `json:"ok"`
 	Subcommand    string     `json:"subcommand"`
+	Deprecated    string     `json:"deprecated,omitempty"`
 	Error         *ErrorInfo `json:"error,omitempty"`
 	Degraded      []Degraded `json:"degraded"`
 }
@@ -32,35 +40,38 @@ type WhoResult struct {
 	Self              *Peer              `json:"self,omitempty"`
 	LastOrchestrators []LastOrchestrator `json:"last_orchestrators,omitempty"`
 	Repos             []orcacmd.RepoInfo `json:"repos,omitempty"`
+	// RepoSlug is <repo> of every role name (peername.RepoSlug of the main checkout).
+	RepoSlug string `json:"repo_slug"`
+	Standing
 }
 
-// AddressedCount is `tail --count-only`: how many messages were addressed to a
-// session, without their text.
-type AddressedCount struct {
-	Count  int    `json:"count"`
-	LastAt string `json:"last_at,omitempty"`
+// Standing is the process-bound standing answer for one inbound message, present
+// only when --from-name / --from-addr were passed: StandingOK is then always in the
+// envelope (false included), StandingReason names why it is false.
+type Standing struct {
+	StandingOK     *bool  `json:"standing_ok,omitempty"`
+	StandingReason string `json:"standing_reason,omitempty"`
 }
 
-// TailResult is a peer's recent output.
+func standingOf(ok bool, reason string) Standing {
+	return Standing{StandingOK: &ok, StandingReason: reason}
+}
+
+// TailResult is a session's recent output.
 type TailResult struct {
 	Envelope
-	Session       string          `json:"session,omitempty"`
-	TerminalID    string          `json:"terminal_id,omitempty"`
-	Turns         []Turn          `json:"turns"`
-	Omitted       int             `json:"omitted,omitempty"` // earlier turns the limit left out
-	Screen        []string        `json:"screen,omitempty"`
-	Note          string          `json:"note,omitempty"`
-	AddressedToMe *AddressedCount `json:"addressed_to_me,omitempty"`
+	Session string          `json:"session,omitempty"`
+	Turns   []peertail.Turn `json:"turns"`
+	Omitted int             `json:"omitted,omitempty"` // earlier turns the limit left out
+	Note    string          `json:"note,omitempty"`
 	// TruncatedBytes counts SOURCE bytes lost to either cut: bytes removed inside a
 	// turn that was kept, plus the full SOURCE size of a turn the call ceiling
-	// dropped - its kept text AND whatever the per-turn cap had already cut from
-	// that same turn, so a heavily-capped dropped turn is not under-reported. So a
-	// whole-turn drop moves both Omitted and this counter - omitted: 0 no longer
-	// implies a complete answer on its own.
+	// dropped. So a whole-turn drop moves both Omitted and this counter - omitted: 0
+	// does not imply a complete answer on its own.
 	TruncatedBytes int `json:"truncated_bytes,omitempty"`
 }
 
-// FrameResult is a framed, addressed message slot.
+// FrameResult is a framed, addressed message slot (deprecated: v0.10.0 skills).
 type FrameResult struct {
 	Envelope
 	Header      string `json:"header"`
@@ -69,48 +80,45 @@ type FrameResult struct {
 	HandoffPath string `json:"handoff_path"`
 }
 
-// ReceiptInfo is what Orca's `terminal send` proved.
-type ReceiptInfo struct {
-	InputAccepted bool `json:"input_accepted"`
-	TurnStarted   bool `json:"turn_started"`
-}
-
-// TellResult is a send attempt.
+// TellResult is the deprecated `tell`: it never types anything - it hands the framed
+// text back (route claude, reason claude_transport_model_send) for the v0.10.0
+// skill's SendMessage.
 type TellResult struct {
 	Envelope
-	Delivered bool         `json:"delivered"`
-	Route     string       `json:"route"` // orca | claude | none
-	Reason    string       `json:"reason,omitempty"`
-	State     string       `json:"state,omitempty"`
-	Receipt   *ReceiptInfo `json:"receipt,omitempty"`
-	SentAt    string       `json:"sent_at,omitempty"`
-	Observed  bool         `json:"observed"`
-	// Note: set on a non-delivery that kept its handoff - names the same msgid to
-	// retry with. Absent when the handoff was consumed (delivered, claude route, or a
-	// refused-before-typing malformed handoff).
-	Note string `json:"note,omitempty"`
-	// ClaudeFallbackAllowed: an Orca send was not safe, but the peer is also reachable
-	// over SendMessage (a Claude row with a name unique across the whole registry).
-	ClaudeFallbackAllowed bool   `json:"claude_fallback_allowed,omitempty"`
-	Text                  string `json:"text,omitempty"` // the framed text for the skill's SendMessage (claude route)
+	Delivered bool   `json:"delivered"`
+	Route     string `json:"route"` // claude | none
+	Reason    string `json:"reason,omitempty"`
+	Text      string `json:"text,omitempty"` // the framed text, header line included
 }
 
-// WaitResult is a reply wait.
+// WaitResult is the deprecated `wait`: completion is never verified any more.
 type WaitResult struct {
 	Envelope
 	Satisfied bool   `json:"satisfied"`
 	Reason    string `json:"reason,omitempty"`
 }
 
-// RoleResult is a role change.
+// RoleInfo is what `role set` recorded: the session proof, not a role.
+type RoleInfo struct {
+	Granted     bool   `json:"granted"`
+	Role        string `json:"role,omitempty"` // the word the caller passed; it means nothing any more
+	Reason      string `json:"reason,omitempty"`
+	Remediation string `json:"remediation,omitempty"`
+	Registered  bool   `json:"registered"`
+}
+
+// RoleResult is a `role set` / `role clear` (deprecated: the session proof only).
 type RoleResult struct {
 	Envelope
 	Role *RoleInfo `json:"role,omitempty"`
 }
 
-// OrchestratorResult is the resolver's answer.
+// OrchestratorResult is the resolver's answer. SelfRecord ("is this session an
+// orchestrator") is always present - null when the caller has no record; Source /
+// Target answer "whom do my messages go to".
 type OrchestratorResult struct {
 	Envelope
+	SelfRecord  *SelfRecord `json:"self_record"`
 	Source      string      `json:"source"`
 	Scope       string      `json:"scope"`
 	Target      *Peer       `json:"target,omitempty"`
@@ -118,4 +126,5 @@ type OrchestratorResult struct {
 	Reason      string      `json:"reason,omitempty"`
 	Remediation string      `json:"remediation,omitempty"` // the exact line to show the user; set with every Reason
 	Refused     []Refused   `json:"refused,omitempty"`
+	Standing
 }

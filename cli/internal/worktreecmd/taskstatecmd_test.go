@@ -4,12 +4,15 @@ package worktreecmd_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/restarter/lets-workflow/cli/internal/ccregistry"
 	"github.com/restarter/lets-workflow/cli/internal/fsutil"
 	"github.com/restarter/lets-workflow/cli/internal/worktreecmd"
 )
@@ -203,4 +206,308 @@ func fakePluginRoot(t *testing.T, worktree string) string {
 	mustWrite(t, filepath.Join(root, ".claude-plugin", "plugin.json"), `{"name":"lets"}`, 0o644)
 	mustWrite(t, filepath.Join(root, "rules", "tracker-beads.md"), "# Tracker adapter: beads\n\n## Worktree\n\n"+worktree+"\n", 0o644)
 	return root
+}
+
+func strp(s string) *string { return &s }
+
+// fakeSelf registers one live session (name "" = unnamed) in a fake Claude Code
+// registry and returns its id.
+func fakeSelf(t *testing.T, name string) string {
+	t.Helper()
+	home := t.TempDir()
+	mustMkdir(t, filepath.Join(home, "sessions"))
+	sid := "aaaaaaaa-0000-4000-8000-0000000000aa"
+	mustWrite(t, filepath.Join(home, "sessions", "4343.json"), `{"name":"`+name+`","sessionId":"`+sid+`","cwd":"/x","peerProtocol":1}`, 0o644)
+	oldHome, oldAlive, oldParent := ccregistry.HomeDir, ccregistry.ProcAlive, ccregistry.ParentOf
+	ccregistry.HomeDir = func() string { return home }
+	ccregistry.ProcAlive = func(pid int) bool { return pid == 4343 }
+	// this test process runs under that session: its parent's parent is pid 4343
+	ccregistry.ParentOf = fakeParents(map[int]int{os.Getppid(): 4343, 4343: 1})
+	t.Cleanup(func() { ccregistry.HomeDir, ccregistry.ProcAlive, ccregistry.ParentOf = oldHome, oldAlive, oldParent })
+	return sid
+}
+
+// fakeParents is a ccregistry.ParentOf over a fixed process tree; a pid outside it
+// cannot be read.
+func fakeParents(parents map[int]int) func(int) (int, error) {
+	return func(pid int) (int, error) {
+		if p, ok := parents[pid]; ok {
+			return p, nil
+		}
+		return 0, errors.New("no such process")
+	}
+}
+
+func tsSet(t *testing.T, repo string, o worktreecmd.TaskStateOptions) {
+	t.Helper()
+	res, err := worktreecmd.TaskStateSet(context.Background(), repo, o)
+	if err != nil || !res.TaskState.Written {
+		t.Fatalf("%+v: err=%v res=%+v", o, err, res.TaskState)
+	}
+}
+
+// Records land on the merge-branch file (created when missing), merge only the
+// fields given, keep every other line, and clear by name.
+func TestTaskStateSet_OrchestratorRecords(t *testing.T) {
+	repo := tsRepo(t, "main")
+	sid := fakeSelf(t, "MAIN-LETS")
+	tsSet(t, repo, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sid, OrchestratorScope: strp("docs"), Standing: strp("on")})
+	tsSet(t, repo, worktreecmd.TaskStateOptions{Orchestrator: "MAIN-ETH"})
+	tsSet(t, repo, worktreecmd.TaskStateOptions{Task: "lets-abc"})
+	want := "orchestrator: MAIN-LETS scope=docs standing=on\norchestrator: MAIN-ETH\ntask: lets-abc\n"
+	if got := readTask(t, repo, "main"); got != want {
+		t.Fatalf("file:\n%s\nwant:\n%s", got, want)
+	}
+	tsSet(t, repo, worktreecmd.TaskStateOptions{Orchestrator: "MAIN-LETS"})
+	tsSet(t, repo, worktreecmd.TaskStateOptions{Orchestrator: "MAIN-LETS", Standing: strp("off")})
+	tsSet(t, repo, worktreecmd.TaskStateOptions{Orchestrator: "MAIN-ETH", OrchestratorScope: strp("cli")})
+	tsSet(t, repo, worktreecmd.TaskStateOptions{ClearOrchestrator: "MAIN-ETH"})
+	want = "orchestrator: MAIN-LETS scope=docs standing=off\ntask: lets-abc\n"
+	if got := readTask(t, repo, "main"); got != want {
+		t.Errorf("file:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// Orchestrator records always go to the merge-branch file, whatever HEAD is: from
+// a feature-branch worktree too (F1). That branch's own keys cannot ride along.
+func TestTaskStateSet_OrchestratorFromWorktree(t *testing.T) {
+	repo := tsRepo(t, "main")
+	wt := filepath.Join(filepath.Dir(repo), "wt-feature")
+	runIn(t, repo, "git", "worktree", "add", "-q", "-b", "feature/lets-abc-x", wt)
+	if err := os.Symlink(filepath.Join(repo, ".lets"), filepath.Join(wt, ".lets")); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, taskFile(repo, "feature/lets-abc-x"), "task: lets-abc\n", 0o644)
+	sid := fakeSelf(t, "MAIN-LETS")
+	res, err := worktreecmd.TaskStateSet(context.Background(), wt, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sid, Standing: strp("on")})
+	if err != nil || !res.TaskState.Written || res.TaskState.Path != taskFile(repo, "main") {
+		t.Fatalf("from a worktree: err=%v res=%+v", err, res.TaskState)
+	}
+	if got := readTask(t, repo, "main"); got != "orchestrator: MAIN-LETS standing=on\n" {
+		t.Errorf("merge-branch file: %q", got)
+	}
+	tsSet(t, wt, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sid, Standing: strp("off")})
+	tsSet(t, wt, worktreecmd.TaskStateOptions{ClearOrchestrator: "OTHER"})
+	if got := readTask(t, repo, "main"); got != "orchestrator: MAIN-LETS standing=off\n" {
+		t.Errorf("standing toggled from the worktree: %q", got)
+	}
+	if got := readTask(t, repo, "feature/lets-abc-x"); got != "task: lets-abc\n" {
+		t.Errorf("the worktree's own file must not change: %q", got)
+	}
+	_, err = worktreecmd.TaskStateSet(context.Background(), wt, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sid, ClearOrc: true})
+	if worktreecmd.ExitCode(err) != worktreecmd.ExitUsage {
+		t.Errorf("this branch's keys with orchestrator records off the merge-branch: %v, want usage", err)
+	}
+}
+
+// A detached HEAD has no task-state of its own, but orchestrator records alone still
+// go to the merge-branch file; a call that also writes HEAD's keys is refused.
+func TestTaskStateSet_OrchestratorFromDetachedHead(t *testing.T) {
+	repo := tsRepo(t, "main")
+	runIn(t, repo, "git", "checkout", "-q", "--detach")
+	sid := fakeSelf(t, "MAIN-LETS")
+	res, err := worktreecmd.TaskStateSet(context.Background(), repo, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sid, Standing: strp("off")})
+	if err != nil || !res.TaskState.Written || res.TaskState.Path != taskFile(repo, "main") {
+		t.Fatalf("detached HEAD, records only: err=%v res=%+v", err, res.TaskState)
+	}
+	if got := readTask(t, repo, "main"); got != "orchestrator: MAIN-LETS standing=off\n" {
+		t.Errorf("merge-branch file: %q", got)
+	}
+	_, err = worktreecmd.TaskStateSet(context.Background(), repo, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sid, SessionSHA: "abc1234", SessionID: testSID})
+	if worktreecmd.ExitCode(err) != worktreecmd.ExitUsage {
+		t.Errorf("detached HEAD with this branch's keys: %v, want detached_head (usage)", err)
+	}
+}
+
+// /lets:start --main writes its session boundary, clears orc: and records itself in
+// ONE call on the merge-branch (F2).
+func TestTaskStateSet_MainModeOneCall(t *testing.T) {
+	repo := tsRepo(t, "main")
+	mustWrite(t, taskFile(repo, "main"), "orc: STALE\nfuture: keep\n", 0o644)
+	sid := fakeSelf(t, "MAIN-LETS")
+	tsSet(t, repo, worktreecmd.TaskStateOptions{ClearOrc: true, SessionSHA: "abc1234", SessionID: testSID, Create: true, SelfOrchestrator: true, Session: sid, OrchestratorScope: strp("docs")})
+	if got := readTask(t, repo, "main"); got != "future: keep\nsession: abc1234 "+testSID+"\norchestrator: MAIN-LETS scope=docs\n" {
+		t.Errorf("one call: %q", got)
+	}
+}
+
+// --self-orchestrator records this session's registry name; an unnamed or unknown
+// session is refused with the /rename remedy.
+func TestTaskStateSet_SelfOrchestrator(t *testing.T) {
+	repo := tsRepo(t, "main")
+	sid := fakeSelf(t, "MAIN-LETS")
+	tsSet(t, repo, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sid, OrchestratorScope: strp("docs")})
+	tsSet(t, repo, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sid, Standing: strp("on")})
+	if got := readTask(t, repo, "main"); got != "orchestrator: MAIN-LETS scope=docs standing=on\n" {
+		t.Errorf("file: %s", got)
+	}
+	bad := fakeSelf(t, "x --auto")
+	if res, _ := worktreecmd.TaskStateSet(context.Background(), repo, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: bad}); res.Error == nil || !strings.Contains(res.Error.Message, "fails the name grammar") {
+		t.Errorf("a registry name failing the grammar is named: %+v", res.Error)
+	}
+	unnamed := fakeSelf(t, "")
+	for _, s := range []string{unnamed, "bbbbbbbb-0000-4000-8000-0000000000bb"} {
+		res, err := worktreecmd.TaskStateSet(context.Background(), repo, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: s})
+		if err == nil || res.Error == nil || res.Error.Kind != "orchestrator_needs_name" || !strings.Contains(res.Error.Remediation, "/rename") {
+			t.Errorf("session %s: err=%v res=%+v", s, err, res.Error)
+		}
+	}
+	if _, err := worktreecmd.TaskStateSet(context.Background(), repo, worktreecmd.TaskStateOptions{SelfOrchestrator: true}); worktreecmd.ExitCode(err) != worktreecmd.ExitUsage {
+		t.Errorf("no session id: %v, want exit 2", err)
+	}
+}
+
+// A grant is written only by the orchestrator itself: --standing on for a named
+// orchestrator is refused with the rule; --standing off for one stays allowed.
+func TestTaskStateSet_StandingOnOnlySelf(t *testing.T) {
+	repo := tsRepo(t, "main")
+	res, err := worktreecmd.TaskStateSet(context.Background(), repo, worktreecmd.TaskStateOptions{Orchestrator: "MAIN-LETS", Standing: strp("on")})
+	if worktreecmd.ExitCode(err) != worktreecmd.ExitUsage || res.Error == nil || !strings.Contains(res.Error.Message, "--self-orchestrator") {
+		t.Errorf("err=%v res=%+v", err, res.Error)
+	}
+	tsSet(t, repo, worktreecmd.TaskStateOptions{Orchestrator: "MAIN-LETS", Standing: strp("off")})
+	if got := readTask(t, repo, "main"); got != "orchestrator: MAIN-LETS standing=off\n" {
+		t.Errorf("revoking stays open to anyone: %q", got)
+	}
+}
+
+// --self-orchestrator writes only when the claimed session's own process runs the
+// command: a session id from the environment of another process is refused
+// orchestrator_not_own_process (exit 2), and so is an ancestry that cannot be read.
+func TestTaskStateSet_SelfOrchestratorOwnProcess(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		parents map[int]int
+	}{
+		{"not an ancestor", map[int]int{os.Getppid(): 777, 777: 1}},
+		{"ancestry unreadable", map[int]int{os.Getppid(): 777}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := tsRepo(t, "main")
+			sid := fakeSelf(t, "MAIN-LETS")
+			ccregistry.ParentOf = fakeParents(tc.parents)
+			res, err := worktreecmd.TaskStateSet(context.Background(), repo, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sid, Standing: strp("on")})
+			if worktreecmd.ExitCode(err) != worktreecmd.ExitUsage || res.Error == nil || res.Error.Kind != "orchestrator_not_own_process" || res.Error.Remediation == "" {
+				t.Errorf("err=%v res=%+v", err, res.Error)
+			}
+			if _, err := os.Stat(taskFile(repo, "main")); !os.IsNotExist(err) {
+				t.Error("a refused call must write nothing")
+			}
+		})
+	}
+}
+
+// A name two live sessions carry is refused orchestrator_name_not_unique (exit 2),
+// even from the session's own process: the record is keyed by name, so writing it
+// would set the other holder's grant too.
+func TestTaskStateSet_SelfOrchestratorNameNotUnique(t *testing.T) {
+	repo := tsRepo(t, "main")
+	sid := fakeSelf(t, "MAIN-LETS")
+	home := ccregistry.HomeDir()
+	mustWrite(t, filepath.Join(home, "sessions", "5454.json"), `{"name":"MAIN-LETS","sessionId":"bbbbbbbb-0000-4000-8000-0000000000bb","cwd":"/y","peerProtocol":1}`, 0o644)
+	ccregistry.ProcAlive = func(pid int) bool { return pid == 4343 || pid == 5454 }
+	res, err := worktreecmd.TaskStateSet(context.Background(), repo, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sid, Standing: strp("on")})
+	if worktreecmd.ExitCode(err) != worktreecmd.ExitUsage || res.Error == nil || res.Error.Kind != "orchestrator_name_not_unique" || !strings.Contains(res.Error.Remediation, "/rename") {
+		t.Errorf("err=%v res=%+v", err, res.Error)
+	}
+	if _, err := os.Stat(taskFile(repo, "main")); !os.IsNotExist(err) {
+		t.Error("a refused call must write nothing")
+	}
+	// the ancestry check comes first: a process that is not the claimed session learns
+	// nothing about the name
+	ccregistry.ParentOf = fakeParents(map[int]int{os.Getppid(): 777, 777: 1})
+	if res, _ := worktreecmd.TaskStateSet(context.Background(), repo, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sid}); res.Error == nil || res.Error.Kind != "orchestrator_not_own_process" {
+		t.Errorf("not own process first: %+v", res.Error)
+	}
+}
+
+// addSession registers one more live session in fakeSelf's registry.
+func addSession(t *testing.T, pid int, name, sid string) {
+	t.Helper()
+	mustWrite(t, filepath.Join(ccregistry.HomeDir(), "sessions", strconv.Itoa(pid)+".json"), `{"name":"`+name+`","sessionId":"`+sid+`","cwd":"/y","peerProtocol":1}`, 0o644)
+	prev := ccregistry.ProcAlive
+	ccregistry.ProcAlive = func(p int) bool { return p == pid || prev(p) }
+}
+
+// The caller's session is the NEAREST Claude Code process above the command: a session
+// B launched under orchestrator A (A -> make -> B -> shell -> lets) cannot write A's
+// record by exporting A's id; it can write its own. Plain wrappers beneath A stay
+// transparent.
+func TestTaskStateSet_SelfOrchestratorNestedSession(t *testing.T) {
+	repo := tsRepo(t, "main")
+	sidA := fakeSelf(t, "MAIN-LETS") // pid 4343
+	sidB := "cccccccc-0000-4000-8000-0000000000cc"
+	addSession(t, 6565, "WORKER-B", sidB)
+	ccregistry.ParentOf = fakeParents(map[int]int{os.Getppid(): 6565, 6565: 600, 600: 4343, 4343: 1})
+	res, err := worktreecmd.TaskStateSet(context.Background(), repo, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sidA, Standing: strp("on")})
+	if worktreecmd.ExitCode(err) != worktreecmd.ExitUsage || res.Error == nil || res.Error.Kind != "orchestrator_not_own_process" || !strings.Contains(res.Error.Message, sidB) {
+		t.Errorf("B claiming A: err=%v res=%+v", err, res.Error)
+	}
+	if _, err := os.Stat(taskFile(repo, "main")); !os.IsNotExist(err) {
+		t.Fatal("a refused call must write nothing")
+	}
+	tsSet(t, repo, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sidB, Standing: strp("on")})
+	if got := readTask(t, repo, "main"); got != "orchestrator: WORKER-B standing=on\n" {
+		t.Errorf("B's own record: %q", got)
+	}
+	// shell -> make -> env beneath A: transparent
+	ccregistry.ParentOf = fakeParents(map[int]int{os.Getppid(): 600, 600: 601, 601: 4343, 4343: 1})
+	tsSet(t, repo, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sidA, Standing: strp("on")})
+	if got := readTask(t, repo, "main"); !strings.Contains(got, "orchestrator: MAIN-LETS standing=on\n") {
+		t.Errorf("A through plain wrappers: %q", got)
+	}
+}
+
+// A pure --standing off only tightens, so it passes while the name is shared (still
+// from the session's own process); anything else on a shared name is refused.
+func TestTaskStateSet_StandingOffWithSharedName(t *testing.T) {
+	repo := tsRepo(t, "main")
+	sid := fakeSelf(t, "MAIN-LETS")
+	mustWrite(t, taskFile(repo, "main"), "orchestrator: MAIN-LETS standing=on\n", 0o644)
+	addSession(t, 5454, "MAIN-LETS", "bbbbbbbb-0000-4000-8000-0000000000bb")
+	tsSet(t, repo, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sid, Standing: strp("off")})
+	if got := readTask(t, repo, "main"); got != "orchestrator: MAIN-LETS standing=off\n" {
+		t.Errorf("revoke on a shared name: %q", got)
+	}
+	for _, o := range []worktreecmd.TaskStateOptions{
+		{SelfOrchestrator: true, Session: sid, Standing: strp("off"), OrchestratorScope: strp("docs")},
+		{SelfOrchestrator: true, Session: sid, OrchestratorScope: strp("docs")},
+		{SelfOrchestrator: true, Session: sid, Standing: strp("on")},
+	} {
+		if res, _ := worktreecmd.TaskStateSet(context.Background(), repo, o); res.Error == nil || res.Error.Kind != "orchestrator_name_not_unique" {
+			t.Errorf("%+v on a shared name: %+v", o, res.Error)
+		}
+	}
+	ccregistry.ParentOf = fakeParents(map[int]int{os.Getppid(): 777, 777: 1})
+	if res, _ := worktreecmd.TaskStateSet(context.Background(), repo, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sid, Standing: strp("off")}); res.Error == nil || res.Error.Kind != "orchestrator_not_own_process" {
+		t.Errorf("a revoke still needs the own process: %+v", res.Error)
+	}
+}
+
+// Flag combinations that cannot mean one write, and invalid values, are usage errors
+// and write nothing.
+func TestTaskStateSet_OrchestratorUsage(t *testing.T) {
+	repo := tsRepo(t, "main")
+	for _, o := range []worktreecmd.TaskStateOptions{
+		{Standing: strp("on")},
+		{OrchestratorScope: strp("docs")},
+		{Orchestrator: "A", SelfOrchestrator: true},
+		{Orchestrator: "A", ClearOrchestrator: "B"},
+		{ClearOrchestrator: "B", Standing: strp("off")},
+		{Orchestrator: "A", Orc: "B"},
+		{Orchestrator: "A", Task: "lets-abc"},
+		{SelfOrchestrator: true, Start: "abc1234"},
+		{Orchestrator: "A", Standing: strp("maybe")},
+		{Orchestrator: "A", Standing: strp("on")}, // only the orchestrator itself grants
+		{Standing: strp("on"), OrchestratorScope: strp("docs")},
+		{Orchestrator: "x --auto"},
+		{Orchestrator: "A", OrchestratorScope: strp("a=b")},
+	} {
+		if _, err := worktreecmd.TaskStateSet(context.Background(), repo, o); worktreecmd.ExitCode(err) != worktreecmd.ExitUsage {
+			t.Errorf("%+v: err=%v, want exit 2", o, err)
+		}
+	}
+	if _, err := os.Stat(taskFile(repo, "main")); !os.IsNotExist(err) {
+		t.Error("a refused call must write nothing")
+	}
 }
