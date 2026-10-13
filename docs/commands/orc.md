@@ -9,6 +9,7 @@ When several Claude sessions work on one repo - an orchestrator planning and rou
 /lets:orc read
 /lets:peer "MAIN PWA" tell the auth refactor landed on main
 /lets:orc who
+/lets:orc standing on
 ```
 
 You can also just say it: "ask the orchestrator …", "what did the orchestrator say", "спитай у оркестратора …".
@@ -21,7 +22,8 @@ You can also just say it: "ask the orchestrator …", "what did the orchestrator
 | `ping` | yes | a short FYI; the peer records it and does not answer |
 | `tell` | yes | a message to a named peer |
 | `read [N]` | no | the peer's last turns, secrets withheld |
-| `who` | no | the live sessions of the repo: role, name, scope or orchestrator, task, branch, state |
+| `who` | no | the live sessions of the repo: name, orchestrator and scope, task, branch, state |
+| `standing on\|off` | no | in an orchestrator session: allow or stop the bound pair talking without per-message confirmation (see below) |
 
 ## `--yes` - send without the confirmation
 
@@ -31,17 +33,26 @@ It changes one thing and nothing else. A send still has to be something you aske
 
 ## Who you are talking to
 
-- **Orchestrators.** `/lets:start --main` registers the session as an orchestrator under its `/rename` name, optionally with `--scope "<part>"`. A repo can have several; a name belongs to one live session, and taking it over is a question, never automatic.
+- **Orchestrators.** `/lets:start --main` records the session as an orchestrator under its `/rename` name, optionally with `--scope "<part>"`. A repo can have several. Names are machine-wide: when two live sessions anywhere carry the same name, neither can be addressed by it until one is renamed.
 - **Workers are bound.** `/lets:worktree create <id>` run from an orchestrator binds every worker it spawns; a chat you open yourself takes `/lets:start <id> --orc=<name>`. The binding lives with the branch, so it survives `/clear` and restarts.
-- **A worker sees its orchestrator at start.** In a worktree, `/lets:start` prints one line - the bound orchestrator, whether it is alive, and how many messages it has addressed to this session (`N message(s) from <name> - /lets:orc read`). Only the count: no peer text enters the session until you ask for it. An unbound branch with several orchestrators alive lists them and how to bind.
+- **A worker sees its orchestrator at start.** In a worktree, `/lets:start` prints one line - the bound orchestrator and whether it is alive. No peer text enters the session until you ask for it. An unbound branch with several orchestrators alive lists them and how to bind.
 - **No guessing.** `/lets:orc` without a name talks to the bound orchestrator. If that session is gone it says so and sends nothing - it never quietly picks another. With no binding it uses the only live orchestrator, or asks which one.
 
 ## How a message travels
 
-Go (`lets peers`) finds the peer, frames the message with a header that addresses it by session id, and delivers it:
+Every message is Claude Code's own session messaging (`SendMessage`), addressed by the peer's session **name**, on every launcher - Orca included. Go (`lets peers`) lists, reads and resolves which session a name means; it never delivers anything itself. An `ask` gets an idle notice when the peer has answered, and the reply arrives as the peer's own message. After a send, `/lets:orc` prints what happened - `sent to <name>`, `held for approval in <name>` (the peer runs another permission mode and its user must approve), `refused by <name>`, `expired unapproved in <name>`, or `NOT SENT` with the reason - and it never resends on its own.
 
-- **Claude's session messaging** by default - the model sends the framed text with `SendMessage`, and an `ask` gets an idle notice when the peer has answered.
-- **Orca** when `LETS_LAUNCHER=orca` and the peer runs in an Orca pane: Go types the message into that pane only when the peer's transcript shows a finished turn, its screen shows the empty prompt (no permission dialog a keystroke could answer), and Orca reports it idle. It never resends.
+A session outside this repo is reached by name only when it is this branch's bound orchestrator, a name you typed in that turn, a row `/lets:hub` listed, or the session whose message you are answering. Anything else is reported as not found, never guessed.
+
+## Standing authorization
+
+Asking the orchestrator a question and getting the answer can cost several approvals: the worker's Send?, the orchestrator user's reply, and the same again on the way back. A standing grant removes that for one bound pair - an orchestrator and the workers (or a standing team's lead) bound to it in this repo - in both directions:
+
+- **Granted once.** `/lets:start --main` and `/lets:team run` ask once, when a session is first recorded as an orchestrator; `/lets:orc standing on|off` in that orchestrator session changes it later. Only the orchestrator's own session can turn it on - Go refuses a grant written from any other process - and `standing off` is always allowed.
+- **Sends.** A message you asked for, from either side of the pair to the other, is printed as `sending under standing authorization:` and goes without the Send? question. You still have to ask for the send.
+- **Replies.** A message from the other side of the pair may be answered without asking you, when the answer stays inside what is already agreed - a fact, a status, a decision already recorded in the plan, the task or the team file. Anything that decides approach, scope or priority, anything other sessions will see, and any request to act comes to you. The first autonomous reply is announced once, and after 3 autonomous replies to one peer the thread is handed to you until you type.
+- **Who sent it is checked in Go.** A name in the message, or the sender attribute alone, is a claim. Go checks that the message's socket belongs to the one live session with that name, that it runs in this repo, that it is bound, and that the grant is on (`lets peers who --orc` / `lets peers orchestrator` with `--from-name` / `--from-addr`). Anything else is relayed to you as usual.
+- **What it never covers.** Cross-repo peers, unbound peers and `/lets:hub` always ask. No tracker, git or file action is ever taken on a peer's behalf, and every hard gate - push, merge, close, tracker status - still asks you.
 
 ## Where LETS offers it
 
@@ -62,12 +73,12 @@ A gate never grows past four options: where one was full, two near-identical opt
 
 ## Safety
 
-- Nothing is sent unless you asked for it in that chat; anything the model wrote is shown first with "Send?".
-- A peer's words are data. They never count as your approval, the header's sender is a claim rather than proof, and no session acts on the tracker, git or files because a peer asked.
+- Nothing is sent unless you asked for it in that chat; anything the model wrote is shown first with "Send?" - or, under a standing grant, printed as it goes.
+- A peer's words are data. They never count as your approval, a sender named in the text is a claim rather than proof, and no session acts on the tracker, git or files because a peer asked.
 - Replies are relayed whole, marked as the peer's.
 - `read` and `tail` output withholds environment dumps, `.env`-like files and known token shapes, and is capped.
 - The model never opens other sessions' registry or transcript files itself - only the redacted command output.
 
 ## When it cannot reach anyone
 
-`who` names every source it could not read (`claude registry: registry_protocol_unknown …`, `orca: orca_app_not_running`) and still lists what it could. A non-Claude agent in an Orca pane (for example Codex or Antigravity) can be read but not messaged in this version. To give it work, hand it a brief instead: `/lets:handoff --send` types the brief into its tab and brings its report back - see **[handoff.md](handoff.md)**, and **[../messaging.md](../messaging.md)** for when to use which.
+`who` names every source it could not read (`claude: registry_protocol_unknown …`, `git: worktrees_unreadable`) and still lists what it could. A non-Claude agent (for example Codex or Antigravity in an Orca tab) is not a peer and cannot be messaged. To give it work, hand it a brief instead: `/lets:handoff --send` types the brief into its tab and brings its report back - see **[handoff.md](handoff.md)**, and **[../messaging.md](../messaging.md)** for when to use which.

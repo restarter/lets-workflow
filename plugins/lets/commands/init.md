@@ -185,7 +185,7 @@ Build the options from the probe:
 - **Terminal** (Recommended) — always offered: `"Print a cd command to run in a new terminal. Works everywhere."`
 - **tmux** — offer on any unix (`Darwin` or `Linux`). Append ` (detected)` to the label when `TMUX_PRESENT`; when `TMUX_ABSENT` the description reads `"Open in a tmux window/session. tmux is not installed — falls back to terminal until you install it."`, else `"Open in a tmux window/session automatically (Linux + macOS)."`
 - **cmux** — offer ONLY when `uname -s` is `Darwin`. Append ` (detected)` when `CMUX_PRESENT`. **Omit the option entirely on Linux** — cmux is macOS-only.
-- **Orca** — offer on any unix. Append ` (detected)` when `lets orca status --json` reports `status.bin` (the one detector: it also finds `~/Applications/Orca.app` and rejects a non-Orca `orca` on PATH, such as the GNOME screen reader). Description: `"Worktrees open in Orca; also enables Orca peer messaging, card status, /lets:hub and the team orca backend"`. Orca is an opt-in addon: without this choice LETS never looks up an Orca binary.
+- **Orca** — offer on any unix. Append ` (detected)` when `lets orca status --json` reports `status.bin` (the one detector: it also finds `~/Applications/Orca.app` and rejects a non-Orca `orca` on PATH, such as the GNOME screen reader). Description: `"Worktrees open in Orca; also enables card status, /lets:hub and the team orca backend"`. Orca is an opt-in addon: without this choice LETS never looks up an Orca binary.
 
 AskUserQuestion(
   questions=[{
