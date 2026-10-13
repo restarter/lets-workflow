@@ -393,3 +393,59 @@ func TestRegenerateUserEnv_HandAddedProjectKeyPreserved(t *testing.T) {
 		}
 	}
 }
+
+// LETS_GATES has an IMPLICIT default (lets-wu2xl): a regen keeps a picked level,
+// leaves an absent one EMPTY (never fills standard - that would mask a
+// user-level ~/.lets/.env value), and an explicit flag wins.
+func TestRegenerateEnv_GatesImplicitDefault(t *testing.T) {
+	base := "LETS_LANGUAGE=English\nLETS_MERGE_BRANCH=main\nLETS_PR_FLOW=local\nLETS_TRACKER=beads\nLETS_LAUNCHER=terminal\nLETS_RULES_SCOPE=project\n"
+	cases := []struct {
+		name, existing string
+		prefs          Prefs
+		want           string
+		changed        bool
+	}{
+		{"keeps strict", base + "LETS_GATES=strict\n", Prefs{}, "\nLETS_GATES=strict\n", false},
+		{"absent stays empty", base, Prefs{}, "\nLETS_GATES=\n", false},
+		{"flag wins", base + "LETS_GATES=strict\n", Prefs{Gates: "minimal"}, "\nLETS_GATES=minimal\n", true},
+		{"flag on absent", base, Prefs{Gates: "standard"}, "\nLETS_GATES=standard\n", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), ".env")
+			if err := os.WriteFile(path, []byte(tc.existing), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			action, err := RegenerateEnv(path, tc.prefs)
+			if err != nil {
+				t.Fatal(err)
+			}
+			data, _ := os.ReadFile(path)
+			if !bytes.Contains(data, []byte(tc.want)) {
+				t.Errorf("want %q in:\n%s", tc.want, data)
+			}
+			gotChanged := false
+			for _, k := range action.ChangedKeys {
+				if k == "LETS_GATES" {
+					gotChanged = true
+				}
+			}
+			if gotChanged != tc.changed {
+				t.Errorf("LETS_GATES in changed_keys = %v, want %v (%v)", gotChanged, tc.changed, action.ChangedKeys)
+			}
+		})
+	}
+}
+
+// LETS_GATES is a project key: `lets init --user` never writes it as a managed
+// line (a hand-added one is preserved as a foreign line).
+func TestRegenerateUserEnv_NoGatesLine(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".lets", ".env")
+	if _, err := RegenerateUserEnv(path, map[string]string{}); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(path)
+	if bytes.Contains(data, []byte("LETS_GATES=")) {
+		t.Errorf("user env must not manage LETS_GATES:\n%s", data)
+	}
+}

@@ -26,3 +26,6 @@ LETS_RULES_SCOPE=project
 
 # How the sessions LETS launches start: default (plain claude; also what empty means) | auto (--permission-mode auto) | all-in (--permission-mode bypassPermissions - set it only on purpose; match the class your orchestrator runs in)
 LETS_LAUNCH_MODE=
+
+# Which actions ask you first: strict (every commit and confirm, as before 0.11) | standard (irreversible or outward only: PR merge, force-push, destructive, tracker close outside /lets:done, bd dolt push, posting outside the repo, other projects, release) | minimal (the floor: force-push, destructive, posting outside the repo, other projects, release). Written only by /lets:init or by you; read at session start
+LETS_GATES=

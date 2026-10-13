@@ -67,6 +67,7 @@ func TestDefaults_HardcodedContract(t *testing.T) {
 		"LETS_LAUNCHER":     "terminal",
 		"LETS_RULES_SCOPE":  "project",
 		"LETS_LAUNCH_MODE":  "default",
+		"LETS_GATES":        "standard",
 	}
 	got := letsconfig.Defaults()
 	if !reflect.DeepEqual(got, want) {
@@ -100,4 +101,23 @@ func TestUserKeys_ExactlyLanguageAndLauncher(t *testing.T) {
 			t.Errorf("UserKeys[%d]: got %q want %q", i, k.Name, want[i])
 		}
 	}
+}
+
+// LETS_GATES is a project key (not written by `lets init --user`; a hand-set
+// ~/.lets/.env value still applies through MergedEnv) whose canonical default
+// is standard - the fail-safe level.
+func TestKeys_Gates(t *testing.T) {
+	for _, k := range letsconfig.Keys {
+		if k.Name != "LETS_GATES" {
+			continue
+		}
+		if k.UserLevel {
+			t.Error("LETS_GATES must not be UserLevel")
+		}
+		if k.Default != "standard" {
+			t.Errorf("LETS_GATES default = %q, want standard", k.Default)
+		}
+		return
+	}
+	t.Fatal("LETS_GATES missing from Keys")
 }

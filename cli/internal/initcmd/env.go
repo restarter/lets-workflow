@@ -258,6 +258,12 @@ func mergePrefs(prefs Prefs, existing map[string]string) Prefs {
 	// Prefs{Tracker} only) rendered LETS_LAUNCHER= empty, dropping a
 	// customized cmux. The cobra layer passes raw flag values (empty = not set)
 	// so pick's flag>existing>default precedence preserves user customization.
+	//
+	// LETS_LAUNCH_MODE and LETS_GATES are the deliberate exceptions: flag >
+	// existing, NO default. Their defaults are implicit - writing one into the
+	// project file would mask a user-level ~/.lets/.env value. An unpicked
+	// LETS_GATES stays empty; letsconfig.ResolvedEnv normalizes empty to
+	// standard before the hook injects it.
 	result := prefs
 	result.Language = pick(prefs.Language, "LETS_LANGUAGE")
 	result.MergeBranch = pick(prefs.MergeBranch, "LETS_MERGE_BRANCH")
@@ -270,6 +276,10 @@ func mergePrefs(prefs Prefs, existing map[string]string) Prefs {
 	result.LaunchMode = prefs.LaunchMode
 	if result.LaunchMode == "" {
 		result.LaunchMode = existing["LETS_LAUNCH_MODE"]
+	}
+	result.Gates = prefs.Gates
+	if result.Gates == "" {
+		result.Gates = existing["LETS_GATES"]
 	}
 	if existingTracker := existing["LETS_TRACKER"]; existingTracker != "" {
 		result.Tracker = existingTracker
@@ -304,6 +314,9 @@ func diffKeys(old map[string]string, new Prefs) []string {
 	}
 	if old["LETS_LAUNCH_MODE"] != new.LaunchMode {
 		changed = append(changed, "LETS_LAUNCH_MODE")
+	}
+	if old["LETS_GATES"] != new.Gates {
+		changed = append(changed, "LETS_GATES")
 	}
 	if len(changed) == 0 {
 		return []string{}

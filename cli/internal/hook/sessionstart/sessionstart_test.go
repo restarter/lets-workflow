@@ -679,3 +679,55 @@ func TestRun_InvalidLaunchModeNotInjected(t *testing.T) {
 		}
 	}
 }
+
+// --- LETS_GATES (lets-wu2xl) ---
+
+// The Config block always carries the effective level: unset -> standard, a
+// valid level as-is, an unknown value -> standard plus a Notice naming it
+// (quoted, capped). A user-level value applies when the project leaves it empty.
+func TestRun_GatesLevel(t *testing.T) {
+	cases := []struct {
+		name, projectEnv, homeEnv, wantLine, wantNotice string
+	}{
+		{"unset", "LETS_MERGE_BRANCH=main\n", "", "LETS_GATES=standard\n", ""},
+		{"minimal", "LETS_MERGE_BRANCH=main\nLETS_GATES=minimal\n", "", "LETS_GATES=minimal\n", ""},
+		{"user strict", "LETS_MERGE_BRANCH=main\nLETS_GATES=\n", "LETS_GATES=strict\n", "LETS_GATES=strict\n", ""},
+		{"bypass", "LETS_MERGE_BRANCH=main\nLETS_GATES=bypass\n", "", "LETS_GATES=standard\n", `LETS_GATES="bypass" is not a level (strict | standard | minimal) - standard applies.`},
+		{"long unknown capped", "LETS_MERGE_BRANCH=main\nLETS_GATES=" + strings.Repeat("x", 100) + "\n", "", "LETS_GATES=standard\n", `LETS_GATES="` + strings.Repeat("x", 40) + `" is not a level`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			home := t.TempDir()
+			rulesPath := filepath.Join(dir, "rules.md")
+			writeFile(t, rulesPath, "---\nversion: 0.4.0\n---\n")
+			writeFile(t, filepath.Join(dir, ".claude", "rules", "lets-rules.md"), "---\nversion: 0.4.0\n---\n")
+			writeFile(t, filepath.Join(dir, ".lets", ".env"), tc.projectEnv)
+			if tc.homeEnv != "" {
+				writeFile(t, filepath.Join(home, ".lets", ".env"), tc.homeEnv)
+			}
+
+			var buf bytes.Buffer
+			if err := sessionstart.Run(&buf, rulesPath, dir, home, nil); err != nil {
+				t.Fatal(err)
+			}
+			out := buf.String()
+			cfg := out[strings.Index(out, "## LETS Config"):]
+			if !strings.Contains(cfg, "\n"+tc.wantLine) {
+				t.Errorf("Config block missing %q:\n%s", tc.wantLine, out)
+			}
+			if tc.wantNotice == "" {
+				if strings.Contains(out, "LETS Notice") {
+					t.Errorf("unexpected Notice:\n%s", out)
+				}
+				return
+			}
+			if !strings.Contains(out, "## LETS Notice") || !strings.Contains(out, tc.wantNotice) {
+				t.Errorf("want Notice containing %q:\n%s", tc.wantNotice, out)
+			}
+			if strings.Contains(out, strings.Repeat("x", 41)) {
+				t.Errorf("the quoted value must be capped at 40 bytes:\n%s", out)
+			}
+		})
+	}
+}

@@ -93,3 +93,40 @@ func TestMergedEnvSource_AgreesWithMergedEnv(t *testing.T) {
 		})
 	}
 }
+
+// LETS_GATES is normalized in the one resolver on both return paths (merge
+// branch set or derived): empty or unknown -> standard; a user-level value
+// applies when the project leaves it empty; MergedEnv keeps the raw value.
+func TestResolvedEnv_GatesNormalized(t *testing.T) {
+	cases := []struct {
+		name, home, project, want string
+	}{
+		{"unset", "", "", "standard"},
+		{"project minimal", "", "LETS_GATES=minimal\n", "minimal"},
+		{"project unknown", "", "LETS_GATES=bypass\n", "standard"},
+		{"user strict, project empty", "LETS_GATES=strict\n", "LETS_GATES=\n", "strict"},
+		{"project wins over user", "LETS_GATES=strict\n", "LETS_GATES=minimal\n", "minimal"},
+		{"merge branch set", "", "LETS_MERGE_BRANCH=develop\nLETS_GATES=strict\n", "strict"},
+		{"merge branch set, unknown", "", "LETS_MERGE_BRANCH=develop\nLETS_GATES=STRICT\n", "standard"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			project, home := t.TempDir(), t.TempDir()
+			if tc.home != "" {
+				writeEnv(t, home, tc.home)
+			}
+			if tc.project != "" {
+				writeEnv(t, project, tc.project)
+			}
+			if got := ResolvedEnv(project, home, nil)["LETS_GATES"]; got != tc.want {
+				t.Errorf("LETS_GATES = %q, want %q", got, tc.want)
+			}
+		})
+	}
+
+	project := t.TempDir()
+	writeEnv(t, project, "LETS_GATES=bypass\n")
+	if got := MergedEnv(project, "")["LETS_GATES"]; got != "bypass" {
+		t.Errorf("MergedEnv must keep the raw value: got %q", got)
+	}
+}
