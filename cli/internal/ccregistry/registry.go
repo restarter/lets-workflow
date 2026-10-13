@@ -242,6 +242,35 @@ func (s Snapshot) ContinuedIn(sid, own string) bool {
 	return p.ParkedJobID == c.JobID
 }
 
+// Named is every live entry carrying name (one per process), machine-wide, with a
+// parked session collapsed into its continuation (lets-56ymc): a row whose session
+// was parked into a background job that is also listed under name (ContinuedIn) is
+// dropped, so the pair counts as ONE logical session and the continuation is its
+// address. The one by-name count for uniqueness checks (who's duplicate_name, a bound
+// target's name_not_unique, the standing sender, orchestrator_name_not_unique).
+func (s Snapshot) Named(name string) []Entry {
+	var all []Entry
+	for _, e := range s.Entries {
+		if e.NameOK && e.Name == name {
+			all = append(all, e)
+		}
+	}
+	out := all[:0:0]
+	for _, e := range all {
+		parked := false
+		for _, c := range all {
+			if s.ContinuedIn(e.SessionID, c.SessionID) {
+				parked = true
+				break
+			}
+		}
+		if !parked {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
 // Liveness of one session; pid is the holder's recorded pid (0 when unknown).
 // Never guesses: a pid-less holder that the registry does not show is Unknown,
 // because "not found" proves nothing about a session the registry never described.
@@ -273,4 +302,31 @@ func (s Snapshot) Liveness(sid string, pid int) Liveness {
 		return Dead // a live pid without a registry file: the session exited, the pid was reused
 	}
 	return Unknown
+}
+
+// NameState classifies a session's registry name (NameOf).
+type NameState int
+
+const (
+	NameUnlisted NameState = iota // the registry lists no live entry for the session
+	NameNone                      // listed, without a name
+	NameInvalid                   // listed, the name fails the peer-name grammar
+	NameValid                     // listed with a usable name
+)
+
+// NameOf is session sid's registry name and its state - the one self-name lookup for
+// `task-state set --self-orchestrator` (selfName) and `lets worktree info`'s
+// team_lead.self, so their /rename hints classify a session the same way. An invalid
+// name is returned as written, for the message that names it.
+func (s Snapshot) NameOf(sid string) (string, NameState) {
+	e, ok := s.Find(sid)
+	switch {
+	case !ok:
+		return "", NameUnlisted
+	case e.NameOK:
+		return e.Name, NameValid
+	case e.Name != "":
+		return e.Name, NameInvalid
+	}
+	return "", NameNone
 }

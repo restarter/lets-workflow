@@ -120,3 +120,30 @@ func TestNoSessionProofInPlugin(t *testing.T) {
 		t.Error("a markdown write of session_proof must fail the check")
 	}
 }
+
+// TestWorktreesProtocol_TaskStateFields pins the task-state table of
+// protocol/worktrees.md to the keys Go writes: orchestrator: (lets-0xsw2, merge-branch
+// only, repeatable) and session_proof: (lets-gbfpd) beside the single-valued keys.
+func TestWorktreesProtocol_TaskStateFields(t *testing.T) {
+	wt := pluginTexts(t)["protocol/worktrees.md"]
+	if p := taskStateFieldProblems(wt); len(p) > 0 {
+		t.Errorf("protocol/worktrees.md: %v", p)
+	}
+	row := "| `orchestrator: <name>[ scope=<part>][ standing=on\\|off]` | merge-branch file only, repeatable"
+	if !strings.Contains(wt, row) {
+		t.Fatal("mutant cannot apply: the orchestrator: row is missing")
+	}
+	if len(taskStateFieldProblems(strings.Replace(wt, row, "| `orc2:` | x", 1))) == 0 {
+		t.Error("mutation: a table without the orchestrator: row must fail the check")
+	}
+}
+
+func taskStateFieldProblems(wt string) []string {
+	var bad []string
+	for _, key := range []string{"| `task:` |", "| `start:` |", "| `session: <sha> <sid>` |", "| `origin:` |", "| `orc:` |", "| `orchestrator: <name>[ scope=<part>][ standing=on\\|off]` | merge-branch file only, repeatable", "| `session_proof: <sid> <pid> <started-ms>` |"} {
+		if !strings.Contains(wt, key) {
+			bad = append(bad, "missing row "+key)
+		}
+	}
+	return bad
+}

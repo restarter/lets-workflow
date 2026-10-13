@@ -38,7 +38,8 @@ A worktree may live anywhere: `lets worktree create` puts it in `.worktrees/`, O
 | `start:` | read by `/lets:done` |
 | `session: <sha> <sid>` | read by `/lets:end`; refreshed by the SessionStart hook on a new session |
 | `origin:` | adopt derived the id from the branch or directory name; probed once before use; cleared on claim |
-| `orc:` | a worker's orchestrator binding; never on the merge-branch |
+| `orc:` | a worker's (or a team lead's) orchestrator binding; never on the merge-branch; `lets worktree switch` carries it to the next task branch |
+| `orchestrator: <name>[ scope=<part>][ standing=on\|off]` | merge-branch file only, repeatable - one line per recorded orchestrator name, shared by every worktree; written only by `lets worktree task-state set --self-orchestrator` (and its `--standing` / `--orchestrator-scope`), never by markdown |
 | `session_proof: <sid> <pid> <started-ms>` | the process that held `session:` when Go wrote it - the proof a `/clear` carry needs; written only by Go beside every Go `session:` write, never by markdown |
 
 - detect-task reads the file first; every reader cross-checks against a live anchor (tracker status on the merge-branch, git ancestry, the session-id) and degrades loudly.

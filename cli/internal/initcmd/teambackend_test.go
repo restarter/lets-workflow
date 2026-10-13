@@ -338,6 +338,23 @@ func TestTeamBackend_WorktreeTeam(t *testing.T) {
 		t.Error("the relaunch shows the command verbatim and runs only after the user's yes")
 	}
 
+	// T5: "this session is an orchestrator" is a non-null self_record, never source=self
+	// (source answers whom this session's messages go to - seams b)
+	if p := t5OrcProblems(team); len(p) > 0 {
+		t.Errorf("Step T5: %v", p)
+	}
+	for _, m := range []struct{ old, repl string }{
+		{`'/lets:start --orc="<self_record.name>"'`, `'/lets:start --orc="<target.name>"'`},
+		{"carries a non-null `self_record`", "answers `source=self`"},
+	} {
+		if !strings.Contains(team, m.old) {
+			t.Fatalf("mutant cannot apply: %q", m.old)
+		}
+		if len(t5OrcProblems(strings.Replace(team, m.old, m.repl, 1))) == 0 {
+			t.Errorf("mutation %q -> %q must fail the T5 check", m.old, m.repl)
+		}
+	}
+
 	c1 := sectionSpan(wt, "\n### Step C1: Get Name\n")
 	if !strings.Contains(c1, "the `dir` field as the dir `<name>`") || strings.Contains(c1, "from `slug` as the dir") {
 		t.Error("C1 takes the dir name from branch-name's dir field, never hand-built from slug")
@@ -389,11 +406,25 @@ func TestTeamBackend_TeamTaskFlow(t *testing.T) {
 	if strings.Count(step2t, "lets worktree task-state set") != 1 || strings.Contains(step2t, "task-state set --task") {
 		t.Error("the team path's task-state write passes only what switch did not write")
 	}
+	// the Worker-name /rename nudge never fires in a team worktree: the lead keeps lead_name (seams c)
+	if p := workerNameProblems(take); len(p) > 0 {
+		t.Errorf("take-task: %v", p)
+	}
+	if len(workerNameProblems(strings.Replace(take, "not trunk-mode, not a team worktree)", "not trunk-mode)", 1))) == 0 {
+		t.Error("mutation: a Worker-name nudge without the team-worktree exemption must fail the check")
+	}
 	if !strings.Contains(sectionSpan(take, "### Step 3: Worktree Check"), "never reaches here - its branch comes from `lets worktree switch`") {
 		t.Error("take-task Step 3 must not use a team worktree's branch as-is")
 	}
 
 	start := read("commands", "start.md")
+	// a lead launched with '/lets:start --orc="<name>"' (no task id) is bound on team_<c> at once (seams d)
+	if p := orcNoTaskProblems(start); len(p) > 0 {
+		t.Errorf("start.md: %v", p)
+	}
+	if len(orcNoTaskProblems(strings.Replace(start, "command -v lets >/dev/null 2>&1 && lets worktree task-state set --create --orc '<name>' --json", "", 1))) == 0 {
+		t.Error("mutation: start.md without the no-task-id --orc write must fail the check")
+	}
 	step5 := sectionSpan(start, "## Step 5: What do we do? (task selection - MANDATORY)")
 	team := strings.Index(step5, "**Team worktree**")
 	respawn := strings.Index(step5, "**Respawn roster**")
@@ -598,4 +629,92 @@ func TestTeamBackend_MembersLink(t *testing.T) {
 			t.Errorf("mutant produced no problem containing %q - that guard cannot fail", m.want)
 		})
 	}
+}
+
+// t5OrcProblems checks the team create's Step T5: the lead's --orc comes from this
+// session's own self_record, as in worktree.md's Orchestrator binding.
+func t5OrcProblems(team string) []string {
+	t5 := team
+	if i := strings.Index(t5, "### Step T5: Launch the lead"); i >= 0 {
+		t5 = t5[i:]
+	}
+	var bad []string
+	if strings.Contains(t5, "source=self") {
+		bad = append(bad, "T5 tests source=self for \"this session is an orchestrator\"")
+	}
+	if !strings.Contains(t5, "carries a non-null `self_record`") || !strings.Contains(t5, `'/lets:start --orc="<self_record.name>"'`) {
+		bad = append(bad, "T5 binds the lead with '/lets:start --orc=\"<self_record.name>\"' when self_record is non-null")
+	}
+	return bad
+}
+
+// workerNameProblems checks take-task's Worker-name bullet: a team worktree (the lead,
+// named by lead_name) is exempt from the /rename <repo_slug>-<task-id> nudge.
+func workerNameProblems(take string) []string {
+	i := strings.Index(take, "- **Worker name.**")
+	if i < 0 {
+		return []string{"the Worker name bullet is missing"}
+	}
+	line := take[i:]
+	if j := strings.Index(line, "\n"); j >= 0 {
+		line = line[:j]
+	}
+	var bad []string
+	if !strings.Contains(line, "not trunk-mode, not a team worktree)") || !strings.Contains(line, "**A team worktree**") || !strings.Contains(line, "`team_lead` hint owns that name") {
+		bad = append(bad, "the Worker name nudge must exempt a team worktree and defer to the team_lead hint")
+	}
+	return bad
+}
+
+// orcNoTaskProblems checks start.md Step 0a: `--orc` with no task id records orc: on
+// the current branch (after Step 0.5), which lets worktree switch then carries.
+func orcNoTaskProblems(start string) []string {
+	i := strings.Index(start, "**`--orc` without a task id**")
+	j := strings.Index(start, "**If `<task-id>` provided**")
+	if i < 0 || j < i {
+		return []string{"Step 0a must carry the `--orc` without a task id paragraph before the per-path steps"}
+	}
+	block := start[i:j]
+	var bad []string
+	if !strings.Contains(block, "command -v lets >/dev/null 2>&1 && lets worktree task-state set --create --orc '<name>' --json") || strings.Contains(block, "--task") {
+		bad = append(bad, "the binding is one task-state write of --orc on the current branch, no --task")
+	}
+	if !strings.Contains(block, "after Step 0.5") || !strings.Contains(block, "`lets worktree switch` carries that `orc:`") {
+		bad = append(bad, "the write runs after Step 0.5 and names the switch carry")
+	}
+	return bad
+}
+
+// TestPeersProtocol_PaneMemberNames pins the documented limitation (seams f): pane
+// members are `<callsign>-<name>` with no repository part, and callsigns are unique
+// per repository only.
+func TestPeersProtocol_PaneMemberNames(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join(pluginDir(t), "protocol", "peers.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	peers := string(b)
+	if p := paneNameProblems(peers); len(p) > 0 {
+		t.Errorf("protocol/peers.md: %v", p)
+	}
+	if len(paneNameProblems(strings.Replace(peers, "## Pane-member names across repos", "## Pane members", 1))) == 0 {
+		t.Error("mutation: peers.md without the pane-member names section must fail the check")
+	}
+	if len(paneNameProblems(strings.Replace(peers, "`lets peers who` marks both `duplicate_name`", "both are listed", 1))) == 0 {
+		t.Error("mutation: the section without the duplicate_name consequence must fail the check")
+	}
+}
+
+func paneNameProblems(peers string) []string {
+	sec := sectionSpan(peers, "\n## Pane-member names across repos\n")
+	if sec == "" {
+		return []string{"the ## Pane-member names across repos section is missing"}
+	}
+	var bad []string
+	for _, want := range []string{"unique per repository only", "`<repo>-<callsign>-lead`", "`<callsign>-<name>` with no repository part", "`lets peers who` marks both `duplicate_name`", "`[ref]`", "In-process members (no pane) are not affected"} {
+		if !strings.Contains(sec, want) {
+			bad = append(bad, "missing "+want)
+		}
+	}
+	return bad
 }

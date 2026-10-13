@@ -366,14 +366,25 @@ func TestOrcLint(t *testing.T) {
 		t.Error("mutation: team.md Guard 4 without the Allow write must fail the lint")
 	}
 
-	// start.md main mode: a refused orchestrator record wrote nothing, the boundary
-	// included - the boundary-alone fallback runs on EVERY failed envelope except
-	// the two where the file itself could not be written (f1 r1)
-	if !startFallbackOK(files["commands/start.md"]) {
-		t.Error("commands/start.md: after a failed record, the boundary-alone fallback must run on every failed envelope except task_state_lock_busy / task_state_write_failed")
+	// start.md main mode: the guarded boundary write and the orchestrator record are
+	// two calls - a held boundary (exit 35) never drops the record (seams a)
+	start := files["commands/start.md"]
+	if p := startSplitProblems(start); len(p) > 0 {
+		t.Errorf("commands/start.md main mode: %v", p)
 	}
-	if startFallbackOK(strings.Replace(files["commands/start.md"], "every failed envelope except", "an orchestrator_needs_name envelope, not", 1)) {
-		t.Error("mutation: a fallback scoped to one error kind must fail the start.md check")
+	for _, m := range []struct{ name, old, repl string }{
+		{"record folded into the boundary call", "lets worktree task-state set --self-orchestrator {SCOPE_FLAG} --json", `lets worktree task-state set --session-sha "$(git rev-parse HEAD)" --session-id "$CLAUDE_CODE_SESSION_ID" --self-orchestrator {SCOPE_FLAG} --json`},
+		{"exit-35 line after the record call", "The boundary write is guarded and can answer exit 35 `session_held`", "The boundary write is guarded"},
+		{"boundary call carries the record", `--session-id "$CLAUDE_CODE_SESSION_ID" --create --json
+  else`, `--session-id "$CLAUDE_CODE_SESSION_ID" --create --self-orchestrator --json
+  else`},
+	} {
+		if !strings.Contains(start, m.old) {
+			t.Fatalf("mutant %q cannot apply", m.name)
+		}
+		if len(startSplitProblems(strings.Replace(start, m.old, m.repl, 1))) == 0 {
+			t.Errorf("mutation (%s) must fail the start.md split check", m.name)
+		}
 	}
 	if len(mutate("commands/hub.md", "lets peers frame --to-session x")) == 0 {
 		t.Error("mutation: a frame step in hub.md must fail the lint")
@@ -426,12 +437,29 @@ func TestOrcLint(t *testing.T) {
 // startFallbackOK reports whether start.md's main mode names the fallback rule
 // (every failed envelope except the two write failures) and runs the boundary-alone
 // write as the next command after it.
-func startFallbackOK(start string) bool {
-	rule := strings.Index(start, "every failed envelope except `task_state_lock_busy` / `task_state_write_failed`")
-	if rule < 0 {
-		return false
+// startSplitProblems checks Step M1 of start.md: the boundary call (guarded, with the
+// exit-35 line under it) comes first and carries no record; the orchestrator record
+// is its own call with no session key.
+func startSplitProblems(start string) []string {
+	m1 := start
+	if i := strings.Index(m1, "### Step M1: Orient"); i >= 0 {
+		m1 = m1[i:]
 	}
-	next := strings.Index(start[rule:], "lets worktree task-state set")
-	boundary := `lets worktree task-state set --clear-orc --session-sha "$(git rev-parse HEAD)" --session-id "$CLAUDE_CODE_SESSION_ID" --create --json`
-	return next >= 0 && strings.HasPrefix(start[rule+next:], boundary)
+	boundary := strings.Index(m1, `lets worktree task-state set --clear-orc --session-sha "$(git rev-parse HEAD)" --session-id "$CLAUDE_CODE_SESSION_ID" --create --json`)
+	held := strings.Index(m1, "exit 35 `session_held`")
+	record := strings.Index(m1, "lets worktree task-state set --self-orchestrator {SCOPE_FLAG} --json")
+	var bad []string
+	if boundary < 0 || record < 0 {
+		bad = append(bad, "both the boundary call and the orchestrator-only record call must be present")
+	}
+	if held < 0 || held < boundary || held > record {
+		bad = append(bad, "the exit-35 session_held line sits under the boundary call, before the record call")
+	}
+	for _, line := range strings.Split(m1, "\n") {
+		if strings.Contains(line, "lets worktree task-state set") && strings.Contains(line, "--self-orchestrator") &&
+			(strings.Contains(line, "--session-sha") || strings.Contains(line, "--session-id") || strings.Contains(line, "--clear-orc")) {
+			bad = append(bad, "a --self-orchestrator call carries a session key: "+strings.TrimSpace(line))
+		}
+	}
+	return bad
 }

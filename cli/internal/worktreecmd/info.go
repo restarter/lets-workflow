@@ -124,12 +124,12 @@ func teamLeadOf(teamsDir, team string) *TeamLead {
 	if snap.Degraded != nil {
 		return tl
 	}
-	e, ok := snap.Find(sid)
-	if !ok {
+	name, state := snap.NameOf(sid)
+	if state == ccregistry.NameUnlisted {
 		return tl
 	}
-	tl.Self, tl.Match = e.Name, "other"
-	if e.Name == tl.Name {
+	tl.Self, tl.Match = name, "other"
+	if name == tl.Name {
 		tl.Match = "lead"
 	}
 	return tl

@@ -22,11 +22,22 @@ type regRow struct {
 // unknown-protocol live pids, and points the registry seams at it.
 func claudeHome(t *testing.T, rows []regRow, unknown ...int) string {
 	t.Helper()
+	return claudeHomeJobs(t, rows, nil, unknown...)
+}
+
+// claudeHomeJobs is claudeHome with extra registry keys per pid (kind, jobId,
+// parkedJobId - a parked session and its background continuation).
+func claudeHomeJobs(t *testing.T, rows []regRow, extra map[int]map[string]any, unknown ...int) string {
+	t.Helper()
 	dir := t.TempDir()
 	_ = os.MkdirAll(filepath.Join(dir, "sessions"), 0o700)
 	alive := map[int]bool{}
 	for _, r := range rows {
-		b, _ := json.Marshal(map[string]any{"sessionId": r.sid, "name": r.name, "cwd": r.cwd, "peerProtocol": 1, "status": "idle"})
+		m := map[string]any{"sessionId": r.sid, "name": r.name, "cwd": r.cwd, "peerProtocol": 1, "status": "idle"}
+		for k, v := range extra[r.pid] {
+			m[k] = v
+		}
+		b, _ := json.Marshal(m)
 		_ = os.WriteFile(filepath.Join(dir, "sessions", itoa(r.pid)+".json"), b, 0o600)
 		alive[r.pid] = true
 	}

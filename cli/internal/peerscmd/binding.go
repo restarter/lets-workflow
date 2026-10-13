@@ -176,7 +176,7 @@ func ResolveOrchestrator(ctx context.Context, v *nameView, o ResolveOptions) *Re
 			}
 			// A record belongs to a name, not a session: a second live session under
 			// the same name (a reused MAIN-LETS) never inherits the record or its grant.
-			if len(liveByName(v.snap, e.Name)) == 1 {
+			if len(v.snap.Named(e.Name)) == 1 {
 				res.SelfRecord = &SelfRecord{Name: r.Name, Scope: r.Scope, Standing: r.Standing}
 			} else {
 				res.Degraded = append(res.Degraded, Degraded{Source: "claude", Reason: "self_name_not_unique", Detail: e.Name})
@@ -192,8 +192,8 @@ func ResolveOrchestrator(ctx context.Context, v *nameView, o ResolveOptions) *Re
 		res.Source = "bound"
 		var hits []ccregistry.Entry
 		seen := map[string]bool{}
-		for _, e := range v.snap.Entries {
-			if e.NameOK && e.Name == name && !seen[e.SessionID] {
+		for _, e := range v.snap.Named(name) { // a parked session and its continuation are one
+			if !seen[e.SessionID] {
 				seen[e.SessionID] = true
 				hits = append(hits, e)
 			}

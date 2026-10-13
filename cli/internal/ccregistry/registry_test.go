@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -311,6 +313,64 @@ func TestSameProcess(t *testing.T) {
 	for _, c := range cases {
 		if got := s.SameProcess(c.pid, c.started); got != c.want {
 			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// Named collapses a parked session and its background continuation into ONE logical
+// session - the continuation, its address; anything else counts per process.
+func TestNamed(t *testing.T) {
+	const other = "cccccccc-3333-4333-8333-333333333333"
+	otherRow := `{"sessionId":"` + other + `","name":"snake-lead","peerProtocol":1,"kind":"interactive"}`
+	cases := []struct {
+		name string
+		rows map[int]string
+		want []string // session ids, sorted
+	}{
+		{"parked + its continuation = one, the continuation", map[int]string{3001: parkedRow("deadbeef"), 3002: bgRow("bg", "deadbeef")}, []string{bgSID}},
+		{"two unrelated live sessions = two", map[int]string{3001: parkedRow(""), 3003: otherRow}, []string{parkedSID, other}},
+		{"parked without a continuation = one, the parked row", map[int]string{3001: parkedRow("deadbeef")}, []string{parkedSID}},
+		{"a bg job of another job id = two", map[int]string{3001: parkedRow("deadbeef"), 3002: bgRow("bg", "feedface")}, []string{parkedSID, bgSID}},
+		{"parked + continuation + an unrelated holder = two", map[int]string{3001: parkedRow("deadbeef"), 3002: bgRow("bg", "deadbeef"), 3003: otherRow}, []string{bgSID, other}},
+		{"no holder", map[int]string{3003: `{"sessionId":"` + other + `","name":"MAIN","peerProtocol":1}`}, nil},
+	}
+	for _, c := range cases {
+		var got []string
+		for _, e := range writeRows(t, c.rows).Named("snake-lead") {
+			got = append(got, e.SessionID)
+		}
+		sort.Strings(got)
+		if strings.Join(got, ",") != strings.Join(c.want, ",") {
+			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// NameOf classifies a session's registry name the one way every self-name reader
+// uses: not listed, listed without a name, a name failing the grammar, a usable name.
+func TestNameOf(t *testing.T) {
+	const (
+		noName = "cccccccc-3333-4333-8333-333333333333"
+		badSID = "dddddddd-4444-4444-8444-444444444444"
+		absent = "eeeeeeee-5555-4555-8555-555555555555"
+	)
+	s := writeRows(t, map[int]string{
+		3001: parkedRow(""),
+		3003: `{"sessionId":"` + noName + `","peerProtocol":1}`,
+		3004: `{"sessionId":"` + badSID + `","name":"bad  name","peerProtocol":1}`,
+	})
+	for _, c := range []struct {
+		sid       string
+		wantName  string
+		wantState NameState
+	}{
+		{parkedSID, "snake-lead", NameValid},
+		{noName, "", NameNone},
+		{badSID, "bad  name", NameInvalid},
+		{absent, "", NameUnlisted},
+	} {
+		if n, st := s.NameOf(c.sid); n != c.wantName || st != c.wantState {
+			t.Errorf("%s: %q %v, want %q %v", c.sid, n, st, c.wantName, c.wantState)
 		}
 	}
 }

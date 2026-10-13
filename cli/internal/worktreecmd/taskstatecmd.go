@@ -32,8 +32,9 @@ type TaskStateOptions struct {
 	OrchestratorScope *string
 	Standing          *string // "on" | "off"
 	ClearOrchestrator string
-	// Session is the caller's session id ($CLAUDE_CODE_SESSION_ID, set by the cli
-	// layer), read only by SelfOrchestrator.
+	// Session is the caller's session id ($CLAUDE_CODE_SESSION_ID, read once by the
+	// cli layer): SelfOrchestrator's claim, and the id the cli's proof gate compares
+	// SessionID with (a proof only for the caller's own session).
 	Session string
 	// Guard judges a --session-id write under the task lock: a live foreign holder
 	// (HeldLive, HeldRotatedForeign) refuses it. A zero guard writes as before.
@@ -67,13 +68,13 @@ func selfName(sid string, unique bool) (string, *Error) {
 	}
 	remedy := "name this session with /rename <name>, then run /lets:start --main again"
 	snap := ccregistry.Read(ccregistry.HomeDir())
-	e, ok := snap.Find(sid)
-	switch {
-	case !ok:
+	name, state := snap.NameOf(sid)
+	switch state {
+	case ccregistry.NameUnlisted:
 		return "", &Error{Code: ExitGeneric, Kind: "orchestrator_needs_name", Message: "this session is not in the Claude Code session registry, so it has no name to record", Remediation: remedy}
-	case !e.NameOK && e.Name != "":
-		return "", &Error{Code: ExitGeneric, Kind: "orchestrator_needs_name", Message: fmt.Sprintf("this session has no usable name (%q fails the name grammar)", e.Name), Remediation: remedy}
-	case !e.NameOK:
+	case ccregistry.NameInvalid:
+		return "", &Error{Code: ExitGeneric, Kind: "orchestrator_needs_name", Message: fmt.Sprintf("this session has no usable name (%q fails the name grammar)", name), Remediation: remedy}
+	case ccregistry.NameNone:
 		return "", &Error{Code: ExitGeneric, Kind: "orchestrator_needs_name", Message: "this session has no name to record as an orchestrator", Remediation: remedy}
 	}
 	// The session id is only a claim ($CLAUDE_CODE_SESSION_ID can be set by any
@@ -90,31 +91,26 @@ func selfName(sid string, unique bool) (string, *Error) {
 		return "", &Error{Code: ExitUsage, Kind: "orchestrator_not_own_process", Message: msg, Cause: err,
 			Remediation: "run it from the orchestrator's own Claude Code session (its Bash tool), not from another process"}
 	}
-	if caller.Name != e.Name { // one session id under two processes (claude -r): the caller's own name counts
+	if caller.Name != name { // one session id under two processes (claude -r): the caller's own name counts
 		if !caller.NameOK {
 			return "", &Error{Code: ExitGeneric, Kind: "orchestrator_needs_name", Message: "this session's process has no usable name to record", Remediation: remedy}
 		}
-		e = caller
+		name = caller.Name
 	}
 	if !unique {
-		return e.Name, nil
+		return name, nil
 	}
 	// After the process proof: only the session's own process learns whether its name
 	// is shared. A record is keyed by name, so a second live holder would write the
 	// first one's grant - the same rule as the read side, where a shared name carries
 	// no self_record.
-	holders := 0
-	for _, x := range snap.Entries {
-		if x.NameOK && x.Name == e.Name {
-			holders++
-		}
-	}
+	holders := len(snap.Named(name)) // a parked session and its continuation are one
 	if holders > 1 {
 		return "", &Error{Code: ExitUsage, Kind: "orchestrator_name_not_unique",
-			Message:     fmt.Sprintf("%d live sessions are named %s - a record is keyed by name, so it cannot be written for one of them", holders, e.Name),
+			Message:     fmt.Sprintf("%d live sessions are named %s - a record is keyed by name, so it cannot be written for one of them", holders, name),
 			Remediation: "rename this session with /rename <name>, then run it again"}
 	}
-	return e.Name, nil
+	return name, nil
 }
 
 // taskStateTarget resolves the task-state file for dir's current HEAD branch. It
