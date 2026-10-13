@@ -396,6 +396,30 @@ func TestTaskStateSet_SelfOrchestratorOwnProcess(t *testing.T) {
 	}
 }
 
+// A name two live sessions carry is refused orchestrator_name_not_unique (exit 2),
+// even from the session's own process: the record is keyed by name, so writing it
+// would set the other holder's grant too.
+func TestTaskStateSet_SelfOrchestratorNameNotUnique(t *testing.T) {
+	repo := tsRepo(t, "main")
+	sid := fakeSelf(t, "MAIN-LETS")
+	home := ccregistry.HomeDir()
+	mustWrite(t, filepath.Join(home, "sessions", "5454.json"), `{"name":"MAIN-LETS","sessionId":"bbbbbbbb-0000-4000-8000-0000000000bb","cwd":"/y","peerProtocol":1}`, 0o644)
+	ccregistry.ProcAlive = func(pid int) bool { return pid == 4343 || pid == 5454 }
+	res, err := worktreecmd.TaskStateSet(context.Background(), repo, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sid, Standing: strp("on")})
+	if worktreecmd.ExitCode(err) != worktreecmd.ExitUsage || res.Error == nil || res.Error.Kind != "orchestrator_name_not_unique" || !strings.Contains(res.Error.Remediation, "/rename") {
+		t.Errorf("err=%v res=%+v", err, res.Error)
+	}
+	if _, err := os.Stat(taskFile(repo, "main")); !os.IsNotExist(err) {
+		t.Error("a refused call must write nothing")
+	}
+	// the ancestry check comes first: a process that is not the claimed session learns
+	// nothing about the name
+	ccregistry.ParentOf = fakeParents(map[int]int{os.Getppid(): 777, 777: 1})
+	if res, _ := worktreecmd.TaskStateSet(context.Background(), repo, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sid}); res.Error == nil || res.Error.Kind != "orchestrator_not_own_process" {
+		t.Errorf("not own process first: %+v", res.Error)
+	}
+}
+
 // Flag combinations that cannot mean one write, and invalid values, are usage errors
 // and write nothing.
 func TestTaskStateSet_OrchestratorUsage(t *testing.T) {

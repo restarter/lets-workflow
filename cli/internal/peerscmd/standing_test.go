@@ -62,6 +62,7 @@ func TestStanding_OrchestratorSide(t *testing.T) {
 		extra    func(root, far string) []regRow // added to the base registry
 		unknown  []int
 		own      string
+		caller   string // default: the orchestrator MAIN-LETS
 		fromName string
 		fromAddr string
 		ok       bool
@@ -78,7 +79,9 @@ func TestStanding_OrchestratorSide(t *testing.T) {
 		{name: "another process claims the name", fromName: "W", fromAddr: sock(pidU), reason: "pid_mismatch"},
 		{name: "grant off", records: "orchestrator: MAIN-LETS standing=off\n", fromName: "W", fromAddr: sock(pidW), reason: "standing_off"},
 		{name: "never asked", records: "orchestrator: MAIN-LETS\n", fromName: "W", fromAddr: sock(pidW), reason: "standing_off"},
-		{name: "no record", records: "orchestrator: OTHER standing=on\n", fromName: "W", fromAddr: sock(pidW), reason: "standing_off"},
+		{name: "no record", records: "orchestrator: OTHER standing=on\n", fromName: "W", fromAddr: sock(pidW), reason: "no_self_record"},
+		{name: "caller not in the registry", caller: "aaaaaaaa-0000-4000-8000-0000000000ff", fromName: "W", fromAddr: sock(pidW), reason: "no_self_record"},
+		{name: "wrong own name, grant off", records: "orchestrator: MAIN-LETS standing=off\n", own: "MAIN-ETH", fromName: "W", fromAddr: sock(pidW), reason: "not_own_name"},
 		{name: "own name reused", extra: func(_, far string) []regRow { return []regRow{{106, sidO, "MAIN-LETS", far}} }, fromName: "W", fromAddr: sock(pidW), reason: "self_name_not_unique"},
 		{name: "asks for another name", own: "MAIN-ETH", fromName: "W", fromAddr: sock(pidW), reason: "not_own_name"},
 		{name: "unbound worker", fromName: "U", fromAddr: sock(pidU), reason: "not_bound_here"},
@@ -98,7 +101,11 @@ func TestStanding_OrchestratorSide(t *testing.T) {
 			if own == "" {
 				own = "MAIN-LETS"
 			}
-			res := who(t, WhoOptions{Cwd: root, Orc: own, Caller: sidM, Probe: StandingProbe{FromName: c.fromName, FromAddr: c.fromAddr}})
+			caller := c.caller
+			if caller == "" {
+				caller = sidM
+			}
+			res := who(t, WhoOptions{Cwd: root, Orc: own, Caller: caller, Probe: StandingProbe{FromName: c.fromName, FromAddr: c.fromAddr}})
 			checkStanding(t, c.name, standingEnv(t, res), c.ok, c.reason)
 		})
 	}
@@ -177,7 +184,7 @@ func TestStanding_WorkerSide(t *testing.T) {
 func TestStanding_ReasonsCovered(t *testing.T) {
 	want := map[string]bool{
 		"from_addr_unparseable": true, "liveness_unknown": true, "sender_not_live": true, "name_not_unique": true, "pid_mismatch": true,
-		"standing_off": true, "self_name_not_unique": true, "not_own_name": true, "not_bound_here": true,
+		"no_self_record": true, "standing_off": true, "self_name_not_unique": true, "not_own_name": true, "not_bound_here": true,
 		"not_bound": true, "not_bound_target": true, "cross_repo": true,
 	}
 	for _, r := range standingReasons {
@@ -220,8 +227,30 @@ func TestStanding_FlagsAndUsage(t *testing.T) {
 		if e, ok := err.(*Error); !ok || e.Code != ExitUsage || res.Error == nil || res.Error.Kind != "usage" {
 			t.Errorf("%+v: err=%v", p, err)
 		}
+		checkStanding(t, "orchestrator usage", standingEnv(t, res), false, "usage")
 	}
 }
+
+// Once the probe was passed, an envelope that never reached the decision still says
+// standing_ok=false, with the error kind as the reason.
+func TestStanding_ErrorEnvelopesAnswerFalse(t *testing.T) {
+	probe := StandingProbe{FromName: "W", FromAddr: sock(pidW)}
+	res, err := Who(context.Background(), WhoOptions{Cwd: root0(t), Orc: "MAIN-LETS", Probe: probe})
+	if err == nil {
+		t.Fatal("who outside a repo must fail")
+	}
+	checkStanding(t, "who not_in_repo", standingEnv(t, res), false, "not_in_repo")
+	res, _ = Who(context.Background(), WhoOptions{Orc: "MAIN-LETS", Probe: StandingProbe{FromName: "W"}})
+	checkStanding(t, "who usage", standingEnv(t, res), false, "usage")
+	o, err := OrchestratorWith(context.Background(), root0(t), sidW, probe)
+	if err == nil {
+		t.Fatal("orchestrator outside a repo must fail")
+	}
+	checkStanding(t, "orchestrator not_in_repo", standingEnv(t, o), false, "not_in_repo")
+}
+
+// root0 is a directory outside any git repository.
+func root0(t *testing.T) string { return t.TempDir() }
 
 // A reused orchestrator name (two live sessions called MAIN-LETS) never inherits the
 // record: self_record is null for both, and degraded[] says why.

@@ -49,14 +49,17 @@ func (o TaskStateOptions) orchestratorOnly() bool {
 		!o.ClearOrigin && !o.ClearOrc && !o.ClearTask
 }
 
-// selfName is the caller's registry name, or an orchestrator_needs_name refusal.
+// selfName is the caller's registry name, or a refusal: orchestrator_needs_name (no
+// usable name), orchestrator_not_own_process (the claimed session does not run this
+// command), orchestrator_name_not_unique (another live session carries the name).
 func selfName(sid string) (string, *Error) {
 	if !ccregistry.ValidSession(sid) {
 		return "", &Error{Code: ExitUsage, Kind: "usage", Message: "--self-orchestrator needs this session's id ($CLAUDE_CODE_SESSION_ID)",
 			Remediation: "run inside a Claude Code session"}
 	}
 	remedy := "name this session with /rename <name>, then run /lets:start --main again"
-	e, ok := ccregistry.Read(ccregistry.HomeDir()).Find(sid)
+	snap := ccregistry.Read(ccregistry.HomeDir())
+	e, ok := snap.Find(sid)
 	switch {
 	case !ok:
 		return "", &Error{Code: ExitGeneric, Kind: "orchestrator_needs_name", Message: "this session is not in the Claude Code session registry, so it has no name to record", Remediation: remedy}
@@ -75,6 +78,21 @@ func selfName(sid string) (string, *Error) {
 		}
 		return "", &Error{Code: ExitUsage, Kind: "orchestrator_not_own_process", Message: msg, Cause: err,
 			Remediation: "run it from the orchestrator's own Claude Code session (its Bash tool), not from another process"}
+	}
+	// After the ancestry walk: only the session's own process learns whether its name
+	// is shared. A record is keyed by name, so a second live holder would write the
+	// first one's grant - the same rule as the read side, where a shared name carries
+	// no self_record.
+	holders := 0
+	for _, x := range snap.Entries {
+		if x.NameOK && x.Name == e.Name {
+			holders++
+		}
+	}
+	if holders > 1 {
+		return "", &Error{Code: ExitUsage, Kind: "orchestrator_name_not_unique",
+			Message:     fmt.Sprintf("%d live sessions are named %s - a record is keyed by name, so it cannot be written for one of them", holders, e.Name),
+			Remediation: "rename this session with /rename <name>, then run it again"}
 	}
 	return e.Name, nil
 }

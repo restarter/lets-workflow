@@ -107,6 +107,8 @@ func Who(ctx context.Context, o WhoOptions) (*WhoResult, error) {
 	}
 	res := &WhoResult{Envelope: newEnvelope("who"), Peers: []Peer{}}
 	if o.Probe.given() {
+		// every return carries the answer once the probe was passed: an error is false
+		defer func() { standingOnError(&res.Standing, res.Error) }()
 		e := o.Probe.usage()
 		if e == nil && (o.Orc == "" || o.OrcaRepos) {
 			e = &Error{Code: ExitUsage, Kind: "usage", Message: "--from-name / --from-addr answer for this repo's orchestrator: pass --orc <own name>, without --orca-repos"}

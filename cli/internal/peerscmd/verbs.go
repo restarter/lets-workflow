@@ -126,6 +126,10 @@ func Orchestrator(ctx context.Context, cwd, session string) (*OrchestratorResult
 // a standing grant: standing_ok / standing_reason (standingFromOrchestrator).
 func OrchestratorWith(ctx context.Context, cwd, session string, probe StandingProbe) (*OrchestratorResult, error) {
 	res := &OrchestratorResult{Envelope: newEnvelope("orchestrator"), Candidates: []Candidate{}}
+	if probe.given() {
+		// every return carries the answer once the probe was passed: an error is false
+		defer func() { standingOnError(&res.Standing, res.Error) }()
+	}
 	if e := probe.usage(); e != nil {
 		res.Error = &ErrorInfo{Kind: e.Kind, Message: e.Message}
 		return res, e

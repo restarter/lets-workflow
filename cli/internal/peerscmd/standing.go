@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/restarter/lets-workflow/cli/internal/ccregistry"
+	"github.com/restarter/lets-workflow/cli/internal/taskstate"
 )
 
 // StandingProbe is the harness envelope of one inbound message, passed by the orc
@@ -34,8 +35,21 @@ func (p StandingProbe) usage() *Error {
 // and the orc skill name the same set.
 var standingReasons = []string{
 	"from_addr_unparseable", "liveness_unknown", "sender_not_live", "name_not_unique", "pid_mismatch",
-	"standing_off", "self_name_not_unique", "not_own_name", "not_bound_here",
+	"no_self_record", "not_own_name", "self_name_not_unique", "standing_off", "not_bound_here",
 	"not_bound", "not_bound_target", "cross_repo",
+}
+
+// standingOnError fills a probe's answer on a return that never reached the decision:
+// standing_ok=false, standing_reason = the error kind ("error" without one).
+func standingOnError(s *Standing, e *ErrorInfo) {
+	if s.StandingOK != nil {
+		return
+	}
+	reason := "error"
+	if e != nil && e.Kind != "" {
+		reason = e.Kind
+	}
+	*s = standingOf(false, reason)
 }
 
 // senderPid parses the pid out of an envelope from attribute: `uds:` + a path whose
@@ -115,25 +129,30 @@ func standingFromWorker(v *nameView, self, own string, p StandingProbe) (bool, s
 	if why != "" {
 		return false, why
 	}
+	// the caller's identity and record first, so the reason names the real cause;
+	// the grant itself last
 	e, ok := v.snap.Find(self)
 	if !ok || !e.NameOK {
-		return false, "standing_off" // a caller without a name holds no record
+		return false, "no_self_record" // a caller without a registry name holds no record
+	}
+	if own != e.Name {
+		return false, "not_own_name"
 	}
 	if len(liveByName(v.snap, e.Name)) != 1 {
 		return false, "self_name_not_unique"
 	}
-	granted := false
-	for _, r := range v.recs {
-		if r.Name == e.Name {
-			granted = r.Standing == "on"
+	var rec *taskstate.Orchestrator
+	for i := range v.recs {
+		if v.recs[i].Name == e.Name {
+			rec = &v.recs[i]
 			break
 		}
 	}
 	switch {
-	case !granted:
+	case rec == nil:
+		return false, "no_self_record"
+	case rec.Standing != "on":
 		return false, "standing_off"
-	case own != e.Name:
-		return false, "not_own_name"
 	}
 	if row := repoRowOf(v, sender); row == nil || row.Orc != own {
 		return false, "not_bound_here"
