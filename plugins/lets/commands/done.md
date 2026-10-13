@@ -66,7 +66,7 @@ AskUserQuestion(
 ```
 
 **Handle response:**
-- **Commit first** -> invoke `Skill(skill: "lets:commit")`, then continue
+- **Commit first** -> invoke `Skill(skill: "lets:commit")`, then continue. When this card named new files, the commit skill's new-file question is answered by this pick - it does not ask again for those same files.
 - **Skip** -> warn and continue
 - **Cancel** -> stop, return to work
 
@@ -683,8 +683,8 @@ Do NOT delete the branch or remove the worktree here - `/lets:worktree remove` h
 **Which PR.** In every "After PR" variant below, `#{number}` / `{PR URL}` is the PR Step 8 created - or, on the Existing-PR Guard's `open` outcome, the open PR it pushed to (the number the Step 8 re-check confirmed); never a second one. Its `PR:` line then reads `#{number} - {PR URL} (existing PR)`, and "Merge & close" merges that PR. On the `shipped` outcome there is no "After PR" variant: use the matching `### After local merge` one, and replace its `Merged to ...` and `Branch ... deleted` lines with `PR: #{number} - {PR URL} (already merged)` - this path merged and deleted nothing. When Step 3 chose "PR only, keep open", no close ran: its Task line reads `- kept open (PR only, keep open)` instead of a close status.
 
 **By level.** `{LETS_GATES}` is `strict` -> every variant's AskUserQuestion as written. Otherwise (missing reads as `standard`), the github variants first run "Merge by level" below, then:
-- **the task was closed** (trunk, a local merge, or a PR merged by "Merge by level") -> the variant's status lines, then its remaining "Next step" options as a Nav box, never a card: `Next task?  /lets:start` where the variant offers Next task, `End?  /lets:end`, and in a worktree the line `/lets:worktree remove {name}` from the main repo. "Stay on branch" / "Stay here" / "Keep working" is the default and needs no line.
-- **the PR is still open** (Bitbucket, **PR only, keep open**, `standard`'s **Not now**, a `minimal` PR left open) -> the variant's "Next step" card as written, without "Merge & close": the task is still active and its handlers carry the checkout to the merge branch, so it stays a real choice.
+- **the task was closed** (trunk or a local merge WITHOUT **PR only, keep open**, or a PR merged by "Merge by level") -> the variant's status lines, then its remaining "Next step" options as a Nav box, never a card: `Next task?  /lets:start` where the variant offers Next task, `End?  /lets:end`, and in a worktree the line `/lets:worktree remove {name}` from the main repo. "Stay on branch" / "Stay here" / "Keep working" is the default and needs no line.
+- **the task is still open** (Bitbucket, **PR only, keep open** - trunk and local merge included -, `standard`'s **Not now**, a `minimal` PR left open) -> the variant's "Next step" card as written, without "Merge & close": the task is still active and its handlers carry the checkout to the merge branch, so it stays a real choice.
 
 ### After trunk-mode finish (HEAD == `$LETS_MERGE_BRANCH`):
 

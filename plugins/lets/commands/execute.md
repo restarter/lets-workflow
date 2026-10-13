@@ -15,7 +15,7 @@ Load an implementation plan and execute it - inline, in Claude Code's native pla
 
 ## --auto mode
 
-`/lets:execute --auto` runs the approved plan **autonomously**: skip the per-step "review before moving on" gate and `/lets:commit` at each plan commit point WITHOUT re-asking (matches the established "autonomous commits during execute after plan approval" preference). `--auto` is execution-speed for an *already-approved* plan — it does NOT bypass the hard-stops.
+`/lets:execute --auto` runs the approved plan **autonomously**: skip the per-step "review before moving on" gate and commit at each plan commit point through `Skill(skill: "lets:commit", args: "approved=plan-files")` WITHOUT re-asking (matches the established "autonomous commits during execute after plan approval" preference). `--auto` is execution-speed for an *already-approved* plan — it does NOT bypass the hard-stops.
 
 **`--auto` = run under AUTO MODE** (see `.claude/rules/lets-rules.md` `## AUTO MODE`) — do NOT restate the contract here. What still applies under `--auto`: push / PR / close (tracker `close`) / external stay gated; a 3×-fail halts; fabrication halts; and **`--auto` on `$LETS_MERGE_BRANCH` REFUSES** (Step 1) rather than auto-entering trunk-mode. When a hard-stop is hit, write the `blocked` marker and fire the execute-blocked notify (Step 6 / the gate-notification block) so an unattended session surfaces instead of stalling.
 
@@ -232,7 +232,7 @@ AskUserQuestion(
 **Commit cadence is DERIVED from the mode - never a separate question:** step-by-step -> confirm each commit at `strict` (otherwise commit at each plan point and report); straight-through -> auto-commit at each plan commit point; auto -> auto-commit; implementers -> one commit per chunk, after the Accept its gate policy names (5-D.5).
 
 **Handle response (sets the mode that Step 5 obeys):**
-- **Straight-through** -> Step 5 (native plan mode); after the plan-mode approval, implement all tasks with NO per-task pause and `/lets:commit` at each plan commit point without re-asking.
+- **Straight-through** -> Step 5 (native plan mode); after the plan-mode approval, implement all tasks with NO per-task pause and commit at each plan commit point through `Skill(skill: "lets:commit", args: "approved=plan-files")` without re-asking.
 - **Step-by-step** -> Step 5 (native plan mode); after the plan-mode approval, implement one task, pause for user review before the next, and confirm each `/lets:commit`.
 - **Auto** -> proceed exactly as `--auto` (Step 5's `--auto` behavior + pipeline-state marker + execute-blocked notify). **Guard:** if on `$LETS_MERGE_BRANCH`, REFUSE Auto here too (same rule as Step 1's `--auto` refuse - AUTO MODE never edits the merge-branch); tell the user to pick step-by-step / straight-through or take a feature branch.
 - **Implementers** -> do NOT enter native plan mode: Step 4.6, Step 4.7, then Step 5-D. `/lets:team` manages a standing team; parallel implementation of a plan runs here, in the parallel shape.
@@ -355,9 +355,9 @@ Call `EnterPlanMode`.
 4. Writes the execution strategy to the plan file (the file specified by plan mode)
 5. Calls `ExitPlanMode` when ready for user approval
 
-**After user approves**, Claude implements per the **Step 4.5 mode**: *step-by-step* implements one task, pauses for review before the next, and confirms each commit at `strict` (otherwise commits at the plan point and reports); *straight-through* runs all tasks and `/lets:commit`s at each plan commit point without re-asking; *auto* is the `--auto` behavior below. Commit only at the plan's commit points.
+**After user approves**, Claude implements per the **Step 4.5 mode**: *step-by-step* implements one task, pauses for review before the next, and confirms each commit at `strict` (otherwise commits at the plan point and reports); *straight-through* runs all tasks and commits at each plan commit point through `Skill(skill: "lets:commit", args: "approved=plan-files")` without re-asking; *auto* is the `--auto` behavior below. Commit only at the plan's commit points.
 
-**Under `--auto` (inline runs only - Step 4.5 refuses `--auto` for Implementers):** write the `executing` pipeline-state marker, then — the plan-mode approval IS the gate — implement straight through without a per-step "review before moving on" pause, and `/lets:commit` at each plan commit point WITHOUT re-asking (one approval covers the run). Hard-stops still halt (push/PR/close/external gated; 3×-fail; fabrication; `$LETS_MERGE_BRANCH` refused per Step 1) — on any halt, write the `blocked` marker + fire the execute-blocked notify.
+**Under `--auto` (inline runs only - Step 4.5 refuses `--auto` for Implementers):** write the `executing` pipeline-state marker, then — the plan-mode approval IS the gate — implement straight through without a per-step "review before moving on" pause, and commit at each plan commit point through `Skill(skill: "lets:commit", args: "approved=plan-files")` WITHOUT re-asking (one approval covers the run). `approved=plan-files` lets a new file the plan names in a `Create:` line of the committed tasks through without the commit skill's new-file question; any other new file still asks. Hard-stops still halt (push/PR/close/external gated; 3×-fail; fabrication; `$LETS_MERGE_BRANCH` refused per Step 1) — on any halt, write the `blocked` marker + fire the execute-blocked notify.
 
 **Progress tracking:** After completing each plan task, append `[DONE]` to its `### Task N:` heading in the plan file. This makes resume self-documenting - on re-entry, skip tasks already marked `[DONE]`.
 
@@ -389,7 +389,7 @@ AskUserQuestion(
 1. Present the plan summary, then ask in words "Start implementing?" and WAIT - no edit before an explicit yes (this replaces the plan-mode approval as the one code-write approval)
 2. Present each plan task one by one with files to change and expected outcome
 3. Implement the task, then ask user to review before moving on
-4. Use `/lets:commit` at commit points indicated in the plan
+4. Commit at the commit points the plan indicates through `Skill(skill: "lets:commit", args: "approved=plan-files")`
 5. Track completed tasks by appending `[DONE]` markers in the plan file
 
 The plan file provides the roadmap; the plan-mode approval (or the Start gate) and `## Gates` provide the gates.
