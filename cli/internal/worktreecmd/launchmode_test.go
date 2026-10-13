@@ -53,6 +53,11 @@ func TestClassifyLaunch(t *testing.T) {
 		{`docker compose run --rm dev sh -c 'claude --permission-mode bypassPermissions'`, "bypass", nil},
 		{`docker compose run --rm dev sh -c "claude --permission-mode=auto"`, "auto", nil},
 		{"claude --name bypassPermissions", "default", nil},
+		{"(cd /w; claude --dangerously-skip-permissions)", "bypass", nil},
+		{"claude --dangerously-skip-permissions; true", "bypass", nil},
+		{"claude --permission-mode=bypassPermissions&&x", "bypass", nil},
+		{"claude --permission-mode auto|tee log", "auto", nil},
+		{`claude --name 'a;--dangerously-skip-permissions'`, "default", nil},
 	} {
 		class, warnings := worktreecmd.ClassifyLaunch(c.cmd)
 		if class != c.class || !slices.Equal(warnings, c.warnings) {

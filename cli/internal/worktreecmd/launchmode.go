@@ -112,9 +112,12 @@ func classifyFields(fields []string, depth int) (bypass, auto, settings bool) {
 }
 
 // shellFields splits s into words the way a POSIX shell would for a plain command:
-// whitespace separates, single quotes are literal, double quotes keep their content
-// (a backslash escapes ", \, $ and a backtick there), a bare backslash escapes the
-// next character. An unterminated quote runs to the end. No expansion happens.
+// whitespace separates, and outside quotes the control operators ; & | ( ) < >
+// also end the current word and are themselves dropped (so a flag glued to one,
+// `--flag;` or `(claude`, is a word of its own); single quotes are literal, double
+// quotes keep their content (a backslash escapes ", \, $ and a backtick there), and
+// operators inside either quote stay literal; a bare backslash escapes the next
+// character. An unterminated quote runs to the end. No expansion happens.
 func shellFields(s string) []string {
 	var out []string
 	var cur strings.Builder
@@ -144,7 +147,7 @@ func shellFields(s string) []string {
 			inWord = true
 			i++
 			cur.WriteByte(s[i])
-		case c == ' ' || c == '\t' || c == '\n':
+		case c == ' ' || c == '\t' || c == '\n' || strings.IndexByte(";&|()<>", c) >= 0:
 			if inWord {
 				out = append(out, cur.String())
 				cur.Reset()
