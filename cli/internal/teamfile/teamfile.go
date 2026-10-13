@@ -2,7 +2,8 @@
 // `.lets/teams/<name>.md`: rendering it from the plugin template
 // (plugins/lets/templates/team.md) and finding the team that owns a worktree.
 // The file is model-read; Go reads only the frontmatter keys `team`, `worktree`,
-// `git_dir` and `lead_name`, and never anything below the frontmatter.
+// `git_dir`, `lead_name`, `agent_command` and `orca_agent` (LaunchCommands), and
+// never anything below the frontmatter.
 //
 // `.lets/teams/` is shared by every worktree of the repo, so one broken file must
 // not affect another worktree: FindByWorktree skips a malformed file that does not
