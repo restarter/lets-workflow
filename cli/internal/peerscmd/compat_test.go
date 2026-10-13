@@ -103,38 +103,45 @@ func TestCompat_TellRefusesForeignHeader(t *testing.T) {
 	}
 }
 
-// role set records the /clear proof from the registry (no role semantics); a session
-// the registry does not list gets ok=false and no file; role clear removes it.
-// Every role envelope carries deprecated.
-func TestCompat_RoleSetWritesProofOnly(t *testing.T) {
+// role set and role clear are v0.10.0 stubs: every flag still parses, nothing is
+// read or written (the /clear proof is the task-state session_proof key), and the
+// answer is ok=true granted=true with deprecated - for a session the registry does
+// not list too. A legacy .role file stays byte-identical, and no peers dir appears.
+func TestCompat_RoleSetRecordsNothing(t *testing.T) {
 	ctx := context.Background()
 	repo := repoWithLets(t, "")
-	claudeHome(t, []regRow{{101, sidMain, "MAIN", repo}, {102, sidFable, "MAIN", repo}})
-	for _, sid := range []string{sidMain, sidFable} { // two sessions, one name: no name_held any more
-		res, err := RoleSet(ctx, repo, RoleOptions{Session: sid, Role: "orchestrator", Takeover: true, Scope: "x"})
-		if err != nil || !res.OK || res.Role == nil || !res.Role.Granted || res.Deprecated == "" {
-			t.Fatalf("role set %s: %+v %v", sid, res, err)
+	claudeHome(t, []regRow{{101, sidMain, "MAIN", repo}})
+	for _, o := range []RoleOptions{
+		{Session: sidMain, Role: "orchestrator", Takeover: true, Scope: "x"},
+		{Session: sidWork, Role: "worker", Task: "lets-abc"}, // not in the registry
+	} {
+		res, err := RoleSet(ctx, repo, o)
+		if err != nil || !res.OK || res.Role == nil || !res.Role.Granted || res.Deprecated == "" || res.Error != nil {
+			t.Fatalf("role set %s: %+v %v", o.Session, res, err)
 		}
 	}
-	if pid, set, ok := RoleProof(repo, sidMain); !ok || pid != 101 || set.IsZero() {
-		t.Errorf("proof: %d %v %v", pid, set, ok)
+	if _, err := os.Stat(filepath.Join(repo, ".lets", "sessions", "peers")); !os.IsNotExist(err) {
+		t.Errorf("role set created the peers dir: %v", err)
 	}
-	data, _ := os.ReadFile(filepath.Join(peersDir(repo), sidMain+".role"))
-	if strings.Contains(string(data), "role:") || !strings.Contains(string(data), "session: "+sidMain) {
-		t.Errorf("a proof file holds session / pid / set only:\n%s", data)
+	legacy := "session: " + sidMain + "\npid: 101\nset: 2026-10-12T17:00:00Z\n"
+	path := filepath.Join(repo, ".lets", "sessions", "peers", sidMain+".role")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
 	}
-	res, err := RoleSet(ctx, repo, RoleOptions{Session: sidWork, Role: "worker", Task: "lets-abc"})
-	if err != nil || res.OK || res.Error == nil || res.Error.Kind != "session_not_in_registry" || res.Role.Reason != "session_not_in_registry" {
-		t.Errorf("unknown session: %+v %v", res, err)
+	if err := os.WriteFile(path, []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(peersDir(repo), sidWork+".role")); !os.IsNotExist(err) {
-		t.Error("no proof for a session the registry does not list")
+	if _, err := RoleSet(ctx, repo, RoleOptions{Session: sidMain, Role: "orchestrator"}); err != nil {
+		t.Fatal(err)
 	}
 	clr, err := RoleClear(ctx, repo, sidMain)
 	if err != nil || !clr.OK || clr.Deprecated == "" {
 		t.Errorf("role clear: %+v %v", clr, err)
 	}
-	if _, _, ok := RoleProof(repo, sidMain); ok {
-		t.Error("role clear removes the proof")
+	if data, _ := os.ReadFile(path); string(data) != legacy {
+		t.Errorf("a legacy .role file was touched:\n%s", data)
+	}
+	if _, err := RoleSet(ctx, repo, RoleOptions{Session: "not-a-session"}); err == nil {
+		t.Error("an invalid --session is still a usage error")
 	}
 }

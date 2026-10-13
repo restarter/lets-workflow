@@ -17,14 +17,14 @@ The public source of truth for this standing team. Every member reads it at spaw
 
 **Continuity = files only.** The harness restores no teammate after a lead restart - a member's context dies with it. Every member finding that must survive lands in a file the lead writes (this file, or a path listed under Resume artefacts); a finding that lives only in a reply is lost.
 
-The frontmatter is written once by `lets worktree team-init`. Go reads only `worktree` and `git_dir` (which worktree this team owns, and that the path was not reused); the model reads the rest. Never edit `team`, `worktree` or `git_dir` by hand.
+The frontmatter is written once by `lets worktree team-init`. Go reads only `worktree` and `git_dir` (which worktree this team owns, and that the path was not reused), `lead_name` (the lead session's name) and `agent_command` / `orca_agent` (read by `teamfile.LaunchCommands`, classified for `lets worktree info` `team_launch`); the model reads the rest. Never edit `team`, `worktree` or `git_dir` by hand.
 
 ## 1. Charter
 
 - **Area:** what this team owns, in one line - the frontmatter `area`, spelled out.
 - **Worktree:** the frontmatter `worktree`, branch `team_<team>`. A task branch is cut INSIDE this worktree; the worktree is not torn down when a task ends.
 - **Base:** the frontmatter `base`.
-- **Lead:** the session named by the frontmatter `lead_name`, launched with `agent_command` (Orca: agent `orca_agent`). The lead is recorded by `lets members`, never inferred from who happens to be running here.
+- **Lead:** the session running under the frontmatter `lead_name` (`lets worktree info --json` -> `team_lead`) - never inferred from which sessions run. It is launched with `agent_command` (Orca: agent `orca_agent`).
 - **Owner approves** in the lead's pane: the plan, the start of code, every commit, push, PR, tracker write, anything external.
 
 ## 2. Workspace
@@ -66,7 +66,7 @@ Read code at the task base, never from memory; mark anything unchecked `[UNVERIF
 
 ## 7. Current task
 
-None yet. The lead rewrites this section on every task switch: the task (**Title** (`id`)), its branch, the phase, and the next step.
+None yet. On every task switch the lead rewrites the task-specific content of this section: the task (**Title** (`id`)), its branch, the phase, the next step, and the resume artefacts. Every `Dismissed: <name> (lead <session6>)` and `Reports: <dir> (lead <session6>)` line is KEPT as it is across a switch - other lead sessions' lines too.
 
 Resume artefacts:
 

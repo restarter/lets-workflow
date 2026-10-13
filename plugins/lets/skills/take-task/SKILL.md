@@ -65,6 +65,8 @@ If staying on current branch (worktree, already correct) or no changes - skip th
 
 ### Step 2T: Team worktree - park, then switch
 
+**Busy writer first.** Before anything else, run `ListAgents`. A busy agent of THIS session that writes in this tree stops the switch: a group agent of `.lets/cache/delegated-run-*.json` with `isolation: null`, or a `<team>-<name>` whose spawn brief `.lets/cache/member-<team>-<name>.md` ("You are <name> (lets:<role>) of team <c>") names `lets:implementer` - every team agent is classified by its spawn brief, never by the roster (`/lets:team spawn` may run any role under any name); a brief that is missing, unreadable or names no role counts as a writer, never as read-only -> stop: "`{name}` is still working in this tree - wait for its report, or stop it (`/lets:team dismiss <name>`, or the run's Stop), then `/lets:start` again"; nothing is switched. A brief naming any other role is read-only. The same agent idle -> one line "`{name}` is idle and keeps `{branch}`'s context - dismiss it before its next brief", continue. Isolated implementers and read-only roles never block.
+
 Read `${CLAUDE_PLUGIN_ROOT}/protocol/worktrees.md` before this step unless its text is in your current context (standing-team worktree, park never stash).
 
 A team worktree never stashes. `git status --short`; changes present -> list them, and list separately every NEW path a park would need to name - untracked (`git ls-files --others --exclude-standard`) and staged additions (`git diff --cached --diff-filter=ACR --name-only HEAD`). Ignored files are never parked; they stay on disk. Then:
@@ -99,18 +101,18 @@ lets worktree switch --task '<task-id>' --title-file .lets/cache/title-<session6
 
 - `ok=true` -> "Switched to `{branch}`" (`created` -> "cut from `{base}`", with the staleness warning when `base_stale`); `park` -> name the park commit; `unpark` -> `unparked` (the parked changes are staged again), `parked_pushed` / `parked_unverified` / `parked_kept` (the park stays a commit - say why).
 - Every `warn` step in `steps[]` -> print its `message` as one line, on success and on refusal - a `convention_*` / `adapter_missing` / `board_not_in_main_checkout` line names a naming declaration the tracker convention could not use, and the fix. Never drop one.
-- A refusal -> show `error.kind` and `error.message`, change nothing, stop: `dirty_worktree`, `index_unmerged`, `operation_in_progress`, `detached_head` (exit 14 - the tree must be sorted out first), `untracked_present` (list `new_paths`, back to the Park question), `members_live` (a live implementer writes in this tree - wait for it or dismiss it), `no_remote_base`, `target_is_merge_branch`, `session_held` (switch from the team's lead session), `convention_declaration_invalid` (a naming declaration cannot be read - fix the line it names, or pass `--branch`).
+- A refusal -> show `error.kind` and `error.message`, and "would have switched to `{planned.branch}`" when `planned` is set (a refusal never moved the tree), change nothing, stop: `dirty_worktree`, `index_unmerged`, `operation_in_progress`, `detached_head` (exit 14 - the tree must be sorted out first), `untracked_present` (list `new_paths`, back to the Park question), `no_remote_base`, `target_is_merge_branch`, `session_held` (another live session owns this task's boundary (`error.message` names it) - switch from it, after it ends, or pick another task), `convention_declaration_invalid` (a naming declaration cannot be read - fix the line it names, or pass `--branch`).
+- `already_on_target` -> "already on it - nothing to switch; the tail below and Step 5 run".
+- `task_state_failed` -> the worktree IS on `{branch}` - say so, then show `error.remediation` (the command that records the task from the session owning the line).
 
-`lets worktree switch` wrote the target branch's task-state (`task`, `start`, `session` through the session guard, `orc` carried from the old branch), so Step 5's own write - its `--session-sha`, unguarded - is skipped on this path. Its tail still runs on the new branch, passing only what switch did not write:
+`lets worktree switch` wrote the target branch's task-state (`task`, `start`, `session` through the session guard, `orc` carried from the old branch), so Step 5's own session write is skipped on this path. Its tail still runs on the new branch, passing only what switch did not write:
 
 ```bash
-LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 # {ORC_FLAG} as in Step 5: --orc '<name>' when args carried orc="<name>", else empty
 lets worktree task-state set --clear-origin {ORC_FLAG} --json
-lets peers role set worker --task "<task-id>" --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" --json
 ```
 
-The first clears `origin:` and applies a requested orchestrator binding (an explicit `--orc` wins over the carried one); the second records this session's /clear proof (until lets-gbfpd). Each failure is Step 5's one-line report - never hidden. Then rewrite the team file's `## 7. Current task` section (`.lets/teams/<team>.md`; the lead is its only writer): the task as **Title** (`id`), its branch, the phase, the next step, and `Resume artefacts:`. Then Step 6.
+It clears `origin:` and applies a requested orchestrator binding (an explicit `--orc` wins over the carried one). A failure is Step 5's one-line report - never hidden. Then rewrite the team file's `## 7. Current task` section (`.lets/teams/<team>.md`; the lead is its only writer): replace only the task-specific content - the task as **Title** (`id`), its branch, the phase, the next step, and `Resume artefacts:` - and KEEP every existing `Dismissed: <name> (lead <session6>)` and `Reports: <dir> (lead <session6>)` line as it is, other lead sessions' lines too (they are history; readers filter by this lead session), so a member dismissed on the previous task stays dismissed and the round's report directory stays known. Then Step 6.
 
 ### Step 3: Worktree Check
 
@@ -195,7 +197,6 @@ fi
 if command -v lets >/dev/null 2>&1; then
   # {ORC_FLAG}: --orc '<name>' when args carried orc="<name>" and this is not the merge-branch (single-quoted, '\'' escaping); else empty
   lets worktree task-state set --task "$CLAIMED_ID" --start "$START" --session-sha "$HEAD_SHA" --session-id "$SID" --clear-origin {ORC_FLAG} --create --json
-  lets peers role set worker --task "$CLAIMED_ID" --session "$SID" --cwd "$LETS_PROJECT_ROOT" --json
 else
   tmp=$(mktemp "${TASK_FILE}.XXXX")
   {
@@ -207,11 +208,10 @@ else
 fi
 ```
 
-On `ok=false` surface `error.message` - the claim succeeded but the boundary file did not, so `/lets:done` cannot measure the task until it is fixed.
+On `ok=false` surface `error.message` - the claim succeeded but the boundary file did not, so `/lets:done` cannot measure the task until it is fixed. `session_held` (exit 35) -> "another live session owns this task's boundary (`error.message` names it) - the task is claimed, its boundary is not; run /lets:start in that session or after it ends".
 
 - **Orchestrator binding (`orc="<name>"` in the args, from detect-task's `--orc` strip).** Pass it as `{ORC_FLAG}`; Go validates the name and a refusal is one line with nothing written. A trunk-mode claim (HEAD is `{LETS_MERGE_BRANCH}`) ignores it with one line - the merge-branch never carries a binding. When the envelope reports `rebound.from`, say in one line that this branch moved from that orchestrator to the new one.
-  - **Worker name.** On a bound claim (`orc=` present, not trunk-mode), read this session's own name with `lets peers who --session "$CLAUDE_CODE_SESSION_ID" --json` (`self.name`, `repo_slug`). When `self.name` is empty or differs from `<repo_slug>-<task-id>`, print ONE line: "Name this session: /rename <repo_slug>-<task-id> - the orchestrator addresses workers by name." Never rename and never block; no binary or a failed call -> say nothing. (A worker an orchestrator launched through Orca cannot be given `--name` at launch - Orca takes no agent arguments.)
-- **Session proof.** The second call records this session's /clear proof (until lets-gbfpd): the SessionStart hook proves a later `/clear` re-mint with it. Orchestrators see the worker through the registry and its branch's `orc:` binding, not through this call. A non-ok envelope (e.g. `session_not_in_registry`) is one line - never hidden, a silent failure leaves the next `/clear` unprovable. Without the binary the no-binary branch skips it; say so in one line.
+  - **Worker name.** On a bound claim (`orc=` present, not trunk-mode, not a team worktree), read this session's own name with `lets peers who --session "$CLAUDE_CODE_SESSION_ID" --json` (`self.name`, `repo_slug`). When `self.name` is empty or differs from `<repo_slug>-<task-id>`, print ONE line: "Name this session: /rename <repo_slug>-<task-id> - the orchestrator addresses workers by name." Never rename and never block; no binary or a failed call -> say nothing. (A worker an orchestrator launched through Orca cannot be given `--name` at launch - Orca takes no agent arguments.) **A team worktree** (`lets worktree info --json` reports a `team` - the Step 2T path) never gets this line: its session is the team's lead, named by the team file's `lead_name`, and `/lets:start`'s `team_lead` hint owns that name - a rename to `<repo_slug>-<task-id>` would make `team_lead` read `other` and lose the lead at disband.
 
 ### Step 6: Context Recovery (existing branch)
 

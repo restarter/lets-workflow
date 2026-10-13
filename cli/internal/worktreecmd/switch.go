@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,7 +17,6 @@ import (
 	"time"
 
 	"github.com/restarter/lets-workflow/cli/internal/gitutil"
-	"github.com/restarter/lets-workflow/cli/internal/memberscmd"
 	"github.com/restarter/lets-workflow/cli/internal/taskid"
 	"github.com/restarter/lets-workflow/cli/internal/taskstate"
 	"github.com/restarter/lets-workflow/cli/internal/teamfile"
@@ -67,6 +67,9 @@ type SwitchResult struct {
 	Unpark     string    `json:"unpark,omitempty"`
 	UnparkHead string    `json:"unpark_head,omitempty"`
 	NewPaths   []NewPath `json:"new_paths,omitempty"`
+	// Planned is where a refused switch would have gone; set only when git switch
+	// did not run (see SwitchPlan).
+	Planned *SwitchPlan `json:"planned,omitempty"`
 }
 
 // Unpark outcomes.
@@ -93,17 +96,34 @@ var parkSubjectRe = regexp.MustCompile(`^wip(\([^)]*\))?: park$`)
 // Switch moves a standing team's worktree to another task's branch. It refuses
 // before touching anything: not a team worktree (29), an unmerged index
 // (index_unmerged), an operation in progress (operation_in_progress), a detached
-// HEAD (detached_head), a live writer working here (32), the merge-branch as target
-// (33), a dirty tree without --park (14), a new branch with no origin/<merge> (31),
-// a session: line another session holds. A park inventories every new path first
-// and refuses any without --include (30) with the index and HEAD untouched; only
+// HEAD (detached_head), the merge-branch as target (33), a dirty tree without --park
+// (14), a new branch with no origin/<merge> (31), a session: line another session
+// holds, or the registry cannot prove ended (35) - stricter than task-state set,
+// since a switch moves the tree. A park inventories every new path first and
+// refuses any without --include (30) with the index and HEAD untouched; only
 // then does it commit. A new branch is cut from origin/<merge> (never the local
 // merge-branch) with --no-track. Arriving on a parked branch, the park commit is
 // undone with `reset --soft HEAD~1` only when it is HEAD, its subject matches and
-// no remote has it. Nothing here stashes.
+// no remote has it. Nothing here stashes. A refusal reports no effect it did not
+// have: branch / created / base only once git switch ran, else planned.
 func Switch(ctx context.Context, dir string, o SwitchOptions) (*SwitchResult, error) {
 	res := &SwitchResult{Envelope: Envelope{SchemaVersion: SchemaVersion, Subcommand: "switch", Steps: []Step{}}, Task: o.Task}
+	// target / created / base are what switchTarget and remoteBase resolved; switched
+	// is set once git switch succeeded. settle() reports them: as effects after the
+	// switch, as a plan before it - so no refusal claims an effect.
+	var target, base string
+	var created, switched bool
+	settle := func() {
+		switch {
+		case target == "":
+		case switched:
+			res.Branch, res.Created, res.Base = target, created, base
+		default:
+			res.Planned = &SwitchPlan{Branch: target, Create: created, Base: base}
+		}
+	}
 	fail := func(e *Error) (*SwitchResult, error) {
+		settle()
 		res.OK = false
 		res.Error = &ErrorInfo{Kind: e.Kind, Message: e.Message, Remediation: e.Remediation}
 		return res, e
@@ -171,24 +191,18 @@ func Switch(ctx context.Context, dir string, o SwitchOptions) (*SwitchResult, er
 		return fail(&Error{Code: ExitDirtyWorktree, Kind: "detached_head", Message: "HEAD is detached; nothing was touched", Remediation: "switch this worktree to a branch first"})
 	}
 
-	// 32: a member working in this tree would see it switch under it.
-	if who, e := liveMembersIn(mainRoot, root); e != nil {
-		return fail(e)
-	} else if who != "" {
-		return fail(ErrMembersLive(who))
-	}
-
 	from := currentBranchOf(ctx, root)
 	res.From = from
 	merge := mergeBranch(mainRoot)
-	target, created, convWarns, e := switchTarget(ctx, root, mainRoot, team, o)
+	var convWarns []string
+	var e *Error
+	target, created, convWarns, e = switchTarget(ctx, root, mainRoot, team, o)
 	for _, w := range convWarns {
 		step(StepWarn, w)
 	}
 	if e != nil {
 		return fail(e)
 	}
-	res.Branch, res.Created = target, created
 	switch target {
 	case merge:
 		return fail(ErrTargetIsMergeBranch(target))
@@ -204,13 +218,11 @@ func Switch(ctx context.Context, dir string, o SwitchOptions) (*SwitchResult, er
 		return fail(&Error{Code: ExitDirtyWorktree, Kind: "dirty_worktree", Message: "the worktree has changes:\n" + dirty, Remediation: "commit them, or pass --park (with --include for every new path)"})
 	}
 
-	base := ""
 	if created {
 		base, e = remoteBase(ctx, root, gitDir, merge, o.FetchTimeout, res)
 		if e != nil {
 			return fail(e)
 		}
-		res.Base = base
 	}
 
 	targetSlug, _ := taskstate.Slug(target)
@@ -219,7 +231,7 @@ func Switch(ctx context.Context, dir string, o SwitchOptions) (*SwitchResult, er
 		if err := taskstate.MaySetSession(cur, rerr == nil, o.Session, taskstate.OpRefresh, o.Guard); err != nil {
 			var held *taskstate.HeldError
 			if errors.As(err, &held) {
-				return fail(sessionHeld(target, held))
+				return fail(ErrSessionHeld(held, target))
 			}
 		}
 	}
@@ -227,10 +239,12 @@ func Switch(ctx context.Context, dir string, o SwitchOptions) (*SwitchResult, er
 	if dirty != "" {
 		fromState, _ := taskstate.Read(letsDir, slugOf(from))
 		park, e := parkChanges(ctx, root, letsDir, from, fromState.Task, team, o.Include, res)
+		if park != nil {
+			res.Park = park // a park that was made is reported, even when its task-state write failed
+		}
 		if e != nil {
 			return fail(e)
 		}
-		res.Park = park
 		step(StepOK, fmt.Sprintf("parked %s as %s", from, park.Sha))
 	}
 	fromState, _ := taskstate.Read(letsDir, slugOf(from))
@@ -244,21 +258,31 @@ func Switch(ctx context.Context, dir string, o SwitchOptions) (*SwitchResult, er
 		}
 		return e
 	}
+	// A post-checkout hook runs after the checkout and its exit status becomes git
+	// switch's: an error does not prove nothing moved, so the tree is asked.
 	if created {
 		if _, err := git("switch", "--no-overwrite-ignore", "--no-track", "-c", target, base); err != nil {
+			switched = currentBranchOf(ctx, root) == target
 			return fail(switchFailed("switch -c", err))
 		}
+		switched = true
 		step(StepOK, fmt.Sprintf("cut %s from origin/%s (%s)", target, merge, base))
 	} else {
 		if _, err := git("switch", "--no-overwrite-ignore", target); err != nil {
+			switched = currentBranchOf(ctx, root) == target
 			return fail(switchFailed("switch", err))
 		}
+		switched = true
 		step(StepOK, "switched to "+target)
 	}
 	head, _ := git("rev-parse", "HEAD")
 
 	// One MergeWrite on the target's file: task, start (a new branch starts at its
 	// cut; an existing one keeps its own), orc carried, session through the guard.
+	// start / startUnknown feed the remediation when the session: line is held: the
+	// boundary the write would have recorded, or a task change with none derived.
+	var start string
+	var startUnknown bool
 	_, err = taskstate.MergeWrite(letsDir, targetSlug, taskstate.WriteOpts{
 		Create:   true,
 		Deadline: time.Now().Add(5 * time.Second),
@@ -275,10 +299,12 @@ func Switch(ctx context.Context, dir string, o SwitchOptions) (*SwitchResult, er
 			if cur.Orc == "" && fromState.Orc != "" {
 				set["orc"] = fromState.Orc
 			}
+			start = set["start"]
+			startUnknown = start == "" && cur.Task != "" && cur.Task != o.Task
 			if o.Session != "" {
 				switch err := taskstate.MaySetSession(cur, exists, o.Session, taskstate.OpRefresh, o.Guard); {
 				case err == nil:
-					set["session"] = head + " " + o.Session
+					maps.Copy(set, taskstate.SessionValues(head, o.Session, o.Guard.OwnProof(o.Session)))
 				case !errors.Is(err, taskstate.ErrSessionUnchanged):
 					return nil, err
 				}
@@ -289,25 +315,33 @@ func Switch(ctx context.Context, dir string, o SwitchOptions) (*SwitchResult, er
 	var held *taskstate.HeldError
 	switch {
 	case errors.As(err, &held):
-		e := sessionHeld(target, held)
-		e.Message = fmt.Sprintf("switched to %s, task-state not written: the session: line is held (%s) by %s", target, held.Reason, held.Holder)
-		return fail(e)
+		// After git switch a held line is not "nothing was touched": the worktree moved.
+		fix := fmt.Sprintf("lets worktree task-state set --create --task %s", o.Task)
+		switch {
+		case start != "":
+			fix += " --start " + start
+		case startUnknown:
+			fix += fmt.Sprintf(" --start <the commit %s starts from> (its merge-base with origin/%s could not be computed)", o.Task, merge)
+		}
+		return fail(&Error{Code: ExitFilesystem, Kind: "task_state_failed",
+			Message:     fmt.Sprintf("switched to %s, but its task-state was not written: the session: line is held (%s) by %s", target, held.Reason, held.Holder),
+			Remediation: fmt.Sprintf("the worktree IS on %s; record the task from the session that owns the line: %s", target, fix), Cause: held})
 	case err != nil:
 		return fail(&Error{Code: ExitFilesystem, Kind: "task_state_failed", Message: "switched to " + target + ", but its task-state was not written: " + err.Error(), Cause: err})
 	}
 	step(StepOK, "task-state of "+target+" names "+o.Task)
+	if o.Session == "" {
+		step(StepSkip, "the session: line of "+target+" was not written: no Claude session runs this call")
+	}
 
 	if !created {
 		if e := unpark(ctx, root, letsDir, targetSlug, head, res); e != nil {
 			return fail(e)
 		}
 	}
+	settle()
 	res.OK = true
 	return res, nil
-}
-
-func sessionHeld(target string, held *taskstate.HeldError) *Error {
-	return &Error{Code: ExitGeneric, Kind: "session_held", Message: fmt.Sprintf("the session: line of %s is held (%s) by %s", target, held.Reason, held.Holder), Remediation: "switch from the team's lead session"}
 }
 
 func slugOf(branch string) string {
@@ -580,40 +614,6 @@ func unpark(ctx context.Context, root, letsDir, slug, head string, res *SwitchRe
 	}
 	res.Steps = append(res.Steps, Step{Status: StepOK, Message: "unparked " + head + " (its changes are staged)"})
 	return nil
-}
-
-// liveMembersIn names every WRITER in this tree - an implementer without isolation
-// whose caller_toplevel is this worktree - that is live, rotated or unknown. The
-// standing team's read-only members (architect, skeptic, explorer, ...) and an
-// isolated implementer never block. A registry that cannot be read refuses (fail
-// closed), naming the file; dismissing its members unblocks.
-func liveMembersIn(mainRoot, toplevel string) (string, *Error) {
-	files, _ := filepath.Glob(filepath.Join(mainRoot, ".lets", "execution", "members-*.json"))
-	top := resolvedPath(toplevel)
-	var who []string
-	for _, f := range files {
-		scope := strings.TrimSuffix(strings.TrimPrefix(filepath.Base(f), "members-"), ".json")
-		st, err := memberscmd.Status(memberscmd.Options{Root: mainRoot, Scope: scope}, "")
-		if err != nil {
-			return "", &Error{Code: ExitMembersLive, Kind: "members_live", Message: "members registry " + f + " cannot be judged: " + err.Error(), Remediation: "fix the file, or dismiss its members (lets members dismiss --scope " + scope + " --all)"}
-		}
-		for _, m := range st.Members {
-			if resolvedPath(m.CallerToplevel) != top || m.Role != "lets:implementer" || m.Isolation != "" {
-				continue
-			}
-			if m.Status == memberscmd.StatusLive || m.Status == memberscmd.StatusRotated || m.Status == memberscmd.StatusUnknown {
-				who = append(who, fmt.Sprintf("%s/%s (%s)", scope, m.Name, m.Status))
-			}
-		}
-	}
-	return strings.Join(who, ", "), nil
-}
-
-func resolvedPath(p string) string {
-	if r, err := filepath.EvalSymlinks(p); err == nil {
-		return r
-	}
-	return filepath.Clean(p)
 }
 
 // gitRawIn runs git in dir; the error carries stderr.

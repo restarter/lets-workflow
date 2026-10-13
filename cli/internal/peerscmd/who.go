@@ -128,7 +128,6 @@ func Who(ctx context.Context, o WhoOptions) (*WhoResult, error) {
 		res.Error = &ErrorInfo{Kind: e.Kind, Message: e.Message}
 		return res, e
 	}
-	CarryProof(ctx, mainRoot) // the lazy proof carry: recovers one the hook missed
 	res.RepoSlug = peername.RepoSlug(mainRoot)
 	v := loadNameView(ctx, mainRoot)
 	res.Degraded = append(res.Degraded, v.degraded...)
@@ -190,13 +189,18 @@ func orchestratorRecords(mainRoot, merge string) ([]taskstate.Orchestrator, []De
 // false: in another repo it classifies orchestrators from the registry and the
 // merge-branch records alone (the hub carve-out, protocol/peers.md).
 func whoRows(ctx context.Context, mainRoot, merge string, entries []ccregistry.Entry, snap ccregistry.Snapshot, recs []taskstate.Orchestrator, enrich bool) ([]Peer, map[string]int) {
-	sessionsOf := map[string]map[string]bool{} // name -> live sessions carrying it
+	// name -> the live sessions carrying it, machine-wide (ccregistry.Snapshot.Named:
+	// a parked session and its continuation are one; collapsed rows are skipped below)
+	sessionsOf := map[string]map[string]bool{}
+	address := map[int]bool{} // pids Named keeps
 	for _, e := range snap.Entries {
-		if e.NameOK {
-			if sessionsOf[e.Name] == nil {
-				sessionsOf[e.Name] = map[string]bool{}
-			}
-			sessionsOf[e.Name][e.SessionID] = true
+		if !e.NameOK || sessionsOf[e.Name] != nil {
+			continue
+		}
+		sessionsOf[e.Name] = map[string]bool{}
+		for _, n := range snap.Named(e.Name) {
+			sessionsOf[e.Name][n.SessionID] = true
+			address[n.Pid] = true
 		}
 	}
 	record := map[string]taskstate.Orchestrator{}
@@ -211,8 +215,8 @@ func whoRows(ctx context.Context, mainRoot, merge string, entries []ccregistry.E
 	rows := []Peer{}
 	recordedLive := false
 	for _, e := range entries {
-		if seen[e.SessionID] {
-			continue
+		if seen[e.SessionID] || (e.NameOK && !address[e.Pid]) {
+			continue // one row per session; a parked row collapsed into its continuation has none
 		}
 		seen[e.SessionID] = true
 		pids[e.SessionID] = e.Pid

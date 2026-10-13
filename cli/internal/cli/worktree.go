@@ -11,7 +11,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/restarter/lets-workflow/cli/internal/gitutil"
 	"github.com/restarter/lets-workflow/cli/internal/initcmd"
 	"github.com/restarter/lets-workflow/cli/internal/notifycmd"
 	"github.com/restarter/lets-workflow/cli/internal/worktreecmd"
@@ -414,8 +413,14 @@ func newWorktreeTaskStateCmd() *cobra.Command {
 			if cmd.Flags().Changed("standing") {
 				o.Standing = &standing
 			}
-			if o.SelfOrchestrator {
-				o.Session = os.Getenv("CLAUDE_CODE_SESSION_ID")
+			o.Session = os.Getenv("CLAUDE_CODE_SESSION_ID") // read once; SelfOrchestrator and the proof gate use it
+			if o.SessionID != "" {
+				o.Guard = sessionGuardFn(o.SessionID)
+				// A caller proves only its own process: no proof for another session's id,
+				// and Self records one only when ccregistry.CallerSession is that session.
+				if o.SessionID == o.Session {
+					o.Proof = o.Guard.OwnProof(o.SessionID)
+				}
 			}
 			res, runErr := worktreecmd.TaskStateSet(cmd.Context(), cwd, o)
 			return emitJSONOrRender(cmd, setJSON, false, res, func() { worktreecmd.RenderTaskState(cmd.OutOrStdout(), res) }, runErr)
@@ -571,6 +576,7 @@ func newWorktreeTeamInitCmd() *cobra.Command {
 	f.StringVar(&o.PluginRoot, "plugin-root", "", "Plugin root holding templates/team.md (default: $CLAUDE_PLUGIN_ROOT)")
 	f.StringVar(&o.AgentCommand, "agent-command", "", "How the lead is launched (default claude)")
 	f.StringVar(&o.OrcaAgent, "orca-agent", "", "Shell command an Orca lead terminal runs (default claude)")
+	f.StringVar(&o.LaunchMode, "launch-mode", "", "Lead launch mode rendered into agent_command / orca_agent when not given: default | auto | all-in (default default)")
 	f.BoolVar(&o.Suggest, "suggest-callsign", false, "Only propose a free callsign; write nothing")
 	f.BoolVar(&o.Check, "check", false, "Only check that --callsign is free (no team file, no live lead); write nothing")
 	f.BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
@@ -590,10 +596,10 @@ func newWorktreeSwitchCmd() *cobra.Command {
 				return emitErrorEnvelope(cmd.OutOrStdout(), jsonOut, "switch", &worktreecmd.Error{Code: worktreecmd.ExitFilesystem, Kind: "getwd_failed", Message: err.Error(), Cause: err})
 			}
 			// The session: line goes through the SessionStart hook's own guard: a
-			// teammate pane in this worktree never takes the lead's boundary.
+			// second live session never takes this boundary (HeldLive).
 			o.Session = os.Getenv("CLAUDE_CODE_SESSION_ID")
 			if o.Session != "" {
-				o.Guard, _ = sessionGuardFn(gitutil.ProjectRoot(cwd, 2*time.Second), o.Session)
+				o.Guard = sessionGuardFn(o.Session)
 			}
 			res, runErr := worktreecmd.Switch(cmd.Context(), cwd, o)
 			return emitJSONOrRender(cmd, jsonOut, false, res, func() { worktreecmd.RenderSteps(cmd.OutOrStdout(), res.Envelope) }, runErr)

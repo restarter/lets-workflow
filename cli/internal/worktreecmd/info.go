@@ -8,9 +8,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/restarter/lets-workflow/cli/internal/ccregistry"
 	"github.com/restarter/lets-workflow/cli/internal/fsutil"
 	"github.com/restarter/lets-workflow/cli/internal/gitutil"
 	"github.com/restarter/lets-workflow/cli/internal/initcmd"
@@ -87,10 +89,71 @@ func Info(ctx context.Context, dir string) (*InfoResult, error) {
 		res.Steps = append(res.Steps, Step{Status: StepWarn, Message: "team: " + err.Error()})
 	} else if ok {
 		res.Team = team
+		res.TeamLead = teamLeadOf(filepath.Join(mainRoot, ".lets", "teams"), team)
+		if tl, err := teamLaunchOf(filepath.Join(mainRoot, ".lets", "teams"), team); err != nil {
+			res.Steps = append(res.Steps, Step{Status: StepWarn, Message: "team file launch commands unreadable: " + err.Error()})
+		} else {
+			res.TeamLaunch = tl
+		}
+	}
+	home, _ := os.UserHomeDir()
+	res.LaunchMode = launchModeInfo(mainRoot, home)
+	if !res.LaunchMode.Valid {
+		res.Steps = append(res.Steps, Step{Status: StepWarn, Message: "LETS_LAUNCH_MODE " + strconv.Quote(res.LaunchMode.Value) + " (" + res.LaunchMode.Source + ") is not one of default | auto | all-in; treated as default"})
 	}
 	res.Worktree = &wt
 	res.OK = true
 	return res, nil
+}
+
+// teamLeadOf compares the team's lead_name with this session's registry name (one
+// registry read). match is unknown when there is no session id, the registry is
+// absent or degraded, or this session is not listed.
+func teamLeadOf(teamsDir, team string) *TeamLead {
+	tl := &TeamLead{Match: "unknown"}
+	if name, err := teamfile.LeadName(teamsDir, team); err == nil && name != "" {
+		tl.Name = name
+	} else {
+		tl.Name = team + "-lead"
+	}
+	sid := os.Getenv("CLAUDE_CODE_SESSION_ID")
+	if sid == "" {
+		return tl
+	}
+	snap := ccregistry.Read(ccregistry.HomeDir())
+	if snap.Degraded != nil {
+		return tl
+	}
+	name, state := snap.NameOf(sid)
+	if state == ccregistry.NameUnlisted {
+		return tl
+	}
+	tl.Self, tl.Match = name, "other"
+	if name == tl.Name {
+		tl.Match = "lead"
+	}
+	return tl
+}
+
+// teamLaunchOf reads agent_command / orca_agent from the team file
+// <teamsDir>/<team>.md (teamfile.LaunchCommands) and classifies both. A repeated
+// key, a value that does not parse, or a frontmatter that does not close is an
+// error: the launch command would be ambiguous, so it is never classified.
+func teamLaunchOf(teamsDir, team string) (*TeamLaunch, error) {
+	agent, orca, err := teamfile.LaunchCommands(teamsDir, team)
+	if err != nil {
+		return nil, err
+	}
+	tl := &TeamLaunch{AgentCommand: agent, OrcaAgent: orca}
+	tl.Class, tl.Warnings = ClassifyLaunch(tl.AgentCommand)
+	tl.OrcaClass, tl.OrcaWarnings = ClassifyLaunch(tl.OrcaAgent)
+	if tl.Warnings == nil {
+		tl.Warnings = []string{}
+	}
+	if tl.OrcaWarnings == nil {
+		tl.OrcaWarnings = []string{}
+	}
+	return tl, nil
 }
 
 // TaskCandidateFor returns ONLY the created-shape task candidate for dir's HEAD

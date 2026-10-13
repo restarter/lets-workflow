@@ -69,3 +69,12 @@ func TestWorker(t *testing.T) {
 		t.Errorf("Worker = %q, valid=%v", w, Valid(w))
 	}
 }
+
+func TestLead(t *testing.T) {
+	if l := Lead("lets-workflow", "snake"); l != "lets-workflow-snake-lead" || !Valid(l) {
+		t.Errorf("Lead = %q, valid=%v", l, Valid(l))
+	}
+	if l := Lead(strings.Repeat("r", 60), strings.Repeat("c", 40)); Valid(l) {
+		t.Errorf("a 60-rune repo + 40-rune callsign must fail Valid: %q", l)
+	}
+}

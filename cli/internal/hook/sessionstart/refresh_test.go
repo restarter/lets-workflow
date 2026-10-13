@@ -201,8 +201,10 @@ const (
 	sidForeign = "bbbbbbbb-0000-4000-8000-000000000002"
 )
 
-// guardFor is a guard over a fixed world: alive sids, and rotations old -> new.
-func guardFor(alive map[string]bool, rotated map[string]string) taskstate.SessionGuard {
+// guardFor is a guard over a fixed world: alive sids, and rotations by the proof's
+// pid -> the session that process runs now. It rotates by pid, not by sid: binding
+// the proof to the recorded id is the guard's caller's (MaySetSession) job.
+func guardFor(alive map[string]bool, rotatedByPid map[int]string) taskstate.SessionGuard {
 	return taskstate.SessionGuard{
 		Liveness: func(sid string) taskstate.Liveness {
 			if alive[sid] {
@@ -210,11 +212,27 @@ func guardFor(alive map[string]bool, rotated map[string]string) taskstate.Sessio
 			}
 			return taskstate.LiveDead
 		},
-		Rotated: func(sid string) (string, bool) {
-			to, ok := rotated[sid]
+		Rotated: func(_ string, p taskstate.Proof) (string, bool) {
+			to, ok := rotatedByPid[p.Pid]
 			return to, ok
 		},
 	}
+}
+
+const (
+	sidThird  = "cccccccc-0000-4000-8000-000000000003"
+	proofMs   = int64(1790797661911)
+	proofMsS  = "1790797661911"
+	ownPid    = 5151
+	ownPidStr = "5151"
+)
+
+// withSelf gives g a Self that proves own runs as pid with startedAt proofMs.
+func withSelf(g taskstate.SessionGuard, pid int) taskstate.SessionGuard {
+	g.Self = func(own string) (taskstate.Proof, bool) {
+		return taskstate.Proof{Session: own, Pid: pid, Started: time.UnixMilli(proofMs)}, true
+	}
+	return g
 }
 
 // A teammate pane runs the same hook: a live foreign holder is never overwritten,
@@ -297,27 +315,102 @@ func TestRefresh_LockBusyHeld(t *testing.T) {
 	}
 }
 
-// /clear carries the boundary (sha kept) ONLY on proof the recorded id was
-// re-minted into this one; no proof writes nothing and names the gap; a foreign
-// live holder is held.
+// /clear carries the boundary (sha kept) ONLY on the file's bound session_proof:
+// no proof, or a proof of another id, writes nothing and names the gap; a foreign
+// live holder is held; a proven carry records this process's own proof.
 func TestCarry_ProvenOnly(t *testing.T) {
 	dir, branch := gitInitRepo(t)
+	rot := map[int]string{4242: sidOwn}
 	body := "task: lets-x\nsession: 1111111 " + sidForeign + "\n"
 	p := writeTaskFile(t, dir, branch, body)
 
-	o, notice := CarrySession(dir, sidOwn, guardFor(nil, nil))
-	if o != OutcomeNoProof || readFile(t, p) != body || !strings.Contains(notice, "no peer role file") {
+	o, notice := CarrySession(dir, sidOwn, withSelf(guardFor(nil, rot), ownPid))
+	if o != OutcomeNoProof || readFile(t, p) != body || !strings.Contains(notice, "no session_proof recorded its process") {
 		t.Errorf("no proof: outcome=%v notice=%q file:\n%s", o, notice, readFile(t, p))
 	}
-	o, _ = CarrySession(dir, sidOwn, guardFor(map[string]bool{sidForeign: true}, nil))
-	if o != OutcomeHeld || readFile(t, p) != body {
+	body = "task: lets-x\nsession: 1111111 " + sidForeign + "\nsession_proof: " + sidThird + " 4242 " + proofMsS + "\n"
+	writeTaskFile(t, dir, branch, body)
+	if o, _ = CarrySession(dir, sidOwn, withSelf(guardFor(nil, rot), ownPid)); o != OutcomeNoProof || readFile(t, p) != body {
+		t.Errorf("proof of another id: outcome=%v file:\n%s", o, readFile(t, p))
+	}
+	body = "task: lets-x\nsession: 1111111 " + sidForeign + "\nsession_proof: " + sidForeign + " 4242 " + proofMsS + "\n"
+	writeTaskFile(t, dir, branch, body)
+	if o, _ = CarrySession(dir, sidOwn, guardFor(map[string]bool{sidForeign: true}, nil)); o != OutcomeHeld || readFile(t, p) != body {
 		t.Errorf("foreign live: outcome=%v", o)
 	}
-	o, notice = CarrySession(dir, sidOwn, guardFor(nil, map[string]string{sidForeign: sidOwn}))
-	if o != OutcomeWritten || notice == "" || !strings.Contains(readFile(t, p), "session: 1111111 "+sidOwn) {
+	o, notice = CarrySession(dir, sidOwn, withSelf(guardFor(nil, rot), ownPid))
+	want := "task: lets-x\nsession: 1111111 " + sidOwn + "\nsession_proof: " + sidOwn + " " + ownPidStr + " " + proofMsS + "\n"
+	if o != OutcomeWritten || notice == "" || readFile(t, p) != want {
 		t.Errorf("proven: outcome=%v file:\n%s", o, readFile(t, p))
 	}
 	if o, _ = CarrySession(dir, sidOwn, guardFor(nil, nil)); o != OutcomeUnchanged {
 		t.Errorf("already own: outcome=%v", o)
+	}
+}
+
+// A refresh records this process's proof beside the line when the registry lists it.
+func TestRefresh_WritesProofWhenListed(t *testing.T) {
+	dir, branch := gitInitRepo(t)
+	p := writeTaskFile(t, dir, branch, "task: lets-x\n")
+	if o, _ := RefreshSessionBoundary(dir, sidOwn, withSelf(guardFor(nil, nil), ownPid)); o != OutcomeWritten {
+		t.Fatalf("outcome=%v", o)
+	}
+	if got := readFile(t, p); !strings.HasSuffix(got, "\nsession_proof: "+sidOwn+" "+ownPidStr+" "+proofMsS+"\n") || !strings.Contains(got, sidOwn+"\n") {
+		t.Errorf("file:\n%s", got)
+	}
+}
+
+// No registry row for this session yet (lag): the stale proof of the previous
+// holder is deleted with the session: write, never left beside the new line.
+func TestRefresh_NoRowDeletesStaleProof(t *testing.T) {
+	dir, branch := gitInitRepo(t)
+	p := writeTaskFile(t, dir, branch, "task: lets-x\nsession: 1111111 "+sidForeign+"\nsession_proof: "+sidForeign+" 4242 "+proofMsS+"\n")
+	if o, _ := RefreshSessionBoundary(dir, sidOwn, guardFor(nil, nil)); o != OutcomeWritten {
+		t.Fatalf("outcome=%v", o)
+	}
+	if got := readFile(t, p); strings.Contains(got, "session_proof") || !strings.Contains(got, sidOwn) {
+		t.Errorf("file:\n%s", got)
+	}
+}
+
+// Resume (`claude -r`: same id, new process) re-records ONLY the proof; another
+// session's line, the same process, registry lag and no file write nothing.
+func TestRefreshProof_Resume(t *testing.T) {
+	dir, branch := gitInitRepo(t)
+	body := "task: lets-x\nstart: abc1234\nsession: 1111111 " + sidOwn + "\nsession_proof: " + sidOwn + " 4242 " + proofMsS + "\n"
+	p := writeTaskFile(t, dir, branch, body)
+	if o := RefreshProof(dir, sidOwn, withSelf(guardFor(nil, nil), 4242)); o != OutcomeUnchanged || readFile(t, p) != body {
+		t.Errorf("same process: outcome=%v file:\n%s", o, readFile(t, p))
+	}
+	if o := RefreshProof(dir, sidOwn, guardFor(nil, nil)); o != OutcomeSkipped || readFile(t, p) != body {
+		t.Errorf("registry lag: outcome=%v file:\n%s", o, readFile(t, p))
+	}
+	// the same pid with another startedAt is another process (a reused pid): rewritten
+	reused := guardFor(nil, nil)
+	reused.Self = func(own string) (taskstate.Proof, bool) {
+		return taskstate.Proof{Session: own, Pid: 4242, Started: time.UnixMilli(proofMs + 5000)}, true
+	}
+	if o := RefreshProof(dir, sidOwn, reused); o != OutcomeWritten || !strings.Contains(readFile(t, p), "session_proof: "+sidOwn+" 4242 1790797666911\n") {
+		t.Errorf("same pid, other startedAt: outcome=%v file:\n%s", o, readFile(t, p))
+	}
+	writeTaskFile(t, dir, branch, body)
+	if o := RefreshProof(dir, sidOwn, withSelf(guardFor(nil, nil), ownPid)); o != OutcomeWritten {
+		t.Fatalf("resume: outcome=%v", o)
+	}
+	want := "task: lets-x\nstart: abc1234\nsession: 1111111 " + sidOwn + "\nsession_proof: " + sidOwn + " " + ownPidStr + " " + proofMsS + "\n"
+	if got := readFile(t, p); got != want {
+		t.Errorf("resume rewrote more than the proof:\n%s", got)
+	}
+	other := "task: lets-x\nsession: 1111111 " + sidForeign + "\nsession_proof: " + sidForeign + " 4242 " + proofMsS + "\n"
+	writeTaskFile(t, dir, branch, other)
+	if o := RefreshProof(dir, sidOwn, withSelf(guardFor(nil, nil), ownPid)); o != OutcomeSkipped || readFile(t, p) != other {
+		t.Errorf("another session's line: outcome=%v file:\n%s", o, readFile(t, p))
+	}
+	bare, _ := gitInitRepo(t)
+	if o := RefreshProof(bare, sidOwn, withSelf(guardFor(nil, nil), ownPid)); o != OutcomeSkipped {
+		t.Errorf("no file: outcome=%v", o)
+	}
+	if _, err := os.Stat(filepath.Join(bare, ".lets")); !os.IsNotExist(err) {
+		t.Errorf("no file: .lets created (err=%v)", err)
 	}
 }

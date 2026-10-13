@@ -80,3 +80,7 @@ func ParseOrchestrator(repo, name string) (scope string, ok bool) {
 
 // Worker is the run-worker name of a task: <repo>-<task-id>.
 func Worker(repo, taskID string) string { return repo + "-" + taskID }
+
+// Lead is a standing team's lead session name, <repo>-<callsign>-lead; the caller
+// checks Valid.
+func Lead(repo, callsign string) string { return repo + "-" + callsign + "-lead" }

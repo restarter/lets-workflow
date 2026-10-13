@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -16,11 +17,30 @@ import (
 	"github.com/restarter/lets-workflow/cli/internal/worktreecmd"
 )
 
-// teamSetup is a repo with a linked team worktree, a plugin root holding the real
-// team template, and an empty session registry whose live names the test sets.
+// teamRepoSlug is the repo slug of teamSetup's main checkout, whose directory is
+// named literally lets-workflow: lead names in these tests are literals, never
+// computed with peername.RepoSlug.
+const teamRepoSlug = "lets-workflow"
+
+// teamSetup is a repo (directory lets-workflow) with a linked team worktree, a
+// plugin root holding the real team template, and an empty session registry whose
+// live names the test sets.
 func teamSetup(t *testing.T, liveNames ...string) (repo, wt, pluginRoot string) {
 	t.Helper()
-	repo = initRepo(t)
+	return teamSetupIn(t, "lets-workflow", liveNames...)
+}
+
+// teamSetupIn is teamSetup with the main checkout's directory named repoDir.
+func teamSetupIn(t *testing.T, repoDir string, liveNames ...string) (repo, wt, pluginRoot string) {
+	t.Helper()
+	repo = filepath.Join(realTempDir(t), repoDir)
+	if err := os.MkdirAll(repo, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runIn(t, repo, "git", "-c", "init.defaultBranch=main", "init")
+	runIn(t, repo, "git", "config", "user.email", "test@example.com")
+	runIn(t, repo, "git", "config", "user.name", "test")
+	runIn(t, repo, "git", "commit", "--allow-empty", "-m", "initial")
 	wt = filepath.Join(realTempDir(t), "team_snake")
 	runIn(t, repo, "git", "worktree", "add", "-q", "-b", "team_snake", wt)
 
@@ -79,7 +99,7 @@ func TestTeamInit_Renders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, line := range []string{`team: "snake"`, `area: "the CLI"`, `worktree: "` + wt + `"`, `lead_name: "snake-lead"`, `agent_command: "claude"`, `orca_agent: "claude"`, `git_dir: "`} {
+	for _, line := range []string{`team: "snake"`, `area: "the CLI"`, `worktree: "` + wt + `"`, `lead_name: "lets-workflow-snake-lead"`, `agent_command: "claude"`, `orca_agent: "claude"`, `git_dir: "`} {
 		if !strings.Contains(string(b), line) {
 			t.Errorf("team file lacks %s", line)
 		}
@@ -155,7 +175,7 @@ func TestTeamInit_ConcurrentSameCallsign(t *testing.T) {
 }
 
 func TestTeamInit_CallsignLive(t *testing.T) {
-	repo, wt, pluginRoot := teamSetup(t, "frog-lead")
+	repo, wt, pluginRoot := teamSetup(t, "lets-workflow-frog-lead")
 	_, err := teamInit(repo, wt, pluginRoot, "frog")
 	if worktreecmd.ExitCode(err) != worktreecmd.ExitCallsignLive {
 		t.Fatalf("exit %d (%v), want %d", worktreecmd.ExitCode(err), err, worktreecmd.ExitCallsignLive)
@@ -191,7 +211,7 @@ func TestTeamInit_RefusesControlChars(t *testing.T) {
 }
 
 func TestTeamInit_SuggestWritesNothing(t *testing.T) {
-	repo, wt, pluginRoot := teamSetup(t, teamfile.Callsigns[1]+"-lead")
+	repo, wt, pluginRoot := teamSetup(t, teamRepoSlug+"-"+teamfile.Callsigns[1]+"-lead")
 	res, err := worktreecmd.TeamInit(context.Background(), repo, worktreecmd.TeamInitOptions{Suggest: true})
 	if err != nil || !res.Suggested || res.Callsign != teamfile.Callsigns[0] {
 		t.Fatalf("suggest: %+v, %v", res, err)
@@ -233,7 +253,7 @@ func TestTeamInit_LinkRefusesLateFile(t *testing.T) {
 // --check verifies a callsign before any worktree exists: it writes nothing and
 // refuses exactly like the write does (27 file, 34 live lead, 2 invalid).
 func TestTeamInit_Check(t *testing.T) {
-	repo, wt, pluginRoot := teamSetup(t, "frog-lead")
+	repo, wt, pluginRoot := teamSetup(t, "lets-workflow-frog-lead")
 	check := func(c string) error {
 		_, err := worktreecmd.TeamInit(context.Background(), repo, worktreecmd.TeamInitOptions{Callsign: c, Check: true})
 		return err
@@ -255,5 +275,209 @@ func TestTeamInit_Check(t *testing.T) {
 	}
 	if code := worktreecmd.ExitCode(check("snake")); code != worktreecmd.ExitTeamExists {
 		t.Errorf("existing team file: exit %d", code)
+	}
+}
+
+// A callsign is unique per repository: the live-lead check compares the
+// repo-embedding lead name, so another repo's lead of the same callsign - or a
+// bare pre-rename `<callsign>-lead` - never blocks it; this repo's own does (34).
+// --suggest-callsign and --check report the lead name too.
+func TestTeamInit_CallsignPerRepo(t *testing.T) {
+	repo, wt, pluginRoot := teamSetup(t, "other-repo-snake-lead", "frog-lead", "lets-workflow-otter-lead")
+	check := func(c string) (*worktreecmd.TeamInitResult, error) {
+		return worktreecmd.TeamInit(context.Background(), repo, worktreecmd.TeamInitOptions{Callsign: c, Check: true})
+	}
+	for _, c := range []string{"snake", "frog"} {
+		res, err := check(c)
+		if err != nil || res.LeadName != "lets-workflow-"+c+"-lead" {
+			t.Errorf("%s: another repo's or a bare lead must not block: %+v, %v", c, res, err)
+		}
+	}
+	_, err := check("otter")
+	if worktreecmd.ExitCode(err) != worktreecmd.ExitCallsignLive || !strings.Contains(err.Error(), "lets-workflow-otter-lead") {
+		t.Errorf("this repo's live lead: exit %d (%v), want %d naming lets-workflow-otter-lead", worktreecmd.ExitCode(err), err, worktreecmd.ExitCallsignLive)
+	}
+	sug, err := worktreecmd.TeamInit(context.Background(), repo, worktreecmd.TeamInitOptions{Suggest: true})
+	if err != nil || sug.Callsign != "snake" || sug.LeadName != "lets-workflow-snake-lead" {
+		t.Errorf("suggest: %+v, %v", sug, err)
+	}
+	res, err := teamInit(repo, wt, pluginRoot, "snake")
+	if err != nil || res.LeadName != "lets-workflow-snake-lead" {
+		t.Fatalf("write: %+v, %v", res, err)
+	}
+	if got, err := teamfile.LeadName(filepath.Join(repo, ".lets", "teams"), "snake"); err != nil || got != "lets-workflow-snake-lead" {
+		t.Errorf("the team file records lead_name %q, %v", got, err)
+	}
+}
+
+// A repo whose slug makes <repo>-<callsign>-lead too long for the session-name
+// grammar gets the short <callsign>-lead, and says so in a warn step.
+func TestTeamInit_LongRepoShortLeadName(t *testing.T) {
+	repo, wt, pluginRoot := teamSetupIn(t, strings.Repeat("r", 60))
+	res, err := teamInit(repo, wt, pluginRoot, "snake")
+	if err != nil || res.LeadName != "snake-lead" {
+		t.Fatalf("write: %+v, %v", res, err)
+	}
+	warned := false
+	for _, s := range res.Steps {
+		warned = warned || (s.Status == worktreecmd.StepWarn && strings.Contains(s.Message, "would exceed the session-name grammar; this team's lead is snake-lead"))
+	}
+	if !warned {
+		t.Errorf("no warn step: %+v", res.Steps)
+	}
+	b, _ := os.ReadFile(filepath.Join(repo, ".lets", "teams", "snake.md"))
+	if !strings.Contains(string(b), `lead_name: "snake-lead"`) {
+		t.Errorf("team file lead_name:\n%s", b)
+	}
+}
+
+// --launch-mode renders the lead's agent_command and orca_agent at creation; an
+// explicit --agent-command wins; an unknown mode is refused with nothing written.
+func TestTeamInit_LaunchMode(t *testing.T) {
+	repo, wt, pluginRoot := teamSetup(t)
+	res, err := worktreecmd.TeamInit(context.Background(), repo, worktreecmd.TeamInitOptions{Callsign: "snake", Area: "the CLI", Worktree: wt, PluginRoot: pluginRoot, LaunchMode: "all-in"})
+	if err != nil || !res.OK {
+		t.Fatalf("all-in: %+v, %v", res, err)
+	}
+	b, _ := os.ReadFile(filepath.Join(repo, ".lets", "teams", "snake.md"))
+	for _, line := range []string{`agent_command: "claude --permission-mode bypassPermissions"`, `orca_agent: "claude --permission-mode bypassPermissions"`} {
+		if !strings.Contains(string(b), line) {
+			t.Errorf("team file lacks %s:\n%s", line, b)
+		}
+	}
+	warned := false
+	for _, s := range res.Steps {
+		warned = warned || (s.Status == worktreecmd.StepWarn && strings.Contains(s.Message, "bypassPermissions"))
+	}
+	if !warned {
+		t.Errorf("an all-in team must say so in a warn step: %+v", res.Steps)
+	}
+	if res.LaunchClass != worktreecmd.LaunchClassBypass || res.OrcaLaunchClass != worktreecmd.LaunchClassBypass {
+		t.Errorf("all-in: launch_class %q, orca_launch_class %q; want bypass for both", res.LaunchClass, res.OrcaLaunchClass)
+	}
+
+	res, err = worktreecmd.TeamInit(context.Background(), repo, worktreecmd.TeamInitOptions{Callsign: "frog", Area: "docs", Worktree: wt, PluginRoot: pluginRoot, LaunchMode: "auto", AgentCommand: "docker compose run dev claude"})
+	if err != nil || !res.OK {
+		t.Fatalf("explicit agent: %+v, %v", res, err)
+	}
+	b, _ = os.ReadFile(filepath.Join(repo, ".lets", "teams", "frog.md"))
+	if !strings.Contains(string(b), `agent_command: "docker compose run dev claude"`) || !strings.Contains(string(b), `orca_agent: "claude --permission-mode auto"`) {
+		t.Errorf("an explicit --agent-command must win, orca_agent rendered:\n%s", b)
+	}
+	if res.LaunchClass != worktreecmd.LaunchClassDefault || res.OrcaLaunchClass != worktreecmd.LaunchClassAuto {
+		t.Errorf("explicit agent: launch_class %q (want default - classified from the written command, not the mode), orca_launch_class %q (want auto)", res.LaunchClass, res.OrcaLaunchClass)
+	}
+
+	// A hand-given bypass command is classified too, and a --settings override warns.
+	res, err = worktreecmd.TeamInit(context.Background(), repo, worktreecmd.TeamInitOptions{Callsign: "heron", Area: "x", Worktree: wt, PluginRoot: pluginRoot, AgentCommand: `claude --settings '{"permissions":{"defaultMode":"bypassPermissions"}}'`})
+	if err != nil || !res.OK {
+		t.Fatalf("settings agent: %+v, %v", res, err)
+	}
+	if res.LaunchClass != worktreecmd.LaunchClassBypass || !slices.Equal(res.LaunchWarnings, []string{worktreecmd.LaunchWarnSettingsOverride}) {
+		t.Errorf("settings agent: launch_class %q, warnings %v; want bypass, [settings_override]", res.LaunchClass, res.LaunchWarnings)
+	}
+	warned = false
+	for _, s := range res.Steps {
+		warned = warned || (s.Status == worktreecmd.StepWarn && strings.Contains(s.Message, "agent_command: settings_override"))
+	}
+	if !warned {
+		t.Errorf("a --settings agent_command must warn: %+v", res.Steps)
+	}
+
+	_, err = worktreecmd.TeamInit(context.Background(), repo, worktreecmd.TeamInitOptions{Callsign: "otter", Area: "x", Worktree: wt, PluginRoot: pluginRoot, LaunchMode: "bypassPermissions"})
+	if worktreecmd.ExitCode(err) != worktreecmd.ExitUsage {
+		t.Errorf("unknown mode: exit %d (%v), want %d", worktreecmd.ExitCode(err), err, worktreecmd.ExitUsage)
+	}
+	if _, err := os.Stat(filepath.Join(repo, ".lets", "teams", "otter.md")); !os.IsNotExist(err) {
+		t.Error("an unknown launch mode wrote a team file")
+	}
+}
+
+// A main checkout whose basename yields no repo slug gets the short <callsign>-lead,
+// and the warn step names that cause, not the grammar.
+func TestTeamInit_NoRepoSlugShortLeadName(t *testing.T) {
+	repo, wt, pluginRoot := teamSetupIn(t, "___")
+	res, err := teamInit(repo, wt, pluginRoot, "snake")
+	if err != nil || res.LeadName != "snake-lead" {
+		t.Fatalf("write: %+v, %v", res, err)
+	}
+	warned := false
+	for _, s := range res.Steps {
+		if s.Status != worktreecmd.StepWarn {
+			continue
+		}
+		if strings.Contains(s.Message, "session-name grammar") {
+			t.Errorf("a missing slug is not a grammar problem: %q", s.Message)
+		}
+		warned = warned || strings.Contains(s.Message, `no repo slug derives from "___"; this team's lead is snake-lead`)
+	}
+	if !warned {
+		t.Errorf("no warn step naming the missing slug: %+v", res.Steps)
+	}
+}
+
+// team-init grants the lead's allow rules right after the team file is linked
+// (lets-qysjv, ported by lets-gbfpd): an ok step names both rules and the revoke.
+func TestTeamInit_GrantsAllowRules(t *testing.T) {
+	isolateGitIgnore(t)
+	repo, wt, pluginRoot := teamSetup(t)
+	mustMkdir(t, filepath.Join(repo, ".lets"))
+	res, err := teamInit(repo, wt, pluginRoot, "snake")
+	if err != nil || !res.OK {
+		t.Fatalf("team-init: %v %+v", err, res)
+	}
+	if got := settingsAllow(t, wt); strings.Join(got, "|") != strings.Join(worktreecmd.TeamAllowRules(), "|") {
+		t.Errorf("allow = %v", got)
+	}
+	granted := false
+	for i, s := range res.Steps {
+		if s.Status == worktreecmd.StepOK && s.Message == allowAdded {
+			granted = true
+			if i == 0 || !strings.HasPrefix(res.Steps[i-1].Message, "team file written: ") {
+				t.Errorf("the grant must follow the team file write: %+v", res.Steps)
+			}
+		}
+	}
+	if !granted {
+		t.Errorf("no ok step %q: %+v", allowAdded, res.Steps)
+	}
+	// A second team-init on the same worktree (the team file removed, the team created
+	// again) does not duplicate a rule.
+	if err := os.Remove(res.TeamFile); err != nil {
+		t.Fatal(err)
+	}
+	again, err := teamInit(repo, wt, pluginRoot, "snake")
+	if err != nil || !again.OK {
+		t.Fatalf("second team-init: %v %+v", err, again)
+	}
+	if got := settingsAllow(t, wt); strings.Join(got, "|") != strings.Join(worktreecmd.TeamAllowRules(), "|") {
+		t.Errorf("a second team-init duplicated a rule: %v", got)
+	}
+	if !stepsContain(again.Steps, "already lists Bash(lets worktree switch:*), Bash(lets worktree task-state:*)") {
+		t.Errorf("the second grant must be a skip naming the rules: %+v", again.Steps)
+	}
+}
+
+// A grant that fails is a warn step, never a failed team-init; a tracked
+// settings.local.json is never written.
+func TestTeamInit_GrantFailureIsAStep(t *testing.T) {
+	isolateGitIgnore(t)
+	repo, wt, pluginRoot := teamSetup(t)
+	mustWrite(t, settingsPath(wt), "{}\n", 0o644)
+	runIn(t, wt, "git", "add", "-f", ".claude/settings.local.json")
+	runIn(t, wt, "git", "commit", "-q", "-m", "track it")
+	res, err := teamInit(repo, wt, pluginRoot, "snake")
+	if err != nil || !res.OK {
+		t.Fatalf("team-init must not fail on a grant warning: %v %+v", err, res)
+	}
+	warned := false
+	for _, s := range res.Steps {
+		warned = warned || (s.Status == worktreecmd.StepWarn && strings.HasPrefix(s.Message, worktreecmd.SettingsLocalTracked+": "))
+	}
+	if !warned {
+		t.Errorf("no warn step for the tracked file: %+v", res.Steps)
+	}
+	if data, _ := os.ReadFile(settingsPath(wt)); string(data) != "{}\n" {
+		t.Errorf("the tracked file was rewritten: %s", data)
 	}
 }

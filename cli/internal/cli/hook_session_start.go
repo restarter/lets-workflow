@@ -47,20 +47,19 @@ var rulesSyncFn = func(rulesPath string) string {
 //     (lets-urmfa) - effective from the next session, since settings load before
 //     this hook; compact never self-heals,
 //     and PreCompact never reads the payload at all;
-//   - on source startup|resume|clear, carries the session proof (peersHeal): a
-//     proof file moved to a re-minted id, or refreshed for a resumed pid -
-//     best-effort and silent, like selfHeal;
 //   - on every source, after the self-heal, keeps the global
 //     ~/.claude/rules/lets-rules.md a cache of this session's plugin
 //     (rulesSyncFn, lets-tg008); its outcome joins the Notice;
 //   - proactively refreshes the session boundary of the current branch's
 //     .task-<slug> file (lets-dsdmp) - but ONLY on a genuinely new session
 //     (source=startup), so /lets:end has a fresh boundary even when /lets:start
-//     was skipped - and on /clear carries it to the re-minted id on proof only.
-//     Both go through the session-owner guard (sessionOwnerPass): a teammate pane
-//     in the same worktree never takes a live session's boundary, and a declined
-//     write is a Notice, never silent. PreCompact does NOT do this (the same
-//     session continues there - moving the boundary would drop commits).
+//     was skipped - and on /clear carries it to the re-minted id on proof only
+//     (the session_proof recorded beside the line); on resume it re-records only
+//     that proof for the new process. All go through the session-owner guard
+//     (sessionOwnerPass): a second live session in the same worktree never takes
+//     this boundary (HeldLive), and a declined write is a Notice, never silent.
+//     PreCompact does NOT do this (the same session continues there - moving the
+//     boundary would drop commits).
 func NewHookSessionStartCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "session-start",
@@ -73,10 +72,7 @@ func NewHookSessionStartCmd() *cobra.Command {
 			case "startup", "resume", "clear":
 				root := sessionstart.DetectProjectRoot()
 				notices = append(notices, selfHealFn(root, rulesPath))
-				// Before peersHeal: its carry moves a re-minted proof file to the new id,
-				// and the /clear carry's proof is the OLD id's proof file.
 				sessionNotices = sessionOwnerPass(root, sid, source)
-				peersHealFn(root, sid)
 			}
 			notices = append(notices, rulesSyncFn(rulesPath)) // every source, after self-heal
 			notices = append(notices, sessionNotices...)      // after rules sync, for a stable read
@@ -92,36 +88,24 @@ func NewHookSessionStartCmd() *cobra.Command {
 }
 
 // sessionOwnerPass runs the guarded session: write for source - a refresh on
-// startup, a carry on /clear, none on resume - and, on an allowed pass (or a resume)
-// of the recorded team lead, refreshes the lead's pid. It returns the Notice
-// messages of a declined or carried write; nothing here fails the hook.
+// startup, a carry on /clear, a session_proof refresh on resume (`claude -r`: same
+// id, new process). It returns the Notice messages of a declined or carried write;
+// nothing here fails the hook.
 func sessionOwnerPass(root, sid, source string) []string {
 	if root == "" || sid == "" {
 		return nil
 	}
-	g, onAllowed := sessionGuardFn(root, sid)
-	var o sessionstart.Outcome
+	g := sessionGuardFn(sid)
 	var msg string
 	switch source {
 	case "startup":
-		o, msg = sessionstart.RefreshSessionBoundary(root, sid, g)
+		_, msg = sessionstart.RefreshSessionBoundary(root, sid, g)
 	case "clear":
-		o, msg = sessionstart.CarrySession(root, sid, g)
+		_, msg = sessionstart.CarrySession(root, sid, g)
 	case "resume":
-		o = sessionstart.OutcomeUnchanged // `claude -r`: same id, maybe a new pid
+		sessionstart.RefreshProof(root, sid, g) // never a Notice
 	default:
 		return nil
-	}
-	if o.Allowed() && onAllowed != nil {
-		onAllowed()
-	}
-	// No peers dir = no role file can ever prove a carry: saying so on every /clear
-	// would be noise for every install without peers. Nothing was written, and the
-	// session-boundary reader still reports the line as prior-session.
-	if o == sessionstart.OutcomeNoProof {
-		if _, err := os.Stat(filepath.Join(root, ".lets", "sessions", "peers")); err != nil {
-			return nil
-		}
 	}
 	if msg == "" {
 		return nil

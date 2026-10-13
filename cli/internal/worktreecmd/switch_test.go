@@ -15,9 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/restarter/lets-workflow/cli/internal/ccregistry"
 	"github.com/restarter/lets-workflow/cli/internal/gitutil"
-	"github.com/restarter/lets-workflow/cli/internal/memberscmd"
 	"github.com/restarter/lets-workflow/cli/internal/taskstate"
 )
 
@@ -126,45 +124,6 @@ func TestSwitch_TargetIsMergeBranch(t *testing.T) {
 	f := newTeamFixture(t)
 	_, err := f.sw(SwitchOptions{Task: "lets-a1", Branch: "main"})
 	wantKind(t, err, ExitTargetIsMergeBranch, "target_is_merge_branch")
-}
-
-// fakeLead registers a live lead session for the members registry and returns
-// Options for scope in this fixture's team worktree.
-func fakeLead(t *testing.T, f teamFixture, scope string) memberscmd.Options {
-	t.Helper()
-	home := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(home, "sessions"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	sid := "aaaaaaaa-0000-4000-8000-000000000001"
-	if err := os.WriteFile(filepath.Join(home, "sessions", "4242.json"), []byte(`{"name":"snake-lead","sessionId":"`+sid+`","cwd":"/x","peerProtocol":1}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	oldHome, oldAlive := ccregistry.HomeDir, ccregistry.ProcAlive
-	ccregistry.HomeDir = func() string { return home }
-	ccregistry.ProcAlive = func(pid int) bool { return pid == 4242 }
-	t.Cleanup(func() { ccregistry.HomeDir, ccregistry.ProcAlive = oldHome, oldAlive })
-	oldSleep := memberscmd.Sleep
-	memberscmd.Sleep = func(time.Duration) {}
-	t.Cleanup(func() { memberscmd.Sleep = oldSleep })
-	return memberscmd.Options{Root: f.repo, CallerToplevel: f.wt, Session: sid, Scope: scope}
-}
-
-func TestSwitch_MembersLive(t *testing.T) {
-	f := newTeamFixture(t)
-	o := fakeLead(t, f, "run-abc123")
-	if _, err := memberscmd.Add(o, memberscmd.AddOptions{Name: "impl-abc123", Role: "implementer"}); err != nil {
-		t.Fatal(err)
-	}
-	before := indexSnap(t, f.wt)
-	_, err := f.sw(SwitchOptions{Task: "lets-a1"})
-	wantKind(t, err, ExitMembersLive, "members_live")
-	if !strings.Contains(err.Error(), "run-abc123/impl-abc123") {
-		t.Errorf("the refusal must name the member: %v", err)
-	}
-	if indexSnap(t, f.wt) != before {
-		t.Error("a refused switch touched the tree")
-	}
 }
 
 func TestSwitch_DirtyWithoutPark(t *testing.T) {
@@ -369,19 +328,175 @@ func TestSwitch_TaskStateCarry(t *testing.T) {
 	}
 }
 
+const (
+	heldHolder   = "11111111-0000-4000-8000-000000000001"
+	otherSession = "bbbbbbbb-0000-4000-8000-000000000002"
+)
+
+// holderLive is a guard on which only heldHolder runs.
+var holderLive = taskstate.SessionGuard{Liveness: func(sid string) taskstate.Liveness {
+	if sid == heldHolder {
+		return taskstate.LiveAlive
+	}
+	return taskstate.LiveDead
+}}
+
+// seedHeld records heldHolder in branch's task-state: a fresh target has no file,
+// so without the seed nothing is held there.
+func (f teamFixture) seedHeld(t *testing.T, branch string) {
+	t.Helper()
+	f.sessionFile(t, slugOf(branch), "task: lets-zz\nsession: abc1234 "+heldHolder+"\n")
+}
+
+func newBranchName(t *testing.T, f teamFixture, id string) string {
+	t.Helper()
+	bn, err := BranchName(context.Background(), f.wt, BranchNameOptions{Task: id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return bn.Branch
+}
+
 func TestSwitch_SessionHeldStops(t *testing.T) {
 	f := newTeamFixture(t)
 	f.onTask(t, "lets-a1")
 	f.write(t, "a.txt", "wip\n")
+	target := newBranchName(t, f, "lets-b2")
+	f.seedHeld(t, target)
 	before := indexSnap(t, f.wt)
-	g := taskstate.SessionGuard{Lead: func(string) (bool, string) { return false, "snake-lead (session 11111111)" }}
-	_, err := f.sw(SwitchOptions{Task: "lets-b2", Park: true, Session: "bbbbbbbb-0000-4000-8000-000000000002", Guard: g})
-	wantKind(t, err, ExitGeneric, "session_held")
-	if !strings.Contains(err.Error(), "snake-lead") {
+	res, err := f.sw(SwitchOptions{Task: "lets-b2", Park: true, Session: otherSession, Guard: holderLive})
+	wantKind(t, err, ExitSessionHeld, "session_held")
+	if !strings.Contains(err.Error(), heldHolder) || !strings.Contains(err.Error(), taskstate.HeldLive) {
 		t.Errorf("the refusal must name the holder: %v", err)
+	}
+	if res.Planned == nil || res.Planned.Branch != target || !res.Planned.Create || res.Planned.Base == "" {
+		t.Errorf("planned = %+v, want %s created from a base", res.Planned, target)
+	}
+	if res.Branch != "" || res.Base != "" || res.Created || res.Park != nil {
+		t.Errorf("a refusal claims an effect: branch=%q base=%q created=%v park=%+v", res.Branch, res.Base, res.Created, res.Park)
 	}
 	if indexSnap(t, f.wt) != before {
 		t.Error("a held switch parked or moved anything")
+	}
+}
+
+// A refusal before git switch claims no effect: the would-be target is in planned,
+// the top-level branch / created / base stay empty.
+func TestSwitch_RefusalsReportPlanned(t *testing.T) {
+	cases := []struct {
+		name  string
+		code  int
+		kind  string
+		setup func(t *testing.T, f teamFixture) (SwitchOptions, SwitchPlan)
+	}{
+		{"session_held", ExitSessionHeld, "session_held", func(t *testing.T, f teamFixture) (SwitchOptions, SwitchPlan) {
+			name := newBranchName(t, f, "lets-a1")
+			f.seedHeld(t, name)
+			return SwitchOptions{Task: "lets-a1", Session: otherSession, Guard: holderLive},
+				SwitchPlan{Branch: name, Create: true, Base: gitOut(t, f.repo, "rev-parse", "origin/main")}
+		}},
+		{"dirty_worktree", ExitDirtyWorktree, "dirty_worktree", func(t *testing.T, f teamFixture) (SwitchOptions, SwitchPlan) {
+			f.onTask(t, "lets-a1")
+			f.write(t, "a.txt", "changed\n")
+			return SwitchOptions{Task: "lets-b2"}, SwitchPlan{Branch: newBranchName(t, f, "lets-b2"), Create: true}
+		}},
+		{"no_remote_base", ExitNoRemoteBase, "no_remote_base", func(t *testing.T, f teamFixture) (SwitchOptions, SwitchPlan) {
+			name := newBranchName(t, f, "lets-a1")
+			gitOut(t, f.repo, "remote", "remove", "origin")
+			return SwitchOptions{Task: "lets-a1"}, SwitchPlan{Branch: name, Create: true}
+		}},
+		{"target_is_merge_branch", ExitTargetIsMergeBranch, "target_is_merge_branch", func(t *testing.T, f teamFixture) (SwitchOptions, SwitchPlan) {
+			return SwitchOptions{Task: "lets-a1", Branch: "main"}, SwitchPlan{Branch: "main"}
+		}},
+		{"already_on_target", ExitUsage, "already_on_target", func(t *testing.T, f teamFixture) (SwitchOptions, SwitchPlan) {
+			a1 := f.onTask(t, "lets-a1")
+			return SwitchOptions{Task: "lets-a1"}, SwitchPlan{Branch: a1}
+		}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := newTeamFixture(t)
+			o, want := c.setup(t, f)
+			head := gitOut(t, f.wt, "rev-parse", "HEAD")
+			res, err := f.sw(o)
+			wantKind(t, err, c.code, c.kind)
+			if res.OK || res.Branch != "" || res.Created || res.Base != "" {
+				t.Errorf("a refusal claims an effect: ok=%v branch=%q created=%v base=%q", res.OK, res.Branch, res.Created, res.Base)
+			}
+			if res.Planned == nil || *res.Planned != want {
+				t.Errorf("planned = %+v, want %+v", res.Planned, want)
+			}
+			if gitOut(t, f.wt, "rev-parse", "HEAD") != head {
+				t.Error("a refusal moved HEAD")
+			}
+		})
+	}
+}
+
+// A held session: line after git switch is task_state_failed with the real effect
+// and a remediation that records the task with its start. The holder is judged live
+// only once the tree has moved - keyed on the tree, not on a call count.
+func TestSwitch_HeldAfterSwitchIsTaskStateFailed(t *testing.T) {
+	f := newTeamFixture(t)
+	from := gitOut(t, f.wt, "branch", "--show-current")
+	target := newBranchName(t, f, "lets-a1")
+	f.seedHeld(t, target)
+	base := gitOut(t, f.repo, "rev-parse", "origin/main")
+	g := taskstate.SessionGuard{Liveness: func(sid string) taskstate.Liveness {
+		if sid == heldHolder && gitOut(t, f.wt, "branch", "--show-current") != from {
+			return taskstate.LiveAlive
+		}
+		return taskstate.LiveDead
+	}}
+	res, err := f.sw(SwitchOptions{Task: "lets-a1", Session: otherSession, Guard: g})
+	wantKind(t, err, ExitFilesystem, "task_state_failed")
+	if !strings.Contains(res.Error.Message, heldHolder) {
+		t.Errorf("the message must name the holder: %q", res.Error.Message)
+	}
+	for _, want := range []string{"the worktree IS on " + target, "lets worktree task-state set", "--task lets-a1", "--start " + base} {
+		if !strings.Contains(res.Error.Remediation, want) {
+			t.Errorf("remediation %q lacks %q", res.Error.Remediation, want)
+		}
+	}
+	if res.Branch != target || !res.Created || res.Base != base || res.Planned != nil {
+		t.Errorf("the effect must be reported: branch %q created %v base %q planned %+v", res.Branch, res.Created, res.Base, res.Planned)
+	}
+	if got := gitOut(t, f.wt, "branch", "--show-current"); got != target {
+		t.Errorf("worktree on %q, want %q", got, target)
+	}
+	if st := f.state(t, target); st.Task != "lets-zz" || !strings.Contains(st.Session, heldHolder) {
+		t.Errorf("the held task-state was changed: %+v", st)
+	}
+}
+
+// The switch's session: write records the caller's session_proof beside it; with no
+// session the line is skipped and said so.
+func TestSwitch_WritesSessionProof(t *testing.T) {
+	f := newTeamFixture(t)
+	g := taskstate.SessionGuard{
+		Liveness: func(string) taskstate.Liveness { return taskstate.LiveDead },
+		Self: func(own string) (taskstate.Proof, bool) {
+			return taskstate.Proof{Session: own, Pid: 4242, Started: time.UnixMilli(1790797661911)}, true
+		},
+	}
+	res, err := f.sw(SwitchOptions{Task: "lets-a1", Session: otherSession, Guard: g})
+	if err != nil || !res.OK {
+		t.Fatalf("switch: %+v, %v", res, err)
+	}
+	st := f.state(t, res.Branch)
+	if st.Session != gitOut(t, f.wt, "rev-parse", "HEAD")+" "+otherSession || st.SessionProof != otherSession+" 4242 1790797661911" {
+		t.Errorf("task-state = %+v", st)
+	}
+	res, err = f.sw(SwitchOptions{Task: "lets-b2"})
+	if err != nil || !res.OK {
+		t.Fatalf("switch: %+v, %v", res, err)
+	}
+	skipped := false
+	for _, s := range res.Steps {
+		skipped = skipped || (s.Status == StepSkip && strings.Contains(s.Message, "no Claude session runs this call"))
+	}
+	if st := f.state(t, res.Branch); !skipped || st.Session != "" || st.SessionProof != "" {
+		t.Errorf("no session: skipped=%v state=%+v", skipped, st)
 	}
 }
 
@@ -468,25 +583,6 @@ func TestSwitch_UnparkStatePartialNamed(t *testing.T) {
 	}
 }
 
-// Owner decision: only a live WRITER in this tree blocks - the team's read-only
-// members and an isolated implementer never do.
-func TestSwitch_ReadOnlyAndIsolatedMembersDoNotBlock(t *testing.T) {
-	f := newTeamFixture(t)
-	o := fakeLead(t, f, "run-abc123")
-	for _, a := range []memberscmd.AddOptions{
-		{Name: "architect", Role: "architect"},
-		{Name: "skeptic", Role: "lets:skeptic"},
-		{Name: "impl-abc123-a", Role: "implementer", Isolation: "worktree", WorktreePath: filepath.Join(t.TempDir(), "agent"), AgentID: "a1b2c3"},
-	} {
-		if _, err := memberscmd.Add(o, a); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if res, err := f.sw(SwitchOptions{Task: "lets-a1"}); err != nil || !res.OK {
-		t.Fatalf("read-only and isolated members must not block: %+v, %v", res, err)
-	}
-}
-
 func TestSwitch_OperationInProgress(t *testing.T) {
 	for _, marker := range []string{"MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply"} {
 		t.Run(marker, func(t *testing.T) {
@@ -559,8 +655,11 @@ func TestSwitch_IgnoredFileNotOverwritten(t *testing.T) {
 		t.Fatalf("fixture: the ignored file must not show as dirty: %q", st)
 	}
 	before := indexSnap(t, f.wt)
-	_, err := f.sw(SwitchOptions{Task: "lets-a1"})
+	res, err := f.sw(SwitchOptions{Task: "lets-a1"})
 	wantKind(t, err, ExitGitFailed, "git_failed")
+	if res.Branch != "" || res.Created || res.Planned == nil || res.Planned.Branch != a1 {
+		t.Errorf("a failed git switch reports branch %q created %v planned %+v", res.Branch, res.Created, res.Planned)
+	}
 	if b, _ := os.ReadFile(filepath.Join(f.wt, "config.env")); string(b) != local {
 		t.Errorf("the ignored file was overwritten: %q", b)
 	}

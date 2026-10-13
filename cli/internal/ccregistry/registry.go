@@ -29,6 +29,29 @@ type Entry struct {
 	Version      string `json:"version"`
 	StartedAt    int64  `json:"startedAt"` // ms since epoch; unchanged across /clear (same process)
 	PeerProtocol *int   `json:"peerProtocol"`
+	// Kind, JobID and ParkedJobID are read when present (Claude Code writes them for
+	// background jobs and parked sessions); any other JSON type is ignored, never an error.
+	Kind        string `json:"-"`
+	JobID       string `json:"-"`
+	ParkedJobID string `json:"-"`
+}
+
+// jobFields is the lenient side decode of Entry's job keys: a typed string field
+// would turn a future non-string value into an unparseable entry and degrade the
+// whole registry.
+type jobFields struct {
+	Kind        json.RawMessage `json:"kind"`
+	JobID       json.RawMessage `json:"jobId"`
+	ParkedJobID json.RawMessage `json:"parkedJobId"`
+}
+
+// rawString is m's value when m is a JSON string, else "".
+func rawString(m json.RawMessage) string {
+	var s string
+	if len(m) == 0 || json.Unmarshal(m, &s) != nil {
+		return ""
+	}
+	return s
 }
 
 // Degraded names why the registry could not be read in full.
@@ -99,9 +122,14 @@ func Read(claudeDir string) Snapshot {
 			continue
 		}
 		var e Entry
-		if b, err := os.ReadFile(f); err != nil || json.Unmarshal(b, &e) != nil {
+		b, err := os.ReadFile(f)
+		if err != nil || json.Unmarshal(b, &e) != nil {
 			s.Unrecognized[pid] = "unparseable"
 			continue
+		}
+		var jf jobFields
+		if json.Unmarshal(b, &jf) == nil {
+			e.Kind, e.JobID, e.ParkedJobID = rawString(jf.Kind), rawString(jf.JobID), rawString(jf.ParkedJobID)
 		}
 		if e.PeerProtocol == nil || *e.PeerProtocol != 1 {
 			s.Unrecognized[pid] = protoString(e.PeerProtocol)
@@ -188,6 +216,70 @@ func (s Snapshot) Rotated(sid string, pid int, set time.Time) (string, bool) {
 	return e.SessionID, true
 }
 
+// SameProcess reports whether the registry lists pid with exactly startedMs as its
+// startedAt - the same process, never a pid reused later.
+func (s Snapshot) SameProcess(pid int, startedMs int64) bool {
+	e, ok := s.FindPid(pid)
+	return ok && startedMs > 0 && e.StartedAt == startedMs
+}
+
+// ContinuedIn reports whether session sid was parked into the background job that
+// runs as session own (lets-56ymc): sid's row carries parkedJobId, own's row is a
+// background job (kind bg, or no kind) with that jobId. Missing fields, an empty
+// pair, or sid == own prove nothing.
+func (s Snapshot) ContinuedIn(sid, own string) bool {
+	if sid == "" || own == "" || sid == own {
+		return false
+	}
+	p, ok1 := s.Find(sid)
+	c, ok2 := s.Find(own)
+	return ok1 && ok2 && continues(p, c)
+}
+
+// continues reports whether entry parked was parked into the background job that
+// runs as entry cont: parked carries parkedJobId, cont is a background job (kind bg,
+// or no kind) with that jobId, and they are different sessions. Judged on the entry
+// pair itself - never on another process that happens to share a session id.
+func continues(parked, cont Entry) bool {
+	if parked.ParkedJobID == "" || cont.JobID == "" || parked.SessionID == cont.SessionID {
+		return false
+	}
+	if cont.Kind != "" && cont.Kind != "bg" {
+		return false
+	}
+	return parked.ParkedJobID == cont.JobID
+}
+
+// Named is every live entry carrying name (one per process), machine-wide, with a
+// parked session collapsed into its continuation (lets-56ymc): a row whose session
+// was parked into a background job that is also listed under name (continues, on
+// the entry pair - another process of the same session id is judged on its own) is
+// dropped, so the pair counts as ONE logical session and the continuation is its
+// address. The one by-name count for uniqueness checks (who's duplicate_name, a bound
+// target's name_not_unique, the standing sender, orchestrator_name_not_unique).
+func (s Snapshot) Named(name string) []Entry {
+	var all []Entry
+	for _, e := range s.Entries {
+		if e.NameOK && e.Name == name {
+			all = append(all, e)
+		}
+	}
+	out := all[:0:0]
+	for _, e := range all {
+		parked := false
+		for _, c := range all {
+			if continues(e, c) { // per entry: a resumed process of the parked id stays
+				parked = true
+				break
+			}
+		}
+		if !parked {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
 // Liveness of one session; pid is the holder's recorded pid (0 when unknown).
 // Never guesses: a pid-less holder that the registry does not show is Unknown,
 // because "not found" proves nothing about a session the registry never described.
@@ -219,4 +311,31 @@ func (s Snapshot) Liveness(sid string, pid int) Liveness {
 		return Dead // a live pid without a registry file: the session exited, the pid was reused
 	}
 	return Unknown
+}
+
+// NameState classifies a session's registry name (NameOf).
+type NameState int
+
+const (
+	NameUnlisted NameState = iota // the registry lists no live entry for the session
+	NameNone                      // listed, without a name
+	NameInvalid                   // listed, the name fails the peer-name grammar
+	NameValid                     // listed with a usable name
+)
+
+// NameOf is session sid's registry name and its state - the one self-name lookup for
+// `task-state set --self-orchestrator` (selfName) and `lets worktree info`'s
+// team_lead.self, so their /rename hints classify a session the same way. An invalid
+// name is returned as written, for the message that names it.
+func (s Snapshot) NameOf(sid string) (string, NameState) {
+	e, ok := s.Find(sid)
+	switch {
+	case !ok:
+		return "", NameUnlisted
+	case e.NameOK:
+		return e.Name, NameValid
+	case e.Name != "":
+		return e.Name, NameInvalid
+	}
+	return "", NameNone
 }

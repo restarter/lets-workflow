@@ -163,6 +163,26 @@ func TestWho_DuplicateNameMachineWide(t *testing.T) {
 	}
 }
 
+// A session parked into a background job and that job are ONE logical session
+// (ccregistry.Snapshot.Named): one row - the continuation - and no duplicate_name.
+func TestWho_ParkedContinuationIsOneSession(t *testing.T) {
+	repo := repoWithLets(t, "")
+	claudeHomeJobs(t, []regRow{{101, sidMain, "MAIN", repo}, {102, sidFable, "MAIN", repo}}, map[int]map[string]any{
+		101: {"kind": "interactive", "parkedJobId": "deadbeef"},
+		102: {"kind": "bg", "jobId": "deadbeef"},
+	})
+	res := who(t, WhoOptions{Cwd: repo})
+	var named []Peer
+	for _, p := range res.Peers {
+		if p.Name == "MAIN" {
+			named = append(named, p)
+		}
+	}
+	if len(named) != 1 || named[0].Session != sidFable || named[0].Duplicate {
+		t.Errorf("a parked session and its continuation: want one row (the continuation), no duplicate: %+v", named)
+	}
+}
+
 // Every who refreshes the last-seen file of each orchestrator row it lists; a busy
 // lock is silent, and a repo without .lets is never written.
 func TestWho_RefreshesLastSeen(t *testing.T) {

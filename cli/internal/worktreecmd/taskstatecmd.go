@@ -32,9 +32,16 @@ type TaskStateOptions struct {
 	OrchestratorScope *string
 	Standing          *string // "on" | "off"
 	ClearOrchestrator string
-	// Session is the caller's session id ($CLAUDE_CODE_SESSION_ID, set by the cli
-	// layer), read only by SelfOrchestrator.
+	// Session is the caller's session id ($CLAUDE_CODE_SESSION_ID, read once by the
+	// cli layer): SelfOrchestrator's claim, and the id the cli's proof gate compares
+	// SessionID with (a proof only for the caller's own session).
 	Session string
+	// Guard judges a --session-id write under the task lock: a live foreign holder
+	// (HeldLive, HeldRotatedForeign) refuses it. A zero guard writes as before.
+	Guard taskstate.SessionGuard
+	// Proof is recorded as session_proof beside the session: line; nil deletes the
+	// line (the caller proves only its own process).
+	Proof *taskstate.Proof
 }
 
 // orchestratorOps reports whether o touches an `orchestrator:` record.
@@ -61,13 +68,13 @@ func selfName(sid string, unique bool) (string, *Error) {
 	}
 	remedy := "name this session with /rename <name>, then run /lets:start --main again"
 	snap := ccregistry.Read(ccregistry.HomeDir())
-	e, ok := snap.Find(sid)
-	switch {
-	case !ok:
+	name, state := snap.NameOf(sid)
+	switch state {
+	case ccregistry.NameUnlisted:
 		return "", &Error{Code: ExitGeneric, Kind: "orchestrator_needs_name", Message: "this session is not in the Claude Code session registry, so it has no name to record", Remediation: remedy}
-	case !e.NameOK && e.Name != "":
-		return "", &Error{Code: ExitGeneric, Kind: "orchestrator_needs_name", Message: fmt.Sprintf("this session has no usable name (%q fails the name grammar)", e.Name), Remediation: remedy}
-	case !e.NameOK:
+	case ccregistry.NameInvalid:
+		return "", &Error{Code: ExitGeneric, Kind: "orchestrator_needs_name", Message: fmt.Sprintf("this session has no usable name (%q fails the name grammar)", name), Remediation: remedy}
+	case ccregistry.NameNone:
 		return "", &Error{Code: ExitGeneric, Kind: "orchestrator_needs_name", Message: "this session has no name to record as an orchestrator", Remediation: remedy}
 	}
 	// The session id is only a claim ($CLAUDE_CODE_SESSION_ID can be set by any
@@ -84,31 +91,26 @@ func selfName(sid string, unique bool) (string, *Error) {
 		return "", &Error{Code: ExitUsage, Kind: "orchestrator_not_own_process", Message: msg, Cause: err,
 			Remediation: "run it from the orchestrator's own Claude Code session (its Bash tool), not from another process"}
 	}
-	if caller.Name != e.Name { // one session id under two processes (claude -r): the caller's own name counts
+	if caller.Name != name { // one session id under two processes (claude -r): the caller's own name counts
 		if !caller.NameOK {
 			return "", &Error{Code: ExitGeneric, Kind: "orchestrator_needs_name", Message: "this session's process has no usable name to record", Remediation: remedy}
 		}
-		e = caller
+		name = caller.Name
 	}
 	if !unique {
-		return e.Name, nil
+		return name, nil
 	}
 	// After the process proof: only the session's own process learns whether its name
 	// is shared. A record is keyed by name, so a second live holder would write the
 	// first one's grant - the same rule as the read side, where a shared name carries
 	// no self_record.
-	holders := 0
-	for _, x := range snap.Entries {
-		if x.NameOK && x.Name == e.Name {
-			holders++
-		}
-	}
+	holders := len(snap.Named(name)) // a parked session and its continuation are one
 	if holders > 1 {
 		return "", &Error{Code: ExitUsage, Kind: "orchestrator_name_not_unique",
-			Message:     fmt.Sprintf("%d live sessions are named %s - a record is keyed by name, so it cannot be written for one of them", holders, e.Name),
+			Message:     fmt.Sprintf("%d live sessions are named %s - a record is keyed by name, so it cannot be written for one of them", holders, name),
 			Remediation: "rename this session with /rename <name>, then run it again"}
 	}
-	return e.Name, nil
+	return name, nil
 }
 
 // taskStateTarget resolves the task-state file for dir's current HEAD branch. It
@@ -161,7 +163,10 @@ func TaskStateShow(ctx context.Context, dir string) (*TaskStateResult, error) {
 // make every caller safe by construction: an `orc:` binding is never written on the
 // merge-branch, and a --task that names a different task than the file does is
 // refused unless --start comes with it (take-task always passes both), so a writer
-// can never pair one task's id with another task's start.
+// can never pair one task's id with another task's start. A --session-id write is
+// guarded too: a live foreign holder of the session: line refuses the whole call
+// (exit 35 session_held, nothing written); unknown, dead, no-proof and unchanged
+// holders write - the "/lets:start in this chat rewrites the session" remedy.
 func TaskStateSet(ctx context.Context, dir string, o TaskStateOptions) (*TaskStateResult, error) {
 	res := &TaskStateResult{Envelope: Envelope{SchemaVersion: SchemaVersion, Subcommand: "task-state", Steps: []Step{}}}
 	fail := func(e *Error) (*TaskStateResult, error) {
@@ -288,10 +293,22 @@ func TaskStateSet(ctx context.Context, dir string, o TaskStateOptions) (*TaskSta
 		if exists && o.Task != "" && cur.Task != "" && cur.Task != o.Task && o.Start == "" {
 			return nil, errMismatch
 		}
-		return nil, nil
+		if o.SessionSHA == "" {
+			return nil, nil
+		}
+		if o.Guard.Liveness != nil {
+			err := taskstate.MaySetSession(cur, exists, o.SessionID, taskstate.OpRefresh, o.Guard)
+			var held *taskstate.HeldError
+			if errors.As(err, &held) && (held.Reason == taskstate.HeldLive || held.Reason == taskstate.HeldRotatedForeign) {
+				return nil, ErrSessionHeld(held, branch) // the file is untouched
+			}
+			// nil, unchanged, unknown, no proof: write as before
+		}
+		return taskstate.SessionValues(o.SessionSHA, o.SessionID, o.Proof), nil
 	}
 	st, err := taskstate.MergeWrite(letsDir, slug, taskstate.WriteOpts{Set: set, Create: o.Create || patch != nil, Deadline: time.Now().Add(wait), Derive: derive,
 		PatchOrchestrator: patch, ClearOrchestrator: o.ClearOrchestrator})
+	var we *Error
 	switch {
 	case errors.Is(err, taskstate.ErrInvalidValue):
 		return fail(&Error{Code: ExitUsage, Kind: "invalid_value", Message: err.Error(), Cause: err})
@@ -307,6 +324,8 @@ func TaskStateSet(ctx context.Context, dir string, o TaskStateOptions) (*TaskSta
 	case errors.Is(err, taskstate.ErrLockBusy):
 		return fail(&Error{Code: ExitTaskStateLockBusy, Kind: "task_state_lock_busy",
 			Message: fmt.Sprintf("%s is locked by another writer", path), Remediation: "retry, or raise --wait", Cause: err})
+	case errors.As(err, &we):
+		return fail(we)
 	case err != nil:
 		return fail(&Error{Code: ExitFilesystem, Kind: "task_state_write_failed", Message: err.Error(), Cause: err})
 	}

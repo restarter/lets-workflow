@@ -27,6 +27,14 @@ Restore context and prepare for work. **User MUST select a task before working.*
 
 Parse the arguments only - a task id (it goes through the detect-task id gate before any use), `--continue`, `--main` / `--assistant`, `--scope "<text>"` (main mode: the part of the repo this orchestrator owns). `--orc` is stripped per the detect-task explicit-argument convention before the task-id test and forwarded to take-task; with `--main` it is dropped with a one-line note (an orchestrator is never bound). No tracker verb runs here. Every path below runs **Step 0.5 first**, then its own steps.
 
+**`--orc` without a task id** (not `--main` - e.g. the lead `/lets:team create` launched with `'/lets:start --orc="<name>"'`): after Step 0.5, record the binding on the current branch right away, single-quoting the name (`'\''` for a quote inside it) - the same call detect-task uses for an in-progress task:
+
+```bash
+command -v lets >/dev/null 2>&1 && lets worktree task-state set --create --orc '<name>' --json
+```
+
+So a `team_<c>` lead is a bound row of its orchestrator's `lets peers who --orc` from launch, and `lets worktree switch` carries that `orc:` to every task branch it moves to. `written=false` (`orc_on_merge_branch` on the merge-branch) or a refused name -> one line, nothing else changes; no binary -> say nothing. A task picked later still goes to take-task with the same `orc="<name>"`.
+
 **If `<task-id>` provided** (e.g., `/lets:start lets-rmcwo`):
 - Step 0.5 (with `--task '<task-id>'`), then:
 - Skip Steps 1, 3, 5 (session history, orient, task selection)
@@ -160,7 +168,7 @@ The orient snapshot (Step 3) already shows In flight + Next up - don't repeat th
 - Inform user: "Created task XX, working in feature branch"
 - This keeps traceability without friction
 
-**Team worktree** (`lets worktree info --json` reports a `team`): run Step 6's lead claim FIRST, before offering the moves - a `lead_held` stops the session there. Once this session is the lead, the moves gain one more:
+**Team worktree** (`lets worktree info --json` reports a `team`): read its `team_lead` - `match` `lead` or `unknown` -> nothing; `other` -> one line "This session is `{team_lead.self|unnamed}`, not the team's lead `{team_lead.name}` - /rename {team_lead.name} if it is the lead", never blocking. The moves gain one more:
 
 > - **Respawn roster** -> `Skill(skill: "lets:team", args: "spawn --roster")`; the members of the team file's roster come back, then pick the task here.
 
@@ -170,17 +178,7 @@ Outside a team worktree the moves stay as above - no roster offer.
 
 ## Step 6: Take Task
 
-**Team worktree: claim the lead first.** When `lets worktree info --json` reports a `team`, this session claims that team's lead before take-task:
-
-```bash
-lets members lead --claim --scope '<team>' --json
-```
-
-- `claimed=true` -> continue.
-- `lead_held` -> stop, naming the live lead (`lead.name`, `lead.session`, `lead.status`): continue in that session, or close it and run `/lets:start` again. take-task does not run.
-- Any other failure (`registry_unavailable` included, or no `lets` binary) -> one warning line naming it, then continue.
-
-Already claimed in Step 5 (the team path) -> do not claim again. A task id passed on the argument skipped Step 5: after take-task, print one line - `Respawn the roster?  /lets:team spawn --roster`. No `team` -> skip this paragraph.
+**Team worktree.** A task id passed on the argument skipped Step 5: after take-task, print one line - `Respawn the roster?  /lets:team spawn --roster`. No `team` -> skip this paragraph.
 
 After task is selected, delegate to the **take-task** skill to claim it and prepare the branch: `Skill(skill: "lets:take-task", args: "<task-id>")`.
 
@@ -208,6 +206,7 @@ After the task is claimed, suggest renaming the Claude Code session so the statu
 
 - Slug: short, lowercase, dash-separated, derived from the task title (e.g. **Add CHANGELOG step to /lets:done** -> `changelog-step-done`). Keep under ~30 chars; compress long titles to the 2-4 most distinctive words.
 - This is a one-line suggestion, not a gate — continue regardless of whether the user runs it.
+- **Team worktree** (`lets worktree info --json` reports a `team`): never suggest `/rename {slug}` - it would rename the lead away from the team file's `lead_name`, and `team_lead` would read `other` everywhere. Suggest `/rename {team_lead.name}` only when `team_lead.match` is not `lead`; otherwise suggest nothing.
 
 ## Step 8: Task Size Assessment
 
@@ -267,7 +266,7 @@ You do **NOT** write or edit code in this mode. The moment the user wants to imp
 
 **Guard first.** Main mode expects `HEAD == $LETS_MERGE_BRANCH`. If on another branch (a worktree or feature branch - which are task-bound), say so in one line, suggest the normal task flow instead, and **skip the session-boundary write below** - stay strictly read-only if the user still wants the overview.
 
-Steps 1-2 already ran (sessions, git). Main mode skips `take-task`, so - **only when `HEAD == $LETS_MERGE_BRANCH`** - save the **session boundary** here (so `/lets:end` can still diff the session). Main mode claims no task, so it does NOT create a `task:`/`start:` (that would make `.task-main` mis-fire trunk-mode). But it must NOT destroy a live trunk claim either - so it **preserves** every existing line (`task:`, `start:`, lines a newer LETS added; merge-write, like the SessionStart hook), refreshes `session:`, and clears `orc:` (the merge-branch never carries an orchestrator binding). The same call **records this session as an orchestrator**: an orchestrator is a recorded NAME, so it writes THIS session's own registry name - whatever the owner named it - as an `orchestrator:` line of the merge-branch task-state, shared by every worktree. `{SCOPE_FLAG}` is `--orchestrator-scope '<text>'` when `--scope` was given (single-quoted, `'\''` escaping), else empty (an existing scope is kept). A genuine main-mode file (no prior `task:`) stays `session:` + `orchestrator:`; a preserved live claim then surfaces through orient below instead of being silently clobbered:
+Steps 1-2 already ran (sessions, git). Main mode skips `take-task`, so - **only when `HEAD == $LETS_MERGE_BRANCH`** - save the **session boundary** here (so `/lets:end` can still diff the session). Main mode claims no task, so it does NOT create a `task:`/`start:` (that would make `.task-main` mis-fire trunk-mode). But it must NOT destroy a live trunk claim either - so it **preserves** every existing line (`task:`, `start:`, lines a newer LETS added; merge-write, like the SessionStart hook), refreshes `session:`, and clears `orc:` (the merge-branch never carries an orchestrator binding). A genuine main-mode file (no prior `task:`) stays `session:` (+ the `orchestrator:` lines below); a preserved live claim then surfaces through orient below instead of being silently clobbered:
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
@@ -281,7 +280,7 @@ if [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ]; then
   # destroy it, and its /lets:done would then hard-abort with no start:. `lets worktree task-state`
   # owns the file (merge-write under a lock); without the binary, replace only session: and orc:.
   if command -v lets >/dev/null 2>&1; then
-    lets worktree task-state set --clear-orc --session-sha "$(git rev-parse HEAD)" --session-id "$CLAUDE_CODE_SESSION_ID" --create --self-orchestrator {SCOPE_FLAG} --json
+    lets worktree task-state set --clear-orc --session-sha "$(git rev-parse HEAD)" --session-id "$CLAUDE_CODE_SESSION_ID" --create --json
   else
     echo "LETS_BINARY_MISSING"
     tmp=$(mktemp "${TASK_FILE}.XXXX")
@@ -290,16 +289,16 @@ if [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ]; then
 fi
 ```
 
-**The orchestrator record** (merge-branch only; the envelope of the call above):
+The boundary write is guarded and can answer exit 35 `session_held`: several orchestrators share `.task-{LETS_MERGE_BRANCH}`, and the session guard keeps it for the live session that recorded it first. Then render one line "the {LETS_MERGE_BRANCH} boundary belongs to `{holder}` - /lets:end in this session will report an approximate range" (`{holder}` from `error.message`), and continue - main mode never stops on it. `task_state_lock_busy` / `task_state_write_failed`: one line naming `error.kind`, no retry, continue. `LETS_BINARY_MISSING`: one line, then continue - and skip the record below.
 
-- **A failed envelope** - every failed envelope except `task_state_lock_busy` / `task_state_write_failed`: nothing was written, the boundary included (`orchestrator_needs_name` when this session has no name, `invalid_value` for a `--scope` outside the name grammar, ...). Save the boundary alone, then print one line naming `error.kind` - plus `error.remediation` verbatim when present (for `orchestrator_needs_name`: name it with `/rename <name>`, then `/lets:start --main` again); main mode continues unrecorded:
+**The orchestrator record** (merge-branch only, after the boundary write, never folded into it). An orchestrator is a recorded NAME: this ORCHESTRATOR-ONLY call writes THIS session's own registry name - whatever the owner named it - as an `orchestrator:` line of the merge-branch task-state, shared by every worktree. It carries no session key (no `--session-sha` / `--session-id` / `--clear-orc`), so the session guard never refuses it and a held boundary never drops it. `{SCOPE_FLAG}` is `--orchestrator-scope '<text>'` when `--scope` was given (single-quoted, `'\''` escaping), else empty (an existing scope is kept):
 
 ```bash
-lets worktree task-state set --clear-orc --session-sha "$(git rev-parse HEAD)" --session-id "$CLAUDE_CODE_SESSION_ID" --create --json
+lets worktree task-state set --self-orchestrator {SCOPE_FLAG} --json
 ```
 
-- `task_state_lock_busy` / `task_state_write_failed`: the file itself could not be written - one line naming `error.kind`, no retry; main mode continues unrecorded.
-- `LETS_BINARY_MISSING` or a `not_supported` stub reason: one line, then continue.
+- **A failed envelope** (`orchestrator_needs_name` when this session has no name, `orchestrator_not_own_process`, `orchestrator_name_not_unique`, `invalid_value` for a `--scope` outside the name grammar, `task_state_lock_busy`, ...): nothing was recorded - print one line naming `error.kind`, plus `error.remediation` verbatim when present (for `orchestrator_needs_name`: name it with `/rename <name>`, then `/lets:start --main` again); main mode continues unrecorded. The boundary above is already saved.
+- A `not_supported` stub reason: one line, then continue.
 - written: read the record back -
 
 ```bash
@@ -325,12 +324,7 @@ AskUserQuestion(
 
   **Allow** -> `lets worktree task-state set --self-orchestrator --standing on --json`; **Ask per message** -> `lets worktree task-state set --self-orchestrator --standing off --json`. A failed write: one line, the grant stays unasked. The full rule: `${CLAUDE_PLUGIN_ROOT}/protocol/peers.md` `## Standing authorization`.
 
-Then record this session's /clear proof (until lets-gbfpd) - its result is read only for a non-ok envelope, printed as one line:
-
-```bash
-LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-command -v lets >/dev/null 2>&1 && lets peers role set orchestrator --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" --json
-```
+**Launch mode (lets-d3wu3).** `LETS_LAUNCH_MODE` absent from LETS Config (unset or empty - an empty value is never injected) -> one line: "LETS_LAUNCH_MODE is unset - the sessions this orchestrator launches start in `default`; set it to the class this session runs in (`all-in` only when it runs with `--permission-mode bypassPermissions`) - `/lets:init`". A session cannot read its own permission mode, so nothing is inferred; set -> nothing.
 
 Invoke `Skill(skill: "lets:orient", args: "caller=start")` - with no active task it degrades to branch + no-task + In flight + Next up + Project, which IS the PM triage surface. Keep it short - if the tracker has a deeper native dashboard, point the user at it in one line.
 

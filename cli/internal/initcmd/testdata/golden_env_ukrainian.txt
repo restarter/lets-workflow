@@ -23,3 +23,6 @@ LETS_LAUNCHER=terminal
 
 # Where this project's workflow rules come from: project (own .claude/rules copy) | user (rely on the ~/.claude/rules global copy)
 LETS_RULES_SCOPE=project
+
+# How the sessions LETS launches start: default (plain claude; also what empty means) | auto (--permission-mode auto) | all-in (--permission-mode bypassPermissions - set it only on purpose; match the class your orchestrator runs in)
+LETS_LAUNCH_MODE=

@@ -34,3 +34,7 @@ A grant that lets a bound pair talk without per-message confirmation - the owner
 |---|---|
 | SendMessage between members of one agent team (`/lets:team`, a team session) while the team link holds | team routing, not a peer send |
 | a member reached as a cross-session peer (`link: peer`) | a peer send - gated like any peer send (user's request in this turn), and members do not message each other then |
+
+## Pane-member names across repos
+
+A standing team's callsign is unique per repository only, so two repositories can each run a `snake` team. The lead's name embeds the repository (`<repo>-<callsign>-lead`) and never collides. A pane member - a separately launched session - is named `<callsign>-<name>` with no repository part, so `snake-architect` panes in two repositories are one machine-wide name: `lets peers who` marks both `duplicate_name`, `/lets:orc` refuses to send to either, `/lets:team spawn --roster` never re-uses them, and a native `SendMessage` by that name needs the `[ref]` `ListAgents` shows. In-process members (no pane) are not affected. Until pane names carry the repository, run one repository's pane members of a callsign at a time, or address them by `[ref]`.

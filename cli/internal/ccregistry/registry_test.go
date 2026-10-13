@@ -6,6 +6,9 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -168,5 +171,230 @@ func TestSnapshot_LooseKeepsProtocolUnknown(t *testing.T) {
 	}
 	if _, ok := s.Find(v2); ok {
 		t.Error("a Loose session must never be addressable through Find")
+	}
+}
+
+// writeRows writes one registry file per pid -> JSON body and reads the registry
+// back with exactly those pids alive.
+func writeRows(t *testing.T, rows map[int]string) Snapshot {
+	t.Helper()
+	dir := t.TempDir()
+	sessions := filepath.Join(dir, "sessions")
+	if err := os.MkdirAll(sessions, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	var pids []int
+	for pid, body := range rows {
+		pids = append(pids, pid)
+		if err := os.WriteFile(filepath.Join(sessions, strconv.Itoa(pid)+".json"), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	withAlive(t, pids...)
+	return Read(dir)
+}
+
+const (
+	parkedSID = "aaaaaaaa-1111-4111-8111-111111111111"
+	bgSID     = "bbbbbbbb-2222-4222-8222-222222222222"
+)
+
+// parkedRow is the observed shape of a session parked into a background job.
+func parkedRow(parkedJobID string) string {
+	b, _ := json.Marshal(map[string]any{
+		"pid": 3001, "sessionId": parkedSID, "cwd": "/repo", "startedAt": 1760000000000,
+		"procStart": "Mon Oct 12 17:00:00 2026", "kind": "interactive", "status": "idle",
+		"name": "snake-lead", "nameSource": "user", "peerProtocol": 1, "parkedJobId": parkedJobID,
+	})
+	return string(b)
+}
+
+// bgRow is the observed shape of the background job's row: the shared name, no
+// nameSource. kind "" or jobID "" omit that key.
+func bgRow(kind, jobID string) string {
+	m := map[string]any{
+		"pid": 3002, "sessionId": bgSID, "cwd": "/repo", "startedAt": 1760000100000,
+		"procStart": "Mon Oct 12 17:01:40 2026", "status": "idle", "name": "snake-lead", "peerProtocol": 1,
+	}
+	if kind != "" {
+		m["kind"] = kind
+	}
+	if jobID != "" {
+		m["jobId"] = jobID
+	}
+	b, _ := json.Marshal(m)
+	return string(b)
+}
+
+// selfParkedBgRow is one background-job row whose parkedJobId equals its own jobId.
+var selfParkedBgRow = `{"sessionId":"` + parkedSID + `","name":"snake-lead","peerProtocol":1,"kind":"bg","jobId":"deadbeef","parkedJobId":"deadbeef"}`
+
+func TestRead_DecodesJobFields(t *testing.T) {
+	plain := `{"sessionId":"` + bgSID + `","name":"MAIN","peerProtocol":1,"startedAt":1760000100000}`
+	s := writeRows(t, map[int]string{3001: parkedRow("bbbbbbbb"), 3002: plain})
+	if s.Degraded != nil || len(s.Entries) != 2 {
+		t.Fatalf("entries=%+v degraded=%+v", s.Entries, s.Degraded)
+	}
+	p, _ := s.Find(parkedSID)
+	if p.Kind != "interactive" || p.ParkedJobID != "bbbbbbbb" || p.JobID != "" {
+		t.Errorf("parked row: %+v", p)
+	}
+	c, _ := s.Find(bgSID)
+	if c.Kind != "" || c.JobID != "" || c.ParkedJobID != "" {
+		t.Errorf("row without job keys: %+v", c)
+	}
+	s = writeRows(t, map[int]string{3002: bgRow("bg", "bbbbbbbb")})
+	if c, _ = s.Find(bgSID); c.Kind != "bg" || c.JobID != "bbbbbbbb" || c.ParkedJobID != "" {
+		t.Errorf("bg row: %+v", c)
+	}
+	s = writeRows(t, map[int]string{3001: selfParkedBgRow})
+	if e, _ := s.Find(parkedSID); e.Kind != "bg" || e.JobID != "deadbeef" || e.ParkedJobID != "deadbeef" {
+		t.Errorf("row with all three job keys: %+v", e)
+	}
+}
+
+func TestRead_JobFieldWrongTypeStillReads(t *testing.T) {
+	body := `{"sessionId":"` + bgSID + `","name":"snake-lead","peerProtocol":1,"kind":["bg"],"jobId":123,"parkedJobId":{"x":1}}`
+	s := writeRows(t, map[int]string{3002: body})
+	if s.Degraded != nil || len(s.Entries) != 1 {
+		t.Fatalf("entries=%+v degraded=%+v", s.Entries, s.Degraded)
+	}
+	if e := s.Entries[0]; e.JobID != "" || e.Kind != "" || e.ParkedJobID != "" {
+		t.Errorf("non-string job fields must read as empty: %+v", e)
+	}
+}
+
+func TestContinuedIn(t *testing.T) {
+	const other = "cccccccc-3333-4333-8333-333333333333"
+	plainParked := `{"sessionId":"` + parkedSID + `","name":"snake-lead","peerProtocol":1}`
+	plainBg := `{"sessionId":"` + bgSID + `","name":"snake-lead","peerProtocol":1}`
+	cases := []struct {
+		name     string
+		rows     map[int]string
+		sid, own string
+		want     bool
+	}{
+		{"parked + bg, matching ids", map[int]string{3001: parkedRow("bbbbbbbb"), 3002: bgRow("bg", "bbbbbbbb")}, parkedSID, bgSID, true},
+		{"explicit ids, not the own sid prefix", map[int]string{3001: parkedRow("deadbeef"), 3002: bgRow("bg", "deadbeef")}, parkedSID, bgSID, true},
+		{"own row without kind", map[int]string{3001: parkedRow("deadbeef"), 3002: bgRow("", "deadbeef")}, parkedSID, bgSID, true},
+		{"neither row carries a job field", map[int]string{3001: plainParked, 3002: plainBg}, parkedSID, bgSID, false},
+		{"own row kind interactive", map[int]string{3001: parkedRow("deadbeef"), 3002: bgRow("interactive", "deadbeef")}, parkedSID, bgSID, false},
+		{"different job id", map[int]string{3001: parkedRow("deadbeef"), 3002: bgRow("bg", "feedface")}, parkedSID, bgSID, false},
+		{"own row without jobId", map[int]string{3001: parkedRow("deadbeef"), 3002: bgRow("bg", "")}, parkedSID, bgSID, false},
+		{"parkedJobId is own sid prefix, own has no jobId", map[int]string{3001: parkedRow(bgSID[:8]), 3002: bgRow("bg", "")}, parkedSID, bgSID, false},
+		{"sid not listed", map[int]string{3002: bgRow("bg", "deadbeef")}, other, bgSID, false},
+		{"own not listed", map[int]string{3001: parkedRow("deadbeef")}, parkedSID, other, false},
+		// a bg row that carries its own job id as parkedJobId: every field matches, so
+		// only the sid == own guard makes it false
+		{"sid == own", map[int]string{3001: selfParkedBgRow}, parkedSID, parkedSID, false},
+	}
+	for _, c := range cases {
+		if got := writeRows(t, c.rows).ContinuedIn(c.sid, c.own); got != c.want {
+			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+func TestSameProcess(t *testing.T) {
+	const started = int64(1760000000000)
+	s := writeRows(t, map[int]string{3001: parkedRow("deadbeef")})
+	cases := []struct {
+		name    string
+		pid     int
+		started int64
+		want    bool
+	}{
+		{"equal ms", 3001, started, true},
+		{"+800 ms", 3001, started + 800, false},
+		{"-800 ms", 3001, started - 800, false},
+		{"pid not listed", 3009, started, false},
+		{"startedMs 0", 3001, 0, false},
+	}
+	for _, c := range cases {
+		if got := s.SameProcess(c.pid, c.started); got != c.want {
+			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// Named collapses a parked session and its background continuation into ONE logical
+// session - the continuation, its address; anything else counts per process.
+func TestNamed(t *testing.T) {
+	const other = "cccccccc-3333-4333-8333-333333333333"
+	otherRow := `{"sessionId":"` + other + `","name":"snake-lead","peerProtocol":1,"kind":"interactive"}`
+	cases := []struct {
+		name string
+		rows map[int]string
+		want []string // session ids, sorted
+	}{
+		{"parked + its continuation = one, the continuation", map[int]string{3001: parkedRow("deadbeef"), 3002: bgRow("bg", "deadbeef")}, []string{bgSID}},
+		{"two unrelated live sessions = two", map[int]string{3001: parkedRow(""), 3003: otherRow}, []string{parkedSID, other}},
+		{"parked without a continuation = one, the parked row", map[int]string{3001: parkedRow("deadbeef")}, []string{parkedSID}},
+		{"a bg job of another job id = two", map[int]string{3001: parkedRow("deadbeef"), 3002: bgRow("bg", "feedface")}, []string{parkedSID, bgSID}},
+		{"parked + continuation + an unrelated holder = two", map[int]string{3001: parkedRow("deadbeef"), 3002: bgRow("bg", "deadbeef"), 3003: otherRow}, []string{bgSID, other}},
+		{"no holder", map[int]string{3003: `{"sessionId":"` + other + `","name":"MAIN","peerProtocol":1}`}, nil},
+	}
+	for _, c := range cases {
+		var got []string
+		for _, e := range writeRows(t, c.rows).Named("snake-lead") {
+			got = append(got, e.SessionID)
+		}
+		sort.Strings(got)
+		if strings.Join(got, ",") != strings.Join(c.want, ",") {
+			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// NameOf classifies a session's registry name the one way every self-name reader
+// uses: not listed, listed without a name, a name failing the grammar, a usable name.
+func TestNameOf(t *testing.T) {
+	const (
+		noName = "cccccccc-3333-4333-8333-333333333333"
+		badSID = "dddddddd-4444-4444-8444-444444444444"
+		absent = "eeeeeeee-5555-4555-8555-555555555555"
+	)
+	s := writeRows(t, map[int]string{
+		3001: parkedRow(""),
+		3003: `{"sessionId":"` + noName + `","peerProtocol":1}`,
+		3004: `{"sessionId":"` + badSID + `","name":"bad  name","peerProtocol":1}`,
+	})
+	for _, c := range []struct {
+		sid       string
+		wantName  string
+		wantState NameState
+	}{
+		{parkedSID, "snake-lead", NameValid},
+		{noName, "", NameNone},
+		{badSID, "bad  name", NameInvalid},
+		{absent, "", NameUnlisted},
+	} {
+		if n, st := s.NameOf(c.sid); n != c.wantName || st != c.wantState {
+			t.Errorf("%s: %q %v, want %q %v", c.sid, n, st, c.wantName, c.wantState)
+		}
+	}
+}
+
+// A session id held by two processes - the parked row and an independently resumed
+// process without job fields - is judged per ENTRY: only the parked row collapses into
+// the continuation, the resumed process stays, in every entry order.
+func TestNamed_PerEntryInEveryOrder(t *testing.T) {
+	parked := Entry{Pid: 3001, SessionID: parkedSID, Name: "snake-lead", NameOK: true, Kind: "interactive", ParkedJobID: "J"}
+	cont := Entry{Pid: 3002, SessionID: bgSID, Name: "snake-lead", NameOK: true, Kind: "bg", JobID: "J"}
+	resumed := Entry{Pid: 3003, SessionID: parkedSID, Name: "snake-lead", NameOK: true}
+	rows := []Entry{parked, cont, resumed}
+	for _, order := range [][]int{{0, 1, 2}, {0, 2, 1}, {1, 0, 2}, {1, 2, 0}, {2, 0, 1}, {2, 1, 0}} {
+		var es []Entry
+		for _, i := range order {
+			es = append(es, rows[i])
+		}
+		var pids []int
+		for _, e := range (Snapshot{Entries: es}).Named("snake-lead") {
+			pids = append(pids, e.Pid)
+		}
+		sort.Ints(pids)
+		if len(pids) != 2 || pids[0] != 3002 || pids[1] != 3003 {
+			t.Errorf("order %v: Named = pids %v, want [3002 3003]", order, pids)
+		}
 	}
 }

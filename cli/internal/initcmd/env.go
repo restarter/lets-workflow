@@ -264,6 +264,13 @@ func mergePrefs(prefs Prefs, existing map[string]string) Prefs {
 	result.PRFlow = pick(prefs.PRFlow, "LETS_PR_FLOW")
 	result.Launcher = pick(prefs.Launcher, "LETS_LAUNCHER")
 	result.RulesScope = pick(prefs.RulesScope, "LETS_RULES_SCOPE")
+	// LETS_LAUNCH_MODE never falls back to its default (lets-d3wu3): empty means
+	// `default` and stays "unset", so the user-level overlay still applies and
+	// /lets:start --main can name it. Flag > existing value > "".
+	result.LaunchMode = prefs.LaunchMode
+	if result.LaunchMode == "" {
+		result.LaunchMode = existing["LETS_LAUNCH_MODE"]
+	}
 	if existingTracker := existing["LETS_TRACKER"]; existingTracker != "" {
 		result.Tracker = existingTracker
 	}
@@ -294,6 +301,9 @@ func diffKeys(old map[string]string, new Prefs) []string {
 	}
 	if old["LETS_RULES_SCOPE"] != new.RulesScope {
 		changed = append(changed, "LETS_RULES_SCOPE")
+	}
+	if old["LETS_LAUNCH_MODE"] != new.LaunchMode {
+		changed = append(changed, "LETS_LAUNCH_MODE")
 	}
 	if len(changed) == 0 {
 		return []string{}

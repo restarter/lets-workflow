@@ -143,7 +143,7 @@ Worktree:  /lets:worktree create -> `cd .worktrees/<name>/ && claude` -> /lets:s
 Orca:      /lets:worktree create (LETS_LAUNCHER=orca) -> Orca pane runs /lets:start <id> (adopt already linked it) -> Work -> /lets:done -> /lets:end -> archive in Orca (lets worktree release)
 
 Team:      /lets:team run [--tasks A,B] -> one visible worker session per task on any launcher, bound via /lets:orc -> each worker /lets:start ... /lets:done   (orca: an Orca child worktree per task; --backend agents is refused)
-Standing team:  /lets:team create [<callsign>] --area <a> (from the main checkout) -> the lead <callsign>-lead opens in team_<callsign> -> /lets:start <id> claims the lead and switches the branch (uncommitted work: commit or park, never stash) -> work -> /lets:done -> next task -> /lets:team disband <callsign>
+Standing team:  /lets:team create [<callsign>] --area <a> (from the main checkout) -> the lead (the session named by the team file's lead_name, <repo>-<callsign>-lead for a new team) opens in team_<callsign> -> /lets:start <id> claims nothing (it only hints /rename) and switches the branch (uncommitted work: commit or park, never stash) -> work -> /lets:done -> next task -> /lets:team disband <callsign>
 
 Orchestrators:  /lets:start --main [--scope "<part>"] (several per repo, unique per session name) -> /lets:worktree create <id> binds each spawned worker (--orc) -> a worker chat opened by hand: /lets:start <id> --orc=<name> -> worker and orchestrator talk via /lets:orc
 
@@ -335,19 +335,19 @@ A `--json` subcommand package owns its typed exit codes (`exit.go`, with a `Test
 
 | Package | Command | Range |
 |---|---|---|
-| `worktreecmd` | `lets worktree` | 10-26; 27-34 reserved for the standing-team verbs |
-| `memberscmd` | `lets members` | 40-49 |
+| `worktreecmd` | `lets worktree` | 10-26; 27-35 reserved for the standing-team verbs |
+| `memberscmd` (retired) | `lets members` (deprecated stub) | 40-49 retired, never reused |
 | `integratecmd` | `lets integrate` | 50-59 (full: a new failure class reuses 55 with its own `error.kind`) |
 
 `0` ok, `1` generic and `2` usage are shared. A new package takes the next free decade and adds a row here.
 
 ### Spawning an agent that writes or persists
 
-An implementer, or any member of a standing team, is spawned, messaged and dismissed ONLY through `skills/member-run/SKILL.md`, with `lets members` as the registry of who is live. A command never calls the `Agent` tool for such a member itself (`TestMemberRun`, `cli/internal/initcmd/memberrun_test.go`, pins the contract; `TestOrcLint` exempts only member-run's and execute.md's own `{agent}` recipient from the peer-send rule). One-shot analysis subagents (`/lets:review`, `/lets:opinion`, ...) are not members.
+An implementer, or any member of a standing team, is spawned, messaged and dismissed ONLY through `skills/member-run/SKILL.md`; `ListAgents` judges who is live and the caller's run record / team file holds `agent_id` and dismissals. A command never calls the `Agent` tool for such a member itself (`TestMemberRun`, `cli/internal/initcmd/memberrun_test.go`, pins the contract; `TestOrcLint` exempts only member-run's and execute.md's own `{agent}` recipient from the peer-send rule). One-shot analysis subagents (`/lets:review`, `/lets:opinion`, ...) are not members.
 
 ### Leaf packages and import direction
 
-`trackeradapter`, `taskid`, `fsutil`, `peername`, `taskstate`, `redact`, `ccregistry`, `agentrun`, `teamfile`, `memberscmd`, `integratecmd` and `gitutil` are leaves (the test's table is authoritative): they import the standard library or another leaf, nothing else, so any command package can use them without an import cycle. `TestLeafPackages` (`cli/internal/cli/leaf_packages_test.go`) holds the table - append a directory when a new leaf lands - and `TestDeniedImports` forbids the edges that would compile but invert the layering (`worktreecmd` never imports `orcacmd` or `peerscmd`; `orcacmd` never imports `peerscmd`). A package that owns a file format (`taskstate` owns `.task-<branch-slug>`) is the only writer; markdown writes through its CLI.
+`trackeradapter`, `taskid`, `fsutil`, `peername`, `taskstate`, `redact`, `ccregistry`, `agentrun`, `teamfile`, `integratecmd` and `gitutil` are leaves (the test's table is authoritative): they import the standard library or another leaf, nothing else, so any command package can use them without an import cycle. `TestLeafPackages` (`cli/internal/cli/leaf_packages_test.go`) holds the table - append a directory when a new leaf lands - and `TestDeniedImports` forbids the edges that would compile but invert the layering (`worktreecmd` never imports `orcacmd` or `peerscmd`; `orcacmd` never imports `peerscmd`). A package that owns a file format (`taskstate` owns `.task-<branch-slug>`) is the only writer; markdown writes through its CLI.
 
 ## Commits & PRs
 

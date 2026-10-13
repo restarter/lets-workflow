@@ -19,6 +19,7 @@ type Prefs struct {
 	Tracker     string // adapter name: "beads" (default) | "none"
 	Launcher    string // "terminal" (default) | "cmux" | "tmux" | "orca" (also the Orca addon switch)
 	RulesScope  string // "project" (own .claude/rules copy) | "user" (rely on ~/.claude/rules) | "" = preserve-or-default
+	LaunchMode  string // "default" | "auto" | "all-in" (lets-d3wu3) | "" = preserve-or-default
 	SkipBeads   bool
 	// TrackerExplicit records whether --tracker was passed on the command line
 	// (cobra Changed). Transient signal, NOT a config key (excluded from
@@ -41,6 +42,7 @@ func (p Prefs) AsValues() map[string]string {
 		"LETS_TRACKER":      p.Tracker,
 		"LETS_LAUNCHER":     p.Launcher,
 		"LETS_RULES_SCOPE":  p.RulesScope,
+		"LETS_LAUNCH_MODE":  p.LaunchMode,
 	}
 }
 

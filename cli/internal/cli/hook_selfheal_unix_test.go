@@ -185,17 +185,31 @@ func TestSelfHeal_LockBusyTimesOut(t *testing.T) {
 	}
 }
 
-func TestSessionStart_PeersHealOnClearNotCompact(t *testing.T) {
-	dir := t.TempDir()
-	var got []string
-	old := peersHealFn
-	peersHealFn = func(root, sid string) { got = append(got, sid) }
-	t.Cleanup(func() { peersHealFn = old })
-	const sid = "aaaaaaaa-0000-4000-8000-000000000001"
-	runSessionStart(t, dir, `{"source":"clear","session_id":"`+sid+`"}`)
-	runSessionStart(t, dir, `{"source":"compact","session_id":"`+sid+`"}`)
-	if len(got) != 1 || got[0] != sid {
-		t.Errorf("the proof carry must run on clear, not compact; got %v", got)
+// The hook never reads or writes .lets/sessions/peers: the /clear proof is the
+// task-state session_proof key. Startup, resume and /clear leave a missing peers dir
+// missing, and an existing legacy .role file byte-identical - even one the registry
+// shows under another pid (the old carry rewrote that one).
+func TestHookSessionStart_NeverTouchesPeersDir(t *testing.T) {
+	for _, src := range []string{"startup", "resume", "clear"} {
+		w := newGuardWorld(t)
+		repo, _, _ := guardRepo(t, "task: lets-abc\nsession: 1111111 "+gSidLead+"\n"+proofLine(gSidLead, 100, gStartedMs))
+		w.putRow(100, interactiveRow(100, gSidLead, repo, gStartedMs))
+		w.callerIs(100)
+		payload := `{"session_id":"` + gSidLead + `","source":"` + src + `"}`
+		runSessionStart(t, repo, payload)
+		peers := filepath.Join(repo, ".lets", "sessions", "peers")
+		if _, err := os.Stat(peers); !os.IsNotExist(err) {
+			t.Errorf("%s: the hook created the peers dir: %v", src, err)
+		}
+		legacy := "session: " + gSidLead + "\npid: 999\nset: 2026-10-12T17:00:00Z\n"
+		healWrite(t, filepath.Join(peers, gSidLead+".role"), legacy)
+		runSessionStart(t, repo, payload)
+		if got := readString(t, filepath.Join(peers, gSidLead+".role")); got != legacy {
+			t.Errorf("%s: a legacy .role file was rewritten:\n%s", src, got)
+		}
+		if ents, _ := os.ReadDir(peers); len(ents) != 1 {
+			t.Errorf("%s: the peers dir gained files: %v", src, ents)
+		}
 	}
 }
 
@@ -203,6 +217,7 @@ const (
 	gSidLead = "aaaaaaaa-0000-4000-8000-000000000001"
 	gSidPane = "bbbbbbbb-0000-4000-8000-000000000002"
 	gSidNew  = "cccccccc-0000-4000-8000-000000000003"
+	gSidNext = "dddddddd-0000-4000-8000-000000000004"
 )
 
 // guardWorld is a fake Claude Code session registry for the session-owner guard.
@@ -225,6 +240,25 @@ func newGuardWorld(t *testing.T) *guardWorld {
 	return w
 }
 
+// callerIs makes pid the Claude Code process that runs this test's commands: the
+// ancestry walk (ccregistry.CallerSession) goes os.Getppid() -> pid -> init.
+func (w *guardWorld) callerIs(pid int) {
+	w.parentsAre(map[int]int{os.Getppid(): pid, pid: 1})
+}
+
+// parentsAre makes ccregistry.ParentOf answer from parents; a pid outside it is an
+// unreadable hop.
+func (w *guardWorld) parentsAre(parents map[int]int) {
+	old := ccregistry.ParentOf
+	ccregistry.ParentOf = func(pid int) (int, error) {
+		if p, ok := parents[pid]; ok {
+			return p, nil
+		}
+		return 0, fmt.Errorf("no such process %d", pid)
+	}
+	w.t.Cleanup(func() { ccregistry.ParentOf = old })
+}
+
 func (w *guardWorld) put(pid int, sid, name, cwd string, started time.Time) {
 	w.t.Helper()
 	b, _ := json.Marshal(map[string]any{"sessionId": sid, "name": name, "cwd": cwd, "peerProtocol": 1, "status": "idle", "startedAt": started.UnixMilli()})
@@ -232,6 +266,37 @@ func (w *guardWorld) put(pid int, sid, name, cwd string, started time.Time) {
 		w.t.Fatal(err)
 	}
 	w.alive[pid] = true
+}
+
+// putRow writes a registry row of the observed shape verbatim (kind, jobId,
+// parkedJobId, procStart, a missing nameSource ...) and marks pid alive.
+func (w *guardWorld) putRow(pid int, row map[string]any) {
+	w.t.Helper()
+	b, _ := json.Marshal(row)
+	if err := os.WriteFile(filepath.Join(w.dir, "sessions", fmt.Sprintf("%d.json", pid)), b, 0o600); err != nil {
+		w.t.Fatal(err)
+	}
+	w.alive[pid] = true
+}
+
+// interactiveRow is an interactive session's row as Claude Code writes it.
+func interactiveRow(pid int, sid, cwd string, startedMs int64) map[string]any {
+	return map[string]any{
+		"pid": pid, "sessionId": sid, "cwd": cwd, "startedAt": startedMs, "procStart": "Mon Oct 12 17:00:00 2026",
+		"kind": "interactive", "status": "idle", "name": "snake-lead", "nameSource": "user", "peerProtocol": 1,
+	}
+}
+
+// bgRow is a background job's row: the shared name, no nameSource; jobID "" omits jobId.
+func bgRow(pid int, sid, cwd string, startedMs int64, jobID string) map[string]any {
+	m := map[string]any{
+		"pid": pid, "sessionId": sid, "cwd": cwd, "startedAt": startedMs, "procStart": "Mon Oct 12 17:01:40 2026",
+		"kind": "bg", "status": "idle", "name": "snake-lead", "peerProtocol": 1,
+	}
+	if jobID != "" {
+		m["jobId"] = jobID
+	}
+	return m
 }
 
 func (w *guardWorld) kill(pid int) {
@@ -266,9 +331,9 @@ func readString(t *testing.T, p string) string {
 	return string(b)
 }
 
-// A teammate pane in the lead's worktree runs the same hook: the lead's live
-// boundary is not overwritten and the pane is told so; once the lead has ended,
-// a new session takes the boundary as before.
+// A second session in the same worktree runs the same hook: the live holder's
+// boundary is not overwritten and the newcomer is told so; once the holder has
+// ended, a new session takes the boundary as before.
 func TestHookSessionStart_HeldNotice(t *testing.T) {
 	w := newGuardWorld(t)
 	body := "task: lets-abc\nsession: 1111111 " + gSidLead + "\n"
@@ -290,52 +355,151 @@ func TestHookSessionStart_HeldNotice(t *testing.T) {
 	}
 }
 
-// /clear re-mints the id in the same process: with the old id's proof file (an
-// older binary's role file reads the same) the boundary is carried (sha kept), and
-// peersHeal's CarryProof still moves that file to the new id afterwards - the guard
-// read it without touching it. Without a proof file nothing is written and the
-// residual gap is named.
-func TestHookSessionStart_ClearCarriesWithRoleFile(t *testing.T) {
+const gStartedMs = int64(1790797661911)
+
+func proofLine(sid string, pid int, ms int64) string {
+	return fmt.Sprintf("session_proof: %s %d %d\n", sid, pid, ms)
+}
+
+// /clear re-mints the id in the same process: the session_proof recorded beside the
+// line proves it (no peers dir at all), the boundary is carried with its sha and the
+// new proof binds the new id. Without the proof nothing is written and the gap is
+// named - with or without a peers dir.
+func TestHookSessionStart_ClearCarriesWithSessionProof(t *testing.T) {
 	w := newGuardWorld(t)
 	body := "task: lets-abc\nsession: 1111111 " + gSidLead + "\n"
 	repo, _, taskFile := guardRepo(t, body)
-	set := time.Now().Add(-time.Minute).UTC().Truncate(time.Second)
-	w.put(100, gSidNew, "lead", repo, set.Add(-time.Hour)) // same pid, re-minted id
-	oldRole := filepath.Join(repo, ".lets", "sessions", "peers", gSidLead+".role")
+	w.putRow(100, interactiveRow(100, gSidNew, repo, gStartedMs)) // same pid, re-minted id
+	// the Claude Code process that runs the hook
+	w.callerIs(100)
 
-	// No peers dir (a default install): no proof is possible, so /clear stays silent.
 	out := runSessionStart(t, repo, `{"session_id":"`+gSidNew+`","source":"clear"}`)
 	if got := readString(t, taskFile); got != body {
 		t.Fatalf("no proof: the boundary must stay:\n%s", got)
 	}
-	if strings.Contains(out, "no peer role file") || strings.Contains(out, ".task-feature-x") {
-		t.Errorf("no peers dir: /clear must add no Notice:\n%s", out)
-	}
-	// Peers in use but no role file for the old id: the gap is named.
-	if err := os.MkdirAll(filepath.Dir(oldRole), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	out = runSessionStart(t, repo, `{"session_id":"`+gSidNew+`","source":"clear"}`)
-	if got := readString(t, taskFile); got != body {
-		t.Fatalf("no proof: the boundary must stay:\n%s", got)
-	}
-	if !strings.Contains(out, "no peer role file") {
-		t.Errorf("peers dir present: the gap must be named:\n%s", out)
+	if !strings.Contains(out, "no session_proof recorded its process") {
+		t.Errorf("no proof: the gap must be named even without a peers dir:\n%s", out)
 	}
 
-	healWrite(t, oldRole, "role: worker\ntask: lets-abc\npid: 100\nset: "+set.Format(time.RFC3339)+"\n")
+	healWrite(t, taskFile, body+proofLine(gSidLead, 100, gStartedMs))
 	out = runSessionStart(t, repo, `{"session_id":"`+gSidNew+`","source":"clear"}`)
-	if got := readString(t, taskFile); !strings.Contains(got, "session: 1111111 "+gSidNew) {
-		t.Fatalf("proven: the boundary must be carried with its sha:\n%s\n%s", got, out)
+	want := "task: lets-abc\nsession: 1111111 " + gSidNew + "\n" + proofLine(gSidNew, 100, gStartedMs)
+	if got := readString(t, taskFile); got != want {
+		t.Fatalf("proven: the boundary must be carried with its sha and a new proof:\n%s\n%s", got, out)
 	}
 	if !strings.Contains(out, "carried to this session's new id") {
 		t.Errorf("a carry is never silent:\n%s", out)
 	}
-	if _, err := os.Stat(filepath.Join(repo, ".lets", "sessions", "peers", gSidNew+".role")); err != nil {
-		t.Errorf("peersHeal must still move the proof file to the new id: %v", err)
+	if _, err := os.Stat(filepath.Join(repo, ".lets", "sessions", "peers")); !os.IsNotExist(err) {
+		t.Errorf("the carry must not need or create a peers dir: %v", err)
 	}
-	if _, err := os.Stat(oldRole); !os.IsNotExist(err) {
-		t.Errorf("the old id's proof file must be gone after peersHeal: %v", err)
+}
+
+// An older binary rewrote session: and left the proof of the previous id beside it:
+// that proof names another session and proves nothing about the stored one.
+func TestHookSessionStart_ProofOfOldIdProvesNothing(t *testing.T) {
+	w := newGuardWorld(t)
+	body := "task: lets-abc\nsession: 1111111 " + gSidPane + "\n" + proofLine(gSidLead, 100, gStartedMs)
+	repo, _, taskFile := guardRepo(t, body)
+	w.putRow(100, interactiveRow(100, gSidNew, repo, gStartedMs))
+	out := runSessionStart(t, repo, `{"session_id":"`+gSidNew+`","source":"clear"}`)
+	if got := readString(t, taskFile); got != body {
+		t.Fatalf("a proof of another id carried:\n%s", got)
+	}
+	if !strings.Contains(out, "no session_proof recorded its process") {
+		t.Errorf("want the no-proof Notice:\n%s", out)
+	}
+}
+
+// Two /clear in a row in the same process: each carry writes the proof the next
+// one needs.
+func TestHookSessionStart_ClearTwiceCarries(t *testing.T) {
+	w := newGuardWorld(t)
+	repo, _, taskFile := guardRepo(t, "task: lets-abc\nsession: 1111111 "+gSidLead+"\n"+proofLine(gSidLead, 100, gStartedMs))
+	w.putRow(100, interactiveRow(100, gSidNew, repo, gStartedMs))
+	// the Claude Code process that runs the hook
+	w.callerIs(100)
+	runSessionStart(t, repo, `{"session_id":"`+gSidNew+`","source":"clear"}`)
+	w.putRow(100, interactiveRow(100, gSidNext, repo, gStartedMs))
+	out := runSessionStart(t, repo, `{"session_id":"`+gSidNext+`","source":"clear"}`)
+	want := "task: lets-abc\nsession: 1111111 " + gSidNext + "\n" + proofLine(gSidNext, 100, gStartedMs)
+	if got := readString(t, taskFile); got != want {
+		t.Errorf("second carry:\n%s\n%s", got, out)
+	}
+}
+
+// `claude -r` resumes the same id in a new process: the resume re-records only the
+// proof, so a /clear in that new process still carries.
+func TestHookSessionStart_ResumeThenClearCarries(t *testing.T) {
+	w := newGuardWorld(t)
+	repo, _, taskFile := guardRepo(t, "task: lets-abc\nsession: 1111111 "+gSidLead+"\n"+proofLine(gSidLead, 100, gStartedMs))
+	const p2Ms = gStartedMs + 3_600_000
+	w.putRow(300, interactiveRow(300, gSidLead, repo, p2Ms)) // P1 (pid 100) is gone
+	// the Claude Code process that runs the hook
+	w.callerIs(300)
+	runSessionStart(t, repo, `{"session_id":"`+gSidLead+`","source":"resume"}`)
+	if got, want := readString(t, taskFile), "task: lets-abc\nsession: 1111111 "+gSidLead+"\n"+proofLine(gSidLead, 300, p2Ms); got != want {
+		t.Fatalf("resume must rewrite only the proof:\n%s", got)
+	}
+	w.putRow(300, interactiveRow(300, gSidNew, repo, p2Ms))
+	out := runSessionStart(t, repo, `{"session_id":"`+gSidNew+`","source":"clear"}`)
+	if got := readString(t, taskFile); !strings.Contains(got, "session: 1111111 "+gSidNew+"\n") {
+		t.Errorf("resume then /clear must carry:\n%s\n%s", got, out)
+	}
+}
+
+// The proof names an exact process: the recorded pid now listing a startedAt 800 ms
+// off is another process (Rotated's one-second slack alone would accept it).
+func TestHookSessionStart_ProofStartedMismatchNoProof(t *testing.T) {
+	w := newGuardWorld(t)
+	body := "task: lets-abc\nsession: 1111111 " + gSidLead + "\n" + proofLine(gSidLead, 100, gStartedMs)
+	repo, _, taskFile := guardRepo(t, body)
+	w.putRow(100, interactiveRow(100, gSidNew, repo, gStartedMs+800))
+	out := runSessionStart(t, repo, `{"session_id":"`+gSidNew+`","source":"clear"}`)
+	if got := readString(t, taskFile); got != body {
+		t.Fatalf("a pid with another startedAt carried:\n%s", got)
+	}
+	if !strings.Contains(out, "no session_proof recorded its process") {
+		t.Errorf("want the no-proof Notice:\n%s", out)
+	}
+}
+
+// A session parked into a background job (lets-56ymc): the job that continues it
+// takes the boundary on startup, though the parked row is still listed.
+func TestHookSessionStart_ParkedContinuationRefreshes(t *testing.T) {
+	w := newGuardWorld(t)
+	repo, head, taskFile := guardRepo(t, "task: lets-abc\nsession: 1111111 "+gSidLead+"\n")
+	parked := interactiveRow(100, gSidLead, repo, gStartedMs)
+	parked["parkedJobId"] = "deadbeef"
+	w.putRow(100, parked)
+	w.putRow(200, bgRow(200, gSidNew, repo, gStartedMs+60_000, "deadbeef"))
+	// the Claude Code process that runs the hook
+	w.callerIs(200)
+	out := runSessionStart(t, repo, `{"session_id":"`+gSidNew+`","source":"startup"}`)
+	want := "task: lets-abc\nsession: " + head + " " + gSidNew + "\n" + proofLine(gSidNew, 200, gStartedMs+60_000)
+	if got := readString(t, taskFile); got != want {
+		t.Errorf("the continuing job must take the boundary:\n%s\n%s", got, out)
+	}
+}
+
+// The same parked session is not continued in a caller whose job id differs or is
+// missing: the live parked holder keeps the line.
+func TestHookSessionStart_UnrelatedParkedHeld(t *testing.T) {
+	for _, jobID := range []string{"feedface", ""} {
+		w := newGuardWorld(t)
+		body := "task: lets-abc\nsession: 1111111 " + gSidLead + "\n"
+		repo, _, taskFile := guardRepo(t, body)
+		parked := interactiveRow(100, gSidLead, repo, gStartedMs)
+		parked["parkedJobId"] = "deadbeef"
+		w.putRow(100, parked)
+		w.putRow(200, bgRow(200, gSidNew, repo, gStartedMs+60_000, jobID))
+		out := runSessionStart(t, repo, `{"session_id":"`+gSidNew+`","source":"startup"}`)
+		if got := readString(t, taskFile); got != body {
+			t.Errorf("jobId %q: an unrelated job took the boundary:\n%s", jobID, got)
+		}
+		if !strings.Contains(out, "held by live session aaaaaaaa") {
+			t.Errorf("jobId %q: want the HeldLive Notice:\n%s", jobID, out)
+		}
 	}
 }
 
@@ -368,47 +532,31 @@ func TestHookSessionStart_GuardBounded(t *testing.T) {
 	}
 }
 
-// In a team worktree the recorded lead decides: a pane never writes the boundary,
-// even over a dead holder; the lead does, and its resumed pid is refreshed.
-func TestHookSessionStart_TeamLeadOnly(t *testing.T) {
+// A team worktree has no lead check any more: a recorded lead (a THIRD live
+// session in the old members registry) decides nothing. A dead holder's line is
+// refreshed and no Notice names the lead; a live foreign holder is HeldLive.
+func TestHookSessionStart_TeamWorktreeLiveHolderHeld(t *testing.T) {
 	w := newGuardWorld(t)
 	body := "task: lets-abc\nsession: 1111111 " + gSidNew + "\n" // a dead holder
 	repo, head, taskFile := guardRepo(t, body)
 	healWrite(t, filepath.Join(repo, ".lets", "teams", "snake.md"), "---\nteam: \"snake\"\nworktree: \""+repo+"\"\n---\n")
-	reg := filepath.Join(repo, ".lets", "execution", "members-snake.json")
-	healWrite(t, reg, `{"schema":1,"scope":"snake","lead":{"session":"`+gSidLead+`","name":"snake-lead","pid":100,"set":"2026-09-26T10:00:00Z"},"members":[]}`)
-	w.put(101, gSidLead, "snake-lead", repo, time.Now().Add(-time.Hour)) // the lead, resumed under pid 101
+	healWrite(t, filepath.Join(repo, ".lets", "execution", "members-snake.json"), `{"schema":1,"scope":"snake","lead":{"session":"`+gSidLead+`","name":"snake-lead","pid":101,"set":"2026-09-26T10:00:00Z"},"members":[]}`)
+	w.put(101, gSidLead, "snake-lead", repo, time.Now().Add(-time.Hour)) // the recorded lead, live
 	w.put(200, gSidPane, "snake-architect", repo, time.Now())
 
 	out := runSessionStart(t, repo, `{"session_id":"`+gSidPane+`","source":"startup"}`)
-	if got := readString(t, taskFile); got != body {
-		t.Fatalf("a pane wrote the boundary in a team worktree:\n%s", got)
+	if got := readString(t, taskFile); !strings.Contains(got, "session: "+head+" "+gSidPane+"\n") {
+		t.Fatalf("a dead holder's line must be refreshed:\n%s\n%s", got, out)
 	}
-	if !strings.Contains(out, "snake-lead") {
-		t.Errorf("the refusal must name the lead:\n%s", out)
+	if strings.Contains(out, "snake-lead") || strings.Contains(out, "team worktree") {
+		t.Errorf("no Notice may name the lead:\n%s", out)
 	}
-	runSessionStart(t, repo, `{"session_id":"`+gSidLead+`","source":"startup"}`)
-	if got := readString(t, taskFile); !strings.Contains(got, "session: "+head+" "+gSidLead) {
-		t.Errorf("the lead must refresh its boundary:\n%s", got)
+	out = runSessionStart(t, repo, `{"session_id":"`+gSidNew+`","source":"startup"}`)
+	if got := readString(t, taskFile); !strings.Contains(got, "session: "+head+" "+gSidPane+"\n") {
+		t.Errorf("a live foreign holder was overwritten:\n%s", got)
 	}
-	if !strings.Contains(readString(t, reg), `"pid": 101`) {
-		t.Errorf("the lead's pid must be refreshed:\n%s", readString(t, reg))
-	}
-}
-
-// A team file that cannot be read refuses the write and says how to fix it.
-func TestHookSessionStart_TeamFileErrorNamesFix(t *testing.T) {
-	w := newGuardWorld(t)
-	body := "task: lets-abc\n"
-	repo, _, taskFile := guardRepo(t, body)
-	healWrite(t, filepath.Join(repo, ".lets", "teams", "snake.md"), "---\nteam: \"frog\"\nworktree: \""+repo+"\"\n---\n")
-	w.put(200, gSidPane, "x", repo, time.Now())
-	out := runSessionStart(t, repo, `{"session_id":"`+gSidPane+`","source":"startup"}`)
-	if got := readString(t, taskFile); got != body {
-		t.Errorf("file changed:\n%s", got)
-	}
-	if !strings.Contains(out, "fix or remove the team file") || !strings.Contains(out, "snake.md") {
-		t.Errorf("the Notice must name the team file and the fix:\n%s", out)
+	if !strings.Contains(out, "held by live session bbbbbbbb") {
+		t.Errorf("want the HeldLive Notice:\n%s", out)
 	}
 }
 

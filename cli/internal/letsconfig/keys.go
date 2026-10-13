@@ -118,6 +118,19 @@ var Keys = []Key{
 		Comment: "Where this project's workflow rules come from: project (own .claude/rules copy) | user (rely on the ~/.claude/rules global copy)",
 		Default: "project",
 	},
+	{
+		// UserLevel stays false: the hook's MergedEnv already overlays
+		// ~/.lets/.env under the project file for every Names() key, so a
+		// hand-set user-level LETS_LAUNCH_MODE is the fallback, as for
+		// LETS_LAUNCHER; `lets init --user` does not manage it (lets-d3wu3).
+		// Default `default` is IMPLICIT: initcmd's mergePrefs never falls back
+		// to it for this key, so a regen leaves the value empty ("unset") - an
+		// empty project value lets the user-level overlay apply, and
+		// /lets:start --main names the unset key. .env.example shows `default`.
+		Name:    "LETS_LAUNCH_MODE",
+		Comment: "How the sessions LETS launches start: default (plain claude; also what empty means) | auto (--permission-mode auto) | all-in (--permission-mode bypassPermissions - set it only on purpose; match the class your orchestrator runs in)",
+		Default: "default",
+	},
 }
 
 // UserKeys returns the subset of Keys that `lets init --user` manages in

@@ -1,8 +1,9 @@
 // Package teamfile owns the Go side of the standing-team file
 // `.lets/teams/<name>.md`: rendering it from the plugin template
 // (plugins/lets/templates/team.md) and finding the team that owns a worktree.
-// The file is model-read; Go reads only the frontmatter keys `team`, `worktree`
-// and `git_dir`, and never anything below the frontmatter.
+// The file is model-read; Go reads only the frontmatter keys `team`, `worktree`,
+// `git_dir`, `lead_name`, `agent_command` and `orca_agent` (LaunchCommands), and
+// never anything below the frontmatter.
 //
 // `.lets/teams/` is shared by every worktree of the repo, so one broken file must
 // not affect another worktree: FindByWorktree skips a malformed file that does not
@@ -62,15 +63,15 @@ var Callsigns = []string{
 	"yak", "zebra", "beaver", "cobra", "dolphin", "eagle", "fox", "gibbon",
 }
 
-// FreeCallsign returns the first callsign with no team file in teamsDir and no
-// live session `<callsign>-lead` (live answers for a session name). ok=false when
-// every callsign is taken.
-func FreeCallsign(teamsDir string, live func(name string) bool) (string, bool) {
+// FreeCallsign returns the first callsign with no team file in teamsDir and no live
+// lead (leadLive reports whether a live session carries that callsign's lead name -
+// the caller owns the name rule). ok=false when every callsign is taken.
+func FreeCallsign(teamsDir string, leadLive func(callsign string) bool) (string, bool) {
 	for _, c := range Callsigns {
 		if _, err := os.Lstat(filepath.Join(teamsDir, c+".md")); err == nil || !errors.Is(err, os.ErrNotExist) {
 			continue
 		}
-		if live != nil && live(c+"-lead") {
+		if leadLive != nil && leadLive(c) {
 			continue
 		}
 		return c, true
@@ -109,9 +110,47 @@ func Render(tmpl []byte, v Values) ([]byte, error) {
 	return out, nil
 }
 
-// header is the part of a team file's frontmatter Go reads.
+// header is the part of a team file's frontmatter Go reads. agentCommand and
+// orcaAgent (the lead's launch commands, read by LaunchCommands) keep their own
+// error, launchErr: a bad launch key makes the launch commands unreadable without
+// making the file malformed for FindByWorktree or LeadName.
 type header struct {
-	team, worktree, gitDir string
+	team, worktree, gitDir, leadName string
+	agentCommand, orcaAgent          string
+	launchErr                        error
+}
+
+// LeadName is the lead_name the team file <teamsDir>/<team>.md records ("" when the
+// key is absent). A file that cannot be read, or whose frontmatter is malformed (a
+// duplicate key, a bad value, no closing ---), is an error.
+func LeadName(teamsDir, team string) (string, error) {
+	h, found, err := readHeader(filepath.Join(teamsDir, team+".md"))
+	if err != nil {
+		return "", err
+	}
+	if !found {
+		return "", nil
+	}
+	return h.leadName, nil
+}
+
+// LaunchCommands are the agent_command and orca_agent the team file
+// <teamsDir>/<team>.md records ("" for an absent key) - how its lead is launched.
+// A file that cannot be read, a malformed frontmatter, or a launch key that is
+// repeated or does not parse (the same rules as lead_name) is an error: the launch
+// command would be ambiguous.
+func LaunchCommands(teamsDir, team string) (agent, orca string, err error) {
+	h, found, err := readHeader(filepath.Join(teamsDir, team+".md"))
+	if err == nil {
+		err = h.launchErr
+	}
+	if err != nil {
+		return "", "", err
+	}
+	if !found {
+		return "", "", nil
+	}
+	return h.agentCommand, h.orcaAgent, nil
 }
 
 // FindByWorktree returns the team whose file in teamsDir claims the worktree at
@@ -213,6 +252,7 @@ func readHeader(path string) (h header, found bool, err error) {
 			continue
 		}
 		var dst *string
+		errp := &err
 		switch m[1] {
 		case "team":
 			dst = &h.team
@@ -220,17 +260,23 @@ func readHeader(path string) (h header, found bool, err error) {
 			dst = &h.worktree
 		case "git_dir":
 			dst = &h.gitDir
+		case "lead_name":
+			dst = &h.leadName
+		case "agent_command":
+			dst, errp = &h.agentCommand, &h.launchErr
+		case "orca_agent":
+			dst, errp = &h.orcaAgent, &h.launchErr
 		default:
 			continue
 		}
 		if seen[m[1]] {
-			err = errors.Join(err, fmt.Errorf("duplicate key %s", m[1]))
+			*errp = errors.Join(*errp, fmt.Errorf("duplicate key %s", m[1]))
 			continue
 		}
 		seen[m[1]] = true
 		val, verr := scalar(m[2])
 		if verr != nil {
-			err = errors.Join(err, fmt.Errorf("key %s: %w", m[1], verr))
+			*errp = errors.Join(*errp, fmt.Errorf("key %s: %w", m[1], verr))
 			continue
 		}
 		*dst = val

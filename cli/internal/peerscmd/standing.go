@@ -75,17 +75,6 @@ func senderPid(addr string) (int, bool) {
 	return pid, true
 }
 
-// liveByName is every live registry entry (one per process) carrying name, machine-wide.
-func liveByName(snap ccregistry.Snapshot, name string) []ccregistry.Entry {
-	var hits []ccregistry.Entry
-	for _, e := range snap.Entries {
-		if e.NameOK && e.Name == name {
-			hits = append(hits, e)
-		}
-	}
-	return hits
-}
-
 // standingSender is the process that sent the message: the ONE live entry named
 // p.FromName, and its pid must be the pid of p.FromAddr. A name alone is a claim any
 // session can make; the socket pid is the harness's.
@@ -97,7 +86,7 @@ func standingSender(v *nameView, p StandingProbe) (ccregistry.Entry, string) {
 	if v.snap.Degraded != nil { // an unreadable live entry may carry the name
 		return ccregistry.Entry{}, "liveness_unknown"
 	}
-	hits := liveByName(v.snap, p.FromName)
+	hits := v.snap.Named(p.FromName)
 	switch {
 	case len(hits) == 0:
 		return ccregistry.Entry{}, "sender_not_live"
@@ -138,7 +127,7 @@ func standingFromWorker(v *nameView, self, own string, p StandingProbe) (bool, s
 	if own != e.Name {
 		return false, "not_own_name"
 	}
-	if len(liveByName(v.snap, e.Name)) != 1 {
+	if len(v.snap.Named(e.Name)) != 1 {
 		return false, "self_name_not_unique"
 	}
 	var rec *taskstate.Orchestrator

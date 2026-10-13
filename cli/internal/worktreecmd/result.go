@@ -126,7 +126,22 @@ type InfoResult struct {
 	Worktree      *WorktreeInfo  `json:"worktree,omitempty"`
 	MainRoot      string         `json:"main_root"`
 	TaskCandidate *TaskCandidate `json:"task_candidate,omitempty"`
-	Team          string         `json:"team,omitempty"` // the standing team owning this worktree (teamfile.FindByWorktree)
+	Team          string         `json:"team,omitempty"`      // the standing team owning this worktree (teamfile.FindByWorktree)
+	TeamLead      *TeamLead      `json:"team_lead,omitempty"` // set exactly when Team is
+	// LaunchMode is LETS_LAUNCH_MODE with its source (set on every info answer, not
+	// on --task-candidate); TeamLaunch the team file's launch commands, classified
+	// (set when Team is and the file's launch keys parse).
+	LaunchMode *LaunchModeInfo `json:"launch_mode,omitempty"`
+	TeamLaunch *TeamLaunch     `json:"team_launch,omitempty"`
+}
+
+// TeamLead is the team's recorded lead name against this session's own registry
+// name - a hint for the caller, never a gate: unknown means nothing could be
+// compared.
+type TeamLead struct {
+	Name  string `json:"name"`           // the team file's lead_name; <team>-lead when it records none
+	Self  string `json:"self,omitempty"` // this session's registry name
+	Match string `json:"match"`          // lead | other | unknown
 }
 
 // TaskCandidate is the task id the active convention reads off a branch name in a
@@ -172,6 +187,15 @@ type TaskStateInfo struct {
 // Rebound reports that --orc replaced a different binding.
 type Rebound struct {
 	From string `json:"from"`
+}
+
+// SwitchPlan is where a refused switch would have gone: the target and whether it
+// would have been cut, with its base once resolved. Only on ok=false, and only when
+// git switch did not run; after it ran the effects are reported top-level.
+type SwitchPlan struct {
+	Branch string `json:"branch"`
+	Create bool   `json:"create"`
+	Base   string `json:"base,omitempty"`
 }
 
 // TaskStateResult is the task-state-subcommand envelope.

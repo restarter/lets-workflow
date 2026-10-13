@@ -1,7 +1,8 @@
 // Package taskstate is the ONE owner of the per-branch task-state file
 // `.lets/sessions/.task-<branch-slug>` (fields `task:` / `start:` / `session:` /
-// `origin:` / `orc:` / `park:` / `park_team:`, plus the repeatable `orchestrator:`
-// lines of the merge-branch file). Every Go writer goes through MergeWrite and every markdown
+// `origin:` / `orc:` / `park:` / `park_team:` / `session_proof:` - the last written
+// only by Go - plus the repeatable `orchestrator:` lines of the merge-branch file).
+// Every Go writer goes through MergeWrite and every markdown
 // writer through `lets worktree task-state`, so a writer only ever changes the keys
 // it owns and keeps every other line - including lines a newer LETS added.
 //
@@ -14,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,7 +27,7 @@ import (
 
 // Keys is the canonical order of the known single-valued keys; new keys are appended
 // in it. The repeatable OrchestratorKey is not one of them.
-var Keys = []string{"task", "start", "session", "origin", "orc", "park", "park_team"}
+var Keys = []string{"task", "start", "session", "origin", "orc", "park", "park_team", "session_proof"}
 
 // OrchestratorKey is the one repeatable key: an `orchestrator:` line per recorded
 // orchestrator name, written only on the merge-branch file.
@@ -43,6 +45,9 @@ var (
 var (
 	shaRe     = regexp.MustCompile(`^[0-9a-f]{7,64}$`)
 	sessionRe = regexp.MustCompile(`^[0-9a-f]{7,64} [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+	// session_proof: <sid> <pid> <started-ms> - the registry pid and startedAt (Unix ms,
+	// 13 digits) of the process that held sid when Go wrote the session: line.
+	proofRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12} [1-9][0-9]{0,9} [1-9][0-9]{12}$`)
 )
 
 // Slug maps a branch to the file key. An empty (detached) branch has no file.
@@ -59,6 +64,8 @@ type State struct {
 	// Park is the sha of the `wip(<id>): park` commit `lets worktree switch --park`
 	// made on this branch; ParkTeam is the standing team that parked it.
 	Park, ParkTeam string
+	// SessionProof is the raw session_proof: value (ParseProof / StoredProof read it).
+	SessionProof string
 	// OrchestratorLines are the values of the `orchestrator:` lines in file order,
 	// raw - a line that does not parse is kept here (and on disk) and skipped by
 	// Orchestrators.
@@ -82,6 +89,8 @@ func (s *State) set(key, value string) {
 		s.Park = value
 	case "park_team":
 		s.ParkTeam = value
+	case "session_proof":
+		s.SessionProof = value
 	}
 }
 
@@ -323,6 +332,8 @@ func Validate(key, value string) error {
 		ok = shaRe.MatchString(value)
 	case "park_team":
 		ok = teamfile.ValidName(value)
+	case "session_proof":
+		ok = proofRe.MatchString(value)
 	default:
 		return fmt.Errorf("%w: unknown key %q", ErrInvalidValue, key)
 	}
@@ -607,19 +618,78 @@ const (
 	OpCarry
 )
 
+// Proof names the exact process that held a session: its registry pid and startedAt.
+type Proof struct {
+	Session string
+	Pid     int
+	Started time.Time // the process's registry startedAt
+}
+
+// Value is the session_proof: line value of p (startedAt in Unix ms).
+func (p Proof) Value() string {
+	return fmt.Sprintf("%s %d %d", p.Session, p.Pid, p.Started.UnixMilli())
+}
+
+// ParseProof parses a session_proof: value; a malformed one is no proof.
+func ParseProof(v string) (Proof, bool) {
+	if !proofRe.MatchString(v) {
+		return Proof{}, false
+	}
+	f := strings.Fields(v)
+	pid, err1 := strconv.Atoi(f[1])
+	ms, err2 := strconv.ParseInt(f[2], 10, 64)
+	if err1 != nil || err2 != nil {
+		return Proof{}, false
+	}
+	return Proof{Session: f[0], Pid: pid, Started: time.UnixMilli(ms)}, true
+}
+
+// StoredProof is cur's session_proof only when its sid is StoredSession(cur): a
+// proof of another id (an older binary rewrote session: without it) proves nothing.
+func StoredProof(s State) (Proof, bool) {
+	p, ok := ParseProof(s.SessionProof)
+	if !ok || p.Session == "" || p.Session != StoredSession(s) {
+		return Proof{}, false
+	}
+	return p, true
+}
+
+// SessionValues is the MergeWrite set of a session: write naming own at sha; the
+// proof line is written with p, deleted ("") when p is nil.
+func SessionValues(sha, own string, p *Proof) map[string]string {
+	proof := ""
+	if p != nil {
+		proof = p.Value()
+	}
+	return map[string]string{"session": sha + " " + own, "session_proof": proof}
+}
+
 // SessionGuard protects the session: line from a writer that does not own it - a
-// teammate pane in the same worktree runs the same SessionStart hook. Every
+// second session in the same worktree runs the same SessionStart hook. Every
 // callback is optional: a nil Liveness keeps the unguarded behaviour (no registry
-// to judge by), a nil Rotated proves no rotation, a nil Lead means no recorded lead.
+// to judge by), a nil Rotated proves no rotation, a nil Self records no proof.
 type SessionGuard struct {
 	// Liveness judges a recorded session id.
 	Liveness func(sid string) Liveness
-	// Rotated names the session id a recorded one was re-minted into in the same
-	// process (/clear, an in-session /resume), when that can be proven.
-	Rotated func(sid string) (string, bool)
-	// Lead reports whether sid may write here at all - set only in a team worktree
-	// with a recorded lead; holder names that lead for the refusal.
-	Lead func(sid string) (ok bool, holder string)
+	// Rotated names the session the recorded sid became - a same-process re-mint
+	// proven by proof (zero when none binds), or the background job it was parked
+	// into (ContinuedIn, caller-scoped).
+	Rotated func(sid string, proof Proof) (string, bool)
+	// Self is the proof a writer records beside its own session: line.
+	Self func(own string) (Proof, bool)
+}
+
+// OwnProof is the proof own's writer records; nil when Self is nil or has none
+// (registry lag: a later Go write fills it).
+func (g SessionGuard) OwnProof(own string) *Proof {
+	if g.Self == nil {
+		return nil
+	}
+	p, ok := g.Self(own)
+	if !ok {
+		return nil
+	}
+	return &p
 }
 
 var (
@@ -635,13 +705,12 @@ const (
 	HeldLive           = "live"            // the recorded session runs
 	HeldUnknown        = "unknown"         // the registry cannot prove it dead
 	HeldRotatedForeign = "rotated_foreign" // re-minted into another live session
-	HeldLead           = "lead"            // a team worktree whose recorded lead is someone else
 	HeldNoProof        = "no_proof"        // a carry with no proof the recorded id became this one
 )
 
 // HeldError is ErrSessionHeld with who holds the line and why.
 type HeldError struct {
-	Holder string // a session id, or the lead's label
+	Holder string // a session id
 	Reason string // Held*
 }
 
@@ -669,16 +738,13 @@ func StoredSession(s State) string {
 //     == own (or nothing recorded) is unchanged; anything else is held (no_proof,
 //     or live when a foreign holder still runs).
 //
-// The Lead check, when set, must pass first.
+// Rotated receives cur's StoredProof (zero when none binds to the recorded id).
 func MaySetSession(cur State, exists bool, own string, op SessionOp, g SessionGuard) error {
-	if g.Lead != nil {
-		if ok, holder := g.Lead(own); !ok {
-			return &HeldError{Holder: holder, Reason: HeldLead}
-		}
-	}
 	stored := ""
+	var proof Proof
 	if exists {
 		stored = StoredSession(cur)
+		proof, _ = StoredProof(cur)
 	}
 	switch {
 	case stored == own:
@@ -690,7 +756,7 @@ func MaySetSession(cur State, exists bool, own string, op SessionOp, g SessionGu
 	}
 	rotatedTo := ""
 	if g.Rotated != nil {
-		rotatedTo, _ = g.Rotated(stored)
+		rotatedTo, _ = g.Rotated(stored, proof)
 	}
 	if op == OpCarry {
 		if rotatedTo == own {

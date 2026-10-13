@@ -38,8 +38,10 @@ const sessionLockDeadline = time.Second
 // branches). Every other line is preserved verbatim, through taskstate (the one
 // owner of the file; atomic, locked with a 1 s deadline). The guard g decides,
 // under that lock, whether this session may write at all (taskstate.MaySetSession):
-// a teammate pane in the same worktree runs this same hook and must never take the
-// lead's boundary. A zero guard keeps the unguarded behaviour. Best-effort: nothing
+// a second live session in the same worktree runs this same hook and must never
+// take this boundary (HeldLive). The write records this process's session_proof
+// beside the line (g.OwnProof; none during registry lag). A zero guard keeps the
+// unguarded behaviour. Best-effort: nothing
 // here fails the hook; a declined write returns a Notice message instead.
 //
 // Intended to run on a genuinely NEW session (SessionStart source=startup), so
@@ -75,7 +77,7 @@ func RefreshSessionBoundary(projectRoot, sessionID string, g taskstate.SessionGu
 			if err := taskstate.MaySetSession(cur, exists, sessionID, taskstate.OpRefresh, g); err != nil {
 				return nil, err
 			}
-			return map[string]string{"session": head + " " + sessionID}, nil
+			return taskstate.SessionValues(head, sessionID, g.OwnProof(sessionID)), nil
 		},
 	})
 	return outcome(err, slug, taskstate.OpRefresh)
@@ -84,8 +86,8 @@ func RefreshSessionBoundary(projectRoot, sessionID string, g taskstate.SessionGu
 // CarrySession moves the recorded boundary to this session's new id after /clear,
 // keeping its sha: /clear re-mints the id in the same process, and without the carry
 // /lets:end would no longer recognize its own session. It writes ONLY on proof
-// (g.Rotated shows the recorded id was re-minted into sessionID); no proof writes
-// nothing and returns a warning naming the gap.
+// (g.Rotated, given the file's session_proof, shows the recorded id was re-minted
+// into sessionID); no proof writes nothing and returns a warning naming the gap.
 func CarrySession(projectRoot, sessionID string, g taskstate.SessionGuard) (Outcome, string) {
 	if projectRoot == "" || sessionID == "" {
 		return OutcomeSkipped, ""
@@ -101,11 +103,54 @@ func CarrySession(projectRoot, sessionID string, g taskstate.SessionGuard) (Outc
 				return nil, err
 			}
 			sha, _, _ := strings.Cut(cur.Session, " ")
-			return map[string]string{"session": sha + " " + sessionID}, nil
+			return taskstate.SessionValues(sha, sessionID, g.OwnProof(sessionID)), nil
 		},
 	})
 	return outcome(err, slug, taskstate.OpCarry)
 }
+
+// RefreshProof re-records this process in session_proof on resume (`claude -r`: the
+// same id in a new process), so a later /clear in this process still carries. It
+// writes ONLY session_proof (the session: line and its sha stay) and only when the
+// line already names sessionID and g.OwnProof names another process than the
+// stored proof - another pid, or the same pid with another startedAt (a reused
+// pid). No file, another session's line, or registry lag writes nothing; it never
+// returns a Notice.
+func RefreshProof(projectRoot, sessionID string, g taskstate.SessionGuard) Outcome {
+	if projectRoot == "" || sessionID == "" {
+		return OutcomeSkipped
+	}
+	slug, ok := taskstate.Slug(gitOut(projectRoot, "branch", "--show-current"))
+	if !ok {
+		return OutcomeSkipped
+	}
+	_, err := taskstate.MergeWrite(filepath.Join(projectRoot, ".lets"), slug, taskstate.WriteOpts{
+		Deadline: time.Now().Add(sessionLockDeadline),
+		Derive: func(cur taskstate.State, exists bool) (map[string]string, error) {
+			if !exists || taskstate.StoredSession(cur) != sessionID {
+				return nil, errProofSkip
+			}
+			own := g.OwnProof(sessionID)
+			if own == nil {
+				return nil, errProofSkip
+			}
+			if stored, ok := taskstate.StoredProof(cur); ok && stored.Pid == own.Pid && stored.Started.Equal(own.Started) {
+				return nil, taskstate.ErrSessionUnchanged
+			}
+			return map[string]string{"session_proof": own.Value()}, nil
+		},
+	})
+	switch {
+	case err == nil:
+		return OutcomeWritten
+	case errors.Is(err, taskstate.ErrSessionUnchanged):
+		return OutcomeUnchanged
+	}
+	return OutcomeSkipped
+}
+
+// errProofSkip: RefreshProof has nothing to record; nothing is written.
+var errProofSkip = errors.New("no session_proof to refresh")
 
 // outcome maps a MergeWrite result to an Outcome and its Notice message ("" when
 // there is nothing to say). A declined write always says so: silence is how a
@@ -132,9 +177,7 @@ func outcome(err error, slug string, op taskstate.SessionOp) (Outcome, string) {
 	case errors.As(err, &held):
 		switch held.Reason {
 		case taskstate.HeldNoProof:
-			return OutcomeNoProof, fmt.Sprintf("The session boundary in %s (session %s) was %s: nothing proves that id was this chat's (no peer role file recorded it), so /lets:end will report an approximate range. Run /lets:start in this chat to rewrite the session.", file, short(held.Holder), label)
-		case taskstate.HeldLead:
-			return OutcomeHeld, fmt.Sprintf("The session boundary in %s was %s: this is a team worktree and its recorded lead is %s - a teammate never takes the lead's boundary. If this chat is the lead, run /lets:start in that chat to rewrite the session.", file, label, held.Holder)
+			return OutcomeNoProof, fmt.Sprintf("The session boundary in %s (session %s) was %s: nothing proves that id was this chat's (no session_proof recorded its process), so /lets:end will report an approximate range. Run /lets:start in this chat to rewrite the session.", file, short(held.Holder), label)
 		case taskstate.HeldUnknown:
 			return OutcomeHeld, fmt.Sprintf("The session boundary in %s was %s: it names session %s, which the session registry cannot prove ended. If this chat owns the task, run /lets:start in that chat to rewrite the session.", file, label, short(held.Holder))
 		}

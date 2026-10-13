@@ -90,10 +90,11 @@ func TestTeamBackend(t *testing.T) {
 			t.Errorf("the sessions run must launch with %q", want)
 		}
 	}
-	if !strings.Contains(sessions, "`{agent_command}` = the `agent_command` frontmatter value of the team file") || !strings.Contains(sessions, "else `claude`") {
-		t.Error("the agent command comes from the team file's agent_command, else claude")
+	if r45 := sectionSpan(team, "### Step R4.5: Launch Mode"); !strings.Contains(r45, "`{agent_command}` = `team_launch.agent_command` (the `agent_command` frontmatter value of the team file") || !strings.Contains(r45, "**Else** `claude`") ||
+		!strings.Contains(sessions, "`{agent_command}`, its class and its source are Step R4.5's") {
+		t.Error("the agent command comes from the team file's agent_command, else claude - resolved in R4.5 and used by N2")
 	}
-	if !strings.Contains(orca, "`{agent_command}` as defined in Step N2") {
+	if !strings.Contains(orca, "`{agent_command}` as defined in Step R4.5") {
 		t.Error("the orca worker start uses the same agent command")
 	}
 	if !strings.Contains(sessions, "lets worktree branch-name") || !strings.Contains(sessions, "`dir`") {
@@ -178,14 +179,21 @@ func TestTeamBackend_Members(t *testing.T) {
 	if !strings.Contains(dismiss, `Skill(skill: "lets:member-run", args: "op=dismiss `) {
 		t.Error("dismiss goes through member-run op=dismiss")
 	}
-	if !strings.Contains(dismiss, "`lead.session` is not `$CLAUDE_CODE_SESSION_ID`") || !strings.Contains(dismiss, "**Refused:**") {
-		t.Error("only the lead's own session dismisses")
+	if !strings.Contains(dismiss, "`team_lead.match`") || !strings.Contains(dismiss, "/rename") || strings.Contains(dismiss, "**Refused:**") {
+		t.Error("dismiss warns with the team_lead /rename line, never refuses")
+	}
+	if rec, call := strings.Index(dismiss, "BEFORE every `op=dismiss`, append `Dismissed: <name> (lead <session6>)`"), strings.Index(dismiss, `args: "op=dismiss `); rec < 0 || call < rec {
+		t.Error("dismiss records `Dismissed: <name>` in the team file before op=dismiss")
 	}
 	members := sectionSpan(team, "\n## Members\n")
-	for _, want := range []string{"lets worktree info --json", "No `team`", "`<c>-<name>`", "`cwd` is the team worktree"} {
+	for _, want := range []string{"lets worktree info --json", "No `team`", "`<c>-<name>`", "`cwd` is the team worktree", "`ListAgents` lists `<c>-<name>`", "`team_lead`", "/rename it if this is the lead", "never refused"} {
 		if !strings.Contains(members, want) {
 			t.Errorf("Step M0 must state %q", want)
 		}
+	}
+	m0 := sectionSpan(team, "### Step M0: Team")
+	if strings.Contains(m0, "lets members") || strings.Contains(m0, "**Refused:**") {
+		t.Error("Step M0 reads ListAgents and team_lead - no lets members, and an unknown or other lead is never refused")
 	}
 	spawn := sectionSpan(team, "\n## Spawn\n")
 	refuse := strings.Index(spawn, "**Same name live -> refused.**")
@@ -193,7 +201,7 @@ func TestTeamBackend_Members(t *testing.T) {
 	if refuse < 0 || call < 0 || refuse > call {
 		t.Error("the same-name live refusal comes before the spawn call")
 	}
-	for _, want := range []string{`label: "Close it first (Recommended)"`, "the survivor is recorded dismissed", "the survivor keeps running - close it by hand", ".lets/cache/member-<c>-<name>.md", "on the lead's OK"} {
+	for _, want := range []string{`label: "Close it first (Recommended)"`, "the survivor is recorded dismissed", "the survivor keeps running - close it by hand", ".lets/cache/member-<c>-<name>.md", "on the lead's OK", "**Fresh name** -> append `Dismissed: <name> (lead <session6>)`", "This gate is the only guard: member-run does not refuse a duplicate name."} {
 		if !strings.Contains(spawn, want) {
 			t.Errorf("spawn must carry %q", want)
 		}
@@ -218,14 +226,18 @@ func TestTeamBackend_Members(t *testing.T) {
 		t.Fatal(err)
 	}
 	step6 := sectionSpan(string(s), "\n## Step 6: Take Task\n")
-	claim := strings.Index(step6, "lets members lead --claim --scope")
+	roster := strings.Index(step6, "`Respawn the roster?  /lets:team spawn --roster`")
 	take := strings.Index(step6, `Skill(skill: "lets:take-task"`)
-	if claim < 0 || take < 0 || claim > take {
-		t.Errorf("start.md claims the team lead before take-task (claim=%d take=%d)", claim, take)
+	if roster < 0 || take < 0 || roster > take || strings.Contains(step6, "lets members") || strings.Contains(step6, "lead_held") {
+		t.Errorf("start.md Step 6 claims no lead - the roster hint stays, then take-task (roster=%d take=%d)", roster, take)
 	}
-	for _, want := range []string{"`lead_held` -> stop", "`registry_unavailable` included", "then continue"} {
-		if !strings.Contains(step6, want) {
-			t.Errorf("start.md's lead claim must state %q", want)
+	if step7 := sectionSpan(string(s), "\n## Step 7: Suggest Session Rename\n"); !strings.Contains(step7, "never suggest `/rename {slug}`") || !strings.Contains(step7, "Suggest `/rename {team_lead.name}` only when `team_lead.match` is not `lead`; otherwise suggest nothing.") {
+		t.Error("start.md Step 7 must not rename a team's lead away from lead_name")
+	}
+	step5 := sectionSpan(string(s), "\n## Step 5: ")
+	for _, want := range []string{"`team_lead`", "/rename {team_lead.name}", "never blocking", "**Respawn roster**"} {
+		if !strings.Contains(step5, want) {
+			t.Errorf("start.md Step 5's team paragraph must state %q", want)
 		}
 	}
 }
@@ -250,8 +262,9 @@ func TestTeamBackend_WorktreeTeam(t *testing.T) {
 			strip = l
 		}
 	}
-	if strip == "" || !strings.Contains(strip, "`--flow` or `--auto`") || !strings.Contains(strip, "from inside a worktree") || !strings.Contains(strip, "**Refused**") {
-		t.Errorf("Step 1 must route create --team and refuse it with --flow / --auto and inside a worktree: %q", strip)
+	if strip == "" || !strings.Contains(strip, "together with `--flow`") || !strings.Contains(strip, "from inside a worktree") || !strings.Contains(strip, "**Refused**") ||
+		!strings.Contains(strip, "the launch-mode flags (`--launch-mode <m>` / `--auto` / `--all-in` - the lead's **Launch mode** below)") {
+		t.Errorf("Step 1 must route create --team, take the launch-mode flags as the lead's launch mode, and refuse it with --flow and inside a worktree: %q", strip)
 	}
 
 	team := sectionSpan(wt, "\n## Create a team\n")
@@ -306,8 +319,8 @@ func TestTeamBackend_WorktreeTeam(t *testing.T) {
 			t.Errorf("every team --command passes \"$CMD\" from a quoted heredoc: %s", strings.TrimSpace(l))
 		}
 		if strings.Contains(l, "CMD=$(cat <<") {
-			if !strings.Contains(l, "<<'EOF'") || i+1 >= len(teamLines) || !strings.Contains(teamLines[i+1], "--name '<c>-lead' '/lets:start'") {
-				t.Errorf("a CMD heredoc must be quoted and carry --name '<c>-lead': %s", strings.TrimSpace(l))
+			if !strings.Contains(l, "<<'EOF'") || i+1 >= len(teamLines) || !strings.Contains(teamLines[i+1], "--name '<lead_name>' '/lets:start'") {
+				t.Errorf("a CMD heredoc must be quoted and carry --name '<lead_name>': %s", strings.TrimSpace(l))
 			}
 		}
 	}
@@ -323,6 +336,23 @@ func TestTeamBackend_WorktreeTeam(t *testing.T) {
 	reopen := strings.Index(team, "### Reopen a team")
 	if reopen < 0 || !strings.Contains(team[reopen:], "through the same quoted heredoc - only after the user's yes") || !strings.Contains(team[reopen:], `header: "Reopen"`) {
 		t.Error("the relaunch shows the command verbatim and runs only after the user's yes")
+	}
+
+	// T5: "this session is an orchestrator" is a non-null self_record, never source=self
+	// (source answers whom this session's messages go to - seams b)
+	if p := t5OrcProblems(team); len(p) > 0 {
+		t.Errorf("Step T5: %v", p)
+	}
+	for _, m := range []struct{ old, repl string }{
+		{`'/lets:start --orc="<self_record.name>"'`, `'/lets:start --orc="<target.name>"'`},
+		{"carries a non-null `self_record`", "answers `source=self`"},
+	} {
+		if !strings.Contains(team, m.old) {
+			t.Fatalf("mutant cannot apply: %q", m.old)
+		}
+		if len(t5OrcProblems(strings.Replace(team, m.old, m.repl, 1))) == 0 {
+			t.Errorf("mutation %q -> %q must fail the T5 check", m.old, m.repl)
+		}
 	}
 
 	c1 := sectionSpan(wt, "\n### Step C1: Get Name\n")
@@ -357,28 +387,44 @@ func TestTeamBackend_TeamTaskFlow(t *testing.T) {
 	if strings.Contains(step2t, "Stash") || strings.Contains(step2t, "git stash") {
 		t.Error("the team path must never offer or run a stash")
 	}
-	for _, want := range []string{`label: "Commit first"`, `label: "Park"`, `label: "Stay"`, "lets worktree switch --task", "--include '<path>' per confirmed new path", "names only the paths the user confirmed", "`## 7. Current task`", "so Step 5's own write - its `--session-sha`, unguarded - is skipped on this path", "operation_in_progress", "Ignored files are never parked"} {
+	for _, want := range []string{`label: "Commit first"`, `label: "Park"`, `label: "Stay"`, "lets worktree switch --task", "--include '<path>' per confirmed new path", "names only the paths the user confirmed", "`## 7. Current task`", "so Step 5's own session write is skipped on this path", "operation_in_progress", "Ignored files are never parked"} {
 		if !strings.Contains(step2t, want) {
 			t.Errorf("take-task Step 2T must carry %q", want)
 		}
 	}
 	sw := strings.Index(step2t, "lets worktree switch --task")
 	tail := strings.Index(step2t, "lets worktree task-state set --clear-origin {ORC_FLAG} --json")
-	role := strings.Index(step2t, `lets peers role set worker --task "<task-id>"`)
-	if sw < 0 || tail < sw || role < tail {
-		t.Error("Step 2T runs Step 5's tail (clear origin + orc, worker role) after the switch")
+	if sw < 0 || tail < sw {
+		t.Error("the `task-state set --clear-origin` call stays after the switch")
 	}
-	if strings.Contains(step2t, "--session-sha") && !strings.Contains(step2t, "its `--session-sha`, unguarded - is skipped") {
-		t.Error("Step 2T must never write session: unguarded")
+	if strings.Contains(step2t, "peers role set") {
+		t.Error("Step 2T records no role and no /clear proof - the proof is task-state session_proof")
+	}
+	if strings.Contains(step2t, "--session-sha") || !strings.Contains(step2t, "so Step 5's own session write is skipped on this path") {
+		t.Error("Step 2T never writes session: - switch wrote it through the session guard")
 	}
 	if strings.Count(step2t, "lets worktree task-state set") != 1 || strings.Contains(step2t, "task-state set --task") {
 		t.Error("the team path's task-state write passes only what switch did not write")
+	}
+	// the Worker-name /rename nudge never fires in a team worktree: the lead keeps lead_name (seams c)
+	if p := workerNameProblems(take); len(p) > 0 {
+		t.Errorf("take-task: %v", p)
+	}
+	if len(workerNameProblems(strings.Replace(take, "not trunk-mode, not a team worktree)", "not trunk-mode)", 1))) == 0 {
+		t.Error("mutation: a Worker-name nudge without the team-worktree exemption must fail the check")
 	}
 	if !strings.Contains(sectionSpan(take, "### Step 3: Worktree Check"), "never reaches here - its branch comes from `lets worktree switch`") {
 		t.Error("take-task Step 3 must not use a team worktree's branch as-is")
 	}
 
 	start := read("commands", "start.md")
+	// a lead launched with '/lets:start --orc="<name>"' (no task id) is bound on team_<c> at once (seams d)
+	if p := orcNoTaskProblems(start); len(p) > 0 {
+		t.Errorf("start.md: %v", p)
+	}
+	if len(orcNoTaskProblems(strings.Replace(start, "command -v lets >/dev/null 2>&1 && lets worktree task-state set --create --orc '<name>' --json", "", 1))) == 0 {
+		t.Error("mutation: start.md without the no-task-id --orc write must fail the check")
+	}
 	step5 := sectionSpan(start, "## Step 5: What do we do? (task selection - MANDATORY)")
 	team := strings.Index(step5, "**Team worktree**")
 	respawn := strings.Index(step5, "**Respawn roster**")
@@ -439,8 +485,8 @@ func TestTeamBackend_CreateDisband(t *testing.T) {
 	if disband == "" {
 		t.Fatal("## Disband section missing")
 	}
-	if !strings.Contains(disband, "lets members lead --scope '<c>' --json") || !strings.Contains(disband, "never counted or guessed") || strings.Contains(disband, "exactly one session") {
-		t.Error("disband reads the lead from the lets members record, never a session count")
+	if !strings.Contains(disband, "lets peers who --json") || !strings.Contains(disband, "the session NAMED by the team file's `lead_name`") || !strings.Contains(disband, "never counted or guessed") || strings.Contains(disband, "exactly one session") || strings.Contains(disband, "lets members lead") {
+		t.Error("disband finds the lead by the team file's lead_name in lets peers who, never a session count")
 	}
 	if strings.Contains(disband, "TaskStop(") || !strings.Contains(disband, "no `TaskStop`") {
 		t.Error("disband never kills a session")
@@ -450,7 +496,7 @@ func TestTeamBackend_CreateDisband(t *testing.T) {
 	if tellGate < 0 || tell < tellGate {
 		t.Error("the tell to a live lead is gated")
 	}
-	if !strings.Contains(disband, "`lead.status` `live`, `rotated` or `unknown`") || !strings.Contains(disband, "No lead record, or its lead is `gone` ->") {
+	if !strings.Contains(disband, "`who` failed or degraded -> the same gate with `{state}` = `unknown`") || !strings.Contains(disband, "never treated as gone") || !strings.Contains(disband, "- No row, or only `dead` ones -> list every live session whose cwd is `<path>`") || !strings.Contains(disband, "- One or more rows whose `alive` is not `dead` -> ask the owner") {
 		t.Error("an unknown lead is asked about like a live one, never treated as gone")
 	}
 	wrapped := strings.Index(disband, `label: "Lead has wrapped up"`)
@@ -524,7 +570,19 @@ func membersLinkProblems(team string) []string {
 	if m2 := sectionSpan(team, "### Step M2: The Whole Roster (`spawn --roster`)"); !strings.Contains(m2, "by Step M1.5's rule") || !strings.Contains(m2, "Each member's brief and prompt then carry its own `REPORT_FILE: <path>` line") {
 		p = append(p, "Step M2 must open or add the report files by Step M1.5's rule and hand each brief its REPORT_FILE")
 	}
+	if m2 := sectionSpan(team, "### Step M2: The Whole Roster (`spawn --roster`)"); !strings.Contains(m2, "that `ListAgents` does not list as `<c>-<name>` and that has no `Dismissed: <name>` line by this lead session is a candidate") || strings.Contains(m2, "not live (Step M0)") {
+		p = append(p, "Step M2 must skip a roster row recorded Dismissed: by this lead session")
+	}
+	if m5 := sectionSpan(team, "### Step M5: Member reports"); !strings.Contains(m5, "A member with a `Dismissed: <name> (lead <session6>)` line by this lead session in the team file's `## 7. Current task` is never messaged: no nudge - straight to item 3's `op=collect ... retry=no`") {
+		p = append(p, "Step M5 must never nudge a member recorded Dismissed: by this lead session")
+	}
 	m4 := sectionSpan(team, "### Step M4: Dismiss (`dismiss <name>` / `dismiss --all`)")
+	if !strings.Contains(m1, "else the name of the roster row for this role that is not live and has no `Dismissed: <name>` line by this lead session; else `<role>` under the same condition; else the next free `-N` suffix") || !strings.Contains(m1, "takes Step 4's **Fresh name** path at once") {
+		p = append(p, "Step M1's name choice must skip a name recorded Dismissed: by this lead session")
+	}
+	if !strings.Contains(m4, "every `<c>-*` agent `ListAgents` (the harness's agent registry) lists, roster row or not, that has no `Dismissed:` line by this lead session") {
+		p = append(p, "Step M4 dismiss --all must cover only the listed roster names with no Dismissed: line by this lead session")
+	}
 	if strings.Contains(m4, "the same call") || strings.Count(m4, `Skill(skill: "lets:member-run", args: "op=dismiss scope=<c> name=<name>")`) != 2 {
 		p = append(p, "Step M4 must name member-run op=dismiss for dismiss <name> and dismiss --all alike")
 	}
@@ -551,7 +609,12 @@ func TestTeamBackend_MembersLink(t *testing.T) {
 		{"a reader takes any Reports line", "Take the line whose `<session6>` is this session's (`$CLAUDE_CODE_SESSION_ID`)", "Take the latest line", "only the Reports line this lead session opened"},
 		{"the brief loses its REPORT_FILE", ", then its own last line `REPORT_FILE: <path>` (Step 5's path)", "", "brief file must carry its REPORT_FILE"},
 		{"M2 skips the M1.5 rule", "first the report files, by Step M1.5's rule, for every name at once", "first the report files for every name at once", "Step M2 must open or add"},
-		{"dismiss --all says the same call again", "then `Skill(skill: \"lets:member-run\", args: \"op=dismiss scope=<c> name=<name>\")` for every registry member", "then the same call for every registry member", "Step M4 must name member-run op=dismiss"},
+		{"dismiss --all says the same call again", "then `Skill(skill: \"lets:member-run\", args: \"op=dismiss scope=<c> name=<name>\")` for every registry member - every `<c>-*` agent", "then the same call for every registry member - every `<c>-*` agent", "Step M4 must name member-run op=dismiss"},
+		{"M2 respawns a dismissed row", " and that has no `Dismissed: <name>` line by this lead session is a candidate", " is a candidate", "Step M2 must skip a roster row recorded Dismissed:"},
+		{"M2 drops surviving panes again", "that `ListAgents` does not list as `<c>-<name>` and that has", "that is not live (Step M0) and has", "Step M2 must skip a roster row recorded Dismissed:"},
+		{"dismiss --all forgets Dismissed", " that has no `Dismissed:` line by this lead session.", ".", "Step M4 dismiss --all must cover only"},
+		{"M5 nudges a dismissed member", "2. A member with a `Dismissed: <name> (lead <session6>)` line by this lead session in the team file's `## 7. Current task` is never messaged: no nudge - straight to item 3's `op=collect ... retry=no`, and its GAP is recorded. Otherwise, not", "2. Not", "Step M5 must never nudge a member recorded Dismissed:"},
+		{"M1 reuses a dismissed name", "for this role that is not live and has no `Dismissed: <name>` line by this lead session;", "for this role that is not live;", "Step M1's name choice must skip"},
 	}
 	for _, m := range mutants {
 		t.Run(m.name, func(t *testing.T) {
@@ -566,4 +629,143 @@ func TestTeamBackend_MembersLink(t *testing.T) {
 			t.Errorf("mutant produced no problem containing %q - that guard cannot fail", m.want)
 		})
 	}
+}
+
+// t5OrcProblems checks the team create's Step T5: the lead's --orc comes from this
+// session's own self_record, as in worktree.md's Orchestrator binding.
+func t5OrcProblems(team string) []string {
+	t5 := team
+	if i := strings.Index(t5, "### Step T5: Launch the lead"); i >= 0 {
+		t5 = t5[i:]
+	}
+	var bad []string
+	if strings.Contains(t5, "source=self") {
+		bad = append(bad, "T5 tests source=self for \"this session is an orchestrator\"")
+	}
+	if !strings.Contains(t5, "carries a non-null `self_record`") || !strings.Contains(t5, `'/lets:start --orc="<self_record.name>"'`) {
+		bad = append(bad, "T5 binds the lead with '/lets:start --orc=\"<self_record.name>\"' when self_record is non-null")
+	}
+	return bad
+}
+
+// workerNameProblems checks take-task's Worker-name bullet: a team worktree (the lead,
+// named by lead_name) is exempt from the /rename <repo_slug>-<task-id> nudge.
+func workerNameProblems(take string) []string {
+	i := strings.Index(take, "- **Worker name.**")
+	if i < 0 {
+		return []string{"the Worker name bullet is missing"}
+	}
+	line := take[i:]
+	if j := strings.Index(line, "\n"); j >= 0 {
+		line = line[:j]
+	}
+	var bad []string
+	if !strings.Contains(line, "not trunk-mode, not a team worktree)") || !strings.Contains(line, "**A team worktree**") || !strings.Contains(line, "`team_lead` hint owns that name") {
+		bad = append(bad, "the Worker name nudge must exempt a team worktree and defer to the team_lead hint")
+	}
+	return bad
+}
+
+// orcNoTaskProblems checks start.md Step 0a: `--orc` with no task id records orc: on
+// the current branch (after Step 0.5), which lets worktree switch then carries.
+func orcNoTaskProblems(start string) []string {
+	i := strings.Index(start, "**`--orc` without a task id**")
+	j := strings.Index(start, "**If `<task-id>` provided**")
+	if i < 0 || j < i {
+		return []string{"Step 0a must carry the `--orc` without a task id paragraph before the per-path steps"}
+	}
+	block := start[i:j]
+	var bad []string
+	if !strings.Contains(block, "command -v lets >/dev/null 2>&1 && lets worktree task-state set --create --orc '<name>' --json") || strings.Contains(block, "--task") {
+		bad = append(bad, "the binding is one task-state write of --orc on the current branch, no --task")
+	}
+	if !strings.Contains(block, "after Step 0.5") || !strings.Contains(block, "`lets worktree switch` carries that `orc:`") {
+		bad = append(bad, "the write runs after Step 0.5 and names the switch carry")
+	}
+	return bad
+}
+
+// TestPeersProtocol_PaneMemberNames pins the documented limitation (seams f): pane
+// members are `<callsign>-<name>` with no repository part, and callsigns are unique
+// per repository only.
+func TestPeersProtocol_PaneMemberNames(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join(pluginDir(t), "protocol", "peers.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	peers := string(b)
+	if p := paneNameProblems(peers); len(p) > 0 {
+		t.Errorf("protocol/peers.md: %v", p)
+	}
+	if len(paneNameProblems(strings.Replace(peers, "## Pane-member names across repos", "## Pane members", 1))) == 0 {
+		t.Error("mutation: peers.md without the pane-member names section must fail the check")
+	}
+	if len(paneNameProblems(strings.Replace(peers, "`lets peers who` marks both `duplicate_name`", "both are listed", 1))) == 0 {
+		t.Error("mutation: the section without the duplicate_name consequence must fail the check")
+	}
+}
+
+func paneNameProblems(peers string) []string {
+	sec := sectionSpan(peers, "\n## Pane-member names across repos\n")
+	if sec == "" {
+		return []string{"the ## Pane-member names across repos section is missing"}
+	}
+	var bad []string
+	for _, want := range []string{"unique per repository only", "`<repo>-<callsign>-lead`", "`<callsign>-<name>` with no repository part", "`lets peers who` marks both `duplicate_name`", "`[ref]`", "In-process members (no pane) are not affected"} {
+		if !strings.Contains(sec, want) {
+			bad = append(bad, "missing "+want)
+		}
+	}
+	return bad
+}
+
+// TestTeamFile_SwitchKeepsSessionLines pins the same-session dismissal contract
+// across a task switch: the `## 7. Current task` rewrite replaces only the
+// task-specific content and keeps every `Dismissed:` / `Reports:` line - take-task
+// Step 2T (the writer) and the template's section intro both say so.
+func TestTeamFile_SwitchKeepsSessionLines(t *testing.T) {
+	files := pluginTexts(t)
+	take, tmpl := files["skills/take-task/SKILL.md"], files["templates/team.md"]
+	if p := switchKeepProblems(take, tmpl); len(p) > 0 {
+		t.Errorf("%v", p)
+	}
+	const takeKeep = "and KEEP every existing `Dismissed: <name> (lead <session6>)` and `Reports: <dir> (lead <session6>)` line as it is"
+	const tmplKeep = "Every `Dismissed: <name> (lead <session6>)` and `Reports: <dir> (lead <session6>)` line is KEPT as it is across a switch"
+	if !strings.Contains(take, takeKeep) || !strings.Contains(tmpl, tmplKeep) {
+		t.Fatal("mutants cannot apply: a keep-rule sentence is missing")
+	}
+	if len(switchKeepProblems(strings.Replace(take, takeKeep, "", 1), tmpl)) == 0 {
+		t.Error("mutation: take-task Step 2T without the keep-rule must fail the check")
+	}
+	if len(switchKeepProblems(take, strings.Replace(tmpl, tmplKeep, "The lead rewrites the whole section", 1))) == 0 {
+		t.Error("mutation: the template without the keep-rule must fail the check")
+	}
+}
+
+func switchKeepProblems(take, tmpl string) []string {
+	var bad []string
+	step2t := sectionSpan(take, "### Step 2T: Team worktree - park, then switch")
+	i := strings.Index(step2t, "Then rewrite the team file's `## 7. Current task` section")
+	if i < 0 {
+		return []string{"take-task Step 2T must rewrite the team file's ## 7. Current task section"}
+	}
+	rewrite := step2t[i:]
+	if j := strings.Index(rewrite, "Then Step 6."); j >= 0 {
+		rewrite = rewrite[:j]
+	}
+	for _, want := range []string{"replace only the task-specific content", "KEEP every existing `Dismissed: <name> (lead <session6>)` and `Reports: <dir> (lead <session6>)` line", "other lead sessions' lines too"} {
+		if !strings.Contains(rewrite, want) {
+			bad = append(bad, "take-task Step 2T rewrite: missing "+want)
+		}
+	}
+	sec := sectionSpan(tmpl, "\n## 7. Current task\n")
+	for _, want := range []string{"rewrites the task-specific content of this section", "Every `Dismissed: <name> (lead <session6>)` and `Reports: <dir> (lead <session6>)` line is KEPT as it is across a switch"} {
+		if !strings.Contains(sec, want) {
+			bad = append(bad, "templates/team.md ## 7: missing "+want)
+		}
+	}
+	if strings.Contains(sec, "The lead rewrites this section on every task switch") {
+		bad = append(bad, "templates/team.md ## 7 still says the whole section is rewritten")
+	}
+	return bad
 }

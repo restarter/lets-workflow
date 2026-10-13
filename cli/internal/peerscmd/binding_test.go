@@ -206,6 +206,22 @@ func TestResolveByName_BoundElsewhere(t *testing.T) {
 	}
 }
 
+// A bound orchestrator parked into a background job is still ONE target - the
+// continuation - never target_unsendable/name_not_unique with a /rename remedy.
+func TestResolveByName_BoundParkedContinuation(t *testing.T) {
+	root := repoWithLets(t, "")
+	withBranch(t, "feature/x")
+	bindBranch(t, root, "feature/x", "MAIN")
+	claudeHomeJobs(t, []regRow{{1, sidM, "MAIN", root}, {2, sidN, "MAIN", root}, {3, sidW, "W", root}}, map[int]map[string]any{
+		1: {"kind": "interactive", "parkedJobId": "deadbeef"},
+		2: {"kind": "bg", "jobId": "deadbeef"},
+	})
+	res, _ := orcEnv(t, root, sidW)
+	if res.Source != "bound" || res.Target == nil || res.Target.Session != sidN || res.Reason != "" || len(res.Refused) != 0 {
+		t.Errorf("bound parked orchestrator: want the continuation as the target: %+v", res)
+	}
+}
+
 func TestResolveByName_BoundRefusals(t *testing.T) {
 	root := repoWithLets(t, "")
 	withBranch(t, "feature/x")

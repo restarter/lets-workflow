@@ -67,3 +67,29 @@ func TestResolvedEnv_CapAndPrecedence(t *testing.T) {
 		t.Errorf("env = %v", env)
 	}
 }
+
+// MergedEnvSource and MergedEnv walk the same layers, so the value MergedEnvSource
+// names is always MergedEnv's, and its source is the layer that supplied it.
+func TestMergedEnvSource_AgreesWithMergedEnv(t *testing.T) {
+	const key = "LETS_LAUNCH_MODE"
+	for _, c := range []struct {
+		name, project, user, wantSource string
+	}{
+		{"project set", key + "=auto\n", key + "=all-in\n", "project"},
+		{"user only", "LETS_LANGUAGE=English\n", key + "=auto\n", "user"},
+		{"project empty masks nothing", key + "=\n", key + "=all-in\n", "user"},
+		{"unset", "LETS_LANGUAGE=English\n", "", "unset"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			project, home := t.TempDir(), t.TempDir()
+			writeEnv(t, project, c.project)
+			if c.user != "" {
+				writeEnv(t, home, c.user)
+			}
+			v, src := MergedEnvSource(project, home, key)
+			if want := MergedEnv(project, home)[key]; v != want || src != c.wantSource {
+				t.Errorf("MergedEnvSource = %q, %q; MergedEnv = %q, want source %q", v, src, want, c.wantSource)
+			}
+		})
+	}
+}

@@ -2,7 +2,11 @@
 
 package worktreecmd
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/restarter/lets-workflow/cli/internal/taskstate"
+)
 
 // Error is the typed package error. Use errors.As(err, &e) to inspect.
 // Code maps to one of the Exit* constants; Kind is the snake_case
@@ -70,9 +74,10 @@ func ErrTemplateMissing(path string) *Error {
 	return &Error{Code: ExitTemplateMissing, Kind: "template_missing", Message: fmt.Sprintf("team template %s is missing", path), Remediation: "pass --plugin-root <plugins/lets>"}
 }
 
-// ErrCallsignLive - a live session already runs as the callsign's lead.
-func ErrCallsignLive(callsign string) *Error {
-	return &Error{Code: ExitCallsignLive, Kind: "callsign_live", Message: fmt.Sprintf("a live session is named %s-lead", callsign), Remediation: "pick another callsign (--suggest-callsign)"}
+// ErrCallsignLive - a live session already carries the callsign's lead name in this
+// repository.
+func ErrCallsignLive(callsign, name string) *Error {
+	return &Error{Code: ExitCallsignLive, Kind: "callsign_live", Message: fmt.Sprintf("a live session is named %s (the lead of team %s)", name, callsign), Remediation: "pick another callsign (--suggest-callsign)"}
 }
 
 // ErrNotTeamWorktree - switch runs only in a standing team's worktree.
@@ -90,9 +95,11 @@ func ErrNoRemoteBase(merge string) *Error {
 	return &Error{Code: ExitNoRemoteBase, Kind: "no_remote_base", Message: fmt.Sprintf("origin/%s is missing; a new branch is never cut from the local %s", merge, merge), Remediation: "add the origin remote and fetch " + merge}
 }
 
-// ErrMembersLive - a member working in this worktree would see its tree switch under it.
-func ErrMembersLive(who string) *Error {
-	return &Error{Code: ExitMembersLive, Kind: "members_live", Message: "members still working in this worktree: " + who, Remediation: "dismiss them (/lets:team dismiss) or wait for them, then switch"}
+// ErrSessionHeld - the session: line of branch is held by another session, or by one
+// the registry cannot prove ended (switch refuses on any held reason; task-state set
+// only on a live foreign holder); nothing was written.
+func ErrSessionHeld(held *taskstate.HeldError, branch string) *Error {
+	return &Error{Code: ExitSessionHeld, Kind: "session_held", Message: fmt.Sprintf("the session: line of %s is held (%s) by %s", branch, held.Reason, held.Holder), Remediation: held.Holder + " still owns this task's boundary: run this from that session, after it ends, or pick another task", Cause: held}
 }
 
 // ErrTargetIsMergeBranch - a team never works on the merge-branch.

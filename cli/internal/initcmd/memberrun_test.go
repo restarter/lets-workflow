@@ -27,13 +27,31 @@ func delegatedContractProblems(f map[string]string) []string {
 	if strings.Contains(skill, predecessor) {
 		add("member-run must never name its predecessor, not even as history (the rename grep gate)")
 	}
-	check0 := sectionSpan(skill, "## Step 0: Binary check")
 	spawn := sectionSpan(skill, "## Step 2: Spawn")
 	next := sectionSpan(skill, "## Step 3: Next / Correct")
-	if check0 == "" || !strings.Contains(check0, "lets members status --scope") || !strings.Contains(check0, "/lets:update") {
-		add("member-run must keep Step 0: a lets members status check that stops with /lets:update")
-	} else if strings.Index(skill, "## Step 0: Binary check") > strings.Index(skill, "Agent(") {
-		add("the Step 0 binary check must precede the first Agent call")
+	if strings.Contains(skill, "lets members") {
+		add("member-run must call no lets members verb - the caller's record is the record, ListAgents judges liveness (lets-gbfpd)")
+	}
+	// The role gate: every role_not_allowed line before the Agent call names every
+	// session agent and lets:actor - none of them is ever a member.
+	if at := strings.Index(skill, "Agent("); at < 0 {
+		add("member-run must contain the Agent call")
+	} else {
+		lines := 0
+		for _, line := range strings.Split(skill[:at], "\n") {
+			if !strings.Contains(line, "role_not_allowed") {
+				continue
+			}
+			lines++
+			for _, a := range append(append([]string{}, sessionAgents...), "actor") {
+				if !strings.Contains(line, "`lets:"+a+"`") {
+					add("every role_not_allowed line must name `lets:" + a + "`: " + line)
+				}
+			}
+		}
+		if lines == 0 || !strings.Contains(skill, "a shipped `lets:*` agent") {
+			add("member-run must refuse a non-member role with role_not_allowed before the Agent call, and allow a shipped `lets:*` agent")
+		}
 	}
 	if spawn == "" || next == "" {
 		add("member-run must keep its Step 2: Spawn and Step 3: Next / Correct sections")
@@ -60,17 +78,15 @@ func delegatedContractProblems(f map[string]string) []string {
 				add("the Step 2 Agent call must not pass " + field)
 			}
 		}
-		if status := strings.Index(spawn, "lets members status"); status < 0 || agentAt < 0 || status > agentAt {
-			add("Step 2 must read lets members status before the Agent call")
+		ret := ""
+		if at := strings.Index(spawn, "Return: "); at >= 0 {
+			ret = spawn[at:]
+			if end := strings.Index(ret, "\n"); end >= 0 {
+				ret = ret[:end]
+			}
 		}
-		if addAt := strings.Index(spawn, "lets members add"); addAt < 0 || agentAt < 0 || addAt < agentAt {
-			add("Step 2 must record the member with lets members add right after the Agent call")
-		}
-		if !strings.Contains(spawn, "pane") || !strings.Contains(spawn, "in_process") {
-			add("Step 2 must report which kind was recorded (pane or in_process)")
-		}
-		if !strings.Contains(spawn, "no_lead") {
-			add("a team-scope spawn must stop on no_lead")
+		if !strings.Contains(ret, "id {agent_id}") || !strings.Contains(ret, "the caller records it") {
+			add("the Step 2 Return line must carry the id {agent_id} the Agent call returned, for the caller to record")
 		}
 		if !strings.Contains(skill, "`<callsign>-<name>` in a team scope") {
 			add("member-run must name team-scope agents <callsign>-<name>")
@@ -82,8 +98,8 @@ func delegatedContractProblems(f map[string]string) []string {
 		if send < 0 {
 			add("Step 3: Next / Correct must resume the named member with SendMessage")
 		}
-		if status := strings.Index(next, "lets members status"); status < 0 || send < 0 || status > send {
-			add("Step 3 must run lets members status before every SendMessage")
+		if list := strings.Index(next, "\n1. `ListAgents`, before every message.\n"); list < 0 || send < 0 || list > send {
+			add("Step 3 must run ListAgents before every SendMessage")
 		}
 		if !strings.Contains(call, `\nREPORT_FILE: {report-file}"`) {
 			add("the Step 2 Agent prompt must carry a REPORT_FILE line")
@@ -95,7 +111,7 @@ func delegatedContractProblems(f map[string]string) []string {
 			add("member-run must read the report as a REPORT_WRITTEN pointer to a file, and refuse a missing report-file")
 		}
 		if strings.Count(skill, "SendMessage(") != strings.Count(next, "SendMessage(") {
-			add("every SendMessage must live in Step 3, behind its lets members status")
+			add("every SendMessage must live in Step 3, behind its ListAgents")
 		}
 	}
 	for _, absent := range []string{"TeamCreate", "TeamDelete", "TaskCreate", "TaskUpdate", "TaskList", "team_name", "mode="} {
@@ -216,7 +232,7 @@ func delegatedContractProblems(f map[string]string) []string {
 	}
 	// A nudge is an amendment that changes nothing: implementer.md re-checks for a clean
 	// tree on every NEXT, so a nudge sent as op=next blocks a solo implementer on its own chunk.
-	if !strings.Contains(exec, `args: "op=correct scope=run-{RUN} name={agent} correct-file=<that file> report-file={path}")`) || strings.Contains(exec, "brief-file=<that file>") ||
+	if !strings.Contains(exec, `args: "op=correct scope=run-{RUN} name={agent} id={agent_id} correct-file=<that file> report-file={path}")`) || strings.Contains(exec, "brief-file=<that file>") ||
 		!strings.Contains(exec, "`member-run` `op=correct` with it as `correct-file=`") || !strings.Contains(exec, "do not re-run Verify unless you have not run it yet") {
 		add("the 5-D.5 nudge and the 5-D.7 resend must go through op=correct, never op=next, and say they change nothing in the chunk")
 	}
@@ -236,6 +252,9 @@ func delegatedContractProblems(f map[string]string) []string {
 	}
 	if peek, collect := strings.Index(who, "op=peek"), strings.Index(who, "op=collect"); peek < 0 || collect < peek || strings.Count(who, "op=collect") != strings.Count(who, "retry=no") || !strings.Contains(who, "`op=correct`") || strings.Contains(who, "ONE retry") {
 		add("the team check must peek, nudge once through op=correct, then op=collect retry=no - a member-run member is never retried by agent-report")
+	}
+	if !strings.Contains(who, "`Dismissed: <name>`") || !strings.Contains(who, "`ListAgents` lists `<callsign>-<name>`") {
+		add("the team check must skip a standing member that is not listed or recorded Dismissed: by this lead session")
 	}
 	if !strings.Contains(exec, "read in the team check's member order: `op=peek`, one nudge through `op=correct`, then `op=collect ... retry=no`") {
 		add("the allowlist architect is a member-run member: read it in the team check's member order, never retried")
@@ -261,10 +280,40 @@ func delegatedContractProblems(f map[string]string) []string {
 		add("the label auto-commit low-risk must appear nowhere")
 	}
 	record := sectionSpan(exec, "### 5-D.3 Run record")
-	for _, field := range []string{"shape", "gate_policy", "members_scope", "risk", "base", "agent_branch", "agent_worktree_path", "picked_sha", "patch_path", "accepted_by", "committed_by", "integrated_source", "allowlist_amendments"} {
+	for _, field := range []string{"shape", "gate_policy", "risk", "base", "agent_branch", "agent_worktree_path", "picked_sha", "patch_path", "accepted_by", "committed_by", "integrated_source", "allowlist_amendments"} {
 		if !strings.Contains(record, `"`+field+`":`) {
 			add("the run record must list " + field)
 		}
+	}
+	groups := ""
+	if at := strings.Index(record, `"groups": [`); at >= 0 {
+		groups = record[at:]
+		if end := strings.Index(groups, "\n"); end >= 0 {
+			groups = groups[:end]
+		}
+	}
+	for _, field := range []string{"agent_id", "dismissed"} {
+		if !strings.Contains(groups, `"`+field+`":`) {
+			add("every group of the run record must carry " + field)
+		}
+	}
+	if strings.Contains(exec, "members_scope") {
+		add("the run record must carry no members_scope - no registry scope exists (lets-gbfpd)")
+	}
+	if !strings.Contains(record, "every later member-run call of that member passes `id={agent_id}`") || !strings.Contains(record, "a member recorded `dismissed` is never messaged") {
+		add("the run record must say every member-run call passes id={agent_id} and a dismissed member is never messaged")
+	}
+	// Every implementer call carries its recorded id; the run's analysts are addressed by name.
+	for _, m := range runMemberCall.FindAllStringSubmatch(exec, -1) {
+		switch name, rest := m[2], m[3]; {
+		case name == "{agent}" && !strings.Contains(rest, "id={agent_id}"):
+			add("every implementer member-run call (op=" + m[1] + ") carries id={agent_id}: " + m[0])
+		case name != "{agent}" && strings.Contains(rest, "id="):
+			add("an analyst member-run call carries no id - it goes by name: " + m[0])
+		}
+	}
+	if !strings.Contains(exec, "`TaskStop(task_id=<the group's agent_id, else {agent}>)`") {
+		add("5-D.6 Stop must stop the group's agent_id, else the name")
 	}
 	if !strings.Contains(record, "it moves only after the lead's commit") {
 		add("integrated_source must move only after the lead's commit")
@@ -282,9 +331,9 @@ func delegatedContractProblems(f map[string]string) []string {
 		}
 	}
 	recovery := sectionSpan(exec, "### 5-D.7 Recovery (a run record exists)")
-	for _, need := range []string{"`unknown_pre_upgrade`", "`members_scope`", "members-run-{RUN}.json", "never messaged"} {
+	for _, need := range []string{"**Liveness comes from `ListAgents`**", "never from the record", "`dismissed`", "never messaged", "`{agent}` not listed (a recorded `agent_id` -> first the idle row's path through member-run with `id={agent_id}`; `agent_gone` -> this row)", "and no `agent_id` is recorded (or a correction by `id={agent_id}` returns `agent_gone`)", "or an `agent_id` recorded (sent by id)"} {
 		if !strings.Contains(recovery, need) {
-			add("5-D.7 must treat a pre-upgrade record's agents as gone and never message them: " + need)
+			add("5-D.7 must judge liveness by ListAgents and never message a dismissed member: " + need)
 		}
 	}
 	if strings.Contains(recovery, "SendMessage(") {
@@ -321,6 +370,9 @@ func delegatedContractProblems(f map[string]string) []string {
 		add("an agent branch and worktree may be removed only when integrated_source is its tip, and only on the user's yes")
 	}
 	cleanup := between(completion, "**Isolated groups' worktrees.**", "Any mismatch at step 2 or 3")
+	if !strings.Contains(cleanup, "record `dismissed: true` and `agent_id: null` in ONE record write, then the call") {
+		add("cleanup must record dismissed: true with agent_id: null in one write before the dismiss call")
+	}
 	dismissAt, removeAt, deleteAt := strings.Index(cleanup, "`op=dismiss` FIRST"), strings.Index(cleanup, "`git worktree remove {agent_worktree_path}`"), strings.Index(cleanup, "`git branch -D {agent_branch}`")
 	if dismissAt < 0 || removeAt < dismissAt || deleteAt < removeAt || strings.Count(cleanup, "git rev-parse {agent_branch}") < 2 || !strings.Contains(cleanup, "never with `--force`") || strings.Contains(cleanup, "remove --force") {
 		add("cleanup must dismiss first, re-check the tip before the worktree remove and before the branch delete, and never force the remove")
@@ -403,11 +455,11 @@ func delegatedContractProblems(f map[string]string) []string {
 	if !strings.Contains(isolated, "Before EVERY commit re-check") || !strings.Contains(isolated, "still equals the path you verified at spawn") || !strings.Contains(isolated, "still the branch you switched at spawn") || !strings.Contains(isolated, "NEVER push") {
 		add("implementer.md's isolated row must re-check the toplevel (the path verified at spawn) and the branch before every commit, and never push")
 	}
-	if step3 := sectionSpan(skill, "## Step 3: Next / Correct"); !strings.Contains(step3, "`agent_id`: set -> the `to:` below is that id") || !strings.Contains(skill, "puts the `agent_id` where it says `{agent}`") {
-		add("member-run Step 3 must send to the member's agent_id when it is set")
+	if step3 := sectionSpan(skill, "## Step 3: Next / Correct"); !strings.Contains(step3, "with `id=` -> send to the id") || !strings.Contains(skill, "puts the `id` where it says `{agent}`") {
+		add("member-run must send to the id the caller passes")
 	}
-	if !strings.Contains(sectionSpan(skill, "## Step 4: Dismiss"), "`TaskStop(task_id=\"{agent}\")` - the `agent_id` when set") || !strings.Contains(sectionSpan(skill, "## Step 2: Spawn"), "--agent-id {id}") {
-		add("member-run must record an isolated member's agent id and stop it by that id")
+	if !strings.Contains(sectionSpan(skill, "## Step 4: Dismiss"), "`TaskStop(task_id=\"{agent}\")` - the `id` when passed") {
+		add("member-run must stop a member by the id the caller passes")
 	}
 
 	if strings.Contains(exec, predecessor) || strings.Contains(exec, "chunk-file=") {
@@ -495,8 +547,7 @@ func TestMemberRun(t *testing.T) {
 	}{
 		{"picker loses Implementers", "execute", `label: "Implementers"`, `label: "Implementer"`, "Implementers locus", 1},
 		{"correct spawns", "skill", "SendMessage(", "Agent(", "Correct must", 1},
-		{"status after the send", "skill", "1. `lets members status --scope {scope} --name {name} --json`, before every message.", "1. Check the member before every message.", "before every SendMessage", 1},
-		{"add before the Agent call", "skill", "   lets members add --scope", "   lets memberz add --scope", "right after the Agent call", 1},
+		{"status after the send", "skill", "1. `ListAgents`, before every message.", "1. Check the member before every message.", "before every SendMessage", 1},
 		{"execute back on the old skill", "execute", `Skill(skill: "lets:member-run", args: "op=spawn`, "Skill(skill: \"lets:implementer" + "-run\", args: \"op=spawn", "not its predecessor", 1},
 		{"a Review gate is dropped", "execute", `header: "Review"`, `header: "Reviewed"`, "Review gates", 1},
 		{"files audit becomes a warning", "execute", "**Files audit - a GATE.**", "**Files audit - a WARNING.**", "Files audit as a gate", 1},
@@ -511,11 +562,12 @@ func TestMemberRun(t *testing.T) {
 		{"dispatch respawns every chunk", "execute", `args: "op=next scope=run-{RUN}`, `args: "op=spawn scope=run-{RUN}`, "op=next", 1},
 		{"solo becomes a default allocation", "execute", "the shape the 4.7 proposal usually picks", "by default one implementer", "usually picks", 1},
 		{"Start gate loses Change the launch plan", "execute", `{ label: "Change the launch plan", `, `{ label: "Adjust", `, "Change the launch plan", 1},
-		{"record drops members_scope", "execute", `"members_scope": "run-{RUN}",`, "", "members_scope", 1},
+		{"record drops dismissed", "execute", `"dismissed": false, `, "", "dismissed", 1},
 		{"integrated_source moves on a report", "execute", "it moves only after the lead's commit", "it moves on each report", "only after the lead's commit", 1},
 		{"bare integrated field", "execute", `"integrated_source": null`, `"integrated": null`, "bare integrated", 1},
 		{"addendum heading dropped", "execute", "`## Allowlist addendum`", "`## Extra paths`", "addendum", 1},
-		{"pre-upgrade member messaged", "execute", "such a member is never messaged", "such a member is asked to report", "pre-upgrade", 1},
+		{"a recorded id is never tried", "execute", "`{agent}` not listed (a recorded `agent_id` -> first the idle row's path through member-run with `id={agent_id}`; `agent_gone` -> this row)", "`{agent}` not listed", "judge liveness by ListAgents", 1},
+		{"dismissed member messaged", "execute", "A member recorded `dismissed` is never messaged.", "A member recorded `dismissed` is asked to report.", "never message a dismissed member", 1},
 		{"parallel allowed alone", "execute", "it needs `--implementers` / `--team`", "it runs alone", "--parallel must need", 1},
 		{"groups inferred", "execute", "The shape is never inferred", "The shape is inferred", "declare parallel groups", 1},
 		{"isolated brief loses CALLER_TOPLEVEL", "execute", "CALLER_TOPLEVEL: {git rev-parse", "TOPLEVEL: {git rev-parse", "CALLER_TOPLEVEL", 1},
@@ -523,7 +575,16 @@ func TestMemberRun(t *testing.T) {
 		{"cleanup without the tip check", "execute", "compare its `integrated_source` with the tip of its `agent_branch`", "look at its `agent_branch`", "integrated_source is its tip", 1},
 		{"guard switches first", "agent", "At spawn only, before any edit,", "At spawn only, first `git switch -C <branch> {BASE}`, then before any edit,", "before git switch -C", 1},
 		{"reset --hard creeps in", "agent", "NEVER push.", "NEVER push; git reset --hard on a bad start.", "reset --hard", 1},
-		{"step 3 sends by name", "skill", "   - Read the entry's `agent_id`: set -> the `to:` below is that id, not the name.\n", "", "agent_id when it is set", 1},
+		{"step 3 sends by name", "skill", "puts the `id` where it says `{agent}`", "puts the name where it says `{agent}`", "send to the id", 1},
+		{"dismiss stops by name", "skill", "`TaskStop(task_id=\"{agent}\")` - the `id` when passed", "`TaskStop(task_id=\"{name}\")`", "stop a member by the id", 1},
+		{"next drops the id", "execute", `args: "op=next scope=run-{RUN} name={agent} id={agent_id} brief-file=`, `args: "op=next scope=run-{RUN} name={agent} brief-file=`, "carries id={agent_id}", 1},
+		{"an analyst gets an id", "execute", "## Step 6: Record Completion", "`Skill(skill: \"lets:member-run\", args: \"op=next scope=run-{RUN} name=explorer-{RUN} id=x brief-file=b report-file=r\")`\n\n## Step 6: Record Completion", "carries no id", 1},
+		{"role line drops lets:lead", "skill", "`lets:actor` and `lets:lead` -> stop with `role_not_allowed`", "`lets:actor` -> stop with `role_not_allowed`", "role_not_allowed", 1},
+		{"return drops the id", "skill", "Return: `spawned {agent} on {model}, id {agent_id}`", "Return: `spawned {agent} on {model}`", "Return line", 1},
+		{"dismiss keeps agent_id", "execute", "record `dismissed: true` and `agent_id: null` in ONE record write, then the call", "record `dismissed: true` in ONE record write, then the call", "agent_id: null", 1},
+		{"who checks forgets Dismissed", "execute", " and the team file's `## 7. Current task` holds no `Dismissed: <name>` line by this lead session", "", "Dismissed:", 1},
+		{"stop goes by name only", "execute", "`TaskStop(task_id=<the group's agent_id, else {agent}>)`", "`TaskStop(task_id=\"{agent}\")`", "agent_id, else the name", 1},
+		{"member-run calls lets members again", "skill", "## Step 1: Model panel", "```bash\nlets members status --scope {scope} --json\n```\n\n## Step 1: Model panel", "no lets members verb", 1},
 		{"cleanup deletes before dismissing", "execute", "1. `member-run` `op=dismiss` FIRST", "1. `member-run` `op=dismiss` last", "dismiss first", 1},
 		{"cleanup forces the remove", "execute", "then `git worktree remove {agent_worktree_path}` - plain", "then `git worktree remove --force {agent_worktree_path}` - plain", "dismiss first", 1},
 		{"replacement integrates the tip", "execute", "`--from` the chunk's recorded `commit_sha`, never the branch tip", "`--from` the branch tip", "commit_sha", 1},
@@ -546,7 +607,7 @@ func TestMemberRun(t *testing.T) {
 		{"next keeps an earlier REPORT_FILE", "skill", `\nREPORT_FILE: {report-file}\n` + roundFileNote + `"`, `\nREPORT_FILE: {report-file}"`, "replaces any earlier one", 1},
 		{"the note rejoins the REPORT_FILE line", "skill", `\nREPORT_FILE: {report-file}\n` + roundFileNote + `"`, `\nREPORT_FILE: {report-file} - ` + roundFileNote + `"`, "replaces any earlier one", 1},
 		{"a report-only amendment commits", "agent", "and in `pipelined` / `isolated` mode no commit and no fixup.", "and in `pipelined` / `isolated` mode a fixup as usual.", "report-only amendment", 1},
-		{"the nudge goes back to op=next", "execute", `args: "op=correct scope=run-{RUN} name={agent} correct-file=<that file> report-file={path}")`, `args: "op=next scope=run-{RUN} name={agent} brief-file=<that file> report-file={path}")`, "never op=next", 1},
+		{"the nudge goes back to op=next", "execute", `args: "op=correct scope=run-{RUN} name={agent} id={agent_id} correct-file=<that file> report-file={path}")`, `args: "op=next scope=run-{RUN} name={agent} id={agent_id} brief-file=<that file> report-file={path}")`, "never op=next", 1},
 		{"the resend goes back to op=next", "execute", "`member-run` `op=correct` with it as `correct-file=`", "`member-run` `op=next` with it", "never op=next", 1},
 		{"a nudge advances the round", "execute", "only a correction advances `round`", "every op=correct advances `round`", "keeps the round", 1},
 		{"rehydration re-runs the work", "execute", "Do not re-run Verify and do not change the work.", "", "without re-running Verify", 1},
@@ -579,6 +640,10 @@ func TestMemberRun(t *testing.T) {
 // (the REPORT_FILE line carries only the path): the member holds the earlier rounds'
 // lines in its context, so the newest must say it wins.
 const roundFileNote = "This round's report file; it replaces any earlier REPORT_FILE."
+
+// runMemberCall matches a member-run call template of the execute run's scope:
+// op, member name, and the rest of its args.
+var runMemberCall = regexp.MustCompile(`args: "op=(next|correct|dismiss) scope=run-\{RUN\} name=([^ "]+)([^"]*)"`)
 
 // memberRunCall matches a member-run Skill call's args, or a member-run op
 // written in prose with its role; roleModelPin matches a model named by value in one.

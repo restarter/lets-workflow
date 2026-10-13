@@ -23,23 +23,43 @@ import (
 // homeDir == "" skips the user-level layer. A missing file is not an error.
 func MergedEnv(projectRoot, homeDir string) map[string]string {
 	merged := map[string]string{}
-	if homeDir != "" {
-		userEnv, _ := readEnvFile(filepath.Join(homeDir, ".lets", ".env"))
-		for k, v := range userEnv {
+	eachLayer(projectRoot, homeDir, func(_ string, env map[string]string) {
+		for k, v := range env {
 			if v != "" {
 				merged[k] = v
 			}
 		}
+	})
+	return merged
+}
+
+// MergedEnvSource is MergedEnv's value for one key plus the layer that supplied
+// it: "project" (.lets/.env), "user" (~/.lets/.env) or "unset" (neither has a
+// non-empty value; value ""). It walks the same layers as MergedEnv (eachLayer),
+// so the two never disagree.
+func MergedEnvSource(projectRoot, homeDir, key string) (value, source string) {
+	value, source = "", "unset"
+	eachLayer(projectRoot, homeDir, func(layer string, env map[string]string) {
+		if v := env[key]; v != "" {
+			value, source = v, layer
+		}
+	})
+	return value, source
+}
+
+// eachLayer calls fn for every config layer, lowest precedence first: the
+// user-level ~/.lets/.env (layer "user", skipped when homeDir is "") and then the
+// project .lets/.env (layer "project", skipped when projectRoot is ""). A later
+// non-empty value wins - the one precedence rule MergedEnv documents.
+func eachLayer(projectRoot, homeDir string, fn func(layer string, env map[string]string)) {
+	if homeDir != "" {
+		userEnv, _ := readEnvFile(filepath.Join(homeDir, ".lets", ".env"))
+		fn("user", userEnv)
 	}
 	if projectRoot != "" {
 		projEnv, _ := readEnvFile(filepath.Join(projectRoot, ".lets", ".env"))
-		for k, v := range projEnv {
-			if v != "" {
-				merged[k] = v
-			}
-		}
+		fn("project", projEnv)
 	}
-	return merged
 }
 
 // readEnvFile parses the .env file at path. A missing file is not an error -
