@@ -40,3 +40,10 @@ func SetBeforeTaskStateRemove(f func()) (restore func()) {
 	beforeTaskStateRemove = f
 	return func() { beforeTaskStateRemove = old }
 }
+
+// SetSettingsStage replaces the EnsureLetsAdditionalDir test seam; restore undoes it.
+func SetSettingsStage(f func(string)) (restore func()) {
+	old := settingsStage
+	settingsStage = f
+	return func() { settingsStage = old }
+}

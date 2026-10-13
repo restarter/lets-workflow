@@ -514,3 +514,24 @@ func TestCreate_NoneAdapterLinksNothing(t *testing.T) {
 		t.Error("the none adapter must not link .beads/.env even when it exists")
 	}
 }
+
+func TestCreate_DeclaresLetsAdditionalDir(t *testing.T) {
+	isolateGitIgnore(t)
+	repo := initRepo(t)
+	mustMkdir(t, filepath.Join(repo, ".lets"))
+	res, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{
+		Name: "foo", Mode: worktreecmd.BranchAuto,
+	})
+	if err != nil || !res.OK {
+		t.Fatalf("Create: err=%v ok=%v", err, res.OK)
+	}
+	if got := settingsDirs(t, res.Worktree.Path); len(got) != 1 || got[0] != filepath.Join(repo, ".lets") {
+		t.Errorf("additionalDirectories = %v", got)
+	}
+	if !stepsContain(res.Steps, "permissions.additionalDirectories") {
+		t.Errorf("no additionalDirectories step: %+v", res.Steps)
+	}
+	if !settingsIgnored(res.Worktree.Path) {
+		t.Errorf("git does not ignore settings.local.json in the new worktree")
+	}
+}

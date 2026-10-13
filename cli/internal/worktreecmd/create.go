@@ -286,6 +286,14 @@ func Create(ctx context.Context, projectRoot string, opts CreateOptions) (*Creat
 	}
 	addStep(StepOK, "verify: branch, symlinks, paths")
 
+	// Step 10.5: declare the main .lets/ as an additional directory (lets-urmfa), so a
+	// session in this worktree writes the team file, snapshots and caches without an
+	// approval prompt. After verify, so a rollback never has to undo it; never fatal.
+	if letsSymlinked {
+		st, _ := EnsureLetsAdditionalDir(ctx, wtPath, projectRoot)
+		result.Steps = append(result.Steps, st)
+	}
+
 	// Success.
 	result.OK = true
 	result.Worktree.LetsSymlinked = letsSymlinked
