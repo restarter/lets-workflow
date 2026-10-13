@@ -85,6 +85,23 @@ lets worktree task-state set --self-orchestrator --json
 
   written -> re-run `lets peers orchestrator` above; `self_record` must now be non-null; `<lead>` = `self_record.name`.
 - Any failure - no `lets` binary, `error.kind=orchestrator_needs_name` (this session has no name), another failed write, or `self_record` still null -> **Refused:** "This session cannot be the team's orchestrator ({reason}) - name this session with /rename <name>, or run from /lets:start --main." Stop.
+- **Standing** - with `<lead>` set, read `self_record.standing` from the last `lets peers orchestrator` envelope (the same question as `/lets:start --main`): `on` / `off` (an existing record keeps its grant) -> one line `Standing authorization between {self_record.name} and the sessions bound to it: {on|off} (/lets:orc standing on|off changes it)`; `""` (a new record, never asked) -> ONE question:
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Sessions bound to {self_record.name} and it talk without per-message confirmation?",
+    header: "Standing",
+    options: [
+      { label: "Allow (Recommended)", description: "Sends and in-direction replies both ways skip the Send? question; hard gates stay" },
+      { label: "Ask per message", description: "Every message between it and a bound session asks its user first" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+  **Allow** -> `lets worktree task-state set --self-orchestrator --standing on --json`; **Ask per message** -> `lets worktree task-state set --self-orchestrator --standing off --json`. A failed write: one line, the grant stays unasked; the run continues. The full rule: `${CLAUDE_PLUGIN_ROOT}/protocol/peers.md` `## Standing authorization`.
 
 **Conflict guard (after Step R2 selects tasks).** Read every `.lets/execution/team-*.json` whose `status` is not `completed` or `stopped`, by its `backend`:
 

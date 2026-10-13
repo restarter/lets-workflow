@@ -307,16 +307,16 @@ LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 lets peers orchestrator --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" --json 2>/dev/null
 ```
 
-  `self_record.standing` is `on` or `off` (an existing record keeps its grant): one line - `Standing authorization for workers bound to {self_record.name}: {on|off} (/lets:orc standing on|off changes it)`. `self_record.standing` is `""` (a new record, never asked) - ONE question:
+  `self_record.standing` is `on` or `off` (an existing record keeps its grant): one line - `Standing authorization between {self_record.name} and the sessions bound to it: {on|off} (/lets:orc standing on|off changes it)`. `self_record.standing` is `""` (a new record, never asked) - ONE question:
 
 ```
 AskUserQuestion(
   questions=[{
-    question: "Workers bound to {self_record.name} talk to it without per-message confirmation?",
+    question: "Sessions bound to {self_record.name} and it talk without per-message confirmation?",
     header: "Standing",
     options: [
-      { label: "Allow (Recommended)", description: "Bound workers' sends and in-direction replies skip the Send? question; hard gates stay" },
-      { label: "Ask per message", description: "Every message to or from a bound worker asks this session's user first" }
+      { label: "Allow (Recommended)", description: "Sends and in-direction replies both ways skip the Send? question; hard gates stay" },
+      { label: "Ask per message", description: "Every message between it and a bound session asks its user first" }
     ],
     multiSelect: false
   }]

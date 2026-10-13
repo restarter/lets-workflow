@@ -149,7 +149,63 @@ func lintOrcFiles(files map[string]string) []string {
 			}
 		}
 	}
+	bad = append(bad, lintStanding(files)...)
 	return append(bad, lintOrcOffers(files)...)
+}
+
+// standingMust pins the symmetric standing grant (lets-0xsw2 pm1): each entry is a
+// section of a file (from its start marker to its end marker) and the literals that
+// section must hold.
+var standingMust = []struct {
+	rel, from, to string
+	must          []string
+	why           string
+}{
+	{"skills/orc/SKILL.md", "## Step 4:", "## Step 5:",
+		[]string{"self_record.standing=\"on\"` and the target is a row of `lets peers who --orc \"<self_record.name>\" --json`", "sending under standing authorization:"},
+		"Step 4: the orchestrator side skips Send? only for a row of who --orc"},
+	{"skills/orc/SKILL.md", "## Step 7:", "## Step 8:",
+		[]string{
+			`lets peers who --orc "<self_record.name>" --from-name '<from-name>' --from-addr '<from>' --json`,
+			`lets peers orchestrator --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" --from-name '<from-name>' --from-addr '<from>' --json`,
+			"Proceed ONLY on `standing_ok=true`", "`standing_ok` absent", "no standing reply: <standing_reason",
+		},
+		"Step 7: both sides ask Go with --from-addr and act only on standing_ok=true"},
+	{"skills/orc/SKILL.md", "## Step 7:", "## Step 8:",
+		[]string{"Before this session's FIRST autonomous reply, print once: `standing authorization on with <peer> - answering in-direction messages without asking (cap 3); /lets:orc standing off revokes`"},
+		"Step 7: the first-autonomous-reply notice"},
+	{"commands/team.md", "**Guard 4:", "**Conflict guard",
+		[]string{`header: "Standing"`, "--self-orchestrator --standing on --json", "--self-orchestrator --standing off --json"},
+		"team.md Guard 4: a new record gets the Standing question"},
+}
+
+// lintStanding applies standingMust, and keeps the /lets:peer alias out of Step 8 (the
+// alias cannot carry standing).
+func lintStanding(files map[string]string) []string {
+	var bad []string
+	section := func(body, from, to string) string {
+		i := strings.Index(body, from)
+		if i < 0 {
+			return ""
+		}
+		rest := body[i:]
+		if j := strings.Index(rest[len(from):], to); j >= 0 {
+			return rest[:len(from)+j]
+		}
+		return rest
+	}
+	for _, c := range standingMust {
+		sec := section(files[c.rel], c.from, c.to)
+		for _, m := range c.must {
+			if !strings.Contains(sec, m) {
+				bad = append(bad, c.rel+": "+c.why+" - missing "+m)
+			}
+		}
+	}
+	if strings.Contains(section(files["skills/orc/SKILL.md"], "## Step 8:", "## Receipt rules"), "/lets:peer") {
+		bad = append(bad, "skills/orc/SKILL.md: Step 8 must not offer /lets:peer - the alias cannot carry standing")
+	}
+	return bad
 }
 
 // optionCounts returns the number of labels in every multi-line `options: [` block.
@@ -280,6 +336,30 @@ func TestOrcLint(t *testing.T) {
 	}
 	if len(mutate("commands/start.md", "- **Stop** -> `Skill(skill: \"lets:orc\", args: \"verb=standing text=off footer=none\")`")) != 0 {
 		t.Error("mutation: a Skill(lets:orc) call revoking standing is allowed")
+	}
+
+	// the symmetric standing grant (lets-0xsw2 pm1)
+	orcStep4Skip := "self_record.standing=\"on\"` and the target is a row of `lets peers who --orc \"<self_record.name>\" --json`"
+	if len(replaced("skills/orc/SKILL.md", orcStep4Skip, "self_record.standing=\"on\"`")) == 0 {
+		t.Error("mutation: an orchestrator-side Send? skip without the who --orc row condition must fail the lint")
+	}
+	if len(replaced("skills/orc/SKILL.md", "--from-addr '<from>' ", "")) == 0 {
+		t.Error("mutation: Step 7 calls without --from-addr must fail the lint")
+	}
+	if len(replaced("skills/orc/SKILL.md", "Proceed ONLY on `standing_ok=true`", "Proceed when the name matches")) == 0 {
+		t.Error("mutation: Step 7 not gated on standing_ok=true must fail the lint")
+	}
+	if len(replaced("skills/orc/SKILL.md", "Before this session's FIRST autonomous reply, print once:", "Optionally print:")) == 0 {
+		t.Error("mutation: Step 7 without the first-autonomous-reply notice must fail the lint")
+	}
+	if len(replaced("skills/orc/SKILL.md", "typed `/lets:orc standing on` or said", "typed `/lets:orc standing on` (or `/lets:peer`) or said")) == 0 {
+		t.Error("mutation: /lets:peer back in Step 8 must fail the lint")
+	}
+	if len(replaced("commands/team.md", `header: "Standing"`, `header: "Grant"`)) == 0 {
+		t.Error("mutation: team.md Guard 4 without the Standing question must fail the lint")
+	}
+	if len(replaced("commands/team.md", "--self-orchestrator --standing on --json", "--self-orchestrator --json")) == 0 {
+		t.Error("mutation: team.md Guard 4 without the Allow write must fail the lint")
 	}
 
 	// start.md main mode: a refused orchestrator record wrote nothing, the boundary
