@@ -416,3 +416,100 @@ func TestDoneExistingPRLint(t *testing.T) {
 		}
 	}
 }
+
+// lets-2jaak / lets-wu2xl: Step 3's "PR only, keep open" must hold on EVERY path
+// that closes the task or merges its PR - a guard on the PR path alone let the
+// local merge and the trunk path close a task the user kept open. Every `### `
+// section of Step 8 and Step 9 that holds a `close task=` block or a
+// `gh pr merge` must name the keep-open choice before its first such action.
+
+const (
+	doneStep8Head  = "\n## Step 8: Finish Task\n"
+	doneKeepOpen   = "PR only, keep open"
+	doneMergeLevel = "### Merge by level (github \"After PR\" variants)"
+)
+
+// doneKeepOpenMust are the sections that close or merge today; each must be found
+// closing or merging, so the lint cannot pass by losing them.
+var doneKeepOpenMust = []string{
+	"### If HEAD == `$LETS_MERGE_BRANCH` (trunk-mode):",
+	"### If the Existing-PR Guard's outcome is `shipped`:",
+	"### If $LETS_PR_FLOW == local / fallback (local merge) AND NOT in worktree:",
+	"### If $LETS_PR_FLOW == local / fallback (local merge) AND in worktree:",
+	doneMergeLevel,
+	"### After PR ($LETS_PR_FLOW == github), NOT in worktree:",
+	"### After PR ($LETS_PR_FLOW == github), IN worktree:",
+}
+
+func doneKeepOpenProblems(done string) []string {
+	const f = "commands/done.md: "
+	var bad []string
+	acting := map[string]bool{}
+	// bounded by the next step's heading, not by any "\n## ": Step 8's PR body heredoc
+	// carries `## Summary` lines
+	for _, s := range []struct{ from, to string }{{doneStep8Head, doneStep9Head}, {doneStep9Head, doneRulesHead}} {
+		h2 := s.from
+		body := region(done, s.from, s.to)
+		if body == "" {
+			bad = append(bad, f+"no "+strings.TrimSpace(h2))
+			continue
+		}
+		parts := strings.Split(body, "\n### ")
+		for _, sec := range parts[1:] {
+			heading := "### " + strings.SplitN(sec, "\n", 2)[0]
+			first := -1
+			for _, act := range []string{"close task=", "gh pr merge"} {
+				if i := strings.Index(sec, act); i >= 0 && (first < 0 || i < first) {
+					first = i
+				}
+			}
+			if first < 0 {
+				continue
+			}
+			acting[heading] = true
+			if !strings.Contains(sec[:first], doneKeepOpen) {
+				bad = append(bad, f+"keep-open: "+heading+" closes or merges without first honouring Step 3's "+doneKeepOpen)
+			}
+		}
+	}
+	for _, h := range doneKeepOpenMust {
+		if !acting[h] {
+			bad = append(bad, f+"keep-open coverage: "+h+" no longer closes or merges - renamed? update doneKeepOpenMust")
+		}
+	}
+	return bad
+}
+
+func TestDoneKeepOpenLint(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("..", "..", "..", "plugins", "lets", "commands", "done.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := string(b)
+	for _, p := range doneKeepOpenProblems(done) {
+		t.Error(p)
+	}
+	for _, m := range []struct{ name, old, want string }{
+		{"local worktree path closes a kept-open task", "After merge - when Step 3 chose **PR only, keep open**, skip the `close` and say the task stays open (the merge was the user's pick; only the close is skipped):\n```lets-tracker\nclose task=<task-id> reason=\"Merged locally from worktree.", "AND in worktree:"},
+		{"local path closes a kept-open task", "After merge - when Step 3 chose **PR only, keep open**, skip the `close` and say the task stays open (the merge was the user's pick; only the close is skipped):\n```lets-tracker\nclose task=<task-id> reason=\"Merged locally. Commits", "AND NOT in worktree:"},
+		{"trunk closes a kept-open task", "When Step 3 chose **PR only, keep open**, skip the `close` (and the task-state cleanup that follows it) and say the task stays open.\n\n", "(trunk-mode):"},
+		{"minimal merge ignores keep-open", "When Step 3 chose **PR only, keep open**, nothing here runs: the PR stays open, the task stays open, and one line says so. ", "Merge by level"},
+	} {
+		t.Run(m.name, func(t *testing.T) {
+			if !strings.Contains(done, m.old) {
+				t.Fatalf("mutant cannot apply: %q is not in done.md - update the mutant with the text it guards", m.old)
+			}
+			repl := ""
+			if strings.HasPrefix(m.old, "After merge - ") {
+				// keep the block, drop only the guard sentence
+				repl = "After merge:" + m.old[strings.Index(m.old, "\n```lets-tracker"):]
+			}
+			for _, p := range doneKeepOpenProblems(strings.Replace(done, m.old, repl, 1)) {
+				if strings.Contains(p, "keep-open: ") && strings.Contains(p, m.want) {
+					return
+				}
+			}
+			t.Errorf("mutant %q was not caught (want a keep-open problem naming %q)", m.name, m.want)
+		})
+	}
+}
