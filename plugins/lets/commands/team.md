@@ -86,7 +86,7 @@ lets worktree task-state set --self-orchestrator --json
 
   written -> re-run `lets peers orchestrator` above; `self_record` must now be non-null; `<lead>` = `self_record.name`.
 - Any failure - no `lets` binary, `error.kind=orchestrator_needs_name` (this session has no name), another failed write, or `self_record` still null -> **Refused:** "This session cannot be the team's orchestrator ({reason}) - name this session with /rename <name>, or run from /lets:start --main." Stop.
-- **Standing** - with `<lead>` set, read `self_record.standing` from the last `lets peers orchestrator` envelope (the same question as `/lets:start --main`): `on` / `off` (an existing record keeps its grant) -> one line `Standing authorization between {self_record.name} and the sessions bound to it: {on|off} (/lets:orc standing on|off changes it)`; `""` (a new record, never asked) -> ONE question:
+- **Standing** - with `<lead>` set, read `self_record.standing` from the last `lets peers orchestrator` envelope (the same question as `/lets:start --main`). `{LETS_GATES}` is not `strict` (missing reads as `standard`) -> one line `Gate level {LETS_GATES}: sessions talk without per-message confirmation`, and no question (the recorded grant governs `strict` only). `{LETS_GATES}` is `strict` -> `on` / `off` (an existing record keeps its grant) -> one line `Standing authorization between {self_record.name} and the sessions bound to it: {on|off} (/lets:orc standing on|off changes it)`; `""` (a new record, never asked) -> ONE question:
 
 ```
 AskUserQuestion(

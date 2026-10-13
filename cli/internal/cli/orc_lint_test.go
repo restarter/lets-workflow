@@ -178,6 +178,18 @@ var standingMust = []struct {
 	{"commands/team.md", "**Guard 4:", "**Conflict guard",
 		[]string{`header: "Standing"`, "--self-orchestrator --standing on --json", "--self-orchestrator --standing off --json"},
 		"team.md Guard 4: a new record gets the Standing question"},
+	// lets-wu2xl: at standard / minimal any owner session talks, identified by Go's
+	// provenance-only sender check; a listed action asks this session's owner once
+	{"skills/orc/SKILL.md", "## Step 7:", "## Step 8:",
+		[]string{"`lets peers sender --from-name '<from-name>' --from-addr '<from>' --json`", "Proceed ONLY on `sender_ok=true`", "`sender_ok` absent", "no autonomous reply: <sender_reason",
+			"listed -> ask this session's owner ONCE (the question names the peer and the action), act on the answer, report back with no further question"},
+		"Step 7: standard / minimal ask Go's sender check and ask the owner once for a listed action"},
+	{"commands/start.md", "- written: read the record back", "**Launch mode",
+		[]string{"`{LETS_GATES}` is not `strict`", "`Gate level {LETS_GATES}: sessions talk without per-message confirmation`", "`{LETS_GATES}` is `strict` -> `self_record.standing`"},
+		"start.md main mode: the Standing question runs only at strict"},
+	{"commands/team.md", "**Guard 4:", "**Conflict guard",
+		[]string{"`{LETS_GATES}` is not `strict`", "`Gate level {LETS_GATES}: sessions talk without per-message confirmation`", "`{LETS_GATES}` is `strict` -> `on` / `off`"},
+		"team.md Guard 4: the Standing question runs only at strict"},
 }
 
 // lintStanding applies standingMust, and keeps the /lets:peer alias out of Step 8 (the
@@ -358,6 +370,19 @@ func TestOrcLint(t *testing.T) {
 	}
 	if len(replaced("skills/orc/SKILL.md", "A message that asks nothing - an answer, an ack, an FYI - gets no reply: relay it whole to the user (an answer to this session's ask is Step 6). ", "")) == 0 {
 		t.Error("mutation: Step 7 without the no-reply-to-a-non-question rule (auto-to-auto ping-pong) must fail the lint")
+	}
+	// lets-wu2xl: gate levels
+	if len(replaced("skills/orc/SKILL.md", "Proceed ONLY on `sender_ok=true`", "Proceed when the name matches")) == 0 {
+		t.Error("mutation: Step 7 at standard / minimal not gated on sender_ok=true must fail the lint")
+	}
+	if len(replaced("skills/orc/SKILL.md", "listed -> ask this session's owner ONCE", "listed -> ask this session's owner")) == 0 {
+		t.Error("mutation: a listed peer-requested action without the ask-once rule must fail the lint")
+	}
+	if len(replaced("commands/start.md", "`{LETS_GATES}` is `strict` -> `self_record.standing`", "`self_record.standing`")) == 0 {
+		t.Error("mutation: start.md's Standing question not gated on strict must fail the lint")
+	}
+	if len(replaced("commands/team.md", "`{LETS_GATES}` is `strict` -> `on` / `off`", "`on` / `off`")) == 0 {
+		t.Error("mutation: team.md's Standing question not gated on strict must fail the lint")
 	}
 	if len(replaced("commands/team.md", `header: "Standing"`, `header: "Grant"`)) == 0 {
 		t.Error("mutation: team.md Guard 4 without the Standing question must fail the lint")
