@@ -374,3 +374,27 @@ func TestNameOf(t *testing.T) {
 		}
 	}
 }
+
+// A session id held by two processes - the parked row and an independently resumed
+// process without job fields - is judged per ENTRY: only the parked row collapses into
+// the continuation, the resumed process stays, in every entry order.
+func TestNamed_PerEntryInEveryOrder(t *testing.T) {
+	parked := Entry{Pid: 3001, SessionID: parkedSID, Name: "snake-lead", NameOK: true, Kind: "interactive", ParkedJobID: "J"}
+	cont := Entry{Pid: 3002, SessionID: bgSID, Name: "snake-lead", NameOK: true, Kind: "bg", JobID: "J"}
+	resumed := Entry{Pid: 3003, SessionID: parkedSID, Name: "snake-lead", NameOK: true}
+	rows := []Entry{parked, cont, resumed}
+	for _, order := range [][]int{{0, 1, 2}, {0, 2, 1}, {1, 0, 2}, {1, 2, 0}, {2, 0, 1}, {2, 1, 0}} {
+		var es []Entry
+		for _, i := range order {
+			es = append(es, rows[i])
+		}
+		var pids []int
+		for _, e := range (Snapshot{Entries: es}).Named("snake-lead") {
+			pids = append(pids, e.Pid)
+		}
+		sort.Ints(pids)
+		if len(pids) != 2 || pids[0] != 3002 || pids[1] != 3003 {
+			t.Errorf("order %v: Named = pids %v, want [3002 3003]", order, pids)
+		}
+	}
+}

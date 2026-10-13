@@ -233,18 +233,27 @@ func (s Snapshot) ContinuedIn(sid, own string) bool {
 	}
 	p, ok1 := s.Find(sid)
 	c, ok2 := s.Find(own)
-	if !ok1 || !ok2 || p.ParkedJobID == "" || c.JobID == "" {
+	return ok1 && ok2 && continues(p, c)
+}
+
+// continues reports whether entry parked was parked into the background job that
+// runs as entry cont: parked carries parkedJobId, cont is a background job (kind bg,
+// or no kind) with that jobId, and they are different sessions. Judged on the entry
+// pair itself - never on another process that happens to share a session id.
+func continues(parked, cont Entry) bool {
+	if parked.ParkedJobID == "" || cont.JobID == "" || parked.SessionID == cont.SessionID {
 		return false
 	}
-	if c.Kind != "" && c.Kind != "bg" {
+	if cont.Kind != "" && cont.Kind != "bg" {
 		return false
 	}
-	return p.ParkedJobID == c.JobID
+	return parked.ParkedJobID == cont.JobID
 }
 
 // Named is every live entry carrying name (one per process), machine-wide, with a
 // parked session collapsed into its continuation (lets-56ymc): a row whose session
-// was parked into a background job that is also listed under name (ContinuedIn) is
+// was parked into a background job that is also listed under name (continues, on
+// the entry pair - another process of the same session id is judged on its own) is
 // dropped, so the pair counts as ONE logical session and the continuation is its
 // address. The one by-name count for uniqueness checks (who's duplicate_name, a bound
 // target's name_not_unique, the standing sender, orchestrator_name_not_unique).
@@ -259,7 +268,7 @@ func (s Snapshot) Named(name string) []Entry {
 	for _, e := range all {
 		parked := false
 		for _, c := range all {
-			if s.ContinuedIn(e.SessionID, c.SessionID) {
+			if continues(e, c) { // per entry: a resumed process of the parked id stays
 				parked = true
 				break
 			}

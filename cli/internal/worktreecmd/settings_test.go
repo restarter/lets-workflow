@@ -562,7 +562,7 @@ func TestEnsureTeamAllowRules_ChangedDuringMergeNotOverwritten(t *testing.T) {
 	})
 	defer restore()
 	st, kind := ensureAllow(wt, repo)
-	const want = "settings_local_changed: .claude/settings.local.json left unchanged (it changed while LETS merged it; re-run team-init or add the rules with /permissions)" + allowImpact
+	const want = "settings_local_changed: .claude/settings.local.json left unchanged (it changed while LETS merged it; add the rules with /permissions)" + allowImpact
 	if st.Status != worktreecmd.StepWarn || kind != worktreecmd.SettingsLocalChanged || st.Message != want {
 		t.Errorf("step = %s %q kind %q, want warn %q", st.Status, st.Message, kind, want)
 	}
@@ -643,10 +643,10 @@ func TestMergeSettings_HeldLockWritesNothing(t *testing.T) {
 	if st.Status != worktreecmd.StepWarn || kind != worktreecmd.SettingsLocalChanged || !strings.HasPrefix(st.Message, busy) {
 		t.Errorf("ensure = %s %q kind %q, want warn %q...", st.Status, st.Message, kind, busy)
 	}
-	// team-init only - no SessionStart backfill - so the grant never promises a retry
-	const teamBusy = "settings_local_changed: .claude/settings.local.json left unchanged (another LETS process is updating it; re-run team-init or add the rules with /permissions) - "
+	// team-init only - no SessionStart backfill, and a second team-init stops at team_exists - so the grant never promises a retry
+	const teamBusy = "settings_local_changed: .claude/settings.local.json left unchanged (another LETS process is updating it; add the rules with /permissions) - "
 	st, kind = worktreecmd.EnsureTeamAllowRules(short(), wt, repo)
-	if st.Status != worktreecmd.StepWarn || kind != worktreecmd.SettingsLocalChanged || !strings.HasPrefix(st.Message, teamBusy) || strings.Contains(st.Message, "next session start") {
+	if st.Status != worktreecmd.StepWarn || kind != worktreecmd.SettingsLocalChanged || !strings.HasPrefix(st.Message, teamBusy) || strings.Contains(st.Message, "next session start") || strings.Contains(st.Message, "re-run team-init") {
 		t.Errorf("grant = %s %q kind %q, want warn %q...", st.Status, st.Message, kind, teamBusy)
 	}
 	if _, err := os.Lstat(settingsPath(wt)); !os.IsNotExist(err) {

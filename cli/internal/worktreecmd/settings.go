@@ -121,7 +121,7 @@ func EnsureTeamAllowRules(ctx context.Context, wtRoot, mainRoot string) (Step, s
 		label:          strings.Join(TeamAllowRules(), ", "),
 		impact:         "lets worktree switch and lets worktree task-state will prompt, and auto mode may refuse them; approve them when asked, or add the rules with /permissions",
 		requireIgnored: true,
-		retry:          "re-run team-init or add the rules with /permissions", // team-init only, no backfill
+		retry:          "add the rules with /permissions", // team-init only, no backfill; a second team-init stops at team_exists
 		added: func(rules []string) string {
 			return "added `" + strings.Join(rules, "`, `") + "` to " + settingsLocalRel + " (remove them to revoke)"
 		},
