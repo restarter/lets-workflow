@@ -2,6 +2,19 @@
 
 Claude Code plugin for development workflow with session management, code review, and task tracking.
 
+## Course: trust the model (since 2026-10-13)
+
+LETS began as a control layer over the model: a gate at every step, redundant reminders, hooks and lints that police behaviour. The course is now the opposite - remove control, don't add it. Models no longer need the scaffolding, and every gate costs the owner attention.
+
+- **Control only for real harm.** A gate, rule, hook, lint or self-check is added only to prevent a harm that is irreversible or leaves this machine (lost work, publishing, a merge, a release, another project) - never to make the model behave.
+- **Removing beats adding.** A reversible model mistake is fixed forward, not fenced. A proposal that answers a mistake with a new layer names the costly harm it prevents - otherwise it is the old course.
+- **Native over own.** What Claude Code already does (compaction, permissions, plan mode, SendMessage, memory) is used as is, with no LETS layer on top.
+- **A typed command is the approval** for what it names; local, reversible work runs and is reported in one line.
+- **What stays:** gates on irreversible or outward actions (one table in `lets-rules.md`, lets-wu2xl) and the anti-runaway guards - a plan never runs itself, the deviation stop, the 3-failures stop.
+- **Test for any change:** does it remove a question, a rule, a step or a file? If it adds one, it names the harm.
+
+Tasks on this course - each records its problem -> decision, this section holds only the course: lets-0xsw2, lets-gbfpd, lets-wu2xl, lets-h1fox (audit of the existing control layer).
+
 ## Structure
 
 Monorepo layout: plugin source in `plugins/lets/` subdirectory, marketplace manifest at root pointing into it. Infrastructure scripts and docs stay at root, outside the plugin payload.
