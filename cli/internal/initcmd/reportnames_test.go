@@ -99,6 +99,9 @@ func TestReportFileNames(t *testing.T) {
 		}
 		scanned++
 		problems = append(problems, reportNameProblems(filepath.ToSlash(rel), string(b))...)
+		if filepath.ToSlash(rel) == "commands/team.md" {
+			problems = append(problems, teamReportNameProblems(string(b))...)
+		}
 		return nil
 	})
 	if err != nil {
@@ -139,4 +142,87 @@ func TestReportFileNames(t *testing.T) {
 			}
 		})
 	}
+
+	// The team's member report names, mutated in the real team.md text.
+	teamBytes, err := os.ReadFile(filepath.Join(root, "commands", "team.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	team := string(teamBytes)
+	for _, m := range []struct {
+		name, old, repl string
+		n               int
+	}{
+		{"M1.5 falls back to the bare member name", "names=member-{name}-n0", "names={name}", 1},
+		{"M2 falls back to the bare member names", "<member-{name}-n{k} for every name to spawn>", "<every name to spawn>", -1},
+		{"a member report name loses its round suffix", "names=member-{name}-n0", "names=member-{name}", 1},
+		{"the echoed REPORT_FILE falls back to the bare member name", "`REPORT_FILE member-{name}-n{k}=<path>`", "`REPORT_FILE {name}=<path>`", 1},
+	} {
+		t.Run(m.name, func(t *testing.T) {
+			if !strings.Contains(team, m.old) {
+				t.Fatalf("mutant cannot apply: %q is not in commands/team.md - update the mutant with the text it guards", m.old)
+			}
+			if got := teamReportNameProblems(strings.Replace(team, m.old, m.repl, m.n)); len(got) == 0 {
+				t.Errorf("mutant produced no problem - that guard cannot fail")
+			}
+		})
+	}
+}
+
+// teamSpawnSections are the team.md steps that allocate a member's report name.
+var teamSpawnSections = []string{
+	"### Step M1: One Member (`spawn <role> [name]`)",
+	"### Step M2: The Whole Roster (`spawn --roster`)",
+}
+
+var (
+	// teamNamesRe takes an agent-report names= value: a <prose> form (it may hold
+	// spaces) or a bare comma-separated list.
+	teamNamesRe = regexp.MustCompile("names=(<[^>]*>|[^\\s\"`]+)")
+	// teamEchoRe takes the name of an echoed "REPORT_FILE <name>=<path>" line.
+	teamEchoRe = regexp.MustCompile(`REPORT_FILE ([^\s=]+)=`)
+	// memberReportName is the report name team allocates: a fixed literal prefix and
+	// a round suffix, so an owner-chosen member name ("reporter", "worker-r2") can
+	// neither start with a refused word nor take agent-report's retry slot.
+	memberReportName = regexp.MustCompile(`^member-\{name\}-n(\{[^}]+\}|[0-9]+)`)
+)
+
+// teamReportNameProblems pins the report names team.md allocates in Step M1 and
+// Step M2. reportNameProblems skips a {name} or <prose> value as a placeholder,
+// so without this a member's report name could fall back to the bare member
+// name the owner chose. Every names= value or echoed REPORT_FILE name there that
+// carries {name}, and every <prose> names= value, must read member-{name}-n<round>.
+func teamReportNameProblems(team string) []string {
+	var p []string
+	for _, h := range teamSpawnSections {
+		span := sectionSpan(team, h)
+		if span == "" {
+			p = append(p, "commands/team.md lost the section "+h)
+			continue
+		}
+		var names []string
+		for _, m := range teamNamesRe.FindAllStringSubmatch(span, -1) {
+			if strings.HasPrefix(m[1], "<") {
+				names = append(names, m[1])
+				continue
+			}
+			names = append(names, strings.Split(m[1], ",")...)
+		}
+		if len(names) == 0 {
+			p = append(p, "commands/team.md "+h+" allocates no report name through agent-report names=")
+		}
+		for _, m := range teamEchoRe.FindAllStringSubmatch(span, -1) {
+			names = append(names, m[1])
+		}
+		for _, n := range names {
+			prose := strings.HasPrefix(n, "<")
+			if !prose && !strings.Contains(n, "{name}") {
+				continue // a literal name carries no owner-chosen member name
+			}
+			if !memberReportName.MatchString(strings.TrimPrefix(n, "<")) {
+				p = append(p, "commands/team.md "+h+": member report name "+n+" must read member-{name}-n<round> - an owner-chosen member name could start with a refused word or take the retry slot")
+			}
+		}
+	}
+	return p
 }
