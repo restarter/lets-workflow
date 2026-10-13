@@ -66,7 +66,7 @@ Read code at the task base, never from memory; mark anything unchecked `[UNVERIF
 
 ## 7. Current task
 
-None yet. The lead rewrites this section on every task switch: the task (**Title** (`id`)), its branch, the phase, and the next step.
+None yet. On every task switch the lead rewrites the task-specific content of this section: the task (**Title** (`id`)), its branch, the phase, the next step, and the resume artefacts. Every `Dismissed: <name> (lead <session6>)` and `Reports: <dir> (lead <session6>)` line is KEPT as it is across a switch - other lead sessions' lines too.
 
 Resume artefacts:
 

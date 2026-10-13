@@ -718,3 +718,54 @@ func paneNameProblems(peers string) []string {
 	}
 	return bad
 }
+
+// TestTeamFile_SwitchKeepsSessionLines pins the same-session dismissal contract
+// across a task switch: the `## 7. Current task` rewrite replaces only the
+// task-specific content and keeps every `Dismissed:` / `Reports:` line - take-task
+// Step 2T (the writer) and the template's section intro both say so.
+func TestTeamFile_SwitchKeepsSessionLines(t *testing.T) {
+	files := pluginTexts(t)
+	take, tmpl := files["skills/take-task/SKILL.md"], files["templates/team.md"]
+	if p := switchKeepProblems(take, tmpl); len(p) > 0 {
+		t.Errorf("%v", p)
+	}
+	const takeKeep = "and KEEP every existing `Dismissed: <name> (lead <session6>)` and `Reports: <dir> (lead <session6>)` line as it is"
+	const tmplKeep = "Every `Dismissed: <name> (lead <session6>)` and `Reports: <dir> (lead <session6>)` line is KEPT as it is across a switch"
+	if !strings.Contains(take, takeKeep) || !strings.Contains(tmpl, tmplKeep) {
+		t.Fatal("mutants cannot apply: a keep-rule sentence is missing")
+	}
+	if len(switchKeepProblems(strings.Replace(take, takeKeep, "", 1), tmpl)) == 0 {
+		t.Error("mutation: take-task Step 2T without the keep-rule must fail the check")
+	}
+	if len(switchKeepProblems(take, strings.Replace(tmpl, tmplKeep, "The lead rewrites the whole section", 1))) == 0 {
+		t.Error("mutation: the template without the keep-rule must fail the check")
+	}
+}
+
+func switchKeepProblems(take, tmpl string) []string {
+	var bad []string
+	step2t := sectionSpan(take, "### Step 2T: Team worktree - park, then switch")
+	i := strings.Index(step2t, "Then rewrite the team file's `## 7. Current task` section")
+	if i < 0 {
+		return []string{"take-task Step 2T must rewrite the team file's ## 7. Current task section"}
+	}
+	rewrite := step2t[i:]
+	if j := strings.Index(rewrite, "Then Step 6."); j >= 0 {
+		rewrite = rewrite[:j]
+	}
+	for _, want := range []string{"replace only the task-specific content", "KEEP every existing `Dismissed: <name> (lead <session6>)` and `Reports: <dir> (lead <session6>)` line", "other lead sessions' lines too"} {
+		if !strings.Contains(rewrite, want) {
+			bad = append(bad, "take-task Step 2T rewrite: missing "+want)
+		}
+	}
+	sec := sectionSpan(tmpl, "\n## 7. Current task\n")
+	for _, want := range []string{"rewrites the task-specific content of this section", "Every `Dismissed: <name> (lead <session6>)` and `Reports: <dir> (lead <session6>)` line is KEPT as it is across a switch"} {
+		if !strings.Contains(sec, want) {
+			bad = append(bad, "templates/team.md ## 7: missing "+want)
+		}
+	}
+	if strings.Contains(sec, "The lead rewrites this section on every task switch") {
+		bad = append(bad, "templates/team.md ## 7 still says the whole section is rewritten")
+	}
+	return bad
+}

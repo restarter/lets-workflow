@@ -112,7 +112,7 @@ lets worktree switch --task '<task-id>' --title-file .lets/cache/title-<session6
 lets worktree task-state set --clear-origin {ORC_FLAG} --json
 ```
 
-It clears `origin:` and applies a requested orchestrator binding (an explicit `--orc` wins over the carried one). A failure is Step 5's one-line report - never hidden. Then rewrite the team file's `## 7. Current task` section (`.lets/teams/<team>.md`; the lead is its only writer): the task as **Title** (`id`), its branch, the phase, the next step, and `Resume artefacts:`. Then Step 6.
+It clears `origin:` and applies a requested orchestrator binding (an explicit `--orc` wins over the carried one). A failure is Step 5's one-line report - never hidden. Then rewrite the team file's `## 7. Current task` section (`.lets/teams/<team>.md`; the lead is its only writer): replace only the task-specific content - the task as **Title** (`id`), its branch, the phase, the next step, and `Resume artefacts:` - and KEEP every existing `Dismissed: <name> (lead <session6>)` and `Reports: <dir> (lead <session6>)` line as it is, other lead sessions' lines too (they are history; readers filter by this lead session), so a member dismissed on the previous task stays dismissed and the round's report directory stays known. Then Step 6.
 
 ### Step 3: Worktree Check
 
