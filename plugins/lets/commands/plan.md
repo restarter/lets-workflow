@@ -284,7 +284,7 @@ AskUserQuestion(
 **Handle response:**
 - **Continue** -> proceed to Step 5
 - **Questions** -> answer user's questions about findings, then ask checkpoint again
-- **Re-explore** -> ask what area to explore, launch targeted explorer, update codebase map, ask checkpoint again - `op=add` a fresh name (`explorer-r{n}`; `op=open command=plan ...` when this run has no `REPORT_DIR` yet), the prompt's `REPORT_FILE:` line, then `op=collect` for that name - READ EVERY REPORT IN FULL - before the map is updated
+- **Re-explore** -> ask what area to explore, launch targeted explorer, update codebase map, ask checkpoint again - `op=add` a fresh name (`explorer-n{n}`; `op=open command=plan ...` when this run has no `REPORT_DIR` yet), the prompt's `REPORT_FILE:` line, then `op=collect` for that name - READ EVERY REPORT IN FULL - before the map is updated
 - **Other** (free text) -> treat as question or correction, address it, ask checkpoint again
 
 ## Step 5: Approach Discussion

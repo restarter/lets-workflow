@@ -15,7 +15,7 @@ A Task agent's final text is a lossy channel: it arrives empty or cut near 4 KB,
 Args: `command=<review|opinion|ask|plan|backlog|research|team> names=<name>,<name> [task=<task-id>]`.
 
 1. `Skill(skill: "lets:artifact-path", args: "kind=reports-{command} ext=dir task={task-id}")` -> `REPORT_DIR` = the echoed `ARTIFACT_FILE` (a directory, already created). No echo -> STOP: dispatch nothing, surface the error.
-2. One file per dispatched agent: `{REPORT_DIR}/{name}.md`. `name` is the caller's - the agent short name (`security`), suffixed when one agent type runs several times in the run (`skeptic-f3-2`, `architect-b`). `[a-z0-9.-]` only (a beads id may carry `.N`), unique within the run; `-r2` is reserved for Step 3's retry.
+2. One file per dispatched agent: `{REPORT_DIR}/{name}.md`. `name` is the caller's - the agent short name (`security`), suffixed when one agent type runs several times in the run (`skeptic-f3-2`, `architect-b`). `[a-z0-9.-]` only (a beads id may carry `.N`), unique within the run. A name never starts with `report`, `summary`, `findings` or `analysis` (any case): Claude Code's Write tool refuses a subagent's `.md` whose basename starts with one of them, and the report is lost (lets-jyjxc). A name never ends in `-r<digits>`: that suffix is Step 3's retry. `reportnames_test.go` pins both for every template in the plugin.
 3. Output `REPORT_DIR=<dir>` and one `REPORT_FILE <name>=<path>` line per name.
 
 Every dispatch prompt carries its agent's path as its own line, right after the `PROJECT_ROOT` line (or first, when the prompt has none):
