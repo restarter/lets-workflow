@@ -40,7 +40,8 @@ func launchModeProblems(f map[string]string) []string {
 		}
 	}
 	for _, need := range []string{"neither set -> `default`", "never inferred, never a fallback, never the default", "launching <name> " + launchAnnounce, "`crossSessionInbound` is never written",
-		"`lets worktree info --json` -> `launch_mode`", "With no launch-mode flag typed in this turn, `launch_mode.valid=false` (a hand-edited value outside default | auto | all-in) -> `default`, plus one line", "with a typed flag the flag's mode applies and the invalid value is only named", "`LETS_LAUNCH_MODE in .lets/.env` (`source=project`)"} {
+		"`lets worktree info --json` -> `launch_mode`", "With no launch-mode flag typed in this turn, `launch_mode.valid=false` (a hand-edited value outside default | auto | all-in) -> `default`, plus one line", "with a typed flag the flag's mode applies and the invalid value is only named", "`LETS_LAUNCH_MODE in .lets/.env` (`source=project`)",
+		"or, for a team's lead on Reopen, the key T5 launches: `team file orca_agent` on the orca launcher, `team file agent_command` otherwise"} {
 		if !strings.Contains(wt, need) {
 			p = append(p, "worktree.md Launch mode must state: "+need)
 		}
@@ -136,6 +137,7 @@ func TestLaunchModeContract(t *testing.T) {
 		{"init labels all-in recommended", "init", `{ label: "All-in", `, `{ label: "All-in (Recommended)", `, "never be a default or a fallback"},
 		{"team worker launches all-in unannounced", "team", "first print one line: \"launching <worker_name> " + launchAnnounce + "\"", "launch it", "announce an all-in worker"},
 		{"the announce loses its source", "worktree", "launching <name> " + launchAnnounce, "launching <name> with all-in (bypassPermissions): no harness permission prompts in that session; LETS gates (push, PR, merge, close, peer sends) still ask", "Launch mode must state"},
+		{"the Reopen announce names agent_command on orca", "worktree", "the key T5 launches: `team file orca_agent` on the orca launcher, `team file agent_command` otherwise", "`team file agent_command`", "Launch mode must state"},
 		{"an invalid key is used as is", "worktree", "With no launch-mode flag typed in this turn, `launch_mode.valid=false` (a hand-edited value outside default | auto | all-in) -> `default`, plus one line", "", "Launch mode must state"},
 		{"the invalid-key fallback beats a typed flag", "worktree", "With no launch-mode flag typed in this turn, `launch_mode.valid=false`", "`launch_mode.valid=false`", "Launch mode must state"},
 		{"a typed flag over an invalid key launches default", "worktree", "with a typed flag the flag's mode applies and the invalid value is only named", "with a typed flag it still launches in default", "Launch mode must state"},
