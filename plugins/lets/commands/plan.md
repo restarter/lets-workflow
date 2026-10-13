@@ -175,7 +175,7 @@ Based on the **feature goal**, **user clarifications**, **project size**, and **
 - Large-scale refactor or unclear scope -> 5-10 explorers (one per area of concern)
 - Subagents have a separate rate limit - prefer more exploration when uncertain
 
-**Confirmation gate:** If planning to launch more than 10 explorers:
+**Confirmation gate:** If planning to launch more than 10 explorers: `{LETS_GATES}` is `strict` -> the question below; otherwise (missing reads as `standard`) -> print `Launching {N} explorers` and launch all.
 
 ```
 AskUserQuestion(
@@ -264,7 +264,7 @@ After all explorers return, synthesize a combined codebase map with one section 
 
 ### Checkpoint: Exploration Review
 
-Show the codebase map to user, then ask:
+Show the codebase map to user. `{LETS_GATES}` is `strict` -> ask the question below; otherwise -> print `Codebase map ready - continuing to approaches` and proceed as **Continue** (the user can still ask or re-explore in their next message):
 
 ```
 AskUserQuestion(
@@ -464,7 +464,7 @@ AskUserQuestion(
 
 **If only 1 approach was developed:**
 
-Show the architecture design and ask:
+Show the architecture design. `{LETS_GATES}` is `strict` -> ask below; otherwise -> print `Architecture design ready - continuing to expert evaluation` and proceed as **Continue**:
 
 ```
 AskUserQuestion(
@@ -665,7 +665,7 @@ After each exchange, gauge whether to continue or wrap up. Signals to wrap up:
 - Key questions have been covered
 - User explicitly says "enough" / "let's move on"
 
-When ready to wrap up:
+When ready to wrap up: `{LETS_GATES}` is `strict` -> ask below; otherwise -> print `Generating the plan` and proceed as **Generate plan**:
 
 ```
 AskUserQuestion(
@@ -860,10 +860,10 @@ Want a clean context before executing? Run `/clear` then `/lets:execute` - the t
 - **THE PLAN IS THE END OF THIS COMMAND.** After the Plan Ready output, STOP. The next user message - "ok", "approved", "+", a question, an edit request - is about the document, never a go for code. Edit the plan if asked; answer questions; otherwise reply "Plan accepted - run `/lets:execute` when ready." Applies identically to `--fast`.
 - **NEVER write code** outside the plan document in `.lets/plans/`
 - **NEVER skip clarifying questions** (Step 3) - vague input produces vague plans, in fast mode too
-- **EVERY phase transition requires user approval** via AskUserQuestion
+- A phase transition that chooses between options asks; a pure Proceed? asks only at `strict`
 - **NEVER hardcode approach names** like "Minimal/Maximal/Pragmatic" - derive from exploration context
 - **ALL parallel agents in a SINGLE message** - never sequential when parallel is possible
-- **`--fast` skips Steps 4/6/7 subagent dispatch only** - it does NOT skip the clarifying questions, the checkpoints, the discussion, or any user approval gate. Output plan format is identical; record which mode was used in the Plan Ready output.
+- **`--fast` skips Steps 4/6/7 subagent dispatch only** - it does NOT skip the clarifying questions, the checkpoints (each by its level), the discussion, or any user approval gate. Output plan format is identical; record which mode was used in the Plan Ready output.
 - **Exact file paths** in plan - verified against explorer findings (or orchestrator's own reads in fast mode)
 - **Complete code snippets** - no stubs, no "implement X here"
 - **Plan is the artifact** - session ends when plan is saved

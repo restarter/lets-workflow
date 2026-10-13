@@ -80,7 +80,7 @@ Adjust based on decision complexity - add more experts for cross-cutting decisio
 - `actor` is **never auto-selected** - offer it only on an explicit user request that includes a personality source (URL or file). When the user requests it, invoke `Skill(skill: "lets:actor-fetch-personality", args: "<personality-source-from-user>")` to fetch the personality. Pass the returned `PERSONALITY:` block in the actor's Task prompt only.
 - Agents inherit the session model (no per-agent model pins)
 
-**Confirmation gate:** If planning to launch more than 10 experts:
+**Confirmation gate:** If planning to launch more than 10 experts: `{LETS_GATES}` is `strict` -> the question below; otherwise (missing reads as `standard`) -> print `Launching {N} experts` and launch all.
 
 ```
 AskUserQuestion(

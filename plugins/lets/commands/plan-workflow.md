@@ -50,7 +50,7 @@ Gather the **RUBRIC** - the steering criteria that REPLACE the interactive picks
 - Scope boundaries (explicitly OUT).
 - Success criteria.
 
-**Do not proceed without a rubric** - it is the only steering signal the autonomous run receives. Echo the rubric back for confirmation before launching.
+**Do not proceed without a rubric** - it is the only steering signal the autonomous run receives. Echo the rubric back before launching: `{LETS_GATES}` is `strict` -> for confirmation; otherwise (missing reads as `standard`) -> as a statement, then continue.
 
 **GATE 1 (spawn-claimed runs - the bounded up-front clarify gate).** For a spawn-claimed task (Step 0), the rubric is derived from the task's description + comments (the PM principle: steering lives in the tracker task). If the task already carries enough steering, build the rubric from it and proceed with NO questions. Only if it is **insufficient** for a rubric: write the `gate-clarify` marker, fire the GATE 1 notify ("Plan needs your answers"), ask a SHORT bounded clarify set, record the answers to the task (tracker `comment-add`), then build the rubric and proceed. This is up-front gathering of the rubric (consistent with steer-by-rubric) — NOT a per-step interactive gate.
 
@@ -88,6 +88,7 @@ Defaults for THIS run, from the Step 2 selection:
 - A budget only LOWERS a stage - the script never adds agents - so each stage's max is its default here. More agents = change the Step 2 selection, not the budget.
 - Estimate: max = explorers + 1 (approach synthesis) + approaches + judges + evaluators + 1 (planner) + plan_reviewers + (1 reviser when plan_reviewers > 0) + 2 × plan_checker (checker + refiner); min = the same without the reviser and the refiner (they run only on findings).
 - Render a table `stage | count | min-max`, then `total ~N-M agents` and `model: session model` (or the chosen id).
+- `{LETS_GATES}` is not `strict` (missing reads as `standard`) -> the panel is a statement: print it with `Budget: launching as shown`, pass no `budget` / `model`, and go to Step 3 (the user can still say "adjust" or "cancel" before the run lands). `strict` -> the question below.
 
 ```
 AskUserQuestion(
