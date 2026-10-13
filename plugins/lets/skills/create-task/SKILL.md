@@ -70,8 +70,8 @@ Show discovered labels and ask which fits:
 
 If no existing label fits:
 1. Propose a new `epic:<name>` label with a short explanation of the grouping
-2. Ask if an epic task should be created for this theme (the `create` verb, `type=epic`, `labels="epic:<name>"`)
-3. Wait for user approval before creating either the label or the epic
+2. Decide whether an epic task fits this theme (the `create` verb, `type=epic`, `labels="epic:<name>"`)
+3. `{LETS_GATES}` is `strict` -> ask whether to create the epic, and wait for user approval before creating either the label or the epic; otherwise -> use the proposed label (and create the epic when one fits, through this skill's flow) and name both in the final report
 
 ## Creation Flow
 
@@ -93,7 +93,36 @@ From the user's input, derive only the fields the adapter's `create` declares in
 4. **Description** - why + acceptance criteria. Write as markdown with clear structure
 5. **Labels** - run Label Selection flow (above). Present discovered labels, let user choose or create new
 
-### Step 3: Present for Approval
+### Step 2.5: Duplicate check
+
+Runs at every level. **Tracker protocol:** `Skill(skill: "lets:protocol-tracker")` first, unless its text is in your current context.
+
+```lets-tracker
+search query="<distinctive title keywords>"   # OPTIONAL verb; returns matching tasks
+```
+
+Judge each result from its title + description: a likely duplicate is the same problem or the same deliverable.
+- Likely duplicate -> show it as **Title** (`id`) and ask (at EVERY level - a real choice):
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "A likely duplicate exists. Create this task anyway?",
+    header: "Duplicate",
+    options: [
+      { label: "Use the existing one", description: "Don't create; continue with the existing task" },
+      { label: "Create anyway", description: "Create the new task as composed" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+  "Use the existing one" -> stop and report the existing task; "Create anyway" -> Step 3.
+- No likely duplicate -> Step 3.
+- The adapter marks `search` absent -> print `No duplicate check ran - the tracker has no search` and go to Step 3; at `standard` / `minimal` the final report repeats that the task was created unguarded.
+
+### Step 3: Present (approval at `strict`)
 
 Show the full task `create` before executing. The multi-line description is written to a temp file and passed as `description-file=` (`lets:protocol-tracker` "Bodies"); the short fields go inline:
 
@@ -118,7 +147,9 @@ The example below is shaped for an adapter that declares all five fields (beads 
 create title="Add retry logic to API client" type=feature priority=2 labels="epic:quality" description-file=.lets/cache/new-task-desc-<branch-slug>.md
 ```
 
-Then ask for explicit confirmation:
+Then the gate, by level:
+- `{LETS_GATES}` is `standard` or `minimal` (or missing - reads as `standard`) -> no question: go to Step 4; its report is `Created **{title}** (`{id}`)` with the chosen type, priority and labels.
+- `{LETS_GATES}` is `strict` -> ask for explicit confirmation:
 
 ```
 AskUserQuestion(
@@ -140,14 +171,14 @@ Handle response:
 
 ### Step 4: Execute
 
-Run the `create` verb with all fields. Report the created task ID.
+Run the `create` verb with all fields. Report `Created **{title}** (`{id}`)` with the chosen type, priority and labels (plus the unguarded note when Step 2.5 could not search).
 
 ## Bulk Creation
 
 When creating multiple tasks (e.g., during planning):
 
-- Present all tasks as a table first for review
-- After approval, create in parallel using subagents or sequential `create` calls
+- Run Step 2.5 for each task; present all tasks as a table first (likely duplicates marked)
+- `{LETS_GATES}` is `strict` -> wait for approval, then create; otherwise -> create right after the table (a likely duplicate still asks, per Step 2.5). Create with sequential `create` calls or subagents
 - Every task still needs all required fields - no shortcuts
 
 ## Anti-patterns
@@ -155,7 +186,7 @@ When creating multiple tasks (e.g., during planning):
 - **Never** create a task without `labels` *when the adapter declares `labels`* - on an adapter that does not, say so once and proceed
 - **Never** send a field the adapter's `accepts:` does not list, and never silently omit one it does
 - **Never** use a parent/child hierarchy (beads `--parent` - causes merge collisions in multi-user setup)
-- **Never** skip user approval for task creation
+- At `strict`, never create without the Step 3 approval; at `standard` / `minimal` the duplicate search is the guard
 - **Never** use priority words ("high", "medium") - use numbers 0-4
 
 ## Integration

@@ -1,8 +1,10 @@
 # Git Workflow
 
-## Permission Required
+## Approval
 
-**Never commit or push without explicit user approval.** Also applies to any command that sends data to a remote (`bd dolt push`, etc).
+What asks before a commit, a push or anything sent to a remote follows the core rules' `## Gates` table at `LETS_GATES` (decision 14).
+
+At `strict`:
 
 ```
 Claude: "Done. Ready to commit?"

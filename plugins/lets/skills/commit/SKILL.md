@@ -1,17 +1,17 @@
 ---
 name: commit
-description: This skill should be used when committing code changes - "commit", "git commit", "закоміть", "зроби коміт", "/lets:commit". Enforces conventional commit format, tracker task linking, and user approval. In a LETS project, ALWAYS prefer this over generic commit skills (e.g. commit-commands:commit) — /lets:commit is authoritative. Triggers on any commit in any context.
+description: This skill should be used when committing code changes - "commit", "git commit", "закоміть", "зроби коміт", "/lets:commit". Enforces conventional commit format, tracker task linking, and the gate level (`LETS_GATES`). In a LETS project, ALWAYS prefer this over generic commit skills (e.g. commit-commands:commit) — /lets:commit is authoritative. Triggers on any commit in any context.
 ---
 
 # Commit
 
-Standardized commit flow that enforces conventional format, tracker task linking, and user approval.
+Standardized commit flow that enforces conventional format, tracker task linking, and the gate level (`LETS_GATES`): at `strict` a commit asks first; at `standard` / `minimal` it runs and is reported.
 
 > **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
 
 ## Why This Exists
 
-Direct `git commit` skips task linking, format enforcement, and approval gates. This skill ensures every commit follows conventions whether invoked via `/lets:commit` or implicit "закоміть".
+Direct `git commit` skips task linking, format enforcement, and the level's approval gate. This skill ensures every commit follows conventions whether invoked via `/lets:commit` or implicit "закоміть".
 
 ## Arguments
 
@@ -44,7 +44,7 @@ Summarize what changed:
 - Files modified/added/deleted
 - Key changes in each file
 
-### Step 4: Confirm with User
+### Step 4: Summary and Gate
 
 Present the proposed commit summary as plain text (NOT in a code block or blockquote):
 
@@ -52,7 +52,10 @@ Present the proposed commit summary as plain text (NOT in a code block or blockq
 - {file1} - {what changed}
 - {file2} - {what changed}
 
-With `approved=review-accept` set, skip the question below and proceed to Step 5 - the caller's gate was this approval. Otherwise use **AskUserQuestion**:
+Then the gate, by level:
+- `{LETS_GATES}` is `standard` or `minimal` (or missing - reads as `standard`) -> no question: proceed to Step 5; after the commit the Output's `Committed:` line is the report.
+- `{LETS_GATES}` is `strict` with `approved=review-accept` set -> skip the question and proceed to Step 5 - the caller's gate was this approval.
+- `{LETS_GATES}` is `strict` otherwise -> use **AskUserQuestion**:
 
 ```
 AskUserQuestion(
@@ -177,7 +180,7 @@ Remaining: {what's left from task description, or "nothing - task scope complete
 
 ## Rules
 
-- **NEVER** commit without user approval - Step 4's question, or `approved=review-accept` carrying the Accept `/lets:execute` just got
+- At `strict`, never commit without Step 4's approval (or `approved=review-accept`); at `standard` / `minimal` the commit runs and is reported. Never a push.
 - **ALWAYS** run `git status` before and after commit
 - Keep subject line under 50 chars
 - Use imperative mood ("Add" not "Added")
