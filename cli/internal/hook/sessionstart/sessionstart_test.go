@@ -647,3 +647,35 @@ func TestDriftCheck_UserScopeIsSilent(t *testing.T) {
 		}
 	})
 }
+
+// An invalid LETS_LAUNCH_MODE is never injected into LETS Config (the model would
+// otherwise read a hand-edited value such as `all-in --settings ...` as data it
+// launches with); a valid one is. LETS_LAUNCHER is not filtered here.
+func TestRun_InvalidLaunchModeNotInjected(t *testing.T) {
+	for _, c := range []struct {
+		env, want, absent string
+	}{
+		{"LETS_LANGUAGE=English\nLETS_LAUNCH_MODE=auto\n", "LETS_LAUNCH_MODE=auto\n", ""},
+		{"LETS_LANGUAGE=English\nLETS_LAUNCH_MODE=all-in\n", "LETS_LAUNCH_MODE=all-in\n", ""},
+		{"LETS_LANGUAGE=English\nLETS_LAUNCH_MODE=bypass\n", "LETS_LANGUAGE=English\n", "LETS_LAUNCH_MODE"},
+		{"LETS_LANGUAGE=English\nLETS_LAUNCH_MODE=all-in --settings x\n", "LETS_LANGUAGE=English\n", "LETS_LAUNCH_MODE"},
+		{"LETS_LANGUAGE=English\nLETS_LAUNCHER=bogus\n", "LETS_LAUNCHER=bogus\n", ""},
+	} {
+		dir := t.TempDir()
+		rulesPath := filepath.Join(dir, "rules.md")
+		writeFile(t, rulesPath, "---\nversion: 0.4.0\n---\n")
+		writeFile(t, filepath.Join(dir, ".claude", "rules", "lets-rules.md"), "---\nversion: 0.4.0\n---\n")
+		writeFile(t, filepath.Join(dir, ".lets", ".env"), c.env)
+		var buf bytes.Buffer
+		if err := sessionstart.Run(&buf, rulesPath, dir, "", nil); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+		got := buf.String()
+		if !strings.Contains(got, c.want) {
+			t.Errorf(".env %q: output lacks %q:\n%s", c.env, c.want, got)
+		}
+		if c.absent != "" && strings.Contains(got, c.absent+"=") {
+			t.Errorf(".env %q: an invalid value was injected:\n%s", c.env, got)
+		}
+	}
+}

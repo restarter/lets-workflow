@@ -90,10 +90,11 @@ func TestTeamBackend(t *testing.T) {
 			t.Errorf("the sessions run must launch with %q", want)
 		}
 	}
-	if !strings.Contains(sessions, "`{agent_command}` = the `agent_command` frontmatter value of the team file") || !strings.Contains(sessions, "else `claude`") {
-		t.Error("the agent command comes from the team file's agent_command, else claude")
+	if r45 := sectionSpan(team, "### Step R4.5: Launch Mode"); !strings.Contains(r45, "`{agent_command}` = `team_launch.agent_command` (the `agent_command` frontmatter value of the team file") || !strings.Contains(r45, "**Else** `claude`") ||
+		!strings.Contains(sessions, "`{agent_command}`, its class and its source are Step R4.5's") {
+		t.Error("the agent command comes from the team file's agent_command, else claude - resolved in R4.5 and used by N2")
 	}
-	if !strings.Contains(orca, "`{agent_command}` as defined in Step N2") {
+	if !strings.Contains(orca, "`{agent_command}` as defined in Step R4.5") {
 		t.Error("the orca worker start uses the same agent command")
 	}
 	if !strings.Contains(sessions, "lets worktree branch-name") || !strings.Contains(sessions, "`dir`") {

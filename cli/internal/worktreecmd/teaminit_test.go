@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -351,6 +352,9 @@ func TestTeamInit_LaunchMode(t *testing.T) {
 	if !warned {
 		t.Errorf("an all-in team must say so in a warn step: %+v", res.Steps)
 	}
+	if res.LaunchClass != worktreecmd.LaunchClassBypass || res.OrcaLaunchClass != worktreecmd.LaunchClassBypass {
+		t.Errorf("all-in: launch_class %q, orca_launch_class %q; want bypass for both", res.LaunchClass, res.OrcaLaunchClass)
+	}
 
 	res, err = worktreecmd.TeamInit(context.Background(), repo, worktreecmd.TeamInitOptions{Callsign: "frog", Area: "docs", Worktree: wt, PluginRoot: pluginRoot, LaunchMode: "auto", AgentCommand: "docker compose run dev claude"})
 	if err != nil || !res.OK {
@@ -359,6 +363,25 @@ func TestTeamInit_LaunchMode(t *testing.T) {
 	b, _ = os.ReadFile(filepath.Join(repo, ".lets", "teams", "frog.md"))
 	if !strings.Contains(string(b), `agent_command: "docker compose run dev claude"`) || !strings.Contains(string(b), `orca_agent: "claude --permission-mode auto"`) {
 		t.Errorf("an explicit --agent-command must win, orca_agent rendered:\n%s", b)
+	}
+	if res.LaunchClass != worktreecmd.LaunchClassDefault || res.OrcaLaunchClass != worktreecmd.LaunchClassAuto {
+		t.Errorf("explicit agent: launch_class %q (want default - classified from the written command, not the mode), orca_launch_class %q (want auto)", res.LaunchClass, res.OrcaLaunchClass)
+	}
+
+	// A hand-given bypass command is classified too, and a --settings override warns.
+	res, err = worktreecmd.TeamInit(context.Background(), repo, worktreecmd.TeamInitOptions{Callsign: "heron", Area: "x", Worktree: wt, PluginRoot: pluginRoot, AgentCommand: `claude --settings '{"permissions":{"defaultMode":"bypassPermissions"}}'`})
+	if err != nil || !res.OK {
+		t.Fatalf("settings agent: %+v, %v", res, err)
+	}
+	if res.LaunchClass != worktreecmd.LaunchClassBypass || !slices.Equal(res.LaunchWarnings, []string{worktreecmd.LaunchWarnSettingsOverride}) {
+		t.Errorf("settings agent: launch_class %q, warnings %v; want bypass, [settings_override]", res.LaunchClass, res.LaunchWarnings)
+	}
+	warned = false
+	for _, s := range res.Steps {
+		warned = warned || (s.Status == worktreecmd.StepWarn && strings.Contains(s.Message, "agent_command: settings_override"))
+	}
+	if !warned {
+		t.Errorf("a --settings agent_command must warn: %+v", res.Steps)
 	}
 
 	_, err = worktreecmd.TeamInit(context.Background(), repo, worktreecmd.TeamInitOptions{Callsign: "otter", Area: "x", Worktree: wt, PluginRoot: pluginRoot, LaunchMode: "bypassPermissions"})

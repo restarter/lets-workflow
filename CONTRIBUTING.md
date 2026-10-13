@@ -143,7 +143,7 @@ Worktree:  /lets:worktree create -> `cd .worktrees/<name>/ && claude` -> /lets:s
 Orca:      /lets:worktree create (LETS_LAUNCHER=orca) -> Orca pane runs /lets:start <id> (adopt already linked it) -> Work -> /lets:done -> /lets:end -> archive in Orca (lets worktree release)
 
 Team:      /lets:team run [--tasks A,B] -> one visible worker session per task on any launcher, bound via /lets:orc -> each worker /lets:start ... /lets:done   (orca: an Orca child worktree per task; --backend agents is refused)
-Standing team:  /lets:team create [<callsign>] --area <a> (from the main checkout) -> the lead <callsign>-lead opens in team_<callsign> -> /lets:start <id> claims the lead and switches the branch (uncommitted work: commit or park, never stash) -> work -> /lets:done -> next task -> /lets:team disband <callsign>
+Standing team:  /lets:team create [<callsign>] --area <a> (from the main checkout) -> the lead (the session named by the team file's lead_name, <repo>-<callsign>-lead for a new team) opens in team_<callsign> -> /lets:start <id> claims nothing (it only hints /rename) and switches the branch (uncommitted work: commit or park, never stash) -> work -> /lets:done -> next task -> /lets:team disband <callsign>
 
 Orchestrators:  /lets:start --main [--scope "<part>"] (several per repo, unique per session name) -> /lets:worktree create <id> binds each spawned worker (--orc) -> a worker chat opened by hand: /lets:start <id> --orc=<name> -> worker and orchestrator talk via /lets:orc
 

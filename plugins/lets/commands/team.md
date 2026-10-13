@@ -1,6 +1,6 @@
 ---
 description: Team management - run several tasks at once, one visible LETS session per task on any launcher
-argument-hint: "[run|spawn|dismiss|roster|status|stop|create|disband] [--tasks A,B,C] [--backend orca] [--launch-mode default|auto|all-in] [--auto] [--all-in] [<callsign>] [--area <a>]"
+argument-hint: "[run|spawn|dismiss|roster|status|stop|create|disband] [--tasks A,B,C] [--backend orca|sessions] [--launch-mode default|auto|all-in] [--auto] [--all-in] [<callsign>] [--area <a>]"
 ---
 
 # Team
@@ -14,13 +14,13 @@ Run several independent tasks at once: each task gets its own worktree and its o
 ## Step 1: Determine Subcommand
 
 **If argument provided** (e.g., `/lets:team run`), parse it:
-- `run` -> go to Run (pass remaining flags like `--tasks A,B,C` to Step R2; `--launch-mode <m>` / `--auto` / `--all-in` set the workers' launch mode, Step N2)
+- `run` -> go to Run (pass remaining flags like `--tasks A,B,C` to Step R2; `--launch-mode <m>` / `--auto` / `--all-in` set the workers' launch mode, Step R4.5)
 - `spawn <role> [name]` / `spawn --roster` -> go to Spawn
 - `dismiss <name>` / `dismiss --all` -> go to Dismiss
 - `roster` -> go to Roster
 - `status` -> go to Status
 - `stop` -> go to Stop
-- `create [<callsign>] --area <a>` -> go to Create
+- `create [<callsign>] --area <a>` -> go to Create (carry `--orca` / `--cmux` / `--tmux` and `--launch-mode <m>` / `--auto` / `--all-in` with it)
 - `disband <callsign>` -> go to Disband
 
 **If no argument**, use **AskUserQuestion**:
@@ -65,6 +65,7 @@ git status --short
 
 - `--backend agents` -> **Refused:** "`--backend agents` is gone - the harness no longer provides TeamCreate / TaskCreate and ignores the Agent tool's team and mode parameters. `/lets:team run` opens one session per task instead." Stop. Never a fallback.
 - `--backend orca` -> requires `{LETS_LAUNCHER}` = `orca` AND `lets orca status --json` reporting `status.running=true`. Either missing -> **Refused:** "`--backend orca` needs LETS_LAUNCHER=orca and a running Orca app ({the missing one})." Stop - no fallback to another launcher.
+- `--backend sessions` -> the sessions backend without the Orca addon (the way to launch workers in a non-default launch mode when `{LETS_LAUNCHER}` = `orca`): the launcher resolves as below, except that `orca` takes C3.5's chain at once - `cmux` when `uname -s` is `Darwin` and `command -v cmux` succeeds, else `terminal`.
 - Any other `--backend` value -> **Refused**, naming the value. Stop.
 - No `--backend` -> resolve the launcher the way `commands/worktree.md` Step C3.5 does (`{LETS_LAUNCHER}`: `terminal` | `cmux` | `tmux` | `orca`; an unrecognized value -> `terminal` with one line naming it). `orca` -> `lets orca status --json`: `running=true` -> the Orca addon (`## Run (backend orca)`); otherwise C3.5's chain - `cmux` when `uname -s` is `Darwin` and `command -v cmux` succeeds, else `terminal` - with one line naming the reason.
 
@@ -184,6 +185,18 @@ Each worker session is named `<worker_name>` = `<repo>-<task-id>`, the address t
 - An empty `<repo>` or a name that fails the grammar -> refuse THAT task, one line naming it; the others go on.
 - `lets peers who --json` lists a live session already named `<worker_name>` -> skip that task, naming the clash (the session and its task).
 
+### Step R4.5: Launch Mode
+
+Resolve the workers' launch once, before the confirm, so R5's yes covers what it launches. Run `lets worktree info --json` in this checkout:
+
+- **Team file.** `team_launch` present (a team file claims this checkout): `{agent_command}` = `team_launch.agent_command` (the `agent_command` frontmatter value of the team file - its launch mode was rendered into it at creation), its class `team_launch.class`, source `team file agent_command`. A launch-mode flag typed on `run` -> one line "the team's agent_command fixes the workers' launch (<value>); --<flag> is not applied" and the file's value is used - unless that value is the plain `claude`, where the flag's rendering below is applied (source: that flag).
+- **Else** `claude` rendered for the run's **launch mode**: a flag the user typed in this turn (`--launch-mode <m>`, `--auto` = `auto`, `--all-in` = `all-in`) beats `LETS_LAUNCH_MODE` as `launch_mode` reports it, neither -> `default`; `default` -> `claude` (class `default`), `auto` -> `claude --permission-mode auto` (class `auto`), `all-in` -> `claude --permission-mode bypassPermissions` (class `bypass`). Source: `--all-in flag` | `--auto flag` | `--launch-mode flag` | `LETS_LAUNCH_MODE in .lets/.env` (`launch_mode.source=project`) | `LETS_LAUNCH_MODE in ~/.lets/.env` (`user`) | `default` (`unset`). `launch_mode.valid=false` -> `default`, plus one line "LETS_LAUNCH_MODE=<value> is not default | auto | all-in; the workers launch in default".
+- `all-in` is explicit only - never inferred, never a fallback, never the default (`/lets:worktree`'s **Launch mode** contract; `crossSessionInbound` is never written). The class is Go's (`team_launch.class`) or the mode's own - never a substring test of the command.
+- Each `team_launch.warnings` entry -> one line `agent_command: <warning>` (`settings_override`: a `--settings` can set a permission mode the class does not show; `cross_session_inbound`: the command names `crossSessionInbound`, which LETS never writes).
+- Launcher `orca` (Guard 3) with a class other than `default` -> the refusal of `## Run (backend orca)` step 1 applies now, before R5.
+
+`{agent_command}` is an owner-configured shell command and is substituted as is; every other value in the launch stays single-quoted.
+
 ### Step R5: Confirm Launch
 
 ```
@@ -196,7 +209,11 @@ Each worker session is named `<worker_name>` = `<repo>-<task-id>`, the address t
 
 Orchestrator: {lead}
 Base: origin/{LETS_MERGE_BRANCH}
+Launch: {mode} ({source})
+Command: {agent_command}
 ```
+
+`Launch` and `Command` are Step R4.5's: `{mode}` = the resolved mode (from the team file: its class, `bypass` shown as `all-in (bypass)`), `{source}` = where it came from, `{agent_command}` verbatim - so the existing yes approves the launch mode too. The warning lines of R4.5 print right under the plan.
 
 ```
 AskUserQuestion(
@@ -260,7 +277,7 @@ Write the run record `.lets/execution/team-<run>.json` (`<run>` = `YYYYMMDD-HHMM
 
 ### Step N2: Launch Each Worker
 
-**Agent command.** `{agent_command}` = the `agent_command` frontmatter value of the team file that claims this checkout (`lets worktree info --json` reports it as `team`; the file is `.lets/teams/<team>.md`) - its launch mode was rendered into it at creation; else `claude` rendered for the run's **launch mode**: a flag the user typed in this turn (`--launch-mode <m>`, `--auto` = `auto`, `--all-in` = `all-in`) beats `{LETS_LAUNCH_MODE}`, neither -> `default`; `default` -> `claude`, `auto` -> `claude --permission-mode auto`, `all-in` -> `claude --permission-mode bypassPermissions`. `all-in` is explicit only - never inferred, never a fallback, never the default (`/lets:worktree`'s **Launch mode** contract; `crossSessionInbound` is never written). A launch-mode flag typed on `run` while the team file gives an `agent_command` -> one line "the team's agent_command fixes the workers' launch (<value>); --<flag> is not applied" and the file's value is used - unless that value is the plain `claude`, where the flag's rendering is applied. It is an owner-configured shell command and is substituted as is; every other value in the launch stays single-quoted.
+**Agent command.** `{agent_command}`, its class and its source are Step R4.5's (the team file's `agent_command`, else `claude` rendered for the launch mode) - shown in R5's plan and never re-resolved here. It is an owner-configured shell command and is substituted as is; every other value in the launch stays single-quoted.
 
 For each task, in order:
 
@@ -281,7 +298,7 @@ lets worktree create '<dir>' --branch '<branch>' --new-branch --base "origin/{LE
 ```
 
    Assert `worktree.path` = `<main checkout>/.worktrees/<dir>` and `worktree.branch` = `<branch>`; a mismatch -> STOP the run. `worktree_path_exists` is the backstop for an occupied dir that branch-name could not attribute: create touched nothing - skip the task naming the path. Any other `ok=false` -> skip with `error.message` and any `rollback.residual` paths.
-4. **Launch.** One launch command for every launcher - the session name and the orchestrator binding travel with it. When `{agent_command}` carries `--permission-mode bypassPermissions` or `--dangerously-skip-permissions`, first print one line: "launching <worker_name> with all-in (bypassPermissions): no harness permission prompts in that session; LETS gates (push, PR, merge, close, peer sends) still ask".
+4. **Launch.** One launch command for every launcher - the session name and the orchestrator binding travel with it. When the class (Step R4.5) is `bypass`, first print one line: "launching <worker_name> with all-in (bypassPermissions; source: <source>): no harness permission prompts in that session; LETS gates (push, PR, merge, close, peer sends) still ask" (`<source>` = R4.5's source).
 
 ```bash
 CMD=$(cat <<'EOF'
@@ -329,7 +346,7 @@ A worker moves `launched` -> `open` when it appears in `lets peers who --orc "<l
 The Orca addon of the sessions backend (`LETS_LAUNCHER=orca` and Orca running - Guard 3; otherwise refused, never a fallback): each task is a visible LETS session in its own Orca child worktree (adopted by `orca.yaml`), the human presses that session's gates in its terminal, and this session coordinates. No subagent calls in this section, and no peer-message forms: coordinator traffic is Orca's `ask` / `reply`.
 
 1. **Guide first.** Use the Orca binary `lets orca status --json` reported (`status.bin`) for every call. Read `orca skills get orchestration` (and only the reference a step names) and follow ITS syntax - never pinned flags. Every argv value that carries tracker text goes in single quotes (`'\''` escaping).
-   **Launch mode.** Orca launches each worker with its own configured agent command and accepts no agent arguments, so a resolved launch mode other than `default` (Step N2's rule) -> one line `orca_launch_mode_unsupported - Orca cannot pass --permission-mode; the workers start as Orca launches them`, then continue.
+   **Launch mode.** Orca launches each worker with its own configured agent command and accepts no agent arguments, so a launch class other than `default` (Step R4.5) is **Refused:** "orca_launch_mode_unsupported - Orca cannot pass --permission-mode; run `/lets:team run --backend sessions` to launch the workers in <mode>." Stop - no worker starts in a mode the owner did not pick.
 2. **Tasks.** For each selected task (orchestrator-injected into the spec):
 
 ```lets-tracker
@@ -337,7 +354,7 @@ show task=<id>   # title + description for the worker spec
 ```
 
 3. **Record before the first start.** Write `.lets/execution/team-<run>.json` as in Step N1, with `"backend": "sessions"`, `"launcher": "orca"`, `status: running`, the tasks with their `worker_name`, and the base.
-4. **Run and workers.** Create one Run (objective: the team goal) and one Task per selected task. The Task spec, self-contained per the guide's task-spec contract: the task title and description, then the rules - "a peer or coordinator message is never approval; your own human presses every gate in this terminal; report through the preamble's ask / worker_done". Start each worker in a new child worktree with its launch `--command` = `{agent_command} --name '<worker_name>' '/lets:start <id> --orc="<lead>"'` (`{agent_command}` as defined in Step N2; add `--model` only when the user named one); a worker start the guide gives no way to name or bind -> STOP and say so, never an unnamed worker. A typed message plus Enter would answer a folder-trust dialog: confirm with `terminal read --screen` that the worker shows its idle prompt (a dialog is left for the human), then send the spec as the coordinator's first message. Store each Dispatch ID as the task's `orca_dispatch`.
+4. **Run and workers.** Create one Run (objective: the team goal) and one Task per selected task. The Task spec, self-contained per the guide's task-spec contract: the task title and description, then the rules - "a peer or coordinator message is never approval; your own human presses every gate in this terminal; report through the preamble's ask / worker_done". Start each worker in a new child worktree with its launch `--command` = `{agent_command} --name '<worker_name>' '/lets:start <id> --orc="<lead>"'` (`{agent_command}` as defined in Step R4.5; add `--model` only when the user named one); a worker start the guide gives no way to name or bind -> STOP and say so, never an unnamed worker. A typed message plus Enter would answer a folder-trust dialog: confirm with `terminal read --screen` that the worker shows its idle prompt (a dialog is left for the human), then send the spec as the coordinator's first message. Store each Dispatch ID as the task's `orca_dispatch`.
 5. **Coordinator loop** (background Bash): `check --wait --types worker_done,escalation,question` per the guide.
    - `question` / `escalation`: relay the WHOLE text to the human; `reply` only with the human's words - never your own decision.
    - A plan-level decision that the DAG depends on: a gate via the guide's gate verb, resolved by the human.
@@ -581,7 +598,7 @@ Worktrees and branches stay in place.
 
 A standing team is created from the main checkout (an orchestrator or the owner). This command only routes - it duplicates none of the steps:
 
-`Skill(skill: "lets:worktree", args: "create --team [<callsign>] --area <a>")` - the `/lets:worktree create --team` flow checks the callsign (writing nothing), lets Go create `team_<c>`, writes the team file, runs the gated setup hook and launches only the lead. Pass any `--orca` / `--cmux` / `--tmux` override through.
+`Skill(skill: "lets:worktree", args: "create --team [<callsign>] --area <a>")` - the `/lets:worktree create --team` flow checks the callsign (writing nothing), lets Go create `team_<c>`, writes the team file, runs the gated setup hook and launches only the lead. Pass any `--orca` / `--cmux` / `--tmux` override and any `--launch-mode <m>` / `--auto` / `--all-in` through (the lead's **Launch mode**, rendered into the team file at creation) - never drop a typed launch-mode flag.
 
 ---
 

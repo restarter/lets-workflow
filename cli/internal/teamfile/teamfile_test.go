@@ -418,3 +418,43 @@ func TestLeadName(t *testing.T) {
 		t.Error("a missing team file must be an error")
 	}
 }
+
+// LaunchCommands reads agent_command / orca_agent under lead_name's rules (one
+// line each, a parsing scalar); a bad launch key never makes the rest unreadable.
+func TestLaunchCommands(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, body string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name+".md"), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("snake", "---\nteam: \"snake\"\nagent_command: \"claude --permission-mode auto\"\norca_agent: 'claude --settings ''{}'''\n---\nbody agent_command: ignored\n")
+	write("frog", "---\nteam: \"frog\"\n---\n")
+	write("otter", "---\nteam: \"otter\"\nagent_command: \"claude\"\nagent_command: \"claude --dangerously-skip-permissions\"\n---\n")
+	write("heron", "---\nteam: \"heron\"\norca_agent: \"unterminated\n---\n")
+	write("lynx", "---\nteam: \"lynx\"\nlead_name: \"lynx-lead\"\n")
+	if agent, orca, err := teamfile.LaunchCommands(dir, "snake"); err != nil || agent != "claude --permission-mode auto" || orca != "claude --settings '{}'" {
+		t.Errorf("present: %q, %q, %v", agent, orca, err)
+	}
+	if agent, orca, err := teamfile.LaunchCommands(dir, "frog"); err != nil || agent != "" || orca != "" {
+		t.Errorf("absent: %q, %q, %v", agent, orca, err)
+	}
+	if _, _, err := teamfile.LaunchCommands(dir, "otter"); err == nil || !strings.Contains(err.Error(), "duplicate key agent_command") {
+		t.Errorf("duplicate key: err=%v", err)
+	}
+	if _, _, err := teamfile.LaunchCommands(dir, "heron"); err == nil || !strings.Contains(err.Error(), "key orca_agent") {
+		t.Errorf("bad scalar: err=%v", err)
+	}
+	if _, _, err := teamfile.LaunchCommands(dir, "lynx"); err == nil {
+		t.Error("an unclosed frontmatter must be an error")
+	}
+	if _, _, err := teamfile.LaunchCommands(dir, "missing"); err == nil {
+		t.Error("a missing team file must be an error")
+	}
+	// lead_name beside a repeated agent_command still reads.
+	write("otter", "---\nteam: \"otter\"\nlead_name: \"otter-lead\"\nagent_command: \"a\"\nagent_command: \"b\"\n---\n")
+	if got, err := teamfile.LeadName(dir, "otter"); err != nil || got != "otter-lead" {
+		t.Errorf("lead_name beside a repeated agent_command: %q, %v", got, err)
+	}
+}

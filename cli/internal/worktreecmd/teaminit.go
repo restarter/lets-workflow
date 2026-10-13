@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -42,6 +43,14 @@ type TeamInitResult struct {
 	// LeadName is the lead session name the team gets (<repo>-<callsign>-lead, or
 	// <callsign>-lead when that name would not fit the session-name grammar).
 	LeadName string `json:"lead_name,omitempty"`
+	// LaunchClass is ClassifyLaunch of the agent_command written to the team file
+	// (default | auto | bypass) and LaunchWarnings its warnings - what the lead's
+	// launch announces, read from Go rather than from the command text. The Orca*
+	// pair is the same for orca_agent (the Orca lead terminal's command).
+	LaunchClass        string   `json:"launch_class,omitempty"`
+	LaunchWarnings     []string `json:"launch_warnings,omitempty"`
+	OrcaLaunchClass    string   `json:"orca_launch_class,omitempty"`
+	OrcaLaunchWarnings []string `json:"orca_launch_warnings,omitempty"`
 }
 
 // TeamInit writes the standing team's file `.lets/teams/<callsign>.md` (in the
@@ -114,8 +123,18 @@ func TeamInit(ctx context.Context, dir string, o TeamInitOptions) (*TeamInitResu
 	if orca == "" {
 		orca, _ = LaunchCommand(o.LaunchMode, "claude")
 	}
-	if o.LaunchMode == "all-in" {
-		res.Steps = append(res.Steps, Step{Status: StepWarn, Message: "launch mode all-in: the lead starts with --permission-mode bypassPermissions (no harness permission prompts in that session; LETS gates still ask)"})
+	class, warnings := ClassifyLaunch(agent)
+	orcaClass, orcaWarnings := ClassifyLaunch(orca)
+	for _, c := range []struct {
+		key, cmd, class string
+		warnings        []string
+	}{{"agent_command", agent, class, warnings}, {"orca_agent", orca, orcaClass, orcaWarnings}} {
+		if c.class == LaunchClassBypass {
+			res.Steps = append(res.Steps, Step{Status: StepWarn, Message: "launch class bypass: the lead's " + c.key + " " + strconv.Quote(c.cmd) + " starts a session with no harness permission prompts (bypassPermissions); LETS gates still ask"})
+		}
+		for _, w := range c.warnings {
+			res.Steps = append(res.Steps, Step{Status: StepWarn, Message: c.key + ": " + w})
+		}
 	}
 	for _, f := range []struct{ flag, v string }{{"--agent-command", agent}, {"--orca-agent", orca}, {"--area", o.Area}, {"--worktree", o.Worktree}} {
 		if strings.ContainsFunc(f.v, unicode.IsControl) {
@@ -165,6 +184,8 @@ func TeamInit(ctx context.Context, dir string, o TeamInitOptions) (*TeamInitResu
 		return fail(e)
 	}
 	res.TeamFile, res.OK = target, true
+	res.LaunchClass, res.LaunchWarnings = class, warnings
+	res.OrcaLaunchClass, res.OrcaLaunchWarnings = orcaClass, orcaWarnings
 	res.Steps = append(res.Steps, Step{Status: StepOK, Message: "team file written: " + target})
 	return res, nil
 }

@@ -257,7 +257,7 @@ A chunk's **Risk** is `high` when any of its tasks says `**Risk:** high` or its 
 
 **Files audit - a GATE.** Every path a task's step text creates, edits, renames or deletes must appear in that task's `**Files:**` (a path named only to read or cite is not a touch). Resolve the Files: lines first:
 
-- expand `{a,b}` brace sets (`memberscmd/{members.go,lead.go}` -> two paths);
+- expand `{a,b}` brace sets (`worktreecmd/{switch.go,team.go}` -> two paths);
 - a bare name (no `/`) resolves, in this order: to the directory of the previous path on the same Files line only when the file exists there at BASE or the task creates it there (`info.go`, `info_test.go` -> both in `info.go`'s directory); else to the repo root when it exists there at BASE or the task creates it there (`plugins/lets/rules/lets-rules.md`, `CLAUDE.md` -> `CLAUDE.md` at the root); else it is unresolvable - a warning, never a refusal;
 - a task's `Files add:` Amendment lines count as its Files.
 

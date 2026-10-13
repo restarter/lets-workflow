@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -263,5 +264,121 @@ func TestInfo_TeamLeadSchema(t *testing.T) {
 	}
 	if worktreecmd.SchemaVersion != 1 {
 		t.Errorf("team_lead is additive; SchemaVersion = %d", worktreecmd.SchemaVersion)
+	}
+}
+
+// info.launch_mode reports LETS_LAUNCH_MODE with its source on every answer: the
+// project .lets/.env, else ~/.lets/.env, else unset; an invalid value is
+// valid=false with a warn step (it is treated as default).
+func TestInfo_LaunchMode(t *testing.T) {
+	repo := initRepo(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeEnv := func(dir, body string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Join(dir, ".lets"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, ".lets", ".env"), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cases := []struct {
+		name, project, user string
+		want                worktreecmd.LaunchModeInfo
+		warn                bool
+	}{
+		{"unset", "LETS_LANGUAGE=English\n", "", worktreecmd.LaunchModeInfo{Source: "unset", Valid: true}, false},
+		{"user", "LETS_LAUNCH_MODE=\n", "LETS_LAUNCH_MODE=auto\n", worktreecmd.LaunchModeInfo{Value: "auto", Source: "user", Valid: true}, false},
+		{"project over user", "LETS_LAUNCH_MODE=all-in\n", "LETS_LAUNCH_MODE=auto\n", worktreecmd.LaunchModeInfo{Value: "all-in", Source: "project", Valid: true}, false},
+		{"invalid", "LETS_LAUNCH_MODE=bypass\n", "", worktreecmd.LaunchModeInfo{Value: "bypass", Source: "project", Valid: false}, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			writeEnv(repo, c.project)
+			_ = os.RemoveAll(filepath.Join(home, ".lets"))
+			if c.user != "" {
+				writeEnv(home, c.user)
+			}
+			res, err := worktreecmd.Info(context.Background(), repo)
+			if err != nil || res.LaunchMode == nil || *res.LaunchMode != c.want {
+				t.Fatalf("launch_mode = %+v, err %v; want %+v", res.LaunchMode, err, c.want)
+			}
+			warned := false
+			for _, s := range res.Steps {
+				warned = warned || (s.Status == worktreecmd.StepWarn && strings.Contains(s.Message, "LETS_LAUNCH_MODE"))
+			}
+			if warned != c.warn {
+				t.Errorf("warn step = %v, want %v: %+v", warned, c.warn, res.Steps)
+			}
+			raw, _ := json.Marshal(res)
+			if !strings.Contains(string(raw), `"launch_mode":{"value":`) {
+				t.Errorf("json lacks launch_mode: %s", raw)
+			}
+		})
+	}
+}
+
+// info.team_launch classifies the team file's agent_command / orca_agent through
+// ClassifyLaunch; an ambiguous launch key (repeated) is never classified.
+func TestInfo_TeamLaunch(t *testing.T) {
+	repo := initRepo(t)
+	t.Setenv("HOME", t.TempDir())
+	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cr, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{Name: "team_snake", Mode: worktreecmd.BranchAuto})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wt := cr.Worktree.Path
+	gitDir := strings.TrimSpace(gitOutput(t, wt, "rev-parse", "--absolute-git-dir"))
+	teamFile := func(launchLines string) {
+		t.Helper()
+		p := filepath.Join(repo, ".lets", "teams", "snake.md")
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		body := "---\nteam: \"snake\"\nworktree: \"" + wt + "\"\ngit_dir: \"" + gitDir + "\"\n" + launchLines + "---\n"
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	teamFile(`agent_command: "claude --permission-mode=bypassPermissions"` + "\n" + `orca_agent: "claude --settings '{\"crossSessionInbound\":\"accept\"}'"` + "\n")
+	res, err := worktreecmd.Info(context.Background(), wt)
+	if err != nil || res.TeamLaunch == nil {
+		t.Fatalf("team_launch missing: %+v, %v", res, err)
+	}
+	want := worktreecmd.TeamLaunch{
+		AgentCommand: "claude --permission-mode=bypassPermissions", Class: "bypass", Warnings: []string{},
+		OrcaAgent: `claude --settings '{"crossSessionInbound":"accept"}'`, OrcaClass: "default", OrcaWarnings: []string{"settings_override", "cross_session_inbound"},
+	}
+	if got := *res.TeamLaunch; got.AgentCommand != want.AgentCommand || got.Class != want.Class || !slices.Equal(got.Warnings, want.Warnings) ||
+		got.OrcaAgent != want.OrcaAgent || got.OrcaClass != want.OrcaClass || !slices.Equal(got.OrcaWarnings, want.OrcaWarnings) {
+		t.Errorf("team_launch = %+v, want %+v", got, want)
+	}
+	raw, _ := json.Marshal(res)
+	if !strings.Contains(string(raw), `"team_launch":{"agent_command":`) || !strings.Contains(string(raw), `"warnings":[]`) {
+		t.Errorf("json team_launch shape: %s", raw)
+	}
+
+	teamFile(`agent_command: "claude"` + "\n" + `agent_command: "claude --dangerously-skip-permissions"` + "\n")
+	res, err = worktreecmd.Info(context.Background(), wt)
+	if err != nil || !res.OK || res.Team != "snake" || res.TeamLaunch != nil {
+		t.Fatalf("repeated agent_command: team=%q team_launch=%+v err=%v - want the team, no team_launch", res.Team, res.TeamLaunch, err)
+	}
+	warned := false
+	for _, s := range res.Steps {
+		warned = warned || (s.Status == worktreecmd.StepWarn && strings.Contains(s.Message, "duplicate key agent_command"))
+	}
+	if !warned {
+		t.Errorf("repeated agent_command must warn: %+v", res.Steps)
+	}
+
+	// The main checkout is no team worktree: launch_mode yes, team_launch no.
+	res, _ = worktreecmd.Info(context.Background(), repo)
+	if res.TeamLaunch != nil || res.LaunchMode == nil {
+		t.Errorf("main checkout: team_launch=%+v launch_mode=%+v", res.TeamLaunch, res.LaunchMode)
 	}
 }

@@ -128,6 +128,11 @@ type InfoResult struct {
 	TaskCandidate *TaskCandidate `json:"task_candidate,omitempty"`
 	Team          string         `json:"team,omitempty"`      // the standing team owning this worktree (teamfile.FindByWorktree)
 	TeamLead      *TeamLead      `json:"team_lead,omitempty"` // set exactly when Team is
+	// LaunchMode is LETS_LAUNCH_MODE with its source (set on every info answer, not
+	// on --task-candidate); TeamLaunch the team file's launch commands, classified
+	// (set when Team is and the file's launch keys parse).
+	LaunchMode *LaunchModeInfo `json:"launch_mode,omitempty"`
+	TeamLaunch *TeamLaunch     `json:"team_launch,omitempty"`
 }
 
 // TeamLead is the team's recorded lead name against this session's own registry

@@ -109,9 +109,14 @@ func Render(tmpl []byte, v Values) ([]byte, error) {
 	return out, nil
 }
 
-// header is the part of a team file's frontmatter Go reads.
+// header is the part of a team file's frontmatter Go reads. agentCommand and
+// orcaAgent (the lead's launch commands, read by LaunchCommands) keep their own
+// error, launchErr: a bad launch key makes the launch commands unreadable without
+// making the file malformed for FindByWorktree or LeadName.
 type header struct {
 	team, worktree, gitDir, leadName string
+	agentCommand, orcaAgent          string
+	launchErr                        error
 }
 
 // LeadName is the lead_name the team file <teamsDir>/<team>.md records ("" when the
@@ -126,6 +131,25 @@ func LeadName(teamsDir, team string) (string, error) {
 		return "", nil
 	}
 	return h.leadName, nil
+}
+
+// LaunchCommands are the agent_command and orca_agent the team file
+// <teamsDir>/<team>.md records ("" for an absent key) - how its lead is launched.
+// A file that cannot be read, a malformed frontmatter, or a launch key that is
+// repeated or does not parse (the same rules as lead_name) is an error: the launch
+// command would be ambiguous.
+func LaunchCommands(teamsDir, team string) (agent, orca string, err error) {
+	h, found, err := readHeader(filepath.Join(teamsDir, team+".md"))
+	if err == nil {
+		err = h.launchErr
+	}
+	if err != nil {
+		return "", "", err
+	}
+	if !found {
+		return "", "", nil
+	}
+	return h.agentCommand, h.orcaAgent, nil
 }
 
 // FindByWorktree returns the team whose file in teamsDir claims the worktree at
@@ -227,6 +251,7 @@ func readHeader(path string) (h header, found bool, err error) {
 			continue
 		}
 		var dst *string
+		errp := &err
 		switch m[1] {
 		case "team":
 			dst = &h.team
@@ -236,17 +261,21 @@ func readHeader(path string) (h header, found bool, err error) {
 			dst = &h.gitDir
 		case "lead_name":
 			dst = &h.leadName
+		case "agent_command":
+			dst, errp = &h.agentCommand, &h.launchErr
+		case "orca_agent":
+			dst, errp = &h.orcaAgent, &h.launchErr
 		default:
 			continue
 		}
 		if seen[m[1]] {
-			err = errors.Join(err, fmt.Errorf("duplicate key %s", m[1]))
+			*errp = errors.Join(*errp, fmt.Errorf("duplicate key %s", m[1]))
 			continue
 		}
 		seen[m[1]] = true
 		val, verr := scalar(m[2])
 		if verr != nil {
-			err = errors.Join(err, fmt.Errorf("key %s: %w", m[1], verr))
+			*errp = errors.Join(*errp, fmt.Errorf("key %s: %w", m[1], verr))
 			continue
 		}
 		*dst = val

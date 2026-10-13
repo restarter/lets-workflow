@@ -83,6 +83,12 @@ func Run(w io.Writer, rulesPath, projectRoot, homeDir string, extraNotices []str
 		return err
 	}
 	for _, key := range letsconfig.Names() {
+		// An invalid LETS_LAUNCH_MODE is dropped like an unknown key: it is treated
+		// as default and the model must never read a hand-edited value as a mode
+		// (lets-gbfpd; `lets worktree info` names it, launch_mode.valid=false).
+		if key == "LETS_LAUNCH_MODE" && !letsconfig.ValidLaunchMode(env[key]) {
+			continue
+		}
 		if val := env[key]; val != "" {
 			if _, err := fmt.Fprintf(w, "%s=%s\n", key, val); err != nil {
 				return err
