@@ -124,7 +124,7 @@ func agentReportProblems(f map[string]string) []string {
 	}
 
 	skill := f["skills/agent-report/SKILL.md"]
-	for _, need := range []string{"user-invocable: false", "## op=open", "## op=add", "## op=peek", "## op=collect", "MISSING", "EMPTY", "UNTERMINATED", "UNREADABLE", "REPORT-END", readInFull, "ONCE", "retry=no", "GAP", "Coverage:"} {
+	for _, need := range []string{"user-invocable: false", "## op=open", "## op=add", "## op=peek", "## op=collect", "MISSING", "EMPTY", "UNTERMINATED", "UNREADABLE", "REPORT-END", "TAKEN", readInFull, "ONCE", "retry=no", "GAP", "Coverage:"} {
 		if !strings.Contains(skill, need) {
 			add("the agent-report skill must carry " + need)
 		}
@@ -488,5 +488,58 @@ func TestAgentReportClassifier(t *testing.T) {
 		if got[n] != want[n] {
 			t.Errorf("%s: classified %q, want %q", n, got[n], want[n])
 		}
+	}
+}
+
+// TestAgentReportAdd runs the op=add block of the agent-report skill - extracted
+// as TestAgentReportClassifier extracts Step 1 - and requires it to hand out a
+// path only for a name with no file yet. An existing file belongs to an earlier
+// dispatch; handing it out again would let op=collect read that report as the new
+// one's (lets-bt44m). An empty file is taken too: the Write tool will not
+// overwrite a file the new agent has not read.
+func TestAgentReportAdd(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("op=add is a bash block")
+	}
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash not on PATH")
+	}
+	skill, err := os.ReadFile(filepath.Join(pluginDir(t), "skills", "agent-report", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	section := sectionSpan(string(skill), "## op=add - a later phase of the same run")
+	i := strings.Index(section, "```bash\n")
+	if i < 0 {
+		t.Fatal("agent-report op=add lost its bash block")
+	}
+	block := section[i+len("```bash\n"):]
+	j := strings.Index(block, "\n```")
+	if j < 0 {
+		t.Fatal("agent-report op=add bash block is not closed")
+	}
+	block = block[:j]
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "old.md"), []byte("an earlier report\nREPORT-END\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "empty.md"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	script := strings.NewReplacer("{dir}", dir, "{names}", "fresh,old,empty").Replace(block)
+	out, err := exec.Command(bash, "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("op=add failed: %v\n%s", err, out)
+	}
+	got := strings.TrimSpace(string(out))
+	want := strings.Join([]string{
+		"REPORT_FILE fresh=" + filepath.Join(dir, "fresh.md"),
+		"TAKEN old " + filepath.Join(dir, "old.md"),
+		"TAKEN empty " + filepath.Join(dir, "empty.md"),
+	}, "\n")
+	if got != want {
+		t.Errorf("op=add output:\n%s\nwant:\n%s", got, want)
 	}
 }

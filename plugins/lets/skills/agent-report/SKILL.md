@@ -24,7 +24,18 @@ Every dispatch prompt carries its agent's path as its own line, right after the 
 
 ## op=add - a later phase of the same run
 
-Args: `dir=<REPORT_DIR> names=<name>,<name>`. Same naming as `op=open` step 2 in the SAME directory - one run keeps one directory (review: reviewers, then skeptics; opinion: panel, then challenge; plan: explorers, architects, experts). No artifact-path call. Output: one `REPORT_FILE <name>=<absolute path>` line per name, exactly as `op=open` step 3 - the dispatcher copies each line into its agent's prompt.
+Args: `dir=<REPORT_DIR> names=<name>,<name>`. Same naming as `op=open` step 2 in the SAME directory - one run keeps one directory (review: reviewers, then skeptics; opinion: panel, then challenge; plan: explorers, architects, experts). No artifact-path call. Run as written:
+
+```bash
+REPORT_DIR="{dir}"
+for n in $(printf '%s' "{names}" | tr ',' ' '); do   # names: comma-separated, [a-z0-9.-] only
+  f="$REPORT_DIR/$n.md"
+  if [ -e "$f" ]; then printf 'TAKEN %s %s\n' "$n" "$f"
+  else printf 'REPORT_FILE %s=%s\n' "$n" "$f"; fi
+done
+```
+
+A `REPORT_FILE <name>=<path>` line is that agent's path, exactly as `op=open` step 3 - the dispatcher copies each line into its agent's prompt. A `TAKEN <name> <path>` line hands out NO path: that file belongs to an earlier dispatch, and pointing a new agent at it would let `op=collect` read the earlier report as this one's. Dispatch nothing under that name - pick a fresh one (the caller's own suffix rule) and run `op=add` for it. For Step 3's `{name}-r2`, `TAKEN` is a second guard against a repeat retry (a `-r2` file already on disk, e.g. after a resume); the first guard is the run's own dispatch record (Step 3).
 
 ## op=peek - inspect without concluding
 
