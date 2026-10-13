@@ -32,6 +32,12 @@ type WhoOptions struct {
 	Session        string        // self lookup
 	OrcaRepos      bool          // every repo Orca knows, validated in Go; orchestrator rows carry repo_index
 	Timeout        time.Duration // total budget (default 2500ms)
+	// Probe (with Orc = this session's own name) asks whether a message this
+	// orchestrator received may be answered under its standing grant: standing_ok /
+	// standing_reason (standingFromWorker). Caller is the session asking when Session
+	// is empty (the cli layer's $CLAUDE_CODE_SESSION_ID).
+	Probe  StandingProbe
+	Caller string
 }
 
 // listOrcaRepos is orcacmd.ListRepos, a seam so tests supply Orca's repo list.
@@ -93,15 +99,26 @@ func lastOrch(name, scope, sid, pid, source string) LastOrchestrator {
 // and whether it is an orchestrator - a name recorded in the merge-branch
 // task-state, or (only when no recorded name is live) the <repo>-orc[-scope]
 // convention. No roles, no Orca. Every call refreshes the last-seen file of each
-// orchestrator row it lists.
+// orchestrator row it lists. With a Probe it also answers standing_ok for one
+// inbound message (standingFromWorker).
 func Who(ctx context.Context, o WhoOptions) (*WhoResult, error) {
 	if o.Timeout <= 0 {
 		o.Timeout = 2500 * time.Millisecond
 	}
+	res := &WhoResult{Envelope: newEnvelope("who"), Peers: []Peer{}}
+	if o.Probe.given() {
+		e := o.Probe.usage()
+		if e == nil && (o.Orc == "" || o.OrcaRepos) {
+			e = &Error{Code: ExitUsage, Kind: "usage", Message: "--from-name / --from-addr answer for this repo's orchestrator: pass --orc <own name>, without --orca-repos"}
+		}
+		if e != nil {
+			res.Error = &ErrorInfo{Kind: e.Kind, Message: e.Message}
+			return res, e
+		}
+	}
 	if o.OrcaRepos {
 		return whoOrcaRepos(ctx, o)
 	}
-	res := &WhoResult{Envelope: newEnvelope("who"), Peers: []Peer{}}
 	ctx, cancel := context.WithTimeout(ctx, o.Timeout)
 	defer cancel()
 	mainRoot, e := mainRootOf(o.Cwd)
@@ -111,9 +128,9 @@ func Who(ctx context.Context, o WhoOptions) (*WhoResult, error) {
 	}
 	CarryProof(ctx, mainRoot) // the lazy proof carry: recovers one the hook missed
 	res.RepoSlug = peername.RepoSlug(mainRoot)
-	rows, pids, degraded := repoRows(ctx, mainRoot)
-	res.Degraded = append(res.Degraded, degraded...)
-	for _, p := range rows {
+	v := loadNameView(ctx, mainRoot)
+	res.Degraded = append(res.Degraded, v.degraded...)
+	for _, p := range v.rows {
 		if o.Session != "" && p.Session == o.Session {
 			self := p
 			res.Self = &self
@@ -123,7 +140,11 @@ func Who(ctx context.Context, o WhoOptions) (*WhoResult, error) {
 		}
 		res.Peers = append(res.Peers, p)
 	}
-	refreshLastSeen(mainRoot, rows, pids)
+	if o.Probe.given() {
+		caller := nonEmpty(o.Session, o.Caller)
+		res.Standing = standingOf(standingFromWorker(v, caller, o.Orc, o.Probe))
+	}
+	refreshLastSeen(mainRoot, v.rows, v.pids)
 	res.OK = true
 	return res, nil
 }
@@ -156,17 +177,6 @@ func orchestratorRecords(mainRoot, merge string) ([]taskstate.Orchestrator, []De
 		degraded = append(degraded, Degraded{Source: "taskstate", Reason: "orchestrator_line_invalid", Detail: redact.Cap(redact.Control(b), 120)})
 	}
 	return recs, degraded
-}
-
-// repoRows is the row build of one repo: its registry rows, the merge-branch
-// records, and the pid of each row's session (for the last-seen files).
-func repoRows(ctx context.Context, mainRoot string) ([]Peer, map[string]int, []Degraded) {
-	entries, _, _, snap, degraded := registryPeers(ctx, mainRoot)
-	merge := mergeBranchOf(mainRoot)
-	recs, rdeg := orchestratorRecords(mainRoot, merge)
-	degraded = append(degraded, rdeg...)
-	rows, pids := whoRows(ctx, mainRoot, merge, entries, snap, recs, true)
-	return rows, pids, degraded
 }
 
 // whoRows builds one row per session of entries (the first registry row stands for

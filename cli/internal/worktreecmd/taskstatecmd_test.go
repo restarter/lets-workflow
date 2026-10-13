@@ -4,6 +4,7 @@ package worktreecmd_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -216,11 +217,24 @@ func fakeSelf(t *testing.T, name string) string {
 	mustMkdir(t, filepath.Join(home, "sessions"))
 	sid := "aaaaaaaa-0000-4000-8000-0000000000aa"
 	mustWrite(t, filepath.Join(home, "sessions", "4343.json"), `{"name":"`+name+`","sessionId":"`+sid+`","cwd":"/x","peerProtocol":1}`, 0o644)
-	oldHome, oldAlive := ccregistry.HomeDir, ccregistry.ProcAlive
+	oldHome, oldAlive, oldParent := ccregistry.HomeDir, ccregistry.ProcAlive, ccregistry.ParentOf
 	ccregistry.HomeDir = func() string { return home }
 	ccregistry.ProcAlive = func(pid int) bool { return pid == 4343 }
-	t.Cleanup(func() { ccregistry.HomeDir, ccregistry.ProcAlive = oldHome, oldAlive })
+	// this test process runs under that session: its parent's parent is pid 4343
+	ccregistry.ParentOf = fakeParents(map[int]int{os.Getppid(): 4343, 4343: 1})
+	t.Cleanup(func() { ccregistry.HomeDir, ccregistry.ProcAlive, ccregistry.ParentOf = oldHome, oldAlive, oldParent })
 	return sid
+}
+
+// fakeParents is a ccregistry.ParentOf over a fixed process tree; a pid outside it
+// cannot be read.
+func fakeParents(parents map[int]int) func(int) (int, error) {
+	return func(pid int) (int, error) {
+		if p, ok := parents[pid]; ok {
+			return p, nil
+		}
+		return 0, errors.New("no such process")
+	}
 }
 
 func tsSet(t *testing.T, repo string, o worktreecmd.TaskStateOptions) {
@@ -235,7 +249,8 @@ func tsSet(t *testing.T, repo string, o worktreecmd.TaskStateOptions) {
 // fields given, keep every other line, and clear by name.
 func TestTaskStateSet_OrchestratorRecords(t *testing.T) {
 	repo := tsRepo(t, "main")
-	tsSet(t, repo, worktreecmd.TaskStateOptions{Orchestrator: "MAIN-LETS", OrchestratorScope: strp("docs"), Standing: strp("on")})
+	sid := fakeSelf(t, "MAIN-LETS")
+	tsSet(t, repo, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sid, OrchestratorScope: strp("docs"), Standing: strp("on")})
 	tsSet(t, repo, worktreecmd.TaskStateOptions{Orchestrator: "MAIN-ETH"})
 	tsSet(t, repo, worktreecmd.TaskStateOptions{Task: "lets-abc"})
 	want := "orchestrator: MAIN-LETS scope=docs standing=on\norchestrator: MAIN-ETH\ntask: lets-abc\n"
@@ -341,6 +356,46 @@ func TestTaskStateSet_SelfOrchestrator(t *testing.T) {
 	}
 }
 
+// A grant is written only by the orchestrator itself: --standing on for a named
+// orchestrator is refused with the rule; --standing off for one stays allowed.
+func TestTaskStateSet_StandingOnOnlySelf(t *testing.T) {
+	repo := tsRepo(t, "main")
+	res, err := worktreecmd.TaskStateSet(context.Background(), repo, worktreecmd.TaskStateOptions{Orchestrator: "MAIN-LETS", Standing: strp("on")})
+	if worktreecmd.ExitCode(err) != worktreecmd.ExitUsage || res.Error == nil || !strings.Contains(res.Error.Message, "--self-orchestrator") {
+		t.Errorf("err=%v res=%+v", err, res.Error)
+	}
+	tsSet(t, repo, worktreecmd.TaskStateOptions{Orchestrator: "MAIN-LETS", Standing: strp("off")})
+	if got := readTask(t, repo, "main"); got != "orchestrator: MAIN-LETS standing=off\n" {
+		t.Errorf("revoking stays open to anyone: %q", got)
+	}
+}
+
+// --self-orchestrator writes only when the claimed session's own process runs the
+// command: a session id from the environment of another process is refused
+// orchestrator_not_own_process (exit 2), and so is an ancestry that cannot be read.
+func TestTaskStateSet_SelfOrchestratorOwnProcess(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		parents map[int]int
+	}{
+		{"not an ancestor", map[int]int{os.Getppid(): 777, 777: 1}},
+		{"ancestry unreadable", map[int]int{os.Getppid(): 777}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := tsRepo(t, "main")
+			sid := fakeSelf(t, "MAIN-LETS")
+			ccregistry.ParentOf = fakeParents(tc.parents)
+			res, err := worktreecmd.TaskStateSet(context.Background(), repo, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sid, Standing: strp("on")})
+			if worktreecmd.ExitCode(err) != worktreecmd.ExitUsage || res.Error == nil || res.Error.Kind != "orchestrator_not_own_process" || res.Error.Remediation == "" {
+				t.Errorf("err=%v res=%+v", err, res.Error)
+			}
+			if _, err := os.Stat(taskFile(repo, "main")); !os.IsNotExist(err) {
+				t.Error("a refused call must write nothing")
+			}
+		})
+	}
+}
+
 // Flag combinations that cannot mean one write, and invalid values, are usage errors
 // and write nothing.
 func TestTaskStateSet_OrchestratorUsage(t *testing.T) {
@@ -355,6 +410,8 @@ func TestTaskStateSet_OrchestratorUsage(t *testing.T) {
 		{Orchestrator: "A", Task: "lets-abc"},
 		{SelfOrchestrator: true, Start: "abc1234"},
 		{Orchestrator: "A", Standing: strp("maybe")},
+		{Orchestrator: "A", Standing: strp("on")}, // only the orchestrator itself grants
+		{Standing: strp("on"), OrchestratorScope: strp("docs")},
 		{Orchestrator: "x --auto"},
 		{Orchestrator: "A", OrchestratorScope: strp("a=b")},
 	} {

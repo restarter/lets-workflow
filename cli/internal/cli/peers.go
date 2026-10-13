@@ -47,6 +47,9 @@ func newPeersWhoCmd() *cobra.Command {
 		Args: cobra.NoArgs, SilenceUsage: true, SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			o.Timeout = time.Duration(timeoutMs) * time.Millisecond
+			if o.Probe.FromName != "" || o.Probe.FromAddr != "" {
+				o.Caller = sessionDefault() // the standing answer is for this session, unless --session names it
+			}
 			res, err := peerscmd.Who(cmd.Context(), o)
 			printPeers(cmd, jsonOut, res, func() { peerscmd.RenderWho(cmd.OutOrStdout(), res) })
 			return err
@@ -60,6 +63,8 @@ func newPeersWhoCmd() *cobra.Command {
 	f.StringVar(&o.ExcludeSession, "exclude-session", "", "Leave this session id out")
 	f.StringVar(&o.Session, "session", "", "Also report this session as self")
 	f.BoolVar(&o.OrcaRepos, "orca-repos", false, "Every repo Orca knows (validated in Go): orchestrator rows with repo_index")
+	f.StringVar(&o.Probe.FromName, "from-name", "", "With --orc <own name>: the inbound message's envelope from-name (with --from-addr) - answers standing_ok")
+	f.StringVar(&o.Probe.FromAddr, "from-addr", "", "The inbound message's envelope from attribute, uds:/tmp/cc-socks/<pid>.sock (with --from-name)")
 	f.IntVar(&timeoutMs, "timeout-ms", 2500, "Total time budget")
 	f.BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
 	return cmd
@@ -268,6 +273,7 @@ func newPeersAskROCmd() *cobra.Command {
 
 func newPeersOrchestratorCmd() *cobra.Command {
 	var session, cwd string
+	var probe peerscmd.StandingProbe
 	cmd := &cobra.Command{
 		Use: "orchestrator", Short: "Resolve whom this session's /lets:orc talks to (bound, self, single, ambiguous, none) and its own self_record",
 		Args: cobra.NoArgs, SilenceUsage: true, SilenceErrors: true,
@@ -275,7 +281,7 @@ func newPeersOrchestratorCmd() *cobra.Command {
 			if session == "" {
 				session = sessionDefault()
 			}
-			res, err := peerscmd.Orchestrator(cmd.Context(), cwd, session)
+			res, err := peerscmd.OrchestratorWith(cmd.Context(), cwd, session, probe)
 			printPeers(cmd, true, res, nil)
 			return err
 		},
@@ -283,6 +289,8 @@ func newPeersOrchestratorCmd() *cobra.Command {
 	whitelist(cmd)
 	cmd.Flags().StringVar(&session, "session", "", "This session's id (default: $CLAUDE_CODE_SESSION_ID)")
 	cmd.Flags().StringVar(&cwd, "cwd", "", "Checkout (default: current directory)")
+	cmd.Flags().StringVar(&probe.FromName, "from-name", "", "An inbound message's envelope from-name (with --from-addr) - answers standing_ok for the bound orchestrator")
+	cmd.Flags().StringVar(&probe.FromAddr, "from-addr", "", "That message's envelope from attribute, uds:/tmp/cc-socks/<pid>.sock (with --from-name)")
 	cmd.Flags().Bool("json", false, "Emit JSON envelope (always on)")
 	return cmd
 }

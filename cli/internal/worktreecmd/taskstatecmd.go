@@ -65,6 +65,17 @@ func selfName(sid string) (string, *Error) {
 	case !e.NameOK:
 		return "", &Error{Code: ExitGeneric, Kind: "orchestrator_needs_name", Message: "this session has no name to record as an orchestrator", Remediation: remedy}
 	}
+	// The session id is only a claim ($CLAUDE_CODE_SESSION_ID can be set by any
+	// subprocess): the record is written only when that session's own process runs
+	// this command. Any doubt - no pid, an unreadable hop, not an ancestor - refuses.
+	if own, err := ccregistry.CallerDescendsFrom(e.Pid); !own {
+		msg := fmt.Sprintf("session %s (pid %d) is not a parent process of this command", sid, e.Pid)
+		if err != nil {
+			msg = fmt.Sprintf("could not prove session %s (pid %d) runs this command: %v", sid, e.Pid, err)
+		}
+		return "", &Error{Code: ExitUsage, Kind: "orchestrator_not_own_process", Message: msg, Cause: err,
+			Remediation: "run it from the orchestrator's own Claude Code session (its Bash tool), not from another process"}
+	}
 	return e.Name, nil
 }
 
@@ -275,13 +286,17 @@ func TaskStateSet(ctx context.Context, dir string, o TaskStateOptions) (*TaskSta
 }
 
 // orchestratorUsage refuses the orchestrator flag combinations that cannot mean one
-// write.
+// write, and a standing grant written for a name other than the caller's own.
 func orchestratorUsage(o TaskStateOptions) *Error {
 	usage := func(msg string) *Error { return &Error{Code: ExitUsage, Kind: "usage", Message: msg} }
 	named := o.Orchestrator != "" || o.SelfOrchestrator
 	switch {
 	case o.Orchestrator != "" && o.SelfOrchestrator:
 		return usage("--orchestrator and --self-orchestrator conflict")
+	case o.Standing != nil && *o.Standing == "on" && !o.SelfOrchestrator:
+		// a grant relaxes the orchestrator's own send gate: only its own session
+		// writes it; --standing off and --clear-orchestrator only tighten
+		return usage("--standing on is written only by the orchestrator itself (--self-orchestrator)")
 	case o.ClearOrchestrator != "" && (named || o.OrchestratorScope != nil || o.Standing != nil):
 		return usage("--clear-orchestrator conflicts with --orchestrator / --self-orchestrator / --orchestrator-scope / --standing")
 	case !named && o.ClearOrchestrator == "":

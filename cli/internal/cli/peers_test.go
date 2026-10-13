@@ -96,3 +96,20 @@ func TestPeersTail_RemovedFlags(t *testing.T) {
 		t.Errorf("removed flags: %v", env)
 	}
 }
+
+// --from-name / --from-addr are wired on who and orchestrator: one half alone is a
+// usage envelope (exit 2), never an unknown flag swallowed by the whitelist.
+func TestPeers_StandingProbeFlags(t *testing.T) {
+	dir := t.TempDir()
+	for _, args := range [][]string{
+		{"who", "--cwd", dir, "--orc", "MAIN-LETS", "--from-name", "W", "--json"},
+		{"who", "--cwd", dir, "--orc", "MAIN-LETS", "--from-addr", "uds:/tmp/cc-socks/1.sock", "--json"},
+		{"orchestrator", "--cwd", dir, "--from-name", "MAIN-LETS", "--json"},
+		{"orchestrator", "--cwd", dir, "--from-addr", "uds:/tmp/cc-socks/1.sock", "--json"},
+	} {
+		env, err := runPeers(t, args...)
+		if err == nil || errKind(env) != "usage" {
+			t.Errorf("%v: err=%v env=%v", args, err, env)
+		}
+	}
+}

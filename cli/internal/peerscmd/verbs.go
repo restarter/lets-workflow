@@ -118,7 +118,18 @@ func RoleClear(ctx context.Context, cwd, session string) (*RoleResult, error) {
 // every session start, done, end and Orchestrator offer. It refreshes the last-seen
 // file of each live orchestrator row it sees.
 func Orchestrator(ctx context.Context, cwd, session string) (*OrchestratorResult, error) {
+	return OrchestratorWith(ctx, cwd, session, StandingProbe{})
+}
+
+// OrchestratorWith is Orchestrator answering, for a probe (the harness envelope of a
+// message this worker or lead received), whether its bound orchestrator sent it under
+// a standing grant: standing_ok / standing_reason (standingFromOrchestrator).
+func OrchestratorWith(ctx context.Context, cwd, session string, probe StandingProbe) (*OrchestratorResult, error) {
 	res := &OrchestratorResult{Envelope: newEnvelope("orchestrator"), Candidates: []Candidate{}}
+	if e := probe.usage(); e != nil {
+		res.Error = &ErrorInfo{Kind: e.Kind, Message: e.Message}
+		return res, e
+	}
 	if cwd == "" {
 		cwd, _ = os.Getwd()
 	}
@@ -141,5 +152,8 @@ func Orchestrator(ctx context.Context, cwd, session string) (*OrchestratorResult
 	res.OK = true
 	res.Source, res.Scope, res.Target, res.Candidates, res.Reason, res.Refused, res.Degraded = r.Source, r.Scope, r.Target, r.Candidates, r.Reason, r.Refused, r.Degraded
 	res.Remediation, res.SelfRecord = r.Remediation, r.SelfRecord
+	if probe.given() {
+		res.Standing = standingOf(standingFromOrchestrator(v, r, probe))
+	}
 	return res, nil
 }

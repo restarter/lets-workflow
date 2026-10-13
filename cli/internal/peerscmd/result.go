@@ -15,7 +15,7 @@ type ErrorInfo struct {
 }
 
 // deprecatedText is the one line every v0.10.0 compatibility envelope carries.
-const deprecatedText = "removed next release - peer messages go through SendMessage (/lets:orc)"
+const deprecatedText = "removed next release - peer messages go through SendMessage (/lets:orc); run /lets:update to load the matching plugin"
 
 // Envelope is the core of every `lets peers` result. A degraded source keeps ok=true
 // and names itself in degraded[]. Deprecated is set on a verb (or flag) that still
@@ -42,6 +42,19 @@ type WhoResult struct {
 	Repos             []orcacmd.RepoInfo `json:"repos,omitempty"`
 	// RepoSlug is <repo> of every role name (peername.RepoSlug of the main checkout).
 	RepoSlug string `json:"repo_slug"`
+	Standing
+}
+
+// Standing is the process-bound standing answer for one inbound message, present
+// only when --from-name / --from-addr were passed: StandingOK is then always in the
+// envelope (false included), StandingReason names why it is false.
+type Standing struct {
+	StandingOK     *bool  `json:"standing_ok,omitempty"`
+	StandingReason string `json:"standing_reason,omitempty"`
+}
+
+func standingOf(ok bool, reason string) Standing {
+	return Standing{StandingOK: &ok, StandingReason: reason}
 }
 
 // TailResult is a session's recent output.
@@ -113,4 +126,5 @@ type OrchestratorResult struct {
 	Reason      string      `json:"reason,omitempty"`
 	Remediation string      `json:"remediation,omitempty"` // the exact line to show the user; set with every Reason
 	Refused     []Refused   `json:"refused,omitempty"`
+	Standing
 }

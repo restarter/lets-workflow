@@ -149,9 +149,11 @@ func boundName(mainRoot, merge, branch string) (string, bool) {
 //
 // An orchestrator row is a name recorded in the merge-branch task-state, or (only
 // when no recorded name is live) a <repo>-orc[-scope] name. SelfRecord is always
-// the caller's own record, whatever the source. It never writes.
+// the caller's own record, whatever the source - and only while the caller's name is
+// carried by one live session machine-wide (else nil, and degraded[] names
+// self_name_not_unique). It never writes.
 func ResolveOrchestrator(ctx context.Context, v *nameView, o ResolveOptions) *Resolution {
-	res := &Resolution{Scope: "branch", Candidates: []Candidate{}, Refused: []Refused{}, Degraded: v.degraded}
+	res := &Resolution{Scope: "branch", Candidates: []Candidate{}, Refused: []Refused{}, Degraded: append([]Degraded{}, v.degraded...)}
 	defer func() {
 		if res.Reason != "" && res.Remediation == "" {
 			name, detail := "", ""
@@ -169,10 +171,17 @@ func ResolveOrchestrator(ctx context.Context, v *nameView, o ResolveOptions) *Re
 	}
 	if e, ok := v.snap.Find(o.Session); ok && e.NameOK {
 		for _, r := range v.recs {
-			if r.Name == e.Name {
-				res.SelfRecord = &SelfRecord{Name: r.Name, Scope: r.Scope, Standing: r.Standing}
-				break
+			if r.Name != e.Name {
+				continue
 			}
+			// A record belongs to a name, not a session: a second live session under
+			// the same name (a reused MAIN-LETS) never inherits the record or its grant.
+			if len(liveByName(v.snap, e.Name)) == 1 {
+				res.SelfRecord = &SelfRecord{Name: r.Name, Scope: r.Scope, Standing: r.Standing}
+			} else {
+				res.Degraded = append(res.Degraded, Degraded{Source: "claude", Reason: "self_name_not_unique", Detail: e.Name})
+			}
+			break
 		}
 	}
 	branch := o.Branch
