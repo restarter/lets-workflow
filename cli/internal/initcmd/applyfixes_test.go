@@ -82,7 +82,7 @@ func fixContractProblems(f map[string]string) []string {
 	if !strings.Contains(f["review"], "the top-K cap does not apply") {
 		add("review.md must lift the verify cap under --fix")
 	}
-	if !strings.Contains(f["rules"], "`--fix` on `/lets:check` / `/lets:review` / `/lets:handoff`") {
+	if !strings.Contains(f["rules"], "`--fix` (the reviewed files, never a commit)") {
 		add("lets-rules.md must list --fix among the commands with their own code gate")
 	}
 	for _, need := range []string{"const verification = {", "refuted_findings: refutedFindings", "judged[i] || { f: toVerify[i], votes: [] }"} {
@@ -122,7 +122,7 @@ func TestApplyFixes(t *testing.T) {
 		{"review loses the plan fix", "review", `Skill(skill: "lets:apply-fixes", args: "source=review mode=plan`, `Skill(skill: "lets:other", args: "source=review mode=plan`, "exactly 2"},
 		{"check applies with --json", "check", "--fix edits files - --json has no side effects", "x", "refuse --fix with --json"},
 		{"handoff fixes an execution", "handoff", "an execution brief has none", "x", "must refuse"},
-		{"rules drop the gate", "rules", "`--fix` on `/lets:check`", "`--fix` in `/lets:check`", "own code gate"},
+		{"rules drop the gate", "rules", "`--fix` (the reviewed files, never a commit)", "`--fix` (the reviewed files)", "own code gate"},
 		{"workflow returns counts only", "workflow", "refuted_findings: refutedFindings", "", "per-finding verify outcome"},
 		{"open items stop nothing", "skill", "**Open items**", "Open items", "open item"},
 		{"handoff ignores a moved HEAD", "handoff", "--fix skipped - HEAD moved while the agent worked", "x", "HEAD moved"},

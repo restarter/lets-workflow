@@ -599,7 +599,7 @@ func TestMemberRun(t *testing.T) {
 		{"record loses review_sha", "execute", `"review_sha": null, `, "", "review_sha", 1},
 		{"pipelined row loses fixup", "agent", "`git commit --fixup=<that sha>`", "`git commit --amend`", "--fixup and the overlap stop", 1},
 		{"isolated pipelined commits at once", "execute", "4. **Only then the lead's commit**", "0. **Committed by the lead at once**", "before the lead's commit", 1},
-		{"unscoped gate sentence returns", "rules", "inside it the gate is plan mode for an inline run", "inside it the plan-mode approval is the gate", "still asserts", 1},
+		{"unscoped gate sentence returns", "rules", "`/lets:execute` (plan mode inline, the Start gate delegated)", "`/lets:execute` (after its plan-mode approval)", "still asserts", 1},
 		{"a replacement keeps the old report path", "execute", "a replacement never writes an earlier generation's report", "keep the copied lines", "new generation's round-0 REPORT_FILE", 1},
 		{"the final text gates the report again", "execute", "EMPTY ones included", "non-empty ones", "EMPTY ones included", 1},
 		{"interim notifications conclude a gap", "execute", "op=peek", "op=collect", "EMPTY ones included", -1},
