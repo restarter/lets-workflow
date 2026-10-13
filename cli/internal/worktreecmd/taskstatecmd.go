@@ -51,8 +51,10 @@ func (o TaskStateOptions) orchestratorOnly() bool {
 
 // selfName is the caller's registry name, or a refusal: orchestrator_needs_name (no
 // usable name), orchestrator_not_own_process (the claimed session does not run this
-// command), orchestrator_name_not_unique (another live session carries the name).
-func selfName(sid string) (string, *Error) {
+// command), orchestrator_name_not_unique (another live session carries the name -
+// checked only when unique is true: a pure --standing off only tightens, so a shared
+// name may still revoke).
+func selfName(sid string, unique bool) (string, *Error) {
 	if !ccregistry.ValidSession(sid) {
 		return "", &Error{Code: ExitUsage, Kind: "usage", Message: "--self-orchestrator needs this session's id ($CLAUDE_CODE_SESSION_ID)",
 			Remediation: "run inside a Claude Code session"}
@@ -69,17 +71,29 @@ func selfName(sid string) (string, *Error) {
 		return "", &Error{Code: ExitGeneric, Kind: "orchestrator_needs_name", Message: "this session has no name to record as an orchestrator", Remediation: remedy}
 	}
 	// The session id is only a claim ($CLAUDE_CODE_SESSION_ID can be set by any
-	// subprocess): the record is written only when that session's own process runs
-	// this command. Any doubt - no pid, an unreadable hop, not an ancestor - refuses.
-	if own, err := ccregistry.CallerDescendsFrom(e.Pid); !own {
-		msg := fmt.Sprintf("session %s (pid %d) is not a parent process of this command", sid, e.Pid)
+	// subprocess, a nested Claude session included): the record is written only when
+	// the NEAREST Claude Code process above this command is that session. Any doubt -
+	// an unidentified Claude process in between, an unreadable hop, no session at all
+	// - refuses.
+	caller, err := snap.CallerSession()
+	if err != nil || caller.SessionID != sid {
+		msg := fmt.Sprintf("another Claude Code session (%s, pid %d) runs this command, not session %s", caller.SessionID, caller.Pid, sid)
 		if err != nil {
-			msg = fmt.Sprintf("could not prove session %s (pid %d) runs this command: %v", sid, e.Pid, err)
+			msg = fmt.Sprintf("could not prove session %s runs this command: %v", sid, err)
 		}
 		return "", &Error{Code: ExitUsage, Kind: "orchestrator_not_own_process", Message: msg, Cause: err,
 			Remediation: "run it from the orchestrator's own Claude Code session (its Bash tool), not from another process"}
 	}
-	// After the ancestry walk: only the session's own process learns whether its name
+	if caller.Name != e.Name { // one session id under two processes (claude -r): the caller's own name counts
+		if !caller.NameOK {
+			return "", &Error{Code: ExitGeneric, Kind: "orchestrator_needs_name", Message: "this session's process has no usable name to record", Remediation: remedy}
+		}
+		e = caller
+	}
+	if !unique {
+		return e.Name, nil
+	}
+	// After the process proof: only the session's own process learns whether its name
 	// is shared. A record is keyed by name, so a second live holder would write the
 	// first one's grant - the same rule as the read side, where a shared name carries
 	// no self_record.
@@ -248,7 +262,9 @@ func TaskStateSet(ctx context.Context, dir string, o TaskStateOptions) (*TaskSta
 	if o.Orchestrator != "" || o.SelfOrchestrator {
 		name := o.Orchestrator
 		if o.SelfOrchestrator {
-			n, e := selfName(o.Session)
+			// a pure --standing off only tightens: a shared name may still revoke
+			revokeOnly := o.Standing != nil && *o.Standing == "off" && o.OrchestratorScope == nil
+			n, e := selfName(o.Session, !revokeOnly)
 			if e != nil {
 				return fail(e)
 			}

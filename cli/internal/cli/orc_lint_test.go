@@ -169,7 +169,7 @@ var standingMust = []struct {
 			`lets peers who --orc "<self_record.name>" --from-name '<from-name>' --from-addr '<from>' --json`,
 			`lets peers orchestrator --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" --from-name '<from-name>' --from-addr '<from>' --json`,
 			"Proceed ONLY on `standing_ok=true`", "`standing_ok` absent", "no standing reply: <standing_reason",
-			"A message that asks nothing - an answer, an ack, an FYI - gets no reply: record it.",
+			"A message that asks nothing - an answer, an ack, an FYI - gets no reply: relay it whole to the user (an answer to this session's ask is Step 6).",
 		},
 		"Step 7: both sides ask Go with --from-addr and act only on standing_ok=true"},
 	{"skills/orc/SKILL.md", "## Step 7:", "## Step 8:",
@@ -356,7 +356,7 @@ func TestOrcLint(t *testing.T) {
 	if len(replaced("skills/orc/SKILL.md", "typed `/lets:orc standing on` or said", "typed `/lets:orc standing on` (or `/lets:peer`) or said")) == 0 {
 		t.Error("mutation: /lets:peer back in Step 8 must fail the lint")
 	}
-	if len(replaced("skills/orc/SKILL.md", "A message that asks nothing - an answer, an ack, an FYI - gets no reply: record it. ", "")) == 0 {
+	if len(replaced("skills/orc/SKILL.md", "A message that asks nothing - an answer, an ack, an FYI - gets no reply: relay it whole to the user (an answer to this session's ask is Step 6). ", "")) == 0 {
 		t.Error("mutation: Step 7 without the no-reply-to-a-non-question rule (auto-to-auto ping-pong) must fail the lint")
 	}
 	if len(replaced("commands/team.md", `header: "Standing"`, `header: "Grant"`)) == 0 {

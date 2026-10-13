@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -417,6 +418,69 @@ func TestTaskStateSet_SelfOrchestratorNameNotUnique(t *testing.T) {
 	ccregistry.ParentOf = fakeParents(map[int]int{os.Getppid(): 777, 777: 1})
 	if res, _ := worktreecmd.TaskStateSet(context.Background(), repo, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sid}); res.Error == nil || res.Error.Kind != "orchestrator_not_own_process" {
 		t.Errorf("not own process first: %+v", res.Error)
+	}
+}
+
+// addSession registers one more live session in fakeSelf's registry.
+func addSession(t *testing.T, pid int, name, sid string) {
+	t.Helper()
+	mustWrite(t, filepath.Join(ccregistry.HomeDir(), "sessions", strconv.Itoa(pid)+".json"), `{"name":"`+name+`","sessionId":"`+sid+`","cwd":"/y","peerProtocol":1}`, 0o644)
+	prev := ccregistry.ProcAlive
+	ccregistry.ProcAlive = func(p int) bool { return p == pid || prev(p) }
+}
+
+// The caller's session is the NEAREST Claude Code process above the command: a session
+// B launched under orchestrator A (A -> make -> B -> shell -> lets) cannot write A's
+// record by exporting A's id; it can write its own. Plain wrappers beneath A stay
+// transparent.
+func TestTaskStateSet_SelfOrchestratorNestedSession(t *testing.T) {
+	repo := tsRepo(t, "main")
+	sidA := fakeSelf(t, "MAIN-LETS") // pid 4343
+	sidB := "cccccccc-0000-4000-8000-0000000000cc"
+	addSession(t, 6565, "WORKER-B", sidB)
+	ccregistry.ParentOf = fakeParents(map[int]int{os.Getppid(): 6565, 6565: 600, 600: 4343, 4343: 1})
+	res, err := worktreecmd.TaskStateSet(context.Background(), repo, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sidA, Standing: strp("on")})
+	if worktreecmd.ExitCode(err) != worktreecmd.ExitUsage || res.Error == nil || res.Error.Kind != "orchestrator_not_own_process" || !strings.Contains(res.Error.Message, sidB) {
+		t.Errorf("B claiming A: err=%v res=%+v", err, res.Error)
+	}
+	if _, err := os.Stat(taskFile(repo, "main")); !os.IsNotExist(err) {
+		t.Fatal("a refused call must write nothing")
+	}
+	tsSet(t, repo, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sidB, Standing: strp("on")})
+	if got := readTask(t, repo, "main"); got != "orchestrator: WORKER-B standing=on\n" {
+		t.Errorf("B's own record: %q", got)
+	}
+	// shell -> make -> env beneath A: transparent
+	ccregistry.ParentOf = fakeParents(map[int]int{os.Getppid(): 600, 600: 601, 601: 4343, 4343: 1})
+	tsSet(t, repo, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sidA, Standing: strp("on")})
+	if got := readTask(t, repo, "main"); !strings.Contains(got, "orchestrator: MAIN-LETS standing=on\n") {
+		t.Errorf("A through plain wrappers: %q", got)
+	}
+}
+
+// A pure --standing off only tightens, so it passes while the name is shared (still
+// from the session's own process); anything else on a shared name is refused.
+func TestTaskStateSet_StandingOffWithSharedName(t *testing.T) {
+	repo := tsRepo(t, "main")
+	sid := fakeSelf(t, "MAIN-LETS")
+	mustWrite(t, taskFile(repo, "main"), "orchestrator: MAIN-LETS standing=on\n", 0o644)
+	addSession(t, 5454, "MAIN-LETS", "bbbbbbbb-0000-4000-8000-0000000000bb")
+	tsSet(t, repo, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sid, Standing: strp("off")})
+	if got := readTask(t, repo, "main"); got != "orchestrator: MAIN-LETS standing=off\n" {
+		t.Errorf("revoke on a shared name: %q", got)
+	}
+	for _, o := range []worktreecmd.TaskStateOptions{
+		{SelfOrchestrator: true, Session: sid, Standing: strp("off"), OrchestratorScope: strp("docs")},
+		{SelfOrchestrator: true, Session: sid, OrchestratorScope: strp("docs")},
+		{SelfOrchestrator: true, Session: sid, Standing: strp("on")},
+	} {
+		if res, _ := worktreecmd.TaskStateSet(context.Background(), repo, o); res.Error == nil || res.Error.Kind != "orchestrator_name_not_unique" {
+			t.Errorf("%+v on a shared name: %+v", o, res.Error)
+		}
+	}
+	ccregistry.ParentOf = fakeParents(map[int]int{os.Getppid(): 777, 777: 1})
+	if res, _ := worktreecmd.TaskStateSet(context.Background(), repo, worktreecmd.TaskStateOptions{SelfOrchestrator: true, Session: sid, Standing: strp("off")}); res.Error == nil || res.Error.Kind != "orchestrator_not_own_process" {
+		t.Errorf("a revoke still needs the own process: %+v", res.Error)
 	}
 }
 
