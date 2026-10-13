@@ -31,8 +31,8 @@ When it is too early to design anything, `/lets:plan --idea` writes a concept do
 | Run mode | Flag | What happens | Commits |
 |----------|------|--------------|---------|
 | Straight-through (default) | `--straight` | One approval, then every task with no pause | At each commit point the plan names, without re-asking |
-| Step-by-step | `--step` | A pause for your review after each task | Each one confirmed |
-| Auto | `--auto` | Unattended under AUTO MODE; push / PR / close / external actions stay gated, hard-stops still halt it, refused on the merge branch | At the plan's commit points |
+| Step-by-step | `--step` | A pause for your review after each task | Each one confirmed at `LETS_GATES` `strict`; otherwise at each plan commit point, reported |
+| Auto | `--auto` | Unattended under AUTO MODE, which lifts no gate: push / PR / close / external actions ask as `LETS_GATES` says, hard-stops still halt it, refused on the merge branch | At the plan's commit points |
 | Implementers | `--implementers` (alias `--team`) | One persistent implementer works through the chunks (or `--parallel` groups work side by side in isolated worktrees); every chunk is checked before it is committed, and a correction goes to the same agent, which keeps its context. Interactive only - refused with `--auto` | One per chunk, after it is accepted - by you, or by the team check under the gate policy you pick |
 
 A flag pre-answers the picker; bare `/lets:execute` asks once. `/lets:execute <task-id>` or `<plan-path>` picks the plan explicitly, and `--status` shows where the current plan stands.
@@ -47,13 +47,13 @@ With **Implementers**, this session stops writing code and starts reviewing it. 
 
 **The team check.** Before any gate, every clean report is checked: an explorer compares the patch with the brief (every step done, nothing beyond it, CI output present and passing) on every chunk, and an Opus skeptic tries to refute it when Risk is high or missing. In a standing team's worktree the team's own explorer and skeptic do it; otherwise the run spawns its own.
 
-**The launch plan and the gate policy.** Before Start, `/lets:execute` proposes how to run THIS plan - how many implementers and which chunks each owns, which run isolated, the order chunks land in, whether to pipeline, and the gate policy - each with a one-line reason, as the preview of the Start gate; you accept it or change any choice. The **gate policy** decides where you stop:
+**The launch plan and the gate policy.** Before Start, `/lets:execute` proposes how to run THIS plan - how many implementers and which chunks each owns, which run isolated, the order chunks land in, whether to pipeline, and the gate policy - each with a one-line reason, as the preview of the Start gate; you accept it or change any choice. The **gate policy** decides where you stop. Its default follows `LETS_GATES`: `per-commit` at `strict`, `at-end` at `standard` / `minimal`; `--gate` overrides it:
 
 | Policy | Flag | You stop | Who accepts a chunk |
 |---|---|---|---|
-| `per-commit` (default) | `--gate per-commit` | at every chunk (your Review gate) | you |
+| `per-commit` (default at `strict`) | `--gate per-commit` | at every chunk (your Review gate) | you |
 | `high-only` | `--gate high-only` | at every Risk-high chunk, then a review of the finished run | you on Risk high, the team check on Risk low |
-| `at-end` | `--gate at-end` | once, reviewing the finished run | the team check |
+| `at-end` (default at `standard` / `minimal`) | `--gate at-end` | once, reviewing the finished run | the team check |
 
 In every policy the explorer check always runs, the skeptic runs on Risk high, and a deviation, a blocked report, a failed tree check or a hard stop comes to you at once - never saved for the run review. Picking `high-only` or `at-end` at Start is your approval for the commits the lead makes without a gate; the record says, per chunk, who accepted and who committed. Under `high-only` and `at-end` the run ends in a **run review**: the commits of the run, each with its Risk and verdicts - accept the run, send a fix chunk, or stop (the commits stay, local and unpushed).
 

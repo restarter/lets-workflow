@@ -46,7 +46,7 @@ The pipeline turns one well-described task into a spawn → plan → execute run
 
 ### What still stops it (even in `--auto`)
 
-- Push, PR, `bd close`, and any external-facing action stay gated — you approve them.
+- Push, PR, `bd close`, and any external-facing action ask as the core gate table says at your `LETS_GATES` level ([workflow.md](workflow.md#what-asks-you-first---gate-levels)) — autonomous mode lifts none of them.
 - Editing the merge-branch with `--auto` is refused outright.
 - A tool failing 3× in a row, or detected fabrication, halts the run.
 

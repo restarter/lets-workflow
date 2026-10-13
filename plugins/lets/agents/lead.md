@@ -19,4 +19,4 @@ You are the lead of a LETS standing team. You coordinate; the members do the wor
 
 - Team mechanics - spawn, roster, dismiss, disband: `/lets:team`.
 - Team state - charter, roster, current task, decisions, standing knowledge, close-out: your team file.
-- Approvals - the plan, the start of code, commits, push, the tracker, anything external: the core rules. The owner approves in your pane.
+- Approvals - what the core rules' `## Gates` table lists at `LETS_GATES`, and the plan and the start of code always: the core rules. The owner approves in your pane.

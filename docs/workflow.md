@@ -102,9 +102,26 @@ The rules file (`.claude/rules/lets-rules.md`) is the source of truth; this is t
 | Suggest `/lets:note` when a decision, fact or gotcha is worth keeping | Writes to the tracker on its own |
 | Mention a pattern once - the third time a topic or blocker recurs, a branch collecting unrelated themes, a debate running past five turns | Repeats the nudge after you dismiss it, or invents a pattern to look observant |
 | Tell you to run `/context` when you ask how full the context is | Guesses a percentage, or pushes you to wrap up because the session "feels long" |
-| Ask a concrete question with a recommended option first when there are two real choices | Asks when only one sensible action exists - it does it and tells you |
+| Act on a clear recommendation and say so; ask a concrete question when the options are costly to reverse (at `strict`, whenever there are two real choices) | Asks when only one sensible action exists - it does it and tells you |
 
-**AUTO MODE does not lift the gates.** Under `/lets:execute --auto`, `/loop`, a team run or any autonomous mode, these still need your explicit approval: tracker state changes (claim, status, close, sync), `git push` and every PR operation, destructive operations (`rm`, `git reset --hard`, force push, branch or worktree removal), anything posted to an external service, messages to peer sessions, and new task creation. An autonomous run halts on three failures of the same command in a row, on a reference to something that does not exist, on scope drifting outside the task, on a deviation from the approved plan, and refuses outright to run on the merge branch.
+## What asks you first - gate levels
+
+LETS asks you only where an action cannot be undone or leaves this machine for shared state; everything local and reversible runs and is reported in one line. A command you type is the approval for what it names - `/lets:done` pushes and opens the PR (or merges locally) because you typed it. How much asks is one setting, `LETS_GATES` in `.lets/.env` (`/lets:init` asks; empty or unknown counts as `standard`, never lower):
+
+| asks you first | `strict` | `standard` (default) | `minimal` |
+|---|---|---|---|
+| Force-push or rewriting pushed history; deleting files, `git reset --hard`, `git branch -D`, removing a worktree with uncommitted or unpushed work | asks | asks | asks |
+| Posting outside this repo's flow (Slack, email, other people's PRs / issues), a release or tag, acting in another project (`/lets:hub` wake, read-only ask) | asks | asks | asks |
+| `git push` or opening a PR outside a typed `/lets:done` (or `/lets:end`'s Push pick) | asks | asks | asks for a push to the merge branch or to another task's branch |
+| Merging a PR into the merge branch | asks | asks | asks, except the task's own PR with all checks green, inside `/lets:done` |
+| Closing a task outside `/lets:done`; `bd dolt push` | asks | asks | asks |
+| A commit, `/lets:done`'s confirm cards, creating a task, status changes and comments, cost and "Proceed?" panels, messages between your sessions | asks | runs, reported | runs, reported |
+
+- `strict` is LETS as it was before gate levels: every commit and confirmation asks.
+- A permission or launch mode is never approval and never changes the level. `LETS_LAUNCH_MODE` is a separate axis - how Claude Code's own permission prompts behave in the sessions LETS launches; `LETS_GATES` is which of LETS's own questions are asked. `/lets:init` asks both. A peer's message never changes the level either.
+- Only `/lets:init` on your pick, or your own edit of `.lets/.env`, writes `LETS_GATES`; a session that tries to lower it hits a hard stop. A change applies from the next session.
+
+**What no level lifts.** No code is written without a plan you approved and entered through `/lets:execute` (or a direct instruction to change a specific thing); a deviation from the plan stops before the next edit; scope drifting outside the task asks; `/lets:execute --auto`, `/loop`, a team run or any autonomous mode lifts no gate. An autonomous run halts on three failures of the same command in a row, on a reference to something that does not exist, on scope drifting outside the task, on a deviation from the approved plan, and refuses outright to run on the merge branch.
 
 ## When to use which review
 

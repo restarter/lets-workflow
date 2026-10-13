@@ -76,6 +76,8 @@ The load condition is the context, not the session: after `/compact` or `/clear`
 
 ### Where does a new rule go?
 
+First, whether: LETS trusts the model with everything local and reversible. A rule is added only for a harm that is irreversible or leaves this machine for shared state (or an anti-runaway guard: no code without `/lets:execute`, stop on a deviation), and it names that harm. Removing a rule beats adding one. A new question to the owner is a row in the core `## Gates` table, with a cell per `LETS_GATES` level - never a gate restated in a command body. Then, where:
+
 1. Does it apply in free conversation, outside any command, or on every response (a gate, a boundary, a trust rule, an output format)? -> **core**, as one dense line or table row. Safety wording is never cut for size.
 2. Does it apply only while a command runs a specific step? -> a **protocol skill** when it is a procedure several commands share and it carries structured calls (verbs, gates), a **protocol file** when it is reference detail; add the load at each step that needs it (the lint enforces it).
 3. Does it apply to one command only? -> that **command** or its **skill**.
@@ -294,7 +296,7 @@ Required edits:
 
 If the key is exposed via the `/lets:init` slash command (most are):
 
-4. Add a `--<key>` cobra flag in `cli/internal/cli/init.go` and wire it through `flagOrDefault(flag<X>, defaults["LETS_X"])` in prefs construction.
+4. Add a `--<key>` cobra flag in `cli/internal/cli/init.go`, fail fast on an invalid value before any filesystem work (`letsconfig.ValidGates` is the pattern), and pass the RAW flag into `Prefs` (empty = not supplied). In `initcmd/env.go`, `mergePrefs` picks flag > existing value > default, and `diffKeys` gets an entry. **Implicit default** (`LETS_GATES`, `LETS_LAUNCH_MODE`): when a user-level `~/.lets/.env` value must be able to apply, `mergePrefs` takes flag > existing with NO default fill, so a regen leaves the key empty; the default is applied where it is read - `LETS_GATES` is normalized by `letsconfig.ResolvedEnv` (`GatesLevel`: empty or unknown -> `standard`) before the SessionStart hook injects it, and the hook adds a Notice for an unknown raw value.
 5. Add an AskUserQuestion in `plugins/lets/commands/init.md` (Step 2 first-time path + Step 3d "Keep current" option in change-config path).
 
 Auto-derived (no edit needed):
