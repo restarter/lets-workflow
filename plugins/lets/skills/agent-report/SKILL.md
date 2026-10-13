@@ -39,7 +39,7 @@ A `REPORT_FILE <name>=<path>` line is that agent's path, exactly as `op=open` st
 
 ## op=peek - inspect without concluding
 
-Args: `dir=<directory> names=<name>,<name>`. Runs `op=collect` Step 1 (classify) and, for each `OK` file, Step 2 (READ EVERY REPORT IN FULL) - nothing else: no retry, no `GAP`, no Coverage line. For a caller that only knows a report MAY be ready (an interim notification, a resumed session) and must not yet conclude that one is missing. `OK` -> the caller has the report. Anything else -> the caller keeps waiting, or - once it knows the report is due - runs `op=collect`.
+Args: `dir=<directory> names=<name>,<name>`. Runs `op=collect` Step 1 (classify) and, for each `REPORT` line in state `OK`, Step 2 (READ EVERY REPORT IN FULL) - nothing else: no retry, no `GAP`, no Coverage line. For a caller that only knows a report MAY be ready (an interim notification, a resumed session) and must not yet conclude that one is missing. `OK` -> the caller has the report. Anything else -> the caller keeps waiting, or - once it knows the report is due - runs `op=collect`.
 
 ## op=collect - after a phase's agents return
 
@@ -49,39 +49,50 @@ Args: `dir=<directory> names=<name>,<name> [retry=no]` - exactly the names dispa
 
 This block is run as written. It holds no dollar sign followed by a digit and no dollar-ARGUMENTS placeholder: Claude Code substitutes those with this skill's arguments before the text reaches you, so an awk whole-line field reference would arrive as `op=collect` (pinned by `agentreport_test.go`).
 
+It prints ONE line per expected name, `REPORT <name> <state> <path|none>`, judging the name's own file and its `-r2` retry file together: an `OK` file wins (the retry's, else the original - a late original counts); otherwise the richest file with content (an `UNTERMINATED` file - the larger non-blank line count, a tie to the retry); none with content -> `none`. Every consumer keys by `<name>`; none strips a retry suffix.
+
 ```bash
 REPORT_DIR="{dir}"
-for n in $(printf '%s' "{names}" | tr ',' ' '); do   # names: comma-separated, [a-z0-9.-] only
-  f="$REPORT_DIR/$n.md"
+classify() {   # sets s (state) and c (non-blank lines) for the file in f
+  c=0
   if [ ! -e "$f" ]; then s=MISSING
   elif [ ! -s "$f" ]; then s=EMPTY
   elif [ ! -r "$f" ]; then s=UNREADABLE
   else
     c=$(grep -c '[^[:space:]]' "$f" 2>/dev/null); c=${c:-x}              # non-blank lines
     l=$(grep '[^[:space:]]' "$f" 2>/dev/null | tail -n 1 | sed 's/[[:space:]]*$//')   # last non-blank line
-    if [ "$c" = x ]; then s=UNREADABLE
+    if [ "$c" = x ]; then s=UNREADABLE; c=0
     elif [ "$c" -eq 0 ]; then s=EMPTY               # whitespace only
     elif [ "$l" != "REPORT-END" ]; then s=UNTERMINATED
     elif [ "$c" -lt 2 ]; then s=EMPTY               # the sentinel alone is not a report
     else s=OK; fi
   fi
-  printf '%s %s %s\n' "$s" "$n" "$f"
+}
+for n in $(printf '%s' "{names}" | tr ',' ' '); do   # names: comma-separated, [a-z0-9.-] only
+  f="$REPORT_DIR/$n.md"; classify; s1=$s; c1=$c; p1=$f
+  f="$REPORT_DIR/$n-r2.md"; s2=""; c2=0; p2=""
+  if [ -e "$f" ]; then classify; s2=$s; c2=$c; p2=$f; fi
+  if [ "$s2" = OK ]; then printf 'REPORT %s OK %s\n' "$n" "$p2"
+  elif [ "$s1" = OK ]; then printf 'REPORT %s OK %s\n' "$n" "$p1"
+  elif [ "$s2" = UNTERMINATED ] && { [ "$s1" != UNTERMINATED ] || [ "$c2" -ge "$c1" ]; }; then printf 'REPORT %s UNTERMINATED %s\n' "$n" "$p2"
+  elif [ "$s1" = UNTERMINATED ]; then printf 'REPORT %s UNTERMINATED %s\n' "$n" "$p1"
+  else printf 'REPORT %s %s none\n' "$n" "${s2:-$s1}"; fi
 done
 ```
 
 ### Step 2: READ EVERY REPORT IN FULL
 
-For each `OK` line, Read the file with the Read tool from its first line through its LAST line. A Read that stops before the last line - or is refused for size - continues with `offset` / `limit` until the file ends; size is never a reason to call a file UNREADABLE. Only the final line's `REPORT-END` is the completion mark - a `REPORT-END` earlier in the body (a report about this protocol) is content, never a place to stop. Never a slice, a head, a grep or a summary; never skip a report because another one said the same. For an `OK` file the agent's final text is not the report - ignore it.
+For each `REPORT <name> OK <path>` line, Read `<path>` with the Read tool from its first line through its LAST line. A Read that stops before the last line - or is refused for size - continues with `offset` / `limit` until the file ends; size is never a reason to call a file UNREADABLE. Only the final line's `REPORT-END` is the completion mark - a `REPORT-END` earlier in the body (a report about this protocol) is content, never a place to stop. Never a slice, a head, a grep or a summary; never skip a report because another one said the same. For an `OK` file the agent's final text is not the report - ignore it.
 
 Selective reading is the failure a file transport introduces: a report you did not read is a lens you silently dropped.
 
 ### Step 3: One retry, then a loud gap
 
-- Any `MISSING` / `EMPTY` / `UNTERMINATED` / `UNREADABLE` (the classifier gave no line for a name, or a Read of an `OK` file errored, counts as `UNREADABLE` - never skipped) -> re-dispatch THAT agent ONCE with its original prompt and a FRESH report file: `op=add dir={dir} names={name}-r2`, and the prompt's `REPORT_FILE:` line replaced by the `-r2` path. Never the same path - the failed file exists, the Write tool refuses to overwrite a file the new agent has not read, and the failed attempt is the only evidence of what went wrong. A name whose `-r2` file already exists (a collect run again after a resume) is not retried a second time. Every retry of the phase goes in one message; then Step 1 and Step 2 for each retried name's original AND `-r2` file - a late original counts, never a false gap.
-- A name counts `OK` when its first file or its `-r2` file is `OK`; coverage counts names, not files.
+- Any `REPORT` line not in state `OK` (no `REPORT` line for a name, or a Read of an `OK` path that errored, counts as `UNREADABLE` - never skipped) -> re-dispatch THAT agent ONCE per run with a FRESH report file: `op=add dir={dir} names={name}-r2`. A name this run already re-dispatched (your own record of this run - the retry message you sent) is never re-dispatched again, even when its `-r2` file is missing: it goes straight to resolution and, still not `OK`, to its gap. `TAKEN` on `{name}-r2` is the second guard - a `-r2` file already on disk (a collect run again after a resume): no second retry either. Otherwise the re-dispatch is the original prompt with its `REPORT_FILE:` line replaced by the `-r2` path and, right after it, the one line `Your previous attempt left its report file {state}. Write the WHOLE report to REPORT_FILE in ONE Write call, last line REPORT-END.` - never the failed content or its path (the failed attempt is the only evidence of what went wrong, and the Write tool refuses to overwrite a file the new agent has not read). Every retry of the phase goes in one message; then Step 1 again for the retried names (it judges each name's original AND `-r2` file - a late original counts, never a false gap) and Step 2 for its `OK` lines.
+- Coverage counts names, not files: a name is `OK` when its `REPORT` line is.
 - `retry=no` (agents that change the tree - implementer, teammates) -> no re-dispatch; the name goes straight to a gap.
 - A Read error on the post-retry pass -> `GAP <name>: UNREADABLE`.
-- Still not `OK` -> `GAP <name>: <state>`. When the agent's final text held report content, carry it into the aggregation marked `UNVERIFIED - from the final text, may be truncated` (the retry's final text, else the first attempt's); otherwise the lens contributes nothing.
+- Still not `OK` -> `GAP <name>: <state>`. A `REPORT` line with a path (an `UNTERMINATED` file - content without `REPORT-END`) -> Read that file IN FULL and carry it into the aggregation marked `UNVERIFIED - report file without REPORT-END, may be incomplete`. A path of `none` -> when the agent's final text held report content, carry it marked `UNVERIFIED - from the final text, may be truncated` (the retry's final text, else the first attempt's); otherwise the lens contributes nothing. A file with content beats the channel this skill exists to replace.
 
 ### Step 4: Report coverage - always
 
