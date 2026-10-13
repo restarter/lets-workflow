@@ -113,3 +113,20 @@ func TestPeers_StandingProbeFlags(t *testing.T) {
 		}
 	}
 }
+
+// sender is wired: half a probe (or none) answers a usage envelope with
+// sender_ok=false, never an unknown flag swallowed by the whitelist.
+func TestPeersSender_Wired(t *testing.T) {
+	dir := t.TempDir()
+	for _, args := range [][]string{
+		{"sender", "--cwd", dir, "--from-name", "W", "--json"},
+		{"sender", "--cwd", dir, "--from-addr", "uds:/tmp/cc-socks/1.sock", "--json"},
+		{"sender", "--cwd", dir, "--json"},
+	} {
+		env, err := runPeers(t, args...)
+		ok, present := env["sender_ok"].(bool)
+		if err == nil || errKind(env) != "usage" || env["subcommand"] != "sender" || !present || ok || env["sender_reason"] != "usage" {
+			t.Errorf("%v: err=%v env=%v", args, err, env)
+		}
+	}
+}

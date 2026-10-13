@@ -23,7 +23,7 @@ func NewPeersCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(newPeersWhoCmd(), newPeersTailCmd(), newPeersFrameCmd(), newPeersTellCmd(), newPeersWaitCmd(), newPeersRoleCmd(), newPeersOrchestratorCmd(), newPeersAskROCmd())
+	root.AddCommand(newPeersWhoCmd(), newPeersTailCmd(), newPeersFrameCmd(), newPeersTellCmd(), newPeersWaitCmd(), newPeersRoleCmd(), newPeersOrchestratorCmd(), newPeersSenderCmd(), newPeersAskROCmd())
 	return root
 }
 
@@ -243,6 +243,26 @@ func newPeersRoleCmd() *cobra.Command {
 	clear.Flags().Bool("json", false, "Emit JSON envelope (always on)")
 	root.AddCommand(set, clear)
 	return root
+}
+
+func newPeersSenderCmd() *cobra.Command {
+	var cwd string
+	var probe peerscmd.StandingProbe
+	cmd := &cobra.Command{
+		Use: "sender", Short: "Who sent an inbound message, by its envelope (any repo): sender_ok when one live session has that name and the socket's pid",
+		Args: cobra.NoArgs, SilenceUsage: true, SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			res, err := peerscmd.Sender(cmd.Context(), cwd, probe)
+			printPeers(cmd, true, res, nil)
+			return err
+		},
+	}
+	whitelist(cmd)
+	cmd.Flags().StringVar(&probe.FromName, "from-name", "", "The inbound message's envelope from-name (required, with --from-addr)")
+	cmd.Flags().StringVar(&probe.FromAddr, "from-addr", "", "That message's envelope from attribute, uds:/tmp/cc-socks/<pid>.sock (required, with --from-name)")
+	cmd.Flags().StringVar(&cwd, "cwd", "", "Checkout (default: current directory)")
+	cmd.Flags().Bool("json", false, "Emit JSON envelope (always on)")
+	return cmd
 }
 
 func newPeersAskROCmd() *cobra.Command {

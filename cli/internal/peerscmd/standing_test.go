@@ -275,3 +275,84 @@ func TestResolveByName_SelfRecordNeedsUniqueName(t *testing.T) {
 		t.Errorf("a unique name keeps its record: %+v", res.SelfRecord)
 	}
 }
+
+// checkSender asserts the sender envelope: sender_ok and in_repo present as JSON
+// bools, sender_reason set exactly when sender_ok is false.
+func checkSender(t *testing.T, label string, env map[string]any, wantOK bool, wantReason string, wantInRepo bool) {
+	t.Helper()
+	ok, present := env["sender_ok"].(bool)
+	inRepo, inPresent := env["in_repo"].(bool)
+	reason, _ := env["sender_reason"].(string)
+	if !present || !inPresent || ok != wantOK || reason != wantReason || inRepo != wantInRepo {
+		t.Errorf("%s: sender_ok=%v (present=%v) sender_reason=%q in_repo=%v (present=%v), want %v %q %v", label, env["sender_ok"], present, reason, env["in_repo"], inPresent, wantOK, wantReason, wantInRepo)
+	}
+}
+
+// `lets peers sender`: provenance only, any repo - the happy paths (a session of this
+// repo, a live session of another repo) and every false reason of standingSender.
+// No grant, binding or record is consulted: an unbound worker is a valid sender.
+func TestSender(t *testing.T) {
+	for _, c := range []struct {
+		name     string
+		extra    func(root, far string) []regRow
+		unknown  []int
+		fromName string
+		fromAddr string
+		ok       bool
+		reason   string
+		inRepo   bool
+		wantName string
+		wantCwd  func(root, wtX, wtY, far string) string
+	}{
+		{name: "bound worker in this repo", fromName: "W", fromAddr: sock(pidW), ok: true, inRepo: true, wantName: "W", wantCwd: func(_, wtX, _, _ string) string { return wtX }},
+		{name: "unbound worker in this repo", fromName: "U", fromAddr: sock(pidU), ok: true, inRepo: true, wantName: "U", wantCwd: func(_, _, wtY, _ string) string { return wtY }},
+		{name: "live session of another repo", extra: func(_, far string) []regRow { return []regRow{{107, sidO, "FAR", far}} }, fromName: "FAR", fromAddr: sock(107), ok: true, inRepo: false, wantName: "FAR", wantCwd: func(_, _, _, far string) string { return far }},
+		{name: "addr not a socket", fromName: "W", fromAddr: "tcp:127.0.0.1:3", reason: "from_addr_unparseable"},
+		{name: "degraded registry", unknown: []int{77}, fromName: "W", fromAddr: sock(pidW), reason: "liveness_unknown"},
+		{name: "sender gone", fromName: "GHOST", fromAddr: sock(pidW), reason: "sender_not_live"},
+		{name: "sender name twice", extra: func(_, far string) []regRow { return []regRow{{105, sidO, "W", far}} }, fromName: "W", fromAddr: sock(pidW), reason: "name_not_unique"},
+		{name: "another process claims the name", fromName: "W", fromAddr: sock(pidU), reason: "pid_mismatch"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			root, wtX, wtY := standingRepo(t, "orchestrator: MAIN-LETS\n")
+			far := gitRepo(t)
+			rows := []regRow{{pidOrc, sidM, "MAIN-LETS", root}, {pidW, sidW, "W", wtX}, {pidU, sidN, "U", wtY}}
+			if c.extra != nil {
+				rows = append(rows, c.extra(root, far)...)
+			}
+			claudeHome(t, rows, c.unknown...)
+			res, err := Sender(context.Background(), root, StandingProbe{FromName: c.fromName, FromAddr: c.fromAddr})
+			if err != nil || !res.OK {
+				t.Fatalf("sender: %+v %v", res, err)
+			}
+			env := standingEnv(t, res)
+			checkSender(t, c.name, env, c.ok, c.reason, c.inRepo)
+			if !c.ok {
+				if res.Name != "" || res.Session6 != "" || res.Cwd != "" {
+					t.Errorf("a false answer names no session: %+v", res)
+				}
+				return
+			}
+			if res.Name != c.wantName || len(res.Session6) != 6 || res.Cwd != c.wantCwd(root, wtX, wtY, far) {
+				t.Errorf("sender identity: name=%q session6=%q cwd=%q", res.Name, res.Session6, res.Cwd)
+			}
+		})
+	}
+}
+
+// Half a probe (or none) is a usage error that still answers sender_ok=false; outside
+// a repo the answer is false with the error kind - fail closed.
+func TestSender_FailsClosed(t *testing.T) {
+	for _, p := range []StandingProbe{{}, {FromName: "W"}, {FromAddr: sock(pidW)}} {
+		res, err := Sender(context.Background(), t.TempDir(), p)
+		if err == nil || res.OK || res.Error == nil || res.Error.Kind != "usage" {
+			t.Errorf("%+v: err=%v res=%+v", p, err, res)
+		}
+		checkSender(t, "usage", standingEnv(t, res), false, "usage", false)
+	}
+	res, err := Sender(context.Background(), t.TempDir(), StandingProbe{FromName: "W", FromAddr: sock(pidW)})
+	if err == nil || res.Error == nil {
+		t.Fatalf("outside a repo: err=%v res=%+v", err, res)
+	}
+	checkSender(t, "outside a repo", standingEnv(t, res), false, res.Error.Kind, false)
+}
