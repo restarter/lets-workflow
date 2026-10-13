@@ -97,6 +97,7 @@ func EnsureLetsAdditionalDir(ctx context.Context, wtRoot, mainRoot string) (Step
 		same:   func(have, want string) bool { return sameDir(have, want, wtRoot) },
 		label:  want,
 		impact: fmt.Sprintf("writes to %s will prompt; /add-dir %s in the session is the workaround", want, want),
+		retry:  "the next session start retries", // the SessionStart self-heal runs it again
 	})
 }
 
@@ -120,6 +121,7 @@ func EnsureTeamAllowRules(ctx context.Context, wtRoot, mainRoot string) (Step, s
 		label:          strings.Join(TeamAllowRules(), ", "),
 		impact:         "lets worktree switch and lets worktree task-state will prompt, and auto mode may refuse them; approve them when asked, or add the rules with /permissions",
 		requireIgnored: true,
+		retry:          "re-run team-init or add the rules with /permissions", // team-init only, no backfill
 		added: func(rules []string) string {
 			return "added `" + strings.Join(rules, "`, `") + "` to " + settingsLocalRel + " (remove them to revoke)"
 		},
@@ -135,6 +137,7 @@ type settingsMerge struct {
 	impact         string                        // what a warning costs the user, and the workaround
 	requireIgnored bool                          // write nothing unless git ignores the file
 	added          func(entries []string) string // the ok message for the appended entries; nil = the generic one
+	retry          string                        // what retries a settings_local_changed write (who runs it again)
 }
 
 // mergeSettingsLocal adds m.want to permissions.<m.key> of wtRoot's
@@ -176,9 +179,9 @@ func mergeSettingsLocal(ctx context.Context, wtRoot, mainRoot string, m settings
 	case errors.Is(err, errSettingsGitDir):
 		gitDirErr = err
 	case errors.Is(err, fsutil.ErrLockBusy):
-		return warn(SettingsLocalChanged, "another LETS process is updating it; the next session start retries")
+		return warn(SettingsLocalChanged, "another LETS process is updating it; "+m.retry)
 	case err != nil:
-		return warn(SettingsLocalChanged, "could not take its lock ("+err.Error()+"); the next session start retries")
+		return warn(SettingsLocalChanged, "could not take its lock ("+err.Error()+"); "+m.retry)
 	default:
 		defer unlock()
 	}
@@ -305,9 +308,9 @@ func mergeSettingsLocal(ctx context.Context, wtRoot, mainRoot string, m settings
 	now, err := os.ReadFile(path)
 	switch {
 	case err != nil && !errors.Is(err, os.ErrNotExist):
-		return warn(SettingsLocalChanged, "could not re-read it before writing ("+err.Error()+"); the next session start retries")
+		return warn(SettingsLocalChanged, "could not re-read it before writing ("+err.Error()+"); "+m.retry)
 	case (err == nil) != (original != nil) || !bytes.Equal(now, original):
-		return warn(SettingsLocalChanged, "it changed while LETS merged it; the next session start retries")
+		return warn(SettingsLocalChanged, "it changed while LETS merged it; "+m.retry)
 	}
 	settingsStage("before-write")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

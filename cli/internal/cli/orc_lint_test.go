@@ -434,9 +434,6 @@ func TestOrcLint(t *testing.T) {
 	}
 }
 
-// startFallbackOK reports whether start.md's main mode names the fallback rule
-// (every failed envelope except the two write failures) and runs the boundary-alone
-// write as the next command after it.
 // startSplitProblems checks Step M1 of start.md: the boundary call (guarded, with the
 // exit-35 line under it) comes first and carries no record; the orchestrator record
 // is its own call with no session key.
