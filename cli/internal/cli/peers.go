@@ -202,10 +202,10 @@ func newPeersWaitCmd() *cobra.Command {
 }
 
 func newPeersRoleCmd() *cobra.Command {
-	root := &cobra.Command{Use: "role", Short: "Deprecated: record or clear this session's /clear proof (until lets-gbfpd)", SilenceUsage: true, SilenceErrors: true, Hidden: true}
+	root := &cobra.Command{Use: "role", Short: "Deprecated (v0.10.0): records nothing - the /clear proof is the task-state session_proof key", SilenceUsage: true, SilenceErrors: true, Hidden: true}
 	var o peerscmd.RoleOptions
 	set := &cobra.Command{
-		Use: "set <word>", Short: "Record this session's /clear proof (the role word means nothing any more)",
+		Use: "set <word>", Short: "Records nothing (v0.10.0 compatibility; every flag still parses)",
 		Args: cobra.ExactArgs(1), SilenceUsage: true, SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			o.Role = args[0]
@@ -227,7 +227,7 @@ func newPeersRoleCmd() *cobra.Command {
 	sf.Bool("json", false, "Emit JSON envelope (always on)")
 	var clearSession, clearCwd string
 	clear := &cobra.Command{
-		Use: "clear", Short: "Remove this session's /clear proof", Args: cobra.NoArgs, SilenceUsage: true, SilenceErrors: true,
+		Use: "clear", Short: "Removes nothing (v0.10.0 compatibility)", Args: cobra.NoArgs, SilenceUsage: true, SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if clearSession == "" {
 				clearSession = sessionDefault()

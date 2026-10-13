@@ -185,17 +185,31 @@ func TestSelfHeal_LockBusyTimesOut(t *testing.T) {
 	}
 }
 
-func TestSessionStart_PeersHealOnClearNotCompact(t *testing.T) {
-	dir := t.TempDir()
-	var got []string
-	old := peersHealFn
-	peersHealFn = func(root, sid string) { got = append(got, sid) }
-	t.Cleanup(func() { peersHealFn = old })
-	const sid = "aaaaaaaa-0000-4000-8000-000000000001"
-	runSessionStart(t, dir, `{"source":"clear","session_id":"`+sid+`"}`)
-	runSessionStart(t, dir, `{"source":"compact","session_id":"`+sid+`"}`)
-	if len(got) != 1 || got[0] != sid {
-		t.Errorf("the proof carry must run on clear, not compact; got %v", got)
+// The hook never reads or writes .lets/sessions/peers: the /clear proof is the
+// task-state session_proof key. Startup, resume and /clear leave a missing peers dir
+// missing, and an existing legacy .role file byte-identical - even one the registry
+// shows under another pid (the old carry rewrote that one).
+func TestHookSessionStart_NeverTouchesPeersDir(t *testing.T) {
+	for _, src := range []string{"startup", "resume", "clear"} {
+		w := newGuardWorld(t)
+		repo, _, _ := guardRepo(t, "task: lets-abc\nsession: 1111111 "+gSidLead+"\n"+proofLine(gSidLead, 100, gStartedMs))
+		w.putRow(100, interactiveRow(100, gSidLead, repo, gStartedMs))
+		w.callerIs(100)
+		payload := `{"session_id":"` + gSidLead + `","source":"` + src + `"}`
+		runSessionStart(t, repo, payload)
+		peers := filepath.Join(repo, ".lets", "sessions", "peers")
+		if _, err := os.Stat(peers); !os.IsNotExist(err) {
+			t.Errorf("%s: the hook created the peers dir: %v", src, err)
+		}
+		legacy := "session: " + gSidLead + "\npid: 999\nset: 2026-10-12T17:00:00Z\n"
+		healWrite(t, filepath.Join(peers, gSidLead+".role"), legacy)
+		runSessionStart(t, repo, payload)
+		if got := readString(t, filepath.Join(peers, gSidLead+".role")); got != legacy {
+			t.Errorf("%s: a legacy .role file was rewritten:\n%s", src, got)
+		}
+		if ents, _ := os.ReadDir(peers); len(ents) != 1 {
+			t.Errorf("%s: the peers dir gained files: %v", src, ents)
+		}
 	}
 }
 
@@ -224,6 +238,25 @@ func newGuardWorld(t *testing.T) *guardWorld {
 	ccregistry.ProcAlive = func(pid int) bool { return w.alive[pid] }
 	t.Cleanup(func() { ccregistry.HomeDir, ccregistry.ProcAlive = oldHome, oldAlive })
 	return w
+}
+
+// callerIs makes pid the Claude Code process that runs this test's commands: the
+// ancestry walk (ccregistry.CallerSession) goes os.Getppid() -> pid -> init.
+func (w *guardWorld) callerIs(pid int) {
+	w.parentsAre(map[int]int{os.Getppid(): pid, pid: 1})
+}
+
+// parentsAre makes ccregistry.ParentOf answer from parents; a pid outside it is an
+// unreadable hop.
+func (w *guardWorld) parentsAre(parents map[int]int) {
+	old := ccregistry.ParentOf
+	ccregistry.ParentOf = func(pid int) (int, error) {
+		if p, ok := parents[pid]; ok {
+			return p, nil
+		}
+		return 0, fmt.Errorf("no such process %d", pid)
+	}
+	w.t.Cleanup(func() { ccregistry.ParentOf = old })
 }
 
 func (w *guardWorld) put(pid int, sid, name, cwd string, started time.Time) {
@@ -337,6 +370,8 @@ func TestHookSessionStart_ClearCarriesWithSessionProof(t *testing.T) {
 	body := "task: lets-abc\nsession: 1111111 " + gSidLead + "\n"
 	repo, _, taskFile := guardRepo(t, body)
 	w.putRow(100, interactiveRow(100, gSidNew, repo, gStartedMs)) // same pid, re-minted id
+	// the Claude Code process that runs the hook
+	w.callerIs(100)
 
 	out := runSessionStart(t, repo, `{"session_id":"`+gSidNew+`","source":"clear"}`)
 	if got := readString(t, taskFile); got != body {
@@ -382,6 +417,8 @@ func TestHookSessionStart_ClearTwiceCarries(t *testing.T) {
 	w := newGuardWorld(t)
 	repo, _, taskFile := guardRepo(t, "task: lets-abc\nsession: 1111111 "+gSidLead+"\n"+proofLine(gSidLead, 100, gStartedMs))
 	w.putRow(100, interactiveRow(100, gSidNew, repo, gStartedMs))
+	// the Claude Code process that runs the hook
+	w.callerIs(100)
 	runSessionStart(t, repo, `{"session_id":"`+gSidNew+`","source":"clear"}`)
 	w.putRow(100, interactiveRow(100, gSidNext, repo, gStartedMs))
 	out := runSessionStart(t, repo, `{"session_id":"`+gSidNext+`","source":"clear"}`)
@@ -398,6 +435,8 @@ func TestHookSessionStart_ResumeThenClearCarries(t *testing.T) {
 	repo, _, taskFile := guardRepo(t, "task: lets-abc\nsession: 1111111 "+gSidLead+"\n"+proofLine(gSidLead, 100, gStartedMs))
 	const p2Ms = gStartedMs + 3_600_000
 	w.putRow(300, interactiveRow(300, gSidLead, repo, p2Ms)) // P1 (pid 100) is gone
+	// the Claude Code process that runs the hook
+	w.callerIs(300)
 	runSessionStart(t, repo, `{"session_id":"`+gSidLead+`","source":"resume"}`)
 	if got, want := readString(t, taskFile), "task: lets-abc\nsession: 1111111 "+gSidLead+"\n"+proofLine(gSidLead, 300, p2Ms); got != want {
 		t.Fatalf("resume must rewrite only the proof:\n%s", got)
@@ -434,6 +473,8 @@ func TestHookSessionStart_ParkedContinuationRefreshes(t *testing.T) {
 	parked["parkedJobId"] = "deadbeef"
 	w.putRow(100, parked)
 	w.putRow(200, bgRow(200, gSidNew, repo, gStartedMs+60_000, "deadbeef"))
+	// the Claude Code process that runs the hook
+	w.callerIs(200)
 	out := runSessionStart(t, repo, `{"session_id":"`+gSidNew+`","source":"startup"}`)
 	want := "task: lets-abc\nsession: " + head + " " + gSidNew + "\n" + proofLine(gSidNew, 200, gStartedMs+60_000)
 	if got := readString(t, taskFile); got != want {

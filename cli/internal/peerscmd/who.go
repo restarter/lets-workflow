@@ -128,7 +128,6 @@ func Who(ctx context.Context, o WhoOptions) (*WhoResult, error) {
 		res.Error = &ErrorInfo{Kind: e.Kind, Message: e.Message}
 		return res, e
 	}
-	CarryProof(ctx, mainRoot) // the lazy proof carry: recovers one the hook missed
 	res.RepoSlug = peername.RepoSlug(mainRoot)
 	v := loadNameView(ctx, mainRoot)
 	res.Degraded = append(res.Degraded, v.degraded...)

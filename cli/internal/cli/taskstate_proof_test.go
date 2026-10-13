@@ -28,12 +28,13 @@ func runTaskStateSet(t *testing.T, cwd string, args ...string) (string, error) {
 	return out.String(), err
 }
 
-// ownRegistry writes a registry under a fresh $CLAUDE_CONFIG_DIR listing this test
-// process (a live pid) as session sid, started at startedMs.
+// ownRegistry writes a registry under a fresh $CLAUDE_CONFIG_DIR listing this test's
+// parent process (a live pid, the first hop of ccregistry.CallerSession) as session
+// sid, started at startedMs - the Claude Code session that runs this command.
 func ownRegistry(t *testing.T, sid string, startedMs int64) {
 	t.Helper()
 	cfg := t.TempDir()
-	healWrite(t, filepath.Join(cfg, "sessions", fmt.Sprintf("%d.json", os.Getpid())),
+	healWrite(t, filepath.Join(cfg, "sessions", fmt.Sprintf("%d.json", os.Getppid())),
 		fmt.Sprintf(`{"sessionId":%q,"name":"lead","cwd":"/x","peerProtocol":1,"status":"idle","kind":"interactive","startedAt":%d}`, sid, startedMs))
 	t.Setenv("CLAUDE_CONFIG_DIR", cfg)
 }
@@ -48,7 +49,7 @@ func TestTaskStateSetCmd_ProofOnlyForOwnSession(t *testing.T) {
 	if out, err := runTaskStateSet(t, repo, "--session-sha", head, "--session-id", gSidLead); err != nil {
 		t.Fatalf("set: %v\n%s", err, out)
 	}
-	want := "task: lets-abc\nsession: " + head + " " + gSidLead + "\n" + proofLine(gSidLead, os.Getpid(), gStartedMs)
+	want := "task: lets-abc\nsession: " + head + " " + gSidLead + "\n" + proofLine(gSidLead, os.Getppid(), gStartedMs)
 	if got := readString(t, taskFile); got != want {
 		t.Errorf("own session: want the proof written:\n%s", got)
 	}
@@ -59,6 +60,35 @@ func TestTaskStateSetCmd_ProofOnlyForOwnSession(t *testing.T) {
 	}
 	if got := readString(t, taskFile); got != "task: lets-abc\nsession: "+head+" "+gSidLead+"\n" {
 		t.Errorf("another session's id: no proof may be written:\n%s", got)
+	}
+}
+
+// A Claude Code session launched inside another one is its own caller: the parent's
+// id in $CLAUDE_CODE_SESSION_ID is NOT proven for the child, so the child's write
+// records no proof for it; the child's own id is proven.
+func TestTaskStateSetCmd_NestedSessionProvesOnlyItself(t *testing.T) {
+	w := newGuardWorld(t)
+	repo, head, taskFile := guardRepo(t, "task: lets-abc\n")
+	w.putRow(100, interactiveRow(100, gSidLead, repo, gStartedMs))      // the parent session
+	w.putRow(200, interactiveRow(200, gSidPane, repo, gStartedMs+5000)) // launched inside it
+	w.parentsAre(map[int]int{os.Getppid(): 200, 200: 100, 100: 1})
+
+	t.Setenv("CLAUDE_CODE_SESSION_ID", gSidLead)
+	if out, err := runTaskStateSet(t, repo, "--session-sha", head, "--session-id", gSidLead); err != nil {
+		t.Fatalf("set: %v\n%s", err, out)
+	}
+	if got := readString(t, taskFile); got != "task: lets-abc\nsession: "+head+" "+gSidLead+"\n" {
+		t.Errorf("the parent's id was proven for the nested child:\n%s", got)
+	}
+
+	t.Setenv("CLAUDE_CODE_SESSION_ID", gSidPane)
+	w.kill(100) // the parent ended: its boundary is free for the child
+	if out, err := runTaskStateSet(t, repo, "--session-sha", head, "--session-id", gSidPane); err != nil {
+		t.Fatalf("set: %v\n%s", err, out)
+	}
+	want := "task: lets-abc\nsession: " + head + " " + gSidPane + "\n" + proofLine(gSidPane, 200, gStartedMs+5000)
+	if got := readString(t, taskFile); got != want {
+		t.Errorf("the nested session's own id must be proven:\n%s", got)
 	}
 }
 
@@ -88,6 +118,8 @@ func TestTaskStateSetCmd_RemedyFixesNextClear(t *testing.T) {
 	w := newGuardWorld(t)
 	repo, head, taskFile := guardRepo(t, "task: lets-abc\nsession: 1111111 "+gSidLead+"\n")
 	w.putRow(100, interactiveRow(100, gSidNew, repo, gStartedMs))
+	// the Claude Code process that runs both commands
+	w.callerIs(100)
 	out := runSessionStart(t, repo, `{"session_id":"`+gSidNew+`","source":"clear"}`)
 	if !strings.Contains(out, "no session_proof recorded its process") {
 		t.Fatalf("precondition: a NoProof /clear:\n%s", out)

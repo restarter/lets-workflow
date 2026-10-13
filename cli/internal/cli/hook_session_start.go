@@ -47,9 +47,6 @@ var rulesSyncFn = func(rulesPath string) string {
 //     (lets-urmfa) - effective from the next session, since settings load before
 //     this hook; compact never self-heals,
 //     and PreCompact never reads the payload at all;
-//   - on source startup|resume|clear, carries the session proof (peersHeal): a
-//     proof file moved to a re-minted id, or refreshed for a resumed pid -
-//     best-effort and silent, like selfHeal;
 //   - on every source, after the self-heal, keeps the global
 //     ~/.claude/rules/lets-rules.md a cache of this session's plugin
 //     (rulesSyncFn, lets-tg008); its outcome joins the Notice;
@@ -76,7 +73,6 @@ func NewHookSessionStartCmd() *cobra.Command {
 				root := sessionstart.DetectProjectRoot()
 				notices = append(notices, selfHealFn(root, rulesPath))
 				sessionNotices = sessionOwnerPass(root, sid, source)
-				peersHealFn(root, sid)
 			}
 			notices = append(notices, rulesSyncFn(rulesPath)) // every source, after self-heal
 			notices = append(notices, sessionNotices...)      // after rules sync, for a stable read

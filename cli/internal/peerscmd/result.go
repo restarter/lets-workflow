@@ -98,7 +98,7 @@ type WaitResult struct {
 	Reason    string `json:"reason,omitempty"`
 }
 
-// RoleInfo is what `role set` recorded: the session proof, not a role.
+// RoleInfo is a `role set` answer: nothing is recorded (v0.10.0 compatibility).
 type RoleInfo struct {
 	Granted     bool   `json:"granted"`
 	Role        string `json:"role,omitempty"` // the word the caller passed; it means nothing any more
@@ -107,7 +107,7 @@ type RoleInfo struct {
 	Registered  bool   `json:"registered"`
 }
 
-// RoleResult is a `role set` / `role clear` (deprecated: the session proof only).
+// RoleResult is a `role set` / `role clear` (deprecated: records nothing).
 type RoleResult struct {
 	Envelope
 	Role *RoleInfo `json:"role,omitempty"`

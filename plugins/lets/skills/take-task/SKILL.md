@@ -108,13 +108,11 @@ lets worktree switch --task '<task-id>' --title-file .lets/cache/title-<session6
 `lets worktree switch` wrote the target branch's task-state (`task`, `start`, `session` through the session guard, `orc` carried from the old branch), so Step 5's own session write is skipped on this path. Its tail still runs on the new branch, passing only what switch did not write:
 
 ```bash
-LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 # {ORC_FLAG} as in Step 5: --orc '<name>' when args carried orc="<name>", else empty
 lets worktree task-state set --clear-origin {ORC_FLAG} --json
-lets peers role set worker --task "<task-id>" --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" --json
 ```
 
-The first clears `origin:` and applies a requested orchestrator binding (an explicit `--orc` wins over the carried one); the second records this session's /clear proof (until lets-gbfpd). Each failure is Step 5's one-line report - never hidden. Then rewrite the team file's `## 7. Current task` section (`.lets/teams/<team>.md`; the lead is its only writer): the task as **Title** (`id`), its branch, the phase, the next step, and `Resume artefacts:`. Then Step 6.
+It clears `origin:` and applies a requested orchestrator binding (an explicit `--orc` wins over the carried one). A failure is Step 5's one-line report - never hidden. Then rewrite the team file's `## 7. Current task` section (`.lets/teams/<team>.md`; the lead is its only writer): the task as **Title** (`id`), its branch, the phase, the next step, and `Resume artefacts:`. Then Step 6.
 
 ### Step 3: Worktree Check
 
@@ -199,7 +197,6 @@ fi
 if command -v lets >/dev/null 2>&1; then
   # {ORC_FLAG}: --orc '<name>' when args carried orc="<name>" and this is not the merge-branch (single-quoted, '\'' escaping); else empty
   lets worktree task-state set --task "$CLAIMED_ID" --start "$START" --session-sha "$HEAD_SHA" --session-id "$SID" --clear-origin {ORC_FLAG} --create --json
-  lets peers role set worker --task "$CLAIMED_ID" --session "$SID" --cwd "$LETS_PROJECT_ROOT" --json
 else
   tmp=$(mktemp "${TASK_FILE}.XXXX")
   {
@@ -215,7 +212,6 @@ On `ok=false` surface `error.message` - the claim succeeded but the boundary fil
 
 - **Orchestrator binding (`orc="<name>"` in the args, from detect-task's `--orc` strip).** Pass it as `{ORC_FLAG}`; Go validates the name and a refusal is one line with nothing written. A trunk-mode claim (HEAD is `{LETS_MERGE_BRANCH}`) ignores it with one line - the merge-branch never carries a binding. When the envelope reports `rebound.from`, say in one line that this branch moved from that orchestrator to the new one.
   - **Worker name.** On a bound claim (`orc=` present, not trunk-mode), read this session's own name with `lets peers who --session "$CLAUDE_CODE_SESSION_ID" --json` (`self.name`, `repo_slug`). When `self.name` is empty or differs from `<repo_slug>-<task-id>`, print ONE line: "Name this session: /rename <repo_slug>-<task-id> - the orchestrator addresses workers by name." Never rename and never block; no binary or a failed call -> say nothing. (A worker an orchestrator launched through Orca cannot be given `--name` at launch - Orca takes no agent arguments.)
-- **Session proof.** The second call records this session's /clear proof (until lets-gbfpd): the SessionStart hook proves a later `/clear` re-mint with it. Orchestrators see the worker through the registry and its branch's `orc:` binding, not through this call. A non-ok envelope (e.g. `session_not_in_registry`) is one line - never hidden, a silent failure leaves the next `/clear` unprovable. Without the binary the no-binary branch skips it; say so in one line.
 
 ### Step 6: Context Recovery (existing branch)
 

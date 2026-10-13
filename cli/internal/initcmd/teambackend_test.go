@@ -377,9 +377,11 @@ func TestTeamBackend_TeamTaskFlow(t *testing.T) {
 	}
 	sw := strings.Index(step2t, "lets worktree switch --task")
 	tail := strings.Index(step2t, "lets worktree task-state set --clear-origin {ORC_FLAG} --json")
-	role := strings.Index(step2t, `lets peers role set worker --task "<task-id>"`)
-	if sw < 0 || tail < sw || role < tail {
-		t.Error("Step 2T runs Step 5's tail (clear origin + orc, worker role) after the switch")
+	if sw < 0 || tail < sw {
+		t.Error("the `task-state set --clear-origin` call stays after the switch")
+	}
+	if strings.Contains(step2t, "peers role set") {
+		t.Error("Step 2T records no role and no /clear proof - the proof is task-state session_proof")
 	}
 	if strings.Contains(step2t, "--session-sha") || !strings.Contains(step2t, "so Step 5's own session write is skipped on this path") {
 		t.Error("Step 2T never writes session: - switch wrote it through the session guard")

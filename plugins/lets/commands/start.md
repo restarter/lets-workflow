@@ -318,13 +318,6 @@ AskUserQuestion(
 
   **Allow** -> `lets worktree task-state set --self-orchestrator --standing on --json`; **Ask per message** -> `lets worktree task-state set --self-orchestrator --standing off --json`. A failed write: one line, the grant stays unasked. The full rule: `${CLAUDE_PLUGIN_ROOT}/protocol/peers.md` `## Standing authorization`.
 
-Then record this session's /clear proof (until lets-gbfpd) - its result is read only for a non-ok envelope, printed as one line:
-
-```bash
-LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-command -v lets >/dev/null 2>&1 && lets peers role set orchestrator --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" --json
-```
-
 **Launch mode (lets-d3wu3).** `LETS_LAUNCH_MODE` absent from LETS Config (unset or empty - an empty value is never injected) -> one line: "LETS_LAUNCH_MODE is unset - the sessions this orchestrator launches start in `default`; set it to the class this session runs in (`all-in` only when it runs with `--permission-mode bypassPermissions`) - `/lets:init`". A session cannot read its own permission mode, so nothing is inferred; set -> nothing.
 
 Invoke `Skill(skill: "lets:orient", args: "caller=start")` - with no active task it degrades to branch + no-task + In flight + Next up + Project, which IS the PM triage surface. Keep it short - if the tracker has a deeper native dashboard, point the user at it in one line.

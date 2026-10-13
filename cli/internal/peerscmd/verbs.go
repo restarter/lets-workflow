@@ -4,9 +4,7 @@ package peerscmd
 
 import (
 	"context"
-	"errors"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/restarter/lets-workflow/cli/internal/ccregistry"
@@ -24,8 +22,8 @@ func rootOf(cwd string) (string, *Error) {
 	return root, nil
 }
 
-// RoleOptions configures RoleSet. Role, Task, Scope and Takeover are a v0.10.0
-// caller's flags: accepted and ignored - nothing resolves roles any more.
+// RoleOptions configures RoleSet: a v0.10.0 caller's flags, accepted and ignored -
+// nothing resolves roles or records a proof any more.
 type RoleOptions struct {
 	Session  string
 	Role     string
@@ -35,16 +33,11 @@ type RoleOptions struct {
 	Takeover bool
 }
 
-// sessionNotInRegistry is the remedy when the registry does not list the caller.
-const sessionNotInRegistry = "Claude Code's session registry does not list this session - restart it (or update Claude Code), then run /lets:start again"
-
-// RoleSet is the deprecated `lets peers role set`: it records this session's proof
-// (pid and set time, from the registry) for the SessionStart /clear carry, until
-// lets-gbfpd replaces it. No name, uniqueness or role semantics. A session the
-// registry does not list gets ok=false and no file: a pid-less proof could never
-// prove a carry. Exit 0 either way - a v0.10.0 caller prints a non-ok envelope as
-// one line.
-func RoleSet(ctx context.Context, cwd string, o RoleOptions) (*RoleResult, error) {
+// RoleSet is the deprecated `lets peers role set`: a v0.10.0 caller's call that
+// records nothing (the /clear proof is the task-state session_proof key, lets-gbfpd)
+// and takes no lock. Every flag still parses; a valid --session answers ok=true
+// granted=true with deprecated, so a v0.10.0 plugin's gates pass.
+func RoleSet(_ context.Context, _ string, o RoleOptions) (*RoleResult, error) {
 	res := &RoleResult{Envelope: newEnvelope("role")}
 	res.Deprecated = deprecatedText
 	if !ccregistry.ValidSession(o.Session) {
@@ -52,62 +45,19 @@ func RoleSet(ctx context.Context, cwd string, o RoleOptions) (*RoleResult, error
 		res.Error = &ErrorInfo{Kind: e.Kind, Message: e.Message}
 		return res, e
 	}
-	root, e := rootOf(cwd)
-	if e != nil {
-		res.Error = &ErrorInfo{Kind: e.Kind, Message: e.Message}
-		return res, e
-	}
-	CarryProof(ctx, root) // the lazy proof carry, before this session's own write
-	info := &RoleInfo{Role: o.Role}
-	res.Role = info
-	self, ok := ccregistry.Read(ccregistry.HomeDir()).Find(o.Session)
-	if !ok {
-		info.Reason, info.Remediation = "session_not_in_registry", sessionNotInRegistry
-		res.Error = &ErrorInfo{Kind: "session_not_in_registry", Message: "the session registry does not list this session", Remediation: sessionNotInRegistry}
-		return res, nil
-	}
-	info.Registered = true
-	unlock, err := lockPeers(root, proofLockWait)
-	if err != nil {
-		kind := "proof_write_failed"
-		if errors.Is(err, errPeersLockBusy) {
-			kind = "peers_lock_busy"
-		}
-		res.Error = &ErrorInfo{Kind: kind, Message: err.Error()}
-		return res, &Error{Code: ExitGeneric, Kind: kind, Message: err.Error(), Cause: err}
-	}
-	defer unlock()
-	if err := writeProof(root, o.Session, self.Pid, now()); err != nil {
-		res.Error = &ErrorInfo{Kind: "proof_write_failed", Message: err.Error()}
-		return res, &Error{Code: ExitGeneric, Kind: "proof_write_failed", Message: err.Error(), Cause: err}
-	}
-	res.OK, info.Granted = true, true
+	res.OK, res.Role = true, &RoleInfo{Role: o.Role, Granted: true}
 	return res, nil
 }
 
-// RoleClear is the deprecated `lets peers role clear`: it removes this session's
-// proof file.
-func RoleClear(ctx context.Context, cwd, session string) (*RoleResult, error) {
+// RoleClear is the deprecated `lets peers role clear`: records nothing, removes
+// nothing (a legacy .role file is never read or written), answers ok=true.
+func RoleClear(_ context.Context, _ string, session string) (*RoleResult, error) {
 	res := &RoleResult{Envelope: newEnvelope("role")}
 	res.Deprecated = deprecatedText
-	fail := func(e *Error) (*RoleResult, error) {
+	if !ccregistry.ValidSession(session) {
+		e := &Error{Code: ExitUsage, Kind: "usage", Message: "role clear needs a valid --session"}
 		res.Error = &ErrorInfo{Kind: e.Kind, Message: e.Message}
 		return res, e
-	}
-	if !ccregistry.ValidSession(session) {
-		return fail(&Error{Code: ExitUsage, Kind: "usage", Message: "role clear needs a valid --session"})
-	}
-	root, e := rootOf(cwd)
-	if e != nil {
-		return fail(e)
-	}
-	unlock, err := lockPeers(root, 0)
-	if err != nil {
-		return fail(&Error{Code: ExitGeneric, Kind: "role_clear_failed", Message: err.Error(), Cause: err})
-	}
-	defer unlock()
-	if err := os.Remove(filepath.Join(peersDir(root), session+".role")); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fail(&Error{Code: ExitGeneric, Kind: "role_clear_failed", Message: err.Error(), Cause: err})
 	}
 	res.OK = true
 	return res, nil
@@ -149,7 +99,6 @@ func OrchestratorWith(ctx context.Context, cwd, session string, probe StandingPr
 		res.Error = &ErrorInfo{Kind: e.Kind, Message: e.Message}
 		return res, e
 	}
-	CarryProof(ctx, mainRoot) // the lazy proof carry: recovers one the hook missed
 	v := loadNameView(ctx, mainRoot)
 	r := ResolveOrchestrator(ctx, v, ResolveOptions{Session: session, Cwd: cwd, Branch: branch})
 	refreshLastSeen(mainRoot, v.rows, v.pids)

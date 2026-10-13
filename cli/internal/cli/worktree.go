@@ -416,7 +416,8 @@ func newWorktreeTaskStateCmd() *cobra.Command {
 			o.Session = os.Getenv("CLAUDE_CODE_SESSION_ID") // read once; SelfOrchestrator and the proof gate use it
 			if o.SessionID != "" {
 				o.Guard = sessionGuardFn(o.SessionID)
-				// A caller proves only its own process: no proof for another session's id.
+				// A caller proves only its own process: no proof for another session's id,
+				// and Self records one only when ccregistry.CallerSession is that session.
 				if o.SessionID == o.Session {
 					o.Proof = o.Guard.OwnProof(o.SessionID)
 				}
