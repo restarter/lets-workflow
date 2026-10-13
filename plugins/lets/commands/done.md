@@ -764,10 +764,14 @@ AskUserQuestion(
 ```
 
   **Merge & close** -> the variant's "Merge & close" handler. **Not now** -> nothing merges.
-- `minimal` -> no question. Right after the PR is created its checks are pending or not registered yet, so wait: tell the user it is waiting, poll `gh pr checks {number}` for up to ~2 minutes until at least one check is listed (still none -> `no checks reported`, below), then run `gh pr checks {number} --watch --fail-fast` with `run_in_background`, bounded at 30 minutes. Then read `gh pr view {number} --json mergeable,mergeStateStatus`:
-  - every check passed and `mergeable` is `MERGEABLE` -> the variant's "Merge & close" handler (`gh pr merge {number} --squash --delete-branch`, then `close`), reported in one line;
+- `minimal` -> no question. First record the head the checks run on: `gh pr view {number} --json headRefOid` -> `<checked-sha>`. Right after the PR is created its checks are pending or not registered yet, so wait: tell the user it is waiting, poll `gh pr checks {number}` for up to ~2 minutes until at least one check is listed (still none -> `no checks reported`, below), then run `gh pr checks {number} --watch --fail-fast` with `run_in_background`, bounded at 30 minutes. Then read `gh pr view {number} --json headRefOid,mergeable,mergeStateStatus`:
+  - `headRefOid` is no longer `<checked-sha>` (a push landed during the wait) -> no merge: the PR and the task stay open, `head changed during the CI wait - re-run /lets:done`;
+  - every check passed, the head is still `<checked-sha>` and `mergeable` is `MERGEABLE` -> run `gh pr merge {number} --squash --delete-branch --match-head-commit <checked-sha>` (gh refuses if the head moved since) in place of the variant's step 1, then the **Merge result** check below: only when `state` is `MERGED` does the variant's "Merge & close" handler continue from its close step, reported in one line;
   - a check failed, the wait timed out, no checks were reported (indistinguishable from a CONFLICTING PR that runs no CI), or it is not mergeable -> leave the PR and the task open and print why (`CI failing` / `CI still running after 30 min` / `no checks reported` / the merge state). A later `/lets:done` reuses the PR through the Existing-PR Guard and runs this step again.
+  - **Merge queue.** A PR whose branch requires a merge queue is never auto-merged at `minimal`: on such a branch `gh pr merge` adds the PR to the queue, or arms auto-merge while required checks are pending. When the merge output says the PR was queued / added to the merge queue, or `gh pr view {number} --json autoMergeRequest` shows auto-merge armed -> disarm an armed auto-merge with `gh pr merge {number} --disable-auto`, leave the task open and say `merge queue required - merge it on GitHub, then re-run /lets:done` (`queued in the merge queue` when gh already queued it).
   - Never arm GitHub auto-merge: it would merge after this session closed the task's books.
+
+**Merge result (every merge handler).** Right after `gh pr merge`, read `gh pr view {number} --json state`. Only when `state` is `MERGED` does the handler go on - close the task, switch branches, remind the worktree cleanup. Queued (the merge output says so, or `state` is still `OPEN` with a queue entry) -> `queued in the merge queue - the task stays open; re-run /lets:done once it merged`; anything else -> `merge did not complete - the task stays open`. No close, no checkout, no cleanup reminder in either case; a later `/lets:done` sees the merged PR through the Existing-PR Guard (`shipped`) and closes the task then.
 
 ### After PR ($LETS_PR_FLOW == github), NOT in worktree:
 
@@ -801,9 +805,10 @@ AskUserQuestion(
 **Handle response:**
 - **Merge & close**:
   1. `gh pr merge {number} --squash --delete-branch`
-  2. close the task (tracker `close` verb) - read what it returned: `closed` means closed; another status means the board advanced the task instead, so report the handoff and do NOT call it done; no status means no tracker; a failed close HARD-FAILs
-  3. `git checkout {LETS_MERGE_BRANCH} && git pull`
-  4. If merge fails (conflicts, checks not passed) -> inform user, fall back to "Stay on branch"
+  2. **Merge result** ("Merge by level"): read `gh pr view {number} --json state`; only when `state` is `MERGED` go on to step 3. Queued or not merged -> say so (`queued in the merge queue` / `merge did not complete`), the task stays open, no checkout - fall back to "Stay on branch"
+  3. close the task (tracker `close` verb) - read what it returned: `closed` means closed; another status means the board advanced the task instead, so report the handoff and do NOT call it done; no status means no tracker; a failed close HARD-FAILs
+  4. `git checkout {LETS_MERGE_BRANCH} && git pull`
+  5. If merge fails (conflicts, checks not passed) -> inform user, fall back to "Stay on branch"
 - **Stay on branch** -> stay on current branch, no checkout. User continues working freely.
 - **Next task** -> `git checkout {LETS_MERGE_BRANCH}`, then show the tracker's `ready` view (top 5). When user picks: invoke `Skill(skill: "lets:take-task", args: "<task-id>")` for status update + branch setup.
 - **End session** -> `git checkout {LETS_MERGE_BRANCH}`, then invoke `Skill(skill: "lets:end")`
@@ -842,9 +847,10 @@ No "Next task" option - can't switch branches in a worktree. To start a new task
 **Handle response:**
 - **Merge & close**:
   1. `gh pr merge {number} --squash --delete-branch`
-  2. close the task (tracker `close` verb) - read what it returned: `closed` means closed; another status means the board advanced the task instead, so report the handoff and do NOT call it done; no status means no tracker; a failed close HARD-FAILs
-  3. If merge fails (conflicts, checks not passed) -> inform user, fall back to "Stay here"
-  4. After merge, remind: "Worktree can be removed: `/lets:worktree remove {name}` from the main repo terminal."
+  2. **Merge result** ("Merge by level"): read `gh pr view {number} --json state`; only when `state` is `MERGED` go on to step 3. Queued or not merged -> say so (`queued in the merge queue` / `merge did not complete`), the task stays open, no cleanup reminder - fall back to "Stay here"
+  3. close the task (tracker `close` verb) - read what it returned: `closed` means closed; another status means the board advanced the task instead, so report the handoff and do NOT call it done; no status means no tracker; a failed close HARD-FAILs
+  4. If merge fails (conflicts, checks not passed) -> inform user, fall back to "Stay here"
+  5. After a `MERGED` merge, remind: "Worktree can be removed: `/lets:worktree remove {name}` from the main repo terminal."
 - **Stay here** -> stay in worktree. User continues working.
 - **End session** -> invoke `Skill(skill: "lets:end")`. After the end-session flow completes, remind:
   "After PR merges, clean up: `/lets:worktree remove {name}` from the main repo terminal."

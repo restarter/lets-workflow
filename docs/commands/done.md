@@ -33,7 +33,7 @@ If `gh` is not authenticated, it offers a local merge for this task or cancellin
 
 | Option | What it does |
 |--------|--------------|
-| Merge & close (GitHub) | Merges the PR, closes the task, switches back to the merge branch. At `strict` it is one of the options; at `standard` it is its own question (merging is never automatic there); at `minimal` `/lets:done` waits up to 30 minutes for the PR's checks and merges it only when every check passed and it is mergeable - otherwise the PR and the task stay open and it says why. It never arms GitHub auto-merge, and never merges a PR whose scope check chose **PR only, keep open** |
+| Merge & close (GitHub) | Merges the PR, then closes the task and switches back to the merge branch only once GitHub reports the PR `MERGED` - a PR added to a merge queue, or a merge that did not complete, leaves the task open and says so; a later `/lets:done` closes it after the merge. At `strict` it is one of the options; at `standard` it is its own question (merging is never automatic there); at `minimal` `/lets:done` waits up to 30 minutes for the PR's checks and merges it only when every check passed, it is mergeable and its head is still the commit the checks ran on (`--match-head-commit`) - a branch that requires a merge queue is never merged automatically - otherwise the PR and the task stay open and it says why. It never arms GitHub auto-merge, and never merges a PR whose scope check chose **PR only, keep open** |
 | Stay on branch / Stay here | Keeps you on the branch for PR fixes or follow-up work. At `standard` / `minimal` the next steps are a box of commands to type rather than a question |
 | Next task | Back to the merge branch, then claims another task |
 | End session | Runs `/lets:end` |

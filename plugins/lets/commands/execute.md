@@ -233,7 +233,7 @@ AskUserQuestion(
 
 **Handle response (sets the mode that Step 5 obeys):**
 - **Straight-through** -> Step 5 (native plan mode); after the plan-mode approval, implement all tasks with NO per-task pause and commit at each plan commit point through `Skill(skill: "lets:commit", args: "approved=plan-files")` without re-asking.
-- **Step-by-step** -> Step 5 (native plan mode); after the plan-mode approval, implement one task, pause for user review before the next, and confirm each `/lets:commit`.
+- **Step-by-step** -> Step 5 (native plan mode); after the plan-mode approval, implement one task, pause for user review before the next, and commit through `Skill(skill: "lets:commit", args: "approved=plan-files")`, confirming each commit as its level says.
 - **Auto** -> proceed exactly as `--auto` (Step 5's `--auto` behavior + pipeline-state marker + execute-blocked notify). **Guard:** if on `$LETS_MERGE_BRANCH`, REFUSE Auto here too (same rule as Step 1's `--auto` refuse - AUTO MODE never edits the merge-branch); tell the user to pick step-by-step / straight-through or take a feature branch.
 - **Implementers** -> do NOT enter native plan mode: Step 4.6, Step 4.7, then Step 5-D. `/lets:team` manages a standing team; parallel implementation of a plan runs here, in the parallel shape.
 
@@ -355,7 +355,7 @@ Call `EnterPlanMode`.
 4. Writes the execution strategy to the plan file (the file specified by plan mode)
 5. Calls `ExitPlanMode` when ready for user approval
 
-**After user approves**, Claude implements per the **Step 4.5 mode**: *step-by-step* implements one task, pauses for review before the next, and confirms each commit at `strict` (otherwise commits at the plan point and reports); *straight-through* runs all tasks and commits at each plan commit point through `Skill(skill: "lets:commit", args: "approved=plan-files")` without re-asking; *auto* is the `--auto` behavior below. Commit only at the plan's commit points.
+**After user approves**, Claude implements per the **Step 4.5 mode**: *step-by-step* implements one task, pauses for review before the next, and commits through `Skill(skill: "lets:commit", args: "approved=plan-files")`, confirming each commit at `strict` (otherwise committing at the plan point and reporting); *straight-through* runs all tasks and commits at each plan commit point through `Skill(skill: "lets:commit", args: "approved=plan-files")` without re-asking; *auto* is the `--auto` behavior below. Commit only at the plan's commit points.
 
 **Under `--auto` (inline runs only - Step 4.5 refuses `--auto` for Implementers):** write the `executing` pipeline-state marker, then — the plan-mode approval IS the gate — implement straight through without a per-step "review before moving on" pause, and commit at each plan commit point through `Skill(skill: "lets:commit", args: "approved=plan-files")` WITHOUT re-asking (one approval covers the run). `approved=plan-files` lets a new file the plan names in a `Create:` line of the committed tasks through without the commit skill's new-file question; any other new file still asks. Hard-stops still halt (push/PR/close/external gated; 3×-fail; fabrication; `$LETS_MERGE_BRANCH` refused per Step 1) — on any halt, write the `blocked` marker + fire the execute-blocked notify.
 

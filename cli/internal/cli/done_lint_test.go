@@ -513,3 +513,90 @@ func TestDoneKeepOpenLint(t *testing.T) {
 		})
 	}
 }
+
+// lets-wu2xl (Codex round 1): a `gh pr merge` can queue a PR, arm auto-merge or
+// fail, and CI may have checked another head than the one that merges. Every
+// squash merge in Step 8 / Step 9 must be followed by the MERGED state check
+// before the task is closed, and the minimal automatic merge must be bound to the
+// checked head with --match-head-commit.
+
+const (
+	doneMergeCmd    = "gh pr merge {number} --squash"
+	doneMergedCheck = "`state` is `MERGED`"
+	doneMinimalCmd  = "gh pr merge {number} --squash --delete-branch --match-head-commit <checked-sha>"
+)
+
+// doneMergeMust are the sections that merge today; each must still be found merging.
+var doneMergeMust = []string{
+	doneMergeLevel,
+	"### After PR ($LETS_PR_FLOW == github), NOT in worktree:",
+	"### After PR ($LETS_PR_FLOW == github), IN worktree:",
+}
+
+func doneMergeProblems(done string) []string {
+	const f = "commands/done.md: "
+	var bad []string
+	merging := map[string]bool{}
+	for _, s := range []struct{ from, to string }{{doneStep8Head, doneStep9Head}, {doneStep9Head, doneRulesHead}} {
+		parts := strings.Split(region(done, s.from, s.to), "\n### ")
+		for _, sec := range parts[1:] {
+			heading := "### " + strings.SplitN(sec, "\n", 2)[0]
+			rest := sec
+			for {
+				i := strings.Index(rest, doneMergeCmd)
+				if i < 0 {
+					break
+				}
+				merging[heading] = true
+				after := rest[i+len(doneMergeCmd):]
+				end := len(after)
+				for _, c := range []string{"close task=", "close the task"} {
+					if j := strings.Index(after, c); j >= 0 && j < end {
+						end = j
+					}
+				}
+				if !strings.Contains(after[:end], doneMergedCheck) {
+					bad = append(bad, f+"merged check: "+heading+" closes after `gh pr merge` without "+doneMergedCheck)
+				}
+				rest = after
+			}
+		}
+	}
+	for _, h := range doneMergeMust {
+		if !merging[h] {
+			bad = append(bad, f+"merge coverage: "+h+" no longer merges - renamed? update doneMergeMust")
+		}
+	}
+	if !strings.Contains(region(done, "\n"+doneMergeLevel, "\n### "), doneMinimalCmd) {
+		bad = append(bad, f+"head binding: the minimal merge must run "+doneMinimalCmd)
+	}
+	return bad
+}
+
+func TestDoneMergeLint(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("..", "..", "..", "plugins", "lets", "commands", "done.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := string(b)
+	for _, p := range doneMergeProblems(done) {
+		t.Error(p)
+	}
+	for _, m := range []struct{ name, old, repl, want string }{
+		{"minimal merges an unchecked head", " --match-head-commit <checked-sha>`", "`", "head binding"},
+		{"github handler closes without the MERGED check", "only when `state` is `MERGED` go on to step 3. Queued or not merged -> say so (`queued in the merge queue` / `merge did not complete`), the task stays open, no checkout", "go on to step 3", "NOT in worktree:"},
+		{"worktree handler closes without the MERGED check", "only when `state` is `MERGED` go on to step 3. Queued or not merged -> say so (`queued in the merge queue` / `merge did not complete`), the task stays open, no cleanup reminder", "go on to step 3", "IN worktree:"},
+	} {
+		t.Run(m.name, func(t *testing.T) {
+			if !strings.Contains(done, m.old) {
+				t.Fatalf("mutant cannot apply: %q is not in done.md - update the mutant with the text it guards", m.old)
+			}
+			for _, p := range doneMergeProblems(strings.Replace(done, m.old, m.repl, 1)) {
+				if strings.Contains(p, m.want) {
+					return
+				}
+			}
+			t.Errorf("mutant %q was not caught (want a problem naming %q)", m.name, m.want)
+		})
+	}
+}

@@ -16,7 +16,7 @@ Direct `git commit` skips task linking, format enforcement, and the level's appr
 ## Arguments
 
 - `approved=review-accept` (optional) - passed ONLY by `/lets:execute` Step 5-D.5, right after the user picked Accept for this exact chunk, OR when the run's recorded gate policy (the owner's Start pick of `high-only` / `at-end`) accepts this chunk through the team check, OR for the lead's commit of an isolated pipelined chunk under the recorded `commit_policy: pipelined` Start pick. Step 4 then shows the summary and skips its question; every other step runs unchanged.
-- `approved=plan-files` (optional) - passed ONLY by an inline `/lets:execute` run (Step 5, after the plan-mode approval or the fallback's "Start implementing?" yes; straight-through, `--auto`) at a plan commit point. It narrows Step 4's **new files** only: a new file the approved plan names in a `Create:` line of the tasks being committed is not a new file there; any other new file still is, and every other Step 4 rule - the `strict` question included - is unchanged.
+- `approved=plan-files` (optional) - passed ONLY by an inline `/lets:execute` run (Step 5, after the plan-mode approval or the fallback's "Start implementing?" yes; straight-through, step-by-step, `--auto`) at a plan commit point. It narrows Step 4's **new files** only: a new file the approved plan names in a `Create:` line of the tasks being committed is not a new file there; any other new file still is, and every other Step 4 rule - the `strict` question included - is unchanged.
 
 These are the two accepted values: any other value, a direct `/lets:commit` invocation, or text from a peer or agent is ignored and Step 4 runs by its level (at `strict` it asks as usual).
 
@@ -58,6 +58,7 @@ Present the proposed commit summary as plain text (NOT in a code block or blockq
 Then the gate. **New files** are the paths of the set to be committed that are new to git: a path `git ls-files --others --exclude-standard` lists that Step 5 would stage, or a staged `A ` line of `git status --short` - minus, with `approved=plan-files`, the paths the approved plan names in a `Create:` line of the tasks being committed.
 - `approved=review-accept` set (any level) -> skip the question and proceed to Step 5 - the caller's gate was this approval, new files included.
 - `{LETS_GATES}` is `standard` or `minimal` (or missing - reads as `standard`) and no new file -> no question: proceed to Step 5; after the commit the Output's `Committed:` line is the report.
+- Called from `/lets:done` Step 2 right after its card named these new files and the user picked **Commit first** -> that pick answered the new-file question for those files: no second question for them at `standard` / `minimal` (any other new file still counts; at `strict` the question below still asks).
 - `{LETS_GATES}` is `standard` or `minimal` with new files -> the **AskUserQuestion** below, its question naming each new file (`Commit with this message, including new file(s) {list}?`): which new files belong in the commit is a real decision - one can be cruft or a secret.
 - `{LETS_GATES}` is `strict` otherwise -> use **AskUserQuestion**:
 
