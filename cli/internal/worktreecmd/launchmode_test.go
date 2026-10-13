@@ -57,6 +57,8 @@ func TestClassifyLaunch(t *testing.T) {
 		{"claude --dangerously-skip-permissions; true", "bypass", nil},
 		{"claude --permission-mode=bypassPermissions&&x", "bypass", nil},
 		{"claude --permission-mode auto|tee log", "auto", nil},
+		{"`claude --dangerously-skip-permissions`", "bypass", nil},
+		{"sh -c \"`claude --permission-mode auto`\"", "auto", nil},
 		{`claude --name 'a;--dangerously-skip-permissions'`, "default", nil},
 	} {
 		class, warnings := worktreecmd.ClassifyLaunch(c.cmd)
