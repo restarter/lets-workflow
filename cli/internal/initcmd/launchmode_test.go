@@ -40,7 +40,7 @@ func launchModeProblems(f map[string]string) []string {
 		}
 	}
 	for _, need := range []string{"neither set -> `default`", "never inferred, never a fallback, never the default", "launching <name> " + launchAnnounce, "`crossSessionInbound` is never written",
-		"`lets worktree info --json` -> `launch_mode`", "`launch_mode.valid=false` (a hand-edited value outside default | auto | all-in) -> `default`, plus one line", "`LETS_LAUNCH_MODE in .lets/.env` (`source=project`)"} {
+		"`lets worktree info --json` -> `launch_mode`", "With no launch-mode flag typed in this turn, `launch_mode.valid=false` (a hand-edited value outside default | auto | all-in) -> `default`, plus one line", "with a typed flag the flag's mode applies and the invalid value is only named", "`LETS_LAUNCH_MODE in .lets/.env` (`source=project`)"} {
 		if !strings.Contains(wt, need) {
 			p = append(p, "worktree.md Launch mode must state: "+need)
 		}
@@ -66,7 +66,7 @@ func launchModeProblems(f map[string]string) []string {
 	}
 	team := f["team"]
 	r45 := sectionSpan(team, "### Step R4.5: Launch Mode")
-	for _, need := range []string{"neither -> `default`", "its class `team_launch.class`", "Each `team_launch.warnings` entry", "`launch_mode.valid=false` -> `default`, plus one line", "`LETS_LAUNCH_MODE in .lets/.env` (`launch_mode.source=project`)"} {
+	for _, need := range []string{"neither -> `default`", "its class `team_launch.class`", "Each `team_launch.warnings` entry", "With no launch-mode flag typed on `run`, `launch_mode.valid=false` -> `default`, plus one line", "with a typed flag the flag's mode applies and the invalid value is only named", "`LETS_LAUNCH_MODE in .lets/.env` (`launch_mode.source=project`)"} {
 		if !strings.Contains(r45, need) {
 			p = append(p, "team.md R4.5 must resolve the workers' launch through Go (neither -> default): "+need)
 		}
@@ -136,7 +136,11 @@ func TestLaunchModeContract(t *testing.T) {
 		{"init labels all-in recommended", "init", `{ label: "All-in", `, `{ label: "All-in (Recommended)", `, "never be a default or a fallback"},
 		{"team worker launches all-in unannounced", "team", "first print one line: \"launching <worker_name> " + launchAnnounce + "\"", "launch it", "announce an all-in worker"},
 		{"the announce loses its source", "worktree", "launching <name> " + launchAnnounce, "launching <name> with all-in (bypassPermissions): no harness permission prompts in that session; LETS gates (push, PR, merge, close, peer sends) still ask", "Launch mode must state"},
-		{"an invalid key is used as is", "worktree", "`launch_mode.valid=false` (a hand-edited value outside default | auto | all-in) -> `default`, plus one line", "", "Launch mode must state"},
+		{"an invalid key is used as is", "worktree", "With no launch-mode flag typed in this turn, `launch_mode.valid=false` (a hand-edited value outside default | auto | all-in) -> `default`, plus one line", "", "Launch mode must state"},
+		{"the invalid-key fallback beats a typed flag", "worktree", "With no launch-mode flag typed in this turn, `launch_mode.valid=false`", "`launch_mode.valid=false`", "Launch mode must state"},
+		{"a typed flag over an invalid key launches default", "worktree", "with a typed flag the flag's mode applies and the invalid value is only named", "with a typed flag it still launches in default", "Launch mode must state"},
+		{"R4.5 invalid-key fallback beats a typed flag", "team", "With no launch-mode flag typed on `run`, `launch_mode.valid=false`", "`launch_mode.valid=false`", "R4.5 must resolve the workers' launch through Go"},
+		{"R4.5 typed flag over an invalid key launches default", "team", "with a typed flag the flag's mode applies and the invalid value is only named", "with a typed flag the workers still launch in default", "R4.5 must resolve the workers' launch through Go"},
 		{"the lead launches all-in unannounced", "worktree", "print the all-in announce line", "launch", "T5 must print the all-in announce line"},
 		{"T5 announces from a substring test", "worktree", "when the lead's command is in the `bypass` class - after T3 the envelope's `launch_class` (orca: `orca_launch_class`), on Reopen `team_launch.class` (orca: `team_launch.orca_class`) -", "when `agent_command` carries `--permission-mode bypassPermissions` or `--dangerously-skip-permissions`,", "not a substring test"},
 		{"T5 announces without Go's class", "worktree", "when the lead's command is in the `bypass` class - after T3 the envelope's `launch_class`", "when the lead runs all-in - after T3", "T5 must announce from Go's class"},

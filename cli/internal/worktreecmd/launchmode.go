@@ -41,12 +41,13 @@ const (
 	LaunchWarnCrossSessionInbound = "cross_session_inbound" // the command names crossSessionInbound, which LETS never writes
 )
 
-// ClassifyLaunch reads the permission class a launch command starts in - the one
-// classifier the markdown announces from (lets-gbfpd Task 16), never a substring
-// test in a prompt. bypass: --permission-mode bypassPermissions (either spelling),
-// --dangerously-skip-permissions, --allow-dangerously-skip-permissions, or a
-// --settings value naming bypassPermissions; auto: --permission-mode auto (either
-// spelling); else default. The command is split like a shell would (quotes,
+// ClassifyLaunch reads the permission class the launched session STARTS in - the
+// one classifier the markdown announces from (lets-gbfpd Task 16), never a
+// substring test in a prompt. bypass: --permission-mode bypassPermissions (either
+// spelling), --dangerously-skip-permissions, or a --settings value naming
+// bypassPermissions; auto: --permission-mode auto (either spelling); else default.
+// --allow-dangerously-skip-permissions only makes bypass available as an option,
+// so the session does not start in it and it sets no class. The command is split like a shell would (quotes,
 // backslashes) and a quoted argument holding a whole command (`sh -c '...'`) is
 // classified too; any bypass spelling wins over auto. warnings: settings_override
 // for any --settings, cross_session_inbound when the command names
@@ -91,7 +92,7 @@ func classifyFields(fields []string, depth int) (bypass, auto, settings bool) {
 			mode(next)
 		case strings.HasPrefix(f, "--permission-mode="):
 			mode(strings.TrimPrefix(f, "--permission-mode="))
-		case f == "--dangerously-skip-permissions", f == "--allow-dangerously-skip-permissions":
+		case f == "--dangerously-skip-permissions":
 			bypass = true
 		case f == "--settings":
 			settings = true
