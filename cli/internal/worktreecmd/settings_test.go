@@ -8,9 +8,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/restarter/lets-workflow/cli/internal/fsutil"
 	"github.com/restarter/lets-workflow/cli/internal/worktreecmd"
 )
 
@@ -343,5 +348,305 @@ func TestEnsureLetsAdditionalDir_FinalIgnoreProbeFailsClosed(t *testing.T) {
 	}
 	if _, err := os.Stat(settingsPath(wt)); !os.IsNotExist(err) {
 		t.Errorf("settings.local.json was written after a failed ignore probe (err=%v)", err)
+	}
+}
+
+// Team allow rules (lets-qysjv, ported by lets-gbfpd): EnsureTeamAllowRules shares
+// EnsureLetsAdditionalDir's merge core, and writes only while git ignores the file.
+
+// allowImpact is EnsureTeamAllowRules's warning tail.
+const allowImpact = " - lets worktree switch and lets worktree task-state will prompt, and auto mode may refuse them; approve them when asked, or add the rules with /permissions"
+
+// allowAdded is EnsureTeamAllowRules's ok message for both rules.
+const allowAdded = "added `Bash(lets worktree switch:*)`, `Bash(lets worktree task-state:*)` to .claude/settings.local.json (remove them to revoke)"
+
+func ensureAllow(wt, repo string) (worktreecmd.Step, string) {
+	return worktreecmd.EnsureTeamAllowRules(context.Background(), wt, repo)
+}
+
+// settingsAllow returns permissions.allow of wt's settings.local.json.
+func settingsAllow(t *testing.T, wt string) []string {
+	t.Helper()
+	data, err := os.ReadFile(settingsPath(wt))
+	if err != nil {
+		t.Fatalf("read settings.local.json: %v", err)
+	}
+	var s struct {
+		Permissions struct {
+			Allow []string `json:"allow"`
+		} `json:"permissions"`
+	}
+	if err := json.Unmarshal(data, &s); err != nil {
+		t.Fatalf("settings.local.json is not JSON: %v\n%s", err, data)
+	}
+	return s.Permissions.Allow
+}
+
+func TestTeamAllowRules_NoMembersRule(t *testing.T) {
+	want := []string{"Bash(lets worktree switch:*)", "Bash(lets worktree task-state:*)"}
+	if got := worktreecmd.TeamAllowRules(); strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("TeamAllowRules = %v, want %v (lets members is a deprecated stub - no rule)", got, want)
+	}
+}
+
+func TestEnsureTeamAllowRules_AddsOnceInOrder(t *testing.T) {
+	repo, wt, _ := settingsRepo(t)
+	if st, kind := ensureAllow(wt, repo); st.Status != worktreecmd.StepOK || kind != "" || st.Message != allowAdded {
+		t.Fatalf("first call: %s %q kind %q, want ok %q", st.Status, st.Message, kind, allowAdded)
+	}
+	if got, want := settingsAllow(t, wt), worktreecmd.TeamAllowRules(); strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("allow = %v, want %v", got, want)
+	}
+	if !settingsIgnored(wt) {
+		t.Error("git does not ignore settings.local.json")
+	}
+	first, _ := os.ReadFile(settingsPath(wt))
+	if st, _ := ensureAllow(wt, repo); st.Status != worktreecmd.StepSkip {
+		t.Errorf("second call: %s %q", st.Status, st.Message)
+	}
+	if second, _ := os.ReadFile(settingsPath(wt)); string(second) != string(first) {
+		t.Errorf("second call rewrote the file:\n%s\n---\n%s", first, second)
+	}
+}
+
+func TestEnsureTeamAllowRules_KeepsUserContent(t *testing.T) {
+	repo, wt, _ := settingsRepo(t)
+	const before = `{"cleanupPeriodDays":9007199254740993,"permissions":{"allow":["Bash(make test && go vet ./...)","Bash(lets worktree switch:*)"],"additionalDirectories":["/elsewhere"]}}`
+	mustWrite(t, settingsPath(wt), before, 0o644)
+	st, kind := ensureAllow(wt, repo)
+	if st.Status != worktreecmd.StepOK || kind != "" {
+		t.Fatalf("%s %q kind %q", st.Status, st.Message, kind)
+	}
+	// The step names only what was appended, never a rule the user already had.
+	if want := "added `Bash(lets worktree task-state:*)` to .claude/settings.local.json (remove them to revoke)"; st.Message != want {
+		t.Errorf("message = %q, want %q", st.Message, want)
+	}
+	want := []string{"Bash(make test && go vet ./...)", "Bash(lets worktree switch:*)", "Bash(lets worktree task-state:*)"}
+	if got := settingsAllow(t, wt); strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("allow = %v, want %v (an existing rule is not duplicated)", got, want)
+	}
+	if got := settingsDirs(t, wt); len(got) != 1 || got[0] != "/elsewhere" {
+		t.Errorf("additionalDirectories = %v, want [/elsewhere]", got)
+	}
+	data, _ := os.ReadFile(settingsPath(wt))
+	for _, keep := range []string{`"Bash(make test && go vet ./...)"`, `9007199254740993`} {
+		if !strings.Contains(string(data), keep) {
+			t.Errorf("lost, re-escaped or rounded %s:\n%s", keep, data)
+		}
+	}
+}
+
+func TestEnsureTeamAllowRules_LeavesUnusableFilesAlone(t *testing.T) {
+	plain := func(body string) func(t *testing.T) (repo, wt string) {
+		return func(t *testing.T) (string, string) {
+			repo, wt, _ := settingsRepo(t)
+			mustWrite(t, settingsPath(wt), body, 0o644)
+			return repo, wt
+		}
+	}
+	for _, tc := range []struct {
+		name, kind string
+		setup      func(t *testing.T) (repo, wt string)
+	}{
+		{"malformed", worktreecmd.SettingsLocalUnreadable, plain(`{not json`)},
+		{"permissions not an object", worktreecmd.SettingsLocalShape, plain(`{"permissions":[]}`)},
+		{"allow not an array", worktreecmd.SettingsLocalShape, plain(`{"permissions":{"allow":"x"}}`)},
+		{"allow non-string", worktreecmd.SettingsLocalShape, plain(`{"permissions":{"allow":[1]}}`)},
+		{"symlinked .claude", worktreecmd.SettingsLocalSymlink, func(t *testing.T) (string, string) {
+			repo, wt, _ := settingsRepo(t)
+			outside := realTempDir(t)
+			mustWrite(t, filepath.Join(outside, "settings.local.json"), `{"model":"x"}`, 0o644)
+			if err := os.Symlink(outside, filepath.Join(wt, ".claude")); err != nil {
+				t.Fatal(err)
+			}
+			return repo, wt
+		}},
+		{"tracked", worktreecmd.SettingsLocalTracked, trackedRepo},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo, wt := tc.setup(t)
+			before, _ := os.ReadFile(settingsPath(wt))
+			st, kind := ensureAllow(wt, repo)
+			if st.Status != worktreecmd.StepWarn || kind != tc.kind || !strings.HasPrefix(st.Message, tc.kind+": ") || !strings.HasSuffix(st.Message, allowImpact) {
+				t.Errorf("step = %s %q kind %q, want warn %s", st.Status, st.Message, kind, tc.kind)
+			}
+			if after, _ := os.ReadFile(settingsPath(wt)); string(after) != string(before) {
+				t.Errorf("file was rewritten:\n%s\n---\n%s", before, after)
+			}
+		})
+	}
+}
+
+// Rules in a file git would publish are repository-supplied: a .gitignore negation
+// means nothing is written, unlike the additional directory.
+func TestEnsureTeamAllowRules_NegatedIgnoreWritesNothing(t *testing.T) {
+	repo, wt, _ := settingsRepo(t)
+	mustWrite(t, filepath.Join(wt, ".gitignore"), "!.claude/settings.local.json\n", 0o644)
+	const body = `{"model":"x"}`
+	mustWrite(t, settingsPath(wt), body, 0o644)
+	st, kind := ensureAllow(wt, repo)
+	want := "settings_local_not_ignored: .claude/settings.local.json left unchanged (still not ignored after info/exclude (a .gitignore negation?), and LETS writes it only while git ignores it)" + allowImpact
+	if st.Status != worktreecmd.StepWarn || kind != worktreecmd.SettingsLocalNotIgnored || st.Message != want {
+		t.Errorf("got  %s %q %q\nwant warn %q %q", st.Status, kind, st.Message, worktreecmd.SettingsLocalNotIgnored, want)
+	}
+	if data, _ := os.ReadFile(settingsPath(wt)); string(data) != body {
+		t.Errorf("the file was written: %s", data)
+	}
+}
+
+func TestEnsureTeamAllowRules_ExcludeFailedWritesNothing(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	repo, wt, _ := settingsRepo(t)
+	info := filepath.Join(repo, ".git", "info")
+	mustMkdir(t, info)
+	if err := os.Chmod(info, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(info, 0o755) })
+	st, kind := ensureAllow(wt, repo)
+	const prefix = "settings_local_exclude_failed: .claude/settings.local.json left unchanged (could not add it to info/exclude ("
+	if st.Status != worktreecmd.StepWarn || kind != worktreecmd.SettingsLocalExcludeFailed || !strings.HasPrefix(st.Message, prefix) ||
+		!strings.HasSuffix(st.Message, "and LETS writes it only while git ignores it)"+allowImpact) {
+		t.Errorf("got %s %q %q, want warn %s", st.Status, kind, st.Message, worktreecmd.SettingsLocalExcludeFailed)
+	}
+	if _, err := os.Stat(settingsPath(wt)); !os.IsNotExist(err) {
+		t.Errorf("settings.local.json was written (err=%v)", err)
+	}
+}
+
+// A repo that tracks other .claude files keeps them; the personal file is ignored and
+// both writers land in it.
+func TestEnsureSettings_RepoTracksOtherClaudeFiles(t *testing.T) {
+	isolateGitIgnore(t)
+	repo := initRepo(t)
+	const rules = "# a project rule\n"
+	mustWrite(t, filepath.Join(repo, ".claude", "rules", "x.md"), rules, 0o644)
+	mustWrite(t, filepath.Join(repo, ".claude", "settings.json"), `{"model":"y"}`, 0o644)
+	runIn(t, repo, "git", "add", ".claude")
+	runIn(t, repo, "git", "commit", "-q", "-m", "project claude files")
+	mustMkdir(t, filepath.Join(repo, ".lets"))
+	wt := filepath.Join(realTempDir(t), "wt")
+	runIn(t, repo, "git", "worktree", "add", "-q", "-b", "x", wt)
+
+	if st, kind := ensure(wt, repo); st.Status != worktreecmd.StepOK || kind != "" {
+		t.Fatalf("additional dir: %s %q kind %q", st.Status, st.Message, kind)
+	}
+	if st, kind := ensureAllow(wt, repo); st.Status != worktreecmd.StepOK || kind != "" {
+		t.Fatalf("allow rules: %s %q kind %q", st.Status, st.Message, kind)
+	}
+	if out := gitOutput(t, wt, "ls-files", "--", ".claude/settings.local.json"); strings.TrimSpace(out) != "" {
+		t.Errorf("settings.local.json is tracked: %q", out)
+	}
+	if !settingsIgnored(wt) {
+		t.Error("git does not ignore settings.local.json")
+	}
+	if out := gitOutput(t, wt, "status", "--porcelain"); strings.TrimSpace(out) != "" {
+		t.Errorf("the worktree is not clean:\n%s", out)
+	}
+	if b, _ := os.ReadFile(filepath.Join(wt, ".claude", "rules", "x.md")); string(b) != rules {
+		t.Errorf(".claude/rules/x.md changed: %q", b)
+	}
+	if len(settingsDirs(t, wt)) != 1 || len(settingsAllow(t, wt)) != len(worktreecmd.TeamAllowRules()) {
+		t.Errorf("dirs %v, allow %v", settingsDirs(t, wt), settingsAllow(t, wt))
+	}
+}
+
+func TestEnsureTeamAllowRules_ChangedDuringMergeNotOverwritten(t *testing.T) {
+	repo, wt, _ := settingsRepo(t)
+	restore := worktreecmd.SetSettingsStage(func(stage string) {
+		if stage == "before-reread" {
+			mustWrite(t, settingsPath(wt), `{"model":"x"}`, 0o644)
+		}
+	})
+	defer restore()
+	st, kind := ensureAllow(wt, repo)
+	if st.Status != worktreecmd.StepWarn || kind != worktreecmd.SettingsLocalChanged {
+		t.Errorf("step = %s %q kind %q, want warn %s", st.Status, st.Message, kind, worktreecmd.SettingsLocalChanged)
+	}
+	if data, _ := os.ReadFile(settingsPath(wt)); string(data) != `{"model":"x"}` {
+		t.Errorf("the other writer's file was overwritten: %s", data)
+	}
+}
+
+// Two LETS writers on one worktree - EnsureLetsAdditionalDir and the team grant -
+// keep both entries: the merge holds a per-worktree lock from its first read to its
+// rename, so the grant waits and merges into the newer file instead of being renamed
+// over (lets-qysjv).
+func TestMergeSettings_ConcurrentWritersKeepBoth(t *testing.T) {
+	for _, at := range []string{"before-reread", "before-write"} {
+		t.Run(at, func(t *testing.T) {
+			repo, wt, want := settingsRepo(t)
+			var fired atomic.Bool // never blocks: the grant's own stage calls pass through
+			var wg sync.WaitGroup
+			var grant worktreecmd.Step
+			restore := worktreecmd.SetSettingsStage(func(stage string) {
+				if stage != at || !fired.CompareAndSwap(false, true) {
+					return
+				}
+				started, done := make(chan struct{}), make(chan struct{})
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					defer close(done)
+					close(started)
+					grant, _ = worktreecmd.EnsureTeamAllowRules(context.Background(), wt, repo)
+				}()
+				<-started
+				select { // the grant finishes (no lock) or blocks on the lock
+				case <-done:
+				case <-time.After(time.Second):
+				}
+			})
+			t.Cleanup(restore)
+			st, kind := ensure(wt, repo)
+			wg.Wait()
+			if st.Status != worktreecmd.StepOK || kind != "" {
+				t.Errorf("ensure = %s %q kind %q, want ok", st.Status, st.Message, kind)
+			}
+			if grant.Status != worktreecmd.StepOK {
+				t.Errorf("grant = %s %q, want ok", grant.Status, grant.Message)
+			}
+			if got := settingsDirs(t, wt); !slices.Contains(got, want) {
+				t.Errorf("additionalDirectories = %v, want %s", got, want)
+			}
+			if got := settingsAllow(t, wt); strings.Join(got, "|") != strings.Join(worktreecmd.TeamAllowRules(), "|") {
+				t.Errorf("allow = %v, want %v", got, worktreecmd.TeamAllowRules())
+			}
+		})
+	}
+}
+
+// A lock another LETS process holds writes nothing: the merge waits until ctx's
+// deadline, then warns settings_local_changed.
+func TestMergeSettings_HeldLockWritesNothing(t *testing.T) {
+	repo, wt, _ := settingsRepo(t)
+	gitDir := strings.TrimSpace(gitOutput(t, wt, "rev-parse", "--absolute-git-dir"))
+	f, err := os.OpenFile(filepath.Join(gitDir, "lets-settings-local.lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = f.Close() })
+	if err := fsutil.LockFile(f); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = fsutil.UnlockFile(f) }()
+	short := func() context.Context {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		t.Cleanup(cancel)
+		return ctx
+	}
+	const busy = "settings_local_changed: .claude/settings.local.json left unchanged (another LETS process is updating it; the next session start retries) - "
+	st, kind := worktreecmd.EnsureLetsAdditionalDir(short(), wt, repo)
+	if st.Status != worktreecmd.StepWarn || kind != worktreecmd.SettingsLocalChanged || !strings.HasPrefix(st.Message, busy) {
+		t.Errorf("ensure = %s %q kind %q, want warn %q...", st.Status, st.Message, kind, busy)
+	}
+	st, kind = worktreecmd.EnsureTeamAllowRules(short(), wt, repo)
+	if st.Status != worktreecmd.StepWarn || kind != worktreecmd.SettingsLocalChanged || !strings.HasPrefix(st.Message, busy) {
+		t.Errorf("grant = %s %q kind %q, want warn %q...", st.Status, st.Message, kind, busy)
+	}
+	if _, err := os.Lstat(settingsPath(wt)); !os.IsNotExist(err) {
+		t.Errorf("settings.local.json was written (err=%v)", err)
 	}
 }

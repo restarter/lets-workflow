@@ -415,3 +415,69 @@ func TestTeamInit_NoRepoSlugShortLeadName(t *testing.T) {
 		t.Errorf("no warn step naming the missing slug: %+v", res.Steps)
 	}
 }
+
+// team-init grants the lead's allow rules right after the team file is linked
+// (lets-qysjv, ported by lets-gbfpd): an ok step names both rules and the revoke.
+func TestTeamInit_GrantsAllowRules(t *testing.T) {
+	isolateGitIgnore(t)
+	repo, wt, pluginRoot := teamSetup(t)
+	mustMkdir(t, filepath.Join(repo, ".lets"))
+	res, err := teamInit(repo, wt, pluginRoot, "snake")
+	if err != nil || !res.OK {
+		t.Fatalf("team-init: %v %+v", err, res)
+	}
+	if got := settingsAllow(t, wt); strings.Join(got, "|") != strings.Join(worktreecmd.TeamAllowRules(), "|") {
+		t.Errorf("allow = %v", got)
+	}
+	granted := false
+	for i, s := range res.Steps {
+		if s.Status == worktreecmd.StepOK && s.Message == allowAdded {
+			granted = true
+			if i == 0 || !strings.HasPrefix(res.Steps[i-1].Message, "team file written: ") {
+				t.Errorf("the grant must follow the team file write: %+v", res.Steps)
+			}
+		}
+	}
+	if !granted {
+		t.Errorf("no ok step %q: %+v", allowAdded, res.Steps)
+	}
+	// A second team-init on the same worktree (the team file removed, the team created
+	// again) does not duplicate a rule.
+	if err := os.Remove(res.TeamFile); err != nil {
+		t.Fatal(err)
+	}
+	again, err := teamInit(repo, wt, pluginRoot, "snake")
+	if err != nil || !again.OK {
+		t.Fatalf("second team-init: %v %+v", err, again)
+	}
+	if got := settingsAllow(t, wt); strings.Join(got, "|") != strings.Join(worktreecmd.TeamAllowRules(), "|") {
+		t.Errorf("a second team-init duplicated a rule: %v", got)
+	}
+	if !stepsContain(again.Steps, "already lists Bash(lets worktree switch:*), Bash(lets worktree task-state:*)") {
+		t.Errorf("the second grant must be a skip naming the rules: %+v", again.Steps)
+	}
+}
+
+// A grant that fails is a warn step, never a failed team-init; a tracked
+// settings.local.json is never written.
+func TestTeamInit_GrantFailureIsAStep(t *testing.T) {
+	isolateGitIgnore(t)
+	repo, wt, pluginRoot := teamSetup(t)
+	mustWrite(t, settingsPath(wt), "{}\n", 0o644)
+	runIn(t, wt, "git", "add", "-f", ".claude/settings.local.json")
+	runIn(t, wt, "git", "commit", "-q", "-m", "track it")
+	res, err := teamInit(repo, wt, pluginRoot, "snake")
+	if err != nil || !res.OK {
+		t.Fatalf("team-init must not fail on a grant warning: %v %+v", err, res)
+	}
+	warned := false
+	for _, s := range res.Steps {
+		warned = warned || (s.Status == worktreecmd.StepWarn && strings.HasPrefix(s.Message, worktreecmd.SettingsLocalTracked+": "))
+	}
+	if !warned {
+		t.Errorf("no warn step for the tracked file: %+v", res.Steps)
+	}
+	if data, _ := os.ReadFile(settingsPath(wt)); string(data) != "{}\n" {
+		t.Errorf("the tracked file was rewritten: %s", data)
+	}
+}

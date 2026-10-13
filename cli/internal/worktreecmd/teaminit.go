@@ -187,6 +187,11 @@ func TeamInit(ctx context.Context, dir string, o TeamInitOptions) (*TeamInitResu
 	res.LaunchClass, res.LaunchWarnings = class, warnings
 	res.OrcaLaunchClass, res.OrcaLaunchWarnings = orcaClass, orcaWarnings
 	res.Steps = append(res.Steps, Step{Status: StepOK, Message: "team file written: " + target})
+	// The lead's allow rules (lets-qysjv, ported by lets-gbfpd), once the team file -
+	// the fact that makes this a team worktree - exists. Never fatal: a warning is a
+	// step; a rule already there is not added again.
+	st, _ := EnsureTeamAllowRules(ctx, o.Worktree, mainRoot)
+	res.Steps = append(res.Steps, st)
 	return res, nil
 }
 
