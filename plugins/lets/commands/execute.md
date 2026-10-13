@@ -229,7 +229,7 @@ AskUserQuestion(
 )
 ```
 
-**Commit cadence is DERIVED from the mode - never a separate question:** step-by-step -> confirm each commit at `strict`; otherwise commit at each plan point and report; straight-through -> auto-commit at each plan commit point; auto -> auto-commit; implementers -> one commit per chunk, after the Accept its gate policy names (5-D.5).
+**Commit cadence is DERIVED from the mode - never a separate question:** step-by-step -> confirm each commit at `strict` (otherwise commit at each plan point and report); straight-through -> auto-commit at each plan commit point; auto -> auto-commit; implementers -> one commit per chunk, after the Accept its gate policy names (5-D.5).
 
 **Handle response (sets the mode that Step 5 obeys):**
 - **Straight-through** -> Step 5 (native plan mode); after the plan-mode approval, implement all tasks with NO per-task pause and `/lets:commit` at each plan commit point without re-asking.

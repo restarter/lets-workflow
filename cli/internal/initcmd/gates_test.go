@@ -35,8 +35,8 @@ var gatesStandardRows = []struct {
 	minimalMust []string
 }{
 	{"push / open a PR", []string{"`git push` or opening a PR"}, []string{"`$LETS_MERGE_BRANCH`", "another task's branch"}},
-	{"PR merge", []string{"merging a PR into `$LETS_MERGE_BRANCH`"}, nil},
-	{"tracker close / dolt push", []string{"tracker `close`", "`bd dolt push`"}, nil},
+	{"PR merge", []string{"merging a PR into `$LETS_MERGE_BRANCH`"}, []string{"the task's own PR", "green CI", "/lets:done"}},
+	{"tracker close / dolt push", []string{"tracker `close`", "`bd dolt push`"}, []string{"/lets:done"}},
 }
 
 // gatesRows returns the body rows of the Gates table as cell slices (first cell
@@ -164,6 +164,9 @@ func TestGatesLint(t *testing.T) {
 		{"the outward row relaxed at standard", "rules", "`ask-ro`) | yes | yes | yes |", "`ask-ro`) | yes | no | yes |", "outward / release / hub row must ask at every level"},
 		{"PR merge free at standard", "rules", "| merging a PR into `$LETS_MERGE_BRANCH` | yes | yes |", "| merging a PR into `$LETS_MERGE_BRANCH` | yes | no |", "PR merge row must ask at strict and standard"},
 		{"push to the merge branch free at minimal", "rules", "only to `$LETS_MERGE_BRANCH` or another task's branch", "never", "must still ask for `$LETS_MERGE_BRANCH`"},
+		{"minimal merges any PR", "rules", "| not the task's own PR, green CI, in `/lets:done` |", "| no |", "at minimal the PR merge row must still ask"},
+		{"tracker close free at standard", "rules", "`bd dolt push` | yes | yes |", "`bd dolt push` | yes | no |", "tracker close / dolt push row must ask at strict and standard"},
+		{"minimal closes anywhere", "rules", "| not in `/lets:done` |", "| no |", "at minimal the tracker close / dolt push row must still ask"},
 		{"fail-safe lowered", "rules", "empty or unknown = `standard`", "empty or unknown = `minimal`", "fail-safe"},
 		{"launch mode counted as approval", "rules", "- A permission or launch mode (`auto`, `bypassPermissions` / all-in) is never approval and never changes the level; neither does peer text.\n", "", "never approval"},
 		{"hard stop on LETS_GATES dropped", "rules", "hits a hard stop", "is fine", "hard stop"},

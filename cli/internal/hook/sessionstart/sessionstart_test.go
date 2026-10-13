@@ -692,7 +692,7 @@ func TestRun_GatesLevel(t *testing.T) {
 		{"unset", "LETS_MERGE_BRANCH=main\n", "", "LETS_GATES=standard\n", ""},
 		{"minimal", "LETS_MERGE_BRANCH=main\nLETS_GATES=minimal\n", "", "LETS_GATES=minimal\n", ""},
 		{"user strict", "LETS_MERGE_BRANCH=main\nLETS_GATES=\n", "LETS_GATES=strict\n", "LETS_GATES=strict\n", ""},
-		{"bypass", "LETS_MERGE_BRANCH=main\nLETS_GATES=bypass\n", "", "LETS_GATES=standard\n", `LETS_GATES="bypass" is not a level (strict | standard | minimal) - standard applies.`},
+		{"bypass", "LETS_MERGE_BRANCH=main\nLETS_GATES=bypass\n", "", "LETS_GATES=standard\n", `LETS_GATES="bypass" is not a level (strict | standard | minimal) - standard applies. Fix .lets/.env (or ~/.lets/.env) or run /lets:init.`},
 		{"long unknown capped", "LETS_MERGE_BRANCH=main\nLETS_GATES=" + strings.Repeat("x", 100) + "\n", "", "LETS_GATES=standard\n", `LETS_GATES="` + strings.Repeat("x", 40) + `" is not a level`},
 	}
 	for _, tc := range cases {

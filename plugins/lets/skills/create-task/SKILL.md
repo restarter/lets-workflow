@@ -120,7 +120,7 @@ AskUserQuestion(
 
   "Use the existing one" -> stop and report the existing task; "Create anyway" -> Step 3.
 - No likely duplicate -> Step 3.
-- The adapter marks `search` absent -> print `No duplicate check ran - the tracker has no search` and go to Step 3; at `standard` / `minimal` the final report repeats that the task was created unguarded.
+- The adapter marks `search` absent -> print `No duplicate check ran - the tracker has no search` and go to Step 3; at `standard` / `minimal` the final report repeats that the task was created unguarded - only when `create` actually created one (a no-op `create`, as on the `none` adapter, created nothing to guard).
 
 ### Step 3: Present (approval at `strict`)
 
@@ -171,7 +171,7 @@ Handle response:
 
 ### Step 4: Execute
 
-Run the `create` verb with all fields. Report `Created **{title}** (`{id}`)` with the chosen type, priority and labels (plus the unguarded note when Step 2.5 could not search).
+Run the `create` verb with all fields. Report `Created **{title}** (`{id}`)` with the chosen type, priority and labels (plus the unguarded note when Step 2.5 could not search and a task was created). A `create` the adapter binds to a no-op creates nothing: say so, and report no `Created` line.
 
 ## Bulk Creation
 

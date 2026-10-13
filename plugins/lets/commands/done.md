@@ -47,8 +47,8 @@ git status --short
 ```
 
 If uncommitted changes exist, by level:
-- `{LETS_GATES}` is `standard` or `minimal` (or missing - reads as `standard`) and every change is to a TRACKED file (no `??` line) -> `Skill(skill: "lets:commit")` (it commits without asking at this level), then one line naming what was committed, and continue. A commit failure stops `/lets:done`.
-- Untracked new files present (any level), or `{LETS_GATES}` is `strict` -> **AskUserQuestion** below: which new files belong to the task is a real decision - a swept-in file can be cruft or a secret.
+- `{LETS_GATES}` is `standard` or `minimal` (or missing - reads as `standard`) and no change is a new file (no `??` line and no staged `A ` line) -> `Skill(skill: "lets:commit")` (it commits without asking at this level), then one line naming what was committed, and continue. A commit failure stops `/lets:done`.
+- New files present (`??` or `A ` lines, any level), or `{LETS_GATES}` is `strict` -> **AskUserQuestion** below, its question naming each new file when there are any (`You have uncommitted changes, including new file(s) {list}. What to do?`): which new files belong to the task is a real decision - a swept-in file can be cruft or a secret.
 
 ```
 AskUserQuestion(
@@ -682,7 +682,9 @@ Do NOT delete the branch or remove the worktree here - `/lets:worktree remove` h
 
 **Which PR.** In every "After PR" variant below, `#{number}` / `{PR URL}` is the PR Step 8 created - or, on the Existing-PR Guard's `open` outcome, the open PR it pushed to (the number the Step 8 re-check confirmed); never a second one. Its `PR:` line then reads `#{number} - {PR URL} (existing PR)`, and "Merge & close" merges that PR. On the `shipped` outcome there is no "After PR" variant: use the matching `### After local merge` one, and replace its `Merged to ...` and `Branch ... deleted` lines with `PR: #{number} - {PR URL} (already merged)` - this path merged and deleted nothing. When Step 3 chose "PR only, keep open", no close ran: its Task line reads `- kept open (PR only, keep open)` instead of a close status.
 
-**By level.** `{LETS_GATES}` is `strict` -> every variant's AskUserQuestion as written. Otherwise -> the variant's status lines, then its remaining "Next step" options as a Nav box, never a card: `Next task?  /lets:start` where the variant offers Next task, `End?  /lets:end`, and in a worktree the line `/lets:worktree remove {name}` from the main repo. "Stay on branch" / "Stay here" / "Keep working" is the default and needs no line. The github variants first run "Merge by level" below.
+**By level.** `{LETS_GATES}` is `strict` -> every variant's AskUserQuestion as written. Otherwise (missing reads as `standard`), the github variants first run "Merge by level" below, then:
+- **the task was closed** (trunk, a local merge, or a PR merged by "Merge by level") -> the variant's status lines, then its remaining "Next step" options as a Nav box, never a card: `Next task?  /lets:start` where the variant offers Next task, `End?  /lets:end`, and in a worktree the line `/lets:worktree remove {name}` from the main repo. "Stay on branch" / "Stay here" / "Keep working" is the default and needs no line.
+- **the PR is still open** (Bitbucket, **PR only, keep open**, `standard`'s **Not now**, a `minimal` PR left open) -> the variant's "Next step" card as written, without "Merge & close": the task is still active and its handlers carry the checkout to the merge branch, so it stays a real choice.
 
 ### After trunk-mode finish (HEAD == `$LETS_MERGE_BRANCH`):
 
@@ -719,7 +721,7 @@ LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 command -v lets >/dev/null 2>&1 && lets peers orchestrator --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" --json 2>/dev/null
 ```
 
-When `source` is `bound` or `single` and `target.alive` is `alive`, ask the variant's question and this one in the SAME call - at `standard` / `minimal` the variant's question is the Merge question of "Merge by level" when one is asked, else the Ping question is asked alone (for `ambiguous`, `none`, `self`, a dead target or no binary: no Ping question - the orc skill's own ping asks which):
+When `source` is `bound` or `single` and `target.alive` is `alive`, ask the variant's question and this one in the SAME call - at `standard` / `minimal` the variant's question is the Merge question of "Merge by level" when one is asked, else the variant's "Next step" card while the PR stays open, else (a Nav box) the Ping question is asked alone (for `ambiguous`, `none`, `self`, a dead target or no binary: no Ping question - the orc skill's own ping asks which):
 
 ```
 AskUserQuestion(
@@ -745,7 +747,7 @@ AskUserQuestion(
 When Step 3 chose **PR only, keep open**, nothing here runs: the PR stays open, the task stays open, and one line says so. Otherwise, by level:
 
 - `strict` -> the variant's card, with its "Merge & close" option.
-- `standard` -> "Merge & close" is its own question (merging is hard tier), then the Nav box of "By level":
+- `standard` -> "Merge & close" is its own question (merging is hard tier), then the next step of "By level":
 
 ```
 AskUserQuestion(
@@ -762,7 +764,7 @@ AskUserQuestion(
 ```
 
   **Merge & close** -> the variant's "Merge & close" handler. **Not now** -> nothing merges.
-- `minimal` -> no question. Right after the PR is created its checks are pending, so wait: tell the user it is waiting, then run `gh pr checks {number} --watch --fail-fast` with `run_in_background`, bounded at 30 minutes. Then read `gh pr view {number} --json mergeable,mergeStateStatus`:
+- `minimal` -> no question. Right after the PR is created its checks are pending or not registered yet, so wait: tell the user it is waiting, poll `gh pr checks {number}` for up to ~2 minutes until at least one check is listed (still none -> `no checks reported`, below), then run `gh pr checks {number} --watch --fail-fast` with `run_in_background`, bounded at 30 minutes. Then read `gh pr view {number} --json mergeable,mergeStateStatus`:
   - every check passed and `mergeable` is `MERGEABLE` -> the variant's "Merge & close" handler (`gh pr merge {number} --squash --delete-branch`, then `close`), reported in one line;
   - a check failed, the wait timed out, no checks were reported (indistinguishable from a CONFLICTING PR that runs no CI), or it is not mergeable -> leave the PR and the task open and print why (`CI failing` / `CI still running after 30 min` / `no checks reported` / the merge state). A later `/lets:done` reuses the PR through the Existing-PR Guard and runs this step again.
   - Never arm GitHub auto-merge: it would merge after this session closed the task's books.

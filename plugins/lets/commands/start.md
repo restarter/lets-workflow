@@ -306,7 +306,7 @@ LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 lets peers orchestrator --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" --json 2>/dev/null
 ```
 
-  `{LETS_GATES}` is not `strict` (missing reads as `standard`) -> one line `Gate level {LETS_GATES}: sessions talk without per-message confirmation`, and nothing below runs (the recorded grant governs `strict` only). `{LETS_GATES}` is `strict` -> `self_record.standing` is `on` or `off` (an existing record keeps its grant): one line - `Standing authorization between {self_record.name} and the sessions bound to it: {on|off} (/lets:orc standing on|off changes it)`. `self_record.standing` is `""` (a new record, never asked) - ONE question:
+  `{LETS_GATES}` is not `strict` (missing reads as `standard`) -> one line `Gate level {LETS_GATES}: sessions talk without per-message confirmation`, and no Standing question (the recorded grant governs `strict` only). `{LETS_GATES}` is `strict` -> `self_record.standing` is `on` or `off` (an existing record keeps its grant): one line - `Standing authorization between {self_record.name} and the sessions bound to it: {on|off} (/lets:orc standing on|off changes it)`. `self_record.standing` is `""` (a new record, never asked) - ONE question:
 
 ```
 AskUserQuestion(

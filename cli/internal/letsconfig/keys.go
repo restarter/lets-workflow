@@ -138,7 +138,7 @@ var Keys = []Key{
 		// ResolvedEnv normalizes empty/unknown to standard (letsconfig.GatesLevel)
 		// before the hook injects it - a typo never lowers the gates.
 		Name:    "LETS_GATES",
-		Comment: "Which actions ask you first: strict (every commit and confirm, as before 0.11) | standard (irreversible or outward only: PR merge, force-push, destructive, tracker close outside /lets:done, bd dolt push, posting outside the repo, other projects, release) | minimal (the floor: force-push, destructive, posting outside the repo, other projects, release). Written only by /lets:init or by you; read at session start",
+		Comment: "Which actions ask you first: strict (every commit and confirm, as before 0.11) | standard (irreversible or outward only: PR merge, force-push, destructive, a push or PR outside /lets:done, tracker close outside /lets:done, bd dolt push, posting outside the repo, other projects, release) | minimal (as standard, except a push or PR outside /lets:done asks only for the merge branch or another task's branch, and /lets:done merges the task's own PR once CI is green). The full table: core rules ## Gates. Written only by /lets:init or by you; read at session start",
 		Default: "standard",
 	},
 }

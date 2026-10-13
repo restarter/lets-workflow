@@ -142,7 +142,7 @@ func gatesNotice(raw string) string {
 	if len(raw) > gatesNoticeMaxQuoted {
 		raw = raw[:gatesNoticeMaxQuoted]
 	}
-	return fmt.Sprintf("LETS_GATES=%q is not a level (strict | standard | minimal) - standard applies. Fix .lets/.env or run /lets:init.", raw)
+	return fmt.Sprintf("LETS_GATES=%q is not a level (strict | standard | minimal) - standard applies. Fix .lets/.env (or ~/.lets/.env) or run /lets:init.", raw)
 }
 
 // driftCheck returns the project rules drift message. The global

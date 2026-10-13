@@ -224,9 +224,9 @@ AskUserQuestion(
     question: "Which actions should ask you first?",
     header: "Gates",
     options: [
-      { label: "Standard (Recommended)", description: "PR merge, force-push, destructive, outward and other-project actions ask; the rest runs" },
+      { label: "Standard (Recommended)", description: "PR merge, force-push, destructive, pushes outside /lets:done, outward and other-project actions ask" },
       { label: "Strict", description: "Every commit and confirmation asks, as before" },
-      { label: "Minimal", description: "Only force-push, destructive, outward, other-project and release actions ask" }
+      { label: "Minimal", description: "As Standard, but /lets:done merges your own green PR; fewer push questions" }
     ],
     multiSelect: false
   }]
