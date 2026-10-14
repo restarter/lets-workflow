@@ -22,9 +22,9 @@ Claude Code is powerful, but without structure it drifts - forgets context betwe
 **You don't just chat with AI. You run a process** — `/lets:*` commands and 15 expert agents cover the whole development cycle, every change is reviewed by the right specialists, and every decision is made deliberately, with you in the loop.
 
 - **A complete workflow, not a chat box.** One loop from start to ship — restore context and pick a task, plan the work, build it, review it, open a PR, close the task. The plugin keeps Claude on the rails the whole way; nothing falls through the cracks.
-- **Plan before you build.** Pulse and clean up the backlog, design the architecture with real codebase exploration and expert review, then execute step by step behind approval gates. Choices are made on purpose, not improvised.
+- **Plan before you build.** Pulse and clean up the backlog, design the architecture with real codebase exploration and expert review, then execute it - you approve the plan once, and nothing turns into code without `/lets:execute`. Choices are made on purpose, not improvised.
 - **Every change reviewed by the right experts.** 15 specialized agents - the relevant ones select themselves based on what changed - security for auth code, database for migrations, architect for structure. Findings come tiered by severity, so you act on what matters. Plus an *actor* agent — point it at a senior iOS dev's profile, a UX designer's, anyone — and get their take.
-- **You decide, always.** Commit, push, PR, merge - every state-changing step waits for your "go". The AI proposes and explains its reasoning; it never silently switches approach. Transparency by design.
+- **You decide what cannot be undone.** Merging a PR, force-pushing, deleting, posting outside the repo, touching another project, releasing - these ask you first. Local, reversible work (a commit, a task note, a cost panel) runs and is reported in one line, and the command you typed is the approval for what it names. Pick the level in `.lets/.env`: `strict` (every step asks, as before), `standard` (the default) or `minimal`. The AI never silently switches approach and never writes code without an approved plan.
 - **Context that survives.** Tasks, decisions, and discovery notes live in [beads](https://github.com/steveyegge/beads) and outlast conversation compaction and new sessions - pick up exactly where you left off.
 - **Built for teams.** Shared task database via [Dolt](https://github.com/dolthub/dolt), team runs that implement multiple tasks in parallel (each in its own worktree and its own visible session, gates pressed by you), and worktrees for hands-on parallel sessions.
 - **GitHub-native PR review.** Agents analyze the PR, you discuss findings, they post inline comments to the exact lines, follow up on fixes, approve or request changes - without leaving the terminal.
@@ -211,7 +211,7 @@ A LETS session runs a loop: start, work, commit, finish.
 ├─ You plan, Claude builds ─────────────────────────────────────────────────┤
 │  /lets:backlog     Backlog review (multi-agent) + cleanup triage          │
 │  /lets:plan        Design how to build it - codebase exploration, arch    │
-│  /lets:execute     Claude implements the plan with your approval gates    │
+│  /lets:execute     Claude implements the plan you approved                │
 │                                                                           │
 ├─ Agents work in parallel ─────────────────────────────────────────────────┤
 │  /lets:team        Run several tasks at once, one visible session each    │
@@ -233,7 +233,7 @@ A LETS session runs a loop: start, work, commit, finish.
 
 **Plan** (`/lets:plan`) - codebase exploration with dynamically-scaled explorer agents, then architecture design with expert evaluation. Small project? One explorer. Large monorepo? Usually up to 10, each mapping a different area (more asks you to confirm). Want a quick talk-through instead? `/lets:plan --fast` skips the subagent phases and plans collaboratively in-session.
 
-**Execute** (`/lets:execute`) - implements the plan in native plan mode. You approve the execution once, then pick how it runs: straight-through (the default - all tasks, commits at the plan's commit points), step-by-step (a pause after each task), auto (unattended), or implementers - one persistent agent writes chunk after chunk (or `--parallel` groups work side by side in isolated worktrees) while you review every diff, or let the team check accept low-risk chunks under the gate policy you pick at Start, and send corrections back to the same agent. No surprises.
+**Execute** (`/lets:execute`) - implements the plan in native plan mode. You approve the execution once, then pick how it runs: straight-through (the default - all tasks, commits at the plan's commit points), step-by-step (a pause after each task), auto (unattended), or implementers - one persistent agent writes chunk after chunk (or `--parallel` groups work side by side in isolated worktrees) while you review every diff, or let the team check accept low-risk chunks under the gate policy you approve at Start (its default follows `LETS_GATES`), and send corrections back to the same agent. No surprises.
 
 **Research** (`/lets:research`) - unlike `/lets:opinion` (project-grounded judgment, no web) or `/lets:ask` (a quick model-knowledge consult), this answers an external or technical question with a CITED synthesis: it searches the web, fetches the best sources, and a cross-check pass flags single-source, contradicted, or stale claims before presenting. The deliverable is a sourced answer with a Sources list and an as-of date. `--workflow` runs it off-context; `--project` grounds findings against this repo.
 ### Code review
@@ -293,7 +293,7 @@ On Linux or macOS with [tmux](https://github.com/tmux/tmux) installed, set `LETS
 
 → Full docs: [docs/messaging.md](docs/messaging.md)
 
-**Sessions that talk to each other.** Run a `/lets:start --main` orchestrator next to your worktree sessions and stop copying decisions between chats: a worker asks its orchestrator with `/lets:orc ask`, pings it about a PR, or reads what it said; `/lets:peer <name>` reaches any named session. Nothing is sent without your request in that chat, a peer's words arrive as data rather than instructions, and a message goes out through Claude's own session messaging, addressed by session name. An orchestrator can grant its bound workers a standing authorization, so the pair talks both ways without per-message confirmation while every hard gate still asks. With Orca, `/lets:hub` looks across projects: it asks a stopped orchestrator a read-only question, or wakes it in a visible terminal when the work needs its gates.
+**Sessions that talk to each other.** Run a `/lets:start --main` orchestrator next to your worktree sessions and stop copying decisions between chats: a worker asks its orchestrator with `/lets:orc ask`, pings it about a PR, or reads what it said; `/lets:peer <name>` reaches any named session. Nothing is sent without your request in that chat, a peer's words arrive as data rather than instructions, and a message goes out through Claude's own session messaging, addressed by session name. At the default gate level your sessions talk without per-message confirmation once Go has verified who sent a message - a verified peer can get an unlisted action done inside the receiver's task, a listed one asks the receiver's owner once, and every hard gate still asks; at `strict` only a bound pair with a standing authorization talks that way. With Orca, `/lets:hub` looks across projects: it asks a stopped orchestrator a read-only question, or wakes it in a visible terminal when the work needs its gates.
 
 **Hand the work to another agent.** When you want a second reader with no stake in this chat - Codex, Antigravity, a fresh Claude session - `/lets:handoff --branch` (or `--last-commit`, `--plan`, a PR, ...) builds one self-contained brief. On its own it prints the brief to paste anywhere; `--codex` runs it through Codex headless in a read-only sandbox, and with Orca `--send` types it into an agent's tab. Either way the report comes back UNVERIFIED, and every finding is checked against the code before it counts. The printed brief writes nothing; with `--codex` / `--send` the brief and the agent's report are saved under `.lets/handoffs/`. With `--execute --send`, the same tab implements an approved plan instead of reviewing it: the brief is the plan plus the rules it works under, and its commits come back UNVERIFIED for `/lets:review --branch`.
 
@@ -345,6 +345,10 @@ LETS_TRACKER=beads
 # How the sessions LETS launches start: default | auto | all-in (bypassPermissions - only on purpose,
 # matching the class your orchestrator runs in)
 LETS_LAUNCH_MODE=default
+
+# Which actions ask you first: strict (every commit and confirm) | standard (default -
+# irreversible or outward only) | minimal  (empty or unknown = standard; see docs/workflow.md)
+LETS_GATES=standard
 ```
 
 All plugin-generated files live under `.lets/` (gitignored); interactive worktrees under `.worktrees/`.

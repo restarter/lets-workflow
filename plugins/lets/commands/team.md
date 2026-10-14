@@ -86,7 +86,7 @@ lets worktree task-state set --self-orchestrator --json
 
   written -> re-run `lets peers orchestrator` above; `self_record` must now be non-null; `<lead>` = `self_record.name`.
 - Any failure - no `lets` binary, `error.kind=orchestrator_needs_name` (this session has no name), another failed write, or `self_record` still null -> **Refused:** "This session cannot be the team's orchestrator ({reason}) - name this session with /rename <name>, or run from /lets:start --main." Stop.
-- **Standing** - with `<lead>` set, read `self_record.standing` from the last `lets peers orchestrator` envelope (the same question as `/lets:start --main`): `on` / `off` (an existing record keeps its grant) -> one line `Standing authorization between {self_record.name} and the sessions bound to it: {on|off} (/lets:orc standing on|off changes it)`; `""` (a new record, never asked) -> ONE question:
+- **Standing** - with `<lead>` set, read `self_record.standing` from the last `lets peers orchestrator` envelope (the same question as `/lets:start --main`). `{LETS_GATES}` is not `strict` (missing reads as `standard`) -> one line `Gate level {LETS_GATES}: sessions talk without per-message confirmation`, and no question (the recorded grant governs `strict` only). `{LETS_GATES}` is `strict` -> `on` / `off` (an existing record keeps its grant) -> one line `Standing authorization between {self_record.name} and the sessions bound to it: {on|off} (/lets:orc standing on|off changes it)`; `""` (a new record, never asked) -> ONE question:
 
 ```
 AskUserQuestion(
@@ -113,7 +113,7 @@ AskUserQuestion(
 | absent, or `agent-teams` | legacy - **stale**: the harness that ran it is gone |
 
 - A live record that lists a selected task id -> STOP, naming the record path and the task: that task already has a worker.
-- A stale record never blocks. List each one (path, created, tasks) and offer to close it:
+- A stale record never blocks. List each one (path, created, tasks). `{LETS_GATES}` is `strict` -> offer to close it (below); otherwise (missing reads as `standard`) -> print `Marking {N} stale legacy record(s) stopped` and do **Mark stopped**:
 
 ```
 AskUserQuestion(
@@ -147,7 +147,7 @@ Present as multiSelect AskUserQuestion - user picks tasks.
 
 **2. Manual (`--tasks A,B,C`):** Parse comma-separated task IDs from argument.
 
-**Confirmation gate:** If more than 10 selected:
+**Confirmation gate:** If more than 10 selected: `{LETS_GATES}` is `strict` -> the question below; otherwise (missing reads as `standard`) -> print `Launching {N} worker sessions` and launch all.
 
 ```
 AskUserQuestion(
@@ -209,11 +209,12 @@ Resolve the workers' launch once, before the confirm, so R5's yes covers what it
 
 Orchestrator: {lead}
 Base: origin/{LETS_MERGE_BRANCH}
+Gates: {LETS_GATES}
 Launch: {mode} ({source})
 Command: {agent_command}
 ```
 
-`Launch` and `Command` are Step R4.5's: `{mode}` = the resolved mode (from the team file: its class, `bypass` shown as `all-in (bypass)`), `{source}` = where it came from, `{agent_command}` verbatim - so the existing yes approves the launch mode too. The warning lines of R4.5 print right under the plan.
+`Gates` is this session's level from LETS Config (missing reads as `standard`); the workers read their own at session start. `Launch` and `Command` are Step R4.5's: `{mode}` = the resolved mode (from the team file: its class, `bypass` shown as `all-in (bypass)`), `{source}` = where it came from, `{agent_command}` verbatim - so the existing yes approves the launch mode too. The warning lines of R4.5 print right under the plan.
 
 ```
 AskUserQuestion(
@@ -423,7 +424,7 @@ Skill(skill: "lets:member-run", args: "op=spawn scope=<c> name=<name> role=lets:
 
 1. Every roster row except `lead` that `ListAgents` does not list as `<c>-<name>` and that has no `Dismissed: <name>` line by this lead session is a candidate - a surviving peer pane (`lets peers who`) stays a candidate, for item 2's re-use check.
 2. A **surviving pane**: a candidate whose `<c>-<name>` session still runs (Step M0's `lets peers who` test). It may be re-used only when exactly one live session carries that name.
-3. One confirm, naming the count and each `name (model)`:
+3. One confirm, naming the count and each `name (model)`. `{LETS_GATES}` is not `strict` (missing reads as `standard`) and Step 2 found no re-usable pane -> no question: print `Respawning {N} members of {c}: {name (model), ...}` and do **Respawn all**. Otherwise (`strict`, or a re-usable pane - a real choice) -> ask:
 
 ```
 AskUserQuestion(
@@ -548,6 +549,8 @@ Same as Status S1. No active run -> "No team run to stop. To end the standing te
 
 ### Step T2: Confirm
 
+`{LETS_GATES}` is not `strict` (missing reads as `standard`) -> no question: the typed `/lets:team stop` is the approval; print `Asking {N} workers to commit and end` and go to Step T3. `strict` -> ask:
+
 ```
 AskUserQuestion(
   questions=[{
@@ -564,7 +567,7 @@ AskUserQuestion(
 
 ### Step T3: Ask Each Worker
 
-For each task in state `launched` or `open`, one message through the orc skill (its own Send? gate applies):
+For each task in state `launched` or `open`, one message through the orc skill (the orc skill's level rule applies):
 
 ```
 Skill(skill: "lets:orc", args: "verb=tell target=\"<worker_name>\" footer=none text=The team run is stopping. Commit your work, then end this session with /lets:end.")

@@ -1,8 +1,10 @@
 # Git Workflow
 
-## Permission Required
+## Approval
 
-**Never commit or push without explicit user approval.** Also applies to any command that sends data to a remote (`bd dolt push`, etc).
+What asks before a commit, a push or anything sent to a remote follows the core rules' `## Gates` table at `LETS_GATES`.
+
+At `strict`:
 
 ```
 Claude: "Done. Ready to commit?"
@@ -82,4 +84,4 @@ Reasons it's bad:
 
 ## Use `/lets:commit` skill
 
-`/lets:commit` enforces this format automatically: detects active task from branch, adds scope and footer, asks for approval. **Always use it** instead of manual `git commit` to avoid format drift.
+`/lets:commit` enforces this format automatically: detects active task from branch, adds scope and footer, and asks or commits as `LETS_GATES` says. **Always use it** instead of manual `git commit` to avoid format drift.

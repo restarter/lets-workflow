@@ -131,6 +131,16 @@ var Keys = []Key{
 		Comment: "How the sessions LETS launches start: default (plain claude; also what empty means) | auto (--permission-mode auto) | all-in (--permission-mode bypassPermissions - set it only on purpose; match the class your orchestrator runs in)",
 		Default: "default",
 	},
+	{
+		// Default `standard` is IMPLICIT, like LETS_LAUNCH_MODE (lets-gbfpd):
+		// initcmd's mergePrefs never falls back to it, so a regen leaves an
+		// unpicked value empty and a user-level ~/.lets/.env value can apply.
+		// ResolvedEnv normalizes empty/unknown to standard (letsconfig.GatesLevel)
+		// before the hook injects it - a typo never lowers the gates.
+		Name:    "LETS_GATES",
+		Comment: "Which actions ask you first: strict (every commit and confirm, as before 0.11) | standard (irreversible or outward only: PR merge, force-push, destructive, a push or PR outside /lets:done, tracker close outside /lets:done, bd dolt push, posting outside the repo, other projects, release) | minimal (as standard, except a push or PR outside /lets:done asks only for the merge branch or another task's branch, and /lets:done merges the task's own PR once CI is green). The full table: core rules ## Gates. Written only by /lets:init or by you; read at session start",
+		Default: "standard",
+	},
 }
 
 // UserKeys returns the subset of Keys that `lets init --user` manages in

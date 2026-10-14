@@ -217,6 +217,23 @@ AskUserQuestion(
 
 Bind the label to `$LAUNCH_MODE`: "Default"→"default", "Auto"→"auto", "All-in"→"all-in". `all-in` is only ever this explicit pick - never a fallback. `crossSessionInbound` is never written.
 
+### 2c-ter-c. Gate level
+
+AskUserQuestion(
+  questions=[{
+    question: "Which actions should ask you first?",
+    header: "Gates",
+    options: [
+      { label: "Standard (Recommended)", description: "PR merge, force-push, destructive, pushes outside /lets:done, outward and other-project actions ask" },
+      { label: "Strict", description: "Every commit and confirmation asks, as before" },
+      { label: "Minimal", description: "As Standard, but /lets:done merges your own green PR; fewer push questions" }
+    ],
+    multiSelect: false
+  }]
+)
+
+Bind the label's first word, lowercased, to `$GATES`: "Standard"→"standard", "Strict"→"strict", "Minimal"→"minimal". The level lands in `.lets/.env` as `LETS_GATES` and applies from the next session.
+
 ### 2c-quater. Task tracker adapter
 
 AskUserQuestion(
@@ -281,11 +298,12 @@ lets init --json \
   --pr-flow={FLOW} \
   --launcher={LAUNCHER} \
   --launch-mode={LAUNCH_MODE} \
+  --gates={GATES} \
   --tracker={TRACKER} \
   {SKIP_BEADS_FLAG} {RULES_SCOPE_FLAG}
 ```
 
-The `{...}` values are orchestrator bindings from Steps 2a-2c-quater ({LANGUAGE} = the English language name bound in 2a; {BRANCH}/{FLOW}/{LAUNCHER}/{LAUNCH_MODE}/{TRACKER}; and the two flag fragments {SKIP_BEADS_FLAG}/{RULES_SCOPE_FLAG}, each either empty or its flag) — substitute each literal BEFORE running. NEVER leave a `$`-var: `$LANG` is the POSIX locale env var (`en_US.UTF-8`) and bash would expand it, poisoning `LETS_LANGUAGE` in `.lets/.env`.
+The `{...}` values are orchestrator bindings from Steps 2a-2c-quater ({LANGUAGE} = the English language name bound in 2a; {BRANCH}/{FLOW}/{LAUNCHER}/{LAUNCH_MODE}/{GATES}/{TRACKER}; and the two flag fragments {SKIP_BEADS_FLAG}/{RULES_SCOPE_FLAG}, each either empty or its flag) — substitute each literal BEFORE running. NEVER leave a `$`-var: `$LANG` is the POSIX locale env var (`en_US.UTF-8`) and bash would expand it, poisoning `LETS_LANGUAGE` in `.lets/.env`.
 
 Capture stdout (JSON object).
 
@@ -384,6 +402,8 @@ If "Keep current" picked, substitute `$LANG = $CURRENT_LANG`. Else use selected 
 
 Repeat for MergeBranch (`$BRANCH`), PRFlow (`$FLOW`), and Launcher (`$LAUNCHER` — "Keep current" shows `$LETS_LAUNCHER` from LETS Config, plus options terminal / cmux / tmux / orca — apply the same detection-aware filtering as 2c-ter: omit cmux off macOS, mark a launcher `(detected)` when its binary is on PATH (Orca: when `lets orca status --json` reports `status.bin`); picking orca gets the same `orca.yaml` line), and LaunchMode (`$LAUNCH_MODE` — "Keep current" shows `$LETS_LAUNCH_MODE` from LETS Config, "(unset = default)" when it is absent, and binds `$LAUNCH_MODE` to that CURRENT value - empty when unset, never `default` (`--launch-mode=` keeps the key unset); plus the three options of 2c-ter-b; never a recommended `all-in`).
 
+**Gate level** — the 2c-ter-c question with a first option `{ label: "Keep current", description: "Currently: {LETS_GATES}" }` (the effective level from LETS Config). "Keep current" → `$GATES_FLAG=""` (the file keeps its value, an empty one stays implicit `standard`); any other pick → `$GATES_FLAG="--gates=<level>"`.
+
 **Rules scope** — first run the **Global-rules check** from Step 2d (it computes `SCOPE`/`GLOBAL`/`PROJECT`; the change-config path does not otherwise set them). Then only ask when `GLOBAL=PRESENT` (otherwise there's nothing to rely on; bind `$RULES_SCOPE_FLAG=""`):
 
 AskUserQuestion(
@@ -410,10 +430,10 @@ lets init --json \
   --pr-flow={FLOW} \
   --launcher={LAUNCHER} \
   --launch-mode={LAUNCH_MODE} \
-  {RULES_SCOPE_FLAG}
+  {GATES_FLAG} {RULES_SCOPE_FLAG}
 ```
 
-Same placeholder-substitution rule as Step 2d: substitute {LANGUAGE}/{BRANCH}/{FLOW}/{LAUNCHER}/{LAUNCH_MODE}/{RULES_SCOPE_FLAG} literals BEFORE running; never leave a `$`-var (`$LANG` = POSIX locale, would poison `.lets/.env`).
+Same placeholder-substitution rule as Step 2d: substitute {LANGUAGE}/{BRANCH}/{FLOW}/{LAUNCHER}/{LAUNCH_MODE}/{GATES_FLAG}/{RULES_SCOPE_FLAG} literals BEFORE running; never leave a `$`-var (`$LANG` = POSIX locale, would poison `.lets/.env`).
 
 Passing the prefs flags triggers `env_action.kind=regenerated` (binary detects values differ from existing .env, regenerates while preserving foreign keys + user-customized `LETS_TRACKER`).
 

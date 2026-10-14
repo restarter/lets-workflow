@@ -599,7 +599,7 @@ func TestMemberRun(t *testing.T) {
 		{"record loses review_sha", "execute", `"review_sha": null, `, "", "review_sha", 1},
 		{"pipelined row loses fixup", "agent", "`git commit --fixup=<that sha>`", "`git commit --amend`", "--fixup and the overlap stop", 1},
 		{"isolated pipelined commits at once", "execute", "4. **Only then the lead's commit**", "0. **Committed by the lead at once**", "before the lead's commit", 1},
-		{"unscoped gate sentence returns", "rules", "inside it the gate is plan mode for an inline run", "inside it the plan-mode approval is the gate", "still asserts", 1},
+		{"unscoped gate sentence returns", "rules", "`/lets:execute` (plan mode inline, the Start gate delegated)", "`/lets:execute` (after its plan-mode approval)", "still asserts", 1},
 		{"a replacement keeps the old report path", "execute", "a replacement never writes an earlier generation's report", "keep the copied lines", "new generation's round-0 REPORT_FILE", 1},
 		{"the final text gates the report again", "execute", "EMPTY ones included", "non-empty ones", "EMPTY ones included", 1},
 		{"interim notifications conclude a gap", "execute", "op=peek", "op=collect", "EMPTY ones included", -1},
@@ -697,7 +697,7 @@ func launchPlanProblems(exec string) []string {
 		{"Isolation", "| Isolation | which implementers run isolated"},
 		{"Integration order", "| Integration order | the order"},
 		{"Pipelined", "| Pipelined | whether"},
-		{"Gate policy", "| Gate policy | the default"},
+		{"Gate policy", "| Gate policy | the level's default"},
 	} {
 		if !strings.Contains(lp, choice.row) {
 			add("the launch plan must name " + choice.name)
@@ -706,10 +706,14 @@ func launchPlanProblems(exec string) []string {
 	if !strings.Contains(lp, "each with a one-line reason") || !strings.Contains(lp, "| Why ") {
 		add("every launch plan choice must carry a one-line reason")
 	}
+	// each policy with its meaning - the level-default mapping names policies too
 	for _, policy := range []string{"`per-commit`", "`high-only`", "`at-end`"} {
-		if !strings.Contains(lp, policy) {
+		if !strings.Contains(lp, policy+" (") {
 			add("the launch plan's gate policy must name " + policy)
 		}
+	}
+	if !strings.Contains(lp, "the level's default (`{LETS_GATES}`: `strict` -> `per-commit`, `standard` / `minimal` -> `at-end`)") {
+		add("the launch plan's gate policy must propose the level's default")
 	}
 	for _, need := range []string{"Risk", "Files audit", "file-disjoint", "dependencies"} {
 		if !strings.Contains(lp, need) {
@@ -756,6 +760,7 @@ func TestExecuteLaunchPlan(t *testing.T) {
 		{"integration order dropped", "| Integration order | the order", "| Order | the order", "Integration order"},
 		{"reasons dropped", "each with a one-line reason", "each with a value", "one-line reason"},
 		{"at-end policy dropped", "or `at-end` (", "or `after` (", "`at-end`"},
+		{"launch plan ignores the level", "`standard` / `minimal` -> `at-end`)", "`standard` / `minimal` -> `per-commit`)", "level's default"},
 		{"fixed allocation creeps in", "This is reasoning about THIS plan, not a fixed rule", "Always two implementers, not a fixed rule", "no fixed allocation"},
 		{"pipelined override dropped", "`--parallel`, `--pipelined` and `--gate <policy>`", "`--parallel`, `--pipe` and `--gate <policy>`", "`--pipelined`"},
 		{"preview loses the launch plan", `preview: "{the Step 4.7 launch plan`, `preview: "{the plan`, "Start option's preview"},
@@ -817,9 +822,12 @@ func gatePolicyProblems(exec string) []string {
 		if (strings.Contains(risk, "high") || risk == "any") && !strings.HasPrefix(skeptic, "yes") {
 			add("the skeptic must run on Risk high or missing in every policy, not in " + name + " / " + risk)
 		}
-		if name == "per-commit" && !strings.Contains(policy, "(default)") {
-			add("per-commit must be the default policy")
+		if strings.Contains(policy, "(default)") {
+			add("no row of the dispatch table may be marked (default) - the level picks it: " + name)
 		}
+	}
+	if !strings.Contains(review, "Default: `per-commit` at `strict`, `at-end` at `standard` / `minimal`; `--gate` overrides.") {
+		add("the default policy line must map strict to per-commit and standard / minimal to at-end, with --gate overriding")
 	}
 	for _, v := range []string{"per-commit", "high-only", "at-end"} {
 		if !seen[v] {
@@ -856,7 +864,7 @@ func gatePolicyProblems(exec string) []string {
 		}
 	}
 	record := sectionSpan(exec, "### 5-D.3 Run record")
-	for _, need := range []string{`"gate_policy": "per-commit"`, "`accepted_by` is `owner` or `team`", `"committed_by":`} {
+	for _, need := range []string{`"gate_policy": "at-end"`, "the resolved value the Start pick approved", "`accepted_by` is `owner` or `team`", `"committed_by":`} {
 		if !strings.Contains(record, need) {
 			add("the run record must hold " + need)
 		}
@@ -884,7 +892,10 @@ func TestExecuteGatePolicy(t *testing.T) {
 		{"second dispatch table", "**Accept dispatch - the ONE table.**", "| gate_policy | risk |\n**Accept dispatch - the ONE table.**", "exactly one table"},
 		{"skeptic skipped for at-end high", "| `at-end` | high / missing | yes | yes |", "| `at-end` | high / missing | yes | no |", "skeptic must run"},
 		{"CHECK skipped", "| `high-only` | low | yes | no |", "| `high-only` | low | no | no |", "CHECK must run"},
-		{"per-commit not default", "| `per-commit` (default) |", "| `per-commit` |", "default policy"},
+		{"standard default loses at-end", "Default: `per-commit` at `strict`, `at-end` at `standard` / `minimal`;", "Default: `per-commit` at `strict`, `per-commit` at `standard` / `minimal`;", "default policy line"},
+		{"strict default loses per-commit", "Default: `per-commit` at `strict`", "Default: `at-end` at `strict`", "default policy line"},
+		{"a row marked default returns", "| `per-commit` | any |", "| `per-commit` (default) | any |", "marked (default)"},
+		{"record keeps a fixed default", `"gate_policy": "at-end"`, `"gate_policy": "per-commit"`, "the run record must hold"},
 		{"at-end no longer halts", "**Hard stops and deviations halt at once in every policy**", "**Deviations wait for the run review**", "Hard stops"},
 		{"run review dropped", "### 5-D.8 Run review (`at-end` and `high-only`)", "### 5-D.8 Wrap-up", "5-D.8 run review"},
 		{"extension point lost", "a new policy is a new row, never a new code path", "a new policy gets its own step", "new row"},

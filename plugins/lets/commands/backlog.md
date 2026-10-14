@@ -130,7 +130,7 @@ If active task:
 comment-add task=<task-id> body="Backlog pulse: {key takeaways, 2-3 items}"
 ```
 
-If ideas emerged that deserve tasks, offer to create them (use the `create-task` skill, user approval per task).
+If ideas emerged that deserve tasks, offer to create them (through the `create-task` skill - its gate follows `LETS_GATES`).
 
 ---
 
@@ -300,7 +300,7 @@ Scan the profile for signals and match to agents:
 3. More signals = more agents. No hard cap - include every agent that has a clear signal
 4. If only 1-2 signals matched, add architect + pragmatist for broader perspective
 
-**Confirmation gate:** If planning to launch more than 10 agents:
+**Confirmation gate:** If planning to launch more than 10 agents: `{LETS_GATES}` is `strict` -> the question below; otherwise (missing reads as `standard`) -> print `Launching {N} review agents` and launch all.
 
 ```
 AskUserQuestion(
@@ -466,7 +466,7 @@ AskUserQuestion(
 
 **Handle response:**
 - **Explore an idea** -> ask which one, enter conversation loop (acknowledge, build, probe)
-- **Create tasks** -> ask which ideas, use the `create-task` skill with user approval per task
+- **Create tasks** -> ask which ideas, then create each through the `create-task` skill (its gate follows `LETS_GATES`)
 - **Done** -> Phase 6
 - **Free text** -> treat as exploring a specific idea
 
@@ -565,7 +565,7 @@ For orphan tasks (no labels), suggest a label and ask:
 For unassigned tasks, suggest an assignee based on task domain and ask:
 - tracker `assignee` - assign `{name}`
 
-All mutations require user approval.
+The triage pick per item is the user's choice at every level. Creating or updating a task follows `LETS_GATES`; a close asks at every level (`## Gates`).
 Continue until all groups processed or user says "enough".
 
 ### Step C4: Summary & Exit
@@ -652,7 +652,7 @@ The returned aggregate `{ ideas, counts }` is the only thing that enters context
 
 ## Rules
 
-- All task mutations (create, close, update) require user approval
+- Creating or updating a task follows `LETS_GATES`; a close asks at every level (`## Gates`)
 - No agents in Cleanup mode
 - `--fast` (Fast Mode) is orchestrator-only - a quick no-agent backlog pulse (house `--fast` convention); `--fast` wins over `--workflow`, and is ignored with `cleanup`
 - Explorer + agents only in Review Backlog mode

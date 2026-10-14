@@ -46,7 +46,9 @@ Trunk-mode requires `detect-task` (Step 1) to have returned an active task. If n
 git status --short
 ```
 
-If uncommitted changes exist, use **AskUserQuestion**:
+If uncommitted changes exist, by level:
+- `{LETS_GATES}` is `standard` or `minimal` (or missing - reads as `standard`) and no change is a new file (no `??` line and no staged `A ` line) -> `Skill(skill: "lets:commit")` (it commits without asking at this level), then one line naming what was committed, and continue. A commit failure stops `/lets:done`.
+- New files present (`??` or `A ` lines, any level), or `{LETS_GATES}` is `strict` -> **AskUserQuestion** below, its question naming each new file when there are any (`You have uncommitted changes, including new file(s) {list}. What to do?`): which new files belong to the task is a real decision - a swept-in file can be cruft or a secret.
 
 ```
 AskUserQuestion(
@@ -64,7 +66,7 @@ AskUserQuestion(
 ```
 
 **Handle response:**
-- **Commit first** -> invoke `Skill(skill: "lets:commit")`, then continue
+- **Commit first** -> invoke `Skill(skill: "lets:commit")`, then continue. When this card named new files, the commit skill's new-file question is answered by this pick - it does not ask again for those same files.
 - **Skip** -> warn and continue
 - **Cancel** -> stop, return to work
 
@@ -149,7 +151,7 @@ AskUserQuestion(
 **Handle response:**
 - **Fix first** -> stop, do NOT proceed to closing
 - **Update scope** -> update the task description via the tracker's `set-field` verb, then proceed
-- **PR only, keep open** -> proceed to Step 4. In Step 8, create the PR (or push to the open one the Existing-PR Guard found; on its `shipped` outcome nothing is pushed) but do NOT close the task. In Step 9, skip "Merge & close" option - user explicitly chose to keep the task open for remaining work.
+- **PR only, keep open** -> proceed to Step 4. In Step 8, create the PR (or push to the open one the Existing-PR Guard found; on its `shipped` outcome nothing is pushed) but do NOT close the task. In Step 9, skip "Merge & close" and the `minimal` wait-and-merge - user explicitly chose to keep the task open for remaining work. This question asks at every level.
 - **Ask orchestrator** -> `Skill(skill: "lets:orc", args: "verb=ask footer=none text=Closing {task-id} with requirements missing: {list}. Fix first, update the scope, or PR and keep open?")`. After the reply is relayed, show this gate again without that option - the user picks.
 
 **Only continue to Step 4 when all requirements are verified OR user chose "PR only, keep open".**
@@ -205,7 +207,7 @@ AskUserQuestion(
 )
 ```
 
-**Keep working** -> stop, return to work. **Push them anyway** -> continue; the Step 6 gate still asks as usual. No park commit -> nothing here.
+This card asks at every level. **Keep working** -> stop, return to work. **Push them anyway** -> continue to Step 6 (which runs by its level). No park commit -> nothing here.
 
 Show summary:
 ```
@@ -224,7 +226,7 @@ Keep `CHANGELOG.md` in sync with merged work so release notes don't have to be b
 
 **If the Existing-PR Guard's outcome is `shipped`:** skip this step - nothing can be added to a merged PR.
 
-**If `[Unreleased]` already has an entry naming this task id** (a re-run - e.g. more commits for an open PR): show that entry and ask only whether to update it (**Edit first**) or leave it (**Skip**) - drop **Add entry**; never write a second entry for the same task.
+**If `[Unreleased]` already has an entry naming this task id** (a re-run - e.g. more commits for an open PR): show that entry; at `strict` ask only whether to update it (**Edit first**) or leave it (**Skip**) - drop **Add entry**; at `standard` / `minimal` leave it as it is. Never write a second entry for the same task.
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
@@ -235,7 +237,9 @@ test -f "$LETS_PROJECT_ROOT/CHANGELOG.md" && echo "has-changelog" || echo "no-ch
 
 **If `has-changelog` but the task is pure infra / tests / internal refactor** (no user-visible change to commands, skills, agents, rules, CLI, or README): say so briefly and proceed to Step 6.
 
-**Otherwise** — draft a one-line entry from the task title + commit subjects, pick the right Keep-a-Changelog section (`Added` / `Changed` / `Fixed` / `Removed`), and prepare to insert it under `[Unreleased]` following the file's existing conventions (section headers, task-id link style). Then use **AskUserQuestion**:
+**Otherwise** — draft a one-line entry from the task title + commit subjects, pick the right Keep-a-Changelog section (`Added` / `Changed` / `Fixed` / `Removed`), and prepare to insert it under `[Unreleased]` following the file's existing conventions (section headers, task-id link style). Then by level:
+- `{LETS_GATES}` is `standard` or `minimal` (or missing) -> no question: write the drafted entry under `[Unreleased]`, commit it via `/lets:commit` (`docs(<task-id>): update CHANGELOG`), print the entry, and proceed to Step 6.
+- `{LETS_GATES}` is `strict` -> **AskUserQuestion**:
 
 ```
 AskUserQuestion(
@@ -258,6 +262,8 @@ AskUserQuestion(
 - **Skip** -> proceed to Step 6, CHANGELOG untouched.
 
 ## Step 6: Confirm with User
+
+**By level.** `{LETS_GATES}` is `standard` or `minimal` (or missing) -> no question: the typed `/lets:done` is the approval for the push + PR, or the local merge + close. Print one line naming what happens next - `Pushing {branch} and opening a PR to {LETS_MERGE_BRANCH}` (`fresh`), `Pushing new commits to PR #{number}` (`open`), `Closing the task - PR #{number} is already merged` (`shipped`), `Merging locally into {LETS_MERGE_BRANCH}` (local), `Pushing to {LETS_MERGE_BRANCH} and closing the task` (trunk) - and proceed to Step 7. `{LETS_GATES}` is `strict` -> the cards below.
 
 Show what will happen based on `$LETS_PR_FLOW` from LETS Config:
 
@@ -333,7 +339,7 @@ AskUserQuestion(
 )
 ```
 
-Next steps presented via AskUserQuestion (replaces LETS box).
+Next steps: Step 9 (cards at `strict`, a Nav box otherwise).
 
 **Handle response:**
 - **Finish** -> proceed to Step 7
@@ -383,7 +389,7 @@ comment-add task=<task-id> body-file=.lets/cache/comment-<task-id>.md
 
 ### Team worktree: promote to Standing knowledge
 
-Only when `lets worktree info --json` reports a `team`; otherwise skip this subsection. Before the close in Step 8, list the candidate facts - from the team file's `## 8. Decisions` and this task's notes and comments - that a future task of this team should know, then one separate question - at most 3 candidates (more -> the 3 strongest, the rest named in the question text) and a last "None" option:
+Only when `lets worktree info --json` reports a `team`; otherwise skip this subsection. Before the close in Step 8, list the candidate facts - from the team file's `## 8. Decisions` and this task's notes and comments - that a future task of this team should know. `{LETS_GATES}` is `standard` or `minimal` (or missing) -> no question: the lead appends the strongest (at most 3) to `## 9. Standing knowledge` and names them in one line; no candidate -> nothing. `{LETS_GATES}` is `strict` -> one separate question - at most 3 candidates (more -> the 3 strongest, the rest named in the question text) and a last "None" option:
 
 ```
 AskUserQuestion(
@@ -438,6 +444,8 @@ else
   git push -u origin {LETS_MERGE_BRANCH}
 fi
 ```
+
+When Step 3 chose **PR only, keep open**, skip the `close` (and the task-state cleanup that follows it) and say the task stays open.
 
 ```lets-tracker
 close task=<task-id> reason="Trunk-mode: committed on {LETS_MERGE_BRANCH}, no PR"
@@ -621,7 +629,7 @@ git merge <branch>
 git branch -d <branch>
 ```
 
-After merge:
+After merge - when Step 3 chose **PR only, keep open**, skip the `close` and say the task stays open (the merge was the user's pick; only the close is skipped):
 ```lets-tracker
 close task=<task-id> reason="Merged locally. Commits: {list}"
 ```
@@ -647,7 +655,7 @@ fi
 git -C "$MAIN_ROOT" merge "$BRANCH"
 ```
 
-After merge:
+After merge - when Step 3 chose **PR only, keep open**, skip the `close` and say the task stays open (the merge was the user's pick; only the close is skipped):
 ```lets-tracker
 close task=<task-id> reason="Merged locally from worktree. Commits: {list}"
 ```
@@ -672,12 +680,16 @@ Do NOT delete the branch or remove the worktree here - `/lets:worktree remove` h
 [ "{LETS_LAUNCHER}" = "orca" ] && lets orca card --phase closed --comment 'task {task-id} closed' --json 2>/dev/null || true
 ```
 
-**Which PR.** In every "After PR" variant below, `#{number}` / `{PR URL}` is the PR Step 8 created - or, on the Existing-PR Guard's `open` outcome, the open PR it pushed to (the number the Step 8 re-check confirmed); never a second one. Its `PR:` line then reads `#{number} - {PR URL} (existing PR)`, and "Merge & close" merges that PR. On the `shipped` outcome there is no "After PR" variant: use the matching `### After local merge` one, and replace its `Merged to ...` and `Branch ... deleted` lines with `PR: #{number} - {PR URL} (already merged)` - this path merged and deleted nothing. When Step 3 chose "PR only, keep open", no close ran: its Task line reads `- kept open (remaining scope)` instead of a close status.
+**Which PR.** In every "After PR" variant below, `#{number}` / `{PR URL}` is the PR Step 8 created - or, on the Existing-PR Guard's `open` outcome, the open PR it pushed to (the number the Step 8 re-check confirmed); never a second one. Its `PR:` line then reads `#{number} - {PR URL} (existing PR)`, and "Merge & close" merges that PR. On the `shipped` outcome there is no "After PR" variant: use the matching `### After local merge` one, and replace its `Merged to ...` and `Branch ... deleted` lines with `PR: #{number} - {PR URL} (already merged)` - this path merged and deleted nothing. When Step 3 chose "PR only, keep open", no close ran: its Task line reads `- kept open (PR only, keep open)` instead of a close status.
+
+**By level.** `{LETS_GATES}` is `strict` -> every variant's AskUserQuestion as written. Otherwise (missing reads as `standard`), the github variants first run "Merge by level" below, then:
+- **the task was closed** (trunk or a local merge WITHOUT **PR only, keep open**, or a PR merged by "Merge by level") -> the variant's status lines, then its remaining "Next step" options as a Nav box, never a card: `Next task?  /lets:start` where the variant offers Next task, `End?  /lets:end`, and in a worktree the line `/lets:worktree remove {name}` from the main repo. "Stay on branch" / "Stay here" / "Keep working" is the default and needs no line.
+- **the task is still open** (Bitbucket, **PR only, keep open** - trunk and local merge included -, `standard`'s **Not now**, a `minimal` PR left open) -> the variant's "Next step" card as written, without "Merge & close": the task is still active and its handlers carry the checkout to the merge branch, so it stays a real choice.
 
 ### After trunk-mode finish (HEAD == `$LETS_MERGE_BRANCH`):
 
 ```
-Task: **{title}** ({task-id}) - {CLOSED, or "advanced to {status}" when close returned another status, or "unchanged - no tracker" when it returned none}
+Task: **{title}** ({task-id}) - {CLOSED, or "advanced to {status}" when close returned another status, or "unchanged - no tracker" when it returned none, or "kept open (PR only, keep open)" when Step 3 chose it}
 Branch: {LETS_MERGE_BRANCH} (trunk-mode, no PR)
 Pushed: {N} commits to origin/{LETS_MERGE_BRANCH}
 ```
@@ -709,7 +721,7 @@ LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 command -v lets >/dev/null 2>&1 && lets peers orchestrator --session "$CLAUDE_CODE_SESSION_ID" --cwd "$LETS_PROJECT_ROOT" --json 2>/dev/null
 ```
 
-When `source` is `bound` or `single` and `target.alive` is `alive`, ask the variant's question and this one in the SAME call (for `ambiguous`, `none`, `self`, a dead target or no binary: no Ping question - the orc skill's own ping asks which):
+When `source` is `bound` or `single` and `target.alive` is `alive`, ask the variant's question and this one in the SAME call - at `standard` / `minimal` the variant's question is the Merge question of "Merge by level" when one is asked, else the variant's "Next step" card while the PR stays open, else (a Nav box) the Ping question is asked alone (for `ambiguous`, `none`, `self`, a dead target or no binary: no Ping question - the orc skill's own ping asks which):
 
 ```
 AskUserQuestion(
@@ -729,6 +741,37 @@ AskUserQuestion(
 ```
 
 - **Ping orchestrator** -> `Skill(skill: "lets:orc", args: "verb=ping footer=none text=PR #{number} {PR URL}")`, then handle the "Next step" answer as usual.
+
+### Merge by level (github "After PR" variants)
+
+When Step 3 chose **PR only, keep open**, nothing here runs: the PR stays open, the task stays open, and one line says so. Otherwise, by level:
+
+- `strict` -> the variant's card, with its "Merge & close" option.
+- `standard` -> "Merge & close" is its own question (merging is hard tier), then the next step of "By level":
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Merge PR #{number} and close {task title}?",
+    header: "Merge",
+    options: [
+      { label: "Merge & close", description: "Merge PR #{number}, close the task" },
+      { label: "Not now", description: "Leave the PR and the task open" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+  **Merge & close** -> the variant's "Merge & close" handler. **Not now** -> nothing merges.
+- `minimal` -> no question. First record the head the checks run on: `gh pr view {number} --json headRefOid` -> `<checked-sha>`. Right after the PR is created its checks are pending or not registered yet, so wait: tell the user it is waiting, poll `gh pr checks {number}` for up to ~2 minutes until at least one check is listed (still none -> `no checks reported`, below), then run `gh pr checks {number} --watch --fail-fast` with `run_in_background`, bounded at 30 minutes. Then read `gh pr view {number} --json headRefOid,mergeable,mergeStateStatus`:
+  - `headRefOid` is no longer `<checked-sha>` (a push landed during the wait) -> no merge: the PR and the task stay open, `head changed during the CI wait - re-run /lets:done`;
+  - every check passed, the head is still `<checked-sha>` and `mergeable` is `MERGEABLE` -> run `gh pr merge {number} --squash --delete-branch --match-head-commit <checked-sha>` (gh refuses if the head moved since) in place of the variant's step 1, then the **Merge result** check below: only when `state` is `MERGED` does the variant's "Merge & close" handler continue from its close step, reported in one line;
+  - a check failed, the wait timed out, no checks were reported (indistinguishable from a CONFLICTING PR that runs no CI), or it is not mergeable -> leave the PR and the task open and print why (`CI failing` / `CI still running after 30 min` / `no checks reported` / the merge state). A later `/lets:done` reuses the PR through the Existing-PR Guard and runs this step again.
+  - **Merge queue.** A PR whose branch requires a merge queue is never auto-merged at `minimal`: on such a branch `gh pr merge` adds the PR to the queue, or arms auto-merge while required checks are pending. When the merge output says the PR was queued / added to the merge queue, or `gh pr view {number} --json autoMergeRequest` shows auto-merge armed -> disarm an armed auto-merge with `gh pr merge {number} --disable-auto`, leave the task open and say `merge queue required - merge it on GitHub, then re-run /lets:done` (`queued in the merge queue` when gh already queued it).
+  - Never arm GitHub auto-merge: it would merge after this session closed the task's books.
+
+**Merge result (every merge handler).** Right after `gh pr merge`, read `gh pr view {number} --json state`. Only when `state` is `MERGED` does the handler go on - close the task, switch branches, remind the worktree cleanup. Queued (the merge output says so, or `state` is still `OPEN` with a queue entry) -> `queued in the merge queue - the task stays open; re-run /lets:done once it merged`; anything else -> `merge did not complete - the task stays open`. No close, no checkout, no cleanup reminder in either case; a later `/lets:done` sees the merged PR through the Existing-PR Guard (`shipped`) and closes the task then.
 
 ### After PR ($LETS_PR_FLOW == github), NOT in worktree:
 
@@ -762,9 +805,10 @@ AskUserQuestion(
 **Handle response:**
 - **Merge & close**:
   1. `gh pr merge {number} --squash --delete-branch`
-  2. close the task (tracker `close` verb) - read what it returned: `closed` means closed; another status means the board advanced the task instead, so report the handoff and do NOT call it done; no status means no tracker; a failed close HARD-FAILs
-  3. `git checkout {LETS_MERGE_BRANCH} && git pull`
-  4. If merge fails (conflicts, checks not passed) -> inform user, fall back to "Stay on branch"
+  2. **Merge result** ("Merge by level"): read `gh pr view {number} --json state`; only when `state` is `MERGED` go on to step 3. Queued or not merged -> say so (`queued in the merge queue` / `merge did not complete`), the task stays open, no checkout - fall back to "Stay on branch"
+  3. close the task (tracker `close` verb) - read what it returned: `closed` means closed; another status means the board advanced the task instead, so report the handoff and do NOT call it done; no status means no tracker; a failed close HARD-FAILs
+  4. `git checkout {LETS_MERGE_BRANCH} && git pull`
+  5. If merge fails (conflicts, checks not passed) -> inform user, fall back to "Stay on branch"
 - **Stay on branch** -> stay on current branch, no checkout. User continues working freely.
 - **Next task** -> `git checkout {LETS_MERGE_BRANCH}`, then show the tracker's `ready` view (top 5). When user picks: invoke `Skill(skill: "lets:take-task", args: "<task-id>")` for status update + branch setup.
 - **End session** -> `git checkout {LETS_MERGE_BRANCH}`, then invoke `Skill(skill: "lets:end")`
@@ -803,9 +847,10 @@ No "Next task" option - can't switch branches in a worktree. To start a new task
 **Handle response:**
 - **Merge & close**:
   1. `gh pr merge {number} --squash --delete-branch`
-  2. close the task (tracker `close` verb) - read what it returned: `closed` means closed; another status means the board advanced the task instead, so report the handoff and do NOT call it done; no status means no tracker; a failed close HARD-FAILs
-  3. If merge fails (conflicts, checks not passed) -> inform user, fall back to "Stay here"
-  4. After merge, remind: "Worktree can be removed: `/lets:worktree remove {name}` from the main repo terminal."
+  2. **Merge result** ("Merge by level"): read `gh pr view {number} --json state`; only when `state` is `MERGED` go on to step 3. Queued or not merged -> say so (`queued in the merge queue` / `merge did not complete`), the task stays open, no cleanup reminder - fall back to "Stay here"
+  3. close the task (tracker `close` verb) - read what it returned: `closed` means closed; another status means the board advanced the task instead, so report the handoff and do NOT call it done; no status means no tracker; a failed close HARD-FAILs
+  4. If merge fails (conflicts, checks not passed) -> inform user, fall back to "Stay here"
+  5. After a `MERGED` merge, remind: "Worktree can be removed: `/lets:worktree remove {name}` from the main repo terminal."
 - **Stay here** -> stay in worktree. User continues working.
 - **End session** -> invoke `Skill(skill: "lets:end")`. After the end-session flow completes, remind:
   "After PR merges, clean up: `/lets:worktree remove {name}` from the main repo terminal."
@@ -873,7 +918,7 @@ AskUserQuestion(
 ### After local merge ($LETS_PR_FLOW == local / fallback), NOT in worktree:
 
 ```
-Task: **{title}** ({task-id}) - {CLOSED, or "advanced to {status}" when close returned another status, or "unchanged - no tracker" when it returned none}
+Task: **{title}** ({task-id}) - {CLOSED, or "advanced to {status}" when close returned another status, or "unchanged - no tracker" when it returned none, or "kept open (PR only, keep open)" when Step 3 chose it}
 Merged to {LETS_MERGE_BRANCH}
 Branch {feature-branch} deleted
 ```
@@ -901,7 +946,7 @@ AskUserQuestion(
 ### After local merge ($LETS_PR_FLOW == local / fallback), IN worktree:
 
 ```
-Task: **{title}** ({task-id}) - {CLOSED, or "advanced to {status}" when close returned another status, or "unchanged - no tracker" when it returned none}
+Task: **{title}** ({task-id}) - {CLOSED, or "advanced to {status}" when close returned another status, or "unchanged - no tracker" when it returned none, or "kept open (PR only, keep open)" when Step 3 chose it}
 Merged to {LETS_MERGE_BRANCH} (from worktree via git -C)
 ```
 
@@ -929,12 +974,12 @@ AskUserQuestion(
 
 ## Rules
 
-- **NEVER push or create PR without user approval**
+- Pushing the task branch and opening its PR: the typed `/lets:done` is the approval (`strict`: Step 6 asks)
 - **NEVER open a second PR for a branch that already has an open one** - the Existing-PR Guard's `open` outcome pushes to it; a lookup that ran and failed (or came back incomplete) STOPS before any push and never reads as "no PR"
 - **NEVER report a created PR without reading it back** - a CONFLICTING PR runs no CI at all and looks identical to a passing one
-- **NEVER merge without user approval**
+- Merging a PR follows `## Gates`: asks at `strict` / `standard`; at `minimal` only the task's own PR with all checks green merges here. Never GitHub auto-merge
 - Document BEFORE finishing (Step 7 before Step 8)
-- If PR flow: task stays open, user closes after merge - or the Existing-PR Guard's `shipped` outcome closes it after Finish
-- If local merge: task closes immediately
+- If PR flow: task stays open, user closes after merge - or the Existing-PR Guard's `shipped` outcome closes it after Finish, or the `minimal` wait-and-merge (Step 9) does
+- If local merge: task closes immediately - unless Step 3 chose **PR only, keep open** (every close path skips the close then)
 - If HEAD == `$LETS_MERGE_BRANCH` (trunk-mode): skip PR creation (same-source-target is not a valid PR), push (upstream-aware) + close (tracker `close` verb) instead — regardless of `$LETS_PR_FLOW`
 - Respond in user's language

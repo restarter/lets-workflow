@@ -179,6 +179,26 @@ func TestInit_JSON_EarlyError_NotInGit(t *testing.T) {
 	}
 }
 
+// lets-wu2xl: an unknown --gates level fails fast, before any filesystem work -
+// it never reaches .lets/.env, whence the hook would inject it every session.
+func TestInit_JSON_EarlyError_UnknownGates(t *testing.T) {
+	dir := initGitRepo(t)
+	pluginRoot := makeFakePluginRoot(t)
+
+	result := runInitJSON(t, dir, "--json", "--plugin-root="+pluginRoot,
+		"--language=English", "--merge-branch=main", "--pr-flow=local", "--skip-beads", "--gates=bogus")
+
+	if result.OK {
+		t.Error("OK: got true want false")
+	}
+	if !strings.Contains(result.Error, "--gates must be one of") || !strings.Contains(result.Error, `"bogus"`) {
+		t.Errorf("Error does not name the --gates refusal: %q", result.Error)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".lets", ".env")); !os.IsNotExist(err) {
+		t.Errorf(".lets/.env must not be written on a refused --gates (stat err=%v)", err)
+	}
+}
+
 func TestInit_JSON_EarlyError_InsideWorktree(t *testing.T) {
 	mainDir := initGitRepo(t)
 	for _, c := range [][]string{

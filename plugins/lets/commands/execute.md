@@ -15,7 +15,7 @@ Load an implementation plan and execute it - inline, in Claude Code's native pla
 
 ## --auto mode
 
-`/lets:execute --auto` runs the approved plan **autonomously**: skip the per-step "review before moving on" gate and `/lets:commit` at each plan commit point WITHOUT re-asking (matches the established "autonomous commits during execute after plan approval" preference). `--auto` is execution-speed for an *already-approved* plan — it does NOT bypass the hard-stops.
+`/lets:execute --auto` runs the approved plan **autonomously**: skip the per-step "review before moving on" gate and commit at each plan commit point through `Skill(skill: "lets:commit", args: "approved=plan-files")` WITHOUT re-asking (matches the established "autonomous commits during execute after plan approval" preference). `--auto` is execution-speed for an *already-approved* plan — it does NOT bypass the hard-stops.
 
 **`--auto` = run under AUTO MODE** (see `.claude/rules/lets-rules.md` `## AUTO MODE`) — do NOT restate the contract here. What still applies under `--auto`: push / PR / close (tracker `close`) / external stay gated; a 3×-fail halts; fabrication halts; and **`--auto` on `$LETS_MERGE_BRANCH` REFUSES** (Step 1) rather than auto-entering trunk-mode. When a hard-stop is hit, write the `blocked` marker and fire the execute-blocked notify (Step 6 / the gate-notification block) so an unattended session surfaces instead of stalling.
 
@@ -209,7 +209,7 @@ AskUserQuestion(
 
 ## Step 4.5: Choose Execution Mode
 
-How the approved plan runs is ONE up-front choice. **A mode flag pre-answers it - skip the picker entirely when any is present:** `--auto` (Here · auto), `--implementers` or its alias `--team` (Implementers), `--step` / `--step-by-step` (Here · step-by-step), `--straight` / `--straight-through` (Here · straight-through). `--auto` keeps all its AUTO MODE semantics (Step 1 refuses on `$LETS_MERGE_BRANCH`; hard-stops preserved). Default locus is **Here** (this session, native plan mode); **Implementers** is the only locus switch. **`--auto` together with `--implementers` / `--team` is REFUSED** with one line - a delegated run is interactive by design (its gates wait for you, and an unattended run has nobody to review it): drop `--auto`, or run inline. **`--gate <per-commit|high-only|at-end>`** sets a delegated run's gate policy (Step 4.7 proposes it, 5-D.5 dispatches on it); under `--auto` any value other than `per-commit` is REFUSED with one line - `--auto` runs keep today's gates. **`--parallel`** fixes the parallel shape (Step 4.6, 4.7); it needs `--implementers` / `--team` - alone it is REFUSED with one line - and under `--auto` it is REFUSED like every delegated run. **`--pipelined`** fixes the commit policy `pipelined` (implementers commit locally and move on; 5-D.5 "Pipelined run"), solo or with `--parallel`; it too needs `--implementers` / `--team`, and under `--auto` it is REFUSED.
+How the approved plan runs is ONE up-front choice. **A mode flag pre-answers it - skip the picker entirely when any is present:** `--auto` (Here · auto), `--implementers` or its alias `--team` (Implementers), `--step` / `--step-by-step` (Here · step-by-step), `--straight` / `--straight-through` (Here · straight-through). `--auto` keeps all its AUTO MODE semantics (Step 1 refuses on `$LETS_MERGE_BRANCH`; hard-stops preserved). Default locus is **Here** (this session, native plan mode); **Implementers** is the only locus switch. **`--auto` together with `--implementers` / `--team` is REFUSED** with one line - a delegated run is interactive by design (its gates wait for you, and an unattended run has nobody to review it): drop `--auto`, or run inline. **`--gate <per-commit|high-only|at-end>`** sets a delegated run's gate policy over the level's default (`per-commit` at `strict`, `at-end` at `standard` / `minimal`; Step 4.7 proposes it, 5-D.5 dispatches on it); under `--auto` any value other than `per-commit` is REFUSED with one line - `--auto` runs keep today's gates. **`--parallel`** fixes the parallel shape (Step 4.6, 4.7); it needs `--implementers` / `--team` - alone it is REFUSED with one line - and under `--auto` it is REFUSED like every delegated run. **`--pipelined`** fixes the commit policy `pipelined` (implementers commit locally and move on; 5-D.5 "Pipelined run"), solo or with `--parallel`; it too needs `--implementers` / `--team`, and under `--auto` it is REFUSED.
 
 **Bare `/lets:execute` (no mode flag) - ask exactly once:**
 
@@ -229,11 +229,11 @@ AskUserQuestion(
 )
 ```
 
-**Commit cadence is DERIVED from the mode - never a separate question:** step-by-step -> confirm each commit; straight-through -> auto-commit at each plan commit point; auto -> auto-commit; implementers -> one commit per chunk, after the Accept its gate policy names (5-D.5).
+**Commit cadence is DERIVED from the mode - never a separate question:** step-by-step -> confirm each commit at `strict` (otherwise commit at each plan point and report); straight-through -> auto-commit at each plan commit point; auto -> auto-commit; implementers -> one commit per chunk, after the Accept its gate policy names (5-D.5).
 
 **Handle response (sets the mode that Step 5 obeys):**
-- **Straight-through** -> Step 5 (native plan mode); after the plan-mode approval, implement all tasks with NO per-task pause and `/lets:commit` at each plan commit point without re-asking.
-- **Step-by-step** -> Step 5 (native plan mode); after the plan-mode approval, implement one task, pause for user review before the next, and confirm each `/lets:commit`.
+- **Straight-through** -> Step 5 (native plan mode); after the plan-mode approval, implement all tasks with NO per-task pause and commit at each plan commit point through `Skill(skill: "lets:commit", args: "approved=plan-files")` without re-asking.
+- **Step-by-step** -> Step 5 (native plan mode); after the plan-mode approval, implement one task, pause for user review before the next, and commit through `Skill(skill: "lets:commit", args: "approved=plan-files")`, confirming each commit as its level says.
 - **Auto** -> proceed exactly as `--auto` (Step 5's `--auto` behavior + pipeline-state marker + execute-blocked notify). **Guard:** if on `$LETS_MERGE_BRANCH`, REFUSE Auto here too (same rule as Step 1's `--auto` refuse - AUTO MODE never edits the merge-branch); tell the user to pick step-by-step / straight-through or take a feature branch.
 - **Implementers** -> do NOT enter native plan mode: Step 4.6, Step 4.7, then Step 5-D. `/lets:team` manages a standing team; parallel implementation of a plan runs here, in the parallel shape.
 
@@ -310,7 +310,7 @@ The proposal names six choices, each with a one-line reason:
 | Isolation | which implementers run isolated (only file-disjoint groups that run at the same time) and which run in the task worktree |
 | Integration order | the order in which chunks land in the task branch |
 | Pipelined | whether an implementer starts its next chunk before the previous one is accepted - the run's commit policy, `pipelined` or `lead`, which the Start preview names |
-| Gate policy | the default: `per-commit` (your Review gate before every commit), `high-only` (your gate on Risk high or missing only) or `at-end` (the team flow accepts, you review the finished run) - 5-D.5 dispatches on it |
+| Gate policy | the level's default (`{LETS_GATES}`: `strict` -> `per-commit`, `standard` / `minimal` -> `at-end`) unless `--gate` sets one: `per-commit` (your Review gate before every commit), `high-only` (your gate on Risk high or missing only) or `at-end` (the team flow accepts, you review the finished run) - 5-D.5 dispatches on it |
 | Overrides | which choices an owner flag fixed |
 
 ```
@@ -322,7 +322,7 @@ The proposal names six choices, each with a one-line reason:
 | Isolation         | impl-{RUN} in the task worktree           | nothing runs at the same time                 |
 | Integration order | c1, c2, c3, c4                            | plan order; c3 calls what c2 adds             |
 | Pipelined         | no                                        | c1 and c2 are Risk high - review each first   |
-| Gate policy       | per-commit                                | two high-risk chunks                          |
+| Gate policy       | at-end                                    | the level's default (`standard`)              |
 | Overrides         | none                                      | -                                             |
 ```
 
@@ -355,9 +355,9 @@ Call `EnterPlanMode`.
 4. Writes the execution strategy to the plan file (the file specified by plan mode)
 5. Calls `ExitPlanMode` when ready for user approval
 
-**After user approves**, Claude implements per the **Step 4.5 mode**: *step-by-step* implements one task, pauses for review before the next, and confirms each commit; *straight-through* runs all tasks and `/lets:commit`s at each plan commit point without re-asking; *auto* is the `--auto` behavior below. Commit only at the plan's commit points.
+**After user approves**, Claude implements per the **Step 4.5 mode**: *step-by-step* implements one task, pauses for review before the next, and commits through `Skill(skill: "lets:commit", args: "approved=plan-files")`, confirming each commit at `strict` (otherwise committing at the plan point and reporting); *straight-through* runs all tasks and commits at each plan commit point through `Skill(skill: "lets:commit", args: "approved=plan-files")` without re-asking; *auto* is the `--auto` behavior below. Commit only at the plan's commit points.
 
-**Under `--auto` (inline runs only - Step 4.5 refuses `--auto` for Implementers):** write the `executing` pipeline-state marker, then — the plan-mode approval IS the gate — implement straight through without a per-step "review before moving on" pause, and `/lets:commit` at each plan commit point WITHOUT re-asking (one approval covers the run). Hard-stops still halt (push/PR/close/external gated; 3×-fail; fabrication; `$LETS_MERGE_BRANCH` refused per Step 1) — on any halt, write the `blocked` marker + fire the execute-blocked notify.
+**Under `--auto` (inline runs only - Step 4.5 refuses `--auto` for Implementers):** write the `executing` pipeline-state marker, then — the plan-mode approval IS the gate — implement straight through without a per-step "review before moving on" pause, and commit at each plan commit point through `Skill(skill: "lets:commit", args: "approved=plan-files")` WITHOUT re-asking (one approval covers the run). `approved=plan-files` lets a new file the plan names in a `Create:` line of the committed tasks through without the commit skill's new-file question; any other new file still asks. Hard-stops still halt (push/PR/close/external gated; 3×-fail; fabrication; `$LETS_MERGE_BRANCH` refused per Step 1) — on any halt, write the `blocked` marker + fire the execute-blocked notify.
 
 **Progress tracking:** After completing each plan task, append `[DONE]` to its `### Task N:` heading in the plan file. This makes resume self-documenting - on re-entry, skip tasks already marked `[DONE]`.
 
@@ -389,10 +389,10 @@ AskUserQuestion(
 1. Present the plan summary, then ask in words "Start implementing?" and WAIT - no edit before an explicit yes (this replaces the plan-mode approval as the one code-write approval)
 2. Present each plan task one by one with files to change and expected outcome
 3. Implement the task, then ask user to review before moving on
-4. Use `/lets:commit` at commit points indicated in the plan
+4. Commit at the commit points the plan indicates through `Skill(skill: "lets:commit", args: "approved=plan-files")`
 5. Track completed tasks by appending `[DONE]` markers in the plan file
 
-The plan file provides the roadmap; explicit user approval provides the gates.
+The plan file provides the roadmap; the plan-mode approval (or the Start gate) and `## Gates` provide the gates.
 
 ## Step 5-D: Delegated run (Implementers)
 
@@ -447,7 +447,7 @@ AskUserQuestion(
 
 Four options is the cap: the parallel shape, pipelining and the gate policy are flags or launch-plan choices, never another option, and this gate carries no orchestrator offer (run mode is session mechanics).
 
-- **Start** -> record the run's `gate_policy`. With `high-only` or `at-end`, this pick is the owner's explicit, recorded approval for the lead's commits in this run - the commits 5-D.5 makes without a Review gate. With `--pipelined`, Start is also the owner's approval for the implementer's LOCAL commits on the branch it works on (the lead's integration commits, for an isolated group) - the recorded exception to "committed only after Accept"; record `commit_policy: pipelined`. Nothing is ever pushed. The model is chosen by the first spawn (the `member-run` panel), after this approval - never before it.
+- **Start** -> record the run's `gate_policy` (the resolved value: `--gate`'s, else the level's default). With `high-only` or `at-end`, this pick is the owner's explicit, recorded approval for the lead's commits in this run - the commits 5-D.5 makes without a Review gate. With `--pipelined`, Start is also the owner's approval for the implementer's LOCAL commits on the branch it works on (the lead's integration commits, for an isolated group) - the recorded exception to "committed only after Accept"; record `commit_policy: pipelined`. Nothing is ever pushed. The model is chosen by the first spawn (the `member-run` panel), after this approval - never before it.
 - **Change the launch plan** -> the Step 4.7 follow-up questions, then this gate again with the recomputed preview.
 - **Run inline instead** -> Step 5.
 - **Cancel** -> stop; nothing is spawned.
@@ -462,7 +462,7 @@ Before the first spawn, write `.lets/cache/delegated-run-{TASK_ID}.json` (`.lets
   "plan": "{plan path from Step 2}",
   "run": "{RUN}",
   "shape": "solo",
-  "gate_policy": "per-commit",
+  "gate_policy": "at-end",
   "commit_policy": "lead",
   "pre_rebase_head": null,
   "model": null,
@@ -474,7 +474,7 @@ Before the first spawn, write `.lets/cache/delegated-run-{TASK_ID}.json` (`.lets
 }
 ```
 
-Run fields: `shape` is `solo` or `parallel` (the launch plan's); `gate_policy` is `per-commit` (default), `high-only` or `at-end` (the Start pick); `commit_policy` is `lead` (default) or `pipelined`, and `pre_rebase_head` is recorded before a 5-D.9 autosquash. Per group: the agent that owns it now and its `generation`; `agent_id` is the address the spawn returned, set from EVERY spawn's return (in-tree and isolated alike) - every later member-run call of that member passes `id={agent_id}`; `dismissed: true` and `agent_id: null` are written in ONE record write BEFORE the dismiss (the id is read for that one call first), and a member recorded `dismissed` is never messaged; for an isolated group (`isolation: worktree`) its `base` (the task branch's HEAD at Start), and the `agent_branch` and `agent_worktree_path` the spawn returned; and `integrated_source` - the last agent-branch commit landed in the task branch; it moves only after the lead's commit, never on a report or a pick. Per chunk: `risk` from Step 4.6 (missing = high); `agent_branch`, `agent_worktree_path`, `commit_sha` (the latest `**Commit:**` sha the agent reported), `picked_sha` and `patch_path` belong to an isolated group's integration and stay `null` in the task worktree; under `pipelined` the record is keyed by sha: `commit_sha`, `fixups[]` (each `git commit --fixup` sha, in order), `review_sha` (the last sha the review showed) and `accepted_sha` (the commit and its fixups, as accepted); `check` and `skeptic` hold the 5-D.5 verdicts; `accepted_by` is `owner` or `team`; `committed_by` is `lead`, or `implementer` only under pipelining; `allowlist_amendments[]` holds `{path, by, reason}` for every path added to the allowlist mid-run (5-D.5 Correct). Liveness is never stored here - `ListAgents` judges it. The run's analysts (`explorer-{RUN}`, `skeptic-{RUN}`, `architect-{RUN}`) have no `members[]` here and no id: one that `ListAgents` does not list is respawned from its brief.
+Run fields: `shape` is `solo` or `parallel` (the launch plan's); `gate_policy` is `per-commit`, `high-only` or `at-end` - the resolved value the Start pick approved (`--gate`'s, else the level's default; the example shows `at-end`, the `standard` default); `commit_policy` is `lead` (default) or `pipelined`, and `pre_rebase_head` is recorded before a 5-D.9 autosquash. Per group: the agent that owns it now and its `generation`; `agent_id` is the address the spawn returned, set from EVERY spawn's return (in-tree and isolated alike) - every later member-run call of that member passes `id={agent_id}`; `dismissed: true` and `agent_id: null` are written in ONE record write BEFORE the dismiss (the id is read for that one call first), and a member recorded `dismissed` is never messaged; for an isolated group (`isolation: worktree`) its `base` (the task branch's HEAD at Start), and the `agent_branch` and `agent_worktree_path` the spawn returned; and `integrated_source` - the last agent-branch commit landed in the task branch; it moves only after the lead's commit, never on a report or a pick. Per chunk: `risk` from Step 4.6 (missing = high); `agent_branch`, `agent_worktree_path`, `commit_sha` (the latest `**Commit:**` sha the agent reported), `picked_sha` and `patch_path` belong to an isolated group's integration and stay `null` in the task worktree; under `pipelined` the record is keyed by sha: `commit_sha`, `fixups[]` (each `git commit --fixup` sha, in order), `review_sha` (the last sha the review showed) and `accepted_sha` (the commit and its fixups, as accepted); `check` and `skeptic` hold the 5-D.5 verdicts; `accepted_by` is `owner` or `team`; `committed_by` is `lead`, or `implementer` only under pipelining; `allowlist_amendments[]` holds `{path, by, reason}` for every path added to the allowlist mid-run (5-D.5 Correct). Liveness is never stored here - `ListAgents` judges it. The run's analysts (`explorer-{RUN}`, `skeptic-{RUN}`, `architect-{RUN}`) have no `members[]` here and no id: one that `ListAgents` does not list is respawned from its brief.
 
 `phase` moves `pending` -> `running` -> `review` -> (`correcting` -> `running` -> `review`)* -> `committing` -> `accepted`. A Stop at a review gate records `paused` (it reopens as `review`); a Stop while an agent works goes through `stopping` to `blocked`; `blocked` always carries a `reason` - `stopped`, `re-plan`, `unreachable`, `missing-report` or `unrecognized-commits`. `nudged` records that this round's one report nudge was sent; it resets to `false` whenever `round` or `generation` changes. Caller tasks move `pending` -> `running` -> `done`. `report` is the path of the latest round's saved report, `status` and `reason` are read from it, `received` counts reports in arrival order across the run, and `generation` is 1 for the first agent of a chunk and grows with each replacement. Rewrite the record at every transition BEFORE acting on it, so an interrupted session always finds the state it was in.
 
@@ -594,9 +594,11 @@ For each untracked path, show it as a patch: `git diff --no-index -- /dev/null "
 
 **Accept dispatch - the ONE table.** `gate_policy` x the chunk's `risk` decides who accepts, who commits and where the owner stops:
 
+Default: `per-commit` at `strict`, `at-end` at `standard` / `minimal`; `--gate` overrides.
+
 | gate_policy | risk | CHECK | skeptic | accepted_by | committed_by | the owner stops |
 |---|---|---|---|---|---|---|
-| `per-commit` (default) | any | yes | yes on high / missing | owner (Review gate) | lead | at every chunk |
+| `per-commit` | any | yes | yes on high / missing | owner (Review gate) | lead | at every chunk |
 | `high-only` | high / missing | yes | yes | owner (Review gate) | lead | at this chunk |
 | `high-only` | low | yes | no | team | lead | only on a deviation; the 5-D.8 run review |
 | `at-end` | high / missing | yes | yes | team | lead | the 5-D.8 run review |
@@ -895,7 +897,7 @@ comment-add task=<task-id> body-file=.lets/cache/exec-complete-<task-id>.md
 ## Rules
 
 - **NEVER execute blindly** - read actual file state before every change
-- **NEVER commit without user approval** - use `/lets:commit` at plan commit points
+- Commits follow `LETS_GATES` (`## Gates`): at `strict` each waits for its approval; otherwise the plan's commit points commit and report. Never a push.
 - **Don't work on `$LETS_MERGE_BRANCH` without explicit opt-in** - Step 1 soft-gates with a prompt; user must pick "Continue here" to enable trunk-mode (plan lookup uses task-id)
 - **Adapt cosmetically, never structurally** - plan intent matters more than plan text, but an approach change is a deviation, not an adaptation
 - **Stop on deviation** - the Deviation gate (Step 5) runs before every edit; no answer = no edit; under `--auto` it is a hard-stop

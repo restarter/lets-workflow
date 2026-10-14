@@ -3,9 +3,12 @@
 package peerscmd
 
 import (
+	"context"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/restarter/lets-workflow/cli/internal/ccregistry"
 	"github.com/restarter/lets-workflow/cli/internal/taskstate"
@@ -172,4 +175,44 @@ func standingFromOrchestrator(v *nameView, r *Resolution, p StandingProbe) (bool
 		return false, "standing_off"
 	}
 	return true, ""
+}
+
+// Sender is `lets peers sender`: provenance of one inbound message, any repo.
+// Both probe halves are required; every failure answers sender_ok=false with the
+// reason (fail closed). Mirrors OrchestratorWith's error handling.
+func Sender(ctx context.Context, cwd string, p StandingProbe) (*SenderResult, error) {
+	res := &SenderResult{Envelope: newEnvelope("sender")}
+	if !p.given() {
+		e := &Error{Code: ExitUsage, Kind: "usage", Message: "--from-name and --from-addr are both required"}
+		res.Error, res.SenderReason = &ErrorInfo{Kind: e.Kind, Message: e.Message}, e.Kind
+		return res, e
+	}
+	if e := p.usage(); e != nil {
+		res.Error, res.SenderReason = &ErrorInfo{Kind: e.Kind, Message: e.Message}, e.Kind
+		return res, e
+	}
+	if cwd == "" {
+		cwd, _ = os.Getwd()
+	}
+	ctx, cancel := context.WithTimeout(ctx, 2500*time.Millisecond)
+	defer cancel()
+	mainRoot, e := mainRootOf(cwd)
+	if e != nil {
+		res.Error, res.SenderReason = &ErrorInfo{Kind: e.Kind, Message: e.Message}, e.Kind
+		return res, e
+	}
+	v := loadNameView(ctx, mainRoot)
+	res.OK, res.Degraded = true, v.degraded
+	sender, why := standingSender(v, p)
+	if why != "" {
+		res.SenderReason = why
+		return res, nil
+	}
+	res.SenderOK = true
+	res.Name, res.Cwd = sender.Name, sender.Cwd
+	if len(sender.SessionID) >= 6 {
+		res.Session6 = sender.SessionID[:6]
+	}
+	res.InRepo = repoRowOf(v, sender) != nil
+	return res, nil
 }

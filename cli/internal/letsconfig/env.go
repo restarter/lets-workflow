@@ -83,8 +83,13 @@ func readEnvFile(path string) (map[string]string, error) {
 // callers pass a closure such as
 //
 //	func(r string) string { return gitutil.DefaultBranch(r, 2*time.Second) }
+//
+// LETS_GATES is always present and normalized (GatesLevel: empty or unknown ->
+// GatesDefault), so no caller can see a level that lowers the gates. A caller
+// that needs the raw value (the hook's unknown-value Notice) reads MergedEnv.
 func ResolvedEnv(projectRoot, homeDir string, defaultBranch func(root string) string) map[string]string {
 	merged := MergedEnv(projectRoot, homeDir)
+	merged["LETS_GATES"] = GatesLevel(merged["LETS_GATES"])
 	if merged["LETS_MERGE_BRANCH"] != "" {
 		return merged
 	}

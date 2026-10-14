@@ -113,6 +113,20 @@ type RoleResult struct {
 	Role *RoleInfo `json:"role,omitempty"`
 }
 
+// SenderResult answers who sent an inbound message, by provenance only: the ONE
+// live registry entry named from-name whose pid is the envelope socket's. No
+// scope - the caller (the orc skill, by LETS_GATES) decides what the sender may
+// do. sender_ok is false with a sender_reason in every other case, fail closed.
+type SenderResult struct {
+	Envelope
+	SenderOK     bool   `json:"sender_ok"`
+	SenderReason string `json:"sender_reason,omitempty"`
+	Name         string `json:"name,omitempty"`
+	Session6     string `json:"session6,omitempty"`
+	Cwd          string `json:"cwd,omitempty"`
+	InRepo       bool   `json:"in_repo"`
+}
+
 // OrchestratorResult is the resolver's answer. SelfRecord ("is this session an
 // orchestrator") is always present - null when the caller has no record; Source /
 // Target answer "whom do my messages go to".

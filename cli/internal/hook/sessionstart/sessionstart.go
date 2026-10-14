@@ -69,7 +69,8 @@ func Run(w io.Writer, rulesPath, projectRoot, homeDir string, extraNotices []str
 	// emitted first, the Config block second.
 	env := letsconfig.ResolvedEnv(projectRoot, homeDir, func(r string) string { return gitutil.DefaultBranch(r, time.Second) })
 
-	if err := writeNotice(w, append([]string{driftCheck(rulesPath, projectRoot, homeDir, env["LETS_RULES_SCOPE"])}, extraNotices...)); err != nil {
+	notices := []string{driftCheck(rulesPath, projectRoot, homeDir, env["LETS_RULES_SCOPE"]), gatesNotice(letsconfig.MergedEnv(projectRoot, homeDir)["LETS_GATES"])}
+	if err := writeNotice(w, append(notices, extraNotices...)); err != nil {
 		return err
 	}
 
@@ -125,6 +126,23 @@ func writeNotice(w io.Writer, msgs []string) error {
 	}
 	_, err := fmt.Fprintln(w)
 	return err
+}
+
+// gatesNoticeMaxQuoted caps the raw LETS_GATES value quoted in the Notice: it
+// is file text injected into model context.
+const gatesNoticeMaxQuoted = 40
+
+// gatesNotice returns the Notice for a LETS_GATES value that is not a level, or
+// "" for an empty or valid one. raw is the MergedEnv value (ResolvedEnv has
+// already normalized it to standard, which is what applies).
+func gatesNotice(raw string) string {
+	if raw == "" || letsconfig.ValidGates(raw) {
+		return ""
+	}
+	if len(raw) > gatesNoticeMaxQuoted {
+		raw = raw[:gatesNoticeMaxQuoted]
+	}
+	return fmt.Sprintf("LETS_GATES=%q is not a level (strict | standard | minimal) - standard applies. Fix .lets/.env (or ~/.lets/.env) or run /lets:init.", raw)
 }
 
 // driftCheck returns the project rules drift message. The global
