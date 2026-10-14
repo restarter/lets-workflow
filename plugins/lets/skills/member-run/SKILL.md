@@ -26,7 +26,7 @@ One operation on one named member. The caller (`/lets:execute` Step 5-D, `/lets:
 - `role` - a shipped `lets:*` agent; `lets:actor` and `lets:lead` -> stop with `role_not_allowed`, nothing spawned.
 - `brief-file` / `correct-file` - repo-root-relative paths the caller wrote. Every brief crosses as a file path, never inline.
 - `model` - `opus` | `sonnet` | `fable` | `haiku`, the values the `Agent` tool accepts. Absent -> the role's own default, except for an implementer (Step 1).
-- `report-file` - an absolute path the CALLER named (execute: its pinned `.lets/cache/report-...` path; team: `agent-report op=open` / `op=add`). One file per round; member-run never composes a report path. Required on `spawn`, `next` and `correct`: missing -> stop with `report_file_missing`, nothing sent.
+- `report-file` - an absolute path the CALLER named (execute: its pinned `.lets/cache/run-...` path; team: `agent-report op=open` / `op=add`). One file per round; member-run never composes a report path. Required on `spawn`, `next` and `correct`: missing -> stop with `report_file_missing`, nothing sent.
 
 Every operation returns as soon as its call is issued. The member runs in the background; its report arrives later as a `REPORT_WRITTEN` pointer to the round's REPORT_FILE, and the caller reads the FILE through `agent-report` (`op=peek` on every notification, `op=collect` to conclude) - never the message.
 
