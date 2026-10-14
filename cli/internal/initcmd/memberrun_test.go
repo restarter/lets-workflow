@@ -611,7 +611,7 @@ func TestMemberRun(t *testing.T) {
 		{"the resend goes back to op=next", "execute", "`member-run` `op=correct` with it as `correct-file=`", "`member-run` `op=next` with it", "never op=next", 1},
 		{"a nudge advances the round", "execute", "only a correction advances `round`", "every op=correct advances `round`", "keeps the round", 1},
 		{"rehydration re-runs the work", "execute", "Do not re-run Verify and do not change the work.", "", "without re-running Verify", 1},
-		{"the team check retries an analyst", "execute", "names=report-{TASK_ID}-{RUN}-{chunk}-{member}-r{round} retry=no\")`", "names=report-{TASK_ID}-{RUN}-{chunk}-{member}-r{round}\")`", "never retried by agent-report", 1},
+		{"the team check retries an analyst", "execute", "names=run-{TASK_ID}-{RUN}-{chunk}-{member}-n{round} retry=no\")`", "names=run-{TASK_ID}-{RUN}-{chunk}-{member}-n{round}\")`", "never retried by agent-report", 1},
 		{"the team check collects before its peek", "execute", "Each verdict is read in the member order - peek, one nudge, collect: on every notification from the member, `Skill(skill: \"lets:agent-report\", args: \"op=peek", "Each verdict is read in the member order - peek, one nudge, collect: on every notification from the member, `Skill(skill: \"lets:agent-report\", args: \"op=skim", "never retried by agent-report", 1},
 		{"the anchor check retries its explorer", "execute", "then `op=collect ... retry=no`; never a retry, since nothing is spawned before Start", "then `op=collect`", "never an agent-report retry", 1},
 		{"the architect is retried", "execute", "then `op=collect ... retry=no`; a `GAP` is shown as \"no verdict\"", "then `op=collect`; a `GAP` is shown as \"no verdict\"", "never retried", 1},

@@ -124,7 +124,7 @@ func agentReportProblems(f map[string]string) []string {
 	}
 
 	skill := f["skills/agent-report/SKILL.md"]
-	for _, need := range []string{"user-invocable: false", "## op=open", "## op=add", "## op=peek", "## op=collect", "MISSING", "EMPTY", "UNTERMINATED", "UNREADABLE", "REPORT-END", readInFull, "ONCE", "retry=no", "GAP", "Coverage:"} {
+	for _, need := range []string{"user-invocable: false", "## op=open", "## op=add", "## op=peek", "## op=collect", "MISSING", "EMPTY", "UNTERMINATED", "UNREADABLE", "REPORT-END", "TAKEN", readInFull, "ONCE", "retry=no", "GAP", "Coverage:"} {
 		if !strings.Contains(skill, need) {
 			add("the agent-report skill must carry " + need)
 		}
@@ -410,8 +410,11 @@ func TestAgentReport(t *testing.T) {
 
 // TestAgentReportClassifier runs the Step 1 block of the agent-report skill -
 // extracted from SKILL.md exactly as the model receives it, which the
-// placeholder lint above makes equal to the text on disk - over one fixture
-// per state.
+// placeholder lint above makes equal to the text on disk. Step 1 judges a name's
+// own file and its -r2 retry file together and prints ONE resolved line per
+// name (lets-bt44m): the test drives every (base, retry) state pair through it,
+// plus the richness ties and the single-file fixtures, against a Go oracle of
+// the rule.
 func TestAgentReportClassifier(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("the classifier is a bash block")
@@ -436,38 +439,102 @@ func TestAgentReportClassifier(t *testing.T) {
 	}
 	block = block[:j]
 
+	root := os.Geteuid() == 0 // root reads a 000 file: every UNREADABLE fixture is skipped
 	dir := t.TempDir()
-	fixtures := map[string]string{
-		"good":            "finding\nREPORT-END\n",
-		"empty":           "",
-		"blank":           "  \n\t\n",
-		"only":            "REPORT-END\n",
-		"cut":             "finding, no sentinel\n",
-		"crlf":            "finding\r\nREPORT-END\r\n",
-		"trailing":        "finding\nREPORT-END   \n\n",
-		"body-sentinel":   "REPORT-END\nlater line\n",
-		"report-lets-1.2": "finding\nREPORT-END\n",
-		"locked":          "finding\nREPORT-END\n",
-	}
-	for name, body := range fixtures {
-		if err := os.WriteFile(filepath.Join(dir, name+".md"), []byte(body), 0o600); err != nil {
+	write := func(file, body string, locked bool) {
+		t.Helper()
+		path := filepath.Join(dir, file)
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 			t.Fatal(err)
 		}
-	}
-	want := map[string]string{
-		"good": "OK", "gone": "MISSING", "empty": "EMPTY", "blank": "EMPTY", "only": "EMPTY",
-		"cut": "UNTERMINATED", "crlf": "OK", "trailing": "OK", "body-sentinel": "UNTERMINATED",
-		"report-lets-1.2": "OK", "locked": "UNREADABLE",
-	}
-	if os.Geteuid() == 0 {
-		delete(want, "locked") // root reads a 000 file
-	} else {
-		locked := filepath.Join(dir, "locked.md")
-		if err := os.Chmod(locked, 0); err != nil {
-			t.Fatal(err)
+		if locked {
+			if err := os.Chmod(path, 0); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = os.Chmod(path, 0o600) })
 		}
-		defer func() { _ = os.Chmod(locked, 0o600) }()
 	}
+	// side is one file of a name: its state as the rule sees it, and its non-blank
+	// line count (only an UNTERMINATED side's count decides anything).
+	type side struct {
+		state string
+		lines int
+	}
+	type expect struct{ state, path string }
+	// oracle is the resolution rule, written independently of the bash.
+	oracle := func(name string, base, retry side) expect {
+		bp, rp := filepath.Join(dir, name+".md"), filepath.Join(dir, name+"-r2.md")
+		switch {
+		case retry.state == "OK":
+			return expect{"OK", rp}
+		case base.state == "OK":
+			return expect{"OK", bp}
+		case retry.state == "UNTERMINATED" && (base.state != "UNTERMINATED" || retry.lines >= base.lines):
+			return expect{"UNTERMINATED", rp}
+		case base.state == "UNTERMINATED":
+			return expect{"UNTERMINATED", bp}
+		case retry.state != "MISSING":
+			return expect{retry.state, "none"}
+		default:
+			return expect{base.state, "none"}
+		}
+	}
+	want := map[string]expect{}
+
+	// The full state matrix: 25 names p-<base>-<retry>.
+	bodies := map[string]string{
+		"EMPTY":        "",
+		"UNTERMINATED": "finding\n",
+		"UNREADABLE":   "finding\nREPORT-END\n",
+		"OK":           "finding\nREPORT-END\n",
+	}
+	states := []string{"MISSING", "EMPTY", "UNTERMINATED", "UNREADABLE", "OK"}
+	for _, b := range states {
+		for _, r := range states {
+			if root && (b == "UNREADABLE" || r == "UNREADABLE") {
+				continue
+			}
+			name := "p-" + strings.ToLower(b) + "-" + strings.ToLower(r)
+			if b != "MISSING" {
+				write(name+".md", bodies[b], b == "UNREADABLE")
+			}
+			if r != "MISSING" {
+				write(name+"-r2.md", bodies[r], r == "UNREADABLE")
+			}
+			want[name] = oracle(name, side{b, 1}, side{r, 1})
+		}
+	}
+
+	// Richness: two unfinished files - the larger non-blank line count wins, a tie
+	// goes to the retry.
+	for name, n := range map[string][2]int{"richbase": {3, 1}, "richretry": {1, 2}, "tie": {2, 2}} {
+		write(name+".md", strings.Repeat("finding\n", n[0]), false)
+		write(name+"-r2.md", strings.Repeat("finding\n", n[1]), false)
+		want[name] = oracle(name, side{"UNTERMINATED", n[0]}, side{"UNTERMINATED", n[1]})
+	}
+
+	// Single-file fixtures (no retry file): one per classification edge.
+	singles := []struct{ name, body, state string }{
+		{"good", "finding\nREPORT-END\n", "OK"},
+		{"empty", "", "EMPTY"},
+		{"blank", "  \n\t\n", "EMPTY"},
+		{"only", "REPORT-END\n", "EMPTY"},
+		{"cut", "finding, no sentinel\n", "UNTERMINATED"},
+		{"crlf", "finding\r\nREPORT-END\r\n", "OK"},
+		{"trailing", "finding\nREPORT-END   \n\n", "OK"},
+		{"body-sentinel", "REPORT-END\nlater line\n", "UNTERMINATED"},
+		{"run-lets-1.2", "finding\nREPORT-END\n", "OK"},
+		{"locked", "finding\nREPORT-END\n", "UNREADABLE"},
+	}
+	for _, s := range singles {
+		if root && s.state == "UNREADABLE" {
+			continue
+		}
+		write(s.name+".md", s.body, s.state == "UNREADABLE")
+		want[s.name] = oracle(s.name, side{s.state, 1}, side{"MISSING", 0})
+	}
+	want["gone"] = oracle("gone", side{"MISSING", 0}, side{"MISSING", 0})
+
 	names := make([]string, 0, len(want))
 	for n := range want {
 		names = append(names, n)
@@ -478,15 +545,92 @@ func TestAgentReportClassifier(t *testing.T) {
 	if err != nil {
 		t.Fatalf("classifier failed: %v\n%s", err, out)
 	}
-	got := map[string]string{}
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		if fields := strings.Fields(line); len(fields) >= 2 {
-			got[fields[1]] = fields[0]
+
+	// The one-line invariant, checked before the map is built so a duplicate line
+	// cannot overwrite another: exactly one REPORT <name> <state> <path|none> line
+	// per requested name, none for an unrequested one.
+	lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
+	if len(lines) != len(names) {
+		t.Errorf("classifier printed %d lines for %d names:\n%s", len(lines), len(names), out)
+	}
+	got := map[string]expect{}
+	for _, line := range lines {
+		fields := strings.Fields(line)
+		if len(fields) != 4 || fields[0] != "REPORT" {
+			t.Errorf("malformed line %q - want REPORT <name> <state> <path|none>", line)
+			continue
 		}
+		if _, ok := want[fields[1]]; !ok {
+			t.Errorf("line for an unrequested name: %q", line)
+			continue
+		}
+		if _, dup := got[fields[1]]; dup {
+			t.Errorf("a second line for %s: %q", fields[1], line)
+			continue
+		}
+		got[fields[1]] = expect{fields[2], fields[3]}
 	}
 	for _, n := range names {
-		if got[n] != want[n] {
-			t.Errorf("%s: classified %q, want %q", n, got[n], want[n])
+		g, ok := got[n]
+		if !ok {
+			t.Errorf("%s: no line", n)
+			continue
 		}
+		if g != want[n] {
+			t.Errorf("%s: resolved %s %s, want %s %s", n, g.state, g.path, want[n].state, want[n].path)
+		}
+	}
+}
+
+// TestAgentReportAdd runs the op=add block of the agent-report skill - extracted
+// as TestAgentReportClassifier extracts Step 1 - and requires it to hand out a
+// path only for a name with no file yet. An existing file belongs to an earlier
+// dispatch; handing it out again would let op=collect read that report as the new
+// one's (lets-bt44m). An empty file is taken too: the Write tool will not
+// overwrite a file the new agent has not read.
+func TestAgentReportAdd(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("op=add is a bash block")
+	}
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash not on PATH")
+	}
+	skill, err := os.ReadFile(filepath.Join(pluginDir(t), "skills", "agent-report", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	section := sectionSpan(string(skill), "## op=add - a later phase of the same run")
+	i := strings.Index(section, "```bash\n")
+	if i < 0 {
+		t.Fatal("agent-report op=add lost its bash block")
+	}
+	block := section[i+len("```bash\n"):]
+	j := strings.Index(block, "\n```")
+	if j < 0 {
+		t.Fatal("agent-report op=add bash block is not closed")
+	}
+	block = block[:j]
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "old.md"), []byte("an earlier report\nREPORT-END\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "empty.md"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	script := strings.NewReplacer("{dir}", dir, "{names}", "fresh,old,empty").Replace(block)
+	out, err := exec.Command(bash, "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("op=add failed: %v\n%s", err, out)
+	}
+	got := strings.TrimSpace(string(out))
+	want := strings.Join([]string{
+		"REPORT_FILE fresh=" + filepath.Join(dir, "fresh.md"),
+		"TAKEN old " + filepath.Join(dir, "old.md"),
+		"TAKEN empty " + filepath.Join(dir, "empty.md"),
+	}, "\n")
+	if got != want {
+		t.Errorf("op=add output:\n%s\nwant:\n%s", got, want)
 	}
 }
