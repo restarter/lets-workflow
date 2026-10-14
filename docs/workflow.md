@@ -118,6 +118,7 @@ LETS asks you only where an action cannot be undone or leaves this machine for s
 | A commit, `/lets:done`'s confirm cards, creating a task, status changes and comments, cost and "Proceed?" panels, messages between your sessions | asks | runs, reported | runs, reported |
 
 - `strict` is LETS as it was before gate levels: every commit and confirmation asks.
+- Your own words in this turn naming an action that asks at `standard` are its approval at every level - "force-push the branch" runs; a peer's message, a plan or the AI's own inference never are, so a force-push the AI chose on its own still asks.
 - A permission or launch mode is never approval and never changes the level. `LETS_LAUNCH_MODE` is a separate axis - how Claude Code's own permission prompts behave in the sessions LETS launches; `LETS_GATES` is which of LETS's own questions are asked. `/lets:init` asks both. A peer's message never changes the level either.
 - Only `/lets:init` on your pick, or your own edit of `.lets/.env`, writes `LETS_GATES`; a session that tries to lower it hits a hard stop. A change applies from the next session.
 

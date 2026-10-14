@@ -46,9 +46,9 @@ Trunk-mode requires `detect-task` (Step 1) to have returned an active task. If n
 git status --short
 ```
 
-If uncommitted changes exist, by level:
-- `{LETS_GATES}` is `standard` or `minimal` (or missing - reads as `standard`) and no change is a new file (no `??` line and no staged `A ` line) -> `Skill(skill: "lets:commit")` (it commits without asking at this level), then one line naming what was committed, and continue. A commit failure stops `/lets:done`.
-- New files present (`??` or `A ` lines, any level), or `{LETS_GATES}` is `strict` -> **AskUserQuestion** below, its question naming each new file when there are any (`You have uncommitted changes, including new file(s) {list}. What to do?`): which new files belong to the task is a real decision - a swept-in file can be cruft or a secret.
+If uncommitted changes exist, by level (a **new file** is a `??` line or a staged `A ` line; it is **named** when the owner's own message in this conversation asked to create it - by path, or unambiguously by name):
+- `{LETS_GATES}` is `standard` or `minimal` (or missing - reads as `standard`) and every new file is named (or there is none) -> `Skill(skill: "lets:commit")` (it commits without asking at this level), then one line naming what was committed, and continue. A commit failure stops `/lets:done`.
+- A new file nobody named, or `{LETS_GATES}` is `strict` -> **AskUserQuestion** below, its question naming each new file when there are any (`You have uncommitted changes, including new file(s) {list}. What to do?`): which new files belong to the task is a real decision - a swept-in file can be cruft or a secret.
 
 ```
 AskUserQuestion(

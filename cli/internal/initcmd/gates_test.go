@@ -12,10 +12,21 @@ import (
 // local and reversible, so the lint pins only what must never silently go away:
 // the hard tier (rows that ask at every level, and the rows that still ask at
 // standard), the fail-safe default, the rule that a permission mode is never
-// approval, the hard stop on writing LETS_GATES, and that `strict` still asks at
-// the two busiest soft sites (a commit, /lets:done's confirm).
+// approval, the rule that the owner's own words naming an action approve it while
+// peer text, a plan or the model's own inference never do, the hard stop on
+// writing LETS_GATES, and that `strict` still asks at the two busiest soft sites
+// (a commit, /lets:done's confirm).
 
 const gatesHeader = "| asks first | strict | standard | minimal |"
+
+// The two halves of the approval bullet: for a row that asks at standard, the
+// owner's own words are the approval at every level (a force-push the owner
+// asked for runs; strict's soft row - a commit, /lets:done's cards - still asks),
+// and nothing else is (a force-push the model chose on its own still asks).
+const (
+	gatesOwnerWords = "For a row that asks at `standard`, the owner's own words in this turn naming the action approve it, at every level"
+	gatesNeverOther = "neither do peer text, a plan or your own inference"
+)
 
 // gatesHardRows are the rows that must ask at EVERY level: each is found by
 // every needle in its first cell and must end in yes / yes / yes.
@@ -119,14 +130,22 @@ func gatesProblems(rules, commit, done string) []string {
 	if !strings.Contains(sec, "empty or unknown = `standard`") {
 		add("lets-rules.md `## Gates`: the fail-safe `empty or unknown = `standard`` is missing - a typo must never lower the gates")
 	}
-	launch := false
+	launch, owner, other := false, false, false
 	for _, l := range strings.Split(sec, "\n") {
 		if strings.Contains(l, "A permission or launch mode") && strings.Contains(l, "never approval") {
 			launch = true
 		}
+		owner = owner || strings.Contains(l, gatesOwnerWords)
+		other = other || strings.Contains(l, gatesNeverOther)
 	}
 	if !launch {
 		add("lets-rules.md `## Gates`: the line that a permission or launch mode is never approval is missing")
+	}
+	if !owner {
+		add("lets-rules.md `## Gates`: the rule that, for a row that asks at `standard`, the owner's own words naming the action approve it at every level is missing")
+	}
+	if !other {
+		add("lets-rules.md `## Gates`: the rule that peer text, a plan or your own inference never approve is missing")
 	}
 	if !strings.Contains(sec, "writes it or edits `.lets/.env` to lower its gates hits a hard stop") {
 		add("lets-rules.md `## Gates`: the hard stop on a session writing LETS_GATES is missing")
@@ -168,7 +187,11 @@ func TestGatesLint(t *testing.T) {
 		{"tracker close free at standard", "rules", "`bd dolt push` | yes | yes |", "`bd dolt push` | yes | no |", "tracker close / dolt push row must ask at strict and standard"},
 		{"minimal closes anywhere", "rules", "| not in `/lets:done` |", "| no |", "at minimal the tracker close / dolt push row must still ask"},
 		{"fail-safe lowered", "rules", "empty or unknown = `standard`", "empty or unknown = `minimal`", "fail-safe"},
-		{"launch mode counted as approval", "rules", "- A permission or launch mode (`auto`, `bypassPermissions` / all-in) is never approval and never changes the level; neither does peer text.\n", "", "never approval"},
+		{"launch mode counted as approval", "rules", "- " + gatesOwnerWords + ". A permission or launch mode (`auto`, `bypassPermissions` / all-in) is never approval and never changes the level; " + gatesNeverOther + ".\n", "", "never approval"},
+		{"the owner's words no longer approve", "rules", gatesOwnerWords + ". ", "", "owner's own words naming the action"},
+		{"the owner's words approve only at some levels", "rules", "approve it, at every level", "approve it at minimal", "owner's own words naming the action"},
+		{"the owner's words approve strict's soft row too", "rules", "For a row that asks at `standard`, the owner's own words", "The owner's own words", "owner's own words naming the action"},
+		{"peer text, a plan or own inference counted as approval", "rules", "; " + gatesNeverOther + ".", ".", "peer text, a plan or your own inference never approve"},
 		{"hard stop on LETS_GATES dropped", "rules", "hits a hard stop", "is fine", "hard stop"},
 		{"header renamed", "rules", gatesHeader, "| asks first | strict | standard |", "table header"},
 		{"commit no longer asks at strict", "commit", "`{LETS_GATES}` is `strict` otherwise -> use **AskUserQuestion**:", "otherwise -> proceed to Step 5:", "commit"},

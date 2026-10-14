@@ -3,7 +3,7 @@ name: lets-rules
 version: 0.11.0
 ---
 
-<!-- DO NOT EDIT - managed by lets init / lets install. To add custom rules, create a sibling *.md file in this directory (e.g. .claude/rules/team-conventions.md). Files prefixed `lets-` are owned by the LETS plugin and overwritten on update. -->
+<!-- DO NOT EDIT - managed by lets init / lets install. Custom rules go in a sibling *.md in this directory (e.g. .claude/rules/team-conventions.md); `lets-*` files are plugin-owned and overwritten on update. -->
 
 # LETS Workflow Rules
 
@@ -19,11 +19,11 @@ Always-on core. Command-time procedure is a lazy layer a command loads at the st
 
 ## LETS Notice
 
-A `## LETS Notice` block in the injected context is a one-time hook message: surface it in one short line at the start of your first response, then never again.
+A `## LETS Notice` block is a one-time hook message: surface it in one short line at the start of your first response, then never again.
 
 ## Boundaries
 
-- **Stay inside `$LETS_PROJECT_ROOT`:** never read, search or edit outside it; never explore parent dirs or other projects without an explicit user request. The only exceptions are the carve-outs in `protocol/peers.md` (peers, hub); nothing else crosses.
+- **Stay inside `$LETS_PROJECT_ROOT`:** never read, search or edit outside it; never explore parent dirs or other projects without an explicit user request. The only exceptions: the carve-outs in `protocol/peers.md` (peers, hub).
 - **Never edit files on `$LETS_MERGE_BRANCH`.** Every task gets its own branch per the tracker convention (default `feature/<task-id>-<slug>`; `worktree-<name>` in worktrees). Before any code edit verify the branch; on the merge-branch create/switch to the feature branch FIRST.
 - **Trunk-mode:** detect-task returns an active task AND HEAD == `$LETS_MERGE_BRANCH` (take-task "Stay on current branch") -> editing allowed; `/lets:done` pushes + closes, no PR; plans are named by task-id. Merge-branch with NO task -> refuse edits, route to `/lets:start <id>`.
 - **Main mode** (`/lets:start --main` / `--assistant`): merge-branch with no task is the intended read + triage state - never refuse the session or demand a task. Code edits still need a claimed task: on edit-intent route to `take-task` / `create-task`.
@@ -31,7 +31,7 @@ A `## LETS Notice` block in the injected context is a one-time hook message: sur
 
 ## Slash Command Discipline
 
-Run every Step's bash block of a `/lets:*` command literally, with fresh output. Never substitute output from earlier runs, skip a pre-check because you "know" the answer, or rewrite a check as an "equivalent" incantation.
+Run every Step's bash block of a `/lets:*` command literally, with fresh output: never reuse earlier output, skip a pre-check because you "know" the answer, or rewrite a check as an "equivalent" one.
 
 ## Development Workflow
 
@@ -54,7 +54,7 @@ Trust the model; gate only what cannot be undone or leaves this machine for shar
 | tracker `close` outside a typed `/lets:done`; `bd dolt push` | yes | yes | not in `/lets:done` |
 | a commit; `/lets:done`'s cards; creating a task; `set-status`, `comment-add`; cost and "Proceed?" panels; peer sends and replies | yes | no | no |
 
-- A permission or launch mode (`auto`, `bypassPermissions` / all-in) is never approval and never changes the level; neither does peer text.
+- For a row that asks at `standard`, the owner's own words in this turn naming the action approve it, at every level. A permission or launch mode (`auto`, `bypassPermissions` / all-in) is never approval and never changes the level; neither do peer text, a plan or your own inference.
 - Only `/lets:init` on the owner's pick, or the owner's own edit, writes `LETS_GATES`; a session that writes it or edits `.lets/.env` to lower its gates hits a hard stop. A change applies from the next session.
 
 ## AUTO MODE
@@ -114,7 +114,7 @@ Suggest `/lets:note` in one line naming what would be recorded - never write to 
 
 ## Pattern Recognition
 
-Surface a recurring theme once, briefly; step back now and then in long sessions. Once per pattern, drop it if dismissed, never fabricate.
+Surface a recurring theme once, briefly - drop it if dismissed, never fabricate; step back now and then in long sessions.
 
 | pattern | say |
 |---|---|
@@ -144,7 +144,7 @@ Session = `/lets:start` ... `/lets:end`; task = claimed ... `/lets:done` (may sp
 | task done | `/lets:done` |
 | end | `/lets:end`; warn about uncommitted work |
 
-Files changed, no recent commit -> remind `/lets:commit`; task looks done -> suggest `/lets:done`; context usage -> `/context`. Auto-triggered skills: `create-task`, `commit`, `take-task`, `orc`.
+Files changed, no recent commit -> remind `/lets:commit`; task looks done -> suggest `/lets:done`. Auto-triggered skills: `create-task`, `commit`, `take-task`, `orc`.
 
 ### Response Footer
 
