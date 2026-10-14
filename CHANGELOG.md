@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-14
+
 ### Added
 - **Choose what asks you first: `LETS_GATES` = `strict` | `standard` | `minimal` (lets-wu2xl).** One table in the always-on rules (`## Gates`) says, per level, which actions ask the owner first; everything local and reversible runs and is reported in one line, and a command you typed is the approval for what it names. `standard` (the default) asks for a PR merge, force-push and destructive operations (`git reset --hard`, `git branch -D`, removing a worktree with uncommitted or unpushed work), a push or PR outside a typed `/lets:done`, a task close outside `/lets:done`, `bd dolt push`, posting outside the repo, acting in another project, and a release. `minimal` keeps all of that except two: a push or PR outside `/lets:done` asks only for the merge branch or another task's branch, and `/lets:done` merges the task's own PR once every check is green. `strict` is LETS as before - every commit and confirmation asks. `/lets:init` asks for the level (`lets init --gates`), separately from the launch mode; an empty or unknown value counts as `standard` - never lower - and an unknown one gets a Notice at session start. A permission or launch mode is never approval and never changes the level, and a session that tries to lower it hits a hard stop. The plan gate does not move at any level: no code without a plan entered through `/lets:execute`, and a deviation still stops.
 - **`lets peers sender` - who sent a message, by provenance only (lets-wu2xl).** `lets peers sender --from-name <name> --from-addr uds:/tmp/cc-socks/<pid>.sock --json` answers `sender_ok` when the message's socket belongs to the one live session with that name, in any repository, with its `name`, `session6`, `cwd` and `in_repo`; anything else is `sender_ok=false` with a `sender_reason` - fail closed. It reads no orchestrator record, grant or binding and writes nothing: the orc skill decides what a verified sender may do, by `LETS_GATES`.
@@ -679,7 +681,8 @@ Initial release with expert agents team.
 - SessionStart hook injecting workflow rules
 - Plugin structure: commands, agents, hooks
 
-[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/restarter/lets-workflow/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/restarter/lets-workflow/compare/v0.9.3...v0.10.0
 [0.9.3]: https://github.com/restarter/lets-workflow/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/restarter/lets-workflow/compare/v0.9.1...v0.9.2
