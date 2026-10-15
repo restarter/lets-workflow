@@ -176,6 +176,9 @@ func TestTeamBackend_Members(t *testing.T) {
 			t.Errorf("/lets:team run launches workers with the bare agent_command - never with --agent (lets-1r00e): %s", strings.TrimSpace(l))
 		}
 	}
+	if m16 := between(team, "6. **Brief.**", "7. **Spawn.**"); !strings.Contains(m16, "Your FIRST message to the lead, before any work, announces you: `STATUS: <c>-<name> online - <role> (lets:<role>)`") || !strings.Contains(m16, "`RESULT: the routes you answer and the task you read in section 7 (or no current task)`") {
+		t.Error("the M1.6 spawn brief makes every member announce its name, role and routes first (lets-1w0tz)")
+	}
 	const spawnCall = `Skill(skill: "lets:member-run", args: "op=spawn `
 	if n, calls := strings.Count(team, "op=spawn"), strings.Count(team, spawnCall); calls == 0 || n != calls {
 		t.Errorf("every spawn goes through %s (op=spawn %d, calls %d)", spawnCall, n, calls)

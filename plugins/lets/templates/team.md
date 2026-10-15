@@ -44,6 +44,11 @@ A definition, not a record of live sessions: the lead respawns the roster from t
 | name | role | agent | model | notes |
 |---|---|---|---|---|
 | lead | team lead | (the lead session) | (inherited) | |
+| architect | architect | lets:architect | | standard |
+| skeptic | skeptic | lets:skeptic | | standard |
+| explorer | explorer | lets:explorer | | standard |
+
+The `architect`, `skeptic` and `explorer` rows are the standard roster every new team gets, the way it gets a lead: `/lets:team spawn --roster` spawns them. Delete a row to drop that member; add a row for another. An empty model inherits the session model (an agent's own pin, e.g. the explorer's, still applies).
 
 Available roles: `architect` (`lets:architect`), `skeptic` (`lets:skeptic`), `explorer` (`lets:explorer`), `implementer` (`lets:implementer`). What each one does, and where a decision goes, is the LETS routes table every member gets at spawn.
 
