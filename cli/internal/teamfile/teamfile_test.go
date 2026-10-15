@@ -126,6 +126,7 @@ func TestRender_Template(t *testing.T) {
 		"team: \"snake\"\n", "lead_name: \"snake-lead\"\n", "orca_agent: \"claude-agent-teams\"\n",
 		"## 2. Workspace", "`DOCKER_PREFIX`", "`COMPOSE_PROJECT_NAME`", "<first>-<last>", "`.lets/hooks/team-setup`",
 		"Resume artefacts:", "Continuity = files only",
+		"agent_command --agent lets:lead", "**The lead** never edits a repository file itself",
 	} {
 		if !strings.Contains(string(out), s) {
 			t.Errorf("rendered template lacks %q", s)
