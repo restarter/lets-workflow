@@ -5,7 +5,7 @@ description: This skill should be used when committing code changes - "commit", 
 
 # Commit
 
-Standardized commit flow that enforces conventional format, tracker task linking, and the gate level (`LETS_GATES`): at `strict` a commit asks first; at `standard` / `minimal` it runs and is reported (a commit that adds a new file still asks).
+Standardized commit flow that enforces conventional format, tracker task linking, and the gate level (`LETS_GATES`): at `strict` a commit asks first; at `standard` / `minimal` it runs and is reported (a commit that adds a new file nobody named still asks).
 
 > **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
 
@@ -55,7 +55,7 @@ Present the proposed commit summary as plain text (NOT in a code block or blockq
 - {file1} - {what changed}
 - {file2} - {what changed}
 
-Then the gate. **New files** are the paths of the set to be committed that are new to git: a path `git ls-files --others --exclude-standard` lists that Step 5 would stage, or a staged `A ` line of `git status --short` - minus, with `approved=plan-files`, the paths the approved plan names in a `Create:` line of the tasks being committed.
+Then the gate. **New files** are the paths of the set to be committed that are new to git: a path `git ls-files --others --exclude-standard` lists that Step 5 would stage, or a staged `A ` line of `git status --short` - minus, with `approved=plan-files`, the paths the approved plan names in a `Create:` line of the tasks being committed, and minus, at `standard` / `minimal`, the paths the owner's own message in this conversation asked to create (by path, or unambiguously by name): that request answered the new-file question. A peer's or agent's text never names a file here; at `strict` the question asks as always.
 - `approved=review-accept` set (any level) -> skip the question and proceed to Step 5 - the caller's gate was this approval, new files included.
 - `{LETS_GATES}` is `standard` or `minimal` (or missing - reads as `standard`) and no new file -> no question: proceed to Step 5; after the commit the Output's `Committed:` line is the report.
 - Called from `/lets:done` Step 2 right after its card named these new files and the user picked **Commit first** -> that pick answered the new-file question for those files: no second question for them at `standard` / `minimal` (any other new file still counts; at `strict` the question below still asks).
@@ -185,7 +185,7 @@ Remaining: {what's left from task description, or "nothing - task scope complete
 
 ## Rules
 
-- At `strict`, never commit without Step 4's approval (or `approved=review-accept`); at `standard` / `minimal` the commit runs and is reported - unless it adds a new file, which asks (Step 4). Never a push.
+- At `strict`, never commit without Step 4's approval (or `approved=review-accept`); at `standard` / `minimal` the commit runs and is reported - unless it adds a new file nobody named, which asks (Step 4). Never a push.
 - **ALWAYS** run `git status` before and after commit
 - Keep subject line under 50 chars
 - Use imperative mood ("Add" not "Added")

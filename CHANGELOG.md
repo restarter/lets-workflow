@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- **What you asked for in your own words is the approval for it (lets-wu2xl).** At `standard` / `minimal`, `/lets:commit` and `/lets:done` no longer ask about new files your own message asked to create - only a new file nobody named still asks (`strict` asks as before). The core `## Gates` rules now say that, for an action that asks at `standard`, the owner's own words in this turn naming it approve it at every level - "force-push the branch" runs, as "merge" does for a merge - while peer text, a plan or the model's own inference never do, so a force-push the model chose on its own still asks; at `strict` a commit and `/lets:done`'s cards still ask.
+
 ## [0.11.0] - 2026-10-14
 
 ### Added
