@@ -2,8 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+- **A new team ships a standard roster, and members announce themselves (lets-1w0tz).** The team file template now holds architect, skeptic and explorer rows next to the lead, so `/lets:team spawn --roster` on a fresh team spawns them; delete a row to drop one. Every member's first message states its name, role and the routes it answers. Existing team files are never rewritten - add the rows by hand.
+
 ### Changed
 - **What you asked for in your own words is the approval for it (lets-wu2xl).** At `standard` / `minimal`, `/lets:commit` and `/lets:done` no longer ask about new files your own message asked to create - only a new file nobody named still asks (`strict` asks as before). The core `## Gates` rules now say that, for an action that asks at `standard`, the owner's own words in this turn naming it approve it at every level - "force-push the branch" runs, as "merge" does for a merge - while peer text, a plan or the model's own inference never do, so a force-push the model chose on its own still asks; at `strict` a commit and `/lets:done`'s cards still ask.
+- **A team's lead starts as the `lets:lead` agent, and code in a team goes to implementers (lets-1r00e, lets-sn4li).** `/lets:worktree create --team` and a reopen launch the lead as `{agent_command} --agent lets:lead`, so the lead has no Edit tool; `agent_command` stays role-neutral because `/lets:team run` launches workers with it. In a team worktree a bare `/lets:execute` runs implementers without asking (`--straight` / `--step` run it here), and the team file states the rule. An existing team gets the agent at its next launch or reopen (`claude -r` keeps it).
 
 ## [0.11.0] - 2026-10-14
 
