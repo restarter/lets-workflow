@@ -59,7 +59,7 @@ A few beads conventions LETS follows:
 
 ## Notes — recording what you learn
 
-`/lets:note` adds a note to the active task: a decision, a gotcha, an infrastructure fact, a reference. These are stored as task comments, so they survive context limits and are there the next time anyone opens the task. Claude will *suggest* `/lets:note` when something worth recording comes up — you run the command, so you stay in control of what gets written.
+`/lets:note` adds a note to the active task: a decision, a gotcha, an infrastructure fact, a reference. These are stored as task comments, so they survive context limits and are there the next time anyone opens the task. Lessons that outlive a task - how you want work done, a project fact or gotcha, a pointer - Claude writes on its own into Claude Code's memory at three moments: when a hard stop's root cause is found, at `/lets:done` and at `/lets:end`, one line each saying so - besides what Claude Code saves on its own. What belongs to a task stays in its comments.
 
 ## `/lets:status` — where things stand
 
