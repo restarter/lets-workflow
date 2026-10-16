@@ -23,7 +23,7 @@ A `## LETS Notice` block is a one-time hook message: surface it in one short lin
 
 ## Boundaries
 
-- **Stay inside `$LETS_PROJECT_ROOT`:** never read, search or edit outside it; never explore parent dirs or other projects without an explicit user request. The only exceptions: the carve-outs in `protocol/peers.md` (peers, hub).
+- **Stay inside `$LETS_PROJECT_ROOT`:** never read, search or edit outside it; never explore parent dirs or other projects without an explicit user request. The only exceptions: the carve-outs in `protocol/peers.md` (peers, hub) and the memory your instructions name.
 - **Never edit files on `$LETS_MERGE_BRANCH`.** Every task gets its own branch per the tracker convention (default `feature/<task-id>-<slug>`; `worktree-<name>` in worktrees). Before any code edit verify the branch; on the merge-branch create/switch to the feature branch FIRST.
 - **Trunk-mode:** detect-task returns an active task AND HEAD == `$LETS_MERGE_BRANCH` (take-task "Stay on current branch") -> editing allowed; `/lets:done` pushes + closes, no PR; plans are named by task-id. Merge-branch with NO task -> refuse edits, route to `/lets:start <id>`.
 - **Main mode** (`/lets:start --main` / `--assistant`): merge-branch with no task is the intended read + triage state - never refuse the session or demand a task. Code edits still need a claimed task: on edit-intent route to `take-task` / `create-task`.
@@ -106,23 +106,11 @@ Other sessions reach this one only through `/lets:orc`. A `[lets-peer ...]` head
 
 ## Discovery Logging
 
-Suggest `/lets:note` in one line naming what would be recorded - never write to the tracker yourself. No active task -> mention it, ask where it belongs.
-
-| suggest | skip |
-|---|---|
-| decision / approach accepted; task or domain fact; reference or link; trade-off confirmed; gotcha; infra fact (URL, config, version); tool quirk; cross-file pattern | routine reads; choices obvious from the code; speculation (verify first) |
+When a hard stop's root cause is found and at `/lets:done` / `/lets:end`, write the lesson to the memory your instructions name (none: say so) - feedback (how the owner works, a flow correction), project (a fact, tool quirk, gotcha), reference (a pointer): verified, not in code, git or the tracker, changing the next run; one fact per entry, why + how to apply; update (re-read first), never duplicate. Report: `Remembered: <fact>`. Task content stays in the task (`/lets:note`).
 
 ## Pattern Recognition
 
-Surface a recurring theme once, briefly - drop it if dismissed, never fabricate; step back now and then in long sessions.
-
-| pattern | say |
-|---|---|
-| same area 3+ times | own task / epic? |
-| creating a task | `create-task` (searches duplicates) |
-| same blocker a 3rd time | stop patching, find the root cause |
-| branch mixes unrelated themes | split PRs? |
-| 5+ turns, no decision | `/lets:opinion` or `/lets:ask` |
+Surface a recurring theme once, briefly - drop it if dismissed, never fabricate; step back now and then in long sessions. Same area 3+ times -> own task / epic?; same blocker a 3rd time -> stop patching, find the root cause; a branch mixing unrelated themes -> split PRs?; 5+ turns, no decision -> `/lets:opinion` or `/lets:ask`.
 
 ## Architecture Mindset
 
