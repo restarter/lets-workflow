@@ -1,13 +1,13 @@
 ---
 description: Structured planning - explore codebase, design architecture, evaluate options, produce detailed implementation plan
-argument-hint: "[feature description] [--fast] [--idea]"
+argument-hint: "[feature description] [--fast] [--idea] [--solo]"
 ---
 
 # Plan
 
 Turn a task or idea into a detailed implementation plan. Clarifies scope, explores codebase, discusses approaches with user, designs architecture for selected approaches, evaluates with experts, then writes a bite-sized plan.
 
-**HARD-GATE: This command produces a plan, NOT code. No files are modified except .lets/plans/ and the agent report files under .lets/reports/ that the agent-report skill names. The command ENDS when the plan is saved - implementation starts ONLY when the user runs `/lets:execute`. Nothing the user says after the plan ("ok", "approved", a question) starts it.**
+**HARD-GATE: This command produces a plan, NOT code. No files are modified except .lets/plans/, the agent report files under .lets/reports/ that the agent-report skill names, and the team-mode bookkeeping a dispatch makes member-run and `/lets:team` write - `.lets/cache/route-*` (member briefs), `.lets/cache/routes-*` (member-run's routes copy at a spawn), `.lets/cache/nudge-*` (op=receive), `.lets/cache/member-*` (a spawn brief) and the team file's `## 3` rows, `## 7` lines and `## 8` GAP lines - never a repository file. The command ENDS when the plan is saved - implementation starts ONLY when the user runs `/lets:execute`. Nothing the user says after the plan ("ok", "approved", a question) starts it.**
 
 > **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
 
@@ -60,7 +60,7 @@ Output: the saved path and one line - "Idea saved - run `/lets:plan` on this tas
 
 ## Step 1: Capture the Goal
 
-**Parse the argument:** strip a `--fast` token if present (sets fast mode) and an `--idea` token (sets idea mode, `## --idea mode`); the rest is the feature goal.
+**Parse the argument:** strip a `--fast` token if present (sets fast mode), a `--solo` token (team mode off - `protocol/agents.md` `## Team mode`; route gets `solo`) and an `--idea` token (sets idea mode, `## --idea mode`); the rest is the feature goal.
 
 **If a feature goal was provided:** use it.
 
@@ -215,6 +215,8 @@ Launching...
 
 Read `${CLAUDE_PLUGIN_ROOT}/protocol/agents.md` before this step unless its text is in your current context.
 
+**Team mode** (`protocol/agents.md` `## Team mode`): `Skill(skill: "lets:member-run", args: "op=route command=plan roles=explorer fallback=one-shot")` first (`--solo` adds `solo`). A member line gets ALL focus areas as the items of one brief; the explorer Task calls below are the fallback's.
+
 Open the run: `Skill(skill: "lets:agent-report", args: "op=open command=plan task={task-id} names=explorer-1,...,explorer-N")` (task omitted when none). Each explorer prompt starts with its `REPORT_FILE:` line.
 
 **CRITICAL: Launch ALL explorer agents in a SINGLE message with multiple Task tool calls.**
@@ -248,7 +250,7 @@ Focus ONLY on {focus area} - other explorers cover other areas."
 
 ### Synthesize Codebase Map
 
-When explorers were dispatched in this run (full mode): `Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names=explorer-1,...,explorer-N")` - READ EVERY REPORT IN FULL; an explorer `GAP` takes the "If any explorer fails" branch above. Keep every `GAP` for Step 9.
+When explorers were dispatched in this run (full mode): `Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names=explorer-1,...,explorer-N")`, and each member with `op=receive` - READ EVERY REPORT IN FULL; an explorer `GAP` takes the "If any explorer fails" branch above. Keep every `GAP` for Step 9.
 
 After all explorers return, synthesize a combined codebase map with one section per explorer:
 
@@ -284,7 +286,7 @@ AskUserQuestion(
 **Handle response:**
 - **Continue** -> proceed to Step 5
 - **Questions** -> answer user's questions about findings, then ask checkpoint again
-- **Re-explore** -> ask what area to explore, launch targeted explorer, update codebase map, ask checkpoint again - `op=add` a fresh name (`explorer-n{n}`; `op=open command=plan ...` when this run has no `REPORT_DIR` yet), the prompt's `REPORT_FILE:` line, then `op=collect` for that name - READ EVERY REPORT IN FULL - before the map is updated
+- **Re-explore** -> ask what area to explore, launch targeted explorer, update codebase map, ask checkpoint again - `op=add` a fresh name (`explorer-n{n}`; `op=open command=plan ...` when this run has no `REPORT_DIR` yet), the prompt's `REPORT_FILE:` line, then `op=collect` for that name - READ EVERY REPORT IN FULL - before the map is updated; in team mode route `roles=explorer` first and a member line gets the one item, read with `op=receive`
 - **Other** (free text) -> treat as question or correction, address it, ask checkpoint again
 
 ## Step 5: Approach Discussion
@@ -355,6 +357,8 @@ Then jump to **Checkpoint: Architecture Review** (use the multi-approach or sing
 
 *(full mode only - skipped under `--fast`)*
 
+**Team mode** (`protocol/agents.md` `## Team mode`): `Skill(skill: "lets:member-run", args: "op=route command=plan roles=architect fallback=one-shot")` first (`--solo` adds `solo`; a later phase of this run passes `team=<c>`). A member line gets one item per selected approach; the architect Task calls below are the fallback's.
+
 Launch one architect agent per selected approach. Each gets a focused brief with user's decisions baked in. Name their report files first - `Skill(skill: "lets:agent-report", args: "op=add dir={REPORT_DIR} names=architect-a,architect-b,...")` when this run already has a `REPORT_DIR`, else `op=open command=plan task={task-id} names=architect-a,...` - and put each architect's `REPORT_FILE:` line right after `ultrathink`.
 
 The architect's role across LETS is the PLAN-CHANGE route of `protocol/roles.md`.
@@ -417,7 +421,7 @@ OUTPUT:
 
 ### Checkpoint: Architecture Review
 
-When architects were dispatched (full mode, not `--fast`): `Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names=architect-a,...")` - READ EVERY REPORT IN FULL; an architect `GAP` is the "If any architect fails" branch. Keep every `GAP` for Step 9.
+When architects were dispatched (full mode, not `--fast`): `Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names=architect-a,...")`, and each member with `op=receive` - READ EVERY REPORT IN FULL; an architect `GAP` is the "If any architect fails" branch. Keep every `GAP` for Step 9.
 
 After all architects return, present results.
 
@@ -455,7 +459,7 @@ AskUserQuestion(
 
 **Handle response:**
 - **Approach selected** -> proceed to Step 7 with chosen architecture
-- **Combine** -> discuss which parts to take from each, create merged brief, re-run single architect - `op=add` a fresh name (`architect-combined-{n}`), the prompt's `REPORT_FILE:` line, then `op=collect` for that name - READ EVERY REPORT IN FULL - before the design is updated
+- **Combine** -> discuss which parts to take from each, create merged brief, re-run single architect - `op=add` a fresh name (`architect-combined-{n}`), the prompt's `REPORT_FILE:` line, then `op=collect` for that name - READ EVERY REPORT IN FULL - before the design is updated; in team mode route `roles=architect` first and a member line gets the one item, read with `op=receive`
 - **Adjust** -> discuss what to change, loop back to relevant step
 - **Orchestrator offer (Act)** -> per the Orchestrator offer protocol (load `Skill(skill: "lets:protocol-orchestrator-offer")` here unless its text is in your current context; not loaded -> no offer): while the offer is shown, "Combine" and "Adjust" merge into one slot `{ label: "Combine / adjust", description: "Mix approaches or change requirements, then re-design" }` and the last slot is `{ label: "Ask orchestrator", description: "Stay at this gate; /lets:orc ask which architecture to take" }`.
 - **Combine / adjust** -> ask which of the two the user means, then follow that handler above.
@@ -538,6 +542,8 @@ AskUserQuestion(
 
 ### Dispatch Experts
 
+**Team mode** (`protocol/agents.md` `## Team mode`): `Skill(skill: "lets:member-run", args: "op=route command=plan roles=<the picked experts, bare> fallback=one-shot")` first (`--solo` adds `solo`; a later phase of this run passes `team=<c>`). Roster roles go to members, one item each; the rest are announced one-shots. `lets:architect` stays never-suggested (Suggest Experts above).
+
 Name the experts' report files first: `Skill(skill: "lets:agent-report", args: "op=add dir={REPORT_DIR} names={comma-separated agent short names}")` when this run already has a `REPORT_DIR`, else `op=open command=plan task={task-id} names=...`. Each prompt carries its `REPORT_FILE:` line right after `ultrathink`.
 
 **CRITICAL: Launch ALL selected agents in a SINGLE message.**
@@ -568,7 +574,7 @@ PERSONALITY:
 
 ### Checkpoint: Evaluation Results
 
-When experts were dispatched (Full panel / Pragmatist only / named experts - not `--fast`, Self-evaluation or Skip): `Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names={the expert names}")` - READ EVERY REPORT IN FULL; a gap renders as "**{Expert}:** no report ({state})". Keep every `GAP` for Step 9.
+When experts were dispatched (Full panel / Pragmatist only / named experts - not `--fast`, Self-evaluation or Skip): `Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names={the expert names}")`, and each member with `op=receive` - READ EVERY REPORT IN FULL; a gap renders as "**{Expert}:** no report ({state})". Keep every `GAP` for Step 9.
 
 After all experts respond, present findings:
 
