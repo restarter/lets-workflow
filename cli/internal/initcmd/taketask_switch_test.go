@@ -14,7 +14,8 @@ var takeTaskBusyWriter = []string{
 	"Before anything else, run `ListAgents`.",
 	"A busy agent of THIS session that writes in this tree stops the switch",
 	"`isolation: null`",
-	"a `<team>-<name>` whose spawn brief `.lets/cache/member-<team>-<name>.md` (\"You are <name> (lets:<role>) of team <c>\") names `lets:implementer`",
+	"`isolation: null` listed `running`",
+	"a `Member:` id of this lead session in the team file that `ListAgents` lists `running` and whose spawn brief `.lets/cache/member-<team>-<name>.md` (\"You are <name> (lets:<role>) of team <c>\") names `lets:implementer`",
 	"every team agent is classified by its spawn brief, never by the roster",
 	"a brief that is missing, unreadable or names no role counts as a writer, never as read-only",
 	"A brief naming any other role is read-only.",
@@ -88,7 +89,8 @@ func TestTakeTask_ListAgentsBeforeSwitch(t *testing.T) {
 			at := strings.Index(m, "- **Park** ->")
 			return m[:at] + para + m[at:]
 		}(),
-		"classified by the roster role":   strings.Replace(md, "a `<team>-<name>` whose spawn brief `.lets/cache/member-<team>-<name>.md` (\"You are <name> (lets:<role>) of team <c>\") names `lets:implementer` - every team agent is classified by its spawn brief, never by the roster (`/lets:team spawn` may run any role under any name)", "`<team>-<name>` of a roster row whose role is `implementer`", 1),
+		"classified by the roster role":   strings.Replace(md, "a `Member:` id of this lead session in the team file that `ListAgents` lists `running` and whose spawn brief `.lets/cache/member-<team>-<name>.md` (\"You are <name> (lets:<role>) of team <c>\") names `lets:implementer` - every team agent is classified by its spawn brief, never by the roster (`/lets:team spawn` may run any role under any name)", "`<team>-<name>` of a roster row whose role is `implementer`", 1),
+		"keyed on the agent name again":   strings.Replace(md, "a `Member:` id of this lead session in the team file that `ListAgents` lists `running` and whose spawn brief", "a `<team>-<name>` whose spawn brief", 1),
 		"missing brief read as read-only": strings.Replace(md, "counts as a writer, never as read-only", "counts as read-only", 1),
 		"members_live back":               strings.Replace(md, "`no_remote_base`, `target_is_merge_branch`", "`members_live` (a live implementer writes here), `no_remote_base`, `target_is_merge_branch`", 1),
 	}

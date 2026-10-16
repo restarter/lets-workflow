@@ -45,7 +45,7 @@ A definition, not a record of live sessions: the lead respawns the roster from t
 |---|---|---|---|---|
 | lead | team lead | (the lead session) | (inherited) | |
 
-The roster starts with the lead alone. When no member is live, the lead's `/lets:start` asks which members to spawn - architect + skeptic + explorer (recommended), skeptic + explorer, or none - and adds the picked roles here as rows; from then on it offers this roster first. Delete a row to drop that member; add a row for another. An empty model inherits the session model (an agent's own pin, e.g. the explorer's, still applies).
+The roster starts with the lead alone. When no member is reachable, the lead's `/lets:start` asks which members to spawn - architect + skeptic + explorer (recommended), skeptic + explorer, or none - and adds the picked roles here as rows; from then on it offers this roster first. Delete a row to drop that member; add a row for another. An empty model inherits the session model (an agent's own pin, e.g. the explorer's, still applies).
 
 Available roles: `architect` (`lets:architect`), `skeptic` (`lets:skeptic`), `explorer` (`lets:explorer`), `implementer` (`lets:implementer`). What each one does, and where a decision goes, is the LETS routes table every member gets at spawn.
 
@@ -70,7 +70,13 @@ Read code at the task base, never from memory; mark anything unchecked `[UNVERIF
 
 ## 7. Current task
 
-None yet. On every task switch the lead rewrites the task-specific content of this section: the task (**Title** (`id`)), its branch, the phase, the next step, and the resume artefacts. Every `Dismissed: <name> (lead <session6>)` and `Reports: <dir> (lead <session6>)` line is KEPT as it is across a switch - other lead sessions' lines too.
+None yet. On every task switch the lead rewrites the task-specific content of this section: the task (**Title** (`id`)), its branch, the phase, the next step, and the resume artefacts. These lines are KEPT as they are across a switch - other lead sessions' lines too - and are written in exactly these forms (`<session6>` = the first 6 characters of the lead session id):
+
+- `Member: <name> = <agentId> lets:<role> (lead <session6>)` - a member this lead session spawned; the latest line per name wins.
+- `Member: <name> = gone (lead <session6>)` - a send to that member did not resolve.
+- `Dismissed: <name> (lead <session6>)` - never messaged again by that lead session.
+- `Reports: <dir> (lead <session6>)` - that lead session's report directory.
+- `Members asked: (lead <session6>)` - the Members question was asked in that lead session.
 
 Resume artefacts:
 
