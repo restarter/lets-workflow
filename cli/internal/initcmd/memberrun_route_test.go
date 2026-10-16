@@ -32,6 +32,9 @@ const (
 	rule1GoesOn      = "a notification from that member - even in the same turn - a resumed session or the lead re-checking goes on"
 	membersByRole    = "every name whose LATEST line of this lead session is `Member: <name> = <agentId> lets:<role> (lead <session6>)`"
 	teamSkillCall    = `Skill(skill: "lets:team"`
+	nudgeFileFormula = "`N` = `.lets/cache/nudge-<scope>-<name>-<report dir basename>-<report basename without .md>.md`"
+	receiveDismissed = "2. `dismissed` passed -> nothing is sent; go to 4."
+	receiveNudgeItem = "3. The round's nudge file is"
 )
 
 func memberRunRouteProblems(skill string) []string {
@@ -76,6 +79,14 @@ func memberRunRouteProblems(skill string) []string {
 	}
 
 	// Step 6: peek, one nudge, collect.
+	// G1: the nudge file carries the report's directory - report basenames repeat across runs.
+	if !strings.Contains(step6, nudgeFileFormula) {
+		add("member-run Step 6's nudge file must name the report's directory: " + nudgeFileFormula)
+	}
+	// G3: a dismissed member is never nudged - item 2 comes before the nudge rules of item 3.
+	if d, n := strings.Index(step6, "\n"+receiveDismissed+"\n"), strings.Index(step6, "\n"+receiveNudgeItem); d < 0 || n < 0 || d > n {
+		add("member-run Step 6 item 2 (dismissed -> nothing is sent) must come before item 3's nudge rules")
+	}
 	if !strings.Contains(step6, "`GAP <name> <state> gone` when this call reached 4 through `agent_gone`") || !strings.Contains(step6, "member-run never writes the team file") {
 		add("member-run Step 6 must return GAP <name> <state> gone after an agent_gone, and say member-run never writes the team file")
 	}
@@ -216,6 +227,26 @@ func TestMemberRunRoute_Mutants(t *testing.T) {
 				}
 			}
 			t.Errorf("mutant produced no problem containing %q - that guard cannot fail", m.want)
+		})
+	}
+	// G1 / G3 mutants: the nudge file without its directory; item 2 deleted; item 2 moved after item 3.
+	collect4 := "4. `Skill(skill: \"lets:agent-report\", args: \"op=collect"
+	if !strings.Contains(skill, receiveDismissed+"\n") || !strings.Contains(skill, collect4) || !strings.Contains(skill, nudgeFileFormula) {
+		t.Fatal("mutant cannot apply: Step 6's item 2, item 4 or the nudge-file formula is missing")
+	}
+	movedDismissed := strings.Replace(strings.Replace(skill, receiveDismissed+"\n", "", 1), collect4, receiveDismissed+"\n"+collect4, 1)
+	for name, c := range map[string]struct{ src, want string }{
+		"the nudge file loses its directory": {strings.Replace(skill, "-<report dir basename>-<report basename without .md>.md`", "-<report basename without .md>.md`", 1), "name the report's directory"},
+		"item 2 deleted":                     {strings.Replace(skill, receiveDismissed+"\n", "", 1), "item 2 (dismissed"},
+		"item 2 moved after item 3":          {movedDismissed, "item 2 (dismissed"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			for _, problem := range memberRunRouteProblems(c.src) {
+				if strings.Contains(problem, c.want) {
+					return
+				}
+			}
+			t.Errorf("mutant produced no problem containing %q", c.want)
 		})
 	}
 	t.Run("R2 looks up Member: lines before the roster", func(t *testing.T) {

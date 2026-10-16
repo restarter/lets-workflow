@@ -101,6 +101,11 @@ func teamModeExecuteProblems(exec string) []string {
 		add("5-D.7's recovery rows (idle, not running) must reuse 5-D.5's one nudge rule")
 	}
 
+	// G2: a chunk check is one item - the FIRST member line of each role takes it, so the
+	// role-keyed report path stays unique.
+	if !strings.Contains(who, "The first `member` line of each role -> `member-run` `op=next scope=<callsign> name=<name> id=<agentId>`") || !strings.Contains(who, "further `member` lines of that role get nothing and are not messaged") || !strings.Contains(exec, "the first `member` line -> the standing team's architect") {
+		add("Who checks and the allowlist architect must hand a chunk check to the first member line of each role only")
+	}
 	// F16: a run analyst whose id no longer resolves is respawned fresh under a new name.
 	if !strings.Contains(who, "`agent_gone` on a run analyst's `op=next` (its id no longer resolves - a new lead session) -> record its `agent_id: null`, spawn a fresh one under a new name (`explorer-{RUN}-r2`, `skeptic-{RUN}-r2`") || !strings.Contains(exec, "`agent_gone` on it -> a fresh `architect-{RUN}-r2`") {
 		add("a run analyst's agent_gone must respawn a fresh one under a new name - in Who checks and for the allowlist architect")
@@ -153,6 +158,7 @@ func TestTeamModeExecute_Mutants(t *testing.T) {
 		{"5-D.7 restates instead of pointing", "otherwise 5-D.5's **The one nudge** - its text", "otherwise the one-nudge rule - its text", "reuse 5-D.5's one nudge"},
 		{"the run record drops analysts", `  "analysts": {`, `  "helpers": {`, "analysts.explorer"},
 		{"a team member line is queued", "-> send the check to the run's own analyst instead (`fallback=run`)", "-> record `queued` for it", "busy team member's check"},
+		{"every member line takes the check", "The first `member` line of each role ->", "Every `member` line ->", "first member line"},
 		{"a gone run analyst is not respawned", "`agent_gone` on a run analyst's `op=next`", "`agent_gone` on any op=next", "respawn a fresh one"},
 		{"member_busy only ends the turn", busyNextPending, "It returns `member_busy` (the implementer is still in a round) -> end the turn", "set the chunk back to pending"},
 		{"a stopping round is nudged", stopNeverNudged, "the owner-ordered 5-D.6 stop (`reason: stopped`) is never nudged", "never reach the owner-ordered"},
