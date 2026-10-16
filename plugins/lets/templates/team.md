@@ -78,12 +78,12 @@ Resume artefacts:
 
 ## 8. Decisions
 
-Dated, one entry per decision: who decided, what, and why. Friction with LETS itself is recorded here too.
+Dated, one entry per decision: who decided, what, and why. Friction with LETS itself is recorded here too. Mid-task the lead adds one with `/lets:note --team`.
 
 ## 9. Standing knowledge
 
-Facts that outlive a task. At task close the lead promotes what was learned here - this is what makes the next task cheaper.
+Facts that outlive a task. Mid-task the lead writes one with `/lets:note --team`; at task close it promotes what was learned here and skips what is already written - this is what makes the next task cheaper.
 
 ## 10. Close-out
 
-When a task ends, append what worked, what hurt and one LETS idea each to Decisions and Standing knowledge, and tell the orchestrator through `/lets:orc`. When the team is disbanded, everything worth keeping must already be in this file or in the repo.
+When a task ends, append what worked, what hurt and one LETS idea each to Decisions and Standing knowledge (mid-task: `/lets:note --team`), and tell the orchestrator through `/lets:orc`. When the team is disbanded, everything worth keeping must already be in this file or in the repo.

@@ -1,6 +1,6 @@
 ---
-description: Add a note to the active task - progress, decisions, context. --session (aliases --snapshot, --pre-compact, --compact) writes a resume-grade session snapshot without ending the session.
-argument-hint: "[free text|--session]"
+description: Add a note to the active task - progress, decisions, context. --session (aliases --snapshot, --pre-compact, --compact) writes a resume-grade session snapshot without ending the session. --team writes a fact or a decision into the standing team's file.
+argument-hint: "[free text|--session|--team [text]]"
 ---
 
 # Task Note
@@ -22,11 +22,14 @@ Use `/lets:note` when you want to add extra context that doesn't fit those flows
 /lets:note                  # interactive - pick a note type, add to the active task
 /lets:note <free text>      # use the text directly as the note (infer type)
 /lets:note --session        # RESUME snapshot of the whole session (aliases: --snapshot, --pre-compact, --compact)
+/lets:note --team [text]    # team worktree: a decision -> the team file's Decisions, a fact -> its Standing knowledge
 ```
 
 ## Step 0: Argument Parsing
 
 **If `--session` (aliases `--snapshot`, `--pre-compact`, `--compact`) is passed** -> run **Session Snapshot Mode** (below) INSTEAD of Steps 3-4: no type prompt, produce ONE recovery-grade snapshot. Do NOT run Step 1's interactive task prompt - the `session-snapshot` skill owns task detection (file-primary: ambiguity -> file only, no prompt), keeping this byte-identical to `/lets:end --session`. Then show the output below, NOT the generic Output box (no separate verify - the skill returns the path + task id, and `/lets:end` likewise just delegates and stops).
+
+**If `--team` is passed** -> run **Team Note Mode** (below) INSTEAD of Steps 1-6: no task is needed and none is prompted for, no tracker verb runs. Then show its output, NOT the generic Output box.
 
 **Otherwise** -> normal flow (Steps 1-6).
 
@@ -148,6 +151,22 @@ comment-add task=<task-id> body="[scope-change] <what changed and why>"
 show task=<task-id>
 ```
 
+## Team Note Mode (`--team`)
+
+The manual twin of `/lets:done`'s promote step for a standing team's notebook: a fact or a decision that comes up mid-task goes into the team file now, so a later task of the team reads it, and the promote step at task close skips it.
+
+1. **Team worktree only.** Run `lets worktree info --json`. No top-level `team` -> one line `Not a team worktree - --team writes nothing; /lets:note adds it to the task.` and stop. The file is `.lets/teams/<team>.md`. The lead is its only writer; a member proposes an entry in a `FOR lead` block instead.
+2. **What.** The text after `--team`; none -> the latest decision or fact in this conversation; nothing clear -> ask in words what the note should say, and wait.
+3. **Where.** A decision (who chose what, over what) -> `## 8. Decisions`, as `- {YYYY-MM-DD} {who decided}: {what} - {why}`. A fact that outlives the task -> `## 9. Standing knowledge`, as `- {fact} - {why it matters, how to apply it}`. The type is inferred at every level, `strict` included - the typed command is the approval; nothing is asked.
+4. **Criteria** - the core rules' `## Discovery Logging`: verified, not derivable from code, git or the tracker, and it changes what a next task does; one fact per entry. A note that fails them -> one line why, nothing written.
+5. **Write.** Read the team file. An entry on the same point already in that section -> update that line in place, never a second entry; otherwise insert the new entry at the end of the section - before the next `## ` heading, never at the end of the file. No tracker verb, no commit: `.lets/` is not in git.
+
+Output, then STOP:
+
+```
+Noted to {team} §{8|9}: {the entry, one line}
+```
+
 ## Session Snapshot Mode (`--session`)
 
 One path, four spellings - `--session`, `--snapshot`, `--pre-compact`, `--compact` all write the same recovery-grade `## RESUME` snapshot. There is no separate pre-compaction variant on purpose: the file is permanent and `/lets:start` reads it back, so it records what HAPPENED (a snapshot written mid-session) rather than what the caller intended next, which is true whether or not a `/compact` follows.
@@ -187,4 +206,5 @@ Note added to **{task title}** ({task-id})
 - **Be specific** - "Fixed bug" is useless, "Fixed null check in PaymentService.process()" is useful
 - **Record decisions** - future you will thank you
 - **Use markdown** - comments support formatting
+- **`--team` writes only the team file**, only in a team worktree - never the task, never the tracker, never memory.
 - Respond in user's language

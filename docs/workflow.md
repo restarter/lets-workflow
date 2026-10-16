@@ -99,7 +99,7 @@ The rules file (`.claude/rules/lets-rules.md`) is the source of truth; this is t
 |-------------|--------------|
 | Show the plan - per file, what changes, in what order - before editing anything you have not already approved | Treats "ok" on a plan, an analysis or a review verdict as permission to write code - a plan is only entered through `/lets:execute` |
 | Stop and lay out the options when an approach fails or reality diverges from the plan | Silently switches approaches, or deletes / comments out / "simplifies" code you did not ask about |
-| Suggest `/lets:note` when a decision, fact or gotcha is worth keeping | Writes to the tracker on its own |
+| Write what the next session needs into Claude Code's own memory - a hard stop's root cause, the lessons of `/lets:done` / `/lets:end` - besides what Claude Code saves on its own, and tell you in one line (`Remembered: ... -> memory`) | Writes speculation, anything the code, git or the tracker already hold, or a task's content into memory |
 | Mention a pattern once - the third time a topic or blocker recurs, a branch collecting unrelated themes, a debate running past five turns | Repeats the nudge after you dismiss it, or invents a pattern to look observant |
 | Tell you to run `/context` when you ask how full the context is | Guesses a percentage, or pushes you to wrap up because the session "feels long" |
 | Act on a clear recommendation and say so; ask a concrete question when the options are costly to reverse (at `strict`, whenever there are two real choices) | Asks when only one sensible action exists - it does it and tells you |

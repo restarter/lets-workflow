@@ -105,7 +105,7 @@ Then, inside the Claude Code session:
 | `/lets:commit` | Commit with review and conventional commit format |
 | `/lets:done` | Finish task - create PR (GitHub or Bitbucket) or merge locally |
 | `/lets:status` | Read-only orient snapshot — where you are, what's in flight, what's next (tracker-universal) |
-| `/lets:note` | Add note to active task (`--session`, aliases `--snapshot` / `--pre-compact` / `--compact`, snapshots the session) |
+| `/lets:note` | Add note to active task (`--session`, aliases `--snapshot` / `--pre-compact` / `--compact`, snapshots the session; `--team` writes a fact or a decision into the standing team's file) |
 
 ### Planning & Execution
 
