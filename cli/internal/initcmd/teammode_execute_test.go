@@ -26,6 +26,8 @@ const (
 	oldSingleNudge     = "or, if you have not finished, write a report saying why"
 	stopNeverNudged    = "the owner-ordered 5-D.6 stop - `phase: stopping`, or `blocked` with `reason: stopped` - is never nudged"
 	busyNextPending    = "It returns `member_busy` (the implementer is still in a round) -> record the chunk back to `phase: pending`"
+	anchorAgentsLoad   = "Read `${CLAUDE_PLUGIN_ROOT}/protocol/agents.md` (`## Team mode`) before this dispatch unless its text is in your current context."
+	anchorDismissed    = "before every `op=receive` re-read the team file's `## 7` and pass `dismissed` when it now holds a `Dismissed: <name> (lead <session6>)` line for that member"
 )
 
 // analystCall matches a member-run Skill call (op=next|correct|dismiss) addressed to a
@@ -67,8 +69,14 @@ func teamModeExecuteProblems(exec string) []string {
 	}
 
 	// Step 4.6 anchor check: ask=no.
-	if !strings.Contains(between(exec, "**Anchor check against BASE - a WARNING only.**", "**CI checks.**"), executeAnchorRoute) {
+	anchor := between(exec, "**Anchor check against BASE - a WARNING only.**", "**CI checks.**")
+	if !strings.Contains(anchor, executeAnchorRoute) {
 		add("the Step 4.6 anchor check must route with ask=no - nothing is spawned before Start")
+	}
+	// H1: the anchor check runs before 5-D.4 loads protocol/agents.md - it loads it itself, and
+	// never nudges a member the owner dismissed meanwhile.
+	if load, route := strings.Index(anchor, anchorAgentsLoad), strings.Index(anchor, executeAnchorRoute); load < 0 || route < load || !strings.Contains(anchor, anchorDismissed) {
+		add("the Step 4.6 anchor check must load protocol/agents.md before its route and re-read ## 7 to pass dismissed before every op=receive")
 	}
 
 	// Liveness: the recorded id, agent_gone on a send.
@@ -158,6 +166,8 @@ func TestTeamModeExecute_Mutants(t *testing.T) {
 		{"5-D.7 restates instead of pointing", "otherwise 5-D.5's **The one nudge** - its text", "otherwise the one-nudge rule - its text", "reuse 5-D.5's one nudge"},
 		{"the run record drops analysts", `  "analysts": {`, `  "helpers": {`, "analysts.explorer"},
 		{"a team member line is queued", "-> send the check to the run's own analyst instead (`fallback=run`)", "-> record `queued` for it", "busy team member's check"},
+		{"the anchor check drops the agents.md load", anchorAgentsLoad + " ", "", "load protocol/agents.md"},
+		{"the anchor check drops dismissed", " - " + anchorDismissed + " (`## Team mode` item 5)", "", "pass dismissed"},
 		{"every member line takes the check", "The first `member` line of each role ->", "Every `member` line ->", "first member line"},
 		{"a gone run analyst is not respawned", "`agent_gone` on a run analyst's `op=next`", "`agent_gone` on any op=next", "respawn a fresh one"},
 		{"member_busy only ends the turn", busyNextPending, "It returns `member_busy` (the implementer is still in a round) -> end the turn", "set the chunk back to pending"},
