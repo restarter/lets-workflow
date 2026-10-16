@@ -393,23 +393,23 @@ The lead, from the same envelope's `team_lead`: `match` `lead` -> nothing; `othe
 1. **Role.** `<role>` is a bare role (`architect`, `skeptic`, `explorer`, `implementer`, ... - the team file's Available roles); the agent is `lets:<role>`. `lets:actor` is never a member.
 2. **Name.** The `[name]` argument; else the name of the roster row for this role that is not reachable and has no `Dismissed: <name>` line by this lead session; else `<role>` under the same condition; else the next free `-N` suffix (`<role>-2`, ...) under the same condition. An explicit `[name]` that is reachable goes to the Step 4 gate; one that carries such a `Dismissed:` line takes Step 4's **Fresh name** path at once (the next free suffix; its line is already there) - a dismissed name is never spawned again by this lead session. A name is `[a-z0-9-]{1,40}` and bare - the agent runs as `<c>-<name>` where the Agent tool takes a name.
 3. **Model.** The roster row's `model`; else none, and member-run uses the role's default.
-4. **Same name reachable -> refused.** The name is reachable (Step M0), or a surviving peer pane carries it -> spawn nothing under it. This gate is the only guard: member-run does not refuse a duplicate name.
+4. **Same name reachable -> refused.** The name is reachable (Step M0), or a surviving peer pane carries it -> spawn nothing under it. This gate is the only guard: member-run does not refuse a duplicate name. The question names which case it is: a member, or a peer pane.
 
 ```
 AskUserQuestion(
   questions=[{
-    question: "{c}-{name} is still reachable in this lead session. What now?",
+    question: "{c}-{name} is still reachable in this lead session. What now?",  /* a peer pane: "{c}-{name} still runs as a pane at the team worktree. What now?" */
     header: "Spawn",
     options: [
-      { label: "Close it first (Recommended)", description: "You dismiss it first (`/lets:team dismiss {name}`), then run spawn again; nothing is spawned now" },
-      { label: "Fresh name {name}-2", description: "Spawns {c}-{name}-2; the survivor keeps running - close it by hand" }
+      { label: "Close it first (Recommended)", description: "A member: dismiss it (`/lets:team dismiss {name}`); a pane: close that pane - then spawn again" },
+      { label: "Fresh name {name}-2", description: "Spawns {c}-{name}-2; a member is never messaged again - for a pane, the survivor keeps running - close it by hand" }
     ],
     multiSelect: false
   }]
 )
 ```
 
-   **Fresh name** -> append `Dismissed: <name> (lead <session6>)` to the team file's `## 7. Current task` (the survivor is recorded dismissed, so no brief ever reaches it again; its session keeps running until someone closes it by hand), then continue with `<name>-2`.
+   **Fresh name** -> append `Dismissed: <name> (lead <session6>)` to the team file's `## 7. Current task`, then continue with `<name>-2`. A member: the survivor is recorded dismissed and never messaged again - an idle member cannot be closed (`TaskStop` answers "not running"). A peer pane: it keeps running until someone closes that pane by hand.
 5. **Report file.** Each `Reports:` line in the team file's `## 7. Current task` reads `Reports: <dir> (lead <session6>)`, `<session6>` = the first 6 characters of the lead session that opened it. Take the line whose `<session6>` is this session's (`$CLAUDE_CODE_SESSION_ID`); `<Reports dir>` below is its dir. None - no line, or only lines of an earlier lead session (a new lead session for the same task opens a NEW directory and APPENDS a second `Reports:` line, never reusing the old one) -> `Skill(skill: "lets:agent-report", args: "op=open command=team task={task-id} names=member-{name}-n0")`, then append `Reports: <REPORT_DIR> (lead <session6>)` to `## 7. Current task`. Present -> `Skill(skill: "lets:agent-report", args: "op=add dir=<dir> names=member-{name}-n0")`; a later round of the same member -> `op=add names=member-{name}-n{k}` (k = the next round). `TAKEN` (this lead session already gave that report name a file) -> the next `member-{name}-n{k}` that op=add does not answer `TAKEN`. The echoed `REPORT_FILE member-{name}-n{k}=<path>` is this round's report file; the member's prompt carries it as its own line `REPORT_FILE: <path>`.
 6. **Brief.** Write `.lets/cache/member-<c>-<name>.md` with the Write tool: "Read .lets/teams/<c>.md and the Resume artefacts listed in its section 7. You are <name> (lets:<role>) of team <c>. Your FIRST message to the lead, before any work, announces you: `STATUS: <c>-<name> online - <role> (lets:<role>)`, then `RESULT: the routes you answer and the task you read in section 7 (or no current task)`. Continue from those files; do not redo finished work. Answer in the team file's message format. Message another teammate directly when you need its input - its area, an answer only it has. A teammate's address is its agent id - the latest `Member: <name> = <agentId> lets:<role> (lead <session6>)` line in the team file's `## 7`. Re-read `## 7` right before you send - teammates spawned after you are not in what you read at spawn, and a teammate may have been dismissed since: send only when the name's latest line holds an id and no `Dismissed: <name>` line exists for that lead session; otherwise route the input through the lead with a `FOR <role>:` line. Approvals, task state, and anything outside your boundaries still go through the lead. A decision you reach with another teammate goes into your REPORT_FILE. With `link: peer` (the lead was restarted) send no member-to-member messages - the lead respawns the roster (`/lets:team spawn --roster`) to restore the team.", then its own last line `REPORT_FILE: <path>` (Step 5's path) - an implementer reads its REPORT_FILE from the brief.
 7. **Spawn.**
@@ -499,7 +499,7 @@ Every `GAP` line goes into the team file's `## 8. Decisions` as `{name}: no repo
 
 Called by `/lets:start` (no member of this lead session reachable) and by member-run `op=route` (a roster role a dispatch needs is not reachable). It never calls `op=route`.
 
-After Step M0. In this order, returning exactly one `MEMBERS` line:
+After Step M0 (its lead line only when called directly, not from `/lets:start` or `op=route`). In this order, returning exactly one `MEMBERS` line:
 
 1. `## 7` holds a `Members asked: (lead <session6>)` line -> one line `Members already asked in this lead session - /lets:team spawn <role> starts one`, ask nothing; `MEMBERS skipped asked`.
 2. Unattended turn - the current turn is a `/loop` iteration or a scheduled agent's turn, whichever command led here - nobody answers: ask nothing, spawn nothing, write NO marker, and print one line `no member of {team} is live - /lets:team spawn <role> or spawn --roster starts them; an interactive /lets:start asks`; `MEMBERS skipped unattended`. Every other turn asks - a permission mode (`auto`, `bypassPermissions`) or a `.lets/cache/pipeline-state-*` marker is not unattended.

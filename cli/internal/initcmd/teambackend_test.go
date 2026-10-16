@@ -771,7 +771,7 @@ func TestTeamFile_SwitchKeepsSessionLines(t *testing.T) {
 	if p := switchKeepProblems(take, tmpl); len(p) > 0 {
 		t.Errorf("%v", p)
 	}
-	const takeKeep = "and KEEP every existing line of the four forms of templates/team.md `## 7`"
+	const takeKeep = "and KEEP every existing line of the five forms of templates/team.md `## 7`"
 	const tmplKeep = "These lines are KEPT as they are across a switch - other lead sessions' lines too"
 	if !strings.Contains(take, takeKeep) || !strings.Contains(tmpl, tmplKeep) {
 		t.Fatal("mutants cannot apply: a keep-rule sentence is missing")
@@ -805,7 +805,7 @@ func switchKeepProblems(take, tmpl string) []string {
 	if j := strings.Index(rewrite, "Then Step 6."); j >= 0 {
 		rewrite = rewrite[:j]
 	}
-	for _, want := range append([]string{"replace only the task-specific content", "KEEP every existing line of the four forms of templates/team.md `## 7`", "other lead sessions' lines too"}, keptLineForms...) {
+	for _, want := range append([]string{"replace only the task-specific content", "KEEP every existing line of the five forms of templates/team.md `## 7`", "other lead sessions' lines too"}, keptLineForms...) {
 		if !strings.Contains(rewrite, want) {
 			bad = append(bad, "take-task Step 2T rewrite: missing "+want)
 		}

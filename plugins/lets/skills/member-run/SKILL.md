@@ -110,7 +110,7 @@ Return: `sent {op} to {agent}`.
 
 `TaskStop(task_id="{agent}")` - the `id` when passed, as in Step 3. No registry call: the caller records it dismissed. A `TaskStop` that answers "not running" is no failure - the member is idle, and the caller's record (written before this call) is the dismissal.
 
-The harness resumes a stopped agent by id whatever LETS records (a `SendMessage` after a `TaskStop` resumed one, verified live 2026-10-16), so the caller's record is the guard: a `Dismissed:` line or `dismissed: true`, written before this call, and for `/lets:execute`'s 5-D.6 stop the run's phase (`blocked`, `reason: stopped` goes to the Replacement gate, never to Step 3).
+The harness resumes an idle agent by id whatever LETS records, and `TaskStop` cannot stop an idle one (Task 0.7, 2026-10-16), so the caller's record is the guard: a `Dismissed:` line or `dismissed: true`, written before this call, and for `/lets:execute`'s 5-D.6 stop the run's phase (`blocked`, `reason: stopped` goes to the Replacement gate, never to Step 3).
 
 Return: `dismissed {agent}` - the caller records it dismissed.
 
@@ -149,7 +149,7 @@ The one wait-loop for a member's round report: `/lets:team` Step M5, `/lets:exec
    2. `N` absent, and the member claimed `REPORT_WRITTEN` without an `OK` file or `ListAgents` does not list its id `running` -> write `N`: after a claim, "Write your final report to REPORT_FILE {path} now, last line REPORT-END, then reply REPORT_WRITTEN. This changes nothing in your work; do not redo anything you already ran."; with no claim, the resume text "You stopped before your report. Continue {brief-file} from where you stopped - do not redo finished work - then write REPORT_FILE {path} in ONE Write call, last line REPORT-END, and reply REPORT_WRITTEN." Send it as Step 3's `op=correct` with the SAME report-file and return `NUDGED <N>`; `agent_gone` -> go to 4;
    3. `N` present, and a claim or not running -> go to 4. There is never a second nudge for a round;
    4. otherwise -> return `WAITING`.
-4. `Skill(skill: "lets:agent-report", args: "op=collect dir=<dirname> names=<basename> retry=no")` - READ EVERY REPORT IN FULL - and return `GAP <name> <state>`, or `GAP <name> <state> gone` when this call reached 4 through `agent_gone` (an UNTERMINATED file is carried UNVERIFIED, as collect says).
+4. `Skill(skill: "lets:agent-report", args: "op=collect dir=<dirname> names=<basename> retry=no")` - READ EVERY REPORT IN FULL - and return `RECEIVED <path>` when it finds an `OK` file after all; otherwise `GAP <name> <state>`, or `GAP <name> <state> gone` when this call reached 4 through `agent_gone` (an UNTERMINATED file is carried UNVERIFIED, as collect says).
 
 The caller renders a GAP by its own rule. `GAP ... gone` here, or `agent_gone` from an `op=next` / `op=correct`, -> a team caller records `Member: <name> = gone (lead <session6>)`; member-run never writes the team file.
 

@@ -45,6 +45,6 @@ A team member or an agent reached through `/lets:handoff` dispatches nothing its
 
 A standing team's lead is the session its team file's `lead_name` names. It coordinates; members do the routed work; the owner decides.
 
-- The owner approves in the lead's pane what the core rules' `## Gates` table lists at `LETS_GATES` - the plan and the start of code always. A member never asks the owner; it writes a `FOR lead:` line.
+- The owner approves in the lead's pane what the core rules' `## Gates` table lists at `LETS_GATES`, and - by the core rules' Development Workflow - the plan and the start of code always. A member never asks the owner; it writes a `FOR lead:` line.
 - Code goes to an implementer by default, through `member-run`; the lead edits a file itself only when that is the better move or the owner asks.
 - The lead is the team file's only writer. A member's finding goes into its REPORT_FILE; the lead copies what must survive into the team file or a file it lists - a finding left only in a message is lost at a restart.

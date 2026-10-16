@@ -165,10 +165,11 @@ func agentReportProblems(f map[string]string) []string {
 		if ph.opens && (!strings.Contains(dispatch, skillCall) || (!strings.Contains(dispatch, "op=open") && !strings.Contains(dispatch, "op=add"))) {
 			add(ph.file + " " + ph.dispatch + " must name its report files through the agent-report skill (op=open or op=add)")
 		}
-		// a member-run consumer reads through op=receive (peek, one nudge, collect -
-		// pinned on member-run Step 6 by memberrun_route_test.go); it still says it
-		// reads every report in full.
-		if strings.Contains(consumer, receiveCall) && strings.Contains(consumer, readInFull) {
+		// team.md M5 reads its members only through op=receive (peek, one nudge, collect -
+		// pinned on member-run Step 6 by memberrun_route_test.go); it still says it reads
+		// every report in full. Every other consumer that also carries op=receive (a
+		// team-mode dispatch) keeps its fallback op=collect - the exemption is M5's alone.
+		if ph.file == "commands/team.md" && strings.Contains(consumer, receiveCall) && strings.Contains(consumer, readInFull) {
 			continue
 		}
 		for _, need := range []string{skillCall, "op=collect", readInFull} {
@@ -363,6 +364,7 @@ func TestAgentReport(t *testing.T) {
 		{"M2 loses the Reports write", "commands/team.md", "### Step M2: The Whole Roster (`spawn --roster`)", ", then append `Reports: <REPORT_DIR> (lead <session6>)` to the team file's `## 7. Current task`", "", "M2 must record `Reports:`", 1},
 		{"the Reports line loses its lead session", "commands/team.md", "### Step M1: One Member (`spawn <role> [name]`)", "`Reports: <REPORT_DIR> (lead <session6>)`", "`Reports: <REPORT_DIR>`", "M1 must record `Reports:`", 1},
 		{"dismiss --all dismisses before collecting", "commands/team.md", "### Step M4: Dismiss (`dismiss <name>` / `dismiss --all`)", "then `Skill(skill: \"lets:member-run\", args: \"op=dismiss scope=<c> name=<name> id=<agentId>\")` for every reachable member", "then the same call for every reachable member", "collect the members' reports before dismiss --all", 1},
+		{"a consumer that also carries op=receive drops its fallback collect", "commands/execute.md", "### 5-D.5 Review - one report at a time", "op=collect", "op=skip", "5-D.5 Review - one report at a time must carry op=collect", -1},
 		{"team M5 loses its op=receive", "commands/team.md", "### Step M5: Member reports", `args: "op=receive `, `args: "op=wait `, "Member reports must carry", 1},
 		{"a repeat dispatch loses its protocol", "commands/plan.md", "", "- **Re-explore** ->", "- **Re-explore** -> launch an explorer again\n- **Re-explored** ->", "Re-explore** -> repeat dispatch must carry", 1},
 		{"the skill loses its single retry", "skills/agent-report/SKILL.md", "", "ONCE", "twice", "must carry ONCE", -1},

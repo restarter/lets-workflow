@@ -338,7 +338,7 @@ func delegatedContractProblems(f map[string]string) []string {
 		}
 	}
 	recovery := sectionSpan(exec, "### 5-D.7 Recovery (a run record exists)")
-	for _, need := range []string{"**Liveness comes from the recorded id**", "`ListAgents` only says busy (`running`)", "returns `agent_gone`", "`dismissed`", "never messaged", "`{agent}` not running (its id is not listed `running`", "otherwise the idle row's path by `id={agent_id}`", "and no `agent_id` is recorded (or a correction by `id={agent_id}` returns `agent_gone`)", "or an `agent_id` recorded (sent by id)"} {
+	for _, need := range []string{"**Liveness comes from the recorded id**", "`ListAgents` only says busy (`running`)", "returns `agent_gone`", "`dismissed`", "never messaged", "`{agent}` not running (its id not listed at all", "otherwise the idle row's path by `id={agent_id}`", "and no `agent_id` is recorded (or a correction by `id={agent_id}` returns `agent_gone`)", "or an `agent_id` recorded (sent by id)"} {
 		if !strings.Contains(recovery, need) {
 			add("5-D.7 must judge liveness by the recorded id and never message a dismissed member: " + need)
 		}
@@ -489,6 +489,11 @@ func delegatedContractProblems(f map[string]string) []string {
 	if !strings.Contains(agent, "An AMENDMENT that changes nothing (a report nudge, resend or rehydration) means write the report only: no re-run of Verify beyond what its text asks, and in `pipelined` / `isolated` mode no commit and no fixup.") {
 		add("implementer.md must treat a report-only amendment (nudge, resend, rehydration) as write-the-report-only: no extra Verify, no commit, no fixup")
 	}
+	// lets-mpjhc F15: execute's resume nudge asks the implementer to continue - the
+	// report-only rule above must not swallow it.
+	if !strings.Contains(agent, "The resume nudge (\"You stopped before your report. Continue chunk ... from where you stopped ...\") is not report-only: continue the chunk from where you stopped, then report.") {
+		add("implementer.md must say the resume nudge is not report-only - continue the chunk, then report")
+	}
 	if !strings.Contains(agent, "NEVER run a command in the background") {
 		add("implementer.md must forbid background commands - an idle subagent waiting on its own background task hangs the run")
 	}
@@ -586,6 +591,8 @@ func TestMemberRun(t *testing.T) {
 		{"dismiss stops by name", "skill", "`TaskStop(task_id=\"{agent}\")` - the `id` when passed", "`TaskStop(task_id=\"{name}\")`", "stop a member by the id", 1},
 		{"next drops the id", "execute", `args: "op=next scope=run-{RUN} name={agent} id={agent_id} brief-file=`, `args: "op=next scope=run-{RUN} name={agent} brief-file=`, "carries id={agent_id}", 1},
 		{"an analyst loses its id", "execute", "## Step 6: Record Completion", "`Skill(skill: \"lets:member-run\", args: \"op=next scope=run-{RUN} name=explorer-{RUN} brief-file=b report-file=r\")`\n\n## Step 6: Record Completion", "every analyst member-run call", 1},
+		{"role line drops lets:actor", "skill", "`lets:actor` -> stop with `role_not_allowed`", "`lets:x` -> stop with `role_not_allowed`", "role_not_allowed", 1},
+		{"the resume nudge is report-only", "agent", " The resume nudge (\"You stopped before your report. Continue chunk ... from where you stopped ...\") is not report-only: continue the chunk from where you stopped, then report.", "", "resume nudge", 1},
 		{"return drops the id", "skill", "Return: `spawned {agent} on {model}, id {agent_id}`", "Return: `spawned {agent} on {model}`", "Return line", 1},
 		{"dismiss keeps agent_id", "execute", "record `dismissed: true` and `agent_id: null` in ONE record write, then the call", "record `dismissed: true` in ONE record write, then the call", "agent_id: null", 1},
 		{"who checks forgets Dismissed", "execute", " - passing `dismissed` when the member is recorded dismissed now (a team member line: a `Dismissed: <name>` line by this lead session in the team file's `## 7. Current task`; a run analyst: `analysts.<role>.dismissed`)", "", "Dismissed:", 1},

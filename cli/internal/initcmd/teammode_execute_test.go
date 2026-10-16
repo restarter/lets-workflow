@@ -24,6 +24,8 @@ const (
 	oldLivenessRule    = "`{agent}` not listed counts as gone"
 	resumeText         = "You stopped before your report. Continue chunk {chunk} from where you stopped - do not redo finished work - then write REPORT_FILE {path}"
 	oldSingleNudge     = "or, if you have not finished, write a report saying why"
+	stopNeverNudged    = "the owner-ordered 5-D.6 stop - `phase: stopping`, or `blocked` with `reason: stopped` - is never nudged"
+	busyNextPending    = "It returns `member_busy` (the implementer is still in a round) -> record the chunk back to `phase: pending`"
 )
 
 // analystCall matches a member-run Skill call (op=next|correct|dismiss) addressed to a
@@ -99,6 +101,21 @@ func teamModeExecuteProblems(exec string) []string {
 		add("5-D.7's recovery rows (idle, not running) must reuse 5-D.5's one nudge rule")
 	}
 
+	// F16: a run analyst whose id no longer resolves is respawned fresh under a new name.
+	if !strings.Contains(who, "`agent_gone` on a run analyst's `op=next` (its id no longer resolves - a new lead session) -> record its `agent_id: null`, spawn a fresh one under a new name (`explorer-{RUN}-r2`, `skeptic-{RUN}-r2`") || !strings.Contains(exec, "`agent_gone` on it -> a fresh `architect-{RUN}-r2`") {
+		add("a run analyst's agent_gone must respawn a fresh one under a new name - in Who checks and for the allowlist architect")
+	}
+	// F17: an implementer member_busy puts the chunk back to pending, and a pending NEXT goes first.
+	dispatch := between(exec, "### 5-D.4 Dispatch - in plan order", "### 5-D.5 Review")
+	pendingFirst, whatReport := strings.Index(exec, "**A pending NEXT first.**"), strings.Index(exec, "**What is a report.**")
+	if !strings.Contains(dispatch, busyNextPending) || pendingFirst < 0 || whatReport < pendingFirst || !strings.Contains(recovery, "a chunk set back to `pending` by a `member_busy` NEXT included, sent before any nudge of that agent") {
+		add("an implementer member_busy must set the chunk back to pending, and 5-D.5 / 5-D.7 must send a pending NEXT before any nudge logic")
+	}
+	// F18: the owner-ordered stop is never nudged - stopping and stopped alike.
+	if !strings.Contains(report, stopNeverNudged) || !strings.Contains(notRunning, "The owner-ordered 5-D.6 stop - `phase: stopping`, or `blocked` with `reason: stopped` - is never nudged") {
+		add("the one nudge must never reach the owner-ordered 5-D.6 stop - phase: stopping, or blocked with reason: stopped")
+	}
+
 	// The run record: analysts with agent_id and dismissed.
 	record := sectionSpan(exec, "### 5-D.3 Run record")
 	analysts := lineStarting(record, `  "analysts": `)
@@ -132,6 +149,9 @@ func TestTeamModeExecute_Mutants(t *testing.T) {
 		{"5-D.7 restates instead of pointing", "otherwise 5-D.5's **The one nudge** - its text", "otherwise the one-nudge rule - its text", "reuse 5-D.5's one nudge"},
 		{"the run record drops analysts", `  "analysts": {`, `  "helpers": {`, "analysts.explorer"},
 		{"a team member line is queued", "-> send the check to the run's own analyst instead (`fallback=run`)", "-> record `queued` for it", "busy team member's check"},
+		{"a gone run analyst is not respawned", "`agent_gone` on a run analyst's `op=next`", "`agent_gone` on any op=next", "respawn a fresh one"},
+		{"member_busy only ends the turn", busyNextPending, "It returns `member_busy` (the implementer is still in a round) -> end the turn", "set the chunk back to pending"},
+		{"a stopping round is nudged", stopNeverNudged, "the owner-ordered 5-D.6 stop (`reason: stopped`) is never nudged", "never reach the owner-ordered"},
 		{"a busy run analyst is not queued", "-> record `queued` as that check's value", "-> drop that check", "queue a busy run analyst's check"},
 	}
 	for _, m := range mutants {

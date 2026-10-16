@@ -83,6 +83,7 @@ If `--json` is present alongside any mode:
 - File: the path from the `artifact-path` skill (`kind=review-{local|branch|pr-{number}} ext=json`) - e.g. `.lets/reviews/2026-08-22-0210-lets-05c4s-review-branch.json`. Task-scoped + `-vN` on collision; `.lets/` is shared across worktrees, so never a hand-built `{date}-{mode}` path
 - Skip markdown report generation (Step 8)
 - Skip GitHub PR comment posting (Step 9) - JSON mode implies the caller handles output
+- In a team worktree `--json` passes `solo` to every route of the run (as `/lets:check`'s `--json` stays inline): a programmatic caller (`/lets:github-pr`) cannot answer the Members question or wait out a member's turn
 
 ### Fix flag
 
@@ -94,7 +95,7 @@ If `--json` is present alongside any mode:
 
 ### Solo flag
 
-`--solo` keeps the run off the standing team's members: every lens and the verify pass run as one-shot subagents, as outside a team. Team mode itself is `protocol/agents.md` `## Team mode`; `--solo` makes each route call pass `solo`.
+`--solo` keeps the run off the standing team's members: every lens and the verify pass run as one-shot subagents, as outside a team. Team mode itself is `protocol/agents.md` `## Team mode`; `--solo` makes each route call pass `solo`, and so does `--json` (JSON output flag).
 
 ### Workflow execution flag
 
@@ -684,7 +685,7 @@ Skipped for file mode:
 
 Read `${CLAUDE_PLUGIN_ROOT}/protocol/agents.md` before this step unless its text is in your current context.
 
-**If `--workflow` was parsed:** skip this step and Step 6 - go to the `## Workflow Mode (--workflow)` section below, then resume at Step 6.5. The rest of Step 5 is the standard Task-based path.
+**If `--workflow` was parsed:** skip this step and Step 6 - go to the `## Workflow Mode (--workflow)` section below (no route; in a team worktree it prints `team worktree - --workflow runs its own agents, not the team's`), then resume at Step 6.5. The rest of Step 5 is the standard Task-based path.
 
 **Team mode** (`protocol/agents.md` `## Team mode`): `Skill(skill: "lets:member-run", args: "op=route command=review roles=<the selected catalog roles, bare> fallback=one-shot")` first (`--solo` adds `solo`). In practice only roster roles (the architect) go to members, each with one item - its review prompt below; the rest are announced one-shots and run as the Task calls below.
 
@@ -774,6 +775,8 @@ CODE:
 ## Workflow Mode (--workflow)
 
 Runs when `--workflow` was parsed in Step 1 (code modes only). Replaces Step 5 (Task launch) and Step 6 (aggregation): both happen inside the Dynamic Workflow so the per-agent reports never enter this conversation - only the aggregated object returns.
+
+No route (`protocol/agents.md` `## Team mode` item 7): in a team worktree print once `team worktree - --workflow runs its own agents, not the team's`.
 
 ### W1: Preflight
 
@@ -876,7 +879,7 @@ Cut false positives before reporting: each finding gets a refutation pass from t
 
 **Per finding:** name the skeptics' report files first - `Skill(skill: "lets:agent-report", args: "op=add dir={REPORT_DIR} names=skeptic-f{i}-{k}")` (finding i, skeptic k; every skeptic of the pass in one call) - then launch `lets:skeptic` (via the Task tool in standard mode) N times - **N=2**, or **N=3** for a `[BLOCKER]`, each prompt carrying its own `REPORT_FILE:` line. Each skeptic returns `{real, confidence, reason}` in its report file.
 
-**After the skeptics return** (when this run dispatched skeptics - inline verification above 10 findings dispatches nothing and writes no files): `Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names={the skeptic names}")`, and the skeptic member with `op=receive` - READ EVERY REPORT IN FULL; the drop rule below runs over the reports read. A skeptic `GAP` is an errored skeptic: the finding counts toward `verify_failed` and is kept unverified, never refuted.
+**After the skeptics return** (when this run dispatched skeptics - inline verification above 10 findings dispatches nothing and writes no files): `Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names={the skeptic names}")`, and the skeptic member with `op=receive` - READ EVERY REPORT IN FULL; the drop rule below runs over the fresh skeptics' reports; the member's report goes through the **Member-verdict rule** above. A skeptic `GAP` is an errored skeptic: the finding counts toward `verify_failed` and is kept unverified, never refuted.
 
 **Skeptic prompt template.** The skeptic's spec block is NARROWER than the reviewer's: it returns a verdict and cannot set a tier, so its only lever is `real`. Any reviewer-style "do NOT report this" therefore comes out as `real=false`, which this step maps to a **drop** - a deleted finding, not a softened one. The reviewer's "if the SPEC covers it, do NOT report it as creep" is exactly that shape; the skeptic is told the narrower thing instead (a spec-covered scope finding is not real). It also gets the same REVIEW TREE state as the reviewers; a skeptic on the wrong tree refutes real findings.
 
@@ -1488,7 +1491,7 @@ Whatever the verdict, this command ends here; fixes go into the plan file only.
 
 ## Keeping this file consistent with `/lets:check`
 
-The two commands share a target surface, a SPEC contract and a PR-context block; only the reviewing population differs: check spawns no subagent - one reviewer verifies its own findings, inline or, in a team worktree, the team's live skeptic member (a message to an existing agent, never a spawn) - while review dispatches expert agents and independent skeptics. The rule that governs which differences are legitimate lives in **`commands/check.md` -> "What This Is NOT"** - read it before adding anything here that check will not get. Every round of `lets-2z0hw` produced a bug from these two files drifting on something they were meant to state identically.
+The two commands share a target surface, a SPEC contract and a PR-context block; only the reviewing population differs: check spawns no subagent - one reviewer verifies its own findings, inline or, in a team worktree, the team's live skeptic member (a message to an existing agent, never a spawn), which has read-only git tools and no PR fetch, so a PR check stays inline - while review dispatches expert agents and independent skeptics. The rule that governs which differences are legitimate lives in **`commands/check.md` -> "What This Is NOT"** - read it before adding anything here that check will not get. Every round of `lets-2z0hw` produced a bug from these two files drifting on something they were meant to state identically.
 
 ## Workflow Integration
 

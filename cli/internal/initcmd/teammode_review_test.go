@@ -29,6 +29,8 @@ const (
 	rolesCheckSentence  = "`/lets:check` hands its pass to the team's skeptic member - a message, not a spawn"
 	skepticCheckMode    = "### CHECK (a team's quick check)"
 	prContextBan        = "**The PR CONTEXT block NEVER goes to a skeptic**"
+	memberReportRoute   = "the drop rule below runs over the fresh skeptics' reports; the member's report goes through the **Member-verdict rule** above"
+	reviewJSONSolo      = "- In a team worktree `--json` passes `solo` to every route of the run"
 )
 
 func teamModeReviewProblems(f map[string]string) []string {
@@ -43,6 +45,14 @@ func teamModeReviewProblems(f map[string]string) []string {
 	}
 	if !strings.Contains(verify, memberRuleReplaces) || !strings.Contains(verify, memberRuleNoVerdict) {
 		add("review.md 6.6 member rule must say it REPLACES the Asymmetric drop rule for member verdicts and map a missing item verdict to verify_failed")
+	}
+	// F9: the collect paragraph never sends the member's report into the Asymmetric drop rule.
+	if after := between(verify, "**After the skeptics return**", "**Skeptic prompt template.**"); !strings.Contains(after, memberReportRoute) || strings.Contains(after, "the drop rule below runs over the reports read") {
+		add("review.md 6.6's collect paragraph must send the member's report to the Member-verdict rule, never to the drop rule")
+	}
+	// F10: --json in a team worktree passes solo - a programmatic caller cannot answer or wait.
+	if !strings.Contains(sectionSpan(review, "### JSON output flag"), reviewJSONSolo) {
+		add("review.md's JSON output flag must pass solo to every route in a team worktree")
 	}
 	if !strings.Contains(verify, prContextBan) {
 		add("review.md 6.6 must keep the ban: the PR CONTEXT block NEVER goes to a skeptic")
@@ -131,6 +141,8 @@ func TestTeamModeReview_Mutants(t *testing.T) {
 		{"roles loses the check sentence", "roles", rolesCheckSentence, "`/lets:check` runs inline", "Who dispatches"},
 		{"skeptic VERIFY back to a single finding", "skeptic", "Refute one or more findings against the code", "Refute a single finding against the code", "one or more findings"},
 		{"skeptic intro back to ONE finding", "skeptic", "You are handed one or more review findings", "You are handed ONE review finding", "ONE review finding"},
+		{"the member report enters the drop rule", "review", memberReportRoute, "the drop rule below runs over the reports read", "never to the drop rule"},
+		{"--json routes to members", "review", reviewJSONSolo, "- In a team worktree `--json` routes like any run", "pass solo to every route"},
 		{"review loses the PR CONTEXT ban", "review", prContextBan, "**The PR CONTEXT block may go to a skeptic**", "PR CONTEXT block NEVER"},
 	}
 	for _, m := range mutants {

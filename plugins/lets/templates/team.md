@@ -25,7 +25,7 @@ The frontmatter is written once by `lets worktree team-init`. Go reads only `wor
 - **Worktree:** the frontmatter `worktree`, branch `team_<team>`. A task branch is cut INSIDE this worktree; the worktree is not torn down when a task ends.
 - **Base:** the frontmatter `base`.
 - **Lead:** the session running under the frontmatter `lead_name` (`lets worktree info --json` -> `team_lead`) - never inferred from which sessions run. It is launched as a plain session: `agent_command --name <lead_name>` (Orca: `orca_agent --name <lead_name>`) - no session agent, so the default system prompt and native memory stay. `agent_command` itself stays role-neutral - `/lets:team run` from this worktree launches its workers with it.
-- **Owner approves** in the lead's pane what the core rules' `## Gates` table lists at `LETS_GATES` - the plan and the start of code always.
+- **Owner approves** in the lead's pane what the core rules' `## Gates` table lists at `LETS_GATES`, and - by the core rules' Development Workflow - the plan and the start of code always.
 
 ## 2. Workspace
 
