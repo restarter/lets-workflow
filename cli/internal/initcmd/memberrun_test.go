@@ -32,8 +32,8 @@ func delegatedContractProblems(f map[string]string) []string {
 	if strings.Contains(skill, "lets members") {
 		add("member-run must call no lets members verb - the caller's record is the record, ListAgents judges liveness (lets-gbfpd)")
 	}
-	// The role gate: every role_not_allowed line before the Agent call names every
-	// session agent and lets:actor - none of them is ever a member.
+	// The role gate: every role_not_allowed line before the Agent call names
+	// lets:actor - it is never a member.
 	if at := strings.Index(skill, "Agent("); at < 0 {
 		add("member-run must contain the Agent call")
 	} else {
@@ -43,10 +43,8 @@ func delegatedContractProblems(f map[string]string) []string {
 				continue
 			}
 			lines++
-			for _, a := range append(append([]string{}, sessionAgents...), "actor") {
-				if !strings.Contains(line, "`lets:"+a+"`") {
-					add("every role_not_allowed line must name `lets:" + a + "`: " + line)
-				}
+			if !strings.Contains(line, "`lets:actor`") {
+				add("every role_not_allowed line must name `lets:actor`: " + line)
 			}
 		}
 		if lines == 0 || !strings.Contains(skill, "a shipped `lets:*` agent") {
@@ -582,7 +580,6 @@ func TestMemberRun(t *testing.T) {
 		{"dismiss stops by name", "skill", "`TaskStop(task_id=\"{agent}\")` - the `id` when passed", "`TaskStop(task_id=\"{name}\")`", "stop a member by the id", 1},
 		{"next drops the id", "execute", `args: "op=next scope=run-{RUN} name={agent} id={agent_id} brief-file=`, `args: "op=next scope=run-{RUN} name={agent} brief-file=`, "carries id={agent_id}", 1},
 		{"an analyst gets an id", "execute", "## Step 6: Record Completion", "`Skill(skill: \"lets:member-run\", args: \"op=next scope=run-{RUN} name=explorer-{RUN} id=x brief-file=b report-file=r\")`\n\n## Step 6: Record Completion", "carries no id", 1},
-		{"role line drops lets:lead", "skill", "`lets:actor` and `lets:lead` -> stop with `role_not_allowed`", "`lets:actor` -> stop with `role_not_allowed`", "role_not_allowed", 1},
 		{"return drops the id", "skill", "Return: `spawned {agent} on {model}, id {agent_id}`", "Return: `spawned {agent} on {model}`", "Return line", 1},
 		{"dismiss keeps agent_id", "execute", "record `dismissed: true` and `agent_id: null` in ONE record write, then the call", "record `dismissed: true` in ONE record write, then the call", "agent_id: null", 1},
 		{"who checks forgets Dismissed", "execute", " and the team file's `## 7. Current task` holds no `Dismissed: <name>` line by this lead session", "", "Dismissed:", 1},

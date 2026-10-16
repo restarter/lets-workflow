@@ -113,9 +113,6 @@ func rolesProblems(files map[string]string) []string {
 	if !claimMode.MatchString(files["agents/skeptic.md"]) {
 		bad = append(bad, "agents/skeptic.md needs a ### CLAIM mode inside ## Modes, before ## Report")
 	}
-	if !strings.Contains(files["agents/lead.md"], rolesFile) {
-		bad = append(bad, "agents/lead.md must point at "+rolesFile)
-	}
 	return bad
 }
 
@@ -157,7 +154,6 @@ func TestRolesLint(t *testing.T) {
 		"handoff no longer delivers the routes":     mutate("commands/handoff.md", "\n### 7.1 Save the brief", rolesLoad, x),
 		"print-only handoff lost its pointer":       mutate("commands/handoff.md", "\n## Step 6: Deliver", rolesLoad, x),
 		"skeptic CLAIM mode gone":                   mutate("agents/skeptic.md", "", "### CLAIM (", "### CLAIMS-GONE ("),
-		"lead no longer points at the routes":       mutate("agents/lead.md", "", rolesFile, "protocol/x.md"),
 		"member prompt no longer names the routes":  mutate("skills/member-run/SKILL.md", "\n## Step 2: Spawn", "then read "+memberRoutes+" - ", ""),
 	} {
 		if len(rolesProblems(m)) == 0 {

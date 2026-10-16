@@ -335,19 +335,21 @@ func TestTeamBackend_WorktreeTeam(t *testing.T) {
 	if n := strings.Count(team, `--command "$CMD"`); n < 2 {
 		t.Errorf("cmux/tmux and orca both launch through the heredoc, found %d", n)
 	}
-	// lets-1r00e: the lead starts as the lets:lead agent; agent_command stays role-neutral
+	// lets-eolec: the lead starts as a plain session - no --agent, so Claude Code's
+	// default system prompt and native memory stay; agent_command stays role-neutral
 	// because /lets:team run launches workers with it.
 	for _, form := range []string{
-		"  {agent_command} --agent lets:lead --name '<lead_name>' '/lets:start'",
-		"`cd \"<path>\" && {agent_command} --agent lets:lead --name '<lead_name>' '/lets:start'`",
-		"  {orca_agent} --agent lets:lead --name '<lead_name>' '/lets:start'",
+		"  {agent_command} --name '<lead_name>' '/lets:start'",
+		"`cd \"<path>\" && {agent_command} --name '<lead_name>' '/lets:start'`",
+		"  {orca_agent} --name '<lead_name>' '/lets:start'",
 	} {
 		if !strings.Contains(team, form) {
-			t.Errorf("the lead launches as lets:lead - missing %q", form)
+			t.Errorf("the lead launches as a plain session - missing %q", form)
 		}
 	}
-	if all, lead := strings.Count(team, "--name '<lead_name>' '/lets:start'"), strings.Count(team, "--agent lets:lead --name '<lead_name>' '/lets:start'"); all != lead {
-		t.Errorf("every lead launch form carries --agent lets:lead (%d of %d)", lead, all)
+	const leadTail = " --name '<lead_name>' '/lets:start'"
+	if all, plain := strings.Count(team, leadTail), strings.Count(team, "{agent_command}"+leadTail)+strings.Count(team, "{orca_agent}"+leadTail); all != plain {
+		t.Errorf("no lead launch form carries --agent - each is the bare {agent_command} / {orca_agent} then --name (%d of %d)", plain, all)
 	}
 	if !strings.Contains(team, "ends in `/team_<c>`") || !strings.Contains(team, "branch --show-current` prints `team_<c>`") {
 		t.Error("the created path must be asserted to end in /team_<c>")

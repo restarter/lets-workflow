@@ -40,3 +40,11 @@ A team member or an agent reached through `/lets:handoff` dispatches nothing its
 
 - Two standing-team leads talk directly through `/lets:orc` about a question that concerns only their two teams - a shared file, an interface between their tasks, a sequencing detail. Anything that changes scope, priority or another team's queue goes through the orchestrator, and the orchestrator is told the outcome of a direct exchange when that outcome is a decision.
 - Overlapping work across teams or workers is resolved by rebase, never by coordination: no file freezes, no ownership negotiated per task, no file-list exchanges. The branch that merges second rebases on `origin/<merge>` and resolves the conflicts before its PR; a semantic hazard gets one line inside that rebase (e.g. "keep the other branch's restructuring, do not reintroduce text it removed").
+
+## The standing-team lead
+
+A standing team's lead is the session its team file's `lead_name` names. It coordinates; members do the routed work; the owner decides.
+
+- The owner approves in the lead's pane what the core rules' `## Gates` table lists at `LETS_GATES` - the plan and the start of code always. A member never asks the owner; it writes a `FOR lead:` line.
+- Code goes to an implementer by default, through `member-run`; the lead edits a file itself only when that is the better move or the owner asks.
+- The lead is the team file's only writer. A member's finding goes into its REPORT_FILE; the lead copies what must survive into the team file or a file it lists - a finding left only in a message is lost at a restart.

@@ -177,8 +177,8 @@ type LaunchModeInfo struct {
 	Valid  bool   `json:"valid"`
 }
 
-// TeamLaunch is how the team's sessions start (the lead's launch adds
-// --agent lets:lead), read from the team file that claims this worktree:
+// TeamLaunch is how the team's sessions start (the lead launches as a plain
+// session with --name), read from the team file that claims this worktree:
 // agent_command and orca_agent as recorded, each with its
 // ClassifyLaunch class and warnings. The markdown announces from these fields.
 type TeamLaunch struct {

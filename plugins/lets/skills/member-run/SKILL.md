@@ -23,7 +23,7 @@ One operation on one named member. The caller (`/lets:execute` Step 5-D, `/lets:
 - `name` - the member name, `[a-z0-9-]{1,40}`: the bare roster name in a team scope (`architect`, `architect-2`), in an execute scope `impl-<RUN>` (a replacement `impl-<RUN>-r<generation>`), `explorer-<RUN>`, `skeptic-<RUN>`, `architect-<RUN>`.
 - `{agent}` below is the name the agent runs under: `<callsign>-<name>` in a team scope (pane names are machine-wide), the bare name in an execute scope.
 - `id` - the agent_id the caller recorded at spawn; `{agent}` below is that id when passed, else the name: every `SendMessage` and `TaskStop` below puts the `id` where it says `{agent}`. An isolated member, which the harness runs as a background agent, is reachable only by its id.
-- `role` - a shipped `lets:*` agent; `lets:actor` and `lets:lead` -> stop with `role_not_allowed`, nothing spawned.
+- `role` - a shipped `lets:*` agent; `lets:actor` -> stop with `role_not_allowed`, nothing spawned.
 - `brief-file` / `correct-file` - repo-root-relative paths the caller wrote. Every brief crosses as a file path, never inline.
 - `model` - `opus` | `sonnet` | `fable` | `haiku`, the values the `Agent` tool accepts. Absent -> the role's own default, except for an implementer (Step 1).
 - `report-file` - an absolute path the CALLER named (execute: its pinned `.lets/cache/run-...` path; team: `agent-report op=open` / `op=add`). One file per round; member-run never composes a report path. Required on `spawn`, `next` and `correct`: missing -> stop with `report_file_missing`, nothing sent.
@@ -54,7 +54,7 @@ AskUserQuestion(
 
 ## Step 2: Spawn
 
-1. The role: `lets:actor` or `lets:lead` (a session agent, never a member) -> stop with `role_not_allowed: {role}`; nothing is spawned.
+1. The role: `lets:actor` -> stop with `role_not_allowed: {role}`; nothing is spawned.
 2. The routes. A member never runs `/lets:start`, which loads them, so it gets the LETS routes as a file of its own - the caller's brief is never changed:
 
    ```bash

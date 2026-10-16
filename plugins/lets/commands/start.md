@@ -168,7 +168,7 @@ The orient snapshot (Step 3) already shows In flight + Next up - don't repeat th
 - Inform user: "Created task XX, working in feature branch"
 - This keeps traceability without friction
 
-**Team worktree** (`lets worktree info --json` reports a `team`): read its `team_lead` - `match` `lead` or `unknown` -> nothing; `other` -> one line "This session is `{team_lead.self|unnamed}`, not the team's lead `{team_lead.name}` - /rename {team_lead.name} if it is the lead", never blocking. Then the Members question below, before the moves.
+**Team worktree** (`lets worktree info --json` reports a `team`): read its `team_lead` - `match` `lead` -> Read the team file `.lets/teams/<team>.md` - its `**The lead**` paragraph (section 6) is this session's procedure; `unknown` -> nothing; `other` -> one line "This session is `{team_lead.self|unnamed}`, not the team's lead `{team_lead.name}` - /rename {team_lead.name} if it is the lead", never blocking. Then the Members question below, before the moves.
 
 **Members (team worktree only).** A team starts empty, and which members run is the owner's pick (lets-7k6ae). Run `ListAgents`: an agent named `<team>-<name>` other than the team file's (`.lets/teams/<team>.md`) `lead_name` is listed (busy or idle) -> say nothing. None listed -> ask once. In an unattended turn - this `/lets:start` itself runs as a `/loop` iteration or a scheduled agent's turn - nobody answers: ask nothing, spawn nothing, and print one line `no member of {team} is live - /lets:team spawn <role> or spawn --roster starts them; an interactive /lets:start asks`. Every other `/lets:start` asks - a permission mode (`auto`, `bypassPermissions`) or a `.lets/cache/pipeline-state-*` marker is not unattended.
 
