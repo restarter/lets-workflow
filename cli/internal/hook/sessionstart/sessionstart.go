@@ -1,4 +1,4 @@
-// Package sessionstart implements the SessionStart + PreCompact hook output:
+// Package sessionstart implements the SessionStart hook output:
 // it writes the LETS Config block (and an optional drift notice) to the
 // provided writer. Workflow rules themselves live in the project's
 // .claude/rules/lets-rules.md (uncapped Claude Code project-instructions
@@ -44,6 +44,7 @@ var localConfigExplainer string
 //     merged project-over-user env, see mergedEnv)
 //  4. Blank line
 //  5. ### About these values explainer (embedded from local_config_explainer.md)
+//  6. A closing response-language line for a plain non-English LETS_LANGUAGE (languageLine; lets-xtugk) - always the last line
 //
 // rulesPath is the plugin's rules/lets-rules.md (for version compare against
 // the installed project copy).
@@ -58,7 +59,7 @@ var localConfigExplainer string
 //
 // extraNotices are messages another layer needs surfaced in the same Notice block
 // (the SessionStart self-heal's adopt outcome, the global rules cache sync);
-// PreCompact passes nil.
+// tests pass nil.
 func Run(w io.Writer, rulesPath, projectRoot, homeDir string, extraNotices []string) error {
 	if projectRoot == "" {
 		return writeNotice(w, extraNotices)
@@ -102,7 +103,44 @@ func Run(w io.Writer, rulesPath, projectRoot, homeDir string, extraNotices []str
 	if _, err := fmt.Fprint(w, localConfigExplainer); err != nil {
 		return err
 	}
+	if line := languageLine(env["LETS_LANGUAGE"]); line != "" {
+		if _, err := fmt.Fprintf(w, "\n%s\n", line); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+// languageNameMax caps the LETS_LANGUAGE name the closing line quotes.
+const languageNameMax = 40
+
+// languageLine returns the closing response-language line for a plain,
+// non-English LETS_LANGUAGE, or "" (lets-xtugk). It is the LAST line of the
+// body on every source: after a compaction the summary, the tool output and the
+// explainer above are English, and recency decides the next reply's language.
+// The wording keeps the rules' order - the user's own language wins. A value
+// that is not a plain name gets no line: it is file text, and this line is an
+// imperative.
+func languageLine(lang string) string {
+	lang = strings.TrimSpace(lang)
+	if lang == "" || len(lang) > languageNameMax || strings.EqualFold(lang, "English") || !isPlainLanguageName(lang) {
+		return ""
+	}
+	return fmt.Sprintf("Respond in %s (LETS_LANGUAGE) unless the user writes in another language - slash commands, tool output and a compaction summary are not the user's language.", lang)
+}
+
+// isPlainLanguageName reports whether s is ASCII letters, with spaces and
+// hyphens allowed after the first character.
+func isPlainLanguageName(s string) bool {
+	for i, r := range s {
+		switch {
+		case r >= 'A' && r <= 'Z', r >= 'a' && r <= 'z':
+		case (r == ' ' || r == '-') && i > 0:
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // writeNotice writes the ## LETS Notice block for every non-empty msg; nothing
