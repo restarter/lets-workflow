@@ -19,7 +19,7 @@ LETS ships 15 specialized agents, plus `lead` - the agent a standing team's lead
 | implementer | Full-stack implementation | Used by `/lets:execute` delegated runs and a standing team's `/lets:team spawn implementer` |
 | skeptic | Verifier: tries to refute one finding or claim against the code / sources | The `/lets:review` verify pass, the `/lets:research` cross-check, and a session decision that meets the CLAIM bar; never picked as a reviewer |
 | actor | Any personality from a URL or file | On explicit request |
-| lead | The standing team's lead: coordinates, routes, never edits repository files | Runs a whole lead session (`claude --agent lets:lead`), never a subagent |
+| lead | The standing team's lead: coordinates, routes, delegates code to implementers by default | Runs a whole lead session (`claude --agent lets:lead`), never a subagent |
 
 ## How agents work
 
