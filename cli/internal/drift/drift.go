@@ -1,5 +1,5 @@
 // Package drift provides the rules-version drift state machine used by
-// `lets init` (Step 8) and the SessionStart/PreCompact hooks. State machine
+// `lets init` (Step 8) and the SessionStart hook. State machine
 // is parsing-domain-aware (uses frontmatter.ReadVersion + semver.Compare).
 // Owns canonical user-facing messages so multiple consumers (hook notice +
 // init JSON output) speak identical words.

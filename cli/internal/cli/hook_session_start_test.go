@@ -55,52 +55,13 @@ func TestHookSessionStart_E2E(t *testing.T) {
 	}
 }
 
-// TestHookSessionStart_PreCompact_OutputParity locks the contract that the
-// two hook subcommands produce byte-identical output today (they share
-// runHookSessionPipeline). Future PreCompact-specific divergence should
-// be intentional - this test forces the change to be visible by failing,
-// rather than letting one subcommand silently drift while the other
-// stays correct. Closes S15 from the 2026-05-08 review.
-func TestHookSessionStart_PreCompact_OutputParity(t *testing.T) {
-	// session-start also syncs the global rules cache (lets-tg008); a global copy
-	// byte-identical to the plugin rules keeps that sync a silent no-op whatever
-	// the host project's LETS_RULES_SCOPE, so the parity below stays meaningful.
-	rulesPath := filepath.Join(t.TempDir(), "rules", "lets-rules.md")
-	writeTestFile(t, rulesPath, "---\nversion: 0.4.0\n---\n")
-	home := t.TempDir()
-	writeTestFile(t, filepath.Join(home, ".claude", "rules", "lets-rules.md"), "---\nversion: 0.4.0\n---\n")
-	t.Setenv("HOME", home)
-
-	run := func(t *testing.T, sub string) string {
-		t.Helper()
-		root := cli.NewRootCmd()
-		root.SetArgs([]string{"hook", sub, "--rules=" + rulesPath})
-		var buf bytes.Buffer
-		root.SetOut(&buf)
-		root.SetErr(&buf)
-		if err := root.Execute(); err != nil {
-			t.Fatalf("execute %s: %v", sub, err)
-		}
-		return buf.String()
-	}
-
-	got1 := run(t, "session-start")
-	got2 := run(t, "precompact")
-
-	if got1 != got2 {
-		t.Errorf("session-start vs precompact output diverged.\nsession-start:\n%s\nprecompact:\n%s", got1, got2)
-	}
-}
-
-// TestHookSessionStart_PreCompact_ParityOnUserScopePath pins parity on the
-// user-scope branch deterministically (the unsandboxed parity test above
-// exercises whatever the host repo's state happens to be): fake home with
-// global rules + ~/.lets/.env, fresh git repo without project rules. A parity
-// bug specific to the user-scope path (e.g. one subcommand forgets to pass
-// homeDir) is exactly the divergence this fixture catches. The global copy is
-// byte-identical to the plugin rules so session-start's cache sync (lets-tg008)
-// is a silent no-op - that sync is session-start-only by design.
-func TestHookSessionStart_PreCompact_ParityOnUserScopePath(t *testing.T) {
+// TestHookSessionStart_UserScopePath pins the user-scope branch end to end
+// through the CLI: fake home with global rules + ~/.lets/.env, a fresh git repo
+// without project rules. The missing project copy is covered silently, the
+// user env overlays, and a non-English LETS_LANGUAGE closes the output with the
+// language line (lets-xtugk). The global copy is byte-identical to the plugin
+// rules, so the rules cache sync (lets-tg008) is a silent no-op.
+func TestHookSessionStart_UserScopePath(t *testing.T) {
 	home := t.TempDir()
 	writeTestFile(t, filepath.Join(home, ".claude", "rules", "lets-rules.md"),
 		"---\nversion: 0.4.0\n---\n")
@@ -108,43 +69,34 @@ func TestHookSessionStart_PreCompact_ParityOnUserScopePath(t *testing.T) {
 	t.Setenv("HOME", home)
 
 	repo := t.TempDir()
-	gitArgs := [][]string{{"init", "-q", "-b", "main"}}
-	for _, args := range gitArgs {
-		cmd := exec.Command("git", args...)
-		cmd.Dir = repo
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
+	cmd := exec.Command("git", "init", "-q", "-b", "main")
+	cmd.Dir = repo
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
 	}
 	chdirTo(t, repo)
 
 	rulesPath := filepath.Join(t.TempDir(), "rules", "lets-rules.md")
 	writeTestFile(t, rulesPath, "---\nversion: 0.4.0\n---\n")
 
-	run := func(t *testing.T, sub string) string {
-		t.Helper()
-		root := cli.NewRootCmd()
-		root.SetArgs([]string{"hook", sub, "--rules=" + rulesPath})
-		var buf bytes.Buffer
-		root.SetOut(&buf)
-		root.SetErr(&buf)
-		if err := root.Execute(); err != nil {
-			t.Fatalf("execute %s: %v", sub, err)
-		}
-		return buf.String()
+	root := cli.NewRootCmd()
+	root.SetArgs([]string{"hook", "session-start", "--rules=" + rulesPath})
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
 	}
-
-	got1 := run(t, "session-start")
-	got2 := run(t, "precompact")
-	if got1 != got2 {
-		t.Errorf("session-start vs precompact diverged on the user-scope path.\nsession-start:\n%s\nprecompact:\n%s", got1, got2)
+	got := buf.String()
+	if strings.Contains(got, "LETS Notice") {
+		t.Errorf("user-scope path must not nag:\n%s", got)
 	}
-	// Sanity: the user-scope path covers the missing project copy silently.
-	if strings.Contains(got1, "LETS Notice") {
-		t.Errorf("user-scope path must not nag:\n%s", got1)
+	if !strings.Contains(got, "LETS_LANGUAGE=Ukrainian") {
+		t.Errorf("user env overlay missing:\n%s", got)
 	}
-	if !strings.Contains(got1, "LETS_LANGUAGE=Ukrainian") {
-		t.Errorf("user env overlay missing:\n%s", got1)
+	lines := strings.Split(strings.TrimRight(got, "\n"), "\n")
+	if last := lines[len(lines)-1]; !strings.HasPrefix(last, "Respond in Ukrainian (LETS_LANGUAGE)") {
+		t.Errorf("output must end with the language line, got %q", last)
 	}
 }
 
