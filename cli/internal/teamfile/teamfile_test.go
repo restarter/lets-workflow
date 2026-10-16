@@ -127,10 +127,15 @@ func TestRender_Template(t *testing.T) {
 		"## 2. Workspace", "`DOCKER_PREFIX`", "`COMPOSE_PROJECT_NAME`", "<first>-<last>", "`.lets/hooks/team-setup`",
 		"Resume artefacts:", "Continuity = files only",
 		"agent_command --agent lets:lead", "**The lead** delegates code and doc changes to implementers by default",
-		"| architect | architect | lets:architect | | standard |", "| skeptic | skeptic | lets:skeptic | | standard |", "| explorer | explorer | lets:explorer | | standard |",
+		"| lead | team lead | (the lead session) | (inherited) | |", "The roster starts with the lead alone",
 	} {
 		if !strings.Contains(string(out), s) {
 			t.Errorf("rendered template lacks %q", s)
+		}
+	}
+	for _, row := range []string{"| architect | architect | lets:architect |", "| skeptic | skeptic | lets:skeptic |", "| explorer | explorer | lets:explorer |"} {
+		if strings.Contains(string(out), row) {
+			t.Errorf("a new team file starts with the lead alone - the template still writes %q (lets-7k6ae)", row)
 		}
 	}
 	// Every key is required: dropping any one leaves a placeholder.

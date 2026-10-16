@@ -234,16 +234,16 @@ func TestTeamBackend_Members(t *testing.T) {
 		t.Fatal(err)
 	}
 	step6 := sectionSpan(string(s), "\n## Step 6: Take Task\n")
-	roster := strings.Index(step6, "`Respawn the roster?  /lets:team spawn --roster`")
+	ask := strings.Index(step6, "ask Step 5's **Members** question")
 	take := strings.Index(step6, `Skill(skill: "lets:take-task"`)
-	if roster < 0 || take < 0 || roster > take || strings.Contains(step6, "lets members") || strings.Contains(step6, "lead_held") {
-		t.Errorf("start.md Step 6 claims no lead - the roster hint stays, then take-task (roster=%d take=%d)", roster, take)
+	if ask < 0 || take < 0 || ask > take || strings.Contains(step6, "lets members") || strings.Contains(step6, "lead_held") {
+		t.Errorf("start.md Step 6 claims no lead - the Members question stays, then take-task (ask=%d take=%d)", ask, take)
 	}
 	if step7 := sectionSpan(string(s), "\n## Step 7: Suggest Session Rename\n"); !strings.Contains(step7, "never suggest `/rename {slug}`") || !strings.Contains(step7, "Suggest `/rename {team_lead.name}` only when `team_lead.match` is not `lead`; otherwise suggest nothing.") {
 		t.Error("start.md Step 7 must not rename a team's lead away from lead_name")
 	}
 	step5 := sectionSpan(string(s), "\n## Step 5: ")
-	for _, want := range []string{"`team_lead`", "/rename {team_lead.name}", "never blocking", "**Respawn roster**"} {
+	for _, want := range []string{"`team_lead`", "/rename {team_lead.name}", "never blocking", "**Members (team worktree only).**"} {
 		if !strings.Contains(step5, want) {
 			t.Errorf("start.md Step 5's team paragraph must state %q", want)
 		}
@@ -449,13 +449,24 @@ func TestTeamBackend_TeamTaskFlow(t *testing.T) {
 	}
 	step5 := sectionSpan(start, "## Step 5: What do we do? (task selection - MANDATORY)")
 	team := strings.Index(step5, "**Team worktree**")
-	respawn := strings.Index(step5, "**Respawn roster**")
-	if team < 0 || respawn < team || !strings.Contains(step5, `Skill(skill: "lets:team", args: "spawn --roster")`) || !strings.Contains(step5, "Outside a team worktree the moves stay as above - no roster offer.") {
-		t.Error("start.md Step 5 offers Respawn roster only in a team worktree, after the lead claim")
+	block := between(step5, "**Members (team worktree only).**", "**Wait for user to select")
+	if team < 0 || block == "" || strings.Index(step5, "**Members (team worktree only).**") < team {
+		t.Error("start.md Step 5 asks the Members question only in a team worktree, after the lead line (lets-7k6ae)")
 	}
-	for _, l := range strings.Split(start, "\n") {
-		if strings.Contains(l, "spawn --roster") && !strings.Contains(l, "Respawn roster") && !strings.Contains(l, "No `team` -> skip") {
-			t.Errorf("a roster offer outside the team paths: %s", strings.TrimSpace(l))
+	for _, want := range []string{
+		"`ListAgents`", `header: "Members"`, "is not shown a second time", `Skill(skill: "lets:team", args: "spawn --roster")`,
+		`Skill(skill: "lets:team", args: "spawn <role>")`, "A row is never deleted", "nobody answers: ask nothing, spawn nothing", "Every other `/lets:start` asks", "a permission mode (`auto`, `bypassPermissions`) or a `.lets/cache/pipeline-state-*` marker is not unattended",
+	} {
+		if !strings.Contains(block, want) {
+			t.Errorf("start.md's Members question must state %q (lets-7k6ae)", want)
+		}
+	}
+	if strings.Contains(start, "**Respawn roster**") || strings.Contains(start, "Respawn the roster?") {
+		t.Error("the Members question replaces start.md's Respawn roster move and hint (lets-7k6ae)")
+	}
+	for _, spawn := range []string{"spawn --roster", "spawn <role>"} {
+		if in, all := strings.Count(block, spawn), strings.Count(start, spawn); in != all {
+			t.Errorf("start.md names %q outside the Members question (%d of %d inside)", spawn, in, all)
 		}
 	}
 
