@@ -408,6 +408,10 @@ AskUserQuestion(
 
 The lead appends each picked fact to the team file's `## 9. Standing knowledge` (`.lets/teams/<team>.md`; the lead is its only writer). "None" (or nothing picked) -> nothing written. It never blocks the close.
 
+### Remember
+
+Then up to 3 lessons from this run's evidence - plan deviations, hard stops and their root causes, 3x failures, review rounds, the owner's corrections, verified review findings, and a lesson an implementer or member reported (its report file, a `FOR lead` block) - go to Claude Code's memory by the core rules' `## Discovery Logging`: feedback for how the owner wants work done or a correction to the flow, project for a fact, tool quirk or gotcha, reference for a pointer. Write each the way Claude Code's own memory instructions say (the directory they name, its types, its index). An existing memory on the same point is updated, never duplicated - re-read it and the index right before the write, since every session of this repository writes the same directory. Content only this task needs is already in the completion comment; a team-area fact is the promote step's above. One line per lesson, `Remembered: <fact> -> memory (<type>)`; no lesson -> no line. No memory directory in this session's instructions (auto memory off, or a session run as a custom agent such as `lets:lead`) -> one line `no memory directory in this session's instructions - nothing remembered`. It asks nothing at any level and never blocks the close.
+
 ## Step 8: Finish Task
 
 ### Worktree Detection
