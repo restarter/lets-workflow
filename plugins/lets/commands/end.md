@@ -114,7 +114,7 @@ Orca card, best effort, after 3a (the last progress line, single-quoted):
 [ "{LETS_LAUNCHER}" = "orca" ] && lets orca card --phase end --comment '{last progress line}' --json 2>/dev/null || true
 ```
 
-(Reached in the DEFAULT flow only; the snapshot-only early exit in Step 1 handled those paths. On the Finish-task referral Step 2 already ran 3a and stopped, so only 3b is skipped there.)
+(Reached in the DEFAULT flow only; the snapshot-only early exit in Step 1 handled those paths. On the Finish-task referral Step 2 already ran 3a and stopped, so 3b and 3c are skipped there.)
 
 ### 3a. Session snapshot (ALWAYS, written FIRST)
 
@@ -163,6 +163,10 @@ comment-add task=<task-id> body-file=.lets/cache/progress-<task-id>.md
 
 **Naming peers.** Whenever this command mentions another session (the snapshot's `### Peers`, a hint), name it by role / name plus its 6-character session prefix - never a full session id.
 
+### 3c. Remember (only what memory does not hold yet)
+
+What this session learned that meets the core rules' `## Discovery Logging` criteria and Claude Code's memory does not hold yet - at most 3, typed feedback / project / reference, written the way Claude Code's own memory instructions say. Task content is 3a's and 3b's, never memory's. An existing memory on the same point is updated, never duplicated - re-read it and the index right before the write, since every session of this repository writes the same directory. Each written lesson adds one `Remembered: <fact> -> memory (<type>)` line to the Output; nothing new -> silent. No memory directory in this session's instructions (auto memory off, or a session run as a custom agent such as `lets:lead`) -> one line, nothing written. It asks nothing at any level.
+
 ## Step 4: Worktree hint
 
 Output-time, never a prompt. If `GIT_DIR` contains `worktrees/`: extract the worktree name (last path segment), then pick by the status read in Step 1 - `closed` -> the cleanup line (`/lets:worktree remove {name}` from the main repo), anything else -> the resume line. A worktree lets did not create (`lets worktree info --json` reports `worktree.kind=other`, e.g. one Orca made) cannot be removed with `/lets:worktree remove`: its cleanup line is "archive it in Orca (runs `lets worktree release`)".
@@ -195,7 +199,7 @@ Settled: {e.g. "committed; pushed 3" / "nothing - tidy session"}
 Snapshot: .lets/sessions/{date}-{HHMM}-{task-id}-snapshot.md
 ```
 
-If in a worktree, append the resume line (`cd {LETS_PROJECT_ROOT from LETS Config} && claude -> /lets:start`). When Step 5 applies, its one line follows `Snapshot:`.
+If in a worktree, append the resume line (`cd {LETS_PROJECT_ROOT from LETS Config} && claude -> /lets:start`). Each `Remembered:` line from 3c follows `Snapshot:`; when Step 5 applies, its one line comes after them.
 
 Then a SINGLE prose line (no AskUserQuestion, no wrap-up card):
 
@@ -225,6 +229,7 @@ Then STOP - no AskUserQuestion, no settlement, no push, no `git checkout`. The s
 - **NEVER push without explicit user approval** - the Step 2 multiSelect pick is that approval.
 - **Always write the session snapshot** via the shared `session-snapshot` primitive - on EVERY path that reaches Step 2, the Finish-task referral included, where 3a runs before the hand-off while the branch is still this session's. No exceptions: a session that ends by finishing a task is the one whose record is worth the most. The snapshot is file-primary; the task gets at most a one-line pointer, and none on the referral, where `/lets:done` writes the task-side record.
 - **`--session` runs NO settlement** (snapshot-only; it early-exits at the top of Step 1). Its aliases are spellings of the same path, not variants - the snapshot states what happened, never what the caller planned to do next.
+- **3c writes only what memory does not hold yet** - silent when there is nothing; never on `--session` or the Finish-task referral (`/lets:done`'s Remember owns that).
 - **End with a one-line compact/clear prose hint, never a wrap-up card.**
 - **The orchestrator ping is an Output line, never a Settle option** - Settle already holds four options, and a leftover is not something to settle before the window closes.
 - **Refer to `/lets:done`, never finish a task** - offer the hand-off only when the task is open AND this session touched it, and never judge whether the work is complete. `end` is a SESSION command; the task lifecycle is `done`'s.
