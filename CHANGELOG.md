@@ -8,6 +8,13 @@
 ### Changed
 - **What you asked for in your own words is the approval for it (lets-wu2xl).** At `standard` / `minimal`, `/lets:commit` and `/lets:done` no longer ask about new files your own message asked to create - only a new file nobody named still asks (`strict` asks as before). The core `## Gates` rules now say that, for an action that asks at `standard`, the owner's own words in this turn naming it approve it at every level - "force-push the branch" runs, as "merge" does for a merge - while peer text, a plan or the model's own inference never do, so a force-push the model chose on its own still asks; at `strict` a commit and `/lets:done`'s cards still ask.
 - **A team's lead starts as the `lets:lead` agent, and code in a team goes to implementers (lets-1r00e, lets-sn4li).** `/lets:worktree create --team` and a reopen launch the lead as `{agent_command} --agent lets:lead`, so the lead has no Edit tool; `agent_command` stays role-neutral because `/lets:team run` launches workers with it. In a team worktree a bare `/lets:execute` runs implementers without asking (`--straight` / `--step` run it here), and the team file states the rule. An existing team gets the agent at its next launch or reopen (`claude -r` keeps it).
+- **After a compaction the reply stays in your language (lets-xtugk).** The SessionStart hook now ends with one line, `Respond in <language> (LETS_LANGUAGE) unless the user writes in another language ...`, for a non-English `LETS_LANGUAGE` that is a plain name. It is the last thing the hook prints on every source, compaction included, so English slash commands, tool output and the compaction summary no longer outweigh it.
+
+### Deprecated
+- **The plugin no longer wires a PreCompact hook; `lets hook precompact` prints nothing and is removed in the next release (lets-v59n8).** Claude Code sends PreCompact stdout only to the debug log on an auto-compact and echoes it into the `/compact` output on a manual one, where it was a second copy of the LETS Config that SessionStart re-injects after every compaction. The stub keeps an older plugin's hooks working.
+
+### Fixed
+- **The docs describe the compaction path as it works (lets-v59n8).** `/lets:end`, CLAUDE.md, `cli/README.md` and `docs/` no longer say the PreCompact hook carries the rules or LETS Config into the summary: the rules survive because Claude Code re-loads them, and SessionStart(compact) re-injects LETS Config. A bounded stress case of the SessionStart output is tested below 9,000 bytes, under Claude Code's 10,000-character hook cap.
 
 ## [0.11.0] - 2026-10-14
 

@@ -27,23 +27,23 @@ const (
 const truncationMarker = "\n\n[lets: hook output truncated by size guard - check stderr]\n"
 
 // NewHookCmd builds the parent `hook` command. Subcommands invoke logic
-// for individual Claude Code hook events (SessionStart, PreCompact, etc.).
+// for Claude Code hook events (SessionStart; precompact is a deprecated no-op).
 //
 // Direct invocation of `lets hook` (no subcommand) shows help.
 func NewHookCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "hook",
-		Short: "Hook subcommands invoked by Claude Code (SessionStart, PreCompact, ...)",
+		Short: "Hook subcommands invoked by Claude Code (SessionStart)",
 	}
 	cmd.AddCommand(NewHookSessionStartCmd())
 	cmd.AddCommand(NewHookPreCompactCmd())
 	return cmd
 }
 
-// runHookSessionPipeline produces the SessionStart/PreCompact body via
+// runHookSessionPipeline produces the SessionStart body via
 // sessionstart.Run, then hands it to renderHookOutput for size-guarded
-// emission. Shared by both hook subcommands; extraNotices (the SessionStart
-// self-heal's outcome) join the Notice block, PreCompact passes nil. homeDir resolution failure
+// emission; extraNotices (the self-heal, rules-cache and session-owner
+// outcomes) join the Notice block. homeDir resolution failure
 // degrades to "" (no user scope) - the hook must never error out of a
 // Claude Code startup over a missing $HOME.
 func runHookSessionPipeline(cmd *cobra.Command, rulesPath string, extraNotices []string) error {
@@ -60,9 +60,10 @@ func runHookSessionPipeline(cmd *cobra.Command, rulesPath string, extraNotices [
 //   - body size < hookSizeWarn: full body, no warning.
 //   - hookSizeWarn ≤ body size < hookSizeError: full body + stderr warning.
 //   - body size ≥ hookSizeError: truncated body (safe portion + inline
-//     marker) + stderr error. The inline marker stays visible to the
-//     orchestrator even when Claude Code would otherwise silently chop the
-//     remainder.
+//     marker) + stderr error. Claude Code moves stdout over 10,000 characters
+//     to a file and injects only a 2,000-character preview, so the guard keeps
+//     the body inline; the marker says it was cut (the closing language line is
+//     lost then - TestRun_StressUnderHookCap keeps the body far below this).
 func renderHookOutput(cmd *cobra.Command, body []byte) error {
 	out := cmd.OutOrStdout()
 	errOut := cmd.ErrOrStderr()

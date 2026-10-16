@@ -35,7 +35,7 @@ var rulesSyncFn = func(rulesPath string) string {
 // removed in Phase 4b - rules now live in <project>/.claude/rules/lets-rules.md).
 //
 // Invoked by Claude Code via plugins/lets/hooks/hooks.json on SessionStart.
-// Body shared with `lets hook precompact` via runHookSessionPipeline.
+// Body built by runHookSessionPipeline.
 //
 // In addition to the shared body, this command:
 //   - reads the stdin payload FIRST, and on source startup|resume|clear self-heals
@@ -46,7 +46,7 @@ var rulesSyncFn = func(rulesPath string) string {
 //     worktree's .claude/settings.local.json permissions.additionalDirectories
 //     (lets-urmfa) - effective from the next session, since settings load before
 //     this hook; compact never self-heals,
-//     and PreCompact never reads the payload at all;
+//     and the deprecated precompact stub reads nothing;
 //   - on every source, after the self-heal, keeps the global
 //     ~/.claude/rules/lets-rules.md a cache of this session's plugin
 //     (rulesSyncFn, lets-tg008); its outcome joins the Notice;
@@ -58,7 +58,7 @@ var rulesSyncFn = func(rulesPath string) string {
 //     that proof for the new process. All go through the session-owner guard
 //     (sessionOwnerPass): a second live session in the same worktree never takes
 //     this boundary (HeldLive), and a declined write is a Notice, never silent.
-//     PreCompact does NOT do this (the same session continues there - moving the
+//     A compact source does NOT do this (the same session continues - moving the
 //     boundary would drop commits).
 func NewHookSessionStartCmd() *cobra.Command {
 	cmd := &cobra.Command{

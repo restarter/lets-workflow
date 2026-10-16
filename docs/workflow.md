@@ -78,7 +78,7 @@ Several chats on one repo can coordinate without you carrying messages. Start on
 
 ## How LETS keeps Claude on track
 
-**SessionStart + PreCompact hooks.** On every Claude Code conversation, `lets hook session-start` (and `lets hook precompact`) runs and emits a small `## LETS Config` block — plus a notice if your rules file is out of date. The workflow rules themselves live in `<project>/.claude/rules/lets-rules.md` (copied there by `/lets:init`, re-synced by `/lets:update` when a new release ships), which Claude Code loads as project instructions. SessionStart fires on new, resumed, cleared, and compacted sessions; PreCompact makes sure the rules survive when a long session gets compacted. This is what makes Claude follow the workflow without you having to remind it.
+**SessionStart hook.** On every Claude Code conversation, `lets hook session-start` runs and emits a small `## LETS Config` block — plus a notice if your rules file is out of date, and a closing line naming your response language when it is not English. The workflow rules themselves live in `<project>/.claude/rules/lets-rules.md` (copied there by `/lets:init`, re-synced by `/lets:update` when a new release ships), which Claude Code loads as project instructions. SessionStart fires on new, resumed, cleared, and compacted sessions; after a compaction Claude Code re-loads the rules file itself, and the hook re-injects LETS Config and the language line. This is what makes Claude follow the workflow without you having to remind it.
 
 **LETS boxes.** After key actions, Claude shows a small box with the most likely next steps, so you always know what to do next:
 

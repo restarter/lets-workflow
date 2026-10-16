@@ -10,17 +10,6 @@
           }
         ]
       }
-    ],
-    "PreCompact": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "lets hook precompact --rules=${CLAUDE_PLUGIN_ROOT}/rules/lets-rules.md"
-          }
-        ]
-      }
     ]
   }
 }

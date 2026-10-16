@@ -1,7 +1,7 @@
 # Installing lets
 
 `lets` is the companion CLI for the `lets-workflow` Claude Code plugin. It powers
-SessionStart/PreCompact hooks, the `lets statusline` renderer, and the
+the SessionStart hook, the `lets statusline` renderer, and the
 `lets init` / `lets update` per-project setup that the plugin's slash commands invoke under the hood.
 
 This guide covers installing the **binary** (`lets` on `$PATH`), the **plugin**
