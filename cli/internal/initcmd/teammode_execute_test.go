@@ -111,6 +111,10 @@ func teamModeExecuteProblems(exec string) []string {
 	if !strings.Contains(dispatch, busyNextPending) || pendingFirst < 0 || whatReport < pendingFirst || !strings.Contains(recovery, "a chunk set back to `pending` by a `member_busy` NEXT included, sent before any nudge of that agent") {
 		add("an implementer member_busy must set the chunk back to pending, and 5-D.5 / 5-D.7 must send a pending NEXT before any nudge logic")
 	}
+	// The deferred NEXT is a record flag, not context: "pending after a member_busy" survives a compaction.
+	if !strings.Contains(exec, `"next_pending": false`) || !strings.Contains(dispatch, "with `next_pending: true`") || !strings.Contains(exec, "while a chunk of its group holds `next_pending: true`") || !strings.Contains(recovery, "only a chunk recorded `next_pending: true`") {
+		add("a member_busy NEXT must be recorded as next_pending: true in the run record, and the pending-NEXT rule and the 5-D.7 pending row must key on that flag, never on phase: pending alone")
+	}
 	// F18: the owner-ordered stop is never nudged - stopping and stopped alike.
 	if !strings.Contains(report, stopNeverNudged) || !strings.Contains(notRunning, "The owner-ordered 5-D.6 stop - `phase: stopping`, or `blocked` with `reason: stopped` - is never nudged") {
 		add("the one nudge must never reach the owner-ordered 5-D.6 stop - phase: stopping, or blocked with reason: stopped")
@@ -152,6 +156,7 @@ func TestTeamModeExecute_Mutants(t *testing.T) {
 		{"a gone run analyst is not respawned", "`agent_gone` on a run analyst's `op=next`", "`agent_gone` on any op=next", "respawn a fresh one"},
 		{"member_busy only ends the turn", busyNextPending, "It returns `member_busy` (the implementer is still in a round) -> end the turn", "set the chunk back to pending"},
 		{"a stopping round is nudged", stopNeverNudged, "the owner-ordered 5-D.6 stop (`reason: stopped`) is never nudged", "never reach the owner-ordered"},
+		{"the deferred NEXT is not recorded", "while a chunk of its group holds `next_pending: true`", "while a chunk of its group is `pending` after a `member_busy`", "next_pending: true in the run record"},
 		{"a busy run analyst is not queued", "-> record `queued` as that check's value", "-> drop that check", "queue a busy run analyst's check"},
 	}
 	for _, m := range mutants {
