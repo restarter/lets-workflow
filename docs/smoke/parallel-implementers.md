@@ -53,7 +53,7 @@ In a team worktree: dismiss a pane member, then `/lets:team spawn --roster`. Pas
    - the lead's command ran with cwd == the team worktree;
    - the `lets peers who --json` row has the name exactly `<c>-lead` and that exact cwd, with no `duplicate_name`, and `ListAgents` lists `<c>-lead`.
 2. **(e) Orca.** The lead spawns one named teammate. Record whether it shows as a pane - a finding, not a gate (that is Claude Code's own setting).
-3. **(b) cmux and tmux.** With each launcher, the lead's command `claude --agent lets:lead --name <c>-lead '/lets:start'` gives a `lets peers who` row (and a `ListAgents` row) named exactly `<c>-lead`.
+3. **(b) cmux and tmux.** With each launcher, the lead's command `claude --name <c>-lead '/lets:start'` gives a `lets peers who` row (and a `ListAgents` row) named exactly `<c>-lead`.
 4. **(d) Setup hook.** Two teams in one repo whose `.lets/hooks/team-setup` sets them record distinct `DOCKER_PREFIX`, `COMPOSE_PROJECT_NAME` and port blocks in their team files' Workspace sections. The hook runs only after the owner's yes; a hook that fails stops the flow before the lead is launched, and the reopen offers to run it again.
 
 ## 9. Create and disband (lets-0rgnd, Task 18)
