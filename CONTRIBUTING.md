@@ -6,7 +6,7 @@ Thanks for taking the time. This repo is a Claude Code plugin (`plugins/lets/`) 
 
 Monorepo layout:
 
-- `plugins/lets/` — the plugin payload. `commands/` (slash commands), `agents/` (expert subagents), `skills/` (reusable + internal), `rules/lets-rules.md` (workflow rules, frontmatter-versioned), `hooks/` (SessionStart + PreCompact).
+- `plugins/lets/` — the plugin payload. `commands/` (slash commands), `agents/` (expert subagents), `skills/` (reusable + internal), `rules/lets-rules.md` (workflow rules, frontmatter-versioned), `hooks/` (SessionStart).
 - `cli/` — the Go CLI (`lets`). Go module root is `cli/`, not the repo root — all `go` commands run from there (or via the repo-root `Makefile`).
 - `scripts/release/` — release tooling (`bump-version.sh`, `verify-versions.sh`).
 - `scripts/remote/` — VPS deployment for the shared task-tracker backend (not part of the plugin).

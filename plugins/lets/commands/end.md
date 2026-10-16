@@ -201,7 +201,7 @@ Then a SINGLE prose line (no AskUserQuestion, no wrap-up card):
 
 > Run `/compact` to keep this window lighter, or `/clear` + `/lets:start` for a fresh session.
 
-(`/compact` and `/clear` are user-typed Claude Code commands - never auto-execute them. `/compact` keeps the window with a compacted summary; the PreCompact hook re-injects the rules and the summary just written survives.)
+(`/compact` and `/clear` are user-typed Claude Code commands - never auto-execute them. `/compact` keeps the window with a compacted summary; Claude Code re-loads the rules after it, the SessionStart hook re-injects LETS Config, and the snapshot just written stays on disk for `/lets:start`.)
 
 ### --session
 

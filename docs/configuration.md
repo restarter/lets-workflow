@@ -123,7 +123,7 @@ Run `/lets:init` first — it'll run `bd init` for you if both `lets` and `bd` a
 - **`lets init`** writes only LETS-owned `.gitignore` entries (`.lets/`, `.worktrees/`, and `.mcp.json` — which can carry a tracker adapter's secret token), creates the `.lets/` layout and `.lets/.env`, copies `.claude/rules/lets-rules.md`, and sets the statusline in `.claude/settings.json`.
 - **`bd init`** adds its own `.gitignore` entries (`.beads/...`, `issues.jsonl`, `.beads-credential-key`), installs a project-scoped SessionStart + PreCompact hook block into `.claude/settings.json`, and creates `CLAUDE.md` / `AGENTS.md` if they don't exist yet.
 
-> **Known quirk:** bd's project-scoped PreCompact hook runs in addition to the plugin's, so on a compaction the rules get injected twice. Harmless — being tracked for a fix.
+> **Known quirk:** bd's project-scoped hooks run `bd prime` on SessionStart and PreCompact, beside the plugin's SessionStart hook. That output is beads' own workflow context, not the LETS rules - harmless.
 
 For a shared task database across a team, `bd init --server --database=<name>` connects to a Dolt remote — see `scripts/remote/dolt/README.md` in this repo and the beads docs.
 

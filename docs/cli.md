@@ -12,7 +12,7 @@ The `lets` binary does the filesystem, git and process work behind the `/lets:*`
 | `lets peers` | Underneath `/lets:orc` and `/lets:hub` - who is live, reading a session, which orchestrator a session answers to, whether a message came from its bound peer under a standing grant; it never delivers a message (that is Claude Code's `SendMessage`) | [lets peers](../cli/README.md#lets-peers) |
 | `lets handoff` | Underneath `/lets:handoff --send` / `--open` / `--codex` - `targets`, `send`, `codex`, `await` | [lets handoff](../cli/README.md#lets-handoff) |
 | `lets statusline` | Claude Code runs it on every render; `lets statusline config` is what `/lets:statusline` saves through | [lets statusline](../cli/README.md#lets-statusline) · [config](../cli/README.md#lets-statusline-config) |
-| `lets hook` | The SessionStart / PreCompact hooks that inject `## LETS Config` | [lets hook](../cli/README.md#lets-hook) |
+| `lets hook` | The SessionStart hook that injects `## LETS Config` | [lets hook](../cli/README.md#lets-hook) |
 | `lets version` | Checking what is installed | - |
 
 Every `--json` subcommand prints one JSON object, valid even on failure, with a typed `error.kind` - see [JSON envelope conventions](../cli/README.md#json-envelope-conventions).

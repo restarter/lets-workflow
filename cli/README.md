@@ -12,7 +12,7 @@ cli/
 ├── internal/
 │   ├── cli/                      # Cobra command factories (one file per subcommand)
 │   │   ├── root.go, version.go
-│   │   ├── hook.go, hook_session_start.go, hook_precompact.go
+│   │   ├── hook.go, hook_session_start.go, hook_precompact.go (deprecated no-op)
 │   │   ├── statusline.go, init.go, update.go
 │   │   ├── worktree.go (+ worktree_stub.go), cmux.go (+ cmux_stub.go)
 │   │   └── *_test.go             # Black-box tests (package cli_test)
@@ -21,7 +21,7 @@ cli/
 │   ├── frontmatter/              # YAML frontmatter `version` reader (parses via x/mod/semver)
 │   ├── drift/                    # Rules-file drift check + user-facing drift messages
 │   ├── gitutil/                  # Shared git helpers
-│   ├── hook/sessionstart/        # SessionStart + PreCompact output (LETS Config + Notice + drift check)
+│   ├── hook/sessionstart/        # SessionStart output (LETS Config + Notice + drift check + language line)
 │   ├── initcmd/                  # `lets init` orchestration (init.go + migrate.go + env.go +
 │   │                             #   render.go + tracker.go + embed.go + …)
 │   ├── updatecmd/                # `lets update` (order-aware next_action, deferred rules; SchemaVersion=2)
@@ -66,7 +66,7 @@ make clean       # removes built artifact + test cache
 
 ## Setup
 
-The plugin's `hooks.json` and the project's `.claude/settings.json` invoke `lets` directly. The binary MUST be on `$PATH` for SessionStart, PreCompact, and statusline to work.
+The plugin's `hooks.json` and the project's `.claude/settings.json` invoke `lets` directly. The binary MUST be on `$PATH` for SessionStart and statusline to work.
 
 `make install` places the binary at `/usr/local/bin/lets` if writable, otherwise falls back to `$HOME/.local/bin/lets` (creating the dir if missing) and prints a PATH-setup hint if needed.
 
@@ -496,16 +496,17 @@ Exit codes (50-59, the range is full; a new failure class reuses 55 with its own
 
 ## lets hook
 
-Two cobra subcommands wired to Claude Code hooks: `lets hook session-start` (SessionStart) and `lets hook precompact` (PreCompact). Both take `--rules=${CLAUDE_PLUGIN_ROOT}/rules/lets-rules.md` and currently share output via `sessionstart.Run()` — the subcommands stay distinct for future divergence (e.g. context snapshotting before compaction). Project root is detected via `git rev-parse --show-toplevel` with an `os.Getwd()` fallback.
+`lets hook session-start` is wired to Claude Code's SessionStart on every source (startup, resume, clear, compact) and takes `--rules=${CLAUDE_PLUGIN_ROOT}/rules/lets-rules.md`. `lets hook precompact` is deprecated (lets-v59n8, merged; ships next release; removed the release after): the plugin no longer wires PreCompact - on an auto-compact its stdout reaches only the debug log, on a manual `/compact` Claude Code echoes it into the `/compact` output as a duplicate - so the subcommand prints nothing and exits 0, which keeps an older plugin's `hooks.json` working. Project root is `git rev-parse --show-toplevel` only - there is no `os.Getwd()` fallback, so outside a git project the hook prints only a non-empty Notice, with no LETS Config and no language line.
 
-Output (≈2KB, well under Claude Code's 10K hook cap — `lets-q9bx7`):
+Output (≈4 KB; a bounded stress case is pinned under 9,000 bytes by `TestRun_StressUnderHookCap` - Claude Code moves hook stdout over 10,000 characters to a file behind a 2,000-character preview):
 
 - Optional `## LETS Notice` — the project rules drift check (`sessionstart.go::driftCheck`) plus the global rules cache outcome (below). Drift decision table: project rules present (any state) → `drift.Message` wording (`/lets:update` for `outdated`/`unknown`/`ahead`, `/lets:init` for `missing`); project rules missing + global `~/.claude/rules/lets-rules.md` present, or `LETS_RULES_SCOPE=user` (from the merged env) → **no drift notice** (the user scope covers the project — the lets-wug9k nag fix; the global file is not drift-checked, the cache sync speaks for it); both missing otherwise → the classic `/lets:init` nag. A one-line "surface this to the user" instruction is appended (hook-only, NOT part of `drift.Message`; `commands/start.md` carries the same rule so a large slash command can't crowd the notice out). Outside a git project the hook prints only a non-empty Notice (the cache outcome) and nothing else; a no-op prints nothing.
-- `## LETS Config` — the whitelisted `LETS_*` values from the MERGED env (`~/.lets/.env` overlaid by project `.lets/.env`; project wins per key, only non-empty values mask) + an `### About these values` explainer embedded from `internal/hook/sessionstart/local_config_explainer.md`. `LETS_MERGE_BRANCH` falls back to the repo's origin default branch (`gitutil.DefaultBranch`, 1s timeout, value capped at `envfile.MaxValueLen`), else literal `main`, when neither file supplies it — initialized projects always carry the key, so the extra git spawn only fires in uninitialized repos (per hook fire: SessionStart AND PreCompact). `LETS_GATES` is always injected, normalized by `letsconfig.ResolvedEnv` (`GatesLevel`: empty or unknown -> `standard`, never lower); a non-empty raw value that is not `strict` / `standard` / `minimal` adds a Notice line `LETS_GATES="<value>" is not a level (strict | standard | minimal) - standard applies. Fix .lets/.env or run /lets:init.` (the quoted value capped at 40 bytes) (lets-wu2xl, merged; ships next release).
+- `## LETS Config` — the whitelisted `LETS_*` values from the MERGED env (`~/.lets/.env` overlaid by project `.lets/.env`; project wins per key, only non-empty values mask) + an `### About these values` explainer embedded from `internal/hook/sessionstart/local_config_explainer.md`. `LETS_MERGE_BRANCH` falls back to the repo's origin default branch (`gitutil.DefaultBranch`, 1s timeout, value capped at `envfile.MaxValueLen`), else literal `main`, when neither file supplies it — initialized projects always carry the key, so the extra git spawn only fires in uninitialized repos (per SessionStart fire). `LETS_GATES` is always injected, normalized by `letsconfig.ResolvedEnv` (`GatesLevel`: empty or unknown -> `standard`, never lower); a non-empty raw value that is not `strict` / `standard` / `minimal` adds a Notice line `LETS_GATES="<value>" is not a level (strict | standard | minimal) - standard applies. Fix .lets/.env or run /lets:init.` (the quoted value capped at 40 bytes) (lets-wu2xl, merged; ships next release).
+- A closing response-language line - `Respond in <LETS_LANGUAGE> (LETS_LANGUAGE) unless the user writes in another language - slash commands, tool output and a compaction summary are not the user's language.` - always the last line of output that carries LETS Config (inside a git project), only for a plain non-English name (ASCII letters, spaces and hyphens, <= 40 bytes); any other value gets no line (lets-xtugk, merged; ships next release).
 
 The workflow rules themselves do NOT travel through the hook — they live in `.claude/rules/lets-rules.md` (the uncapped project-instructions channel; copied by `lets init`, frontmatter-version-tracked) and, for user-scope installs, the global `~/.claude/rules/lets-rules.md` floor, which the hook keeps as a cache (below).
 
-**Global rules cache** (`internal/rulescache`, lets-tg008). `session-start` (every source: startup, resume, clear, compact — after the worktree self-heal, so a fresh worktree's linked `.lets/.env` is seen) calls `rulescache.Sync` with the plugin root this session actually loaded (`--rules` minus `rules/lets-rules.md`). `precompact` does not. The contract:
+**Global rules cache** (`internal/rulescache`, lets-tg008). `session-start` (every source: startup, resume, clear, compact — after the worktree self-heal, so a fresh worktree's linked `.lets/.env` is seen) calls `rulescache.Sync` with the plugin root this session actually loaded (`--rules` minus `rules/lets-rules.md`). The contract:
 
 - **Key = content hash**, stored in `~/.lets/cache/rules-cache.json` (sha256, version, source path) — never the frontmatter version (one version string has shipped with two contents). Every sync hashes the plugin rules and the installed file; there is no size/mtime shortcut. An unparseable key, or one whose hash is not 64 hex chars, means "no key" and re-hashes.
 - **One transaction under one lock** (`~/.lets/cache/rules-cache.lock`, 2 s): read, compare, back up and write re-read everything inside it. A busy lock skips with a named reason; it never waits longer.
@@ -526,7 +527,7 @@ The workflow rules themselves do NOT travel through the hook — they live in `.
 - **No registry** (`registry_absent`, a Claude Code without a session registry): pane teammates are UNVERIFIABLE, so today's refresh is kept and a pane can still overwrite `session:` there.
 - **Loud, never silent:** a declined write is a Notice naming the holder and the remedy ("run /lets:start in that chat to rewrite the session"); session-boundary then grants `prior-session`, never `exact`, and its NOTE says the range may include work that is not this session's.
 
-**Headless one-session lag (stated contract).** Interactive sessions get the running plugin's rules in the same session. A headless `claude -p` run (including `lets peers ask-ro` and a headless hand-off) loads memory before the hook runs, so the first such run after a plugin update reads the previous rules once; the next start of any kind is current. **Dual-hook rationale:** SessionStart on a `compact` source re-injects rules into the post-compaction context; PreCompact ensures rules are in the pre-compaction context the auto-summary is generated from — together they prevent workflow drift after compaction in long sessions.
+**Headless one-session lag (stated contract).** Interactive sessions get the running plugin's rules in the same session. A headless `claude -p` run (including `lets peers ask-ro` and a headless hand-off) loads memory before the hook runs, so the first such run after a plugin update reads the previous rules once; the next start of any kind is current. **Compaction:** after a compaction Claude Code re-loads the rules files itself, and SessionStart on a `compact` source re-injects LETS Config and the closing language line; the plugin wires no PreCompact hook (lets-v59n8, merged; ships next release).
 
 ## JSON envelope conventions
 
