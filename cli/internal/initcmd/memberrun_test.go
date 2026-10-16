@@ -134,9 +134,6 @@ func delegatedContractProblems(f map[string]string) []string {
 	if !strings.Contains(picker, "**Team worktree - Implementers by default (lets-sn4li).**") || !strings.Contains(picker, "asks no run-mode question: the run is **Implementers**") {
 		add("Step 4.5: bare /lets:execute in a team worktree runs Implementers without the picker (lets-sn4li)")
 	}
-	if !strings.Contains(picker, "the run does not fall back to a Here mode") || !strings.Contains(exec, "(in a team worktree: stop instead, as Step 4.5's team paragraph says)") {
-		add("a refused delegation in a team worktree stops instead of offering Here modes (lets-sn4li)")
-	}
 	if strings.Contains(exec, `Skill(skill: "lets:team"`) {
 		add("execute.md must not route into /lets:team's Agent Teams backend (lets-7dwc1)")
 	}

@@ -35,7 +35,7 @@ When it is too early to design anything, `/lets:plan --idea` writes a concept do
 | Auto | `--auto` | Unattended under AUTO MODE, which lifts no gate: push / PR / close / external actions ask as `LETS_GATES` says, hard-stops still halt it, refused on the merge branch | At the plan's commit points |
 | Implementers | `--implementers` (alias `--team`) | One persistent implementer works through the chunks (or `--parallel` groups work side by side in isolated worktrees); every chunk is checked before it is committed, and a correction goes to the same agent, which keeps its context. Interactive only - refused with `--auto` | One per chunk, after it is accepted - by you, or by the team check under the gate policy you pick |
 
-A flag pre-answers the picker; bare `/lets:execute` asks once. In a standing team's worktree it asks nothing and runs **Implementers** - the lead writes no code; `--straight` / `--step` run the plan in the lead's session instead. `/lets:execute <task-id>` or `<plan-path>` picks the plan explicitly, and `--status` shows where the current plan stands.
+A flag pre-answers the picker; bare `/lets:execute` asks once. In a standing team's worktree it asks nothing and runs **Implementers** - the lead delegates code by default; `--straight` / `--step` run the plan in the lead's session instead. `/lets:execute <task-id>` or `<plan-path>` picks the plan explicitly, and `--status` shows where the current plan stands.
 
 If reality diverges from the plan's approach mid-run — a tool behaving differently than assumed, a step that can't be done as written — Claude stops and asks instead of quietly re-planning in place (under `--auto` that is a hard stop). Use `/lets:commit` at natural commit points along the way.
 
