@@ -1,11 +1,11 @@
 ---
 description: Quick sanity check - code (inline 6-perspective) or plan (--plan).
-argument-hint: "[PR-url-or-number|--local|--staged|--last-commit|--branch|--plan|--file <path>] [--json] [--spec <path>|none] [--fix]"
+argument-hint: "[PR-url-or-number|--local|--staged|--last-commit|--branch|--plan|--file <path>] [--json] [--spec <path>|none] [--fix] [--solo]"
 ---
 
 # Quick Local Code Check
 
-Fast inline sanity check from 6 perspectives. Same target selection as `/lets:review` - the difference is depth: `/lets:check` reviews inline (no subagent dispatch, no AskUserQuestion gates), `/lets:review` dispatches expert agents.
+Fast inline sanity check from 6 perspectives. Same target selection as `/lets:review` - the difference is depth: `/lets:check` asks no AskUserQuestion gate and spawns no subagent - one reviewer verifies its own findings, inline or, in a team worktree, the team's live skeptic member (a message to an existing agent, never a spawn); `/lets:review` dispatches expert agents.
 
 ## Usage
 
@@ -23,6 +23,7 @@ Fast inline sanity check from 6 perspectives. Same target selection as `/lets:re
 /lets:check --spec <path>        # use this file as the spec (or a bare task id)
 /lets:check --spec none          # there is deliberately no spec - no spec block, no caveat
 /lets:check ... --fix            # verify each finding, then apply the fixes when nothing needs deciding (not with --json)
+/lets:check ... --solo           # in a team worktree: inline, not on the team's skeptic member
 ```
 
 ## When to Use
@@ -55,7 +56,20 @@ Parse the argument(s):
 
 `--spec` is the other modifier: `--spec <path>` uses that file, `--spec none` declares there is no spec, a bare task id resolves through the tracker. It short-circuits Step 2's resolution entirely. **`/lets:check` asks no question about this and never will** - `/lets:review` has the picker because it is the considered checkpoint, run once or twice; check is fired repeatedly while writing code and takes the flag instead. Same control, no interruption.
 
-**This command never dispatches subagents in any mode** - all review is inline (Step 3's 6 lenses). PR and file modes just change what gets fed to those lenses.
+`--solo` keeps the pass inline in a team worktree (**Team mode** below).
+
+**In every mode check spawns no subagent: one reviewer verifies its own findings - inline, or in a team worktree the team's live skeptic member (a message to an existing agent, never a spawn)** - **Team mode** below. PR and file modes just change what gets fed to Step 3's 6 lenses.
+
+### Team mode (team worktree)
+
+Read `${CLAUDE_PLUGIN_ROOT}/protocol/agents.md` (`## Team mode`) before this branch unless its text is in your current context. Runs for the local modes, `--file` and `--plan` - here in Step 0, so `--plan` reaches it before Plan Mode branches off.
+
+- PR mode stays inline: it needs `gh` / `bbb`, which the skeptic's Bash allowlist (`git log/blame/show/diff, ls, find, wc, cat, head, tail` - identical for every analyst, pinned by agentreport_test.go's `reportOnlyWrite`) does not grant; in a team worktree (`lets worktree info --json` reports a `team`) one line `PR check: inline - the team skeptic cannot fetch a PR`.
+- `--solo` or `--json` -> inline (`--json`: tooling needs the result in this turn).
+- Otherwise `Skill(skill: "lets:member-run", args: "op=route command=check roles=skeptic ask=no fallback=inline")`. `TEAM off`, or the skeptic line is not `member` -> continue inline exactly as today, with no question.
+- A member line -> the lead resolves only references - the mode, the printed `BASE` (`--branch`: Step 1's guard prints it), the file or plan path, the spec source (`--spec` value; a tracker spec: the lead runs `show` and injects the description fenced and sanitized as Step 2 does - tracker verbs are orchestrator-only) - then `Skill(skill: "lets:agent-report", args: "op=open command=check task={task-id} names=skeptic")` and ONE brief to the member, written to `.lets/cache/route-<REPORT_DIR basename>-<name>.md` (line 1 its `REPORT_FILE:`) and sent with `Skill(skill: "lets:member-run", args: "op=next scope=<c> name=<name> id=<agentId> brief-file=<brief> report-file=<path>")`: those references, the absolute path of this file (`${CLAUDE_PLUGIN_ROOT}/commands/check.md`), and the section to run - code modes: "run Step 2 through Step 3.5 of that file yourself with only `git diff` / `cat` (the diff command for the mode is named in Step 1; the BASE is given) - apply the six lenses, then verify each of your own findings CONFIRMED / REFUTED / UNCLEAR with the `file:line` you read; write the Step 4 report body"; `--plan`: "run that file's Plan Mode on the plan path given - its five lenses, or the idea-document lenses for an idea file - then verify each issue the same way; write the plan-check report body".
+- Then `Skill(skill: "lets:member-run", args: "op=receive scope=<c> name=<name> id=<agentId> brief-file=<brief> report-file=<path>")` (with `dismissed` when `## 7` now holds a `Dismissed:` line for it) - READ EVERY REPORT IN FULL. `RECEIVED` -> render the member's report (Step 4 / Plan Mode output) and skip the inline lenses; `WAITING` / `NUDGED` -> print `waiting for <c>-<name>: <report path>` and end the turn (`## Team mode` item 5); `GAP` -> say so and run inline; `member_busy` on the `op=next` -> run inline, with one line.
+- Step 5.5 / Plan Mode `--fix` applies only CONFIRMED findings, by the lead.
 
 ## Plan Mode (--plan)
 
@@ -339,11 +353,13 @@ Classify each finding:
 
 ## Step 3.5: Verify Findings (--fix only)
 
-Without `--fix`, skip. check sends no skeptic (fact 1 in What This Is NOT), so verify inline: for each reported issue Read the cited `file:line` and what it depends on again - never from memory of Step 3 - and mark `CONFIRMED` / `REFUTED` / `UNCLEAR` with the `file:line` read. This is self-verification: it catches a misread line, not a blind spot - `/lets:review --fix` is the stronger path for a risky change.
+Without `--fix`, skip. Inline: check spawns no subagent (fact 1 in What This Is NOT) - one reviewer verifies its own findings; in a team worktree the skeptic member runs this pass inside its brief (Step 0 **Team mode**). So verify inline: for each reported issue Read the cited `file:line` and what it depends on again - never from memory of Step 3 - and mark `CONFIRMED` / `REFUTED` / `UNCLEAR` with the `file:line` read. This is self-verification: it catches a misread line, not a blind spot - `/lets:review --fix` is the stronger path for a risky change.
 
 ## Step 4: Present Results
 
 **If `--json` was set, skip this step - go to Step 4.5 instead.**
+
+**Team mode:** a `RECEIVED` member report (Step 0 **Team mode**) is the result body - present it in the format below.
 
 ### Output Format
 
@@ -414,7 +430,7 @@ If clean (no issues) - skip, don't add noise to the task.
 
 ## Step 5.5: Apply Fixes (--fix only)
 
-Build the `apply-fixes` table from Step 3.5 - Remedy in your own words - and invoke `Skill(skill: "lets:apply-fixes", args: "source=check mode=<local|staged|last-commit|branch|pr|file|plan> base=<BASE> path=<path>")`: `base` is the Step 1 `BASE` for `--branch`; in PR mode list the changed files of the PR diff Step 1 fetched, taken from that diff, in the conversation (`apply-fixes` PR scope) - never a new fetch, never a local merge-base; `path` for `--file` / `--plan`. Its output replaces the Output box.
+Build the `apply-fixes` table from Step 3.5 - in team mode from the member report's CONFIRMED findings only - Remedy in your own words - and invoke `Skill(skill: "lets:apply-fixes", args: "source=check mode=<local|staged|last-commit|branch|pr|file|plan> base=<BASE> path=<path>")`: `base` is the Step 1 `BASE` for `--branch`; in PR mode list the changed files of the PR diff Step 1 fetched, taken from that diff, in the conversation (`apply-fixes` PR scope) - never a new fetch, never a local merge-base; `path` for `--file` / `--plan`. Its output replaces the Output box.
 
 ## Output
 
@@ -459,19 +475,20 @@ Skip the box entirely when `--json` was set. With `--fix`, `apply-fixes` renders
 ## Rules
 
 - Respond in user's language
+- In a team worktree the pass goes to the team's live skeptic member (Step 0 **Team mode**); `--solo`, `--json` and PR mode stay inline
 
 ## What This Is NOT
 
 **The rule these two commands are kept consistent by.** Every difference between `/lets:check` and `/lets:review` must be derivable from one of exactly TWO facts:
 
-1. **check dispatches no subagents** - so no skeptic, no adversarial pass, and nothing to withhold a block from;
+1. **check spawns no subagent: one reviewer verifies its own findings - inline, or in a team worktree the team's live skeptic member (a message to an existing agent, never a spawn)** - so no independent skeptic, no adversarial pass, and nothing to withhold a block from;
 2. **check is fired repeatedly while writing code** - so it never asks a question (flags instead) and never moves your HEAD.
 
 Anything else that differs is drift, not design. Three such drifts were found and removed at once: the PR body reaching review but not check, the discussion reaching neither, and a spec cap that was smaller in the cheaper command. When adding to either file, name which of the two facts a new difference comes from - if neither fits, the other command needs the same change.
 
-`--fix` is one surface in both files, defined in `skills/apply-fixes`. Its one difference - check verifies inline (Step 3.5) where review sends skeptics - comes from fact 1; it asks nothing and moves no HEAD, per fact 2.
+`--fix` is one surface in both files, defined in `skills/apply-fixes`. Its one difference - check's one reviewer verifies its own findings (Step 3.5, inline or the team's skeptic member) where review sends independent skeptics - comes from fact 1; it asks nothing and moves no HEAD, per fact 2.
 
-- NOT multi-agent - inline review only, no subagent dispatch in ANY mode (that's the one thing that never changes vs `/lets:review`)
+- NOT multi-agent - in ANY mode check spawns no subagent: one reviewer verifies its own findings - inline, or in a team worktree the team's live skeptic member (a message to an existing agent, never a spawn) (that's the one thing that never changes vs `/lets:review`)
 - NOT saved to file - console only (`--json` emits to console too, for tooling)
 - NOT a substitute for `/lets:review` on large changes - same target surface, shallower analysis
 
@@ -488,7 +505,7 @@ Same flags as `/lets:review` (`--local`, `--staged`, `--last-commit`, `--branch`
 
 ## Notes
 
-- Inline review - no subagent overhead, fast feedback
+- One reviewer, no subagent spawned - fast feedback
 - Focus on actionable issues only - this is a helper, not a blocker
 - No false positives - when in doubt, skip it
 - Be direct, no hedging
