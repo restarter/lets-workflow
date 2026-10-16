@@ -14,7 +14,7 @@ Every `/lets:*` command, grouped. For the day-to-day flow see **[workflow.md](wo
 | `/lets:orc` | Talk to this chat's orchestrator or a named peer session — `ask`, `ping`, `read`, `tell`, `who`, and from an orchestrator `standing on|off` (at `strict`, a bound pair talks both ways without per-message confirmation); at `standard` / `minimal` your sessions talk without per-message confirmation once Go verifies the sender (`lets peers sender`), and hard gates stay at every level; the only sender of peer messages. See [commands/orc.md](commands/orc.md). |
 | `/lets:peer` | `/lets:peer <name> <ask\|ping\|read\|tell\|who> [text]` — the alias of `/lets:orc` with a named target. |
 | `/lets:hub` | Orca addon (`LETS_LAUNCHER=orca`): lists the orchestrators of every project Orca knows, asks a stopped one a read-only question through a narrowed headless fork (plan mode, Read/Grep/Glob, no MCP), and wakes one in a visible Orca terminal for anything that needs its gates. |
-| `/lets:note` | Add a note to the active task — a decision, gotcha, fact, or reference. `/lets:note <free text>` uses the text directly; bare `/lets:note` asks for the note type. `--session` (same aliases) writes the same recovery snapshot `/lets:end` does, without ending anything. |
+| `/lets:note` | Add a note to the active task — a decision, gotcha, fact, or reference. `/lets:note <free text>` uses the text directly; bare `/lets:note` asks for the note type. `--session` (same aliases) writes the same recovery snapshot `/lets:end` does, without ending anything. `--team [text]` (in a team worktree) writes a decision into the team file's Decisions or a fact into its Standing knowledge, for the next task of the team. |
 
 See **[tasks.md](tasks.md)** for the task lifecycle.
 

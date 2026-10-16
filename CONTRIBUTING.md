@@ -203,7 +203,7 @@ The maintained per-command table (core keeps only the flow table and the auto-tr
 | `/lets:hub` | Utility | Orca addon (needs `LETS_LAUNCHER=orca`): every project's orchestrators, a read-only answer from a stopped one, wake one for gated work |
 | `/lets:statusline` | Utility | Manage & persist statusline appearance - light/dark, compact, hidden rows (writes personal `.claude/settings.local.json`) |
 | `/lets:team` | Utility | Team management - `run` (one visible session per task, any launcher), `create` / `disband` a standing team, `spawn` / `dismiss` / `roster` its members, `status`, `stop` |
-| `/lets:note` | Utility | Add note to active task (`--session`, aliases `--snapshot` / `--pre-compact` / `--compact` = resume snapshot on request, one path) |
+| `/lets:note` | Utility | Add note to active task (`--session`, aliases `--snapshot` / `--pre-compact` / `--compact` = resume snapshot on request, one path; `--team` = a fact or decision into the team file, team worktree only) |
 | `/lets:init`    | Setup | Per-project initialization. Re-run for self-heal (drift fix) or to change config; offers the user-scope global-rules install (`lets init --user`) when the plugin is user-scoped |
 | `/lets:update`  | Setup | Sync project with the current release - `.lets/.env` + rules self-heal, plus version status for the `lets` binary and the plugin; the global rules are only reported (the session hook keeps them current) |
 
