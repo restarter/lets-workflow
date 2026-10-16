@@ -165,8 +165,11 @@ func delegatedContractProblems(f map[string]string) []string {
 			add("the Step 4.6 anchor check must be a warning against BASE naming " + need)
 		}
 	}
-	if peek, collect := strings.Index(anchor, "`op=peek`"), strings.Index(anchor, "`op=collect ... retry=no`"); peek < 0 || collect < peek || !strings.Contains(anchor, "`op=correct`") {
-		add("the Step 4.6 anchor check reads a member-run explorer by peek, one op=correct nudge, then op=collect retry=no - never an agent-report retry")
+	// lets-mpjhc: the anchor check routes (ask=no, fallback=inline - nothing is spawned
+	// before Start) and reads a member through op=receive; receive's own order (peek,
+	// one nudge, collect retry=no) is pinned once, on member-run Step 6.
+	if !strings.Contains(anchor, "`Skill(skill: \"lets:member-run\", args: \"op=route command=execute roles=explorer ask=no fallback=inline\")`") || !strings.Contains(anchor, `args: "op=receive scope=<callsign> `) || !strings.Contains(anchor, "never a retry") {
+		add("the Step 4.6 anchor check routes with ask=no fallback=inline and reads a member explorer with member-run op=receive - never an agent-report retry")
 	}
 	if !strings.Contains(split, "`CI CHECKS:`") || !strings.Contains(split, "CI workflow") || !strings.Contains(split, "Makefile") {
 		add("Step 4.6 must take the brief's CI CHECKS from the CI workflow and the Makefile")
@@ -251,14 +254,16 @@ func delegatedContractProblems(f map[string]string) []string {
 			who = who[:end]
 		}
 	}
-	if peek, collect := strings.Index(who, "op=peek"), strings.Index(who, "op=collect"); peek < 0 || collect < peek || strings.Count(who, "op=collect") != strings.Count(who, "retry=no") || !strings.Contains(who, "`op=correct`") || strings.Contains(who, "ONE retry") {
-		add("the team check must peek, nudge once through op=correct, then op=collect retry=no - a member-run member is never retried by agent-report")
+	// lets-mpjhc: the team check routes (fallback=run) and reads every verdict with
+	// member-run op=receive; receive's peek / nudge / collect order is pinned on member-run.
+	if !strings.Contains(who, "`Skill(skill: \"lets:member-run\", args: \"op=route command=execute roles=explorer,skeptic fallback=run\")`") || !strings.Contains(who, `args: "op=receive scope=<the line's scope> `) || strings.Contains(who, "op=peek") || strings.Contains(who, "op=collect") || !strings.Contains(who, "never retried by agent-report") || strings.Contains(who, "ONE retry") {
+		add("the team check must route through op=route (fallback=run) and read each verdict with member-run op=receive - a member-run member is never retried by agent-report")
 	}
-	if !strings.Contains(who, "`Dismissed: <name>`") || !strings.Contains(who, "`ListAgents` lists `<callsign>-<name>`") {
-		add("the team check must skip a standing member that is not listed or recorded Dismissed: by this lead session")
+	if !strings.Contains(who, "`Dismissed: <name>`") || !strings.Contains(who, "`analysts.<role>.dismissed`") || strings.Contains(who, "`ListAgents` lists `<callsign>-") {
+		add("the team check must pass dismissed for a member recorded Dismissed: by this lead session or analysts.<role>.dismissed - never a ListAgents name test")
 	}
-	if !strings.Contains(exec, "read in the team check's member order: `op=peek`, one nudge through `op=correct`, then `op=collect ... retry=no`") {
-		add("the allowlist architect is a member-run member: read it in the team check's member order, never retried")
+	if !strings.Contains(exec, "read with `op=receive` as the team check reads its members, never retried by agent-report") {
+		add("the allowlist architect is a member-run member: read it with op=receive as the team check does, never retried")
 	}
 
 	dispatch := between(exec, "### 5-D.4 Dispatch - in plan order", "### 5-D.5 Review")
@@ -304,13 +309,14 @@ func delegatedContractProblems(f map[string]string) []string {
 	if !strings.Contains(record, "every later member-run call of that member passes `id={agent_id}`") || !strings.Contains(record, "a member recorded `dismissed` is never messaged") {
 		add("the run record must say every member-run call passes id={agent_id} and a dismissed member is never messaged")
 	}
-	// Every implementer call carries its recorded id; the run's analysts are addressed by name.
+	// lets-mpjhc: every member-run call carries its recorded id - implementer AND analyst;
+	// only op=spawn (which returns the id) and op=route (no member yet) go without one.
 	for _, m := range runMemberCall.FindAllStringSubmatch(exec, -1) {
 		switch name, rest := m[2], m[3]; {
 		case name == "{agent}" && !strings.Contains(rest, "id={agent_id}"):
 			add("every implementer member-run call (op=" + m[1] + ") carries id={agent_id}: " + m[0])
-		case name != "{agent}" && strings.Contains(rest, "id="):
-			add("an analyst member-run call carries no id - it goes by name: " + m[0])
+		case name != "{agent}" && !strings.Contains(rest, "id="):
+			add("every analyst member-run call (op=" + m[1] + ") carries id={agent_id}: " + m[0])
 		}
 	}
 	if !strings.Contains(exec, "`TaskStop(task_id=<the group's agent_id, else {agent}>)`") {
@@ -332,9 +338,9 @@ func delegatedContractProblems(f map[string]string) []string {
 		}
 	}
 	recovery := sectionSpan(exec, "### 5-D.7 Recovery (a run record exists)")
-	for _, need := range []string{"**Liveness comes from `ListAgents`**", "never from the record", "`dismissed`", "never messaged", "`{agent}` not listed (a recorded `agent_id` -> first the idle row's path through member-run with `id={agent_id}`; `agent_gone` -> this row)", "and no `agent_id` is recorded (or a correction by `id={agent_id}` returns `agent_gone`)", "or an `agent_id` recorded (sent by id)"} {
+	for _, need := range []string{"**Liveness comes from the recorded id**", "`ListAgents` only says busy (`running`)", "returns `agent_gone`", "`dismissed`", "never messaged", "`{agent}` not running (its id is not listed `running`", "otherwise the idle row's path by `id={agent_id}`", "and no `agent_id` is recorded (or a correction by `id={agent_id}` returns `agent_gone`)", "or an `agent_id` recorded (sent by id)"} {
 		if !strings.Contains(recovery, need) {
-			add("5-D.7 must judge liveness by ListAgents and never message a dismissed member: " + need)
+			add("5-D.7 must judge liveness by the recorded id and never message a dismissed member: " + need)
 		}
 	}
 	if strings.Contains(recovery, "SendMessage(") {
@@ -567,7 +573,7 @@ func TestMemberRun(t *testing.T) {
 		{"integrated_source moves on a report", "execute", "it moves only after the lead's commit", "it moves on each report", "only after the lead's commit", 1},
 		{"bare integrated field", "execute", `"integrated_source": null`, `"integrated": null`, "bare integrated", 1},
 		{"addendum heading dropped", "execute", "`## Allowlist addendum`", "`## Extra paths`", "addendum", 1},
-		{"a recorded id is never tried", "execute", "`{agent}` not listed (a recorded `agent_id` -> first the idle row's path through member-run with `id={agent_id}`; `agent_gone` -> this row)", "`{agent}` not listed", "judge liveness by ListAgents", 1},
+		{"a recorded id is never tried", "execute", "otherwise the idle row's path by `id={agent_id}`", "otherwise", "judge liveness by the recorded id", 1},
 		{"dismissed member messaged", "execute", "A member recorded `dismissed` is never messaged.", "A member recorded `dismissed` is asked to report.", "never message a dismissed member", 1},
 		{"parallel allowed alone", "execute", "it needs `--implementers` / `--team`", "it runs alone", "--parallel must need", 1},
 		{"groups inferred", "execute", "The shape is never inferred", "The shape is inferred", "declare parallel groups", 1},
@@ -579,10 +585,10 @@ func TestMemberRun(t *testing.T) {
 		{"step 3 sends by name", "skill", "puts the `id` where it says `{agent}`", "puts the name where it says `{agent}`", "send to the id", 1},
 		{"dismiss stops by name", "skill", "`TaskStop(task_id=\"{agent}\")` - the `id` when passed", "`TaskStop(task_id=\"{name}\")`", "stop a member by the id", 1},
 		{"next drops the id", "execute", `args: "op=next scope=run-{RUN} name={agent} id={agent_id} brief-file=`, `args: "op=next scope=run-{RUN} name={agent} brief-file=`, "carries id={agent_id}", 1},
-		{"an analyst gets an id", "execute", "## Step 6: Record Completion", "`Skill(skill: \"lets:member-run\", args: \"op=next scope=run-{RUN} name=explorer-{RUN} id=x brief-file=b report-file=r\")`\n\n## Step 6: Record Completion", "carries no id", 1},
+		{"an analyst loses its id", "execute", "## Step 6: Record Completion", "`Skill(skill: \"lets:member-run\", args: \"op=next scope=run-{RUN} name=explorer-{RUN} brief-file=b report-file=r\")`\n\n## Step 6: Record Completion", "every analyst member-run call", 1},
 		{"return drops the id", "skill", "Return: `spawned {agent} on {model}, id {agent_id}`", "Return: `spawned {agent} on {model}`", "Return line", 1},
 		{"dismiss keeps agent_id", "execute", "record `dismissed: true` and `agent_id: null` in ONE record write, then the call", "record `dismissed: true` in ONE record write, then the call", "agent_id: null", 1},
-		{"who checks forgets Dismissed", "execute", " and the team file's `## 7. Current task` holds no `Dismissed: <name>` line by this lead session", "", "Dismissed:", 1},
+		{"who checks forgets Dismissed", "execute", " - passing `dismissed` when the member is recorded dismissed now (a team member line: a `Dismissed: <name>` line by this lead session in the team file's `## 7. Current task`; a run analyst: `analysts.<role>.dismissed`)", "", "Dismissed:", 1},
 		{"stop goes by name only", "execute", "`TaskStop(task_id=<the group's agent_id, else {agent}>)`", "`TaskStop(task_id=\"{agent}\")`", "agent_id, else the name", 1},
 		{"member-run calls lets members again", "skill", "## Step 1: Model panel", "```bash\nlets members status --scope {scope} --json\n```\n\n## Step 1: Model panel", "no lets members verb", 1},
 		{"cleanup deletes before dismissing", "execute", "1. `member-run` `op=dismiss` FIRST", "1. `member-run` `op=dismiss` last", "dismiss first", 1},
@@ -611,10 +617,11 @@ func TestMemberRun(t *testing.T) {
 		{"the resend goes back to op=next", "execute", "`member-run` `op=correct` with it as `correct-file=`", "`member-run` `op=next` with it", "never op=next", 1},
 		{"a nudge advances the round", "execute", "only a correction advances `round`", "every op=correct advances `round`", "keeps the round", 1},
 		{"rehydration re-runs the work", "execute", "Do not re-run Verify and do not change the work.", "", "without re-running Verify", 1},
-		{"the team check retries an analyst", "execute", "names=run-{TASK_ID}-{RUN}-{chunk}-{member}-n{round} retry=no\")`", "names=run-{TASK_ID}-{RUN}-{chunk}-{member}-n{round}\")`", "never retried by agent-report", 1},
-		{"the team check collects before its peek", "execute", "Each verdict is read in the member order - peek, one nudge, collect: on every notification from the member, `Skill(skill: \"lets:agent-report\", args: \"op=peek", "Each verdict is read in the member order - peek, one nudge, collect: on every notification from the member, `Skill(skill: \"lets:agent-report\", args: \"op=skim", "never retried by agent-report", 1},
-		{"the anchor check retries its explorer", "execute", "then `op=collect ... retry=no`; never a retry, since nothing is spawned before Start", "then `op=collect`", "never an agent-report retry", 1},
-		{"the architect is retried", "execute", "then `op=collect ... retry=no`; a `GAP` is shown as \"no verdict\"", "then `op=collect`; a `GAP` is shown as \"no verdict\"", "never retried", 1},
+		{"the team check retries an analyst", "execute", "A member-run member is never retried by agent-report", "A member-run member is retried once by agent-report", "never retried by agent-report", 1},
+		{"the team check reads its own way again", "execute", `args: "op=receive scope=<the line's scope> `, `args: "op=peek scope=<the line's scope> `, "read each verdict with member-run op=receive", 1},
+		{"the anchor check retries its explorer", "execute", `args: "op=receive scope=<callsign> name=<name> id=<agentId> brief-file=<its brief>`, `args: "op=collect scope=<callsign> name=<name> id=<agentId> brief-file=<its brief>`, "never an agent-report retry", 1},
+		{"the anchor check may spawn", "execute", "op=route command=execute roles=explorer ask=no fallback=inline", "op=route command=execute roles=explorer fallback=run", "never an agent-report retry", 1},
+		{"the architect is retried", "execute", "read with `op=receive` as the team check reads its members", "read with `op=collect` as the team check reads its members", "never retried", 1},
 	}
 	for _, m := range mutants {
 		t.Run(m.name, func(t *testing.T) {
@@ -848,9 +855,9 @@ func gatePolicyProblems(exec string) []string {
 	if strings.Contains(exec, "`worktree.team`") {
 		add("the team check must read the info envelope's top-level team field, never worktree.team")
 	}
-	for _, need := range []string{"the top-level `team` field set", "`op=next scope=<callsign> name=explorer|skeptic`", "Only when the team has no live one", "`explorer-{RUN}` / `skeptic-{RUN}`"} {
+	for _, need := range []string{"the top-level `team` field set", "op=route command=execute roles=explorer,skeptic fallback=run", "`explorer-{RUN}` / `skeptic-{RUN}`"} {
 		if !strings.Contains(team, need) {
-			add("in a team worktree the team check must reuse the standing team's live explorer / skeptic first: " + need)
+			add("in a team worktree the team check must route through member-run op=route (fallback=run) before the run's own explorer / skeptic: " + need)
 		}
 	}
 	const runReview = "### 5-D.8 Run review (`at-end` and `high-only`)"
@@ -901,7 +908,7 @@ func TestExecuteGatePolicy(t *testing.T) {
 		{"extension point lost", "a new policy is a new row, never a new code path", "a new policy gets its own step", "new row"},
 		{"skeptic pinned to a model", "`role=lets:skeptic`", "`role=lets:skeptic model=opus`", "pins a model"},
 		{"team read from worktree.team", "the top-level `team` field set", "`worktree.team` set", "top-level team"},
-		{"team explorer not reused", "`op=next scope=<callsign> name=explorer|skeptic`", "`op=spawn scope=run-{RUN}`", "standing team"},
+		{"team explorer not reused", "op=route command=execute roles=explorer,skeptic fallback=run", "op=spawn scope=run-{RUN}", "op=route"},
 		{"accepted_by loses team", "`accepted_by` is `owner` or `team`", "`accepted_by` is `owner`", "accepted_by"},
 	}
 	for _, m := range mutants {
