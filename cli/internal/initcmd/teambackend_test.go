@@ -171,6 +171,14 @@ func TestTeamBackend_Members(t *testing.T) {
 	if strings.Contains(team, "Agent(") {
 		t.Error("team.md never calls the Agent tool - members go through member-run")
 	}
+	for _, l := range strings.Split(team, "\n") {
+		if strings.Contains(l, "--name '<worker_name>'") && strings.Contains(l, "--agent") {
+			t.Errorf("/lets:team run launches workers with the bare agent_command - never with --agent (lets-1r00e): %s", strings.TrimSpace(l))
+		}
+	}
+	if m16 := between(team, "6. **Brief.**", "7. **Spawn.**"); !strings.Contains(m16, "Your FIRST message to the lead, before any work, announces you: `STATUS: <c>-<name> online - <role> (lets:<role>)`") || !strings.Contains(m16, "`RESULT: the routes you answer and the task you read in section 7 (or no current task)`") {
+		t.Error("the M1.6 spawn brief makes every member announce its name, role and routes first (lets-1w0tz)")
+	}
 	const spawnCall = `Skill(skill: "lets:member-run", args: "op=spawn `
 	if n, calls := strings.Count(team, "op=spawn"), strings.Count(team, spawnCall); calls == 0 || n != calls {
 		t.Errorf("every spawn goes through %s (op=spawn %d, calls %d)", spawnCall, n, calls)
@@ -326,6 +334,20 @@ func TestTeamBackend_WorktreeTeam(t *testing.T) {
 	}
 	if n := strings.Count(team, `--command "$CMD"`); n < 2 {
 		t.Errorf("cmux/tmux and orca both launch through the heredoc, found %d", n)
+	}
+	// lets-1r00e: the lead starts as the lets:lead agent; agent_command stays role-neutral
+	// because /lets:team run launches workers with it.
+	for _, form := range []string{
+		"  {agent_command} --agent lets:lead --name '<lead_name>' '/lets:start'",
+		"`cd \"<path>\" && {agent_command} --agent lets:lead --name '<lead_name>' '/lets:start'`",
+		"  {orca_agent} --agent lets:lead --name '<lead_name>' '/lets:start'",
+	} {
+		if !strings.Contains(team, form) {
+			t.Errorf("the lead launches as lets:lead - missing %q", form)
+		}
+	}
+	if all, lead := strings.Count(team, "--name '<lead_name>' '/lets:start'"), strings.Count(team, "--agent lets:lead --name '<lead_name>' '/lets:start'"); all != lead {
+		t.Errorf("every lead launch form carries --agent lets:lead (%d of %d)", lead, all)
 	}
 	if !strings.Contains(team, "ends in `/team_<c>`") || !strings.Contains(team, "branch --show-current` prints `team_<c>`") {
 		t.Error("the created path must be asserted to end in /team_<c>")

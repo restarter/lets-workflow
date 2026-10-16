@@ -21,8 +21,9 @@ import (
 	"github.com/restarter/lets-workflow/cli/internal/teamfile"
 )
 
-// TeamInitOptions configures TeamInit. AgentCommand is how the lead is launched
-// (default `claude`); OrcaAgent is the shell command an Orca lead terminal runs
+// TeamInitOptions configures TeamInit. AgentCommand is how the team's sessions start
+// (the lead's launch line adds --agent lets:lead; /lets:team run uses it for workers
+// as is) (default `claude`); OrcaAgent is the same for an Orca terminal
 // (default `claude`). LaunchMode (default | auto | all-in, lets-d3wu3) renders both
 // through LaunchCommand when they were not given explicitly - an explicit command
 // wins. Suggest only proposes a free callsign and writes nothing;
