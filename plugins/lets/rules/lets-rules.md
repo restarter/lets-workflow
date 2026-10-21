@@ -1,6 +1,6 @@
 ---
 name: lets-rules
-version: 0.11.0
+version: 0.11.1
 ---
 
 <!-- DO NOT EDIT - managed by lets init / lets install. Custom rules go in a sibling *.md in this directory (e.g. .claude/rules/team-conventions.md); `lets-*` files are plugin-owned and overwritten on update. -->

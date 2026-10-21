@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-10-21
+
 ### Added
 - **A team's lead picks its members at start, and members announce themselves (lets-1w0tz, lets-7k6ae).** A new team file's roster holds only the lead. When no member is reachable, the lead's `/lets:start` asks (once per lead session - lets-mpjhc) which to spawn - architect + skeptic + explorer (recommended), skeptic + explorer, or none - and adds the picked roles to the roster; once the roster has rows it is offered first. Every member's first message states its name, role and the routes it answers. Existing team files are never rewritten.
 - **`/lets:note --team` writes a fact or a decision into the standing team's file (lets-phm2v).** In a team worktree, a decision goes to the team file's `## 8. Decisions` (dated: who, what, why) and a fact that outlives the task to `## 9. Standing knowledge`, by the same criteria as the memory triggers; one line says where (`Noted to <team> §9: ...`). It needs no active task and touches neither the tracker nor memory. Outside a team worktree it writes nothing and says so. At task close `/lets:done`'s promote step skips what is already there.
@@ -699,7 +701,8 @@ Initial release with expert agents team.
 - SessionStart hook injecting workflow rules
 - Plugin structure: commands, agents, hooks
 
-[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.11.1...HEAD
+[0.11.1]: https://github.com/restarter/lets-workflow/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/restarter/lets-workflow/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/restarter/lets-workflow/compare/v0.9.3...v0.10.0
 [0.9.3]: https://github.com/restarter/lets-workflow/compare/v0.9.2...v0.9.3
