@@ -1,6 +1,6 @@
 # Expert agents
 
-LETS ships 15 specialized agents, plus `lead` - the agent a standing team's lead session runs as. You don't have to pick them — the commands that use agents (`/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:backlog`, `/lets:research`) analyze the situation and select only the ones that fit; a standing team's lead spawns its members by role with `/lets:team spawn <role>`. The one place you name an expert yourself is `/lets:ask <expert> <question>`.
+LETS ships 15 specialized agents. You don't have to pick them — the commands that use agents (`/lets:review`, `/lets:opinion`, `/lets:ask`, `/lets:plan`, `/lets:backlog`, `/lets:research`) analyze the situation and select only the ones that fit; a standing team's lead spawns its members by role with `/lets:team spawn <role>`. The one place you name an expert yourself is `/lets:ask <expert> <question>`.
 
 | Agent | Expertise | Example trigger |
 |-------|-----------|-----------------|
@@ -17,9 +17,8 @@ LETS ships 15 specialized agents, plus `lead` - the agent a standing team's lead
 | git-historian | Blame analysis, change patterns | Changes to existing code |
 | explorer | Codebase mapping, pattern discovery | Used during `/lets:plan` |
 | implementer | Full-stack implementation | Used by `/lets:execute` delegated runs and a standing team's `/lets:team spawn implementer` |
-| skeptic | Verifier: tries to refute one finding or claim against the code / sources | The `/lets:review` verify pass, the `/lets:research` cross-check, and a session decision that meets the CLAIM bar; never picked as a reviewer |
+| skeptic | Verifier: tries to refute findings or a claim against the code / sources, each judged on its own | The `/lets:review` verify pass, the `/lets:research` cross-check, a session decision that meets the CLAIM bar, and a standing team's `/lets:check`; never picked as a `/lets:review` lens |
 | actor | Any personality from a URL or file | On explicit request |
-| lead | The standing team's lead: coordinates, routes, delegates code to implementers by default | Runs a whole lead session (`claude --agent lets:lead`), never a subagent |
 
 ## How agents work
 
@@ -29,13 +28,23 @@ LETS ships 15 specialized agents, plus `lead` - the agent a standing team's lead
 
 **Multiple modes.** Each agent behaves differently depending on context: *review* mode for code review, *opinion* mode for technical decisions, *plan* mode for evaluating an architecture, *brainstorm* mode for ideation, *ask* mode for a direct question.
 
-**Read-only by default.** Agents analyze; they never modify code. The one exception is `implementer`, which has write access: `/lets:execute` hands it plan chunks you review and correct. It works in one of two modes, named by its brief: **solo** - in your task worktree, one persistent implementer taking chunk after chunk, never committing (the lead commits after the chunk is accepted; under `--pipelined` it commits locally); **isolated** - with `--parallel`, in its own harness worktree switched once to the task branch's HEAD, committing each chunk there for `lets integrate` to land in your tree. Every implementer and every standing-team member is spawned, messaged and dismissed through one path (the `member-run` skill); the harness's `ListAgents` shows who is live, and the run record or the team file keeps each member's address and dismissal. Each agent writes its report to a file under `.lets/reports/` that the command reads in full, so a long report is never cut and a report that never arrives is shown as a gap, not as a clean result; the only file an analyst writes is that report.
+**Read-only by default.** Agents analyze; they never modify code. The one exception is `implementer`, which has write access: `/lets:execute` hands it plan chunks you review and correct. It works in one of two modes, named by its brief: **solo** - in your task worktree, one persistent implementer taking chunk after chunk, never committing (the lead commits after the chunk is accepted; under `--pipelined` it commits locally); **isolated** - with `--parallel`, in its own harness worktree switched once to the task branch's HEAD, committing each chunk there for `lets integrate` to land in your tree. Every implementer and every standing-team member is spawned, messaged and dismissed through one path (the `member-run` skill); the run record or the team file keeps each member's agent id and dismissal, and a member is reached by that id - the harness's `ListAgents` only shows who is busy. Each agent writes its report to a file under `.lets/reports/` that the command reads in full, so a long report is never cut and a report that never arrives is shown as a gap, not as a clean result; the only file an analyst writes is that report.
 
 **Agents respond in English.** Commands localize their output to your language (set by `LETS_LANGUAGE` — see [configuration.md](configuration.md)); the agents themselves always work in English.
 
 **Which model they run on.** Agents use the model of your session - no agent is pinned to a named model, so a newer model in your session is a newer model everywhere. There are two exceptions. `explorer` is pinned *down* to Sonnet: mapping a codebase is mechanical work, and a cheaper model there costs nothing in quality. `implementer` in a delegated `/lets:execute` run takes the model you pick once at the start of the run (Opus by default, Fable for the hardest chunks, Sonnet or Haiku when the work is mechanical). The verifier (`skeptic`) deliberately stays on the session model - a weaker verifier tends to answer "not real" when it cannot follow a deep finding, and that would drop genuine `[BLOCKER]`s.
 
 **Asking one expert.** `/lets:ask <expert> <question>` goes straight to the agent you name (`security`, `architect`, `docs`, `pragmatist`, ...); bare `/lets:ask` offers the four most relevant to the conversation.
+
+## Team mode
+
+In a standing team's worktree, the lead's `/lets:plan`, `/lets:review`, `/lets:check`, `/lets:opinion`, `/lets:ask` and `/lets:execute` hand their agent work to the team's members first, instead of starting fresh one-shot agents.
+
+- **Members by id.** Every member the lead spawns is recorded in the team file as `Member: <name> = <agentId> lets:<role> (lead <session6>)`. Commands reach a member by that id, so a member that finished its turn is resumed with its whole history, not respawned cold.
+- **Which member.** A role the team's roster defines goes to its member, one brief per phase. A role the roster lacks (review's security or qa lens, say) runs as a one-shot agent, announced in one line - `security: one-shot - not in the roster`. A busy member never gets a new brief; its work goes to a one-shot instead. A roster role with no live member asks you once per lead session which members to spawn.
+- **Two exceptions.** `/lets:check` hands its whole pass - the lenses and the check of its own findings - to the team's skeptic; PR mode and `--json` stay inline. `/lets:review --plan` keeps the architect lens a one-shot: the plan's designer does not review its own plan.
+- **`--solo`** on any of the six commands runs it as outside a team. `--workflow` runs its own agents, not the team's.
+- A phase whose member has not reported yet ends the turn with `waiting for <c>-<name>: <report path>`; the member's report picks the command up again.
 
 ## The actor agent
 

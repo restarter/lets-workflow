@@ -1,6 +1,6 @@
 ---
 description: Full code review with dynamic agent selection (up to 12 specialized agents). Analyzes changes first, selects relevant experts. Also reviews implementation plans.
-argument-hint: "[PR-url-or-number|--local|--staged|--last-commit|--branch|--plan|--file <path>] [--json] [--workflow] [--spec <path>|none] [--fix]"
+argument-hint: "[PR-url-or-number|--local|--staged|--last-commit|--branch|--plan|--file <path>] [--json] [--workflow] [--spec <path>|none] [--fix] [--solo]"
 ---
 
 # Full Code Review
@@ -28,6 +28,7 @@ Comprehensive code review with dynamic agent selection based on change types. Up
 /lets:review --spec <path>       # Use this file as the spec (skips the "where is the spec?" question)
 /lets:review --spec none         # There is deliberately no spec - review at full strength, no caveat
 /lets:review --branch --fix     # apply the verified fixes when nothing needs deciding (not with --json)
+/lets:review --branch --solo    # in a team worktree: one-shot agents only, not the team's members
 ```
 
 ## Step 1: Determine Review Mode
@@ -82,6 +83,7 @@ If `--json` is present alongside any mode:
 - File: the path from the `artifact-path` skill (`kind=review-{local|branch|pr-{number}} ext=json`) - e.g. `.lets/reviews/2026-08-22-0210-lets-05c4s-review-branch.json`. Task-scoped + `-vN` on collision; `.lets/` is shared across worktrees, so never a hand-built `{date}-{mode}` path
 - Skip markdown report generation (Step 8)
 - Skip GitHub PR comment posting (Step 9) - JSON mode implies the caller handles output
+- In a team worktree `--json` passes `solo` to every route of the run (as `/lets:check`'s `--json` stays inline): a programmatic caller (`/lets:github-pr`) cannot answer the Members question or wait out a member's turn
 
 ### Fix flag
 
@@ -90,6 +92,10 @@ If `--json` is present alongside any mode:
 - With `--json` -> refused, one line: `--fix edits files - --json has no side effects`; stop.
 - PR mode -> only when Step 2.5 found `HEAD == {headRefOid}` without switching. After `SWITCHED` / `CHECKOUT PARTIAL`, or from the diff, drop `--fix` with one line: Step 6.7 restores your branch, so the PR's files are not here to edit.
 - `--plan` -> supported, fixes go into the plan file only (P6.5). `--workflow` -> supported, the fix runs on the W4 aggregate.
+
+### Solo flag
+
+`--solo` keeps the run off the standing team's members: every lens and the verify pass run as one-shot subagents, as outside a team. Team mode itself is `protocol/agents.md` `## Team mode`; `--solo` makes each route call pass `solo`, and so does `--json` (JSON output flag).
 
 ### Workflow execution flag
 
@@ -679,7 +685,9 @@ Skipped for file mode:
 
 Read `${CLAUDE_PLUGIN_ROOT}/protocol/agents.md` before this step unless its text is in your current context.
 
-**If `--workflow` was parsed:** skip this step and Step 6 - go to the `## Workflow Mode (--workflow)` section below, then resume at Step 6.5. The rest of Step 5 is the standard Task-based path.
+**If `--workflow` was parsed:** skip this step and Step 6 - go to the `## Workflow Mode (--workflow)` section below (no route; in a team worktree it prints `team worktree - --workflow runs its own agents, not the team's`), then resume at Step 6.5. The rest of Step 5 is the standard Task-based path.
+
+**Team mode** (`protocol/agents.md` `## Team mode`): `Skill(skill: "lets:member-run", args: "op=route command=review roles=<the selected catalog roles, bare> fallback=one-shot")` first (`--solo` adds `solo`). In practice only roster roles (the architect) go to members, each with one item - its review prompt below; the rest are announced one-shots and run as the Task calls below.
 
 Open the run: `Skill(skill: "lets:agent-report", args: "op=open command=review task={task-id} names={comma-separated selected agent short names}")` (task omitted when none). Each agent's prompt carries its own `REPORT_FILE:` line - the path `op=open` printed for that agent.
 
@@ -768,6 +776,8 @@ CODE:
 
 Runs when `--workflow` was parsed in Step 1 (code modes only). Replaces Step 5 (Task launch) and Step 6 (aggregation): both happen inside the Dynamic Workflow so the per-agent reports never enter this conversation - only the aggregated object returns.
 
+No route (`protocol/agents.md` `## Team mode` item 7): in a team worktree print once `team worktree - --workflow runs its own agents, not the team's`.
+
 ### W1: Preflight
 
 If the `Workflow` tool is NOT available this session, STOP the workflow path and tell the user:
@@ -833,7 +843,7 @@ When the workflow's completion notification arrives, the orchestrator resumes wi
 
 **Workflow mode:** the script already filtered, deduped, separated systemic, sorted, and computed the verdict. Skip this step - the aggregate is in the Workflow return value. Continue at Step 6.5. The `skills/review-workflow/review.workflow.js` script mirrors the filter/dedupe rules below; **keep them in sync** (see the Keep-in-sync note under Step 7).
 
-Wait for all agents, then `Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names={the names opened in Step 5}")`. READ EVERY REPORT IN FULL - the steps below run over the reports read, never over final texts. Keep every `GAP` for Step 8 / 9.
+Wait for all agents, then `Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names={the names opened in Step 5}")`, and each member with `op=receive`. READ EVERY REPORT IN FULL - the steps below run over the reports read, never over final texts. Keep every `GAP` for Step 8 / 9.
 
 1. **Separate systemic first:** Split `[SYSTEMIC]` findings into their own section BEFORE any tier filter. The systemic instruction downgrades tier by one, so a `[SUGGESTION]`-systemic arrives as `[NIT]`; filtering NITs first would drop it before the split can capture it.
 2. **Filter:** From the regular (non-systemic) findings, keep [BLOCKER] and [SUGGESTION]. Include [NIT] only for small diffs (<50 lines)
@@ -865,9 +875,11 @@ Cut false positives before reporting: each finding gets a refutation pass from t
 
 **Scope:** verify `[BLOCKER]` and `[SUGGESTION]` findings only (skip `[NIT]`).
 
+**Team mode** (`protocol/agents.md` `## Team mode`; standard mode only): `Skill(skill: "lets:member-run", args: "op=route command=review roles=skeptic fallback=one-shot")` first (`--solo` adds `solo`; this run passes `team=<c>` from Step 5's route). A member line gets ONE brief with every `[BLOCKER]` and `[SUGGESTION]` as its items - each item the skeptic prompt template below, unchanged (the PR CONTEXT ban below holds for it), plus the line "judge only the CODE below; what you remember of this PR from earlier rounds is not evidence" - and returns one `{real, confidence, reason}` per item. **Member-verdict rule:** `real=false` from the team skeptic drops a SUGGESTION and downgrades a BLOCKER to SUGGESTION - a BLOCKER is never dropped on one vote. This rule REPLACES the Asymmetric drop rule for member verdicts - a member verdict never enters that rule. An OK member report with no verdict for an item -> that item `verify_failed`, kept unverified. No top-K cap and no ">10 -> inline" for the member (those bound this session's context, not the member's). A member `GAP` -> every finding `verify_failed`, kept unverified. The fallback - no skeptic member, or `TEAM off` - is today's pass below: N=2/3 skeptics per finding with today's caps.
+
 **Per finding:** name the skeptics' report files first - `Skill(skill: "lets:agent-report", args: "op=add dir={REPORT_DIR} names=skeptic-f{i}-{k}")` (finding i, skeptic k; every skeptic of the pass in one call) - then launch `lets:skeptic` (via the Task tool in standard mode) N times - **N=2**, or **N=3** for a `[BLOCKER]`, each prompt carrying its own `REPORT_FILE:` line. Each skeptic returns `{real, confidence, reason}` in its report file.
 
-**After the skeptics return** (when this run dispatched skeptics - inline verification above 10 findings dispatches nothing and writes no files): `Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names={the skeptic names}")` - READ EVERY REPORT IN FULL; the drop rule below runs over the reports read. A skeptic `GAP` is an errored skeptic: the finding counts toward `verify_failed` and is kept unverified, never refuted.
+**After the skeptics return** (when this run dispatched skeptics - inline verification above 10 findings dispatches nothing and writes no files): `Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names={the skeptic names}")`, and the skeptic member with `op=receive` - READ EVERY REPORT IN FULL; the drop rule below runs over the fresh skeptics' reports; the member's report goes through the **Member-verdict rule** above. A skeptic `GAP` is an errored skeptic: the finding counts toward `verify_failed` and is kept unverified, never refuted.
 
 **Skeptic prompt template.** The skeptic's spec block is NARROWER than the reviewer's: it returns a verdict and cannot set a tier, so its only lever is `real`. Any reviewer-style "do NOT report this" therefore comes out as `real=false`, which this step maps to a **drop** - a deleted finding, not a softened one. The reviewer's "if the SPEC covers it, do NOT report it as creep" is exactly that shape; the skeptic is told the narrower thing instead (a spec-covered scope finding is not real). It also gets the same REVIEW TREE state as the reviewers; a skeptic on the wrong tree refutes real findings.
 
@@ -929,7 +941,7 @@ Survivors keep their (possibly downgraded) tier.
 
 **Record `refuted_count`** (how many findings the verify pass dropped or downgraded) and surface it in Step 9 + Step 8.5. If any finding could NOT be verified (skeptics errored - `verify_failed` > 0), say so in the output: those findings are kept unverified, not silently treated as clean.
 
-**Keep in sync:** the `skills/review-workflow/review.workflow.js` script implements this same rule in JS (its `decide()`, the Verify stage). Any change here MUST be mirrored there.
+**Keep in sync:** the `skills/review-workflow/review.workflow.js` script implements this same rule in JS (its `decide()`, the Verify stage). Any change here MUST be mirrored there. The team branch is standard-mode only; review.workflow.js does not run it.
 
 ## Step 6.7: Restore the Branch (PR mode only)
 
@@ -1239,6 +1251,8 @@ Selected agents ({N}):
 
 Read `${CLAUDE_PLUGIN_ROOT}/protocol/agents.md` before this step unless its text is in your current context.
 
+**Team mode** (`protocol/agents.md` `## Team mode`): `Skill(skill: "lets:member-run", args: "op=route command=review roles=pragmatist,<domain roles, bare> fallback=one-shot")` first (`--solo` adds `solo`) - never `architect`: the architect lens stays a one-shot, announced `architect: one-shot - the plan's designer does not review its own plan`. A member line gets its role's template below as its one item.
+
 Open the run: `Skill(skill: "lets:agent-report", args: "op=open command=review task={task-id} names=architect,pragmatist,{domain agent short names}")`. Each prompt below carries its agent's `REPORT_FILE:` line right after `ultrathink`.
 
 **CRITICAL: Launch ALL selected agents in a SINGLE message.**
@@ -1400,7 +1414,7 @@ OUTPUT FORMAT:
 
 ### P5: Aggregate & Output
 
-After all agents respond: `Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names=architect,pragmatist,{domain agent short names}")` - READ EVERY REPORT IN FULL; aggregate the reports read, never final texts. An agent `GAP` is rendered under its heading as `_No report ({state}) - this lens was not reviewed._`, never as APPROVED. INCOMPLETE (below) names the lenses that did not review and says to re-run `/lets:review --plan` before treating the plan as approved - a missing lens is never an approval.
+After all agents respond: `Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names=architect,pragmatist,{domain agent short names}")`, and each member with `op=receive` - READ EVERY REPORT IN FULL; aggregate the reports read, never final texts. An agent `GAP` is rendered under its heading as `_No report ({state}) - this lens was not reviewed._`, never as APPROVED. INCOMPLETE (below) names the lenses that did not review and says to re-run `/lets:review --plan` before treating the plan as approved - a missing lens is never an approval.
 
 ```
 ## Plan Review: **{plan title}** (`{task-id}`)
@@ -1477,7 +1491,7 @@ Whatever the verdict, this command ends here; fixes go into the plan file only.
 
 ## Keeping this file consistent with `/lets:check`
 
-The two commands share a target surface, a SPEC contract and a PR-context block; only the reviewing population differs. The rule that governs which differences are legitimate lives in **`commands/check.md` -> "What This Is NOT"** - read it before adding anything here that check will not get. Every round of `lets-2z0hw` produced a bug from these two files drifting on something they were meant to state identically.
+The two commands share a target surface, a SPEC contract and a PR-context block; only the reviewing population differs: check spawns no subagent - one reviewer verifies its own findings, inline or, in a team worktree, the team's live skeptic member (a message to an existing agent, never a spawn), which has read-only git tools and no PR fetch, so a PR check stays inline - while review dispatches expert agents and independent skeptics. The rule that governs which differences are legitimate lives in **`commands/check.md` -> "What This Is NOT"** - read it before adding anything here that check will not get. Every round of `lets-2z0hw` produced a bug from these two files drifting on something they were meant to state identically.
 
 ## Workflow Integration
 

@@ -388,24 +388,24 @@ The hook runs only after that yes: cwd = the team worktree, env `TEAM_CALLSIGN=<
 
 ### Step T5: Launch the lead
 
-The launcher resolves as in Step C3.5 (an override, else `$LETS_LAUNCHER`). Go's class decides the announce, never a substring test of the command: when the lead's command is in the `bypass` class - after T3 the envelope's `launch_class` (orca: `orca_launch_class`), on Reopen `team_launch.class` (orca: `team_launch.orca_class`) - print the all-in announce line (**Launch mode** above, `<name>` = `<lead_name>`) before the launch below. Print each warning before it too, one line apiece: `launch_warnings` / `team_launch.warnings` as `agent_command: <warning>` (orca: `orca_launch_warnings` / `team_launch.orca_warnings` as `orca_agent: <warning>`) - `settings_override` (a `--settings` can set a permission mode the class does not show), `cross_session_inbound` (the command names `crossSessionInbound`, which LETS never writes). The lead's command is `{agent_command} --agent lets:lead --name '<lead_name>' '/lets:start'` - the lead runs as the `lets:lead` agent (`agents/lead.md`; it delegates code to implementers by default); the orca path uses `{orca_agent}` in its place. `--agent lets:lead` is added here and never written into `agent_command`: `/lets:team run` launches its workers with the team's `agent_command`. When this session is an orchestrator - the same test as **Orchestrator binding** above: the `lets peers orchestrator --session "$CLAUDE_CODE_SESSION_ID" --json` envelope carries a non-null `self_record` (this session's own recorded name - not `source`, which answers whom this session's messages go to) - the slash command becomes `'/lets:start --orc="<self_record.name>"'` in every form below (the lead's task branches carry that `orc:` across `lets worktree switch`). `agent_command` / `orca_agent` come from the shared, writable team file, so they never go inside a double-quoted argument of this session's own Bash call (a `$(...)`, a backtick or a `"` there would expand here): they cross through a quoted heredoc.
+The launcher resolves as in Step C3.5 (an override, else `$LETS_LAUNCHER`). Go's class decides the announce, never a substring test of the command: when the lead's command is in the `bypass` class - after T3 the envelope's `launch_class` (orca: `orca_launch_class`), on Reopen `team_launch.class` (orca: `team_launch.orca_class`) - print the all-in announce line (**Launch mode** above, `<name>` = `<lead_name>`) before the launch below. Print each warning before it too, one line apiece: `launch_warnings` / `team_launch.warnings` as `agent_command: <warning>` (orca: `orca_launch_warnings` / `team_launch.orca_warnings` as `orca_agent: <warning>`) - `settings_override` (a `--settings` can set a permission mode the class does not show), `cross_session_inbound` (the command names `crossSessionInbound`, which LETS never writes). The lead's command is `{agent_command} --name '<lead_name>' '/lets:start'` - a plain session, so Claude Code's default system prompt and native memory stay (a `--agent` session agent would replace both); its role comes from `protocol/roles.md` and its team file, which `/lets:start` loads. The orca path uses `{orca_agent}` in its place. When this session is an orchestrator - the same test as **Orchestrator binding** above: the `lets peers orchestrator --session "$CLAUDE_CODE_SESSION_ID" --json` envelope carries a non-null `self_record` (this session's own recorded name - not `source`, which answers whom this session's messages go to) - the slash command becomes `'/lets:start --orc="<self_record.name>"'` in every form below (the lead's task branches carry that `orc:` across `lets worktree switch`). `agent_command` / `orca_agent` come from the shared, writable team file, so they never go inside a double-quoted argument of this session's own Bash call (a `$(...)`, a backtick or a `"` there would expand here): they cross through a quoted heredoc.
 
 - **cmux / tmux** (`<launcher>`):
 
   ```bash
   CMD=$(cat <<'EOF'
-  {agent_command} --agent lets:lead --name '<lead_name>' '/lets:start'
+  {agent_command} --name '<lead_name>' '/lets:start'
   EOF
   )
   lets <launcher> open "<path>" --name "<lead_name>" --command "$CMD" --json
   ```
 
-- **terminal:** print, for the human to run in a new terminal: `cd "<path>" && {agent_command} --agent lets:lead --name '<lead_name>' '/lets:start'`
+- **terminal:** print, for the human to run in a new terminal: `cd "<path>" && {agent_command} --name '<lead_name>' '/lets:start'`
 - **orca** (a worktree from T2-orca): the lead's terminal opens in the Orca worktree T2-orca created (now attachable):
 
   ```bash
   CMD=$(cat <<'EOF'
-  {orca_agent} --agent lets:lead --name '<lead_name>' '/lets:start'
+  {orca_agent} --name '<lead_name>' '/lets:start'
   EOF
   )
   lets orca terminal --worktree "<path>" --title '<lead_name>' --command "$CMD" --json
@@ -438,7 +438,7 @@ AskUserQuestion(
 
 A last T4 run that failed makes "Run the setup hook first" the recommended option; that pick goes through T4's display and gate, so the hook still runs only on its own yes.
 
-> **Keep in sync:** `--name '<lead_name>'` is the session name `lets worktree info` (`team_lead`) and `/lets:team` read as the team's lead; `team-init` derives it; `lets orca terminal` mirrors `orcacmd.OpenTerminal` (`cli/internal/orcacmd/terminal.go`) and never creates a worktree; `lets orca team-create` mirrors `orcacmd.TeamCreate` (`teamcreate.go`) and is the only Orca create in the team flow. `--agent lets:lead` is in every lead launch form of Step T5 and in no worker launch (`commands/team.md` launches workers with the bare `agent_command`).
+> **Keep in sync:** `--name '<lead_name>'` is the session name `lets worktree info` (`team_lead`) and `/lets:team` read as the team's lead; `team-init` derives it; `lets orca terminal` mirrors `orcacmd.OpenTerminal` (`cli/internal/orcacmd/terminal.go`) and never creates a worktree; `lets orca team-create` mirrors `orcacmd.TeamCreate` (`teamcreate.go`) and is the only Orca create in the team flow. No lead or worker launch carries `--agent`: the lead is a plain session with `--name '<lead_name>'`, and `/lets:team run` launches workers with the bare `agent_command`.
 
 ---
 
