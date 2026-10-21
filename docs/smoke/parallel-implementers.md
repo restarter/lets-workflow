@@ -1,6 +1,6 @@
 # Smoke: parallel implementers and team runs
 
-The live checks behind lets-7dwc1 and lets-0rgnd (merged; ships next release): what a Go test cannot prove because it depends on the running Claude Code harness - how it names, isolates and restores agents, and what it does with a session's id. Run them on a scratch branch, with the owner's yes, whenever Claude Code or this area changes; record every run in the results table at the end. A check that fails is a **deviation**: stop, record what happened, and decide with the owner - never adapt the procedure to make it pass.
+The live checks behind lets-7dwc1 and lets-0rgnd: what a Go test cannot prove because it depends on the running Claude Code harness - how it names, isolates and restores agents, and what it does with a session's id. Run them on a scratch branch, with the owner's yes, whenever Claude Code or this area changes; record every run in the results table at the end. A check that fails is a **deviation**: stop, record what happened, and decide with the owner - never adapt the procedure to make it pass.
 
 The design facts these checks rest on are pinned statically by `TestSmokeFacts` (`cli/internal/initcmd/smokefacts_test.go`): no `team_name` / `mode=` in the execute or team commands, `BASE` in every isolated brief, member-run never messaging a gone member, and `lets integrate` running before Accept.
 
