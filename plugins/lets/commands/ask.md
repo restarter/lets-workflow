@@ -1,6 +1,6 @@
 ---
 description: Ask a single expert agent a question - like a Slack ping to a colleague
-argument-hint: "[expert] [question]"
+argument-hint: "[expert] [question] [--solo]"
 ---
 
 # Ask an Expert
@@ -15,6 +15,7 @@ Quick consultation with a single expert agent. Like pinging a colleague on Slack
 /lets:ask                          # Interactive - asks who and what
 /lets:ask security "is this safe?" # Direct to expert with question
 /lets:ask architect                # Opens dialog, asks question after
+/lets:ask ... --solo               # In a team worktree: a one-shot expert, not the team's member
 ```
 
 ## Difference from /lets:opinion
@@ -28,6 +29,8 @@ Quick consultation with a single expert agent. Like pinging a colleague on Slack
 | Analogy | Slack ping | 30 min meeting |
 
 ## Step 1: Determine Expert
+
+**Parse the argument:** strip a `--solo` token if present (team mode off - `protocol/agents.md` `## Team mode`; route gets `solo`); the rest names the expert and the question.
 
 If specified in arguments - use it. Otherwise use **AskUserQuestion** to pick.
 
@@ -91,6 +94,8 @@ Also check if the question references specific files - if so, note the file path
 
 Read `${CLAUDE_PLUGIN_ROOT}/protocol/agents.md` before this step unless its text is in your current context.
 
+**Team mode** (`protocol/agents.md` `## Team mode`): `Skill(skill: "lets:member-run", args: "op=route command=ask roles=<the expert, bare> fallback=one-shot")` first (`--solo` adds `solo`). A member gets the ask prompt below as its single item; the Task call is the fallback's.
+
 Open the run: `Skill(skill: "lets:agent-report", args: "op=open command=ask task={task-id} names={agent short name}")` (task omitted when none), then use the Task tool to spawn the selected agent with its REPORT_FILE line:
 
 ```
@@ -116,7 +121,7 @@ QUESTION: {user_question}"
 
 ## Step 5: Present Results
 
-`Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names={agent short name}")` - READ EVERY REPORT IN FULL; show the report file's content (without the `REPORT-END` line) under `## {Agent Name} says:`. A `GAP` after the retry -> say plainly that the expert's report did not arrive ({state}); show any final text only marked UNVERIFIED.
+`Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names={agent short name}")`, or for a member `op=receive` - READ EVERY REPORT IN FULL; show the report file's content (without the `REPORT-END` line) under `## {Agent Name} says:`. A `GAP` after the retry -> say plainly that the expert's report did not arrive ({state}); show any final text only marked UNVERIFIED.
 
 Show the agent's response:
 

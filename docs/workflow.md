@@ -63,12 +63,14 @@ For the hands-off version — autonomous spawn → plan → execute, and off-con
 A team per area that outlives its tasks - one worktree, one lead session, expert members, and a team file that remembers what it learned:
 
 ```
-/lets:team create --area "<what it owns>"   (main checkout) -> the lead (lead_name, <repo>-<callsign>-lead; agent lets:lead) opens in team_<callsign>
+/lets:team create --area "<what it owns>"   (main checkout) -> the lead (lead_name, <repo>-<callsign>-lead; a plain Claude session) opens in team_<callsign>
 /lets:start <id>                            (lead) -> claims nothing (hints /rename), switches to the task's branch; commit or park the last one, never stash
 /lets:team spawn --roster                   (lead) -> the members come back from the team file (/lets:start asks which, when none is live)
 work -> /lets:done -> /lets:start <next-id> -> ...
 /lets:team disband <callsign>               -> retired; the team file stays as history
 ```
+
+In the team worktree the lead's `/lets:plan`, `/lets:review`, `/lets:check`, `/lets:opinion`, `/lets:ask` and `/lets:execute` hand their agent work to the team's members first. A member is reached by the agent id the team file records, so one that finished a turn is resumed, not respawned; a role the roster lacks runs as an announced one-shot, and `--solo` runs a command as outside a team. See **[agents.md](agents.md#team-mode)**.
 
 See **[parallel-work.md](parallel-work.md)**.
 

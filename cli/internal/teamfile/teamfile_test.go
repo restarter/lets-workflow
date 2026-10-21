@@ -126,12 +126,15 @@ func TestRender_Template(t *testing.T) {
 		"team: \"snake\"\n", "lead_name: \"snake-lead\"\n", "orca_agent: \"claude-agent-teams\"\n",
 		"## 2. Workspace", "`DOCKER_PREFIX`", "`COMPOSE_PROJECT_NAME`", "<first>-<last>", "`.lets/hooks/team-setup`",
 		"Resume artefacts:", "Continuity = files only",
-		"agent_command --agent lets:lead", "**The lead** delegates code and doc changes to implementers by default",
+		"launched as a plain session", "**The lead** delegates code and doc changes to implementers by default",
 		"| lead | team lead | (the lead session) | (inherited) | |", "The roster starts with the lead alone",
 	} {
 		if !strings.Contains(string(out), s) {
 			t.Errorf("rendered template lacks %q", s)
 		}
+	}
+	if strings.Contains(string(out), "--agent lets:lead") {
+		t.Error("the lead launches as a plain session - the template still names --agent lets:lead (lets-eolec)")
 	}
 	for _, row := range []string{"| architect | architect | lets:architect |", "| skeptic | skeptic | lets:skeptic |", "| explorer | explorer | lets:explorer |"} {
 		if strings.Contains(string(out), row) {

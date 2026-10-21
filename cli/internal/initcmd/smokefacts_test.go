@@ -44,16 +44,18 @@ func smokeFactProblems(f map[string]string) []string {
 		add("execute.md must run `lets integrate` before the Accept dispatch")
 	}
 
-	// member-run never messages a gone member: Step 3's "Not listed" branch returns
-	// agent_gone before any SendMessage.
+	// member-run resumes, never refuses (lets-kwd6e): Step 3's ListAgents item, before
+	// any SendMessage, messages every member but a recorded-dismissed one by its id -
+	// SendMessage resumes a stopped member. agent_gone is pinned on the paragraph after
+	// the send (memberrun_route_test.go).
 	next := sectionSpan(f["member-run"], "## Step 3: Next / Correct")
-	notListed, send := strings.Index(next, "Not listed"), strings.Index(next, "SendMessage(")
+	list, send := strings.Index(next, "1. `ListAgents`, before every message."), strings.Index(next, "SendMessage(")
 	branch := ""
-	if notListed >= 0 && send > notListed {
-		branch = next[notListed:send]
+	if list >= 0 && send > list {
+		branch = next[list:send]
 	}
-	if !strings.Contains(branch, "`gone`") || !strings.Contains(branch, "agent_gone") || !strings.Contains(branch, "Never message it") {
-		add("member-run Step 3 must return agent_gone for a gone member and never message it, before its SendMessage")
+	if !strings.Contains(branch, "never messaged") || !strings.Contains(branch, "resumes a stopped member") || strings.Contains(branch, "LETS refuses to") {
+		add("member-run Step 3 must message every member but a recorded-dismissed one - SendMessage resumes a stopped member - before its SendMessage, and never refuse a resume")
 	}
 	return p
 }
@@ -74,7 +76,7 @@ func TestSmokeFacts(t *testing.T) {
 		{"execute passes mode=", "execute", "## Rules", "Agent(mode=\"plan\")\n\n## Rules", "mode="},
 		{"BASE moves into the isolated block", "execute", "\nBASE: {base sha}", "\nBASE_SHA: {base sha}", "BASE"},
 		{"integrate after Accept", "execute", "lets integrate --from", "lets integrate --frm", "lets integrate"},
-		{"member-run messages a gone member", "member-run", "Never message it", "Message it anyway", "agent_gone"},
+		{"member-run refuses a resume again", "member-run", "   - `link: peer`", "   - Never message it: the harness can still resume a `gone` or dismissed agent by name or id, and LETS refuses to.\n   - `link: peer`", "resumes a stopped member"},
 	}
 	for _, m := range mutants {
 		t.Run(m.name, func(t *testing.T) {

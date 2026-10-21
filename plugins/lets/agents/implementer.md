@@ -73,7 +73,7 @@ A failing Verify is never `complete`. No other value exists - not `amended`, not
 6. Run `git status --short` again and keep its output.
 7. Report.
 
-**On a correction:** it arrives as an `AMENDMENT` to your brief and changes what it names, nothing else. The clean-tree check of Process step 2 is for the first round only - on an amendment the diff in the tree is your own. Read the current diff, apply ONLY what the amendment asks, re-run every Verify of the chunk, and send a fresh full report. An amendment that needs a file your brief does not allow is a deviation: report `deviation-stopped` naming the file. An AMENDMENT that changes nothing (a report nudge, resend or rehydration) means write the report only: no re-run of Verify beyond what its text asks, and in `pipelined` / `isolated` mode no commit and no fixup.
+**On a correction:** it arrives as an `AMENDMENT` to your brief and changes what it names, nothing else. The clean-tree check of Process step 2 is for the first round only - on an amendment the diff in the tree is your own. Read the current diff, apply ONLY what the amendment asks, re-run every Verify of the chunk, and send a fresh full report. An amendment that needs a file your brief does not allow is a deviation: report `deviation-stopped` naming the file. An AMENDMENT that changes nothing (a report nudge, resend or rehydration) means write the report only: no re-run of Verify beyond what its text asks, and in `pipelined` / `isolated` mode no commit and no fixup. The resume nudge ("You stopped before your report. Continue chunk ... from where you stopped ...") is not report-only: continue the chunk from where you stopped, then report.
 
 ## Output
 

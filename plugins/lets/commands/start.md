@@ -168,39 +168,15 @@ The orient snapshot (Step 3) already shows In flight + Next up - don't repeat th
 - Inform user: "Created task XX, working in feature branch"
 - This keeps traceability without friction
 
-**Team worktree** (`lets worktree info --json` reports a `team`): read its `team_lead` - `match` `lead` or `unknown` -> nothing; `other` -> one line "This session is `{team_lead.self|unnamed}`, not the team's lead `{team_lead.name}` - /rename {team_lead.name} if it is the lead", never blocking. Then the Members question below, before the moves.
+**Team worktree** (`lets worktree info --json` reports a `team`): read its `team_lead` - `match` `lead` -> Read the team file `.lets/teams/<team>.md` - its `**The lead**` paragraph (section 6) is this session's procedure; `unknown` -> nothing; `other` -> one line "This session is `{team_lead.self|unnamed}`, not the team's lead `{team_lead.name}` - /rename {team_lead.name} if it is the lead", never blocking. Then the Members question below, before the moves.
 
-**Members (team worktree only).** A team starts empty, and which members run is the owner's pick (lets-7k6ae). Run `ListAgents`: an agent named `<team>-<name>` other than the team file's (`.lets/teams/<team>.md`) `lead_name` is listed (busy or idle) -> say nothing. None listed -> ask once. In an unattended turn - this `/lets:start` itself runs as a `/loop` iteration or a scheduled agent's turn - nobody answers: ask nothing, spawn nothing, and print one line `no member of {team} is live - /lets:team spawn <role> or spawn --roster starts them; an interactive /lets:start asks`. Every other `/lets:start` asks - a permission mode (`auto`, `bypassPermissions`) or a `.lets/cache/pipeline-state-*` marker is not unattended.
-
-The options, at most 4, in this order: **Team file's roster** - only when the team file's `## 3. Roster` holds a row besides `lead`, and then `(Recommended)`; **Architect + skeptic + explorer** - `(Recommended)` when the roster has no such row; **Skeptic + explorer**; **None**. A preset with exactly the roster's member roles is not shown a second time.
-
-```
-AskUserQuestion(
-  questions=[{
-    question: "No member of {team} is live. Which members should I spawn?",
-    header: "Members",
-    options: [
-      { label: "Team file's roster (Recommended)", description: "Spawn {the roster's member rows} from the team file" },  /* only when the roster holds a member row; otherwise "(Recommended)" goes on "Architect + skeptic + explorer" */
-      { label: "Architect + skeptic + explorer", description: "The three standard members; missing rows are added to the roster" },
-      { label: "Skeptic + explorer", description: "The checker and the mapper; missing rows are added to the roster" },
-      { label: "None", description: "Spawn nothing now; asked again at the next start" }
-    ],
-    multiSelect: false
-  }]
-)
-```
-
-- **Team file's roster** -> `Skill(skill: "lets:team", args: "spawn --roster")`.
-- **A preset** -> the pick is the lead's OK for the rows: append `| <role> | <role> | lets:<role> | | |` as a new last row of the team file's `## 3. Roster` table for each role of the preset that has no row there, then `Skill(skill: "lets:team", args: "spawn <role>")` for each role of the preset, in the order shown. A row is never deleted here - the lead deletes one by hand.
-- **None** -> nothing is spawned or written.
-
-Outside a team worktree there is no Members question.
+**Members (team worktree only).** No `Member:` line of this lead session is reachable (team file `## 7`; team.md Step M0) -> `Skill(skill: "lets:team", args: "members")` - it asks at most once per lead session. Outside a team worktree there is no Members question.
 
 **Wait for user to select, create, or describe work.**
 
 ## Step 6: Take Task
 
-**Team worktree.** A task id passed on the argument, or `--continue` with one in-progress task, skipped Step 5: after take-task, ask Step 5's **Members** question (its `ListAgents` test first). No `team` -> skip this paragraph.
+**Team worktree.** A task id passed on the argument, or `--continue` with one in-progress task, skipped Step 5: after take-task, ask Step 5's **Members** question (the same `lets:team members` call). No `team` -> skip this paragraph.
 
 After task is selected, delegate to the **take-task** skill to claim it and prepare the branch: `Skill(skill: "lets:take-task", args: "<task-id>")`.
 

@@ -32,7 +32,7 @@ The bar governs decisions a session makes. A command's own verification or accep
 
 ## Who dispatches
 
-A command or mode that promises no subagents - `/lets:check`, `/lets:plan --fast`, `/lets:plan --idea` - never dispatches: it names the route, marks the claim `[UNVERIFIED]`, and leaves the dispatch to the user. Otherwise the session dispatches `lets:skeptic`, `lets:explorer` and `lets:architect` itself - they are read-only - and shows the verdict. OWNER and CROSS-TASK never resolve without the user. The judging roles (skeptic, architect) run on the session's model - a cheaper one only when the owner picks it for the run, as `/lets:plan-workflow`'s model panel allows (with a warning); an implementer runs on the model the owner picks for the run.
+A command or mode that promises no subagents - `/lets:check`, `/lets:plan --fast`, `/lets:plan --idea` - never dispatches: it names the route, marks the claim `[UNVERIFIED]`, and leaves the dispatch to the user. Otherwise the session dispatches `lets:skeptic`, `lets:explorer` and `lets:architect` itself - they are read-only - and shows the verdict. OWNER and CROSS-TASK never resolve without the user. The judging roles (skeptic, architect) run on the session's model - a cheaper one only when the owner picks it for the run, as `/lets:plan-workflow`'s model panel allows (with a warning); an implementer runs on the model the owner picks for the run. In a team worktree the lead's dispatches go to the team's members first (`protocol/agents.md` `## Team mode`); `/lets:check` hands its pass to the team's skeptic member - a message, not a spawn; `/lets:plan --fast` / `--idea` stay orchestrator-only.
 
 A team member or an agent reached through `/lets:handoff` dispatches nothing itself: it names the route - to a teammate by `SendMessage` inside a team, otherwise in its report. An agent without `SendMessage` routes by ending its reply with `FOR <role>: <ROUTE> - <ask> - <evidence path>`; whoever spawned it forwards. Keep a reply to about 10 lines and put the detail in a file.
 
@@ -40,3 +40,11 @@ A team member or an agent reached through `/lets:handoff` dispatches nothing its
 
 - Two standing-team leads talk directly through `/lets:orc` about a question that concerns only their two teams - a shared file, an interface between their tasks, a sequencing detail. Anything that changes scope, priority or another team's queue goes through the orchestrator, and the orchestrator is told the outcome of a direct exchange when that outcome is a decision.
 - Overlapping work across teams or workers is resolved by rebase, never by coordination: no file freezes, no ownership negotiated per task, no file-list exchanges. The branch that merges second rebases on `origin/<merge>` and resolves the conflicts before its PR; a semantic hazard gets one line inside that rebase (e.g. "keep the other branch's restructuring, do not reintroduce text it removed").
+
+## The standing-team lead
+
+A standing team's lead is the session its team file's `lead_name` names. It coordinates; members do the routed work; the owner decides.
+
+- The owner approves in the lead's pane what the core rules' `## Gates` table lists at `LETS_GATES`, and - by the core rules' Development Workflow - the plan and the start of code always. A member never asks the owner; it writes a `FOR lead:` line.
+- Code goes to an implementer by default, through `member-run`; the lead edits a file itself only when that is the better move or the owner asks.
+- The lead is the team file's only writer. A member's finding goes into its REPORT_FILE; the lead copies what must survive into the team file or a file it lists - a finding left only in a message is lost at a restart.

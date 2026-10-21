@@ -1,6 +1,6 @@
 ---
 description: Technical decision analysis from expert agents launched in parallel, with clear recommendation
-argument-hint: "[topic or question] [--workflow]"
+argument-hint: "[topic or question] [--workflow] [--solo]"
 ---
 
 # Technical Decision Analysis
@@ -17,11 +17,12 @@ Analyze technical decisions by launching expert agents in parallel. Each agent p
 /lets:opinion                 # Frame the decision interactively, then analyze
 /lets:opinion <topic>         # Analyze the given decision
 /lets:opinion ... --workflow  # Expert fan-out + adversarial challenge off-context via a Dynamic Workflow
+/lets:opinion ... --solo      # In a team worktree: one-shot experts, not the team's members
 ```
 
 ## Step 1: Frame the Problem
 
-**Parse the argument:** strip a `--workflow` token if present (sets workflow mode); the rest is the topic. Mirror how `/lets:plan` strips `--fast`.
+**Parse the argument:** strip a `--workflow` token if present (sets workflow mode) and a `--solo` token (team mode off - `protocol/agents.md` `## Team mode`; route gets `solo`); the rest is the topic. Mirror how `/lets:plan` strips `--fast`.
 
 ```
 **Decision:** {what needs to be decided}
@@ -128,6 +129,8 @@ Read `${CLAUDE_PLUGIN_ROOT}/protocol/agents.md` before this step unless its text
 
 **If `--workflow` was parsed:** skip this step (and Step 4.6 / the in-context aggregation) - go to `## Workflow Mode` below, then resume at Step 5 with the returned aggregate.
 
+**Team mode** (`protocol/agents.md` `## Team mode`): `Skill(skill: "lets:member-run", args: "op=route command=opinion roles=<the panel, bare> fallback=one-shot")` first (`--solo` adds `solo`). A member line gets one item per panel role it takes - the opinion prompt below; the Task calls are the fallback's.
+
 Open the run: `Skill(skill: "lets:agent-report", args: "op=open command=opinion task={task-id} names={comma-separated agent short names}")` (task omitted when none). Each prompt carries its agent's `REPORT_FILE:` line.
 
 **CRITICAL:** Launch ALL selected agents in a SINGLE message with multiple Task tool calls.
@@ -156,7 +159,7 @@ CONSTRAINTS: {context, time, legacy, etc.}"
 )
 ```
 
-When the panel returns: `Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names={the panel names}")` - READ EVERY REPORT IN FULL; Step 4.6 and Step 5 work over the reports read, never over final texts. An expert `GAP` is shown as "{expert}: no report ({state})" and is not counted in the leading-option tally. **Zero usable reports** (every panel report a `GAP` after the retry) -> show the gaps and offer a re-run with fresh names; select no leading option, run no challenge, give no recommendation.
+When the panel returns: `Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names={the panel names}")`, and each member with `op=receive` - READ EVERY REPORT IN FULL; Step 4.6 and Step 5 work over the reports read, never over final texts. An expert `GAP` is shown as "{expert}: no report ({state})" and is not counted in the leading-option tally. **Zero usable reports** (every panel report a `GAP` after the retry) -> show the gaps and offer a re-run with fresh names; select no leading option, run no challenge, give no recommendation.
 
 ## Step 4.6: Challenge the Leading Option (Adversarial)
 
@@ -168,7 +171,9 @@ After the panel returns, identify the leading option - **the one the most expert
 
 **Conditional (do not over-spend):** run the challenge ONLY when consensus is weak - the experts are split OR any expert reported low confidence. If every expert recommends the same option at medium/high confidence, the decision is clear: skip the challenge and say so ("strong consensus -> challenge skipped").
 
-**Per challenge:** name the critics' files first - `Skill(skill: "lets:agent-report", args: "op=add dir={REPORT_DIR} names={agent}-challenge,...")` (a re-run after a failed challenge takes fresh names: `{agent}-challenge-2`) - then re-dispatch the SAME experts via the Task tool with an anti-leading prompt whose first line after `ultrathink` is the literal `REPORT_FILE: {this critic's path}` - "make the strongest case AGAINST option {leading}, regardless of your earlier pick; would_change_pick only if the panel should move off it." Each writes `{strongest_counter, severity, would_change_pick, better_option}` to its report file. When the critics return (only when this run dispatched a challenge): `Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names={the critic names}")` - READ EVERY REPORT IN FULL. A critic `GAP` is an errored critic.
+**Per challenge:** name the critics' files first - `Skill(skill: "lets:agent-report", args: "op=add dir={REPORT_DIR} names={agent}-challenge,...")` (a re-run after a failed challenge takes fresh names: `{agent}-challenge-2`) - then re-dispatch the SAME experts via the Task tool with an anti-leading prompt whose first line after `ultrathink` is the literal `REPORT_FILE: {this critic's path}` - "make the strongest case AGAINST option {leading}, regardless of your earlier pick; would_change_pick only if the panel should move off it." Each writes `{strongest_counter, severity, would_change_pick, better_option}` to its report file. When the critics return (only when this run dispatched a challenge): `Skill(skill: "lets:agent-report", args: "op=collect dir={REPORT_DIR} names={the critic names}")`, and each member critic with `op=receive` - READ EVERY REPORT IN FULL. A critic `GAP` is an errored critic.
+
+**Team mode challenge:** a panel expert that was a member in Step 4 gets its challenge from THE SAME member - `Skill(skill: "lets:member-run", args: "op=next scope=<c> name=<name> id=<agentId> brief-file=<brief> report-file=<its {role}-challenge path>")`, one item (the anti-leading prompt above), report name `{role}-challenge` - only while it is still reachable: `protocol/agents.md` `## Team mode` item 4's re-read finds it dismissed or gone since Step 4 -> a one-shot of the role, announced `{role}: one-shot - the member was dismissed`. `member_busy` -> that challenge goes to a one-shot of the role, announced `{role}: one-shot - the member is busy`. One-shot experts re-dispatch as above.
 
 **Asymmetric rule (a weak critique never silently flips the pick):**
 - Confirm the leading option UNLESS a majority `would_change_pick` at `high` severity.
@@ -233,6 +238,8 @@ If the challenge flipped the pick or returned `no_clear_winner`, the recommendat
 ## Workflow Mode (--workflow)
 
 Runs when `--workflow` was parsed. Replaces Step 4 (Task launch), Step 4.6 (challenge), and Step 5 (aggregation): all happen inside the Dynamic Workflow so per-agent opinions never enter this conversation - only the aggregate returns.
+
+No route (`protocol/agents.md` `## Team mode` item 7): in a team worktree print once `team worktree - --workflow runs its own agents, not the team's`.
 
 ### W1: Preflight
 
