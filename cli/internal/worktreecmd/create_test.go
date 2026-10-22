@@ -655,6 +655,11 @@ func TestCreate_RemoteWithoutMergeRefuses(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(repo, ".worktrees")); err == nil {
 		t.Error("a refused base wrote .worktrees/")
 	}
+	// initRepo writes no .gitignore and Step 6 is its first writer: a refusal before
+	// Step 6 leaves none (KD8, c3-F1)
+	if _, err := os.Stat(filepath.Join(repo, ".gitignore")); err == nil {
+		t.Error("a refused base wrote .gitignore - the base must be resolved before Step 6")
+	}
 }
 
 func TestCreate_RemoteAmbiguousRefuses(t *testing.T) {

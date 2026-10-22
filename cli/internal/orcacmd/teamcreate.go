@@ -121,8 +121,10 @@ func gitIn(ctx context.Context, dir string, args ...string) string {
 }
 
 // TeamCreate creates a standing team's worktree THROUGH Orca, so Orca registers it
-// and can attach the lead's terminal: `orca worktree create --base-branch origin/<merge>
-// --setup skip --no-parent`, with no agent and no prompt. Orca unavailable (or its ps
+// and can attach the lead's terminal: `orca worktree create --base-branch <base>
+// --setup skip --no-parent`, with no agent and no prompt - <base> is the explicit
+// --base-branch, or the base resolved from Merge (<remote>/<merge>, the local <merge>
+// with no remote; gitutil.ResolveBase, lets-qjt3h). Orca unavailable (or its ps
 // failing before any create) is not_attempted, exit 0 - the only state the caller may
 // answer with a Go create. Once a create was attempted the outcome is classified from
 // both sides (Orca's ps and git's worktree list) and never degrades to not_attempted;

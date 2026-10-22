@@ -104,8 +104,9 @@ func ErrUntrackedPresent(paths string) *Error {
 
 // ErrBaseRefusal maps a gitutil base refusal to worktreecmd's exits: 31 for
 // no_remote_base and remote_ambiguous (no remote base to cut a new branch from),
-// 13 base_ref_missing when no remote is configured and the local <merge> is missing.
-// hasBase: the verb takes --base (create), so the remediation can name it.
+// 13 base_ref_missing when no remote is configured and the local <merge> is missing,
+// 16 remote_list_failed when `git remote` itself failed (a git failure, not a policy
+// refusal). hasBase: the verb takes --base (create), so the remediation can name it.
 func ErrBaseRefusal(r *gitutil.BaseRefusal, merge string, hasBase bool) *Error {
 	switch r.Kind {
 	case gitutil.BaseRemoteAmbiguous:
@@ -120,6 +121,8 @@ func ErrBaseRefusal(r *gitutil.BaseRefusal, merge string, hasBase bool) *Error {
 			rem += ", or pass --base <existing-ref>"
 		}
 		return &Error{Code: ExitBranchConflict, Kind: gitutil.BaseRefMissing, Message: r.Message, Remediation: rem}
+	case gitutil.BaseRemoteListFailed:
+		return &Error{Code: ExitGitFailed, Kind: gitutil.BaseRemoteListFailed, Message: r.Message, Remediation: "check the repository's git config (git remote failed), then retry"}
 	}
 	rem := fmt.Sprintf("git fetch %s %s, then retry", r.Remote, merge)
 	if hasBase {

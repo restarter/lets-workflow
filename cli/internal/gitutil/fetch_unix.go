@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strings"
 	"syscall"
 	"time"
@@ -26,6 +27,15 @@ import (
 // master a successful fetch started survives. git's stderr is passed through
 // redact.Creds (a leaf package) before it becomes error text: it reaches the stale
 // warning and the refusal message of every envelope (Codex round 2).
+//
+// Setpgid also takes git out of the terminal's foreground group, so a Ctrl-C (or a
+// SIGTERM to lets) reaches only this process (c2-F2). While git runs, SIGINT and
+// SIGTERM are caught: the fetch's context is cancelled (cmd.Cancel kills the whole
+// group), and once Run returned the same signal is re-delivered to this process, so
+// its default action ends lets as before - an interrupt never becomes a stale
+// resolution or a refusal. The returned error names the interrupt for the moment
+// before the process dies. A signal this process inherited as ignored is left
+// alone, as before. The handler is stopped and the watcher gone on every path.
 func fetchBounded(ctx context.Context, dir string, timeout time.Duration, args ...string) error {
 	fctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -36,7 +46,47 @@ func fetchBounded(ctx context.Context, dir string, timeout time.Duration, args .
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 	cmd.WaitDelay = fetchWaitDelay
-	if err := cmd.Run(); err != nil {
+
+	var watched []os.Signal
+	for _, s := range []os.Signal{os.Interrupt, syscall.SIGTERM} {
+		if !signal.Ignored(s) {
+			watched = append(watched, s)
+		}
+	}
+	sigs := make(chan os.Signal, 1)
+	if len(watched) > 0 { // Notify with no signal would relay every signal
+		signal.Notify(sigs, watched...)
+	}
+	defer signal.Stop(sigs)
+	done := make(chan struct{})
+	caught := make(chan os.Signal, 1) // the watcher's one answer: the signal, or nil
+	go func() {
+		select {
+		case s := <-sigs:
+			cancel()
+			caught <- s
+		case <-done:
+			caught <- nil
+		}
+	}()
+
+	err := cmd.Run()
+	close(done)
+	sig := <-caught
+	signal.Stop(sigs)
+	if sig == nil {
+		select {
+		case sig = <-sigs: // arrived after the watcher left, before Stop
+		default:
+		}
+	}
+	if sig != nil {
+		if s, ok := sig.(syscall.Signal); ok {
+			_ = syscall.Kill(os.Getpid(), s)
+		}
+		return fmt.Errorf("interrupted by %s", sig)
+	}
+	if err != nil {
 		if fctx.Err() != nil {
 			return fmt.Errorf("timed out after %s", timeout)
 		}

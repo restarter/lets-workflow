@@ -3,8 +3,14 @@
 package gitutil
 
 import (
+	"bytes"
 	"context"
+	"os"
+	"os/exec"
+	"os/signal"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -35,5 +41,102 @@ func TestFetchBounded_RedactsCredentials(t *testing.T) {
 	err := fetchBounded(context.Background(), clone, 5*time.Second, "-c", "protocol.ext.allow=always", "fetch", "--no-tags", "ext::sh -c echo% https://u:s3cret@host/x% >&2;% exit% 1", "main")
 	if err == nil || strings.Contains(err.Error(), "s3cret") || !strings.Contains(err.Error(), "<redacted>") {
 		t.Fatalf("err = %v, want the credential redacted", err)
+	}
+}
+
+// fetchInterruptHelperEnv marks the re-run test binary as the interrupt helper; its
+// value is the clone the helper fetches in.
+const fetchInterruptHelperEnv = "LETS_TEST_FETCH_INTERRUPT_HELPER"
+
+// TestFetchBounded_InterruptHelper is the helper process of
+// TestFetchBounded_InterruptEndsTheFetch, not a test of its own: it runs a fetch that
+// hangs on the same ext:: remote as the kill test, with a deadline far beyond the
+// test's wait, so only the interrupt can end it.
+func TestFetchBounded_InterruptHelper(t *testing.T) {
+	clone := os.Getenv(fetchInterruptHelperEnv)
+	if clone == "" {
+		t.Skip("the helper process of TestFetchBounded_InterruptEndsTheFetch")
+	}
+	err := fetchBounded(context.Background(), clone, time.Minute, "-c", "protocol.ext.allow=always", "fetch", "--no-tags", "ext::sh -c sleep% 30", "main")
+	// The re-delivered signal ends this process; a helper still here was not ended by it.
+	time.Sleep(5 * time.Second)
+	t.Fatalf("still alive 5s after fetchBounded returned (%v): the interrupt was not re-delivered", err)
+}
+
+// fetchChild finds the helper's one child - the fetch's git - and its process group.
+func fetchChild(t *testing.T, parent int) (pid, pgid int) {
+	t.Helper()
+	out, err := exec.Command("ps", "-A", "-o", "pid=", "-o", "ppid=", "-o", "pgid=").Output()
+	if err != nil {
+		t.Fatalf("ps: %v", err)
+	}
+	for _, l := range strings.Split(string(out), "\n") {
+		f := strings.Fields(l)
+		if len(f) != 3 {
+			continue
+		}
+		if pp, _ := strconv.Atoi(f[1]); pp == parent {
+			pid, _ = strconv.Atoi(f[0])
+			pgid, _ = strconv.Atoi(f[2])
+			return pid, pgid
+		}
+	}
+	return 0, 0
+}
+
+// Ctrl-C reaches lets but not the fetch, which Setpgid moved out of the terminal's
+// foreground group (c2-F2): the interrupt must end the whole fetch group AND still
+// end lets by that signal - never a hanging remote orphaned, never an interrupt
+// turned into a stale resolution. Without fetchBounded's signal handling the helper
+// dies by SIGINT at once, but the fetch group (the 30 s sleep) outlives it.
+func TestFetchBounded_InterruptEndsTheFetch(t *testing.T) {
+	if signal.Ignored(os.Interrupt) {
+		t.Skip("SIGINT is ignored in this process tree; the helper would inherit it")
+	}
+	_, clone := remoteSetup(t)
+	helper := exec.Command(os.Args[0], "-test.run=^TestFetchBounded_InterruptHelper$")
+	helper.Env = append(os.Environ(), fetchInterruptHelperEnv+"="+clone)
+	var out bytes.Buffer
+	helper.Stdout, helper.Stderr = &out, &out
+	if err := helper.Start(); err != nil {
+		t.Fatal(err)
+	}
+	exited := make(chan struct{})
+	go func() { _ = helper.Wait(); close(exited) }()
+	stopHelper := func() {
+		_ = helper.Process.Kill()
+		<-exited
+	}
+
+	pid, pgid := 0, 0
+	for deadline := time.Now().Add(15 * time.Second); pid == 0; time.Sleep(50 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			stopHelper()
+			t.Fatalf("the helper never started its fetch:\n%s", out.String())
+		}
+		pid, pgid = fetchChild(t, helper.Process.Pid)
+	}
+	t.Cleanup(func() { _ = syscall.Kill(-pgid, syscall.SIGKILL) }) // never leave the sleep behind
+	if pgid != pid {
+		stopHelper()
+		t.Fatalf("the fetch's git %d is in group %d, not leading its own", pid, pgid)
+	}
+
+	if err := helper.Process.Signal(os.Interrupt); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-exited:
+	case <-time.After(10 * time.Second):
+		stopHelper()
+		t.Fatalf("the helper outlived the interrupt by 10s (the remote sleeps 30s):\n%s", out.String())
+	}
+	if ws, ok := helper.ProcessState.Sys().(syscall.WaitStatus); !ok || !ws.Signaled() || ws.Signal() != syscall.SIGINT {
+		t.Errorf("the helper ended with %v, want death by the re-delivered SIGINT:\n%s", helper.ProcessState, out.String())
+	}
+	for deadline := time.Now().Add(3 * time.Second); syscall.Kill(-pgid, 0) == nil; time.Sleep(50 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("the fetch's process group %d outlived the interrupt: the hanging remote was orphaned", pgid)
+		}
 	}
 }

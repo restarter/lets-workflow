@@ -2,10 +2,12 @@ package gitutil
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 // pushFromSecondClone advances the bare remote's main by one commit and returns it.
@@ -88,18 +90,50 @@ func TestResolveBase_NoRemote(t *testing.T) {
 	}
 }
 
+// The stale age is the age of the last fetch, read before the failing one: git
+// (2.39) creates / truncates FETCH_HEAD even for a fetch that fails at once, so an
+// age read afterwards always says "0s" (c2-F1, c2-F4).
 func TestResolveBase_FetchFailure(t *testing.T) {
 	ctx := context.Background()
 	_, clone := remoteSetup(t)
+	if _, refusal := ResolveBase(ctx, clone, "main", BaseOptions{}); refusal != nil {
+		t.Fatalf("first resolve (writes FETCH_HEAD): %v", refusal)
+	}
+	fetchHead := remoteGit(t, clone, "rev-parse", "--git-path", "FETCH_HEAD")
+	if !filepath.IsAbs(fetchHead) {
+		fetchHead = filepath.Join(clone, fetchHead)
+	}
+	twoHoursAgo := time.Now().Add(-2 * time.Hour)
+	if err := os.Chtimes(fetchHead, twoHoursAgo, twoHoursAgo); err != nil {
+		t.Fatalf("backdate FETCH_HEAD: %v", err)
+	}
 	before := remoteGit(t, clone, "rev-parse", "origin/main")
 	remoteGit(t, clone, "remote", "set-url", "origin", filepath.Join(t.TempDir(), "gone.git"))
 	br, refusal := ResolveBase(ctx, clone, "main", BaseOptions{})
-	if refusal != nil || !br.Stale || br.Fetched || br.Sha != before || br.FetchAge == "" || !hasNote(br, "last fetched") {
-		t.Fatalf("fetch fails, ref present: %+v, %v", br, refusal)
+	if refusal != nil || !br.Stale || br.Fetched || br.Sha != before || br.FetchAge != "2h0m0s" || !hasNote(br, "last fetched 2h0m0s ago") {
+		t.Fatalf("fetch fails, ref present: %+v, %v; want fetch_age 2h0m0s (the last real fetch) named in the note", br, refusal)
 	}
 	remoteGit(t, clone, "update-ref", "-d", "refs/remotes/origin/main")
 	if _, refusal := ResolveBase(ctx, clone, "main", BaseOptions{}); refusal == nil || refusal.Kind != BaseNoRemoteBase || !strings.Contains(refusal.Message, "fetch failed") {
 		t.Fatalf("fetch fails, ref absent: %+v, want no_remote_base naming the fetch failure", refusal)
+	}
+}
+
+// A failing `git remote` is a git failure, never an ambiguity (c2-F3).
+func TestResolveRemote_ListFailure(t *testing.T) {
+	_, clone := remoteSetup(t)
+	f, err := os.OpenFile(filepath.Join(clone, ".git", "config"), os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString("[broken\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, refusal := ResolveRemote(context.Background(), clone, "main"); refusal == nil || refusal.Kind != BaseRemoteListFailed {
+		t.Fatalf("an unparsable config: refusal %+v, want %s", refusal, BaseRemoteListFailed)
 	}
 }
 

@@ -164,9 +164,12 @@ func Remove(ctx context.Context, projectRoot string, opts RemoveOptions) (*Remov
 
 	// Unpushed-commits safety net (parity with pre-rewrite markdown Step R2).
 	// `git log @{u}.. --oneline` lists local commits not present in the
-	// upstream branch. No upstream configured -> command fails: we surface
-	// a warn step and continue (caller can still see the branch will be
-	// deleted if --delete-branch is set). Skipped under --force.
+	// upstream branch. When it fails - no upstream configured, or one configured
+	// but gone - and a remote is configured with no upstream, the commits no
+	// remote-tracking ref holds are counted instead (lets-qjt3h KD9); only when
+	// nothing can be counted do we surface a warn step naming why and continue
+	// (caller can still see the branch will be deleted if --delete-branch is set).
+	// Skipped under --force.
 	if !opts.Force {
 		out, err := exec.CommandContext(ctx, "git", "-C", wtPath, "log", "@{u}..", "--oneline").CombinedOutput()
 		switch {
@@ -182,7 +185,7 @@ func Remove(ctx context.Context, projectRoot string, opts RemoveOptions) (*Remov
 			// No upstream - the normal state of a branch an implicit cut made (KD6). With a
 			// remote configured, count the commits no remote-tracking ref holds: they
 			// exist only here, which is what this gate protects (lets-qjt3h KD9).
-			n, counted := unpushedWithoutUpstream(ctx, wtPath, branch)
+			n, counted, why := unpushedWithoutUpstream(ctx, wtPath, branch)
 			switch {
 			case counted && n > 0:
 				return fail(&Error{
@@ -196,8 +199,8 @@ func Remove(ctx context.Context, projectRoot string, opts RemoveOptions) (*Remov
 			default:
 				// An upstream configured but gone (a squash-merged, deleted PR branch), no
 				// remote configured (nothing is ever pushed there), or git failed: don't
-				// block, but flag it so the JSON envelope makes the gap visible.
-				addStep(StepWarn, "skipped unpushed-commits check (no upstream configured)")
+				// block, but flag it - and why - so the JSON envelope makes the gap visible.
+				addStep(StepWarn, "skipped unpushed-commits check ("+why+")")
 			}
 		default:
 			addStep(StepOK, "no unpushed commits on upstream")
@@ -256,8 +259,8 @@ func Remove(ctx context.Context, projectRoot string, opts RemoveOptions) (*Remov
 }
 
 // deleteBranch is the ONE branch-delete step shared by --branch-only, the combined
-// remove, and the already-gone path. Unforced, a branch that is an ancestor of
-// origin/<merge> (or local <merge>) is deleted with -D: `git branch -d` measures
+// remove, and the already-gone path. Unforced, a branch that is an ancestor of the
+// resolved remote's <merge> (else the local one) is deleted with -D: `git branch -d` measures
 // "merged" against the LOCAL merge-branch, which lags its origin in a worktree setup
 // and would refuse a branch that is merged upstream. Anything else keeps -d, which
 // git measures against the branch's own upstream when it has one (else HEAD): a
@@ -304,26 +307,38 @@ func deleteBranch(ctx context.Context, root, branch string, force bool, merge st
 	return fmt.Sprintf("branch %q deleted", branch), nil
 }
 
+// Why unpushedWithoutUpstream did not count (the remove warn names it, c4-F1).
+const (
+	uncountedUpstreamGone = "upstream configured but gone"
+	uncountedNoRemote     = "no remote configured"
+	uncountedGitFailed    = "git failed"
+)
+
 // unpushedWithoutUpstream counts the commits of the worktree's HEAD that no
 // remote-tracking ref holds, for a branch with NO upstream configured - the state an
-// implicit cut leaves (lets-qjt3h KD9). counted=false when an upstream is configured
-// but gone (`gh pr merge --squash --delete-branch` + prune: the squashed commits are
-// on no remote, yet merged), with no remote configured (nothing is ever pushed there,
-// and --not --remotes would count the whole history), or when git fails.
-func unpushedWithoutUpstream(ctx context.Context, wtPath, branch string) (int, bool) {
+// implicit cut leaves (lets-qjt3h KD9). counted=false, with why, when an upstream is
+// configured but gone (`gh pr merge --squash --delete-branch` + prune: the squashed
+// commits are on no remote, yet merged), with no remote configured (nothing is ever
+// pushed there, and --not --remotes would count the whole history), or when git fails.
+func unpushedWithoutUpstream(ctx context.Context, wtPath, branch string) (n int, counted bool, why string) {
 	if exec.CommandContext(ctx, "git", "-C", wtPath, "config", "--get", "branch."+branch+".merge").Run() == nil {
-		return 0, false
+		return 0, false, uncountedUpstreamGone
 	}
 	remotes, err := exec.CommandContext(ctx, "git", "-C", wtPath, "remote").Output()
-	if err != nil || len(strings.Fields(string(remotes))) == 0 {
-		return 0, false
+	switch {
+	case err != nil:
+		return 0, false, uncountedGitFailed
+	case len(strings.Fields(string(remotes))) == 0:
+		return 0, false, uncountedNoRemote
 	}
 	out, err := exec.CommandContext(ctx, "git", "-C", wtPath, "rev-list", "--count", "HEAD", "--not", "--remotes").Output()
 	if err != nil {
-		return 0, false
+		return 0, false, uncountedGitFailed
 	}
-	n, err := strconv.Atoi(strings.TrimSpace(string(out)))
-	return n, err == nil
+	if n, err = strconv.Atoi(strings.TrimSpace(string(out))); err != nil {
+		return 0, false, uncountedGitFailed
+	}
+	return n, true, ""
 }
 
 // worktreePaths lists every worktree path git knows for root (main checkout included).

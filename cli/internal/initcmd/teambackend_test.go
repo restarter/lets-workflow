@@ -154,6 +154,40 @@ func TestTeamBackend(t *testing.T) {
 	}
 }
 
+// TestTeamBackend_RunBaseFromGo pins the base contract of the specs (lets-qjt3h,
+// c6-F1): /lets:team run resolves the run's one base through Go in N1 and stops on a
+// refusal, and no spec shells a base fetch of its own.
+func TestTeamBackend_RunBaseFromGo(t *testing.T) {
+	read := func(name string) string {
+		t.Helper()
+		b, err := os.ReadFile(filepath.Join(pluginDir(t), "commands", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	team, wt := read("team.md"), read("worktree.md")
+	n1 := sectionSpan(team, "### Step N1")
+	if n1 == "" {
+		t.Fatal("team.md has no ### Step N1")
+	}
+	if !strings.Contains(n1, "lets worktree base --json") {
+		t.Error("Step N1 resolves the run's base with lets worktree base --json")
+	}
+	stops := false
+	for _, l := range strings.Split(n1, "\n") {
+		stops = stops || (strings.Contains(l, "`ok=false`") && strings.Contains(l, "STOP"))
+	}
+	if !stops {
+		t.Error("Step N1 has an ok=false line that STOPs the run")
+	}
+	for name, body := range map[string]string{"team.md": team, "worktree.md": wt} {
+		if strings.Contains(body, "git fetch") {
+			t.Errorf("%s shells git fetch - the base fetch belongs to Go (lets worktree base / create / switch)", name)
+		}
+	}
+}
+
 // TestTeamBackend_Members pins the standing-team verbs: spawn and dismiss only through
 // member-run, the same-name live refusal, --roster recommending respawn, dismiss from
 // the lead's own session, and /lets:start claiming the lead before take-task.
@@ -584,7 +618,7 @@ func TestTeamBackend_CreateDisband(t *testing.T) {
 }
 
 // goldenT2 is the Go T2 block of worktree.md - the base moved into Go (lets-qjt3h); the non-orca path is otherwise as at 8b36520.
-const goldenT2 = "\nGo resolves the base: `<remote>/{LETS_MERGE_BRANCH}` after a bounded fetch when a remote is configured, the local `{LETS_MERGE_BRANCH}` with a notice when none is; a base refusal (31 `no_remote_base` / `remote_ambiguous`) is `ok=false` below. Then:\n\n```bash\nLETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)\ncd \"$LETS_PROJECT_ROOT\"\nlets worktree create \"team_<c>\" --branch \"team_<c>\" --new-branch --plugin-root \"${CLAUDE_PLUGIN_ROOT}\" --json\n```\n\n`ok=false` -> surface `error.message` and `error.remediation`, and stop. Assert, then go on: `worktree.path` ends in `/team_<c>`, and `git -C \"<path>\" branch --show-current` prints `team_<c>`; anything else -> stop and show both.\n\n"
+const goldenT2 = "\nGo resolves the base: `<remote>/{LETS_MERGE_BRANCH}` after a bounded fetch when a remote is configured, the local `{LETS_MERGE_BRANCH}` with a notice when none is; a base refusal (31 `no_remote_base` / `remote_ambiguous`, 13 `base_ref_missing`) is `ok=false` below. Then:\n\n```bash\nLETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)\ncd \"$LETS_PROJECT_ROOT\"\nlets worktree create \"team_<c>\" --branch \"team_<c>\" --new-branch --plugin-root \"${CLAUDE_PLUGIN_ROOT}\" --json\n```\n\n`ok=false` -> surface `error.message` and `error.remediation`, and stop. Assert, then go on: `worktree.path` ends in `/team_<c>`, and `git -C \"<path>\" branch --show-current` prints `team_<c>`; anything else -> stop and show both.\n\n"
 
 // membersLinkProblems pins D1-D3 (owner, 2026-09-26) on team.md's member sections.
 func membersLinkProblems(team string) []string {

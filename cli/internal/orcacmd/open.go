@@ -119,8 +119,18 @@ func Open(ctx context.Context, o OpenOptions) (*OpenResult, error) {
 		if head == "" && launch.Branch != "" {
 			head = gitIn(ctx, o.Repo, "rev-parse", "--verify", "--quiet", "refs/heads/"+launch.Branch)
 		}
-		if head == "" {
+		// Two HEADs keep the resolution: the resolved commit itself (Orca cut exactly
+		// it, even if the ref moved after the cut), or the tip of the ref Orca was given,
+		// read after the create (Orca fetched and moved it; reconciled below). A HEAD
+		// cut from anything else is not that resolution and is never labelled with it
+		// (c5-F1).
+		tip := gitIn(ctx, o.Repo, "rev-parse", "--verify", "--quiet", launch.BaseResolution.Ref+"^{commit}")
+		switch {
+		case head == "":
 			add(StepWarn, "the created worktree's HEAD could not be read - base_resolution omitted; base_ref is what Orca was given")
+			launch.BaseResolution = nil
+		case head != tip && head != launch.BaseResolution.Sha:
+			add(StepWarn, fmt.Sprintf("Orca cut %s from %s, which is not %s - base_resolution omitted", o.Name, head, launch.BaseResolution.Ref))
 			launch.BaseResolution = nil
 		}
 		reconcileBase(launch.BaseResolution, head, o.Name, add)

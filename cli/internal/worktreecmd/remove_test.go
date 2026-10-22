@@ -165,12 +165,12 @@ func TestRemove_NoUpstreamSkipsCheck(t *testing.T) {
 	}
 	hasWarn := false
 	for _, s := range res.Steps {
-		if s.Status == worktreecmd.StepWarn && strings.Contains(s.Message, "no upstream") {
+		if s.Status == worktreecmd.StepWarn && strings.Contains(s.Message, "skipped unpushed-commits check (no remote configured)") {
 			hasWarn = true
 		}
 	}
 	if !hasWarn {
-		t.Errorf("expected a warn step about missing upstream; got steps=%+v", res.Steps)
+		t.Errorf("expected a warn step naming why the check was skipped (no remote configured); got steps=%+v", res.Steps)
 	}
 }
 
@@ -438,7 +438,7 @@ func TestRemove_NoUpstreamNothingNewRemoves(t *testing.T) {
 		t.Fatalf("err=%v ok=%v", err, res != nil && res.OK)
 	}
 	for _, s := range res.Steps {
-		if s.Status == worktreecmd.StepWarn && strings.Contains(s.Message, "no upstream") {
+		if s.Status == worktreecmd.StepWarn && strings.Contains(s.Message, "skipped unpushed-commits check") {
 			t.Errorf("a counted check must not warn: %+v", res.Steps)
 		}
 	}
@@ -464,9 +464,9 @@ func TestRemove_GoneUpstreamKeepsWarn(t *testing.T) {
 	}
 	warned := false
 	for _, s := range res.Steps {
-		warned = warned || (s.Status == worktreecmd.StepWarn && strings.Contains(s.Message, "no upstream"))
+		warned = warned || (s.Status == worktreecmd.StepWarn && strings.Contains(s.Message, "skipped unpushed-commits check (upstream configured but gone)"))
 	}
 	if !warned {
-		t.Errorf("want the skip warn for a gone upstream: %+v", res.Steps)
+		t.Errorf("want the skip warn naming a gone upstream: %+v", res.Steps)
 	}
 }

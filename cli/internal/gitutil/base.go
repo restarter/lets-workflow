@@ -31,6 +31,9 @@ const (
 	BaseNoRemoteBase    = "no_remote_base"
 	BaseRemoteAmbiguous = "remote_ambiguous"
 	BaseRefMissing      = "base_ref_missing"
+	// BaseRemoteListFailed: `git remote` itself failed - a git failure, not a policy
+	// refusal; worktreecmd maps it to its git-failure exit.
+	BaseRemoteListFailed = "remote_list_failed"
 )
 
 // fetchWaitDelay bounds the wait for the pipes once the fetch's process group was killed.
@@ -79,7 +82,7 @@ type BaseOptions struct{ FetchTimeout time.Duration }
 func ResolveRemote(ctx context.Context, dir, merge string) (Remote, *BaseRefusal) {
 	out, err := runGit(ctx, dir, "remote")
 	if err != nil {
-		return Remote{}, &BaseRefusal{Kind: BaseRemoteAmbiguous, Message: "cannot list the remotes: " + err.Error()}
+		return Remote{}, &BaseRefusal{Kind: BaseRemoteListFailed, Message: "cannot list the remotes: " + err.Error()}
 	}
 	remotes := strings.Fields(string(out))
 	if len(remotes) == 0 {
@@ -131,6 +134,9 @@ func ResolveBase(ctx context.Context, dir, merge string, o BaseOptions) (*BaseRe
 		timeout = DefaultRemoteTimeout
 	}
 	ref := r.Name + "/" + merge
+	// The age is read BEFORE the fetch: git (2.39) creates / truncates FETCH_HEAD even
+	// for a fetch that fails at once, so a stat afterwards always reads "0s" (c2-F4).
+	age := fetchHeadAge(ctx, dir)
 	ferr := fetchBounded(ctx, dir, timeout, "fetch", "--no-tags", r.Name, "+refs/heads/"+merge+":refs/remotes/"+ref)
 	sha := commitOf(ctx, dir, "refs/remotes/"+ref)
 	if sha == "" {
@@ -143,7 +149,7 @@ func ResolveBase(ctx context.Context, dir, merge string, o BaseOptions) (*BaseRe
 	}
 	res := &BaseResolution{Ref: ref, Source: BaseFromRemote, Remote: r.Name, RemoteBy: r.By, Sha: sha, Fetched: ferr == nil}
 	if ferr != nil {
-		res.Stale, res.FetchAge = true, fetchHeadAge(ctx, dir)
+		res.Stale, res.FetchAge = true, age
 		res.Notes = append(res.Notes, fmt.Sprintf("fetch of %s failed (%v); cutting from the local copy of %s, last fetched %s ago", ref, ferr, ref, res.FetchAge))
 	}
 	if local != "" {

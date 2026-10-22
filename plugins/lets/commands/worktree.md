@@ -128,7 +128,7 @@ lets worktree create "$NAME" --plugin-root "${CLAUDE_PLUGIN_ROOT}" --json
 #   lets worktree create "$DIR_NAME" --branch "$BRANCH_REF" --plugin-root "${CLAUDE_PLUGIN_ROOT}" --json
 ```
 
-The Go subcommand auto-detects attach vs new-branch: if `refs/heads/<NAME>` exists, attaches to it; otherwise creates `worktree-<NAME>` from the base Go resolves: `<remote>/{LETS_MERGE_BRANCH}` after a bounded fetch when a remote is configured (never the local one then), the local `{LETS_MERGE_BRANCH}` with a notice when none is; `--base <ref>` is used exactly as given. A base refusal is `ok=false` with exit 31 (`no_remote_base`, `remote_ambiguous`) and its remediation. Pass `--attach` or `--new-branch` to force a mode. **Pass `--branch <ref>`** to attach/create a branch whose ref differs from the dir `<NAME>` — required for git-flow refs containing `/` (e.g. `feature/x`) and for the C1 task branch; the ref is used verbatim (no `worktree-` prefix) while the dir keeps `<NAME>`. Pass `--switch-main-if-needed` to auto-switch main when attaching its current branch (refuses on dirty/mid-rebase tree). Pass `--no-symlink-lets` or `--no-store-links` to skip `.lets` or the declared store links. `--plugin-root` lets Go read the tracker adapter from the plugin when the installed copy predates its `## Worktree` section.
+The Go subcommand auto-detects attach vs new-branch: if `refs/heads/<NAME>` exists, attaches to it; otherwise creates `worktree-<NAME>` from the base Go resolves: `<remote>/{LETS_MERGE_BRANCH}` after a bounded fetch when a remote is configured (never the local one then), the local `{LETS_MERGE_BRANCH}` with a notice when none is; `--base <ref>` is used exactly as given. A base refusal is `ok=false` with exit 31 (`no_remote_base`, `remote_ambiguous`) or 13 `base_ref_missing` when no remote is configured and there is no local `{LETS_MERGE_BRANCH}`, and its remediation. Pass `--attach` or `--new-branch` to force a mode. **Pass `--branch <ref>`** to attach/create a branch whose ref differs from the dir `<NAME>` — required for git-flow refs containing `/` (e.g. `feature/x`) and for the C1 task branch; the ref is used verbatim (no `worktree-` prefix) while the dir keeps `<NAME>`. Pass `--switch-main-if-needed` to auto-switch main when attaching its current branch (refuses on dirty/mid-rebase tree). Pass `--no-symlink-lets` or `--no-store-links` to skip `.lets` or the declared store links. `--plugin-root` lets Go read the tracker adapter from the plugin when the installed copy predates its `## Worktree` section.
 
 Parse the JSON. On `ok=false`, surface `error.message` and `error.remediation` to the user; if `rollback.residual` is non-empty, list the paths so the user can clean up.
 
@@ -331,7 +331,7 @@ lets orca team-create --name "team_<c>" --json
 
 By `team.state`:
 
-- `not_attempted` (Orca absent or not running, or its ps failed, or the base did not resolve - `team.reason` `no_remote_base` / `remote_ambiguous`, which Step T2 then reports with its fix) -> one line with `team.reason`, then Step T2 (Go); T5 then resolves the lead's launcher as C3.5's orca fallback (cmux, else terminal).
+- `not_attempted` (Orca absent or not running, or its ps failed, or the base did not resolve - `team.reason` `no_remote_base` / `remote_ambiguous` / `base_ref_missing`, which Step T2 then reports with its fix) -> one line with `team.reason`, then Step T2 (Go); T5 then resolves the lead's launcher as C3.5's orca fallback (cmux, else terminal).
 - `already_exists` -> "Reopen a team" below.
 - `created` -> first link it, the step Orca's `orca.yaml` would have run (the `team_` prefix keeps adopt from deriving a task id):
 
@@ -345,7 +345,7 @@ By `team.state`:
 
 ### Step T2: Create the worktree (Go)
 
-Go resolves the base: `<remote>/{LETS_MERGE_BRANCH}` after a bounded fetch when a remote is configured, the local `{LETS_MERGE_BRANCH}` with a notice when none is; a base refusal (31 `no_remote_base` / `remote_ambiguous`) is `ok=false` below. Then:
+Go resolves the base: `<remote>/{LETS_MERGE_BRANCH}` after a bounded fetch when a remote is configured, the local `{LETS_MERGE_BRANCH}` with a notice when none is; a base refusal (31 `no_remote_base` / `remote_ambiguous`, 13 `base_ref_missing`) is `ok=false` below. Then:
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
