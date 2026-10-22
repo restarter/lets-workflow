@@ -5,6 +5,7 @@ package worktreecmd
 import (
 	"fmt"
 
+	"github.com/restarter/lets-workflow/cli/internal/gitutil"
 	"github.com/restarter/lets-workflow/cli/internal/taskstate"
 )
 
@@ -104,6 +105,32 @@ func ErrUntrackedPresent(paths string) *Error {
 // ErrNoRemoteBase - a new branch is cut from origin/<merge> only.
 func ErrNoRemoteBase(merge string) *Error {
 	return &Error{Code: ExitNoRemoteBase, Kind: "no_remote_base", Message: fmt.Sprintf("origin/%s is missing; a new branch is never cut from the local %s", merge, merge), Remediation: "add the origin remote and fetch " + merge}
+}
+
+// ErrBaseRefusal maps a gitutil base refusal to worktreecmd's exits: 31 for
+// no_remote_base and remote_ambiguous (no remote base to cut a new branch from),
+// 13 base_ref_missing when no remote is configured and the local <merge> is missing.
+// hasBase: the verb takes --base (create), so the remediation can name it.
+func ErrBaseRefusal(r *gitutil.BaseRefusal, merge string, hasBase bool) *Error {
+	switch r.Kind {
+	case gitutil.BaseRemoteAmbiguous:
+		rem := fmt.Sprintf("set %s's upstream (git branch --set-upstream-to <remote>/%s %s), then retry", merge, merge, merge)
+		if hasBase {
+			rem += fmt.Sprintf("; or pass --base <remote>/%s", merge)
+		}
+		return &Error{Code: ExitNoRemoteBase, Kind: gitutil.BaseRemoteAmbiguous, Message: r.Message, Remediation: rem}
+	case gitutil.BaseRefMissing:
+		rem := "create " + merge + " (no remote is configured, so the local branch is the base)"
+		if hasBase {
+			rem += ", or pass --base <existing-ref>"
+		}
+		return &Error{Code: ExitBranchConflict, Kind: gitutil.BaseRefMissing, Message: r.Message, Remediation: rem}
+	}
+	rem := fmt.Sprintf("git fetch %s %s, then retry", r.Remote, merge)
+	if hasBase {
+		rem += fmt.Sprintf("; or pass --base %s to cut from the local branch on purpose", merge)
+	}
+	return &Error{Code: ExitNoRemoteBase, Kind: gitutil.BaseNoRemoteBase, Message: r.Message, Remediation: rem}
 }
 
 // ErrSessionHeld - the session: line of branch is held by another session, or by one

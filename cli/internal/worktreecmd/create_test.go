@@ -541,3 +541,178 @@ func TestCreate_DeclaresLetsAdditionalDir(t *testing.T) {
 		t.Errorf("git does not ignore settings.local.json in the new worktree")
 	}
 }
+
+// withOrigin gives repo a bare origin with main pushed (upstream set) and a .lets dir.
+func withOrigin(t *testing.T, repo string) string {
+	t.Helper()
+	origin := filepath.Join(realTempDir(t), "origin.git")
+	runIn(t, repo, "git", "init", "-q", "--bare", "-b", "main", origin)
+	runIn(t, repo, "git", "remote", "add", "origin", origin)
+	runIn(t, repo, "git", "push", "-q", "-u", "origin", "main")
+	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return origin
+}
+
+// advanceOrigin pushes one commit to origin's main from a second clone; returns it.
+func advanceOrigin(t *testing.T, origin string) string {
+	t.Helper()
+	other := filepath.Join(realTempDir(t), "other")
+	runIn(t, filepath.Dir(other), "git", "clone", "-q", origin, other)
+	runIn(t, other, "git", "-c", "user.email=t@e", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "upstream")
+	runIn(t, other, "git", "push", "-q", "origin", "main")
+	return strings.TrimSpace(gitOutput(t, other, "rev-parse", "HEAD"))
+}
+
+func createFeat(t *testing.T, repo string, base string) (*worktreecmd.CreateResult, error) {
+	t.Helper()
+	return worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{Name: "feat", Mode: worktreecmd.BranchAuto, Base: base})
+}
+
+func hasStep(res *worktreecmd.CreateResult, status, sub string) bool {
+	for _, s := range res.Steps {
+		if s.Status == status && strings.Contains(s.Message, sub) {
+			return true
+		}
+	}
+	return false
+}
+
+func TestCreate_ImplicitBaseBehindRemote(t *testing.T) {
+	repo := initRepo(t)
+	origin := withOrigin(t, repo)
+	tip := advanceOrigin(t, origin)
+	res, err := createFeat(t, repo, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	br := res.Worktree.BaseResolution
+	if res.Worktree.BaseRef != "origin/main" || br == nil || br.Source != "remote" || br.Sha != tip || br.LocalBehind != 1 || !br.Fetched {
+		t.Fatalf("base_ref=%s resolution=%+v, want origin/main at %s, behind 1", res.Worktree.BaseRef, br, tip)
+	}
+	if head := strings.TrimSpace(gitOutput(t, res.Worktree.Path, "rev-parse", "HEAD")); head != tip {
+		t.Errorf("cut from %s, want the remote tip %s - never the stale local main", head, tip)
+	}
+	if up := exec.Command("git", "-C", repo, "config", "--get", "branch.worktree-feat.merge"); up.Run() == nil {
+		t.Error("the implicit cut set an upstream; want --no-track")
+	}
+}
+
+func TestCreate_ImplicitBaseLocalAheadWarns(t *testing.T) {
+	repo := initRepo(t)
+	withOrigin(t, repo)
+	remoteTip := strings.TrimSpace(gitOutput(t, repo, "rev-parse", "origin/main"))
+	runIn(t, repo, "git", "commit", "--allow-empty", "-m", "local only")
+	res, err := createFeat(t, repo, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if br := res.Worktree.BaseResolution; br.Sha != remoteTip || br.LocalAhead != 1 || !hasStep(res, worktreecmd.StepWarn, "not in the base") {
+		t.Fatalf("resolution=%+v steps=%+v, want the remote sha, ahead 1 and a warn", br, res.Steps)
+	}
+}
+
+func TestCreate_ImplicitBaseEqual(t *testing.T) {
+	repo := initRepo(t)
+	withOrigin(t, repo)
+	res, err := createFeat(t, repo, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if br := res.Worktree.BaseResolution; br.LocalAhead != 0 || br.LocalBehind != 0 || hasStep(res, worktreecmd.StepWarn, "not in the base") || hasStep(res, worktreecmd.StepWarn, "last fetched") || hasStep(res, worktreecmd.StepWarn, "no remote configured") {
+		t.Fatalf("equal: resolution=%+v steps=%+v", br, res.Steps)
+	}
+}
+
+func TestCreate_NoRemoteCutsLocalWithNotice(t *testing.T) {
+	repo := initRepo(t)
+	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	res, err := createFeat(t, repo, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if br := res.Worktree.BaseResolution; res.Worktree.BaseRef != "main" || br.Source != "local" || !hasStep(res, worktreecmd.StepWarn, "no remote configured") {
+		t.Fatalf("no remote: base_ref=%s resolution=%+v", res.Worktree.BaseRef, br)
+	}
+}
+
+func TestCreate_RemoteWithoutMergeRefuses(t *testing.T) {
+	repo := initRepo(t)
+	empty := filepath.Join(realTempDir(t), "empty.git")
+	runIn(t, repo, "git", "init", "-q", "--bare", empty)
+	runIn(t, repo, "git", "remote", "add", "origin", empty)
+	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, err := createFeat(t, repo, "")
+	var e *worktreecmd.Error
+	if !errors.As(err, &e) || e.Code != worktreecmd.ExitNoRemoteBase || e.Kind != "no_remote_base" || !strings.Contains(e.Remediation, "--base main") {
+		t.Fatalf("err=%v, want 31 no_remote_base naming --base main", err)
+	}
+	if _, err := os.Stat(filepath.Join(repo, ".worktrees")); err == nil {
+		t.Error("a refused base wrote .worktrees/")
+	}
+}
+
+func TestCreate_RemoteAmbiguousRefuses(t *testing.T) {
+	repo := initRepo(t)
+	for _, name := range []string{"a", "b"} {
+		bare := filepath.Join(realTempDir(t), name+".git")
+		runIn(t, repo, "git", "init", "-q", "--bare", "-b", "main", bare)
+		runIn(t, repo, "git", "remote", "add", name, bare)
+		runIn(t, repo, "git", "push", "-q", name, "main")
+	}
+	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, err := createFeat(t, repo, "")
+	var e *worktreecmd.Error
+	if !errors.As(err, &e) || e.Code != worktreecmd.ExitNoRemoteBase || e.Kind != "remote_ambiguous" {
+		t.Fatalf("err=%v, want 31 remote_ambiguous", err)
+	}
+}
+
+func TestCreate_StaleFetchUsesRemoteRef(t *testing.T) {
+	repo := initRepo(t)
+	withOrigin(t, repo)
+	runIn(t, repo, "git", "remote", "set-url", "origin", filepath.Join(realTempDir(t), "gone.git"))
+	res, err := createFeat(t, repo, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if br := res.Worktree.BaseResolution; !br.Stale || br.Fetched || !hasStep(res, worktreecmd.StepWarn, "last fetched") {
+		t.Fatalf("stale: resolution=%+v steps=%+v", br, res.Steps)
+	}
+}
+
+func TestCreate_ExplicitBaseWinsWithoutFetch(t *testing.T) {
+	repo := initRepo(t)
+	withOrigin(t, repo)
+	runIn(t, repo, "git", "remote", "set-url", "origin", filepath.Join(realTempDir(t), "gone.git"))
+	res, err := createFeat(t, repo, "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if br := res.Worktree.BaseResolution; res.Worktree.BaseRef != "main" || br.Source != "explicit" || br.Fetched || hasStep(res, worktreecmd.StepWarn, "fetch") {
+		t.Fatalf("explicit: base_ref=%s resolution=%+v steps=%+v", res.Worktree.BaseRef, br, res.Steps)
+	}
+	if _, err := os.Stat(filepath.Join(repo, ".git", "FETCH_HEAD")); err == nil {
+		t.Error("an explicit --base fetched")
+	}
+}
+
+func TestCreate_AttachHasNoBaseResolution(t *testing.T) {
+	repo := initRepo(t)
+	withOrigin(t, repo)
+	runIn(t, repo, "git", "branch", "feat")
+	res, err := createFeat(t, repo, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Worktree.BranchMode != "attached" || res.Worktree.BaseResolution != nil {
+		t.Fatalf("attach: mode=%s resolution=%+v", res.Worktree.BranchMode, res.Worktree.BaseResolution)
+	}
+}

@@ -48,6 +48,7 @@ func NewWorktreeCmd() *cobra.Command {
 	}
 	for _, sub := range []*cobra.Command{
 		newWorktreeCreateCmd(),
+		newWorktreeBaseCmd(),
 		newWorktreeRemoveCmd(),
 		newWorktreeListCmd(),
 		newWorktreeInfoCmd(),
@@ -144,7 +145,7 @@ func newWorktreeCreateCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&attach, "attach", false, "Force attach to an existing branch")
 	cmd.Flags().BoolVar(&newBranch, "new-branch", false, "Force create new branch (refuse if exists)")
-	cmd.Flags().StringVar(&base, "base", "", "Base ref for new branch (default: LETS_MERGE_BRANCH or main)")
+	cmd.Flags().StringVar(&base, "base", "", "Base ref for a new branch, used as given (default: <remote>/<LETS_MERGE_BRANCH> after a bounded fetch; the local one only when no remote is configured)")
 	cmd.Flags().StringVar(&branch, "branch", "", "Branch ref to attach/create, decoupled from <name> (allows '/', e.g. feature/x)")
 	cmd.Flags().BoolVar(&noSymLets, "no-symlink-lets", false, "Skip .lets/ symlink")
 	cmd.Flags().BoolVar(&noSymBeads, "no-store-links", false, "Skip the tracker adapter's declared store links")
@@ -156,6 +157,27 @@ func newWorktreeCreateCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
 	cmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Suppress human-readable output")
 	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "In --print-cd mode, also write human prose to stderr")
+	return cmd
+}
+
+func newWorktreeBaseCmd() *cobra.Command {
+	var jsonOut bool
+	var o worktreecmd.BaseOptions
+	cmd := &cobra.Command{
+		Use:   "base",
+		Short: "Resolve (and fetch) the base a new task branch is cut from; cuts nothing",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return emitErrorEnvelope(cmd.OutOrStdout(), jsonOut, "base", &worktreecmd.Error{Code: worktreecmd.ExitFilesystem, Kind: "getwd_failed", Message: err.Error(), Cause: err})
+			}
+			res, runErr := worktreecmd.Base(cmd.Context(), cwd, o)
+			return emitJSONOrRender(cmd, jsonOut, false, res, func() { worktreecmd.RenderSteps(cmd.OutOrStdout(), res.Envelope) }, runErr)
+		},
+	}
+	cmd.Flags().DurationVar(&o.FetchTimeout, "fetch-timeout", 0, "Bound for the fetch of <remote>/<merge> (default 20s)")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
 	return cmd
 }
 
