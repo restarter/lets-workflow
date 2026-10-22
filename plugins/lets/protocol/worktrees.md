@@ -47,7 +47,7 @@ A worktree may live anywhere: `lets worktree create` puts it in `.worktrees/`, O
 
 ## Standing-team worktree
 
-`team_<callsign>` (dir and branch), created by `/lets:team create`, claimed by `.lets/teams/<callsign>.md`; its lead session is named by the team file's `lead_name` (`<repo>-<callsign>-lead` for a new team); `lets worktree info` reports `team_lead`. It outlives its tasks: `/lets:start <id>` moves it to the task's branch through `lets worktree switch` (a new branch is cut from `origin/<merge>`); uncommitted work is committed or parked as `wip(<id>): park` - never stashed - and unparked when the task comes back. Removed only by `/lets:team disband`.
+`team_<callsign>` (dir and branch), created by `/lets:team create`, claimed by `.lets/teams/<callsign>.md`; its lead session is named by the team file's `lead_name` (`<repo>-<callsign>-lead` for a new team); `lets worktree info` reports `team_lead`. It outlives its tasks: `/lets:start <id>` moves it to the task's branch through `lets worktree switch` (a new branch is cut from the base Go resolves - `<remote>/<merge>`, or the local `<merge>` only when no remote is configured); uncommitted work is committed or parked as `wip(<id>): park` - never stashed - and unparked when the task comes back. Removed only by `/lets:team disband`.
 
 ## Remove safety nets
 

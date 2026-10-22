@@ -78,8 +78,8 @@ func TestTeamBackend(t *testing.T) {
 			t.Errorf("every --command carries --name: %s", strings.TrimSpace(l))
 		}
 		// a route to /lets:worktree create --team is not a create; a bare create on the same line still is
-		if bare := strings.ReplaceAll(l, "/lets:worktree create --team", ""); strings.Contains(bare, "worktree create") && !strings.Contains(bare, `--base "origin/`) {
-			t.Errorf("a worker worktree is cut from origin/<merge> only: %s", strings.TrimSpace(l))
+		if bare := strings.ReplaceAll(l, "/lets:worktree create --team", ""); strings.Contains(bare, "worktree create") && !strings.Contains(bare, "--base '<base_resolution.sha from N1>'") {
+			t.Errorf("a worker worktree is cut from the run's one base, N1's lets worktree base: %s", strings.TrimSpace(l))
 		}
 	}
 	if launches["sessions"] < 2 || launches["orca"] < 1 {
@@ -285,7 +285,7 @@ func TestTeamBackend_WorktreeTeam(t *testing.T) {
 		}
 	}
 	check := strings.Index(team, "lets worktree team-init --check --callsign")
-	create := strings.Index(team, `lets worktree create "team_<c>" --branch "team_<c>" --new-branch --base "origin/`)
+	create := strings.Index(team, `lets worktree create "team_<c>" --branch "team_<c>" --new-branch --plugin-root`)
 	if check < 0 || create < check || !strings.Contains(team, "a given one and a suggested one alike; it writes nothing") {
 		t.Error("the callsign is checked (writing nothing) before the team worktree is created")
 	}
@@ -305,7 +305,7 @@ func TestTeamBackend_WorktreeTeam(t *testing.T) {
 	}
 	// T2-orca: team-create -> adopt -> team-init (T3) -> hook (T4) -> lets orca terminal (T5)
 	o := between(team, "### Step T2-orca: Create the worktree through Orca", "### Step T2: Create the worktree (Go)")
-	tc := strings.Index(team, `lets orca team-create --name "team_<c>" --base-branch "origin/`)
+	tc := strings.Index(team, `lets orca team-create --name "team_<c>" --json`)
 	adopt := strings.Index(team, `lets worktree adopt --dir "<team.path>"`)
 	if o == "" || tc < 0 || adopt < tc || init < adopt || hook < init || orcaTerm < hook {
 		t.Errorf("T2-orca order team-create (%d) -> adopt (%d) -> team-init (%d) -> hook (%d) -> orca terminal (%d)", tc, adopt, init, hook, orcaTerm)
@@ -313,7 +313,7 @@ func TestTeamBackend_WorktreeTeam(t *testing.T) {
 	if !strings.Contains(o, "NEVER Step T2 after this - a create was attempted") || !strings.Contains(o, "`not_attempted`") {
 		t.Error("an ambiguous or failed Orca create never falls to the Go create; only not_attempted does")
 	}
-	// the non-orca T2 block is byte-identical to 8b36520
+	// the non-orca T2 block is byte-identical to goldenT2
 	if got := between(team, "### Step T2: Create the worktree (Go)\n", "### Step T3: Team file"); strings.TrimPrefix(got, "### Step T2: Create the worktree (Go)\n") != goldenT2 {
 		t.Errorf("the Go T2 block changed:\n%s", got)
 	}
@@ -583,8 +583,8 @@ func TestTeamBackend_CreateDisband(t *testing.T) {
 	}
 }
 
-// goldenT2 is the Go T2 block of worktree.md at 8b36520 - the non-orca path is unchanged by fix-5.
-const goldenT2 = "\nFetch as `lets worktree switch` does: `git fetch --no-tags origin {LETS_MERGE_BRANCH}` bounded to 20 s; it fails and `origin/{LETS_MERGE_BRANCH}` exists -> go on with a one-line staleness warning; no `origin/{LETS_MERGE_BRANCH}` -> stop (`no_remote_base`) - the local merge-branch is never a base. Then:\n\n```bash\nLETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)\ncd \"$LETS_PROJECT_ROOT\"\nlets worktree create \"team_<c>\" --branch \"team_<c>\" --new-branch --base \"origin/{LETS_MERGE_BRANCH}\" --plugin-root \"${CLAUDE_PLUGIN_ROOT}\" --json\n```\n\n`ok=false` -> surface `error.message` and stop. Assert, then go on: `worktree.path` ends in `/team_<c>`, and `git -C \"<path>\" branch --show-current` prints `team_<c>`; anything else -> stop and show both.\n\n"
+// goldenT2 is the Go T2 block of worktree.md - the base moved into Go (lets-qjt3h); the non-orca path is otherwise as at 8b36520.
+const goldenT2 = "\nGo resolves the base: `<remote>/{LETS_MERGE_BRANCH}` after a bounded fetch when a remote is configured, the local `{LETS_MERGE_BRANCH}` with a notice when none is; a base refusal (31 `no_remote_base` / `remote_ambiguous`) is `ok=false` below. Then:\n\n```bash\nLETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)\ncd \"$LETS_PROJECT_ROOT\"\nlets worktree create \"team_<c>\" --branch \"team_<c>\" --new-branch --plugin-root \"${CLAUDE_PLUGIN_ROOT}\" --json\n```\n\n`ok=false` -> surface `error.message` and `error.remediation`, and stop. Assert, then go on: `worktree.path` ends in `/team_<c>`, and `git -C \"<path>\" branch --show-current` prints `team_<c>`; anything else -> stop and show both.\n\n"
 
 // membersLinkProblems pins D1-D3 (owner, 2026-09-26) on team.md's member sections.
 func membersLinkProblems(team string) []string {

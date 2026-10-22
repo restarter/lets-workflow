@@ -128,7 +128,7 @@ lets worktree create "$NAME" --plugin-root "${CLAUDE_PLUGIN_ROOT}" --json
 #   lets worktree create "$DIR_NAME" --branch "$BRANCH_REF" --plugin-root "${CLAUDE_PLUGIN_ROOT}" --json
 ```
 
-The Go subcommand auto-detects attach vs new-branch: if `refs/heads/<NAME>` exists, attaches to it; otherwise creates `worktree-<NAME>` from `LETS_MERGE_BRANCH`. Pass `--attach` or `--new-branch` to force a mode. **Pass `--branch <ref>`** to attach/create a branch whose ref differs from the dir `<NAME>` — required for git-flow refs containing `/` (e.g. `feature/x`) and for the C1 task branch; the ref is used verbatim (no `worktree-` prefix) while the dir keeps `<NAME>`. Pass `--switch-main-if-needed` to auto-switch main when attaching its current branch (refuses on dirty/mid-rebase tree). Pass `--no-symlink-lets` or `--no-store-links` to skip `.lets` or the declared store links. `--plugin-root` lets Go read the tracker adapter from the plugin when the installed copy predates its `## Worktree` section.
+The Go subcommand auto-detects attach vs new-branch: if `refs/heads/<NAME>` exists, attaches to it; otherwise creates `worktree-<NAME>` from the base Go resolves: `<remote>/{LETS_MERGE_BRANCH}` after a bounded fetch when a remote is configured (never the local one then), the local `{LETS_MERGE_BRANCH}` with a notice when none is; `--base <ref>` is used exactly as given. A base refusal is `ok=false` with exit 31 (`no_remote_base`, `remote_ambiguous`) and its remediation. Pass `--attach` or `--new-branch` to force a mode. **Pass `--branch <ref>`** to attach/create a branch whose ref differs from the dir `<NAME>` — required for git-flow refs containing `/` (e.g. `feature/x`) and for the C1 task branch; the ref is used verbatim (no `worktree-` prefix) while the dir keeps `<NAME>`. Pass `--switch-main-if-needed` to auto-switch main when attaching its current branch (refuses on dirty/mid-rebase tree). Pass `--no-symlink-lets` or `--no-store-links` to skip `.lets` or the declared store links. `--plugin-root` lets Go read the tracker adapter from the plugin when the installed copy predates its `## Worktree` section.
 
 Parse the JSON. On `ok=false`, surface `error.message` and `error.remediation` to the user; if `rollback.residual` is non-empty, list the paths so the user can clean up.
 
@@ -321,17 +321,17 @@ lets worktree team-init --check --callsign '<c>' --json
 
 ### Step T2-orca: Create the worktree through Orca
 
-Only when the launcher resolves to orca (as in Step C3.5); T1's `--check` already passed. Fetch exactly as Step T2 does (20 s bound, the staleness warning, `no_remote_base` stops). Then, from the main checkout:
+Only when the launcher resolves to orca (as in Step C3.5); T1's `--check` already passed. Then, from the main checkout:
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 cd "$LETS_PROJECT_ROOT"
-lets orca team-create --name "team_<c>" --base-branch "origin/{LETS_MERGE_BRANCH}" --json
+lets orca team-create --name "team_<c>" --json
 ```
 
 By `team.state`:
 
-- `not_attempted` (Orca absent or not running, or its ps failed) -> one line with `team.reason`, then Step T2 (Go); T5 then resolves the lead's launcher as C3.5's orca fallback (cmux, else terminal).
+- `not_attempted` (Orca absent or not running, or its ps failed, or the base did not resolve - `team.reason` `no_remote_base` / `remote_ambiguous`, which Step T2 then reports with its fix) -> one line with `team.reason`, then Step T2 (Go); T5 then resolves the lead's launcher as C3.5's orca fallback (cmux, else terminal).
 - `already_exists` -> "Reopen a team" below.
 - `created` -> first link it, the step Orca's `orca.yaml` would have run (the `team_` prefix keeps adopt from deriving a task id):
 
@@ -345,15 +345,15 @@ By `team.state`:
 
 ### Step T2: Create the worktree (Go)
 
-Fetch as `lets worktree switch` does: `git fetch --no-tags origin {LETS_MERGE_BRANCH}` bounded to 20 s; it fails and `origin/{LETS_MERGE_BRANCH}` exists -> go on with a one-line staleness warning; no `origin/{LETS_MERGE_BRANCH}` -> stop (`no_remote_base`) - the local merge-branch is never a base. Then:
+Go resolves the base: `<remote>/{LETS_MERGE_BRANCH}` after a bounded fetch when a remote is configured, the local `{LETS_MERGE_BRANCH}` with a notice when none is; a base refusal (31 `no_remote_base` / `remote_ambiguous`) is `ok=false` below. Then:
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 cd "$LETS_PROJECT_ROOT"
-lets worktree create "team_<c>" --branch "team_<c>" --new-branch --base "origin/{LETS_MERGE_BRANCH}" --plugin-root "${CLAUDE_PLUGIN_ROOT}" --json
+lets worktree create "team_<c>" --branch "team_<c>" --new-branch --plugin-root "${CLAUDE_PLUGIN_ROOT}" --json
 ```
 
-`ok=false` -> surface `error.message` and stop. Assert, then go on: `worktree.path` ends in `/team_<c>`, and `git -C "<path>" branch --show-current` prints `team_<c>`; anything else -> stop and show both.
+`ok=false` -> surface `error.message` and `error.remediation`, and stop. Assert, then go on: `worktree.path` ends in `/team_<c>`, and `git -C "<path>" branch --show-current` prints `team_<c>`; anything else -> stop and show both.
 
 ### Step T3: Team file
 
@@ -532,7 +532,7 @@ AskUserQuestion(
     question: "Delete branch {removed.branch} too?",
     header: "Branch",
     options: [
-      { label: "Delete", description: "Branch deletion (merged into origin/{LETS_MERGE_BRANCH} is detected; squash merges need force)" },
+      { label: "Delete", description: "Branch deletion (merged into {LETS_MERGE_BRANCH} - its remote copy first, else the local one - is detected; squash merges need force)" },
       { label: "Keep", description: "Keep the branch for reference" }
     ],
     multiSelect: false
@@ -555,7 +555,7 @@ Offer to clean up other task branches that are already merged. Run `lets worktre
 ```
 AskUserQuestion(
   questions=[{
-    question: "{N} task branches are already merged into origin/{LETS_MERGE_BRANCH}. Delete them?",
+    question: "{N} task branches are already merged into {LETS_MERGE_BRANCH}. Delete them?",
     header: "Sweep",
     options: [
       { label: "Delete merged", description: "Delete the listed merged branches; unmerged ones stay" },
