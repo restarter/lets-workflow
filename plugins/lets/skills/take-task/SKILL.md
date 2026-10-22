@@ -162,7 +162,11 @@ AskUserQuestion(
 ```
 
 Handle response:
-- **Branch** -> `git checkout -b <branch> {LETS_MERGE_BRANCH}` (from LETS Config)
+- **Branch** -> cut from the base Go resolves:
+  - run `lets worktree base --json` from the main checkout - Go fetches with its own deadline and applies the one base policy (the verb `/lets:team run` N1 uses); print each `warn` step of `steps[]` as one line (a stale fetch, local commits not in the base, no remote configured);
+  - `ok=false` (31 `no_remote_base` / `remote_ambiguous`, 13 `base_ref_missing`, or any other) -> show `error.message` and `error.remediation`, stop: nothing was cut; the task stays claimed (Step 1);
+  - `ok=true` -> `git checkout --no-track -b <branch> <base_resolution.sha>` (a sha cut gives the branch no upstream, like every implicit cut). When that sha is not HEAD, git carries uncommitted changes that do not conflict and refuses on a conflict (a local change or an untracked file the base would overwrite) -> show git's message as is, stop; never a stash, a reset or a `-f` to get past it;
+  - no `lets` binary -> say the base policy needs the `lets` binary (`/lets:update`), stop; never fall back to the local `{LETS_MERGE_BRANCH}`.
 - **Worktree** -> invoke `Skill(skill: "lets:worktree", args: "create <task-id> --title-file .lets/cache/title-<session6>.txt")` (the id, not a name: the worktree command renders the adapter's `worktree-branch:` name from it), then relay how the new session opens - the worktree command's own output names it (a terminal command, or a cmux / tmux / Orca pane already running `/lets:start <task-id>`).
   Stop here - the worktree session continues in a separate terminal or pane.
 - **Stay on current branch** -> skip `git checkout -b`; stay on the current branch (could be `$LETS_MERGE_BRANCH` or any pre-existing branch). Print one line:

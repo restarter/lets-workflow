@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -84,6 +85,26 @@ func fetchChild(t *testing.T, parent int) (pid, pgid int) {
 	return 0, 0
 }
 
+// groupRuns reports whether a process of group pgid runs the program name (`ps`'s
+// comm: a full path on macOS, the bare name on Linux - compared by base name).
+func groupRuns(t *testing.T, pgid int, name string) bool {
+	t.Helper()
+	out, err := exec.Command("ps", "-A", "-o", "pid=", "-o", "pgid=", "-o", "comm=").Output()
+	if err != nil {
+		t.Fatalf("ps: %v", err)
+	}
+	for _, l := range strings.Split(string(out), "\n") {
+		f := strings.Fields(l)
+		if len(f) < 3 {
+			continue
+		}
+		if g, _ := strconv.Atoi(f[1]); g == pgid && filepath.Base(strings.Join(f[2:], " ")) == name {
+			return true
+		}
+	}
+	return false
+}
+
 // Ctrl-C reaches lets but not the fetch, which Setpgid moved out of the terminal's
 // foreground group (c2-F2): the interrupt must end the whole fetch group AND still
 // end lets by that signal - never a hanging remote orphaned, never an interrupt
@@ -125,6 +146,19 @@ func TestFetchBounded_InterruptEndsTheFetch(t *testing.T) {
 	}
 	if pgid > 0 {
 		t.Cleanup(func() { _ = syscall.Kill(-pgid, syscall.SIGKILL) }) // never leave the sleep behind
+	}
+	// Signal only once the descendant that holds stderr exists, so a cancellation that
+	// killed git alone cannot pass for want of a process to orphan (Codex round 1 on
+	// the branch). The group is git, then `git remote-ext`, then `sleep` (the `sh -c
+	// sleep 30` remote-ext runs, exec'd by sh) - a probe of the group showed all
+	// three. A member count is not enough: two members can be git + remote-ext before
+	// the sleep exists, and remote-ext starts its command only on git's connect and
+	// exits on EOF before it, so a git-only kill then would leave nothing behind.
+	for deadline := time.Now().Add(15 * time.Second); !groupRuns(t, pgid, "sleep"); time.Sleep(50 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			stopHelper()
+			t.Fatalf("no sleep in the fetch's group %d - its remote helper never started the command:\n%s", pgid, out.String())
+		}
 	}
 
 	if err := helper.Process.Signal(os.Interrupt); err != nil {
