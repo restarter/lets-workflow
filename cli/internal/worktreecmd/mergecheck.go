@@ -44,17 +44,26 @@ func mergedUpstream(ctx context.Context, root, branch, merge string) (bool, stri
 	return false, ""
 }
 
-// checkedOutBranches returns the short names of every branch checked out in any
-// worktree of root (main checkout included).
-func checkedOutBranches(ctx context.Context, root string) map[string]bool {
-	out, _ := exec.CommandContext(ctx, "git", "-C", root, "worktree", "list", "--porcelain").Output()
-	set := map[string]bool{}
+// checkedOutBranches maps every branch checked out in a worktree of root (main
+// checkout included) to that worktree's path, from `git worktree list --porcelain`
+// (version- and locale-independent). ok=false when the list failed - a caller
+// never reads that as "nothing is checked out".
+func checkedOutBranches(ctx context.Context, root string) (map[string]string, bool) {
+	out, err := exec.CommandContext(ctx, "git", "-C", root, "worktree", "list", "--porcelain").Output()
+	if err != nil {
+		return nil, false
+	}
+	held := map[string]string{}
+	path := ""
 	for _, line := range strings.Split(string(out), "\n") {
+		if p, ok := strings.CutPrefix(line, "worktree "); ok {
+			path = strings.TrimSpace(p)
+		}
 		if b, ok := strings.CutPrefix(line, "branch refs/heads/"); ok {
-			set[strings.TrimSpace(b)] = true
+			held[strings.TrimSpace(b)] = path
 		}
 	}
-	return set
+	return held, true
 }
 
 // SweepCandidates splits the local branches that start with one of prefixes into
@@ -67,7 +76,7 @@ func SweepCandidates(ctx context.Context, root, merge string, prefixes []string)
 	if err != nil {
 		return nil, nil
 	}
-	checkedOut := checkedOutBranches(ctx, root)
+	checkedOut, _ := checkedOutBranches(ctx, root)
 	var tips []string
 	for _, ref := range mergeRefs(merge) {
 		if tip := refTip(ctx, root, ref); tip != "" {
@@ -75,7 +84,7 @@ func SweepCandidates(ctx context.Context, root, merge string, prefixes []string)
 		}
 	}
 	for _, b := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		if b == "" || b == merge || checkedOut[b] || !hasAnyPrefix(b, prefixes) {
+		if _, held := checkedOut[b]; b == "" || b == merge || held || !hasAnyPrefix(b, prefixes) {
 			continue
 		}
 		tip := refTip(ctx, root, "refs/heads/"+b)

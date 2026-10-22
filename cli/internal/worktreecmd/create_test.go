@@ -276,6 +276,12 @@ func TestCreate_BranchInUseOtherWorktree(t *testing.T) {
 	if e.Kind != "branch_in_use_other_worktree" {
 		t.Errorf("Kind=%q, want branch_in_use_other_worktree", e.Kind)
 	}
+	if !strings.Contains(e.Message, externalWt) {
+		t.Errorf("message %q does not name the other worktree %s", e.Message, externalWt)
+	}
+	if _, err := os.Stat(filepath.Join(repo, ".worktrees", "feat")); err == nil {
+		t.Error("a refused attach created the worktree directory")
+	}
 }
 
 func TestCreate_NoOp_Idempotency(t *testing.T) {

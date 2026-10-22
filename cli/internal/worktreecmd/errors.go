@@ -63,6 +63,17 @@ func ErrBranchCheckedOutInMain(branch string) *Error {
 	}
 }
 
+// ErrBranchInUseOtherWorktree - attach refused: the branch is checked out in another
+// worktree (lets-fh3yq: read from `git worktree list --porcelain`, not git's prose).
+func ErrBranchInUseOtherWorktree(branch, path string) *Error {
+	return &Error{
+		Code:        ExitBranchConflict,
+		Kind:        "branch_in_use_other_worktree",
+		Message:     fmt.Sprintf("branch %q is checked out in another worktree at %s", branch, path),
+		Remediation: "lets worktree list to find it, then remove it (git worktree prune when its directory is already gone), or pick a different name",
+	}
+}
+
 // ErrTeamExists - team-init found (or the filesystem's link refused over) a team
 // file of that callsign; it is never overwritten.
 func ErrTeamExists(path string) *Error {

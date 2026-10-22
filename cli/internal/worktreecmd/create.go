@@ -160,6 +160,22 @@ func Create(ctx context.Context, projectRoot string, opts CreateOptions) (*Creat
 		}
 	}
 
+	// Step 5b (lets-fh3yq): attach pre-check - the branch checked out in ANOTHER
+	// worktree. After Step 5, so 13 branch_checked_out_in_main and
+	// --switch-main-if-needed keep precedence (git refuses one branch in two
+	// worktrees, so after Step 5 only other worktrees can hold it); before Step 6,
+	// so a refusal writes nothing. A failed list skips the check - git's own
+	// refusal still lands in classifyWorktreeAddErr.
+	if plan.Mode == "attached" {
+		if held, ok := checkedOutBranches(ctx, projectRoot); ok {
+			if p, in := held[plan.Branch]; in {
+				restoreMainIfSwitched(prevMainBranch)
+				addStep(StepErr, "guard: "+plan.Branch+" is checked out at "+p)
+				return fail(ErrBranchInUseOtherWorktree(plan.Branch, p))
+			}
+		}
+	}
+
 	// Step 6: ensure .gitignore entries via shared initcmd helper
 	// (race-safe via flock + integrity check after Task 3 hardening).
 	if err := initcmd.EnsureGitignore(projectRoot, []string{".worktrees/", ".lets"}); err != nil {
@@ -183,24 +199,7 @@ func Create(ctx context.Context, projectRoot string, opts CreateOptions) (*Creat
 	}
 	if out, err := exec.CommandContext(ctx, "git", gitArgs...).CombinedOutput(); err != nil {
 		msg := redactCreds(strings.TrimSpace(string(out)))
-		kind := "git_worktree_add_failed"
-		code := ExitGitFailed
-		remediation := "if path is stale: lets worktree remove " + opts.Name + " (use --force if dirty)"
-		switch {
-		// Path collision (e.g. `.worktrees/foo` already exists or `worktree-foo`
-		// branch already exists when creating in new-branch mode).
-		case strings.Contains(msg, "already exists"):
-			kind = "worktree_path_exists"
-			code = ExitWorktreeExists
-		// Branch already checked out in ANOTHER worktree (review S-2). git
-		// emits "fatal: 'feat' is already used by worktree at '...'". Route
-		// to ExitBranchConflict so scripts can branch on it without parsing
-		// prose; remediation points at the offending worktree.
-		case strings.Contains(msg, "is already used by worktree"):
-			kind = "branch_in_use_other_worktree"
-			code = ExitBranchConflict
-			remediation = "the target branch is checked out in another worktree; lets worktree list to find it, then remove or pick a different name"
-		}
+		kind, code, remediation := classifyWorktreeAddErr(msg, opts.Name)
 		restoreMainIfSwitched(prevMainBranch)
 		return fail(&Error{
 			Code:        code,
@@ -337,6 +336,23 @@ func checkGitVersion(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// classifyWorktreeAddErr maps a failed `git worktree add` to a typed kind. The
+// branch-in-use text differs by git version - ">= 2.42: is already used by
+// worktree at", "2.39: is already checked out at" (lets-fh3yq). Step 5b's porcelain
+// pre-check is the primary detector; this is the race fallback.
+func classifyWorktreeAddErr(msg, name string) (kind string, code int, remediation string) {
+	stale := "if path is stale: lets worktree remove " + name + " (use --force if dirty)"
+	switch {
+	// Path collision (e.g. `.worktrees/foo` already exists or `worktree-foo` branch
+	// already exists when creating in new-branch mode).
+	case strings.Contains(msg, "already exists"):
+		return "worktree_path_exists", ExitWorktreeExists, stale
+	case strings.Contains(msg, "is already used by worktree"), strings.Contains(msg, "is already checked out at"):
+		return "branch_in_use_other_worktree", ExitBranchConflict, "the target branch is checked out in another worktree; lets worktree list to find it, then remove or pick a different name"
+	}
+	return "git_worktree_add_failed", ExitGitFailed, stale
 }
 
 // compareSemver returns -1/0/1 for a<b, a==b, a>b on dotted-numeric versions.
