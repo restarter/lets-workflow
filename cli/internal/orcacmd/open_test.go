@@ -131,3 +131,80 @@ func TestTruncate_RuneBoundary(t *testing.T) {
 		t.Errorf("truncate cut mid-rune or wrong length: %d", len([]rune(got)))
 	}
 }
+
+// openRepoWithOrigin is a main checkout with one commit pushed to a bare origin's main.
+func openRepoWithOrigin(t *testing.T) string {
+	t.Helper()
+	repo := mainCheckout(t)
+	origin := filepath.Join(t.TempDir(), "origin.git")
+	for _, a := range [][]string{
+		{"-C", repo, "config", "user.email", "t@e"},
+		{"-C", repo, "config", "user.name", "t"},
+		{"-C", repo, "commit", "-q", "--allow-empty", "-m", "base"},
+		{"init", "-q", "--bare", "-b", "main", origin},
+		{"-C", repo, "remote", "add", "origin", origin},
+		{"-C", repo, "push", "-q", "-u", "origin", "HEAD:main"},
+	} {
+		if out, err := exec.Command("git", a...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", a, err, out)
+		}
+	}
+	return repo
+}
+
+// Orca moves origin/main before it cuts: the envelope names the commit the created
+// worktree actually has (Codex round 2).
+func TestOpen_ReconcilesMovedBase(t *testing.T) {
+	repo := openRepoWithOrigin(t)
+	wt := filepath.Join(t.TempDir(), "lets-abc-x")
+	moved := ""
+	useFakeOrca(t, func(args []string) (string, string, bool) {
+		switch joined(args) {
+		case "status --json":
+			return statusRunning, "", false
+		case "worktree ps --json":
+			return `{"result":{"worktrees":[]}}`, "", false
+		}
+		out, err := exec.Command("git", "-C", repo, "commit-tree", "-p", "origin/main", "-m", "moved", "origin/main^{tree}").Output()
+		if err != nil {
+			return "", "commit-tree failed", true
+		}
+		moved = strings.TrimSpace(string(out))
+		if err := exec.Command("git", "-C", repo, "update-ref", "refs/remotes/origin/main", moved).Run(); err != nil {
+			return "", "update-ref failed", true
+		}
+		if err := exec.Command("git", "-C", repo, "worktree", "add", "-q", "-b", "lets-abc-x", wt, "origin/main").Run(); err != nil {
+			return "", "worktree add failed", true
+		}
+		return `{"ok":true,"result":{"worktree":{"id":"r::` + wt + `","path":"` + wt + `","branch":"refs/heads/lets-abc-x"}}}`, "", false
+	})
+	res, err := Open(context.Background(), OpenOptions{Repo: repo, Name: "lets-abc-x", Merge: "main"})
+	if err != nil || !res.Launch.Launched || res.Launch.BaseResolution == nil || res.Launch.BaseResolution.Sha != moved {
+		t.Fatalf("err=%v launch=%+v, want base_resolution.sha %s", err, res.Launch, moved)
+	}
+}
+
+func TestOpen_PassesResolvedBaseForNewBranch(t *testing.T) {
+	repo := openRepoWithOrigin(t)
+	calls := useFakeOrca(t, func(args []string) (string, string, bool) {
+		switch joined(args) {
+		case "status --json":
+			return statusRunning, "", false
+		case "worktree ps --json":
+			return `{"result":{"worktrees":[]}}`, "", false
+		}
+		return `{"ok":true,"result":{"worktree":{"id":"r::/o/lets-abc-x","path":"/o/lets-abc-x","branch":"refs/heads/lets-abc-x"}}}`, "", false
+	})
+	res, err := Open(context.Background(), OpenOptions{Repo: repo, Name: "lets-abc-x", Merge: "main"})
+	if err != nil || !res.Launch.Launched || res.Launch.BaseRef != "origin/main" {
+		t.Fatalf("err=%v launch=%+v", err, res.Launch)
+	}
+	if last := (*calls)[len(*calls)-1].args; !slices.Contains(last, "--base-branch") || !slices.Contains(last, "origin/main") {
+		t.Errorf("argv %q has no --base-branch origin/main", last)
+	}
+	// /o/lets-abc-x does not exist and no lets-abc-x branch is local: the HEAD Orca cut
+	// cannot be read, so the resolution is omitted, never presented as confirmed
+	if res.Launch.BaseResolution != nil {
+		t.Errorf("an unreadable HEAD kept base_resolution %+v", res.Launch.BaseResolution)
+	}
+}
