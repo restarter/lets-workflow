@@ -108,18 +108,23 @@ func TestFetchBounded_InterruptEndsTheFetch(t *testing.T) {
 		<-exited
 	}
 
+	// Go sets the child's group only in the child, between fork and exec: until then
+	// ps shows git in the helper's group, which is this test's (and go test's). So
+	// poll until git leads its own group, and arm the group kill only after that -
+	// never on a group this test runs in.
 	pid, pgid := 0, 0
-	for deadline := time.Now().Add(15 * time.Second); pid == 0; time.Sleep(50 * time.Millisecond) {
+	for deadline := time.Now().Add(15 * time.Second); pid == 0 || pgid != pid; time.Sleep(50 * time.Millisecond) {
 		if time.Now().After(deadline) {
 			stopHelper()
+			if pid != 0 {
+				t.Fatalf("the fetch's git %d is in group %d, not leading its own", pid, pgid)
+			}
 			t.Fatalf("the helper never started its fetch:\n%s", out.String())
 		}
 		pid, pgid = fetchChild(t, helper.Process.Pid)
 	}
-	t.Cleanup(func() { _ = syscall.Kill(-pgid, syscall.SIGKILL) }) // never leave the sleep behind
-	if pgid != pid {
-		stopHelper()
-		t.Fatalf("the fetch's git %d is in group %d, not leading its own", pid, pgid)
+	if pgid > 0 {
+		t.Cleanup(func() { _ = syscall.Kill(-pgid, syscall.SIGKILL) }) // never leave the sleep behind
 	}
 
 	if err := helper.Process.Signal(os.Interrupt); err != nil {

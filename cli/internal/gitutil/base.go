@@ -190,7 +190,9 @@ func fetchHeadAge(ctx context.Context, dir string) string {
 		paths = append(paths, filepath.Join(strings.TrimSpace(string(out)), "FETCH_HEAD"))
 	}
 	for _, p := range paths {
-		if fi, err := os.Stat(p); err == nil {
+		// An empty FETCH_HEAD is a failed fetch's (git truncates it before it fails):
+		// its mtime dates that failure, not a fetch - skip it.
+		if fi, err := os.Stat(p); err == nil && fi.Size() > 0 {
 			return time.Since(fi.ModTime()).Round(time.Minute).String()
 		}
 	}

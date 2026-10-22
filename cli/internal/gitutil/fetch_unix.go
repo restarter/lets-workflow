@@ -28,12 +28,12 @@ import (
 // redact.Creds (a leaf package) before it becomes error text: it reaches the stale
 // warning and the refusal message of every envelope (Codex round 2).
 //
-// Setpgid also takes git out of the terminal's foreground group, so a Ctrl-C (or a
-// SIGTERM to lets) reaches only this process (c2-F2). While git runs, SIGINT and
-// SIGTERM are caught: the fetch's context is cancelled (cmd.Cancel kills the whole
-// group), and once Run returned the same signal is re-delivered to this process, so
-// its default action ends lets as before - an interrupt never becomes a stale
-// resolution or a refusal. The returned error names the interrupt for the moment
+// Setpgid also takes git out of the terminal's foreground group, so a Ctrl-C, a
+// closed terminal's SIGHUP or a SIGTERM to lets reaches only this process (c2-F2).
+// While git runs, SIGINT, SIGTERM and SIGHUP are caught: the fetch's context is
+// cancelled (cmd.Cancel kills the whole group), and once Run returned the same
+// signal is re-delivered to this process, so its default action ends lets as
+// before - an interrupt never becomes a stale resolution or a refusal. The returned error names the interrupt for the moment
 // before the process dies. A signal this process inherited as ignored is left
 // alone, as before. The handler is stopped and the watcher gone on every path.
 func fetchBounded(ctx context.Context, dir string, timeout time.Duration, args ...string) error {
@@ -48,7 +48,7 @@ func fetchBounded(ctx context.Context, dir string, timeout time.Duration, args .
 	cmd.WaitDelay = fetchWaitDelay
 
 	var watched []os.Signal
-	for _, s := range []os.Signal{os.Interrupt, syscall.SIGTERM} {
+	for _, s := range []os.Signal{os.Interrupt, syscall.SIGTERM, syscall.SIGHUP} {
 		if !signal.Ignored(s) {
 			watched = append(watched, s)
 		}

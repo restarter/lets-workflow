@@ -113,6 +113,11 @@ func TestResolveBase_FetchFailure(t *testing.T) {
 	if refusal != nil || !br.Stale || br.Fetched || br.Sha != before || br.FetchAge != "2h0m0s" || !hasNote(br, "last fetched 2h0m0s ago") {
 		t.Fatalf("fetch fails, ref present: %+v, %v; want fetch_age 2h0m0s (the last real fetch) named in the note", br, refusal)
 	}
+	// The failed fetch left FETCH_HEAD empty with mtime now: a second failure must not
+	// date the ref by the first failure.
+	if br, refusal := ResolveBase(ctx, clone, "main", BaseOptions{}); refusal != nil || !br.Stale || br.FetchAge != "unknown" {
+		t.Fatalf("second failed fetch: %+v, %v; want fetch_age unknown, never the time since the first failure", br, refusal)
+	}
 	remoteGit(t, clone, "update-ref", "-d", "refs/remotes/origin/main")
 	if _, refusal := ResolveBase(ctx, clone, "main", BaseOptions{}); refusal == nil || refusal.Kind != BaseNoRemoteBase || !strings.Contains(refusal.Message, "fetch failed") {
 		t.Fatalf("fetch fails, ref absent: %+v, want no_remote_base naming the fetch failure", refusal)
