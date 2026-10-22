@@ -6,13 +6,35 @@ import (
 	"context"
 	"os/exec"
 	"strings"
+
+	"github.com/restarter/lets-workflow/cli/internal/gitutil"
 )
 
 // mergeRefs lists the refs a branch can be merged into, preferred first: the
-// remote-tracking ref (the local merge-branch lags in a worktree setup, because
-// it only moves when someone pulls in the main checkout), then the local ref.
-func mergeRefs(merge string) []string {
-	return []string{"refs/remotes/origin/" + merge, "refs/heads/" + merge}
+// remote-tracking ref of the remote gitutil.ResolveRemote picks (no fetch; the
+// local merge-branch lags in a worktree setup, because it only moves when someone
+// pulls in the main checkout), then the local ref. No remote, or an ambiguous one,
+// is the local ref alone - never a refusal (lets-57lb9).
+func mergeRefs(ctx context.Context, root, merge string) []string {
+	if r, refusal := gitutil.ResolveRemote(ctx, root, merge); refusal == nil && r.Name != "" {
+		return []string{"refs/remotes/" + r.Name + "/" + merge, "refs/heads/" + merge}
+	}
+	return []string{"refs/heads/" + merge}
+}
+
+// mergeRefFor is the first of mergeRefs that resolves, in short form; merge itself
+// when none does.
+func mergeRefFor(ctx context.Context, root, merge string) string {
+	for _, ref := range mergeRefs(ctx, root, merge) {
+		if refExists(ctx, root, ref) {
+			return shortRef(ref)
+		}
+	}
+	return merge
+}
+
+func shortRef(ref string) string {
+	return strings.TrimPrefix(strings.TrimPrefix(ref, "refs/remotes/"), "refs/heads/")
 }
 
 // refExists reports whether ref resolves in root.
@@ -29,11 +51,11 @@ func refTip(ctx context.Context, root, ref string) string {
 	return strings.TrimSpace(string(out))
 }
 
-// mergedUpstream reports whether branch is an ancestor of origin/<merge> (preferred)
-// or local <merge>, and names the ref it checked. No implicit fetch. Squash and
-// rebase merges are NOT detectable and report false.
+// mergedUpstream reports whether branch is an ancestor of the resolved remote's
+// <merge> (preferred) or local <merge>, and names the ref it checked. No implicit
+// fetch. Squash and rebase merges are NOT detectable and report false.
 func mergedUpstream(ctx context.Context, root, branch, merge string) (bool, string) {
-	for _, ref := range mergeRefs(merge) {
+	for _, ref := range mergeRefs(ctx, root, merge) {
 		if !refExists(ctx, root, ref) {
 			continue
 		}
@@ -78,7 +100,7 @@ func SweepCandidates(ctx context.Context, root, merge string, prefixes []string)
 	}
 	checkedOut, _ := checkedOutBranches(ctx, root)
 	var tips []string
-	for _, ref := range mergeRefs(merge) {
+	for _, ref := range mergeRefs(ctx, root, merge) {
 		if tip := refTip(ctx, root, ref); tip != "" {
 			tips = append(tips, tip)
 		}

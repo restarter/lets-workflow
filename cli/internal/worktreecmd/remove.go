@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -178,10 +179,26 @@ func Remove(ctx context.Context, projectRoot string, opts RemoveOptions) (*Remov
 				Remediation: "push the branch (or pass --force to discard them along with the worktree)",
 			})
 		case err != nil:
-			// Most common cause: no upstream configured (e.g. attach-mode worktree
-			// pointing at a local-only branch). Don't block, but flag it so the
-			// JSON envelope makes the gap visible.
-			addStep(StepWarn, "skipped unpushed-commits check (no upstream configured)")
+			// No upstream - the normal state of a branch an implicit cut made (KD6). With a
+			// remote configured, count the commits no remote-tracking ref holds: they
+			// exist only here, which is what this gate protects (lets-qjt3h KD9).
+			n, counted := unpushedWithoutUpstream(ctx, wtPath, branch)
+			switch {
+			case counted && n > 0:
+				return fail(&Error{
+					Code:        ExitUnpushedCommits,
+					Kind:        "unpushed_commits",
+					Message:     fmt.Sprintf("worktree has %d commit(s) on branch %q that no remote has (no upstream configured)", n, branch),
+					Remediation: "push the branch (or pass --force to discard them along with the worktree)",
+				})
+			case counted:
+				addStep(StepOK, "no unpushed commits (no upstream; every commit is on a remote)")
+			default:
+				// An upstream configured but gone (a squash-merged, deleted PR branch), no
+				// remote configured (nothing is ever pushed there), or git failed: don't
+				// block, but flag it so the JSON envelope makes the gap visible.
+				addStep(StepWarn, "skipped unpushed-commits check (no upstream configured)")
+			}
 		default:
 			addStep(StepOK, "no unpushed commits on upstream")
 		}
@@ -254,7 +271,7 @@ func deleteBranch(ctx context.Context, root, branch string, force bool, merge st
 	default:
 		if ok, ref := mergedUpstream(ctx, root, branch, merge); ok {
 			flag = "-D"
-			note = fmt.Sprintf("merged into %s (merge-base); ", strings.TrimPrefix(strings.TrimPrefix(ref, "refs/remotes/"), "refs/heads/"))
+			note = fmt.Sprintf("merged into %s (merge-base); ", shortRef(ref))
 		}
 	}
 	// `--` between flags and the branch name prevents git from treating a branch
@@ -262,11 +279,15 @@ func deleteBranch(ctx context.Context, root, branch string, force bool, merge st
 	out, err := exec.CommandContext(ctx, "git", "-C", root, "branch", flag, "--", branch).CombinedOutput()
 	if err != nil {
 		if flag == "-d" && strings.Contains(string(out), "not fully merged") {
+			names := []string{}
+			for _, ref := range mergeRefs(ctx, root, merge) {
+				names = append(names, shortRef(ref))
+			}
 			return "", &Error{
 				Code:        ExitBranchUnmerged,
 				Kind:        "branch_unmerged",
 				Message:     fmt.Sprintf("branch %q has unmerged commits", branch),
-				Remediation: fmt.Sprintf("not merged into origin/%s or %s, and not pushed to its upstream; a squash/rebase merge is not detectable - pass --force-branch", merge, merge),
+				Remediation: fmt.Sprintf("not merged into %s, and not pushed to its upstream; a squash/rebase merge is not detectable - pass --force-branch", strings.Join(names, " or ")),
 				Cause:       err,
 			}
 		}
@@ -281,6 +302,28 @@ func deleteBranch(ctx context.Context, root, branch string, force bool, merge st
 		return fmt.Sprintf("branch %q %sdeleted with -D", branch, note), nil
 	}
 	return fmt.Sprintf("branch %q deleted", branch), nil
+}
+
+// unpushedWithoutUpstream counts the commits of the worktree's HEAD that no
+// remote-tracking ref holds, for a branch with NO upstream configured - the state an
+// implicit cut leaves (lets-qjt3h KD9). counted=false when an upstream is configured
+// but gone (`gh pr merge --squash --delete-branch` + prune: the squashed commits are
+// on no remote, yet merged), with no remote configured (nothing is ever pushed there,
+// and --not --remotes would count the whole history), or when git fails.
+func unpushedWithoutUpstream(ctx context.Context, wtPath, branch string) (int, bool) {
+	if exec.CommandContext(ctx, "git", "-C", wtPath, "config", "--get", "branch."+branch+".merge").Run() == nil {
+		return 0, false
+	}
+	remotes, err := exec.CommandContext(ctx, "git", "-C", wtPath, "remote").Output()
+	if err != nil || len(strings.Fields(string(remotes))) == 0 {
+		return 0, false
+	}
+	out, err := exec.CommandContext(ctx, "git", "-C", wtPath, "rev-list", "--count", "HEAD", "--not", "--remotes").Output()
+	if err != nil {
+		return 0, false
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(string(out)))
+	return n, err == nil
 }
 
 // worktreePaths lists every worktree path git knows for root (main checkout included).

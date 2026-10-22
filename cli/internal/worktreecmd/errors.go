@@ -102,11 +102,6 @@ func ErrUntrackedPresent(paths string) *Error {
 	return &Error{Code: ExitUntrackedPresent, Kind: "untracked_present", Message: "new paths need an explicit --include before a park: " + paths + "; the index and HEAD are untouched", Remediation: "pass --include <path> for each path to park, or remove it"}
 }
 
-// ErrNoRemoteBase - a new branch is cut from origin/<merge> only.
-func ErrNoRemoteBase(merge string) *Error {
-	return &Error{Code: ExitNoRemoteBase, Kind: "no_remote_base", Message: fmt.Sprintf("origin/%s is missing; a new branch is never cut from the local %s", merge, merge), Remediation: "add the origin remote and fetch " + merge}
-}
-
 // ErrBaseRefusal maps a gitutil base refusal to worktreecmd's exits: 31 for
 // no_remote_base and remote_ambiguous (no remote base to cut a new branch from),
 // 13 base_ref_missing when no remote is configured and the local <merge> is missing.

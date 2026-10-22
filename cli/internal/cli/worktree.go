@@ -633,7 +633,7 @@ func newWorktreeSwitchCmd() *cobra.Command {
 	f.StringVar(&o.TitleFile, "title-file", "", "File holding the task title (the new branch's slug)")
 	f.BoolVar(&o.Park, "park", false, "Commit the old branch's changes as wip(<id>): park")
 	f.StringArrayVar(&o.Include, "include", nil, "A new path to park (repeatable; every untracked or staged-new path needs one)")
-	f.DurationVar(&o.FetchTimeout, "fetch-timeout", 0, "Bound for fetching origin/<merge> (default 20s)")
+	f.DurationVar(&o.FetchTimeout, "fetch-timeout", 0, "Bound for fetching <remote>/<merge> (default 20s)")
 	f.BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
 	return cmd
 }
