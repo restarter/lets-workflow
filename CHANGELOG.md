@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+- **A new branch is cut from the remote's copy of the merge branch, never from a stale local one (lets-qjt3h, lets-57lb9).** `lets worktree create` without `--base`, `lets worktree switch`, Orca's `open` and `team-create`, and take-task's Branch pick now share one base policy in Go: the remote is resolved (`branch.<merge>.remote`, else the only remote, else `origin` - no longer a remote literally named `origin`), `<merge>` is fetched under a bounded deadline, and the branch is cut with `--no-track` from that exact commit. A failed fetch cuts from the last fetched copy with a "last fetched <age> ago" warning, local commits missing from the base are named in a warning, and with no remote configured the local `<merge>` is used and the run says so. A remote without `<merge>` refuses with exit 31 `no_remote_base`, several remotes with none chosen with 31 `remote_ambiguous`. An explicit `--base` behaves exactly as before. `lets worktree base --json` reports the resolution, and the create, switch and Orca envelopes carry it as `base_resolution`. `lets worktree remove` no longer depends on an upstream to catch unpushed work: a branch without one whose commits are on no remote refuses with exit 21.
+- **`lets worktree create` reports a branch checked out in another worktree on every git version (lets-fh3yq).** It checks `git worktree list` before `git worktree add`, so Apple git 2.39 (the macOS default) gets exit 13 `branch_in_use_other_worktree` naming that worktree instead of a generic exit 16; both git phrasings stay recognized for the race.
+
 ## [0.11.1] - 2026-10-21
 
 ### Added

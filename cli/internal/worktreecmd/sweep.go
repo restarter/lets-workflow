@@ -59,7 +59,8 @@ func templatePrefix(tmpl string) string {
 	return tmpl
 }
 
-// Sweep finds local task branches already merged into origin/<merge> (or <merge>).
+// Sweep finds local task branches already merged into the resolved remote's <merge>
+// (else the local one).
 // Candidates are only the branches the convention's created shapes accept - a
 // template's literal prefix is merely a pre-filter, so a template that starts with
 // {id} never widens the sweep to every branch. Dry-run by default; apply deletes

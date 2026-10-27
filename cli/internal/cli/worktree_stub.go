@@ -28,6 +28,7 @@ func NewWorktreeCmd() *cobra.Command {
 	}
 	for _, use := range []struct{ name, short string }{
 		{"create <name>", "Create a worktree (Windows: not supported)"},
+		{"base", "Resolve a new branch's base (Windows: not supported)"},
 		{"remove <name>", "Remove a worktree (Windows: not supported)"},
 		{"list", "List worktrees (Windows: not supported)"},
 		{"info", "Show worktree info (Windows: not supported)"},

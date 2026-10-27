@@ -56,17 +56,20 @@ type NewPath struct {
 // parked_unverified | parked_kept when the target carried a `park:` key.
 type SwitchResult struct {
 	Envelope
-	Team       string    `json:"team,omitempty"`
-	From       string    `json:"from,omitempty"`
-	Branch     string    `json:"branch,omitempty"`
-	Task       string    `json:"task,omitempty"`
-	Created    bool      `json:"created"`
-	Base       string    `json:"base,omitempty"`
-	BaseStale  bool      `json:"base_stale,omitempty"`
-	Park       *ParkInfo `json:"park,omitempty"`
-	Unpark     string    `json:"unpark,omitempty"`
-	UnparkHead string    `json:"unpark_head,omitempty"`
-	NewPaths   []NewPath `json:"new_paths,omitempty"`
+	Team      string `json:"team,omitempty"`
+	From      string `json:"from,omitempty"`
+	Branch    string `json:"branch,omitempty"`
+	Task      string `json:"task,omitempty"`
+	Created   bool   `json:"created"`
+	Base      string `json:"base,omitempty"`
+	BaseStale bool   `json:"base_stale,omitempty"`
+	// BaseResolution is how Base was resolved (lets-qjt3h); BaseStale is its
+	// deprecated alias, kept for v0.11 readers.
+	BaseResolution *gitutil.BaseResolution `json:"base_resolution,omitempty"`
+	Park           *ParkInfo               `json:"park,omitempty"`
+	Unpark         string                  `json:"unpark,omitempty"`
+	UnparkHead     string                  `json:"unpark_head,omitempty"`
+	NewPaths       []NewPath               `json:"new_paths,omitempty"`
 	// Planned is where a refused switch would have gone; set only when git switch
 	// did not run (see SwitchPlan).
 	Planned *SwitchPlan `json:"planned,omitempty"`
@@ -79,8 +82,6 @@ const (
 	ParkedUnverified = "parked_unverified"
 	ParkedKept       = "parked_kept"
 )
-
-const defaultFetchTimeout = 20 * time.Second
 
 // Seams for tests: the remote check before an unpark, and the unpark's key delete.
 var (
@@ -97,18 +98,19 @@ var parkSubjectRe = regexp.MustCompile(`^wip(\([^)]*\))?: park$`)
 // before touching anything: not a team worktree (29), an unmerged index
 // (index_unmerged), an operation in progress (operation_in_progress), a detached
 // HEAD (detached_head), the merge-branch as target (33), a dirty tree without --park
-// (14), a new branch with no origin/<merge> (31), a session: line another session
+// (14), a new branch with no remote base (31), a session: line another session
 // holds, or the registry cannot prove ended (35) - stricter than task-state set,
 // since a switch moves the tree. A park inventories every new path first and
 // refuses any without --include (30) with the index and HEAD untouched; only
-// then does it commit. A new branch is cut from origin/<merge> (never the local
-// merge-branch) with --no-track. Arriving on a parked branch, the park commit is
+// then does it commit. A new branch is cut from the resolved base
+// (gitutil.ResolveBase: <remote>/<merge>, the local <merge> only when no remote is
+// configured) with --no-track. Arriving on a parked branch, the park commit is
 // undone with `reset --soft HEAD~1` only when it is HEAD, its subject matches and
 // no remote has it. Nothing here stashes. A refusal reports no effect it did not
 // have: branch / created / base only once git switch ran, else planned.
 func Switch(ctx context.Context, dir string, o SwitchOptions) (*SwitchResult, error) {
 	res := &SwitchResult{Envelope: Envelope{SchemaVersion: SchemaVersion, Subcommand: "switch", Steps: []Step{}}, Task: o.Task}
-	// target / created / base are what switchTarget and remoteBase resolved; switched
+	// target / created / base are what switchTarget and gitutil.ResolveBase resolved; switched
 	// is set once git switch succeeded. settle() reports them: as effects after the
 	// switch, as a plan before it - so no refusal claims an effect.
 	var target, base string
@@ -218,11 +220,17 @@ func Switch(ctx context.Context, dir string, o SwitchOptions) (*SwitchResult, er
 		return fail(&Error{Code: ExitDirtyWorktree, Kind: "dirty_worktree", Message: "the worktree has changes:\n" + dirty, Remediation: "commit them, or pass --park (with --include for every new path)"})
 	}
 
+	var baseRef string
 	if created {
-		base, e = remoteBase(ctx, root, gitDir, merge, o.FetchTimeout, res)
-		if e != nil {
-			return fail(e)
+		br, refusal := gitutil.ResolveBase(ctx, root, merge, gitutil.BaseOptions{FetchTimeout: o.FetchTimeout})
+		if refusal != nil {
+			return fail(ErrBaseRefusal(refusal, merge, false))
 		}
+		for _, n := range br.Notes {
+			step(StepWarn, n)
+		}
+		base, baseRef = br.Sha, br.Ref
+		res.BaseResolution, res.BaseStale = br, br.Stale
 	}
 
 	targetSlug, _ := taskstate.Slug(target)
@@ -266,7 +274,7 @@ func Switch(ctx context.Context, dir string, o SwitchOptions) (*SwitchResult, er
 			return fail(switchFailed("switch -c", err))
 		}
 		switched = true
-		step(StepOK, fmt.Sprintf("cut %s from origin/%s (%s)", target, merge, base))
+		step(StepOK, fmt.Sprintf("cut %s from %s (%s)", target, baseRef, base))
 	} else {
 		if _, err := git("switch", "--no-overwrite-ignore", target); err != nil {
 			switched = currentBranchOf(ctx, root) == target
@@ -292,7 +300,7 @@ func Switch(ctx context.Context, dir string, o SwitchOptions) (*SwitchResult, er
 			case created:
 				set["start"] = base
 			case cur.Start == "" || cur.Task != o.Task:
-				if mb, err := git("merge-base", "HEAD", "origin/"+merge); err == nil {
+				if mb, err := git("merge-base", "HEAD", mergeRefFor(ctx, root, merge)); err == nil {
 					set["start"] = mb
 				}
 			}
@@ -321,7 +329,7 @@ func Switch(ctx context.Context, dir string, o SwitchOptions) (*SwitchResult, er
 		case start != "":
 			fix += " --start " + start
 		case startUnknown:
-			fix += fmt.Sprintf(" --start <the commit %s starts from> (its merge-base with origin/%s could not be computed)", o.Task, merge)
+			fix += fmt.Sprintf(" --start <the commit %s starts from> (its merge-base with %s could not be computed)", o.Task, mergeRefFor(ctx, root, merge))
 		}
 		return fail(&Error{Code: ExitFilesystem, Kind: "task_state_failed",
 			Message:     fmt.Sprintf("switched to %s, but its task-state was not written: the session: line is held (%s) by %s", target, held.Reason, held.Holder),
@@ -445,39 +453,6 @@ func ownBranches(ctx context.Context, mainRoot, team, task string) ([]string, *E
 		}
 	}
 	return out, nil
-}
-
-// remoteBase fetches origin/<merge> under the timeout and returns its sha. A failed
-// fetch falls back to the existing origin/<merge> with a staleness warning (the age
-// of FETCH_HEAD); no origin/<merge> at all is 31 - the local merge-branch is never
-// a base.
-func remoteBase(ctx context.Context, root, gitDir, merge string, timeout time.Duration, res *SwitchResult) (string, *Error) {
-	if timeout <= 0 {
-		timeout = defaultFetchTimeout
-	}
-	fctx, cancel := context.WithTimeout(ctx, timeout)
-	_, ferr := gitRawIn(fctx, root, "fetch", "--no-tags", "origin", merge)
-	cancel()
-	base := revParse(ctx, root, "refs/remotes/origin/"+merge)
-	if base == "" {
-		return "", ErrNoRemoteBase(merge)
-	}
-	if ferr != nil {
-		res.BaseStale = true
-		age := "unknown"
-		if fi, err := os.Stat(filepath.Join(gitDir, "FETCH_HEAD")); err == nil {
-			age = time.Since(fi.ModTime()).Round(time.Minute).String()
-		} else if fi, err := os.Stat(filepath.Join(commonDirOf(ctx, root), "FETCH_HEAD")); err == nil {
-			age = time.Since(fi.ModTime()).Round(time.Minute).String()
-		}
-		res.Steps = append(res.Steps, Step{Status: StepWarn, Message: fmt.Sprintf("fetch of origin/%s failed (%v); cutting from the local copy of origin/%s, last fetched %s ago", merge, ferr, merge, age)})
-	}
-	return base, nil
-}
-
-func commonDirOf(ctx context.Context, root string) string {
-	out, _ := gitRawIn(ctx, root, "rev-parse", "--path-format=absolute", "--git-common-dir")
-	return strings.TrimSpace(string(out))
 }
 
 // parkChanges inventories every NEW path first - untracked (not ignored) and staged

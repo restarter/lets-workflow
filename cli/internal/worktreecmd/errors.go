@@ -5,6 +5,7 @@ package worktreecmd
 import (
 	"fmt"
 
+	"github.com/restarter/lets-workflow/cli/internal/gitutil"
 	"github.com/restarter/lets-workflow/cli/internal/taskstate"
 )
 
@@ -63,6 +64,17 @@ func ErrBranchCheckedOutInMain(branch string) *Error {
 	}
 }
 
+// ErrBranchInUseOtherWorktree - attach refused: the branch is checked out in another
+// worktree (lets-fh3yq: read from `git worktree list --porcelain`, not git's prose).
+func ErrBranchInUseOtherWorktree(branch, path string) *Error {
+	return &Error{
+		Code:        ExitBranchConflict,
+		Kind:        "branch_in_use_other_worktree",
+		Message:     fmt.Sprintf("branch %q is checked out in another worktree at %s", branch, path),
+		Remediation: "lets worktree list to find it, then remove it (git worktree prune when its directory is already gone), or pick a different name",
+	}
+}
+
 // ErrTeamExists - team-init found (or the filesystem's link refused over) a team
 // file of that callsign; it is never overwritten.
 func ErrTeamExists(path string) *Error {
@@ -90,9 +102,33 @@ func ErrUntrackedPresent(paths string) *Error {
 	return &Error{Code: ExitUntrackedPresent, Kind: "untracked_present", Message: "new paths need an explicit --include before a park: " + paths + "; the index and HEAD are untouched", Remediation: "pass --include <path> for each path to park, or remove it"}
 }
 
-// ErrNoRemoteBase - a new branch is cut from origin/<merge> only.
-func ErrNoRemoteBase(merge string) *Error {
-	return &Error{Code: ExitNoRemoteBase, Kind: "no_remote_base", Message: fmt.Sprintf("origin/%s is missing; a new branch is never cut from the local %s", merge, merge), Remediation: "add the origin remote and fetch " + merge}
+// ErrBaseRefusal maps a gitutil base refusal to worktreecmd's exits: 31 for
+// no_remote_base and remote_ambiguous (no remote base to cut a new branch from),
+// 13 base_ref_missing when no remote is configured and the local <merge> is missing,
+// 16 remote_list_failed when `git remote` itself failed (a git failure, not a policy
+// refusal). hasBase: the verb takes --base (create), so the remediation can name it.
+func ErrBaseRefusal(r *gitutil.BaseRefusal, merge string, hasBase bool) *Error {
+	switch r.Kind {
+	case gitutil.BaseRemoteAmbiguous:
+		rem := fmt.Sprintf("set %s's upstream (git branch --set-upstream-to <remote>/%s %s), then retry", merge, merge, merge)
+		if hasBase {
+			rem += fmt.Sprintf("; or pass --base <remote>/%s", merge)
+		}
+		return &Error{Code: ExitNoRemoteBase, Kind: gitutil.BaseRemoteAmbiguous, Message: r.Message, Remediation: rem}
+	case gitutil.BaseRefMissing:
+		rem := "create " + merge + " (no remote is configured, so the local branch is the base)"
+		if hasBase {
+			rem += ", or pass --base <existing-ref>"
+		}
+		return &Error{Code: ExitBranchConflict, Kind: gitutil.BaseRefMissing, Message: r.Message, Remediation: rem}
+	case gitutil.BaseRemoteListFailed:
+		return &Error{Code: ExitGitFailed, Kind: gitutil.BaseRemoteListFailed, Message: r.Message, Remediation: "check the repository's git config (git remote failed), then retry"}
+	}
+	rem := fmt.Sprintf("git fetch %s %s, then retry", r.Remote, merge)
+	if hasBase {
+		rem += fmt.Sprintf("; or pass --base %s to cut from the local branch on purpose", merge)
+	}
+	return &Error{Code: ExitNoRemoteBase, Kind: gitutil.BaseNoRemoteBase, Message: r.Message, Remediation: rem}
 }
 
 // ErrSessionHeld - the session: line of branch is held by another session, or by one

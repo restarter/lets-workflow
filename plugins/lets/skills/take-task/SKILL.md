@@ -101,7 +101,7 @@ lets worktree switch --task '<task-id>' --title-file .lets/cache/title-<session6
 
 - `ok=true` -> "Switched to `{branch}`" (`created` -> "cut from `{base}`", with the staleness warning when `base_stale`); `park` -> name the park commit; `unpark` -> `unparked` (the parked changes are staged again), `parked_pushed` / `parked_unverified` / `parked_kept` (the park stays a commit - say why).
 - Every `warn` step in `steps[]` -> print its `message` as one line, on success and on refusal - a `convention_*` / `adapter_missing` / `board_not_in_main_checkout` line names a naming declaration the tracker convention could not use, and the fix. Never drop one.
-- A refusal -> show `error.kind` and `error.message`, and "would have switched to `{planned.branch}`" when `planned` is set (a refusal never moved the tree), change nothing, stop: `dirty_worktree`, `index_unmerged`, `operation_in_progress`, `detached_head` (exit 14 - the tree must be sorted out first), `untracked_present` (list `new_paths`, back to the Park question), `no_remote_base`, `target_is_merge_branch`, `session_held` (another live session owns this task's boundary (`error.message` names it) - switch from it, after it ends, or pick another task), `convention_declaration_invalid` (a naming declaration cannot be read - fix the line it names, or pass `--branch`).
+- A refusal -> show `error.kind` and `error.message`, and "would have switched to `{planned.branch}`" when `planned` is set (a refusal never moved the tree), change nothing, stop: `dirty_worktree`, `index_unmerged`, `operation_in_progress`, `detached_head` (exit 14 - the tree must be sorted out first), `untracked_present` (list `new_paths`, back to the Park question), `no_remote_base`, `target_is_merge_branch`, `remote_ambiguous` (several remotes and none is the merge-branch's upstream or `origin` - set the upstream, then `/lets:start` again), `base_ref_missing` (no remote configured and no local merge branch - create it, then `/lets:start` again), `session_held` (another live session owns this task's boundary (`error.message` names it) - switch from it, after it ends, or pick another task), `convention_declaration_invalid` (a naming declaration cannot be read - fix the line it names, or pass `--branch`).
 - `already_on_target` -> "already on it - nothing to switch; the tail below and Step 5 run".
 - `task_state_failed` -> the worktree IS on `{branch}` - say so, then show `error.remediation` (the command that records the task from the session owning the line).
 
@@ -162,7 +162,11 @@ AskUserQuestion(
 ```
 
 Handle response:
-- **Branch** -> `git checkout -b <branch> {LETS_MERGE_BRANCH}` (from LETS Config)
+- **Branch** -> cut from the base Go resolves:
+  - run `lets worktree base --json` from the main checkout - Go fetches with its own deadline and applies the one base policy (the verb `/lets:team run` N1 uses); print each `warn` step of `steps[]` as one line (a stale fetch, local commits not in the base, no remote configured);
+  - `ok=false` (31 `no_remote_base` / `remote_ambiguous`, 13 `base_ref_missing`, or any other) -> show `error.message` and `error.remediation`, stop: nothing was cut; the task stays claimed (Step 1);
+  - `ok=true` -> `git checkout --no-track -b <branch> <base_resolution.sha>` (a sha cut gives the branch no upstream, like every implicit cut). When that sha is not HEAD, git carries uncommitted changes that do not conflict and refuses on a conflict (a local change or an untracked file the base would overwrite) -> show git's message as is, stop; never a stash, a reset or a `-f` to get past it;
+  - no `lets` binary -> say the base policy needs the `lets` binary (`/lets:update`), stop; never fall back to the local `{LETS_MERGE_BRANCH}`.
 - **Worktree** -> invoke `Skill(skill: "lets:worktree", args: "create <task-id> --title-file .lets/cache/title-<session6>.txt")` (the id, not a name: the worktree command renders the adapter's `worktree-branch:` name from it), then relay how the new session opens - the worktree command's own output names it (a terminal command, or a cmux / tmux / Orca pane already running `/lets:start <task-id>`).
   Stop here - the worktree session continues in a separate terminal or pane.
 - **Stay on current branch** -> skip `git checkout -b`; stay on the current branch (could be `$LETS_MERGE_BRANCH` or any pre-existing branch). Print one line:

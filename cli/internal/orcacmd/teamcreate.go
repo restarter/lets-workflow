@@ -26,10 +26,13 @@ const (
 	TeamFailed        = "failed"
 )
 
-// TeamCreateOptions configures TeamCreate. Name is `team_<callsign>`; BaseBranch is
-// `origin/<merge>` - Orca resolves a bare branch name as the LOCAL ref.
+// TeamCreateOptions configures TeamCreate. Name is `team_<callsign>`. BaseBranch,
+// when given, is <remote>/<branch> for a configured remote - Orca resolves a bare
+// name as the LOCAL ref - or a local branch only when no remote is configured;
+// omitted, the base is resolved from Merge (gitutil.ResolveBase, lets-qjt3h).
 type TeamCreateOptions struct {
-	Repo, Name, BaseBranch string
+	Repo, Name, BaseBranch, Merge string
+	FetchTimeout                  time.Duration
 }
 
 // TerminalBrief is one Orca terminal already open in the new worktree.
@@ -42,15 +45,17 @@ type TerminalBrief struct {
 
 // TeamCreateInfo is what TeamCreate did.
 type TeamCreateInfo struct {
-	Attempted      bool            `json:"attempted"`
-	Created        bool            `json:"created"`
-	Path           string          `json:"path,omitempty"`
-	Branch         string          `json:"branch,omitempty"`
-	Head           string          `json:"head,omitempty"`
-	OrcaWorktreeID string          `json:"orca_worktree_id,omitempty"`
-	Terminals      []TerminalBrief `json:"terminals"`
-	State          string          `json:"state"`
-	Reason         string          `json:"reason,omitempty"`
+	Attempted      bool                    `json:"attempted"`
+	Created        bool                    `json:"created"`
+	Path           string                  `json:"path,omitempty"`
+	Branch         string                  `json:"branch,omitempty"`
+	Head           string                  `json:"head,omitempty"`
+	OrcaWorktreeID string                  `json:"orca_worktree_id,omitempty"`
+	Terminals      []TerminalBrief         `json:"terminals"`
+	State          string                  `json:"state"`
+	Reason         string                  `json:"reason,omitempty"`
+	BaseRef        string                  `json:"base_ref,omitempty"`
+	BaseResolution *gitutil.BaseResolution `json:"base_resolution,omitempty"`
 }
 
 // TeamCreateResult is the team-create envelope.
@@ -116,8 +121,10 @@ func gitIn(ctx context.Context, dir string, args ...string) string {
 }
 
 // TeamCreate creates a standing team's worktree THROUGH Orca, so Orca registers it
-// and can attach the lead's terminal: `orca worktree create --base-branch origin/<merge>
-// --setup skip --no-parent`, with no agent and no prompt. Orca unavailable (or its ps
+// and can attach the lead's terminal: `orca worktree create --base-branch <base>
+// --setup skip --no-parent`, with no agent and no prompt - <base> is the explicit
+// --base-branch, or the base resolved from Merge (<remote>/<merge>, the local <merge>
+// with no remote; gitutil.ResolveBase, lets-qjt3h). Orca unavailable (or its ps
 // failing before any create) is not_attempted, exit 0 - the only state the caller may
 // answer with a Go create. Once a create was attempted the outcome is classified from
 // both sides (Orca's ps and git's worktree list) and never degrades to not_attempted;
@@ -136,12 +143,17 @@ func TeamCreate(ctx context.Context, o TeamCreateOptions) (*TeamCreateResult, er
 	if !validTeamName(o.Name) {
 		return fail(&Error{Code: ExitUsage, Kind: "name_invalid", Message: fmt.Sprintf("--name %q is not a team worktree name (team_<callsign>)", o.Name)})
 	}
-	if !strings.HasPrefix(o.BaseBranch, "origin/") || len(o.BaseBranch) == len("origin/") {
-		return fail(&Error{Code: ExitUsage, Kind: "base_invalid", Message: fmt.Sprintf("--base-branch %q must be origin/<branch> - Orca resolves a bare name as the local ref", o.BaseBranch)})
-	}
 	repo, e := resolveMainCheckout(o.Repo)
 	if e != nil {
 		return fail(e)
+	}
+	switch {
+	case o.BaseBranch == "" && o.Merge == "":
+		return fail(&Error{Code: ExitUsage, Kind: "base_invalid", Message: "--base-branch is empty and no merge branch is known"})
+	case o.BaseBranch != "":
+		if msg := checkOrcaBase(ctx, repo, o.BaseBranch); msg != "" {
+			return fail(&Error{Code: ExitUsage, Kind: "base_invalid", Message: msg})
+		}
 	}
 	info := &TeamCreateInfo{Terminals: []TerminalBrief{}, State: TeamNotAttempted}
 	res.Team, res.OK = info, true
@@ -169,8 +181,26 @@ func TeamCreate(ctx context.Context, o TeamCreateOptions) (*TeamCreateResult, er
 		return res, nil
 	}
 
+	// lets-qjt3h: no --base-branch -> the one base policy, after the Orca checks so an
+	// absent Orca never pays for a fetch. A refusal is not_attempted with the kind as
+	// the reason: the spec's Go T2 then reports it (31) with its fix.
+	baseBranch := o.BaseBranch
+	if baseBranch == "" {
+		br, refusal := gitutil.ResolveBase(ctx, repo, o.Merge, gitutil.BaseOptions{FetchTimeout: o.FetchTimeout})
+		if refusal != nil {
+			info.Reason = refusal.Kind
+			add(StepWarn, "base not resolved ("+refusal.Message+") - no create was attempted; the Go create reports it")
+			return res, nil
+		}
+		for _, n := range br.Notes {
+			add(StepWarn, n)
+		}
+		baseBranch, info.BaseResolution = br.Ref, br
+	}
+	info.BaseRef = baseBranch
+
 	info.Attempted = true
-	args := []string{"worktree", "create", "--repo", "path:" + repo, "--name", o.Name, "--base-branch", o.BaseBranch, "--setup", "skip", "--no-parent", "--json"}
+	args := []string{"worktree", "create", "--repo", "path:" + repo, "--name", o.Name, "--base-branch", baseBranch, "--setup", "skip", "--no-parent", "--json"}
 	cctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	_, cf := c.Run(cctx, "worktree create", args...)
 	cancel()
@@ -215,7 +245,7 @@ func TeamCreate(ctx context.Context, o TeamCreateOptions) (*TeamCreateResult, er
 	// Verify the created worktree before anything runs in it.
 	info.Branch = gitIn(ctx, info.Path, "branch", "--show-current")
 	info.Head = gitIn(ctx, info.Path, "rev-parse", "HEAD")
-	base := gitIn(ctx, repo, "rev-parse", "--verify", "--quiet", o.BaseBranch+"^{commit}")
+	base := gitIn(ctx, repo, "rev-parse", "--verify", "--quiet", baseBranch+"^{commit}")
 	var mismatch []string
 	if filepath.Base(info.Path) != o.Name {
 		mismatch = append(mismatch, fmt.Sprintf("path %s (want basename %s)", info.Path, o.Name))
@@ -224,12 +254,13 @@ func TeamCreate(ctx context.Context, o TeamCreateOptions) (*TeamCreateResult, er
 		mismatch = append(mismatch, fmt.Sprintf("branch %q (want %s)", info.Branch, o.Name))
 	}
 	if info.Head == "" || info.Head != base {
-		mismatch = append(mismatch, fmt.Sprintf("HEAD %s (want %s = %s)", info.Head, o.BaseBranch, base))
+		mismatch = append(mismatch, fmt.Sprintf("HEAD %s (want %s = %s)", info.Head, baseBranch, base))
 	}
 	if len(mismatch) > 0 {
 		info.State, info.Reason = TeamFailed, "team_worktree_mismatch"
 		return fail(&Error{Code: ExitTeamWorktreeMismatch, Kind: "team_worktree_mismatch", Message: "the Orca worktree is not the expected team worktree: " + strings.Join(mismatch, "; ") + "; it stays, nothing is renamed or reset"})
 	}
+	reconcileBase(info.BaseResolution, info.Head, o.Name, add)
 
 	// Terminal preflight: a tracked agent already running there would act before
 	// the setup hook. A plain shell passes; a non-agent command a repo default starts
@@ -253,8 +284,37 @@ func TeamCreate(ctx context.Context, o TeamCreateOptions) (*TeamCreateResult, er
 		return fail(&Error{Code: ExitAgentTerminalPresent, Kind: "agent_terminal_present", Message: "Orca started an agent in the new team worktree before its setup: " + strings.Join(agents, ", ") + "; the worktree stays"})
 	}
 	info.State, info.Created = TeamCreated, true
-	add(StepOK, fmt.Sprintf("orca created %s at %s (branch %s, HEAD %s = %s); %d plain terminal(s) open - a command a repo default starts there cannot be seen", o.Name, info.Path, info.Branch, info.Head, o.BaseBranch, len(info.Terminals)))
+	add(StepOK, fmt.Sprintf("orca created %s at %s (branch %s, HEAD %s = %s); %d plain terminal(s) open - a command a repo default starts there cannot be seen", o.Name, info.Path, info.Branch, info.Head, baseBranch, len(info.Terminals)))
 	return res, nil
+}
+
+// reconcileBase makes base_resolution name the commit Orca actually cut: Orca may
+// fetch on its own between the resolve and the create, so the verified HEAD wins and
+// the ahead / behind counts made against the other commit are dropped.
+func reconcileBase(br *gitutil.BaseResolution, head, name string, add func(status, msg string)) {
+	if br == nil || head == "" || head == br.Sha {
+		return
+	}
+	add(StepWarn, fmt.Sprintf("Orca cut %s from %s, not the resolved %s - the base moved during the create; base_resolution names the commit cut", name, head, br.Sha))
+	br.Sha, br.LocalAhead, br.LocalBehind = head, 0, 0
+}
+
+// checkOrcaBase: an explicit --base-branch is <remote>/<branch> for a configured
+// remote, or - only when no remote is configured - a local branch ("" = valid).
+func checkOrcaBase(ctx context.Context, repo, base string) string {
+	remotes := strings.Fields(gitIn(ctx, repo, "remote"))
+	if len(remotes) == 0 {
+		if gitIn(ctx, repo, "rev-parse", "--verify", "--quiet", "refs/heads/"+base) == "" {
+			return fmt.Sprintf("--base-branch %q is not a local branch (no remote is configured)", base)
+		}
+		return ""
+	}
+	for _, r := range remotes {
+		if strings.HasPrefix(base, r+"/") && len(base) > len(r)+1 {
+			return ""
+		}
+	}
+	return fmt.Sprintf("--base-branch %q must be <remote>/<branch> for a configured remote (%s) - Orca resolves a bare name as the local ref", base, strings.Join(remotes, ", "))
 }
 
 // RenderTeam writes a human-readable summary of a team-create result.

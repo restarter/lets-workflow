@@ -276,14 +276,60 @@ func TestSwitch_StagedRenameTargetNeedsInclude(t *testing.T) {
 	}
 }
 
-func TestSwitch_NoRemoteBase(t *testing.T) {
+func TestSwitch_NoRemoteCutsLocal(t *testing.T) {
 	f := newTeamFixture(t)
 	gitOut(t, f.repo, "remote", "remove", "origin")
+	res, err := f.sw(SwitchOptions{Task: "lets-a1"})
+	if err != nil || !res.Created || res.Base != gitOut(t, f.repo, "rev-parse", "main") || res.BaseResolution.Source != gitutil.BaseFromLocal {
+		t.Fatalf("no remote: %+v, %v; want a cut from the local main", res, err)
+	}
+	if switchWarns(res, "no remote configured") != 1 {
+		t.Errorf("want one no-remote notice: %+v", res.Steps)
+	}
+}
+
+// remoteWithoutMain points origin at an empty bare repo and drops origin/main.
+func (f teamFixture) remoteWithoutMain(t *testing.T) {
+	t.Helper()
+	empty := filepath.Join(t.TempDir(), "empty.git")
+	gitOut(t, f.repo, "init", "-q", "--bare", empty)
+	gitOut(t, f.repo, "remote", "set-url", "origin", empty)
+	gitOut(t, f.repo, "update-ref", "-d", "refs/remotes/origin/main")
+}
+
+func TestSwitch_RemoteWithoutMergeRefuses(t *testing.T) {
+	f := newTeamFixture(t)
+	f.remoteWithoutMain(t)
 	_, err := f.sw(SwitchOptions{Task: "lets-a1"})
 	wantKind(t, err, ExitNoRemoteBase, "no_remote_base")
 	if gitOut(t, f.wt, "branch", "--show-current") != "team_snake" {
 		t.Error("a refused switch moved the worktree")
 	}
+}
+
+func TestSwitch_NonOriginRemote(t *testing.T) {
+	f := newTeamFixture(t)
+	gitOut(t, f.repo, "remote", "rename", "origin", "upstream")
+	res, err := f.sw(SwitchOptions{Task: "lets-a1"})
+	if err != nil || res.Base != gitOut(t, f.repo, "rev-parse", "upstream/main") {
+		t.Fatalf("remote named upstream: %+v, %v", res, err)
+	}
+	cut := false
+	for _, s := range res.Steps {
+		cut = cut || (s.Status == StepOK && strings.Contains(s.Message, "from upstream/main"))
+	}
+	if !cut {
+		t.Errorf("the cut step does not name upstream/main: %+v", res.Steps)
+	}
+}
+
+func TestSwitch_RemoteAmbiguousRefuses(t *testing.T) {
+	f := newTeamFixture(t)
+	gitOut(t, f.repo, "remote", "rename", "origin", "a")
+	gitOut(t, f.repo, "remote", "add", "b", f.origin)
+	gitOut(t, f.repo, "config", "--unset", "branch.main.remote")
+	_, err := f.sw(SwitchOptions{Task: "lets-a1"})
+	wantKind(t, err, ExitNoRemoteBase, "remote_ambiguous")
 }
 
 func TestSwitch_StaleFetchWarning(t *testing.T) {
@@ -402,7 +448,7 @@ func TestSwitch_RefusalsReportPlanned(t *testing.T) {
 		}},
 		{"no_remote_base", ExitNoRemoteBase, "no_remote_base", func(t *testing.T, f teamFixture) (SwitchOptions, SwitchPlan) {
 			name := newBranchName(t, f, "lets-a1")
-			gitOut(t, f.repo, "remote", "remove", "origin")
+			f.remoteWithoutMain(t)
 			return SwitchOptions{Task: "lets-a1"}, SwitchPlan{Branch: name, Create: true}
 		}},
 		{"target_is_merge_branch", ExitTargetIsMergeBranch, "target_is_merge_branch", func(t *testing.T, f teamFixture) (SwitchOptions, SwitchPlan) {
