@@ -83,3 +83,18 @@ func TestRemove_AlreadyGoneUsesConventionCandidate(t *testing.T) {
 		t.Fatalf("err=%v removed=%+v", err, res.Removed)
 	}
 }
+
+// A branch merged into the remote's main is found when the remote is not named
+// origin (lets-57lb9): before, mergeRefs looked only at refs/remotes/origin/main and
+// fell back to the local main, so this branch read as unmerged.
+func TestSweep_NonOriginRemote(t *testing.T) {
+	repo := initRepoWithOrigin(t)
+	mustMkdir(t, filepath.Join(repo, ".lets"))
+	installAdapter(t, repo, "beads", beadsConvention)
+	mergedUpstreamBranch(t, repo, "feature/lets-abc-done")
+	runIn(t, repo, "git", "remote", "rename", "origin", "upstream")
+	res, err := worktreecmd.Sweep(context.Background(), repo, false)
+	if err != nil || !slices.Equal(res.Merged, []string{"feature/lets-abc-done"}) {
+		t.Fatalf("merged into upstream/main: merged=%v unmerged=%v err=%v", res.Merged, res.Unmerged, err)
+	}
+}

@@ -2,6 +2,8 @@
 
 package worktreecmd
 
+import "github.com/restarter/lets-workflow/cli/internal/gitutil"
+
 // Step is one entry in the steps[] array of a result envelope.
 // Use keyed literals at construction sites.
 type Step struct {
@@ -33,19 +35,20 @@ type RollbackInfo struct {
 
 // WorktreeInfo is one worktree row.
 type WorktreeInfo struct {
-	Name          string      `json:"name"`
-	Path          string      `json:"path"`
-	Branch        string      `json:"branch"`
-	BranchMode    string      `json:"branch_mode,omitempty"` // "created" | "attached" (create only)
-	BaseRef       string      `json:"base_ref,omitempty"`
-	Kind          string      `json:"kind,omitempty"` // "interactive" | "agent" | "other"
-	IsMain        bool        `json:"is_main,omitempty"`
-	Locked        bool        `json:"locked,omitempty"`
-	Prunable      bool        `json:"prunable,omitempty"`
-	Detached      bool        `json:"detached,omitempty"`
-	LetsSymlinked bool        `json:"lets_symlinked"`
-	StoreLinks    []StoreLink `json:"store_links,omitempty"` // the tracker adapter's declared links and whether each is a symlink
-	StoreLinked   bool        `json:"store_linked"`          // every declared link is a symlink (and there is at least one)
+	Name           string                  `json:"name"`
+	Path           string                  `json:"path"`
+	Branch         string                  `json:"branch"`
+	BranchMode     string                  `json:"branch_mode,omitempty"` // "created" | "attached" (create only)
+	BaseRef        string                  `json:"base_ref,omitempty"`
+	BaseResolution *gitutil.BaseResolution `json:"base_resolution,omitempty"` // how base_ref was resolved (lets-qjt3h); created branches only
+	Kind           string                  `json:"kind,omitempty"`            // "interactive" | "agent" | "other"
+	IsMain         bool                    `json:"is_main,omitempty"`
+	Locked         bool                    `json:"locked,omitempty"`
+	Prunable       bool                    `json:"prunable,omitempty"`
+	Detached       bool                    `json:"detached,omitempty"`
+	LetsSymlinked  bool                    `json:"lets_symlinked"`
+	StoreLinks     []StoreLink             `json:"store_links,omitempty"` // the tracker adapter's declared links and whether each is a symlink
+	StoreLinked    bool                    `json:"store_linked"`          // every declared link is a symlink (and there is at least one)
 	// BeadsSymlinked is a DEPRECATED alias of StoreLinked, kept so consumers that read
 	// beads_symlinked keep working; new code reads store_linked / store_links.
 	BeadsSymlinked   bool   `json:"beads_symlinked"`

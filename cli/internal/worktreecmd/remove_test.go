@@ -165,12 +165,12 @@ func TestRemove_NoUpstreamSkipsCheck(t *testing.T) {
 	}
 	hasWarn := false
 	for _, s := range res.Steps {
-		if s.Status == worktreecmd.StepWarn && strings.Contains(s.Message, "no upstream") {
+		if s.Status == worktreecmd.StepWarn && strings.Contains(s.Message, "skipped unpushed-commits check (no remote configured)") {
 			hasWarn = true
 		}
 	}
 	if !hasWarn {
-		t.Errorf("expected a warn step about missing upstream; got steps=%+v", res.Steps)
+		t.Errorf("expected a warn step naming why the check was skipped (no remote configured); got steps=%+v", res.Steps)
 	}
 }
 
@@ -406,5 +406,67 @@ func TestList_StoreLinksFromAdapter(t *testing.T) {
 	worktreecmd.RenderList(&b, res)
 	if !strings.Contains(b.String(), "STORE") || strings.Contains(b.String(), "BEADS") {
 		t.Errorf("list table must show STORE, not BEADS:\n%s", b.String())
+	}
+}
+
+// No upstream but a remote (lets-qjt3h KD9): a commit that no remote has still blocks.
+func TestRemove_NoUpstreamUnpushedBlocks(t *testing.T) {
+	repo := initRepoWithOrigin(t)
+	mustMkdir(t, filepath.Join(repo, ".lets"))
+	cr, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{Name: "foo", Mode: worktreecmd.BranchAuto})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runIn(t, cr.Worktree.Path, "git", "commit", "-q", "--allow-empty", "-m", "never pushed")
+	_, err = worktreecmd.Remove(context.Background(), repo, worktreecmd.RemoveOptions{Name: "foo"})
+	var e *worktreecmd.Error
+	if !errors.As(err, &e) || e.Code != worktreecmd.ExitUnpushedCommits || e.Kind != "unpushed_commits" {
+		t.Fatalf("want 21 unpushed_commits for a never-pushed branch without upstream, got %v", err)
+	}
+}
+
+// Cut from the remote base with nothing new: no upstream, every commit is on a
+// remote - removes, with an ok step and no skip warning.
+func TestRemove_NoUpstreamNothingNewRemoves(t *testing.T) {
+	repo := initRepoWithOrigin(t)
+	mustMkdir(t, filepath.Join(repo, ".lets"))
+	if _, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{Name: "foo", Mode: worktreecmd.BranchAuto}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := worktreecmd.Remove(context.Background(), repo, worktreecmd.RemoveOptions{Name: "foo"})
+	if err != nil || !res.OK {
+		t.Fatalf("err=%v ok=%v", err, res != nil && res.OK)
+	}
+	for _, s := range res.Steps {
+		if s.Status == worktreecmd.StepWarn && strings.Contains(s.Message, "skipped unpushed-commits check") {
+			t.Errorf("a counted check must not warn: %+v", res.Steps)
+		}
+	}
+}
+
+// An upstream configured but gone - /lets:done's squash merge deleted the remote
+// branch and a fetch pruned it: the commits are on no remote, yet merged. Remove
+// keeps today's warn, never a false 21 (skeptic2).
+func TestRemove_GoneUpstreamKeepsWarn(t *testing.T) {
+	repo := initRepoWithOrigin(t)
+	mustMkdir(t, filepath.Join(repo, ".lets"))
+	cr, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{Name: "foo", Mode: worktreecmd.BranchAuto})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runIn(t, cr.Worktree.Path, "git", "commit", "-q", "--allow-empty", "-m", "squash-merged later")
+	runIn(t, cr.Worktree.Path, "git", "push", "-q", "-u", "origin", "worktree-foo")
+	runIn(t, repo, "git", "push", "-q", "origin", "--delete", "worktree-foo")
+	runIn(t, repo, "git", "fetch", "-q", "--prune", "origin")
+	res, err := worktreecmd.Remove(context.Background(), repo, worktreecmd.RemoveOptions{Name: "foo"})
+	if err != nil || !res.OK {
+		t.Fatalf("a gone upstream must not block: err=%v", err)
+	}
+	warned := false
+	for _, s := range res.Steps {
+		warned = warned || (s.Status == worktreecmd.StepWarn && strings.Contains(s.Message, "skipped unpushed-commits check (upstream configured but gone)"))
+	}
+	if !warned {
+		t.Errorf("want the skip warn naming a gone upstream: %+v", res.Steps)
 	}
 }

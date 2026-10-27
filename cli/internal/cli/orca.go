@@ -50,7 +50,7 @@ func newOrcaOpenCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			res, runErr := orcacmd.Open(cmd.Context(), orcacmd.OpenOptions{Repo: repo, Name: name, Prompt: prompt, Force: force})
+			res, runErr := orcacmd.Open(cmd.Context(), orcacmd.OpenOptions{Repo: repo, Name: name, Prompt: prompt, Force: force, Merge: mergeBranchOf(repo)})
 			printOrca(cmd, jsonOut, quiet, res.OK, res, func() { orcacmd.RenderOpen(cmd.OutOrStdout(), res) })
 			return runErr
 		},
@@ -64,6 +64,21 @@ func newOrcaOpenCmd() *cobra.Command {
 	return cmd
 }
 
+// mergeBranchOf is LETS_MERGE_BRANCH for the checkout holding dir, through the one
+// resolver (project .lets/.env over ~/.lets/.env, then origin's default branch, then
+// main). dir is normalized to the main checkout first: the project layer is read
+// from <root>/.lets/.env, so a subdirectory would miss it (Codex round 1).
+func mergeBranchOf(dir string) string {
+	if root := gitutil.ProjectRoot(dir, 2*time.Second); root != "" {
+		dir = root
+		if _, main := gitutil.DetectInsideWorktreeAt(root); main != "" {
+			dir = main
+		}
+	}
+	home, _ := os.UserHomeDir()
+	return letsconfig.ResolvedEnv(dir, home, func(r string) string { return gitutil.DefaultBranch(r, 2*time.Second) })["LETS_MERGE_BRANCH"]
+}
+
 // newOrcaTeamCreateCmd is `lets orca team-create`: a standing team's worktree created
 // THROUGH Orca (the orca launcher only), so Orca registers it and can attach the lead.
 func newOrcaTeamCreateCmd() *cobra.Command {
@@ -73,18 +88,25 @@ func newOrcaTeamCreateCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:           "team-create",
-		Short:         "Create a team_<callsign> worktree through Orca from origin/<merge> (no agent, setup skipped)",
+		Short:         "Create a team_<callsign> worktree through Orca from the resolved base (no agent, setup skipped)",
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if o.BaseBranch == "" {
+				dir := o.Repo
+				if dir == "" {
+					dir, _ = os.Getwd()
+				}
+				o.Merge = mergeBranchOf(dir)
+			}
 			res, runErr := orcacmd.TeamCreate(cmd.Context(), o)
 			printOrca(cmd, jsonOut, quiet, res.OK, res, func() { orcacmd.RenderTeam(cmd.OutOrStdout(), res.Envelope, res.Team) })
 			return runErr
 		},
 	}
 	cmd.Flags().StringVar(&o.Name, "name", "", "Team worktree name, team_<callsign>")
-	cmd.Flags().StringVar(&o.BaseBranch, "base-branch", "", "Base, origin/<merge> (a bare name is the local ref to Orca)")
+	cmd.Flags().StringVar(&o.BaseBranch, "base-branch", "", "Base: <remote>/<branch> for a configured remote, a local branch only when none is (default: resolved from LETS_MERGE_BRANCH)")
 	cmd.Flags().StringVar(&o.Repo, "repo", "", "Main checkout (default: the one of the cwd)")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
 	cmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Suppress human-readable output")

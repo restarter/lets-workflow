@@ -29,6 +29,7 @@ type CreateOptions struct {
 	NoStoreLinks       bool   // skip the tracker adapter's declared store links (--no-store-links; --no-symlink-beads alias)
 	PluginRoot         string // plugin root for the adapter fallback (--plugin-root, else CLAUDE_PLUGIN_ROOT)
 	SwitchMainIfNeeded bool
+	FetchTimeout       time.Duration // bound for the implicit base's fetch (0 = 20 s); no CLI flag
 }
 
 // minGitVersion is required for `git worktree remove --force` (since 2.17).
@@ -110,12 +111,10 @@ func Create(ctx context.Context, projectRoot string, opts CreateOptions) (*Creat
 	}
 	addStep(StepOK, "guard: in main repo")
 
-	// Step 3: resolve base ref (LETS_MERGE_BRANCH from .lets/.env, fallback "main").
+	// Step 3: the base. An explicit --base is used exactly as given (validated in
+	// Step 4). Without one, a NEW branch's base is resolved in Step 4b - an attach
+	// needs none and never pays for a fetch.
 	base := opts.Base
-	if base == "" {
-		base = mergeBranch(projectRoot)
-	}
-	addStep(StepOK, "base ref: "+base)
 
 	// Step 4: resolve branch (attach vs create). opts.Branch, when set, decouples
 	// the attached/created ref from the worktree dir name (lets-x5ucf).
@@ -128,6 +127,32 @@ func Create(ctx context.Context, projectRoot string, opts CreateOptions) (*Creat
 		return fail(&Error{Code: ExitGitFailed, Kind: "resolve_branch", Cause: err})
 	}
 	addStep(StepOK, fmt.Sprintf("branch: %s (%s)", plan.Branch, plan.Mode))
+
+	// Step 4b (lets-qjt3h): a new branch's implicit base - one policy for every cut
+	// (gitutil.ResolveBase): <remote>/<merge> after a bounded fetch, never the local
+	// <merge> while a remote is configured; the local <merge> with a notice when none
+	// is. The cut uses the resolved sha with --no-track (Step 7), so the branch gets
+	// no upstream. Before Step 6, so a refusal writes nothing.
+	var baseRes *gitutil.BaseResolution
+	var baseRef string // stays "" for an attach, as base_ref was before
+	if plan.Mode == "created" {
+		baseRef = base
+		if base == "" {
+			merge := mergeBranch(projectRoot)
+			br, refusal := gitutil.ResolveBase(ctx, projectRoot, merge, gitutil.BaseOptions{FetchTimeout: opts.FetchTimeout})
+			if refusal != nil {
+				addStep(StepErr, "base: "+refusal.Message)
+				return fail(ErrBaseRefusal(refusal, merge, true))
+			}
+			for _, n := range br.Notes {
+				addStep(StepWarn, n)
+			}
+			baseRes, baseRef, plan.Base = br, br.Ref, br.Sha
+		} else {
+			baseRes = &gitutil.BaseResolution{Source: gitutil.BaseFromExplicit, Sha: revParse(ctx, projectRoot, base)}
+		}
+		addStep(StepOK, fmt.Sprintf("base ref: %s (%s)", baseRef, baseRes.Sha))
+	}
 
 	// Step 5: attach pre-check — refuse if branch is checked out in main.
 	// If --switch-main-if-needed: capture prevBranch BEFORE switch so rollback
@@ -160,6 +185,22 @@ func Create(ctx context.Context, projectRoot string, opts CreateOptions) (*Creat
 		}
 	}
 
+	// Step 5b (lets-fh3yq): attach pre-check - the branch checked out in ANOTHER
+	// worktree. After Step 5, so 13 branch_checked_out_in_main and
+	// --switch-main-if-needed keep precedence (git refuses one branch in two
+	// worktrees, so after Step 5 only other worktrees can hold it); before Step 6,
+	// so a refusal writes nothing. A failed list skips the check - git's own
+	// refusal still lands in classifyWorktreeAddErr.
+	if plan.Mode == "attached" {
+		if held, ok := checkedOutBranches(ctx, projectRoot); ok {
+			if p, in := held[plan.Branch]; in {
+				restoreMainIfSwitched(prevMainBranch)
+				addStep(StepErr, "guard: "+plan.Branch+" is checked out at "+p)
+				return fail(ErrBranchInUseOtherWorktree(plan.Branch, p))
+			}
+		}
+	}
+
 	// Step 6: ensure .gitignore entries via shared initcmd helper
 	// (race-safe via flock + integrity check after Task 3 hardening).
 	if err := initcmd.EnsureGitignore(projectRoot, []string{".worktrees/", ".lets"}); err != nil {
@@ -176,31 +217,17 @@ func Create(ctx context.Context, projectRoot string, opts CreateOptions) (*Creat
 	// Step 7: git worktree add (no pre-existence Lstat; trust git's atomic registration).
 	wtPath := filepath.Join(projectRoot, ".worktrees", opts.Name)
 	var gitArgs []string
-	if plan.Mode == "attached" {
+	switch {
+	case plan.Mode == "attached":
 		gitArgs = []string{"-C", projectRoot, "worktree", "add", wtPath, plan.Branch}
-	} else {
+	case baseRes != nil && baseRes.Source != gitutil.BaseFromExplicit:
+		gitArgs = []string{"-C", projectRoot, "worktree", "add", "--no-track", "-b", plan.Branch, wtPath, plan.Base}
+	default: // explicit --base: exactly as before
 		gitArgs = []string{"-C", projectRoot, "worktree", "add", "-b", plan.Branch, wtPath, plan.Base}
 	}
 	if out, err := exec.CommandContext(ctx, "git", gitArgs...).CombinedOutput(); err != nil {
 		msg := redactCreds(strings.TrimSpace(string(out)))
-		kind := "git_worktree_add_failed"
-		code := ExitGitFailed
-		remediation := "if path is stale: lets worktree remove " + opts.Name + " (use --force if dirty)"
-		switch {
-		// Path collision (e.g. `.worktrees/foo` already exists or `worktree-foo`
-		// branch already exists when creating in new-branch mode).
-		case strings.Contains(msg, "already exists"):
-			kind = "worktree_path_exists"
-			code = ExitWorktreeExists
-		// Branch already checked out in ANOTHER worktree (review S-2). git
-		// emits "fatal: 'feat' is already used by worktree at '...'". Route
-		// to ExitBranchConflict so scripts can branch on it without parsing
-		// prose; remediation points at the offending worktree.
-		case strings.Contains(msg, "is already used by worktree"):
-			kind = "branch_in_use_other_worktree"
-			code = ExitBranchConflict
-			remediation = "the target branch is checked out in another worktree; lets worktree list to find it, then remove or pick a different name"
-		}
+		kind, code, remediation := classifyWorktreeAddErr(msg, opts.Name)
 		restoreMainIfSwitched(prevMainBranch)
 		return fail(&Error{
 			Code:        code,
@@ -215,11 +242,12 @@ func Create(ctx context.Context, projectRoot string, opts CreateOptions) (*Creat
 	// Stash for Task 4b: wtPath + plan are now the active state. Task 4b
 	// installs symlinks, runs verify, and on failure invokes rollback.
 	result.Worktree = &WorktreeInfo{
-		Name:       opts.Name,
-		Path:       wtPath,
-		Branch:     plan.Branch,
-		BranchMode: plan.Mode,
-		BaseRef:    plan.Base,
+		Name:           opts.Name,
+		Path:           wtPath,
+		Branch:         plan.Branch,
+		BranchMode:     plan.Mode,
+		BaseRef:        baseRef,
+		BaseResolution: baseRes,
 	}
 	result.NextSteps = &NextSteps{AbsolutePath: wtPath}
 
@@ -337,6 +365,23 @@ func checkGitVersion(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// classifyWorktreeAddErr maps a failed `git worktree add` to a typed kind. The
+// branch-in-use text differs by git version - ">= 2.42: is already used by
+// worktree at", "2.39: is already checked out at" (lets-fh3yq). Step 5b's porcelain
+// pre-check is the primary detector; this is the race fallback.
+func classifyWorktreeAddErr(msg, name string) (kind string, code int, remediation string) {
+	stale := "if path is stale: lets worktree remove " + name + " (use --force if dirty)"
+	switch {
+	// Path collision (e.g. `.worktrees/foo` already exists or `worktree-foo` branch
+	// already exists when creating in new-branch mode).
+	case strings.Contains(msg, "already exists"):
+		return "worktree_path_exists", ExitWorktreeExists, stale
+	case strings.Contains(msg, "is already used by worktree"), strings.Contains(msg, "is already checked out at"):
+		return "branch_in_use_other_worktree", ExitBranchConflict, "the target branch is checked out in another worktree; lets worktree list to find it, then remove or pick a different name"
+	}
+	return "git_worktree_add_failed", ExitGitFailed, stale
 }
 
 // compareSemver returns -1/0/1 for a<b, a==b, a>b on dotted-numeric versions.

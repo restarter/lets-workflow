@@ -12,6 +12,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/restarter/lets-workflow/cli/internal/gitutil"
 )
 
 // teamRepo is a main checkout on main pushed to a bare origin, and a separate dir
@@ -316,5 +318,84 @@ func TestTeamCreate_PathComparedBySameDir(t *testing.T) {
 	}})
 	if res, err := teamCreate(r); err != nil || res.Team.State != TeamCreated {
 		t.Errorf("the same dir through a symlink is the same worktree: %+v, %v", res.Team, err)
+	}
+}
+
+func TestTeamCreate_ResolvesBaseWhenOmitted(t *testing.T) {
+	r := newTeamRepo(t)
+	var f *fakeTeamOrca
+	f = r.fake(t, &fakeTeamOrca{create: func([]string) (string, bool) {
+		r.orcaAdd(t, f, "team_snake", "team_snake", "origin/main", true)
+		return `{"ok":true}`, false
+	}})
+	res, err := TeamCreate(context.Background(), TeamCreateOptions{Repo: r.repo, Name: "team_snake", Merge: "main"})
+	if err != nil || res.Team.State != TeamCreated || res.Team.BaseRef != "origin/main" || res.Team.BaseResolution == nil || res.Team.BaseResolution.Source != gitutil.BaseFromRemote {
+		t.Fatalf("resolved: %+v, %v", res.Team, err)
+	}
+	for _, c := range *f.calls {
+		if len(c.args) > 1 && c.args[1] == "create" && !slices.Contains(c.args, "origin/main") {
+			t.Errorf("argv %q does not pass the resolved base", c.args)
+		}
+	}
+}
+
+func TestTeamCreate_NoRemotePassesLocalBase(t *testing.T) {
+	r := newTeamRepo(t)
+	gitT(t, r.repo, "remote", "remove", "origin")
+	var f *fakeTeamOrca
+	f = r.fake(t, &fakeTeamOrca{create: func([]string) (string, bool) {
+		r.orcaAdd(t, f, "team_snake", "team_snake", "main", true)
+		return `{"ok":true}`, false
+	}})
+	res, err := TeamCreate(context.Background(), TeamCreateOptions{Repo: r.repo, Name: "team_snake", Merge: "main"})
+	if err != nil || res.Team.BaseRef != "main" || res.Team.State != TeamCreated {
+		t.Fatalf("no remote: %+v, %v", res.Team, err)
+	}
+}
+
+func TestTeamCreate_BaseRefusalNotAttempted(t *testing.T) {
+	r := newTeamRepo(t)
+	gitT(t, r.repo, "remote", "add", "fork", r.origin)
+	gitT(t, r.repo, "remote", "rename", "origin", "up")
+	gitT(t, r.repo, "config", "--unset", "branch.main.remote")
+	f := r.fake(t, &fakeTeamOrca{create: func([]string) (string, bool) { t.Fatal("a refused base reached orca worktree create"); return "", true }})
+	res, err := TeamCreate(context.Background(), TeamCreateOptions{Repo: r.repo, Name: "team_snake", Merge: "main"})
+	if err != nil || res.Team.State != TeamNotAttempted || res.Team.Reason != gitutil.BaseRemoteAmbiguous || f.count("worktree create") != 0 {
+		t.Fatalf("ambiguous remote: %+v, %v", res.Team, err)
+	}
+}
+
+// Orca refreshes origin/main between the resolve and the create: the envelope names
+// the commit actually cut, not the one resolved before (Codex round 1).
+func TestTeamCreate_BaseMovedDuringCreate(t *testing.T) {
+	r := newTeamRepo(t)
+	var f *fakeTeamOrca
+	moved := ""
+	f = r.fake(t, &fakeTeamOrca{create: func([]string) (string, bool) {
+		moved = gitT(t, r.repo, "commit-tree", "-p", "origin/main", "-m", "moved", "origin/main^{tree}")
+		gitT(t, r.repo, "update-ref", "refs/remotes/origin/main", moved)
+		r.orcaAdd(t, f, "team_snake", "team_snake", "origin/main", true)
+		return `{"ok":true}`, false
+	}})
+	res, err := TeamCreate(context.Background(), TeamCreateOptions{Repo: r.repo, Name: "team_snake", Merge: "main"})
+	if err != nil || res.Team.State != TeamCreated || res.Team.BaseResolution == nil || res.Team.BaseResolution.Sha != moved {
+		t.Fatalf("moved base: %+v, %v; want base_resolution.sha %s", res.Team, err, moved)
+	}
+}
+
+func TestCheckOrcaBase(t *testing.T) {
+	ctx := context.Background()
+	r := newTeamRepo(t)
+	gitT(t, r.repo, "remote", "rename", "origin", "upstream")
+	for base, ok := range map[string]bool{"upstream/main": true, "origin/main": false, "main": false, "upstream/": false} {
+		if got := checkOrcaBase(ctx, r.repo, base) == ""; got != ok {
+			t.Errorf("with remote upstream: checkOrcaBase(%q) ok=%v, want %v", base, got, ok)
+		}
+	}
+	gitT(t, r.repo, "remote", "remove", "upstream")
+	for base, ok := range map[string]bool{"main": true, "nope": false, "upstream/main": false} {
+		if got := checkOrcaBase(ctx, r.repo, base) == ""; got != ok {
+			t.Errorf("no remote: checkOrcaBase(%q) ok=%v, want %v", base, got, ok)
+		}
 	}
 }

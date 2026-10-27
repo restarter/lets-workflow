@@ -33,7 +33,7 @@ const (
 	ExitTemplateMissing      = 28 // team-init: <plugin-root>/templates/team.md is missing
 	ExitNotTeamWorktree      = 29 // switch: no team file claims this worktree
 	ExitUntrackedPresent     = 30 // switch --park: a new path (untracked or staged) has no --include
-	ExitNoRemoteBase         = 31 // switch: origin/<merge> is missing, and a new branch is never cut from local <merge>
+	ExitNoRemoteBase         = 31 // create (implicit base) / switch / base: a remote is configured but <remote>/<merge> is missing (no_remote_base), or which remote is ambiguous (remote_ambiguous); never the local <merge> while a remote is configured
 	// 32 retired (members_live, lets-gbfpd) - never reused
 	ExitTargetIsMergeBranch = 33 // switch: the target branch is the merge-branch
 	ExitCallsignLive        = 34 // team-init: a live session carries the callsign's lead name

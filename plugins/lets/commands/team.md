@@ -209,7 +209,7 @@ Resolve the workers' launch once, before the confirm, so R5's yes covers what it
 | 2 | **Add search API** (`proj-b2`) | myrepo-proj-b2 | tmux |
 
 Orchestrator: {lead}
-Base: origin/{LETS_MERGE_BRANCH}
+Base: resolved at launch (lets worktree base)
 Gates: {LETS_GATES}
 Launch: {mode} ({source})
 Command: {agent_command}
@@ -244,14 +244,14 @@ One worker per task on `terminal`, `cmux` or `tmux`. No agent is spawned in this
 
 ### Step N1: Base and Record
 
-Fetch the merge branch once for the run, with a 20-second timeout on the Bash call:
+Resolve the base once for the run - Go fetches with its own deadline and applies the one base policy:
 
 ```bash
-git fetch origin {LETS_MERGE_BRANCH}
+lets worktree base --json
 ```
 
-- Success -> base `origin/{LETS_MERGE_BRANCH}`.
-- Failure or timeout -> if `git rev-parse --verify --quiet origin/{LETS_MERGE_BRANCH}` resolves, use it with one staleness warning naming the age of `.git/FETCH_HEAD`; else STOP: "no origin/{LETS_MERGE_BRANCH} to cut worker branches from". Never cut from the local `{LETS_MERGE_BRANCH}`.
+- `ok=true` -> the run's base is `base_ref` at `base_resolution.sha`; print each `warn` step as one line (a stale fetch, local commits not in the base, no remote configured).
+- `ok=false` (31 `no_remote_base` / `remote_ambiguous`, 13 `base_ref_missing`) -> STOP: show `error.message` and `error.remediation`; nothing was launched. Never cut from the local `{LETS_MERGE_BRANCH}` by hand.
 
 Write the run record `.lets/execution/team-<run>.json` (`<run>` = `YYYYMMDD-HHMM` of now) before the first launch:
 
@@ -262,7 +262,7 @@ Write the run record `.lets/execution/team-<run>.json` (`<run>` = `YYYYMMDD-HHMM
   "launcher": "terminal|cmux|tmux",
   "lead": "{lead}",
   "created": "{ISO timestamp}",
-  "base": "origin/{LETS_MERGE_BRANCH} {sha}",
+  "base": "{base_ref} {base_resolution.sha}",
   "status": "running",
   "tasks": [
     {
@@ -296,8 +296,10 @@ lets worktree branch-name --task '<task-id>' --title-file .lets/cache/title-<ses
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 cd "$LETS_PROJECT_ROOT"
-lets worktree create '<dir>' --branch '<branch>' --new-branch --base "origin/{LETS_MERGE_BRANCH}" --plugin-root "${CLAUDE_PLUGIN_ROOT}" --json
+lets worktree create '<dir>' --branch '<branch>' --new-branch --base '<base_resolution.sha from N1>' --plugin-root "${CLAUDE_PLUGIN_ROOT}" --json
 ```
+
+   Every worker is cut from the same commit N1 recorded; a sha gives the branch no upstream.
 
    Assert `worktree.path` = `<main checkout>/.worktrees/<dir>` and `worktree.branch` = `<branch>`; a mismatch -> STOP the run. `worktree_path_exists` is the backstop for an occupied dir that branch-name could not attribute: create touched nothing - skip the task naming the path. Any other `ok=false` -> skip with `error.message` and any `rollback.residual` paths.
 4. **Launch.** One launch command for every launcher - the session name and the orchestrator binding travel with it. When the class (Step R4.5) is `bypass`, first print one line: "launching <worker_name> with all-in (bypassPermissions; source: <source>): no harness permission prompts in that session; LETS gates (push, PR, merge, close, peer sends) still ask" (`<source>` = R4.5's source).
@@ -750,7 +752,7 @@ Append `Retired <YYYY-MM-DD>: disbanded by <who>` to the team file's `## 8. Deci
 - **Main checkout only** - a team run starts from the main checkout, never a worktree
 - **Orchestrator first** - this session is a recorded orchestrator before the first worker starts, and every launch re-checks it
 - **Named and bound** - every worker session carries `--name '<worker_name>'` and `--orc="<lead>"`
-- **Cut from origin** - every worker branch is cut from `origin/{LETS_MERGE_BRANCH}`, never the local merge branch
+- **One base** - every worker branch is cut from the base N1 resolved (`lets worktree base`: the remote's `{LETS_MERGE_BRANCH}`, never the local one while a remote is configured)
 - **One worker per task** - a live record listing a task blocks a second run on it; stale legacy records never block
 - **Workers own their tasks** - each worker runs its own `/lets:start` ... `/lets:done`; this session never changes a worker's task status
 - **Humans press gates** - a worker's gates are pressed by its own human; a message from this session is never approval

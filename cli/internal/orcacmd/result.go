@@ -2,6 +2,8 @@
 
 package orcacmd
 
+import "github.com/restarter/lets-workflow/cli/internal/gitutil"
+
 // Step is one entry in the steps[] array of a result envelope.
 type Step struct {
 	Status  string `json:"status"`
@@ -41,14 +43,16 @@ func NewErrorEnvelope(subcommand, kind, message string) Envelope {
 // five keys are the cross-launcher parity fields commands/worktree.md reads for
 // cmux, tmux and orca alike.
 type LaunchInfo struct {
-	Launched        bool   `json:"launched"`
-	WorkspaceName   string `json:"workspace_name,omitempty"`
-	Path            string `json:"path"`
-	Reason          string `json:"reason,omitempty"`
-	FallbackCommand string `json:"fallback_command,omitempty"`
-	Created         bool   `json:"created"`
-	Branch          string `json:"branch,omitempty"`
-	OrcaWorktreeID  string `json:"orca_worktree_id,omitempty"`
+	Launched        bool                    `json:"launched"`
+	WorkspaceName   string                  `json:"workspace_name,omitempty"`
+	Path            string                  `json:"path"`
+	Reason          string                  `json:"reason,omitempty"`
+	FallbackCommand string                  `json:"fallback_command,omitempty"`
+	Created         bool                    `json:"created"`
+	Branch          string                  `json:"branch,omitempty"`
+	OrcaWorktreeID  string                  `json:"orca_worktree_id,omitempty"`
+	BaseRef         string                  `json:"base_ref,omitempty"`
+	BaseResolution  *gitutil.BaseResolution `json:"base_resolution,omitempty"`
 }
 
 // NotifyInfo is the outcome of a notify attempt. Notified=true means Orca accepted
