@@ -6,7 +6,7 @@ user-invocable: false
 
 # Member Run
 
-One operation on one named member - or, for `op=route`, the choice of member for a dispatch. The caller (`/lets:execute` Step 5-D, `/lets:team`, a team-mode dispatch of `/lets:plan`, `/lets:review`, `/lets:check`, `/lets:opinion` or `/lets:ask`) owns the plan, the gates, the record (the execute run record, the team file), the diff check, the commits and the tracker; this skill owns only the agent call. `ListAgents` judges who is busy; no registry exists beside the caller's record. It is the single place LETS spawns, resumes, corrects or dismisses a member, and decides which member takes a dispatch (`op=route`).
+One operation on one named member - or, for `op=route`, the choice of member for a dispatch. The caller (`/lets:execute` Step 5-D, `/lets:team`, a team-mode dispatch of `/lets:plan`, `/lets:review`, `/lets:check`, `/lets:opinion`, `/lets:ask` or `/lets:review-round`, and `apply-fixes` with `apply=member`) owns the plan, the gates, the record (the execute run record, the team file), the diff check, the commits and the tracker; this skill owns only the agent call. `ListAgents` judges who is busy; no registry exists beside the caller's record. It is the single place LETS spawns, resumes, corrects or dismisses a member, and decides which member takes a dispatch (`op=route`).
 
 > **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`, `SendMessage`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own - the tool invocation is part of the contract. This is critical.
 
@@ -18,7 +18,7 @@ One operation on one named member - or, for `op=route`, the choice of member for
 | `next` | `scope=<s> name=<n> brief-file=<path> report-file=<abs path> [id=<agent_id>]` | Step 3 - the member's next brief |
 | `correct` | `scope=<s> name=<n> correct-file=<path> report-file=<abs path> [id=<agent_id>]` | Step 3 - an amendment to its current brief |
 | `dismiss` | `scope=<s> name=<n> [id=<agent_id>]` | Step 4 |
-| `route` | `command=<plan\|review\|opinion\|ask\|check\|execute> roles=<role>[,<role>...] fallback=<one-shot\|inline\|run> [solo] [ask=no] [team=<c>]` | Step 5 - which member, if any, takes each role of a dispatch |
+| `route` | `command=<plan\|review\|opinion\|ask\|check\|execute\|review-round> roles=<role>[,<role>...] fallback=<one-shot\|inline\|run> [solo] [ask=no] [team=<c>]` | Step 5 - which member, if any, takes each role of a dispatch |
 | `receive` | `scope=<s> name=<n> id=<agent_id> brief-file=<path> report-file=<abs path> [dismissed]` | Step 6 - wait for a member's round report: peek, one nudge, collect |
 
 - `scope` - the team's callsign, or `run-<RUN>` for an execute run.
