@@ -6,13 +6,14 @@ import (
 	"testing"
 )
 
-// lets-mpjhc: /lets:plan, /lets:opinion and /lets:ask send a phase to the standing
-// team's members first. Every registered dispatch section routes through member-run
-// op=route before it names its report files; every consumer reads a member's round
-// with op=receive; opinion's challenge goes back to the same member by id and never
-// routes again; plan's HARD-GATE allows exactly the team-mode bookkeeping, and its
-// --fast paths stay orchestrator-only. teamModeCommandProblems reads only its
-// argument, so TestTeamModeCommands feeds it in-memory mutants.
+// lets-mpjhc: /lets:plan, /lets:opinion and /lets:ask - and /lets:review-round's
+// verification (lets-x5zqv) - send a phase to the standing team's members first.
+// Every registered dispatch section routes through member-run op=route before it
+// names its report files; every consumer reads a member's round with op=receive;
+// opinion's challenge goes back to the same member by id and never routes again;
+// plan's HARD-GATE allows exactly the team-mode bookkeeping, and its --fast paths
+// stay orchestrator-only. teamModeCommandProblems reads only its argument, so
+// TestTeamModeCommands feeds it in-memory mutants.
 //
 // Re-verify with `-count=1`: Go's test cache does not track files reached via
 // ../../../plugins/.
@@ -27,6 +28,7 @@ var teamModeDispatches = []struct{ key, command, dispatch, consumer string }{
 	{"plan", "plan", "### Dispatch Experts", "### Checkpoint: Evaluation Results"},
 	{"opinion", "opinion", "## Step 4: Launch Agents in Parallel", "## Step 4: Launch Agents in Parallel"},
 	{"ask", "ask", "## Step 4: Launch Agent", "## Step 5: Present Results"},
+	{"review-round", "review-round", "## Step 3: Verify falsifiable claims against code", "## Step 3: Verify falsifiable claims against code"},
 }
 
 // firstReportName returns the first op=open / op=add in s, -1 when none.
@@ -93,9 +95,10 @@ func teamModeCommandProblems(f map[string]string) []string {
 func teamModeCommandFiles(t *testing.T) map[string]string {
 	t.Helper()
 	return map[string]string{
-		"plan":    readPlugin(t, filepath.Join("commands", "plan.md")),
-		"opinion": readPlugin(t, filepath.Join("commands", "opinion.md")),
-		"ask":     readPlugin(t, filepath.Join("commands", "ask.md")),
+		"plan":         readPlugin(t, filepath.Join("commands", "plan.md")),
+		"opinion":      readPlugin(t, filepath.Join("commands", "opinion.md")),
+		"ask":          readPlugin(t, filepath.Join("commands", "ask.md")),
+		"review-round": readPlugin(t, filepath.Join("commands", "review-round.md")),
 	}
 }
 
@@ -118,6 +121,7 @@ func TestTeamModeCommands_Mutants(t *testing.T) {
 		{"HARD-GATE drops routes-*", "plan", ", `.lets/cache/routes-*` (member-run's routes copy at a spawn)", "", "`.lets/cache/routes-*`"},
 		{"HARD-GATE allows repository files", "plan", " - never a repository file.", ".", "never a repository file"},
 		{"--fast exploration routes", "plan", "Then jump to **Checkpoint: Exploration Review**.", "`" + memberRunRoute + " command=plan roles=explorer fallback=inline\")` first.\n\nThen jump to **Checkpoint: Exploration Review**.", "must stay free of op=route"},
+		{"review-round Step 3 loses its route", "review-round", memberRunRoute + " command=review-round ", `Skill(skill: "lets:member-run", args: "op=skip command=review-round `, "Step 3: Verify falsifiable claims against code must route"},
 	}
 	for _, m := range mutants {
 		t.Run(m.name, func(t *testing.T) {
