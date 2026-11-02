@@ -22,7 +22,7 @@ func reviewRoundProblems(rr string) []string {
 	}
 	step7 := sectionSpan(rr, "## Step 7: Respond to the reviewer")
 	if !strings.Contains(step7, `question: "Post {N} replies to {PR}?"`) || !strings.Contains(step7, "This asks at every level") {
-		add("review-round.md Step 7 must preview the replies and ask once at every level before posting")
+		add("review-round.md Step 7 must ask once at every level before posting a reply")
 	}
 	return p
 }
