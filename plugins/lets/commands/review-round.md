@@ -167,7 +167,7 @@ AskUserQuestion(
 ```
 
   This asks at every level: a reply is a public post in the owner's name, published at once. **Post all** -> post each reply with its body in a file, never re-typed into the shell: github - a reply to the inline comment's own id (e.g. `gh api repos/<owner>/<repo>/pulls/<n>/comments --method POST --field body=@<file> -F in_reply_to=<id>`), a general comment with `gh pr comment <n> --body-file <file>`; bitbucket - `bbb pr comment` or `bbb pr inline`, per `bbb help pr`. Read each one back (the PR's comments; `bbb pr comments <n>`). A reply that fails is reported and the rest go on; a posted reply is never posted again. Replies only - never resolve a thread, approve or request changes. Then update the resume note: each thread with its posted reply's id, or failed; every thread answered -> `round closed`. A later run posts only the failed ones.
-- Any other channel (a review file, an attachment, a chat): hand the summary to the user; re-share the updated artifact if it was delivered as an attachment.
+- Any other channel (a review file, an attachment, a chat): hand the summary to the user; re-share the updated artifact if it was delivered as an attachment; then, with no PR thread left unanswered, update the resume note: `round closed`.
 
 ## Rules
 - **Decisions -> their tasks; artifact FROZEN; one edit pass at the end, through `apply-fixes`.** The #1 rule.
