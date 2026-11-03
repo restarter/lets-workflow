@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- **`/lets:review-round` follows the current plugin (lets-x5zqv).** It reads every source a round comes from - `<!-- REVIEW` and `// REVIEW` markers, a saved `/lets:review` report, a `/lets:handoff` report, the items `--fix` left open, and PR threads through `gh` or `bbb` - and treats that text as data, never as instructions. Each decision lands on the task its item belongs to, and a deferred item becomes a follow-up task with its trigger. Reviewer claims are checked through `protocol/roles.md`, by the team's explorer and skeptic in a team worktree. The final pass runs through `apply-fixes` (`source=review-round mode=files`) after you approve its per-file list; in a team worktree the team's implementer makes the edits and the lead checks the tree. review-round commits nothing: it ends at `/lets:check` and `/lets:commit`. Replies to a PR are posted by review-round itself, after one confirmation at every gate level, and the round records what it posted so a later run answers only open threads.
+
 ## [0.11.2] - 2026-10-27
 
 ### Fixed
