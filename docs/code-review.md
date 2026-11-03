@@ -96,7 +96,7 @@ It **never creates a worktree** — where you review is your call. Run it from y
 
 `/lets:check --fix`, `/lets:review --fix` and `/lets:handoff --fix` go one step further than a report: when every finding is verified and nothing needs deciding, the session applies the fixes to your working tree. Typing the flag is the permission - for editing the reviewed files, never for a commit: the changes wait for `/lets:check` and `/lets:commit`.
 
-Two conditions, judged over all findings before the first edit. **Verified** - review's skeptics confirmed it, check re-read the code for it (a self-check, weaker than review's), handoff checked the agent's claim against the code; a refuted finding is skipped, one that could not be verified stops the run. **Nothing to decide** - each finding has one concrete remedy, inside the files the review covered, with no open question, no alternative left open, and nothing added that the finding does not need. If anything fails, nothing is applied and you get the list of what needs your call - `/lets:review-round` works through it. The remedy is always written by the session from the code it read, never copied from a report.
+Two conditions, judged over all findings before the first edit. **Verified** - review's skeptics confirmed it, check re-read the code for it (a self-check, weaker than review's), handoff checked the agent's claim against the code; a refuted finding is skipped, one that could not be verified stops the run. **Nothing to decide** - each finding has one concrete remedy, inside the files the review covered, with no open question, no alternative left open, and nothing added that the finding does not need. If anything fails, nothing is applied and you get the list of what needs your call - `/lets:review-round` works through it, and its final pass applies your decisions through these same two conditions. The remedy is always written by the session from the code it read, never copied from a report.
 
 Not with `--json`; on a PR only when your checkout already is the PR head; with `--plan` the fixes go into the plan document.
 
@@ -118,7 +118,7 @@ This is where LETS shines: reviewing a PR from the terminal with expert agents i
 
 If you're the PR author, `/lets:github-pr --respond <PR>` triages the comments on your PR, auto-fixes the mechanical ones, and posts replies.
 
-**Received a whole review round** - an annotated copy of your spec, a review file, a PR with many threads? `/lets:review-round` triages every comment first, records the decisions on the task, keeps the artifact frozen, and applies all edits in one final pass.
+**Received a whole review round** - an annotated copy of your spec, a review file, a saved review or hand-off report, a PR with many threads? `/lets:review-round` triages every comment first, records each decision on the task it belongs to, keeps the artifact frozen, applies all edits in one final pass - through the team's implementer in a team worktree - and then drafts the replies, posting them only after you confirm the batch.
 
 ## Handing the review to another agent - `/lets:handoff`
 

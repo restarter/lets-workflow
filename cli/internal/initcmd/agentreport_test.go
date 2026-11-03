@@ -56,6 +56,7 @@ var reportPhases = []reportPhase{
 	{"commands/plan.md", "### Launch Explorers", "### Synthesize Codebase Map", true},
 	{"commands/plan.md", "### Architect Brief", "### Checkpoint: Architecture Review", true},
 	{"commands/plan.md", "### Dispatch Experts", "### Checkpoint: Evaluation Results", true},
+	{"commands/review-round.md", "## Step 3: Verify falsifiable claims against code", "## Step 3: Verify falsifiable claims against code", true},
 	{"commands/backlog.md", "### Phase 1: Explorer - Gather Context", "#### Explorer Failure Guard", true},
 	{"commands/backlog.md", "### Phase 3: Launch Brainstorm Agents (Parallel)", "### Phase 4: Aggregate & Present", true},
 	{"commands/research.md", "### Research (per-sub-question fan-out via the DEFAULT web subagent)", "### Research (per-sub-question fan-out via the DEFAULT web subagent)", true},

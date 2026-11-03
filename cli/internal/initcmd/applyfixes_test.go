@@ -50,6 +50,21 @@ func fixContractProblems(f map[string]string) []string {
 		add("apply-fixes Step 2 must never revert an applied edit")
 	}
 
+	// lets-x5zqv: /lets:review-round's final pass runs through this skill, with no --fix flag of its own
+	rr := f["review-round"]
+	if n := strings.Count(rr, `Skill(skill: "lets:apply-fixes", args: "source=review-round mode=files`); n != 1 {
+		add(fmt.Sprintf("review-round.md must run its final pass through apply-fixes exactly once (source=review-round mode=files), found %d", n))
+	}
+	if strings.Contains(rr, "[--fix]") {
+		add("review-round.md must not offer a --fix flag - its final pass is the command's own code gate")
+	}
+	if !strings.Contains(sectionSpan(skill, "## Input"), "`source=review-round`") {
+		add("apply-fixes ## Input must map review-round's triage onto the verdicts (`source=review-round`)")
+	}
+	if !strings.Contains(sectionSpan(skill, "## Step 2: Apply"), "**`apply=member`**") {
+		add("apply-fixes Step 2 must hold the apply=member branch")
+	}
+
 	for key, calls := range map[string]int{"check": 1, "review": 2, "handoff": 1} {
 		body := f[key]
 		hint := ""
@@ -105,12 +120,13 @@ func TestApplyFixes(t *testing.T) {
 		return string(b)
 	}
 	files := map[string]string{
-		"skill":    read("skills", "apply-fixes", "SKILL.md"),
-		"check":    read("commands", "check.md"),
-		"review":   read("commands", "review.md"),
-		"handoff":  read("commands", "handoff.md"),
-		"rules":    read("rules", "lets-rules.md"),
-		"workflow": read("skills", "review-workflow", "review.workflow.js"),
+		"skill":        read("skills", "apply-fixes", "SKILL.md"),
+		"check":        read("commands", "check.md"),
+		"review":       read("commands", "review.md"),
+		"handoff":      read("commands", "handoff.md"),
+		"rules":        read("rules", "lets-rules.md"),
+		"workflow":     read("skills", "review-workflow", "review.workflow.js"),
+		"review-round": read("commands", "review-round.md"),
 	}
 	for _, problem := range fixContractProblems(files) {
 		t.Error(problem)
@@ -126,6 +142,10 @@ func TestApplyFixes(t *testing.T) {
 		{"workflow returns counts only", "workflow", "refuted_findings: refutedFindings", "", "per-finding verify outcome"},
 		{"open items stop nothing", "skill", "**Open items**", "Open items", "open item"},
 		{"handoff ignores a moved HEAD", "handoff", "--fix skipped - HEAD moved while the agent worked", "x", "HEAD moved"},
+		{"review-round edits outside apply-fixes", "review-round", `Skill(skill: "lets:apply-fixes", args: "source=review-round mode=files`, `Skill(skill: "lets:other", args: "source=review-round mode=files`, "exactly once"},
+		{"review-round grows a --fix flag", "review-round", `argument-hint: "`, `argument-hint: "[--fix] `, "must not offer a --fix flag"},
+		{"skill loses the review-round verdicts", "skill", "`source=review-round`", "`source=other`", "source=review-round"},
+		{"skill loses apply=member", "skill", "**`apply=member`**", "apply=member", "apply=member branch"},
 	}
 	for _, m := range mutants {
 		t.Run(m.name, func(t *testing.T) {
