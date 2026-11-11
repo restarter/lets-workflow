@@ -3,9 +3,11 @@ package updatecmd
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -223,9 +225,9 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 				return result, fmt.Errorf("write rules: %w", err)
 			}
 			drPost := drift.Check(rulesSrc, rulesDst)
-			result.Add(Artifact{Name: "rules", Status: StatusUpdated, CurrentVersion: drPost.InstalledVersion, Detail: rulesUpdatedDetail(dr) + dupHint})
+			result.Add(Artifact{Name: "rules", Status: StatusUpdated, CurrentVersion: drPost.InstalledVersion, Detail: rulesUpdatedDetail(dr) + dupHint + commitNudge(projectRoot, ".claude/rules/lets-rules.md")})
 		default:
-			result.Add(Artifact{Name: "rules", Status: StatusInSync, CurrentVersion: dr.InstalledVersion, Detail: "tracks the plugin" + dupHint})
+			result.Add(Artifact{Name: "rules", Status: StatusInSync, CurrentVersion: dr.InstalledVersion, Detail: "tracks the plugin" + dupHint + commitNudge(projectRoot, ".claude/rules/lets-rules.md")})
 		}
 	}
 
@@ -294,9 +296,9 @@ func Run(ctx context.Context, opts Options, projectRoot, pluginRoot string) (Res
 					return result, fmt.Errorf("write tracker rules: %w", err)
 				}
 				drPost := drift.Check(trackerSrc, trackerDst)
-				result.Add(Artifact{Name: "tracker-rules", Status: StatusUpdated, CurrentVersion: drPost.InstalledVersion, Detail: rulesUpdatedDetail(dr) + fmt.Sprintf(" (tracker-%s.md)", trackerName)})
+				result.Add(Artifact{Name: "tracker-rules", Status: StatusUpdated, CurrentVersion: drPost.InstalledVersion, Detail: rulesUpdatedDetail(dr) + fmt.Sprintf(" (tracker-%s.md)", trackerName) + commitNudge(projectRoot, ".claude/rules/tracker-"+trackerName+".md")})
 			default:
-				result.Add(Artifact{Name: "tracker-rules", Status: StatusInSync, CurrentVersion: dr.InstalledVersion, Detail: fmt.Sprintf("tracks the plugin (tracker-%s.md)", trackerName)})
+				result.Add(Artifact{Name: "tracker-rules", Status: StatusInSync, CurrentVersion: dr.InstalledVersion, Detail: fmt.Sprintf("tracks the plugin (tracker-%s.md)", trackerName) + commitNudge(projectRoot, ".claude/rules/tracker-"+trackerName+".md")})
 			}
 			// Attach the switch notes to the tracker-rules row just added.
 			if len(switchNotes) > 0 {
@@ -666,4 +668,22 @@ func PrintReport(w io.Writer, r Result) {
 			fmt.Fprintf(w, "  %s\n", na.Command)
 		}
 	}
+}
+
+// commitNudge is the rules / tracker-rules row's note when git tracks the file and
+// its working copy differs from HEAD (lets-5whww): worktrees and clones check out
+// the committed copy, so a refresh that stays uncommitted never reaches them.
+// Untracked, ignored or not a repo -> "".
+func commitNudge(projectRoot, rel string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if exec.CommandContext(ctx, "git", "-C", projectRoot, "ls-files", "--error-unmatch", "--", rel).Run() != nil {
+		return ""
+	}
+	err := exec.CommandContext(ctx, "git", "-C", projectRoot, "diff", "--quiet", "HEAD", "--", rel).Run()
+	var ee *exec.ExitError
+	if errors.As(err, &ee) && ee.ExitCode() == 1 {
+		return "; uncommitted - commit it: worktrees and clones check out the committed copy"
+	}
+	return ""
 }
