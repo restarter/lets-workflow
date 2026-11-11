@@ -137,7 +137,7 @@ Then, inside the Claude Code session:
 | `/lets:check` | Inline 6-perspective sanity check, no subagents |
 | `/lets:review` | Full code review with dynamic agent selection + verify pass |
 | `/lets:github-pr` | GitHub PR review lifecycle - analyze, discuss, post inline, follow-up, approve |
-| `/lets:review-round` | Work through a received review round - triage comments, record decisions, one final edit-pass |
+| `/lets:review-round` | Work through a received review round - comments, review reports, PR threads; each decision on its own task, one final edit pass through the `--fix` gates, replies to the reviewer after one confirmation |
 | `/lets:opinion` | Technical decision analysis (dynamic expert agents in parallel) |
 | `/lets:ask` | Quick expert consultation (single agent) - `/lets:ask <expert> <question>` |
 | `/lets:research` | Web-sourced cited answer to an external/technical question - cross-check flags weak/contradicted claims (`--workflow` off-context, `--project` repo-grounded) |
