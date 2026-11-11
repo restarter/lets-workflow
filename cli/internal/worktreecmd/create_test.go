@@ -721,3 +721,110 @@ func TestCreate_AttachHasNoBaseResolution(t *testing.T) {
 		t.Fatalf("attach: mode=%s resolution=%+v", res.Worktree.BranchMode, res.Worktree.BaseResolution)
 	}
 }
+
+// TestCreate_FailingPostCheckoutHookRollsBack: git creates the checkout, then the
+// repo's post-checkout hook fails and git exits non-zero (lets-41cpf) - create
+// rolls back what its own add made instead of leaving an unlinked checkout.
+func TestCreate_FailingPostCheckoutHookRollsBack(t *testing.T) {
+	repo := initRepo(t)
+	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	hooks := filepath.Join(realTempDir(t), "hooks")
+	mustWrite(t, filepath.Join(hooks, "post-checkout"), "#!/bin/sh\nexit 1\n", 0o755)
+	runIn(t, repo, "git", "config", "core.hooksPath", hooks)
+
+	res, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{Name: "foo", Mode: worktreecmd.BranchAuto})
+	var e *worktreecmd.Error
+	if !errors.As(err, &e) || e.Code != worktreecmd.ExitGitFailed || e.Kind != "git_worktree_add_failed" {
+		t.Fatalf("want code 16 git_worktree_add_failed, got err=%v", err)
+	}
+	if res.OK || res.Error == nil || res.Error.Kind != "git_worktree_add_failed" || !strings.Contains(res.Error.Remediation, "post-checkout hook") {
+		t.Errorf("envelope error: %+v", res.Error)
+	}
+	if res.Rollback == nil || !res.Rollback.Attempted || !res.Rollback.Succeeded {
+		t.Errorf("Rollback info: %+v", res.Rollback)
+	}
+	wtPath := filepath.Join(repo, ".worktrees", "foo")
+	if _, err := os.Lstat(wtPath); !os.IsNotExist(err) {
+		t.Errorf("the checkout survived: %v", err)
+	}
+	if out, _ := exec.Command("git", "-C", repo, "worktree", "list", "--porcelain").Output(); strings.Contains(string(out), wtPath) {
+		t.Errorf("git worktree list still has it:\n%s", out)
+	}
+	if out, _ := exec.Command("git", "-C", repo, "branch", "--list", "worktree-foo").Output(); strings.TrimSpace(string(out)) != "" {
+		t.Errorf("branch survived: %s", out)
+	}
+
+	runIn(t, repo, "git", "config", "--unset", "core.hooksPath")
+	res2, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{Name: "foo", Mode: worktreecmd.BranchAuto})
+	if err != nil || !res2.OK {
+		t.Errorf("re-create after the hook fix: err=%v res=%+v", err, res2)
+	}
+}
+
+// A directory that existed before the add is never rolled back.
+func TestCreate_PreExistingPathRefusedUntouched(t *testing.T) {
+	repo := initRepo(t)
+	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	wtPath := filepath.Join(repo, ".worktrees", "foo")
+	mustWrite(t, filepath.Join(wtPath, "mine.txt"), "keep", 0o644)
+	_, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{Name: "foo", Mode: worktreecmd.BranchAuto})
+	var e *worktreecmd.Error
+	if !errors.As(err, &e) || e.Kind != "worktree_path_exists" {
+		t.Fatalf("want worktree_path_exists, got %v", err)
+	}
+	if data, err := os.ReadFile(filepath.Join(wtPath, "mine.txt")); err != nil || string(data) != "keep" {
+		t.Errorf("pre-existing directory touched: %q %v", data, err)
+	}
+}
+
+// The ownership guard: another creator wins the path between the absence check and
+// the add. Create never rolls back the winner's checkout.
+func TestCreate_AddRaceLeavesTheWinner(t *testing.T) {
+	for _, tc := range []struct {
+		name, out, kind string
+	}{
+		{"collision reported", "", "worktree_path_exists"},
+		{"generic failure, other branch", "hook failed", "git_worktree_add_failed"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := initRepo(t)
+			if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			wtPath := filepath.Join(repo, ".worktrees", "foo")
+			out := tc.out
+			if out == "" {
+				out = "fatal: '" + wtPath + "' already exists"
+			}
+			restore := worktreecmd.SetGitWorktreeAddForTesting(func(ctx context.Context, _ []string) ([]byte, error) {
+				if o, err := exec.CommandContext(ctx, "git", "-C", repo, "worktree", "add", "-q", "-b", "winner", wtPath).CombinedOutput(); err != nil {
+					t.Fatalf("winner add: %v\n%s", err, o)
+				}
+				return []byte(out), errors.New("exit status 128")
+			})
+			defer restore()
+
+			res, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{Name: "foo", Mode: worktreecmd.BranchAuto})
+			var e *worktreecmd.Error
+			if !errors.As(err, &e) || e.Kind != tc.kind {
+				t.Fatalf("want %s, got %v", tc.kind, err)
+			}
+			if res.Rollback != nil {
+				t.Errorf("no rollback of another creator's checkout: %+v", res.Rollback)
+			}
+			if _, err := os.Stat(filepath.Join(wtPath, ".git")); err != nil {
+				t.Errorf("the winner's checkout is gone: %v", err)
+			}
+			if o, _ := exec.Command("git", "-C", repo, "branch", "--list", "winner").Output(); !strings.Contains(string(o), "winner") {
+				t.Error("the winner's branch is gone")
+			}
+			if o, _ := exec.Command("git", "-C", repo, "worktree", "list", "--porcelain").Output(); !strings.Contains(string(o), wtPath) {
+				t.Errorf("the winner's worktree entry is gone:\n%s", o)
+			}
+		})
+	}
+}

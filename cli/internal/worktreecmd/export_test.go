@@ -57,6 +57,13 @@ func SetWriteExcludesForTesting(f func(context.Context, string, []string) error)
 	return func() { writeExcludes = old }
 }
 
+// SetGitWorktreeAddForTesting swaps create's `git worktree add` runner; restore undoes it.
+func SetGitWorktreeAddForTesting(f func(context.Context, []string) ([]byte, error)) (restore func()) {
+	old := gitWorktreeAdd
+	gitWorktreeAdd = f
+	return func() { gitWorktreeAdd = old }
+}
+
 // SetSettingsStage replaces the EnsureLetsAdditionalDir test seam; restore undoes it.
 func SetSettingsStage(f func(string)) (restore func()) {
 	old := settingsStage

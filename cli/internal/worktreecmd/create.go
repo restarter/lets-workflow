@@ -32,6 +32,11 @@ type CreateOptions struct {
 	FetchTimeout       time.Duration // bound for the implicit base's fetch (0 = 20 s); no CLI flag
 }
 
+// gitWorktreeAdd runs `git <args>` for Step 7 - a test seam (the ownership race).
+var gitWorktreeAdd = func(ctx context.Context, args []string) ([]byte, error) {
+	return exec.CommandContext(ctx, "git", args...).CombinedOutput()
+}
+
 // minGitVersion is required for `git worktree remove --force` (since 2.17).
 const minGitVersion = "2.17"
 
@@ -225,17 +230,28 @@ func Create(ctx context.Context, projectRoot string, opts CreateOptions) (*Creat
 	default: // explicit --base: exactly as before
 		gitArgs = []string{"-C", projectRoot, "worktree", "add", "-b", plan.Branch, wtPath, plan.Base}
 	}
-	if out, err := exec.CommandContext(ctx, "git", gitArgs...).CombinedOutput(); err != nil {
+	_, preErr := os.Lstat(wtPath)
+	absentBefore := os.IsNotExist(preErr) // a permission or I/O error is NOT proof of absence
+	if out, err := gitWorktreeAdd(ctx, gitArgs); err != nil {
 		msg := redactCreds(strings.TrimSpace(string(out)))
 		kind, code, remediation := classifyWorktreeAddErr(msg, opts.Name)
+		e := &Error{Code: code, Kind: kind, Message: msg, Remediation: remediation, Cause: err}
+		// git creates the checkout, then runs the repo's post-checkout hook, and returns
+		// the hook's status (lets-41cpf): a failing hook leaves a registered worktree
+		// with no .lets link. Roll back only what THIS add created: the path was absent
+		// before it, git did not report a collision (another create may own the path or
+		// the branch - worktree_path_exists / branch_in_use_other_worktree are left
+		// alone), and the checkout there is on the branch this add asked for.
+		_, statErr := os.Lstat(filepath.Join(wtPath, ".git"))
+		ours := absentBefore && statErr == nil && kind == "git_worktree_add_failed" &&
+			currentBranchOf(ctx, wtPath) == plan.Branch
+		if ours {
+			e.Remediation = "git worktree add created the checkout but exited non-zero - often the repository's post-checkout hook; fix it and re-run create"
+			result.Worktree = &WorktreeInfo{Name: opts.Name, Path: wtPath, Branch: plan.Branch, BranchMode: plan.Mode, BaseRef: baseRef, BaseResolution: baseRes}
+			return rollback(ctx, result, projectRoot, wtPath, plan, prevMainBranch, "git worktree add failed", e)
+		}
 		restoreMainIfSwitched(prevMainBranch)
-		return fail(&Error{
-			Code:        code,
-			Kind:        kind,
-			Message:     msg,
-			Remediation: remediation,
-			Cause:       err,
-		})
+		return fail(e)
 	}
 	addStep(StepOK, "git worktree add")
 
