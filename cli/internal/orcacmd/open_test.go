@@ -4,6 +4,7 @@ package orcacmd
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -338,5 +339,147 @@ func TestOpen_BaseRefusalFallsBack(t *testing.T) {
 		if strings.HasPrefix(joined(c.args), "worktree create") {
 			t.Errorf("a refused base reached orca: %q", c.args)
 		}
+	}
+}
+
+// noAgentOrca fakes Orca for a --no-agent open: create runs onCreate, terminal list
+// returns terms. It returns the recorded calls.
+func noAgentOrca(t *testing.T, terms string, onCreate func(args []string) (string, bool)) *[]fakeCall {
+	t.Helper()
+	if terms == "" {
+		terms = `{"ok":true,"result":{"terminals":[]}}`
+	}
+	return useFakeOrca(t, func(args []string) (string, string, bool) {
+		switch {
+		case joined(args) == "status --json":
+			return statusRunning, "", false
+		case joined(args) == "worktree ps --json":
+			return `{"ok":true,"result":{"worktrees":[]}}`, "", false
+		case joined(args) == "terminal list --json":
+			return terms, "", false
+		case len(args) > 1 && args[0] == "worktree" && args[1] == "create":
+			out, fail := onCreate(args)
+			return out, "", fail
+		}
+		return "{}", "", false
+	})
+}
+
+func createCalls(calls *[]fakeCall) [][]string {
+	var out [][]string
+	for _, c := range *calls {
+		if len(c.args) > 1 && c.args[0] == "worktree" && c.args[1] == "create" {
+			out = append(out, c.args)
+		}
+	}
+	return out
+}
+
+func TestOpen_NoAgentArgv(t *testing.T) {
+	repo := mainCheckout(t)
+	calls := noAgentOrca(t, "", func([]string) (string, bool) {
+		return `{"ok":true,"result":{"worktree":{"id":"r::/o/lets-abc-x","path":"/o/lets-abc-x","branch":"refs/heads/lets-abc-x"}}}`, false
+	})
+	res, err := Open(context.Background(), OpenOptions{Repo: repo, Name: "lets-abc-x", NoAgent: true})
+	if err != nil || !res.OK || !res.Launch.Launched || res.Launch.Path != "/o/lets-abc-x" {
+		t.Fatalf("err=%v res=%+v launch=%+v", err, res, res.Launch)
+	}
+	want := []string{"worktree", "create", "--repo", "path:" + repo, "--name", "lets-abc-x", "--no-parent", "--setup", "skip", "--json"}
+	if got := createCalls(calls); len(got) != 1 || !slices.Equal(got[0], want) {
+		t.Errorf("argv = %q\nwant  %q", got, want)
+	}
+}
+
+func TestOpen_NoAgentWithPromptIsUsage(t *testing.T) {
+	repo := mainCheckout(t)
+	calls := noAgentOrca(t, "", func([]string) (string, bool) { return "{}", false })
+	_, err := Open(context.Background(), OpenOptions{Repo: repo, Name: "n", NoAgent: true, Prompt: "/lets:start x"})
+	wantExit(t, err, ExitUsage, "usage")
+	if len(*calls) != 0 {
+		t.Errorf("no Orca call on a usage error, got %d", len(*calls))
+	}
+}
+
+// commitRepo is a main checkout with one commit, so git worktree add works.
+func commitRepo(t *testing.T) string {
+	t.Helper()
+	repo := mainCheckout(t)
+	gitT(t, repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "i")
+	return repo
+}
+
+func TestOpen_NoAgentCreateFailureReconciles(t *testing.T) {
+	failCreate := `{"ok":false,"error":{"code":"internal","message":"boom"}}`
+
+	t.Run("git shows the worktree", func(t *testing.T) {
+		repo := commitRepo(t)
+		wt := filepath.Join(t.TempDir(), "lets-abc-x")
+		noAgentOrca(t, "", func([]string) (string, bool) {
+			gitT(t, repo, "worktree", "add", "-q", "-b", "lets-abc-x", wt)
+			return failCreate, true
+		})
+		res, err := Open(context.Background(), OpenOptions{Repo: repo, Name: "lets-abc-x", NoAgent: true})
+		wantExit(t, err, ExitCreateAmbiguous, "create_ambiguous")
+		if res.OK || res.Launch.Launched || res.Launch.FallbackCommand != "" {
+			t.Errorf("no fallback after a create git shows: %+v", res.Launch)
+		}
+		real, _ := filepath.EvalSymlinks(wt)
+		if !fsutilSame(res.Launch.Path, real) || !strings.Contains(res.Error.Message, filepath.Base(wt)) {
+			t.Errorf("the path must be named: launch=%+v error=%+v", res.Launch, res.Error)
+		}
+		if _, err := os.Stat(wt); err != nil {
+			t.Errorf("the worktree is never auto-removed: %v", err)
+		}
+	})
+
+	t.Run("git cannot be asked", func(t *testing.T) {
+		repo := commitRepo(t)
+		old := worktreeListProbe
+		worktreeListProbe = func(context.Context, string) ([]string, error) { return nil, errors.New("git broke") }
+		t.Cleanup(func() { worktreeListProbe = old })
+		noAgentOrca(t, "", func([]string) (string, bool) { return failCreate, true })
+		res, err := Open(context.Background(), OpenOptions{Repo: repo, Name: "lets-abc-x", NoAgent: true})
+		wantExit(t, err, ExitCreateAmbiguous, "create_ambiguous")
+		if res.Launch.FallbackCommand != "" || !strings.Contains(res.Error.Message, "git could not be asked") {
+			t.Errorf("probe failure: launch=%+v error=%+v", res.Launch, res.Error)
+		}
+	})
+
+	t.Run("nothing created degrades", func(t *testing.T) {
+		repo := commitRepo(t)
+		noAgentOrca(t, "", func([]string) (string, bool) { return failCreate, true })
+		res, err := Open(context.Background(), OpenOptions{Repo: repo, Name: "lets-abc-x", NoAgent: true})
+		if err != nil || !res.OK || res.Launch.Launched || !strings.Contains(res.Launch.FallbackCommand, "--no-orca") {
+			t.Errorf("want the usual fallback: err=%v launch=%+v", err, res.Launch)
+		}
+	})
+}
+
+func fsutilSame(a, b string) bool {
+	ra, _ := filepath.EvalSymlinks(a)
+	rb, _ := filepath.EvalSymlinks(b)
+	return ra != "" && ra == rb
+}
+
+func TestOpen_NoAgentRefusesARunningAgent(t *testing.T) {
+	repo := mainCheckout(t)
+	p := "/o/lets-abc-x"
+	terms := `{"ok":true,"result":{"terminals":[{"handle":"term_a","worktreePath":"` + p + `","title":"claude","tabId":"t","leafId":"l","agentIdentity":"claude"}]}}`
+	noAgentOrca(t, terms, func([]string) (string, bool) {
+		return `{"ok":true,"result":{"worktree":{"id":"r::` + p + `","path":"` + p + `","branch":"refs/heads/lets-abc-x"}}}`, false
+	})
+	res, err := Open(context.Background(), OpenOptions{Repo: repo, Name: "lets-abc-x", NoAgent: true})
+	wantExit(t, err, ExitAgentTerminalPresent, "agent_terminal_present")
+	if res.OK || res.Launch.Launched || res.Launch.Path != p || res.Launch.FallbackCommand != "" {
+		t.Errorf("launch=%+v", res.Launch)
+	}
+
+	// A plain shell in the new worktree passes.
+	shell := `{"ok":true,"result":{"terminals":[{"handle":"term_b","worktreePath":"` + p + `","title":"zsh","tabId":"t","leafId":"l"}]}}`
+	noAgentOrca(t, shell, func([]string) (string, bool) {
+		return `{"ok":true,"result":{"worktree":{"id":"r::` + p + `","path":"` + p + `","branch":"refs/heads/lets-abc-x"}}}`, false
+	})
+	if res, err := Open(context.Background(), OpenOptions{Repo: repo, Name: "lets-abc-x", NoAgent: true}); err != nil || !res.OK || !res.Launch.Launched {
+		t.Errorf("a plain shell must pass: err=%v launch=%+v", err, res.Launch)
 	}
 }

@@ -40,8 +40,8 @@ func printOrca(cmd *cobra.Command, jsonOut, quiet, ok bool, res any, render func
 
 func newOrcaOpenCmd() *cobra.Command {
 	var (
-		repo, name, prompt    string
-		force, jsonOut, quiet bool
+		repo, name, prompt             string
+		force, noAgent, jsonOut, quiet bool
 	)
 	cmd := &cobra.Command{
 		Use:           "open",
@@ -50,7 +50,7 @@ func newOrcaOpenCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			res, runErr := orcacmd.Open(cmd.Context(), orcacmd.OpenOptions{Repo: repo, Name: name, Prompt: prompt, Force: force, Merge: mergeBranchOf(repo)})
+			res, runErr := orcacmd.Open(cmd.Context(), orcacmd.OpenOptions{Repo: repo, Name: name, Prompt: prompt, Force: force, NoAgent: noAgent, Merge: mergeBranchOf(repo)})
 			printOrca(cmd, jsonOut, quiet, res.OK, res, func() { orcacmd.RenderOpen(cmd.OutOrStdout(), res) })
 			return runErr
 		},
@@ -59,6 +59,7 @@ func newOrcaOpenCmd() *cobra.Command {
 	cmd.Flags().StringVar(&name, "name", "", "Worktree name (Orca turns `/` into `-`; pass a `/`-free name)")
 	cmd.Flags().StringVar(&prompt, "prompt", "", "First message for the agent (e.g. /lets:start <id>)")
 	cmd.Flags().BoolVar(&force, "force", false, "Open even when a worktree with this name is already open")
+	cmd.Flags().BoolVar(&noAgent, "no-agent", false, "Create the worktree only (--setup skip, no agent, no prompt); the caller adopts it, then opens a terminal")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
 	cmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Suppress human-readable output")
 	return cmd
