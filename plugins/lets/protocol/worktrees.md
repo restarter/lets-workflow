@@ -24,7 +24,7 @@ A worktree may live anywhere: `lets worktree create` puts it in `.worktrees/`, O
 
 | step | rule |
 |---|---|
-| adopt | a worktree LETS did not create (Orca, a teammate, `git worktree add`) becomes a LETS worktree through `lets worktree adopt`. Runs from Orca's `orca.yaml` setup hook, and from the SessionStart hook for an unlinked worktree of an initialized project before LETS Config is built (never without `<main>/.lets/.env`, never under `.claude/worktrees/`). `/lets:start` Step 0.5 is only the fallback |
+| adopt | a worktree LETS did not create (Orca, a teammate, `git worktree add`) becomes a LETS worktree through `lets worktree adopt` (links, then the main checkout's `.worktreeinclude` files - copied, never overwritten). Runs from `/lets:worktree create` on the orca launcher right after Orca creates the worktree, from Orca's `orca.yaml` setup hook for a worktree Orca made on its own, and from the SessionStart hook for an unlinked worktree of an initialized project before LETS Config is built (never without `<main>/.lets/.env`, never under `.claude/worktrees/`). `/lets:start` Step 0.5 is only the fallback |
 | never deletes | a pre-existing cache-only `.lets` moves to `.lets.pre-adopt[-N]` (safe to delete by hand); anything else stops with exit 22 |
 | release | `lets worktree release` (Orca's archive hook) removes the task-state file and leaves a `released-<task-id>` marker for `/lets:start --main` Reopen |
 
@@ -63,7 +63,7 @@ A worktree may live anywhere: `lets worktree create` puts it in `.worktrees/`, O
 | launcher | lifecycle |
 |---|---|
 | terminal | `/lets:worktree create <name>` (main repo) -> new terminal `cd .worktrees/<name>/ && claude` -> `/lets:start` -> work -> `/lets:done` -> `/lets:worktree remove <name>` (main repo) |
-| Orca (`LETS_LAUNCHER=orca`) | `/lets:worktree create` -> Orca creates the worktree and runs `lets worktree adopt` (the SessionStart hook adopts if it did not) -> `/lets:start <id>` -> work -> `/lets:done` -> archive in Orca (`lets worktree release`; `/lets:worktree remove` refuses it with `worktree_external`) -> `/lets:start --main` offers Reopen for archived tasks still `in_progress` |
+| Orca (`LETS_LAUNCHER=orca`) | `/lets:worktree create` -> Orca creates the worktree with no agent (`lets orca open --no-agent`) -> `lets worktree adopt` -> an Orca terminal runs `/lets:start <id>` -> work -> `/lets:done` -> archive in Orca (`lets worktree release`; `/lets:worktree remove` refuses it with `worktree_external`) -> `/lets:start --main` offers Reopen for archived tasks still `in_progress` |
 
 ## A worktree can vanish outside Orca
 
