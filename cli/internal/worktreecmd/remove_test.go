@@ -470,3 +470,147 @@ func TestRemove_GoneUpstreamKeepsWarn(t *testing.T) {
 		t.Errorf("want the skip warn naming a gone upstream: %+v", res.Steps)
 	}
 }
+
+// TestRemove_DSStoreIsNotDirty: Finder's .DS_Store, at any level, is OS litter,
+// not user work (lets-yeyhz).
+func TestRemove_DSStoreIsNotDirty(t *testing.T) {
+	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null") // a global excludesfile must not hide it
+	repo := initRepo(t)
+	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cr, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{Name: "foo", Mode: worktreecmd.BranchAuto})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(cr.Worktree.Path, ".DS_Store"), "x", 0o644)
+	mustWrite(t, filepath.Join(cr.Worktree.Path, "sub", ".DS_Store"), "x", 0o644)
+	res, err := worktreecmd.Remove(context.Background(), repo, worktreecmd.RemoveOptions{Name: "foo"})
+	if err != nil || !res.OK {
+		t.Fatalf(".DS_Store must not make the worktree dirty: err=%v res=%+v", err, res)
+	}
+	if _, err := os.Stat(cr.Worktree.Path); !os.IsNotExist(err) {
+		t.Errorf("the worktree survived: %v", err)
+	}
+}
+
+// A .DS_Store under a directory git C-quotes (a tab in its name) is litter too.
+func TestRemove_DSStoreQuotedPathIsNotDirty(t *testing.T) {
+	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+	repo := initRepo(t)
+	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cr, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{Name: "foo", Mode: worktreecmd.BranchAuto})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(cr.Worktree.Path, "dir\tx", ".DS_Store"), "x", 0o644)
+	if res, err := worktreecmd.Remove(context.Background(), repo, worktreecmd.RemoveOptions{Name: "foo"}); err != nil || !res.OK {
+		t.Fatalf("a quoted .DS_Store path must not be dirty: err=%v", err)
+	}
+}
+
+// removeFixture creates worktree foo and returns the repo and its path.
+func removeFixture(t *testing.T) (repo, wt string) {
+	t.Helper()
+	repo = initRepo(t)
+	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cr, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{Name: "foo", Mode: worktreecmd.BranchAuto})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return repo, cr.Worktree.Path
+}
+
+// halfRemove fakes git deleting the tree but stopping at a non-empty directory:
+// everything except keep (relative paths) is deleted; the registration stays.
+func halfRemove(t *testing.T, keep ...string) {
+	t.Helper()
+	restore := worktreecmd.SetGitWorktreeRemoveForTesting(func(_ context.Context, _, path string) ([]byte, error) {
+		entries, err := os.ReadDir(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, e := range entries {
+			if err := os.RemoveAll(filepath.Join(path, e.Name())); err != nil {
+				t.Fatal(err)
+			}
+		}
+		for _, k := range keep {
+			mustWrite(t, filepath.Join(path, k), "x", 0o644)
+		}
+		mustMkdir(t, filepath.Join(path, "empty"))
+		return []byte("error: failed to delete '" + path + "': Directory not empty"), errors.New("exit status 255")
+	})
+	t.Cleanup(restore)
+}
+
+func wantRemoveFailed(t *testing.T, err error) *worktreecmd.Error {
+	t.Helper()
+	var e *worktreecmd.Error
+	if !errors.As(err, &e) || e.Code != worktreecmd.ExitGitFailed || e.Kind != "git_worktree_remove_failed" {
+		t.Fatalf("want 16 git_worktree_remove_failed, got %v", err)
+	}
+	return e
+}
+
+func TestRemove_FinishesAHalfRemovedTree(t *testing.T) {
+	repo, wt := removeFixture(t)
+	halfRemove(t, filepath.Join("sub", ".DS_Store"))
+	res, err := worktreecmd.Remove(context.Background(), repo, worktreecmd.RemoveOptions{Name: "foo"})
+	if err != nil || !res.OK {
+		t.Fatalf("only Finder litter left - remove must finish: err=%v res=%+v", err, res)
+	}
+	warned := false
+	for _, s := range res.Steps {
+		warned = warned || (s.Status == worktreecmd.StepWarn && strings.Contains(s.Message, "finished with a filesystem remove"))
+	}
+	if !warned {
+		t.Errorf("want the finish warn step: %+v", res.Steps)
+	}
+	if _, err := os.Lstat(wt); !os.IsNotExist(err) {
+		t.Errorf("the directory survived: %v", err)
+	}
+	if out, _ := exec.Command("git", "-C", repo, "worktree", "list", "--porcelain").Output(); strings.Contains(string(out), wt) {
+		t.Errorf("the registration survived:\n%s", out)
+	}
+}
+
+func TestRemove_HalfRemovedWithUserFileStays(t *testing.T) {
+	repo, wt := removeFixture(t)
+	halfRemove(t, "notes.md", ".DS_Store")
+	_, err := worktreecmd.Remove(context.Background(), repo, worktreecmd.RemoveOptions{Name: "foo"})
+	e := wantRemoveFailed(t, err)
+	if !strings.Contains(e.Message, "notes.md") {
+		t.Errorf("the message must name notes.md: %q", e.Message)
+	}
+	if _, err := os.Stat(filepath.Join(wt, "notes.md")); err != nil {
+		t.Errorf("notes.md must stay: %v", err)
+	}
+}
+
+func TestRemove_OtherFailureStaysAnError(t *testing.T) {
+	repo, wt := removeFixture(t)
+	restore := worktreecmd.SetGitWorktreeRemoveForTesting(func(context.Context, string, string) ([]byte, error) {
+		return []byte("fatal: cannot remove a locked working tree, lock reason: x\nuse 'remove -f -f' to override or unlock first; '" + wt + "' is locked"), errors.New("exit status 128")
+	})
+	defer restore()
+	_, err := worktreecmd.Remove(context.Background(), repo, worktreecmd.RemoveOptions{Name: "foo"})
+	_ = wantRemoveFailed(t, err)
+	if _, err := os.Stat(filepath.Join(wt, ".git")); err != nil {
+		t.Errorf("the tree must be intact: %v", err)
+	}
+}
+
+func TestRemove_LockedWorktreeForceStaysIntact(t *testing.T) {
+	repo, wt := removeFixture(t)
+	runIn(t, repo, "git", "worktree", "lock", wt)
+	_, err := worktreecmd.Remove(context.Background(), repo, worktreecmd.RemoveOptions{Name: "foo", Force: true})
+	_ = wantRemoveFailed(t, err)
+	if _, err := os.Stat(filepath.Join(wt, ".git")); err != nil {
+		t.Errorf("a locked worktree must stay intact: %v", err)
+	}
+}

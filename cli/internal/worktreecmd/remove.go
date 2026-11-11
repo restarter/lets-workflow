@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -34,12 +35,58 @@ func hasUserChanges(porcelain string, links []trackeradapter.Link) bool {
 			return true
 		}
 		path := strings.TrimSuffix(strings.TrimSpace(l[2:]), "/")
-		if path == ".lets" || strings.HasPrefix(path, ".lets.pre-adopt") || isDeclaredLink(path, links) {
+		// git C-quotes a path with special characters ("dir\tx/.DS_Store").
+		if strings.HasPrefix(path, "\"") {
+			if u, err := strconv.Unquote(path); err == nil {
+				path = u
+			}
+		}
+		if path == ".lets" || strings.HasPrefix(path, ".lets/") || strings.HasPrefix(path, ".lets.pre-adopt") || isDeclaredLink(path, links) {
 			continue
+		}
+		if filepath.Base(path) == ".DS_Store" {
+			continue // macOS Finder litter, never user work (lets-yeyhz)
 		}
 		return true
 	}
 	return false
+}
+
+// gitWorktreeRemove runs `git worktree remove --force` - a test seam.
+var gitWorktreeRemove = func(ctx context.Context, root, path string) ([]byte, error) {
+	return exec.CommandContext(ctx, "git", "-C", root, "worktree", "remove", "--force", path).CombinedOutput()
+}
+
+// nonLitter returns up to max paths (relative to dir) under dir that are not Finder
+// litter: anything but a directory or a regular file named .DS_Store - a symlink,
+// any other file, an entry the walk could not read. Symlinks are never followed;
+// empty directories are litter.
+func nonLitter(dir string, max int) []string {
+	var out []string
+	_ = filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		rel, rerr := filepath.Rel(dir, p)
+		if rerr != nil {
+			rel = p
+		}
+		switch {
+		case err != nil:
+			out = append(out, rel)
+			if d != nil && d.IsDir() {
+				return filepath.SkipDir
+			}
+		case d.IsDir():
+			return nil
+		case d.Type().IsRegular() && d.Name() == ".DS_Store":
+			return nil
+		default:
+			out = append(out, rel)
+		}
+		if len(out) >= max {
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	return out
 }
 
 // isDeclaredLink reports whether path is a declared store link or one of its parents.
@@ -150,7 +197,7 @@ func Remove(ctx context.Context, projectRoot string, opts RemoveOptions) (*Remov
 	// symlinks always appear as untracked in the worktree (their branch HEAD
 	// commit doesn't carry these paths). Filter them out so a freshly-created
 	// worktree is not falsely classified as "dirty".
-	statusOut, _ := exec.CommandContext(ctx, "git", "-C", wtPath, "status", "--porcelain").Output()
+	statusOut, _ := exec.CommandContext(ctx, "git", "-C", wtPath, "status", "--porcelain", "--untracked-files=all").Output()
 	dirty := hasUserChanges(string(statusOut), loadStoreLinks(projectRoot, "", func(string, string) {}))
 	if dirty && !opts.Force {
 		return fail(&Error{
@@ -216,13 +263,25 @@ func Remove(ctx context.Context, projectRoot string, opts RemoveOptions) (*Remov
 		})
 	}
 
-	if out, err := exec.CommandContext(ctx, "git", "-C", projectRoot, "worktree", "remove", "--force", wtPath).CombinedOutput(); err != nil {
-		return fail(&Error{
-			Code:    ExitGitFailed,
-			Kind:    "git_worktree_remove_failed",
-			Message: redactCreds(strings.TrimSpace(string(out))),
-			Cause:   err,
-		})
+	if out, err := gitWorktreeRemove(ctx, projectRoot, wtPath); err != nil {
+		msg := redactCreds(strings.TrimSpace(string(out)))
+		// Finder can re-create .DS_Store while git deletes the tree, and git stops at
+		// the non-empty directory with the tree half gone (lets-yeyhz). Finish exactly
+		// that case - and only when what is left is Finder litter: RemoveAll is the one
+		// irreversible step, and in a race the leftovers could be anything (MAIN-LETS).
+		// Any other failure (a locked worktree, permissions) stays an error.
+		if !strings.Contains(msg, "Directory not empty") {
+			return fail(&Error{Code: ExitGitFailed, Kind: "git_worktree_remove_failed", Message: msg, Cause: err})
+		}
+		if other := nonLitter(wtPath, 3); len(other) > 0 {
+			return fail(&Error{Code: ExitGitFailed, Kind: "git_worktree_remove_failed",
+				Message:     msg + "; left in place - not only .DS_Store remains: " + strings.Join(other, ", "),
+				Remediation: "check those files, then remove the directory by hand and run `git worktree prune`", Cause: err})
+		}
+		if rmErr := os.RemoveAll(wtPath); rmErr != nil {
+			return fail(&Error{Code: ExitGitFailed, Kind: "git_worktree_remove_failed", Message: msg + "; finishing with a filesystem remove failed: " + rmErr.Error(), Cause: err})
+		}
+		addStep(StepWarn, "git worktree remove stopped at a non-empty directory - finished with a filesystem remove")
 	}
 	_ = exec.CommandContext(ctx, "git", "-C", projectRoot, "worktree", "prune").Run()
 	addStep(StepOK, "git worktree remove + prune")

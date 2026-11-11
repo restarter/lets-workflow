@@ -64,6 +64,13 @@ func SetGitWorktreeAddForTesting(f func(context.Context, []string) ([]byte, erro
 	return func() { gitWorktreeAdd = old }
 }
 
+// SetGitWorktreeRemoveForTesting swaps remove's `git worktree remove --force` runner; restore undoes it.
+func SetGitWorktreeRemoveForTesting(f func(ctx context.Context, root, path string) ([]byte, error)) (restore func()) {
+	old := gitWorktreeRemove
+	gitWorktreeRemove = f
+	return func() { gitWorktreeRemove = old }
+}
+
 // SetSettingsStage replaces the EnsureLetsAdditionalDir test seam; restore undoes it.
 func SetSettingsStage(f func(string)) (restore func()) {
 	old := settingsStage
