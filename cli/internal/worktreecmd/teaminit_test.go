@@ -99,7 +99,7 @@ func TestTeamInit_Renders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, line := range []string{`team: "snake"`, `area: "the CLI"`, `worktree: "` + wt + `"`, `lead_name: "lets-workflow-snake-lead"`, `agent_command: "claude"`, `orca_agent: "claude"`, `git_dir: "`} {
+	for _, line := range []string{`team: "snake"`, `area: "the CLI"`, `worktree: "` + wt + `"`, `lead_name: "snake-lead"`, `agent_command: "claude"`, `orca_agent: "claude"`, `git_dir: "`} {
 		if !strings.Contains(string(b), line) {
 			t.Errorf("team file lacks %s", line)
 		}
@@ -174,11 +174,12 @@ func TestTeamInit_ConcurrentSameCallsign(t *testing.T) {
 	noTempFiles(t, repo)
 }
 
+// Both the short and the repo-prefixed lead name held -> 34 callsign_live.
 func TestTeamInit_CallsignLive(t *testing.T) {
-	repo, wt, pluginRoot := teamSetup(t, "lets-workflow-frog-lead")
-	_, err := teamInit(repo, wt, pluginRoot, "frog")
-	if worktreecmd.ExitCode(err) != worktreecmd.ExitCallsignLive {
-		t.Fatalf("exit %d (%v), want %d", worktreecmd.ExitCode(err), err, worktreecmd.ExitCallsignLive)
+	repo, wt, pluginRoot := teamSetup(t, "frog-lead", "lets-workflow-frog-lead")
+	res, err := teamInit(repo, wt, pluginRoot, "frog")
+	if worktreecmd.ExitCode(err) != worktreecmd.ExitCallsignLive || res.Error == nil || res.Error.Kind != "callsign_live" {
+		t.Fatalf("exit %d (%v), want %d callsign_live", worktreecmd.ExitCode(err), err, worktreecmd.ExitCallsignLive)
 	}
 	if _, err := os.Stat(filepath.Join(repo, ".lets", "teams", "frog.md")); !os.IsNotExist(err) {
 		t.Error("a team file was written for a live callsign")
@@ -211,7 +212,7 @@ func TestTeamInit_RefusesControlChars(t *testing.T) {
 }
 
 func TestTeamInit_SuggestWritesNothing(t *testing.T) {
-	repo, wt, pluginRoot := teamSetup(t, teamRepoSlug+"-"+teamfile.Callsigns[1]+"-lead")
+	repo, wt, pluginRoot := teamSetup(t, teamfile.Callsigns[1]+"-lead", teamRepoSlug+"-"+teamfile.Callsigns[1]+"-lead")
 	res, err := worktreecmd.TeamInit(context.Background(), repo, worktreecmd.TeamInitOptions{Suggest: true})
 	if err != nil || !res.Suggested || res.Callsign != teamfile.Callsigns[0] {
 		t.Fatalf("suggest: %+v, %v", res, err)
@@ -253,7 +254,7 @@ func TestTeamInit_LinkRefusesLateFile(t *testing.T) {
 // --check verifies a callsign before any worktree exists: it writes nothing and
 // refuses exactly like the write does (27 file, 34 live lead, 2 invalid).
 func TestTeamInit_Check(t *testing.T) {
-	repo, wt, pluginRoot := teamSetup(t, "lets-workflow-frog-lead")
+	repo, wt, pluginRoot := teamSetup(t, "frog-lead", "lets-workflow-frog-lead")
 	check := func(c string) error {
 		_, err := worktreecmd.TeamInit(context.Background(), repo, worktreecmd.TeamInitOptions{Callsign: c, Check: true})
 		return err
@@ -278,56 +279,56 @@ func TestTeamInit_Check(t *testing.T) {
 	}
 }
 
-// A callsign is unique per repository: the live-lead check compares the
-// repo-embedding lead name, so another repo's lead of the same callsign - or a
-// bare pre-rename `<callsign>-lead` - never blocks it; this repo's own does (34).
-// --suggest-callsign and --check report the lead name too.
-func TestTeamInit_CallsignPerRepo(t *testing.T) {
-	repo, wt, pluginRoot := teamSetup(t, "other-repo-snake-lead", "frog-lead", "lets-workflow-otter-lead")
+// lets-rpufs: a new team's lead is the short <callsign>-lead; a live holder of the
+// short name (anywhere on the machine) moves it to <repo>-<callsign>-lead with one
+// warn step; neither free -> 34. --suggest-callsign and --check report the name too.
+func TestTeamInit_ShortLeadNameAndFallback(t *testing.T) {
+	repo, wt, pluginRoot := teamSetup(t, "other-repo-snake-lead", "frog-lead", "otter-lead", "lets-workflow-otter-lead")
 	check := func(c string) (*worktreecmd.TeamInitResult, error) {
 		return worktreecmd.TeamInit(context.Background(), repo, worktreecmd.TeamInitOptions{Callsign: c, Check: true})
 	}
-	for _, c := range []string{"snake", "frog"} {
-		res, err := check(c)
-		if err != nil || res.LeadName != "lets-workflow-"+c+"-lead" {
-			t.Errorf("%s: another repo's or a bare lead must not block: %+v, %v", c, res, err)
-		}
+	res, err := check("snake")
+	if err != nil || res.LeadName != "snake-lead" || hasWarn(res.Steps) {
+		t.Errorf("snake: want snake-lead with no warn step: %+v, %v", res, err)
 	}
-	_, err := check("otter")
-	if worktreecmd.ExitCode(err) != worktreecmd.ExitCallsignLive || !strings.Contains(err.Error(), "lets-workflow-otter-lead") {
-		t.Errorf("this repo's live lead: exit %d (%v), want %d naming lets-workflow-otter-lead", worktreecmd.ExitCode(err), err, worktreecmd.ExitCallsignLive)
+	res, err = check("frog")
+	if err != nil || res.LeadName != "lets-workflow-frog-lead" || !warnContains(res.Steps, "the lead name frog-lead is held by a live session") {
+		t.Errorf("frog: want the repo-prefixed fallback with a warn step: %+v, %v", res, err)
+	}
+	_, err = check("otter")
+	if worktreecmd.ExitCode(err) != worktreecmd.ExitCallsignLive || !strings.Contains(err.Error(), "otter-lead") {
+		t.Errorf("otter: exit %d (%v), want %d naming otter-lead", worktreecmd.ExitCode(err), err, worktreecmd.ExitCallsignLive)
 	}
 	sug, err := worktreecmd.TeamInit(context.Background(), repo, worktreecmd.TeamInitOptions{Suggest: true})
-	if err != nil || sug.Callsign != "snake" || sug.LeadName != "lets-workflow-snake-lead" {
+	if err != nil || sug.Callsign != "snake" || sug.LeadName != "snake-lead" {
 		t.Errorf("suggest: %+v, %v", sug, err)
 	}
-	res, err := teamInit(repo, wt, pluginRoot, "snake")
-	if err != nil || res.LeadName != "lets-workflow-snake-lead" {
+	res, err = teamInit(repo, wt, pluginRoot, "snake")
+	if err != nil || res.LeadName != "snake-lead" {
 		t.Fatalf("write: %+v, %v", res, err)
 	}
-	if got, err := teamfile.LeadName(filepath.Join(repo, ".lets", "teams"), "snake"); err != nil || got != "lets-workflow-snake-lead" {
+	if got, err := teamfile.LeadName(filepath.Join(repo, ".lets", "teams"), "snake"); err != nil || got != "snake-lead" {
 		t.Errorf("the team file records lead_name %q, %v", got, err)
 	}
 }
 
-// A repo whose slug makes <repo>-<callsign>-lead too long for the session-name
-// grammar gets the short <callsign>-lead, and says so in a warn step.
-func TestTeamInit_LongRepoShortLeadName(t *testing.T) {
+// A repo whose slug makes <repo>-<callsign>-lead too long gets the short name when
+// it is free, and no fallback when it is held (34).
+func TestTeamInit_LongRepoNoFallback(t *testing.T) {
 	repo, wt, pluginRoot := teamSetupIn(t, strings.Repeat("r", 60))
 	res, err := teamInit(repo, wt, pluginRoot, "snake")
-	if err != nil || res.LeadName != "snake-lead" {
+	if err != nil || res.LeadName != "snake-lead" || hasWarn(res.Steps) {
 		t.Fatalf("write: %+v, %v", res, err)
-	}
-	warned := false
-	for _, s := range res.Steps {
-		warned = warned || (s.Status == worktreecmd.StepWarn && strings.Contains(s.Message, "would exceed the session-name grammar; this team's lead is snake-lead"))
-	}
-	if !warned {
-		t.Errorf("no warn step: %+v", res.Steps)
 	}
 	b, _ := os.ReadFile(filepath.Join(repo, ".lets", "teams", "snake.md"))
 	if !strings.Contains(string(b), `lead_name: "snake-lead"`) {
 		t.Errorf("team file lead_name:\n%s", b)
+	}
+
+	repo, _, _ = teamSetupIn(t, strings.Repeat("r", 60), "snake-lead")
+	_, err = worktreecmd.TeamInit(context.Background(), repo, worktreecmd.TeamInitOptions{Callsign: "snake", Check: true})
+	if worktreecmd.ExitCode(err) != worktreecmd.ExitCallsignLive {
+		t.Errorf("held short name, long form too long: exit %d (%v), want %d", worktreecmd.ExitCode(err), err, worktreecmd.ExitCallsignLive)
 	}
 }
 
@@ -393,26 +394,19 @@ func TestTeamInit_LaunchMode(t *testing.T) {
 	}
 }
 
-// A main checkout whose basename yields no repo slug gets the short <callsign>-lead,
-// and the warn step names that cause, not the grammar.
+// A main checkout whose basename yields no repo slug gets the short <callsign>-lead
+// with no warn step; a held short name has no fallback (34).
 func TestTeamInit_NoRepoSlugShortLeadName(t *testing.T) {
 	repo, wt, pluginRoot := teamSetupIn(t, "___")
 	res, err := teamInit(repo, wt, pluginRoot, "snake")
-	if err != nil || res.LeadName != "snake-lead" {
+	if err != nil || res.LeadName != "snake-lead" || hasWarn(res.Steps) {
 		t.Fatalf("write: %+v, %v", res, err)
 	}
-	warned := false
-	for _, s := range res.Steps {
-		if s.Status != worktreecmd.StepWarn {
-			continue
-		}
-		if strings.Contains(s.Message, "session-name grammar") {
-			t.Errorf("a missing slug is not a grammar problem: %q", s.Message)
-		}
-		warned = warned || strings.Contains(s.Message, `no repo slug derives from "___"; this team's lead is snake-lead`)
-	}
-	if !warned {
-		t.Errorf("no warn step naming the missing slug: %+v", res.Steps)
+
+	repo, _, _ = teamSetupIn(t, "___", "snake-lead")
+	_, err = worktreecmd.TeamInit(context.Background(), repo, worktreecmd.TeamInitOptions{Callsign: "snake", Check: true})
+	if worktreecmd.ExitCode(err) != worktreecmd.ExitCallsignLive {
+		t.Errorf("held short name, no slug: exit %d (%v), want %d", worktreecmd.ExitCode(err), err, worktreecmd.ExitCallsignLive)
 	}
 }
 
@@ -479,5 +473,202 @@ func TestTeamInit_GrantFailureIsAStep(t *testing.T) {
 	}
 	if data, _ := os.ReadFile(settingsPath(wt)); string(data) != "{}\n" {
 		t.Errorf("the tracked file was rewritten: %s", data)
+	}
+}
+
+// hasWarn reports whether steps carry any warn step.
+func hasWarn(steps []worktreecmd.Step) bool {
+	for _, s := range steps {
+		if s.Status == worktreecmd.StepWarn {
+			return true
+		}
+	}
+	return false
+}
+
+// warnContains reports whether a warn step's message contains sub.
+func warnContains(steps []worktreecmd.Step, sub string) bool {
+	for _, s := range steps {
+		if s.Status == worktreecmd.StepWarn && strings.Contains(s.Message, sub) {
+			return true
+		}
+	}
+	return false
+}
+
+// teamInitLead is teamInit with an explicit --lead-name.
+func teamInitLead(repo, wt, pluginRoot, callsign, lead string) (*worktreecmd.TeamInitResult, error) {
+	return worktreecmd.TeamInit(context.Background(), repo, worktreecmd.TeamInitOptions{Callsign: callsign, Area: "the CLI", Worktree: wt, PluginRoot: pluginRoot, LeadName: lead})
+}
+
+// checkLead is --check with an explicit --lead-name.
+func checkLead(repo, callsign, lead string) (*worktreecmd.TeamInitResult, error) {
+	return worktreecmd.TeamInit(context.Background(), repo, worktreecmd.TeamInitOptions{Callsign: callsign, Check: true, LeadName: lead})
+}
+
+// writeTeamFile writes .lets/teams/<team>.md by hand with the given frontmatter body.
+func writeTeamFile(t *testing.T, repo, team, frontmatter string) {
+	t.Helper()
+	dir := filepath.Join(repo, ".lets", "teams")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := "---\nteam: \"" + team + "\"\n" + frontmatter + "---\n# team " + team + "\n"
+	if err := os.WriteFile(filepath.Join(dir, team+".md"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func noTeamFile(t *testing.T, repo, team string) {
+	t.Helper()
+	if _, err := os.Stat(filepath.Join(repo, ".lets", "teams", team+".md")); !os.IsNotExist(err) {
+		t.Errorf("a team file was written for %s", team)
+	}
+}
+
+// wantRefusal asserts exit code and error kind on a TeamInit result.
+func wantRefusal(t *testing.T, what string, res *worktreecmd.TeamInitResult, err error, code int, kind string) {
+	t.Helper()
+	if worktreecmd.ExitCode(err) != code || res == nil || res.Error == nil || res.Error.Kind != kind {
+		var got string
+		if res != nil && res.Error != nil {
+			got = res.Error.Kind
+		}
+		t.Errorf("%s: exit %d kind %q (%v), want %d %s", what, worktreecmd.ExitCode(err), got, err, code, kind)
+	}
+}
+
+// --lead-name (lets-rpufs): recorded as given; invalid -> 2; held by a live
+// session -> 34 lead_name_live, never replaced; with --suggest-callsign -> 2.
+func TestTeamInit_LeadNameFlag(t *testing.T) {
+	repo, wt, pluginRoot := teamSetup(t)
+	res, err := teamInitLead(repo, wt, pluginRoot, "snake", "pwa-lead")
+	if err != nil || res.LeadName != "pwa-lead" || hasWarn(res.Steps) {
+		t.Fatalf("--lead-name pwa-lead: %+v, %v", res, err)
+	}
+	if got, err := teamfile.LeadName(filepath.Join(repo, ".lets", "teams"), "snake"); err != nil || got != "pwa-lead" {
+		t.Errorf("the team file records lead_name %q, %v", got, err)
+	}
+
+	res, err = teamInitLead(repo, wt, pluginRoot, "frog", "bad name!")
+	wantRefusal(t, "invalid --lead-name", res, err, worktreecmd.ExitUsage, "lead_name_invalid")
+	noTeamFile(t, repo, "frog")
+
+	repo, wt, pluginRoot = teamSetup(t, "pwa-lead")
+	res, err = checkLead(repo, "snake", "pwa-lead")
+	wantRefusal(t, "check, live --lead-name", res, err, worktreecmd.ExitCallsignLive, "lead_name_live")
+	res, err = teamInitLead(repo, wt, pluginRoot, "snake", "pwa-lead")
+	wantRefusal(t, "write, live --lead-name", res, err, worktreecmd.ExitCallsignLive, "lead_name_live")
+	if res != nil && res.LeadName != "pwa-lead" {
+		t.Errorf("a held --lead-name was replaced: %q", res.LeadName)
+	}
+	noTeamFile(t, repo, "snake")
+
+	_, err = worktreecmd.TeamInit(context.Background(), repo, worktreecmd.TeamInitOptions{Suggest: true, LeadName: "x"})
+	if worktreecmd.ExitCode(err) != worktreecmd.ExitUsage {
+		t.Errorf("--suggest-callsign --lead-name: exit %d (%v), want %d", worktreecmd.ExitCode(err), err, worktreecmd.ExitUsage)
+	}
+	if _, err := os.Stat(filepath.Join(repo, ".lets", "teams")); !os.IsNotExist(err) {
+		t.Error("--suggest-callsign --lead-name wrote something")
+	}
+}
+
+// A callsign whose short lead name is no session name (`-frog-lead`) falls back to
+// the repo-prefixed name with the real cause in the warn step; with no repo slug it
+// is refused 34 naming that cause - never "held by a live session".
+func TestTeamInit_LeadingHyphenCallsign(t *testing.T) {
+	repo, _, _ := teamSetup(t)
+	res, err := worktreecmd.TeamInit(context.Background(), repo, worktreecmd.TeamInitOptions{Callsign: "-frog", Check: true})
+	if err != nil || res.LeadName != "lets-workflow--frog-lead" || !warnContains(res.Steps, "the lead name -frog-lead is not a valid session name; this team's lead is lets-workflow--frog-lead") || warnContains(res.Steps, "held by a live session") {
+		t.Errorf("-frog: %+v, %v", res, err)
+	}
+
+	repo, _, _ = teamSetupIn(t, "___")
+	res, err = worktreecmd.TeamInit(context.Background(), repo, worktreecmd.TeamInitOptions{Callsign: "-frog", Check: true})
+	wantRefusal(t, "-frog, no slug", res, err, worktreecmd.ExitCallsignLive, "callsign_live")
+	if err == nil || !strings.Contains(err.Error(), "is not a valid session name") || strings.Contains(err.Error(), "held by a live session") {
+		t.Errorf("-frog, no slug: message %v must name the invalid name", err)
+	}
+}
+
+// An explicit --lead-name another team file of this repo records is refused 34
+// lead_name_taken, naming that team.
+func TestTeamInit_LeadNameTaken(t *testing.T) {
+	repo, wt, pluginRoot := teamSetup(t)
+	writeTeamFile(t, repo, "gold", "lead_name: \"pwa-lead\"\n")
+	res, err := checkLead(repo, "snake", "pwa-lead")
+	wantRefusal(t, "check", res, err, worktreecmd.ExitCallsignLive, "lead_name_taken")
+	if err == nil || !strings.Contains(err.Error(), "gold") {
+		t.Errorf("check: %v must name team gold", err)
+	}
+	res, err = teamInitLead(repo, wt, pluginRoot, "snake", "pwa-lead")
+	wantRefusal(t, "write", res, err, worktreecmd.ExitCallsignLive, "lead_name_taken")
+	if err == nil || !strings.Contains(err.Error(), "gold") {
+		t.Errorf("write: %v must name team gold", err)
+	}
+	noTeamFile(t, repo, "snake")
+}
+
+// A short name another team file records is skipped like a live holder; a legacy
+// team file without lead_name records <team>-lead.
+func TestTeamInit_ShortRecordedByOtherTeam(t *testing.T) {
+	repo, wt, pluginRoot := teamSetup(t)
+	writeTeamFile(t, repo, "gold", "lead_name: \"snake-lead\"\n")
+	res, err := worktreecmd.TeamInit(context.Background(), repo, worktreecmd.TeamInitOptions{Callsign: "snake", Check: true})
+	if err != nil || res.LeadName != "lets-workflow-snake-lead" || !warnContains(res.Steps, "the lead name snake-lead is recorded by team gold") {
+		t.Errorf("snake: %+v, %v", res, err)
+	}
+
+	writeTeamFile(t, repo, "otter", "area: \"legacy\"\n")
+	res, err = checkLead(repo, "snake", "otter-lead")
+	wantRefusal(t, "check, legacy otter-lead", res, err, worktreecmd.ExitCallsignLive, "lead_name_taken")
+	if err == nil || !strings.Contains(err.Error(), "otter") {
+		t.Errorf("check: %v must name team otter", err)
+	}
+	res, err = teamInitLead(repo, wt, pluginRoot, "snake", "otter-lead")
+	wantRefusal(t, "write, legacy otter-lead", res, err, worktreecmd.ExitCallsignLive, "lead_name_taken")
+	noTeamFile(t, repo, "snake")
+}
+
+// Refusal order: usage (2) before team_exists (27) before the lead-name refusals (34),
+// in --check and in the write.
+func TestTeamInit_RefusalPrecedence(t *testing.T) {
+	repo, wt, pluginRoot := teamSetup(t, "pwa-lead")
+	writeTeamFile(t, repo, "snake", "lead_name: \"snake-lead\"\n")
+	for _, mode := range []string{"check", "write"} {
+		run := func(c, lead string) (*worktreecmd.TeamInitResult, error) {
+			if mode == "check" {
+				return checkLead(repo, c, lead)
+			}
+			return teamInitLead(repo, wt, pluginRoot, c, lead)
+		}
+		res, err := run("snake", "bad name!")
+		wantRefusal(t, mode+": invalid --lead-name + existing file", res, err, worktreecmd.ExitUsage, "lead_name_invalid")
+		res, err = run("snake", "pwa-lead")
+		wantRefusal(t, mode+": existing file + held --lead-name", res, err, worktreecmd.ExitTeamExists, "team_exists")
+		res, err = run("frog", "pwa-lead")
+		wantRefusal(t, mode+": held --lead-name, no file", res, err, worktreecmd.ExitCallsignLive, "lead_name_live")
+	}
+	noTeamFile(t, repo, "frog")
+}
+
+// A degraded registry keeps its warn step, and a readable holder of the short name
+// still moves the lead to the repo-prefixed name.
+func TestTeamInit_DegradedRegistryWarns(t *testing.T) {
+	repo, _, _ := teamSetup(t, "snake-lead", "placeholder")
+	// pid 1001 is live in the fixture: replace its row with an unknown protocol.
+	row := `{"sessionId":"cccccccc-0000-4000-8000-0000000000cc","peerProtocol":2}`
+	if err := os.WriteFile(filepath.Join(ccregistry.HomeDir(), "sessions", "1001.json"), []byte(row), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := worktreecmd.TeamInit(context.Background(), repo, worktreecmd.TeamInitOptions{Callsign: "snake", Check: true})
+	if err != nil || res.LeadName != "lets-workflow-snake-lead" {
+		t.Fatalf("degraded: %+v, %v", res, err)
+	}
+	if !warnContains(res.Steps, "session registry degraded") {
+		t.Errorf("no degraded-registry warn step: %+v", res.Steps)
+	}
+	if !warnContains(res.Steps, "the lead name snake-lead is held by a live session") {
+		t.Errorf("no fallback warn step: %+v", res.Steps)
 	}
 }

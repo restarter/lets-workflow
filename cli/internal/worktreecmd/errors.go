@@ -86,10 +86,24 @@ func ErrTemplateMissing(path string) *Error {
 	return &Error{Code: ExitTemplateMissing, Kind: "template_missing", Message: fmt.Sprintf("team template %s is missing", path), Remediation: "pass --plugin-root <plugins/lets>"}
 }
 
-// ErrCallsignLive - a live session already carries the callsign's lead name in this
-// repository.
-func ErrCallsignLive(callsign, name string) *Error {
-	return &Error{Code: ExitCallsignLive, Kind: "callsign_live", Message: fmt.Sprintf("a live session is named %s (the lead of team %s)", name, callsign), Remediation: "pick another callsign (--suggest-callsign)"}
+// ErrCallsignLive - team-init: the callsign has no usable lead name (held by a
+// live session, or not a valid session name) - cause says which.
+func ErrCallsignLive(callsign, name, cause string) *Error {
+	if cause == "" {
+		cause = "is held by a live session"
+	}
+	return &Error{Code: ExitCallsignLive, Kind: "callsign_live", Message: fmt.Sprintf("no usable lead name for team %s: %s %s, and no usable repo-prefixed name is available", callsign, name, cause), Remediation: "pick another callsign (--suggest-callsign), or pass --lead-name"}
+}
+
+// ErrLeadNameLive - team-init: an explicit --lead-name is held by a live session.
+func ErrLeadNameLive(name string) *Error {
+	return &Error{Code: ExitCallsignLive, Kind: "lead_name_live", Message: fmt.Sprintf("a live session is already named %s", name), Remediation: "pick another --lead-name, or leave it out for <callsign>-lead"}
+}
+
+// ErrLeadNameTaken - team-init: an explicit --lead-name is recorded by another team
+// file of this repo; two teams with one lead name break team_lead and peer routing.
+func ErrLeadNameTaken(name, team string) *Error {
+	return &Error{Code: ExitCallsignLive, Kind: "lead_name_taken", Message: fmt.Sprintf("team %s already records lead_name %s", team, name), Remediation: "pick another --lead-name, or leave it out for <callsign>-lead"}
 }
 
 // ErrNotTeamWorktree - switch runs only in a standing team's worktree.
