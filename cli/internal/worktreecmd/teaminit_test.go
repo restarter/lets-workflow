@@ -672,3 +672,51 @@ func TestTeamInit_DegradedRegistryWarns(t *testing.T) {
 		t.Errorf("no fallback warn step: %+v", res.Steps)
 	}
 }
+
+// A team file whose lead name cannot be read (a duplicate lead_name key) is a warn
+// step, never a refusal: a free callsign still passes --check.
+func TestTeamInit_UnreadableTeamFileWarns(t *testing.T) {
+	repo, _, _ := teamSetup(t)
+	writeTeamFile(t, repo, "gold", "lead_name: \"a-lead\"\nlead_name: \"b-lead\"\n")
+	res, err := worktreecmd.TeamInit(context.Background(), repo, worktreecmd.TeamInitOptions{Callsign: "snake", Check: true})
+	if err != nil || !res.OK {
+		t.Fatalf("check: %+v, %v", res, err)
+	}
+	if !warnContains(res.Steps, "is unreadable") || !warnContains(res.Steps, "its lead name is not checked") {
+		t.Errorf("no unreadable-team-file warn step: %+v", res.Steps)
+	}
+}
+
+// --suggest-callsign uses the same rule as --check: a held short name with a free
+// repo-prefixed one still proposes the callsign; both held (one recorded by another
+// team file, one live) skips it.
+func TestTeamInit_SuggestLeadFallback(t *testing.T) {
+	c := teamfile.Callsigns[0]
+	repo, _, _ := teamSetup(t, c+"-lead")
+	res, err := worktreecmd.TeamInit(context.Background(), repo, worktreecmd.TeamInitOptions{Suggest: true})
+	if err != nil || res.Callsign != c || res.LeadName != teamRepoSlug+"-"+c+"-lead" {
+		t.Errorf("short held, long free: %+v, %v", res, err)
+	}
+
+	repo, _, _ = teamSetup(t, teamRepoSlug+"-"+c+"-lead")
+	writeTeamFile(t, repo, "zzteam", "lead_name: \""+c+"-lead\"\n")
+	res, err = worktreecmd.TeamInit(context.Background(), repo, worktreecmd.TeamInitOptions{Suggest: true})
+	if err != nil || res.Callsign == c {
+		t.Errorf("short recorded, long live: suggest must skip %s: %+v, %v", c, res, err)
+	}
+}
+
+// An explicit --lead-name that reads as this repo's orchestrator name is refused 2
+// lead_name_invalid; a name that only starts with the same letters is accepted.
+func TestTeamInit_LeadNameOrchestratorRefused(t *testing.T) {
+	repo, wt, pluginRoot := teamSetup(t)
+	for _, n := range []string{"lets-workflow-orc", "lets-workflow-orc-x"} {
+		res, err := teamInitLead(repo, wt, pluginRoot, "snake", n)
+		wantRefusal(t, n, res, err, worktreecmd.ExitUsage, "lead_name_invalid")
+		noTeamFile(t, repo, "snake")
+	}
+	res, err := teamInitLead(repo, wt, pluginRoot, "snake", "lets-workflow-orchid-lead")
+	if err != nil || !res.OK || res.LeadName != "lets-workflow-orchid-lead" {
+		t.Errorf("lets-workflow-orchid-lead: %+v, %v", res, err)
+	}
+}

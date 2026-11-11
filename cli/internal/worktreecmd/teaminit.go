@@ -28,7 +28,7 @@ import (
 // (default `claude`). LaunchMode (default | auto | all-in, lets-d3wu3) renders both
 // through LaunchCommand when they were not given explicitly - an explicit command
 // wins. Suggest only proposes a free callsign and writes nothing;
-// Check only verifies Callsign is free (valid, no team file, no live lead) and
+// Check only verifies Callsign is free (valid, no team file, a usable lead name) and
 // writes nothing - run before a team worktree is created.
 type TeamInitOptions struct {
 	Callsign, Area, Worktree, PluginRoot, AgentCommand, OrcaAgent string
@@ -128,12 +128,15 @@ func TeamInit(ctx context.Context, dir string, o TeamInitOptions) (*TeamInitResu
 		case !peername.Valid(o.LeadName):
 			return fail(&Error{Code: ExitUsage, Kind: "lead_name_invalid", Message: fmt.Sprintf("--lead-name %q is not a session name (letters, digits, . _ -, words separated by single spaces, at most %d runes)", o.LeadName, peername.MaxRunes)})
 		}
+		if _, isOrc := peername.ParseOrchestrator(peername.RepoSlug(mainRoot), o.LeadName); isOrc {
+			return fail(&Error{Code: ExitUsage, Kind: "lead_name_invalid", Message: fmt.Sprintf("--lead-name %q reads as an orchestrator name of this repository (<repo>-orc[-<scope>])", o.LeadName)})
+		}
 	}
 
 	if o.Suggest {
 		c, ok := teamfile.FreeCallsign(teamsDir, func(c string) bool { return !leadFree(c) })
 		if !ok {
-			return fail(&Error{Code: ExitGeneric, Kind: "no_free_callsign", Message: "every callsign has a team file or a live lead"})
+			return fail(&Error{Code: ExitGeneric, Kind: "no_free_callsign", Message: "every callsign has a team file or no usable lead name"})
 		}
 		_ = resolveLead(c)
 		res.Callsign, res.Suggested, res.OK = c, true, true
