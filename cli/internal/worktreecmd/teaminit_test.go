@@ -720,3 +720,19 @@ func TestTeamInit_LeadNameOrchestratorRefused(t *testing.T) {
 		t.Errorf("lets-workflow-orchid-lead: %+v, %v", res, err)
 	}
 }
+
+// A derived lead name that reads as this repo's orchestrator name is never used:
+// callsign `orc` falls back to lets-workflow-orc-lead (= orchestrator scope "lead"),
+// so with orc-lead live there is no usable name (34); callsign `lets-workflow-orc`
+// has that problem in its short name and takes the repo-prefixed one, saying why.
+func TestTeamInit_DerivedOrchestratorNameSkipped(t *testing.T) {
+	repo, _, _ := teamSetup(t, "orc-lead")
+	_, err := checkLead(repo, "orc", "")
+	if worktreecmd.ExitCode(err) != worktreecmd.ExitCallsignLive {
+		t.Errorf("orc with orc-lead live: exit %d (%v), want %d", worktreecmd.ExitCode(err), err, worktreecmd.ExitCallsignLive)
+	}
+	res, err := checkLead(repo, "lets-workflow-orc", "")
+	if err != nil || res.LeadName != "lets-workflow-lets-workflow-orc-lead" || !warnContains(res.Steps, "reads as an orchestrator name of this repository") {
+		t.Errorf("orchestrator-like short name: %+v, %v", res, err)
+	}
+}
