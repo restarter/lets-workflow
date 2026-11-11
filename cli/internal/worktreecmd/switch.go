@@ -17,6 +17,9 @@ import (
 	"time"
 
 	"github.com/restarter/lets-workflow/cli/internal/gitutil"
+	"github.com/restarter/lets-workflow/cli/internal/initcmd"
+	"github.com/restarter/lets-workflow/cli/internal/letsconfig"
+	"github.com/restarter/lets-workflow/cli/internal/rulesdrift"
 	"github.com/restarter/lets-workflow/cli/internal/taskid"
 	"github.com/restarter/lets-workflow/cli/internal/taskstate"
 	"github.com/restarter/lets-workflow/cli/internal/teamfile"
@@ -36,6 +39,7 @@ type SwitchOptions struct {
 	FetchTimeout            time.Duration // zero = 20s
 	Session                 string
 	Guard                   taskstate.SessionGuard
+	PluginRoot              string // --plugin-root; "" -> CLAUDE_PLUGIN_ROOT via initcmd.DetectPluginRoot
 }
 
 // ParkInfo is the park commit Switch made on the branch it left.
@@ -347,6 +351,18 @@ func Switch(ctx context.Context, dir string, o SwitchOptions) (*SwitchResult, er
 			return fail(e)
 		}
 	}
+	// Rules drift (lets-5whww): the branch just checked out carries its committed
+	// .claude/rules copies; this session does not restart, so no hook will say it.
+	if pr, err := initcmd.DetectPluginRoot(o.PluginRoot); err != nil {
+		step(StepSkip, "rules drift not checked: no plugin root (pass --plugin-root)")
+	} else {
+		home, _ := os.UserHomeDir()
+		env := letsconfig.ResolvedEnv(mainRoot, home, nil)
+		files := rulesdrift.Check(rulesdrift.Options{PluginRoot: pr, CheckoutRoot: root, MainRoot: mainRoot, Scope: env["LETS_RULES_SCOPE"], Tracker: env["LETS_TRACKER"], HomeDir: home})
+		if msg := rulesdrift.WorktreeMessage(files, merge); msg != "" {
+			step(StepWarn, msg)
+		}
+	}
 	settle()
 	res.OK = true
 	return res, nil
@@ -368,7 +384,7 @@ func switchTarget(ctx context.Context, root, mainRoot, team string, o SwitchOpti
 		}
 		return o.Branch, !exists(o.Branch), nil, nil
 	}
-	conv, diag := conventionOf(root, mainRoot, "")
+	conv, diag := conventionOf(root, mainRoot, o.PluginRoot)
 	warns = diag.Warnings
 	// Before any lookup: an unreadable convention has no trustworthy shape to look
 	// up by, and a hit must not hide it (Codex round 1).

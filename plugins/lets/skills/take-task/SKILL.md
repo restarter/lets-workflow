@@ -93,7 +93,7 @@ AskUserQuestion(
 No changes -> the switch below directly. The switch, from the team worktree:
 
 ```bash
-lets worktree switch --task '<task-id>' --title-file .lets/cache/title-<session6>.txt --json
+lets worktree switch --task '<task-id>' --title-file .lets/cache/title-<session6>.txt --plugin-root "${CLAUDE_PLUGIN_ROOT}" --json
 # Park: add --park and one --include '<path>' per confirmed new path
 ```
 
