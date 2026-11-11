@@ -4,6 +4,7 @@ package worktreecmd
 
 import (
 	"context"
+	"os"
 
 	"github.com/restarter/lets-workflow/cli/internal/trackeradapter"
 )
@@ -39,6 +40,21 @@ func SetBeforeTaskStateRemove(f func()) (restore func()) {
 	old := beforeTaskStateRemove
 	beforeTaskStateRemove = f
 	return func() { beforeTaskStateRemove = old }
+}
+
+// CopyRegularForTesting drives copyRegular.
+func CopyRegularForTesting(root *os.Root, src, rel string, perm os.FileMode) error {
+	return copyRegular(root, src, rel, perm)
+}
+
+// LiteralExcludeForTesting drives literalExclude.
+var LiteralExcludeForTesting = literalExclude
+
+// SetWriteExcludesForTesting swaps the .worktreeinclude exclude writer; restore undoes it.
+func SetWriteExcludesForTesting(f func(context.Context, string, []string) error) (restore func()) {
+	old := writeExcludes
+	writeExcludes = f
+	return func() { writeExcludes = old }
 }
 
 // SetSettingsStage replaces the EnsureLetsAdditionalDir test seam; restore undoes it.

@@ -126,6 +126,9 @@ func Adopt(ctx context.Context, dir string, o AdoptOptions) (*AdoptResult, error
 	if err := ensureWorktreeExcludes(ctx, mainRoot, excludes); err != nil {
 		add(StepWarn, fmt.Sprintf("could not update info/exclude (%s): %v", strings.Join(excludes, ", "), err))
 	}
+	// .worktreeinclude files (lets-5whww) before the settings merge below, which
+	// would otherwise pre-create a listed settings.local.json; on --links-only too.
+	res.Steps = append(res.Steps, copyWorktreeInclude(ctx, mainRoot, wtRoot)...)
 	// The main .lets/ as an additional directory (lets-urmfa): an Orca or teammate
 	// worktree's sessions then write .lets/ without an approval prompt. Also on a
 	// re-adopt of a linked worktree - idempotent, a present entry writes nothing.

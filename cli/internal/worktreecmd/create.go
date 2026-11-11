@@ -314,6 +314,11 @@ func Create(ctx context.Context, projectRoot string, opts CreateOptions) (*Creat
 	}
 	addStep(StepOK, "verify: branch, symlinks, paths")
 
+	// Step 10.4: copy the main checkout's .worktreeinclude files (lets-5whww). After
+	// verify, so a rollback never has to undo it; before Step 10.5, whose settings
+	// merge would otherwise pre-create a listed settings.local.json. Never fatal.
+	result.Steps = append(result.Steps, copyWorktreeInclude(ctx, projectRoot, wtPath)...)
+
 	// Step 10.5: declare the main .lets/ as an additional directory (lets-urmfa), so a
 	// session in this worktree writes the team file, snapshots and caches without an
 	// approval prompt. After verify, so a rollback never has to undo it; never fatal.
