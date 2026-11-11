@@ -566,7 +566,7 @@ func TestRemove_FinishesAHalfRemovedTree(t *testing.T) {
 	}
 	warned := false
 	for _, s := range res.Steps {
-		warned = warned || (s.Status == worktreecmd.StepWarn && strings.Contains(s.Message, "finished with a filesystem remove"))
+		warned = warned || (s.Status == worktreecmd.StepWarn && strings.Contains(s.Message, "finished by deleting the .DS_Store files and empty directories left"))
 	}
 	if !warned {
 		t.Errorf("want the finish warn step: %+v", res.Steps)
@@ -630,5 +630,43 @@ func TestRemove_TrackedDSStoreChangeIsDirty(t *testing.T) {
 	var e *worktreecmd.Error
 	if !errors.As(err, &e) || e.Kind != "dirty_worktree" {
 		t.Fatalf("a modified tracked .DS_Store must be dirty, got %v", err)
+	}
+}
+
+// A file written through a reference into the moved tree after the litter check
+// is never deleted: the finish removes only .DS_Store files and empty directories,
+// non-recursively (lets-5whww Codex review fix 1).
+func TestRemove_FinishNeverDeletesALateWrite(t *testing.T) {
+	repo, wt := removeFixture(t)
+	halfRemove(t, filepath.Join("sub", ".DS_Store"))
+	restore := worktreecmd.SetBeforeLitterFinishForTesting(func(aside string) {
+		mustWrite(t, filepath.Join(aside, "sub", "notes.md"), "late", 0o644)
+	})
+	defer restore()
+	_, err := worktreecmd.Remove(context.Background(), repo, worktreecmd.RemoveOptions{Name: "foo"})
+	e := wantRemoveFailed(t, err)
+	if !strings.Contains(e.Message, "notes.md") || !strings.Contains(e.Message, "moved back to "+wt) {
+		t.Errorf("the error must name the file and where it is: %q", e.Message)
+	}
+	if data, err := os.ReadFile(filepath.Join(wt, "sub", "notes.md")); err != nil || string(data) != "late" {
+		t.Errorf("notes.md must survive at %s: %q %v", wt, data, err)
+	}
+}
+
+// The remove runs in the C locale, so "Directory not empty" matches (fix 3).
+func TestRemove_GitRunsInTheCLocale(t *testing.T) {
+	t.Setenv("LC_ALL", "de_DE.UTF-8")
+	cmd := worktreecmd.GitWorktreeRemoveCmdForTesting(context.Background(), "/r", "/r/.worktrees/x")
+	var lcAll []string
+	for _, kv := range cmd.Env {
+		if strings.HasPrefix(kv, "LC_ALL=") {
+			lcAll = append(lcAll, kv)
+		}
+	}
+	if len(lcAll) != 1 || lcAll[0] != "LC_ALL=C" {
+		t.Errorf("want exactly LC_ALL=C, got %q", lcAll)
+	}
+	if want := []string{"git", "-C", "/r", "worktree", "remove", "--force", "/r/.worktrees/x"}; strings.Join(cmd.Args, " ") != strings.Join(want, " ") {
+		t.Errorf("args = %q", cmd.Args)
 	}
 }

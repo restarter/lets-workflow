@@ -54,7 +54,55 @@ func hasUserChanges(porcelain string, links []trackeradapter.Link) bool {
 
 // gitWorktreeRemove runs `git worktree remove --force` - a test seam.
 var gitWorktreeRemove = func(ctx context.Context, root, path string) ([]byte, error) {
-	return exec.CommandContext(ctx, "git", "-C", root, "worktree", "remove", "--force", path).CombinedOutput()
+	return gitWorktreeRemoveCmd(ctx, root, path).CombinedOutput()
+}
+
+// gitWorktreeRemoveCmd is the remove command, in the C locale so the
+// "Directory not empty" match below holds in every locale.
+func gitWorktreeRemoveCmd(ctx context.Context, root, path string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, "git", "-C", root, "worktree", "remove", "--force", path)
+	cmd.Env = gitCEnv()
+	return cmd
+}
+
+// beforeLitterFinish runs between the litter check and the finish - a test seam
+// (a process that kept a reference into the moved tree writes there).
+var beforeLitterFinish = func(aside string) {}
+
+// finishLitter deletes a tree that held only Finder litter, non-recursively and
+// deepest first: a regular .DS_Store file (Lstat right before, never following a
+// symlink) or an empty directory (rmdir, which fails if anything appeared in it).
+// Anything else, or any failed delete, stops it at once; it returns that path and
+// deletes nothing more. A process holding a reference into the tree can still
+// write there after the check - this never deletes what it wrote.
+func finishLitter(dir string) (stuck string, err error) {
+	var paths []string
+	if werr := filepath.WalkDir(dir, func(p string, _ fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		paths = append(paths, p)
+		return nil
+	}); werr != nil {
+		return dir, werr
+	}
+	for i := len(paths) - 1; i >= 0; i-- {
+		p := paths[i]
+		fi, err := os.Lstat(p)
+		if err != nil {
+			return p, err
+		}
+		switch {
+		case fi.IsDir():
+		case fi.Mode().IsRegular() && fi.Name() == ".DS_Store":
+		default:
+			return p, errors.New("not Finder litter")
+		}
+		if err := os.Remove(p); err != nil {
+			return p, err
+		}
+	}
+	return "", nil
 }
 
 // nonLitter returns up to max paths (relative to dir) under dir that are not Finder
@@ -292,10 +340,19 @@ func Remove(ctx context.Context, projectRoot string, opts RemoveOptions) (*Remov
 		if other := nonLitter(aside, 3); len(other) > 0 {
 			return putBack("left in place - not only .DS_Store remains: " + strings.Join(other, ", "))
 		}
-		if rmErr := os.RemoveAll(aside); rmErr != nil {
-			return fail(&Error{Code: ExitGitFailed, Kind: "git_worktree_remove_failed", Message: msg + "; finishing with a filesystem remove of " + aside + " failed: " + rmErr.Error(), Cause: err})
+		beforeLitterFinish(aside)
+		if stuck, rmErr := finishLitter(aside); rmErr != nil {
+			where := "what remains is at " + aside
+			if _, statErr := os.Lstat(aside); statErr == nil {
+				if os.Rename(aside, wtPath) == nil {
+					where = "what remains was moved back to " + wtPath
+				}
+			}
+			return fail(&Error{Code: ExitGitFailed, Kind: "git_worktree_remove_failed",
+				Message:     fmt.Sprintf("%s; finishing stopped at %s (%v) - %s", msg, stuck, rmErr, where),
+				Remediation: "check what remains, then remove the directory by hand and run `git worktree prune`", Cause: err})
 		}
-		addStep(StepWarn, "git worktree remove stopped at a non-empty directory - finished with a filesystem remove")
+		addStep(StepWarn, "git worktree remove stopped at a non-empty directory - finished by deleting the .DS_Store files and empty directories left")
 	}
 	_ = exec.CommandContext(ctx, "git", "-C", projectRoot, "worktree", "prune").Run()
 	addStep(StepOK, "git worktree remove + prune")

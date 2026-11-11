@@ -889,3 +889,27 @@ func slicesContainsPrefix(env []string, prefix string) bool {
 	}
 	return false
 }
+
+// A failing hook that prints "already exists" is still the add's own failure:
+// only git's fatal: lines classify a collision (lets-5whww Codex review fix 2).
+func TestCreate_HookPrintingAlreadyExistsStillRollsBack(t *testing.T) {
+	repo := initRepo(t)
+	if err := os.MkdirAll(filepath.Join(repo, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	hooks := filepath.Join(realTempDir(t), "hooks")
+	mustWrite(t, filepath.Join(hooks, "post-checkout"), "#!/bin/sh\necho 'cache already exists'\nexit 1\n", 0o755)
+	runIn(t, repo, "git", "config", "core.hooksPath", hooks)
+
+	res, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{Name: "foo", Mode: worktreecmd.BranchAuto})
+	var e *worktreecmd.Error
+	if !errors.As(err, &e) || e.Kind != "git_worktree_add_failed" {
+		t.Fatalf("want git_worktree_add_failed, got %v", err)
+	}
+	if res.Rollback == nil || !res.Rollback.Attempted || !res.Rollback.Succeeded {
+		t.Errorf("Rollback: %+v", res.Rollback)
+	}
+	if _, err := os.Lstat(filepath.Join(repo, ".worktrees", "foo")); !os.IsNotExist(err) {
+		t.Errorf("the checkout survived: %v", err)
+	}
+}

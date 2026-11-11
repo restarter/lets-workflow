@@ -14,6 +14,8 @@ func TestClassifyWorktreeAddErr(t *testing.T) {
 		{"fatal: '/x/.worktrees/foo' already exists", "worktree_path_exists", ExitWorktreeExists},
 		{"fatal: a branch named 'worktree-foo' already exists", "worktree_path_exists", ExitWorktreeExists},
 		{"fatal: invalid reference: nope", "git_worktree_add_failed", ExitGitFailed},
+		{"cache already exists\nhook failed", "git_worktree_add_failed", ExitGitFailed},                                                        // hook output, not git's
+		{"Preparing worktree (new branch 'x')\nwarning: index already exists\nfatal: hook exited 1", "git_worktree_add_failed", ExitGitFailed}, // only fatal: lines count
 	} {
 		kind, code, rem := classifyWorktreeAddErr(c.msg, "foo")
 		if kind != c.kind || code != c.code || rem == "" {

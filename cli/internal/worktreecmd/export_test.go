@@ -81,6 +81,16 @@ func SetCheckIgnoredForTesting(f func(context.Context, string, []string) (map[st
 // GitCEnvForTesting drives gitCEnv.
 var GitCEnvForTesting = gitCEnv
 
+// SetBeforeLitterFinishForTesting runs f between remove's litter check and its finish; restore undoes it.
+func SetBeforeLitterFinishForTesting(f func(aside string)) (restore func()) {
+	old := beforeLitterFinish
+	beforeLitterFinish = f
+	return func() { beforeLitterFinish = old }
+}
+
+// GitWorktreeRemoveCmdForTesting drives gitWorktreeRemoveCmd.
+var GitWorktreeRemoveCmdForTesting = gitWorktreeRemoveCmd
+
 // SetSettingsStage replaces the EnsureLetsAdditionalDir test seam; restore undoes it.
 func SetSettingsStage(f func(string)) (restore func()) {
 	old := settingsStage
