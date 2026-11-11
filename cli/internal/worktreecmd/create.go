@@ -458,7 +458,7 @@ func loadStoreLinks(projectRoot, pluginFlag string, addStep func(status, msg str
 	}
 	wt, reason := trackeradapter.Load(projectRoot, tracker, pluginRoot)
 	if reason != "" {
-		addStep(StepWarn, fmt.Sprintf("tracker adapter %q: %s - run /lets:update so the installed adapter declares its ## Worktree links", tracker, reason))
+		addStep(StepWarn, fmt.Sprintf("tracker adapter %q: %s - %s", tracker, reason, adapterAdvice(reason, tracker, pluginRoot)))
 	}
 	return wt.Links
 }
