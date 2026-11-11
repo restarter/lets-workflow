@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/restarter/lets-workflow/cli/internal/taskstate"
@@ -65,9 +66,9 @@ func gitWorktreeRemoveCmd(ctx context.Context, root, path string) *exec.Cmd {
 	return cmd
 }
 
-// beforeLitterFinish runs between the litter check and the finish - a test seam
-// (a process that kept a reference into the moved tree writes there).
-var beforeLitterFinish = func(aside string) {}
+// beforeLitterFinish runs inside finishLitter between its walk and its deletes - a
+// test seam (a process that kept a reference into the moved tree writes there).
+var beforeLitterFinish = func(dir string) {}
 
 // finishLitter deletes a tree that held only Finder litter, non-recursively and
 // deepest first: a regular .DS_Store file (Lstat right before, never following a
@@ -86,19 +87,35 @@ func finishLitter(dir string) (stuck string, err error) {
 	}); werr != nil {
 		return dir, werr
 	}
+	beforeLitterFinish(dir)
 	for i := len(paths) - 1; i >= 0; i-- {
 		p := paths[i]
 		fi, err := os.Lstat(p)
 		if err != nil {
 			return p, err
 		}
+		// syscall, not os.Remove: os.Remove tries unlink before rmdir, so a directory
+		// swapped for a user file after the Lstat would lose that file. Rmdir fails
+		// on anything but an empty directory (ENOTEMPTY, ENOTDIR); Unlink fails on a
+		// directory.
 		switch {
 		case fi.IsDir():
+			if err = syscall.Rmdir(p); err != nil {
+				// Name what appeared, so the owner sees which file stopped it.
+				if entries, rerr := os.ReadDir(p); rerr == nil && len(entries) > 0 {
+					names := make([]string, 0, 3)
+					for _, e := range entries[:min(len(entries), 3)] {
+						names = append(names, e.Name())
+					}
+					err = fmt.Errorf("%w: holds %s", err, strings.Join(names, ", "))
+				}
+			}
 		case fi.Mode().IsRegular() && fi.Name() == ".DS_Store":
+			err = syscall.Unlink(p)
 		default:
 			return p, errors.New("not Finder litter")
 		}
-		if err := os.Remove(p); err != nil {
+		if err != nil {
 			return p, err
 		}
 	}
@@ -340,7 +357,6 @@ func Remove(ctx context.Context, projectRoot string, opts RemoveOptions) (*Remov
 		if other := nonLitter(aside, 3); len(other) > 0 {
 			return putBack("left in place - not only .DS_Store remains: " + strings.Join(other, ", "))
 		}
-		beforeLitterFinish(aside)
 		if stuck, rmErr := finishLitter(aside); rmErr != nil {
 			where := "what remains is at " + aside
 			if _, statErr := os.Lstat(aside); statErr == nil {

@@ -249,7 +249,7 @@ func Create(ctx context.Context, projectRoot string, opts CreateOptions) (*Creat
 	absentBefore := os.IsNotExist(preErr) // a permission or I/O error is NOT proof of absence
 	if out, err := gitWorktreeAdd(ctx, gitArgs); err != nil {
 		msg := redactCreds(strings.TrimSpace(string(out)))
-		kind, code, remediation := classifyWorktreeAddErr(msg, opts.Name)
+		kind, code, remediation := classifyWorktreeAddErr(msg, opts.Name, wtPath, plan.Branch)
 		e := &Error{Code: code, Kind: kind, Message: msg, Remediation: remediation, Cause: err}
 		// git creates the checkout, then runs the repo's post-checkout hook, and returns
 		// the hook's status (lets-41cpf): a failing hook leaves a registered worktree
@@ -407,25 +407,26 @@ func checkGitVersion(ctx context.Context) error {
 // branch-in-use text differs by git version - ">= 2.42: is already used by
 // worktree at", "2.39: is already checked out at" (lets-fh3yq). Step 5b's porcelain
 // pre-check is the primary detector; this is the race fallback.
-func classifyWorktreeAddErr(msg, name string) (kind string, code int, remediation string) {
+func classifyWorktreeAddErr(msg, name, wtPath, branch string) (kind string, code int, remediation string) {
 	stale := "if path is stale: lets worktree remove " + name + " (use --force if dirty)"
-	// Only git's own `fatal: ` lines: the output also carries the repository's
-	// hook output, and a hook printing "already exists" must not pass for a
-	// collision (that would skip the rollback of the checkout the add made).
-	var fatal []string
+	// Only a git `fatal: ` line naming THIS add's own path or branch is a collision:
+	// the output also carries the repository's hook output, and a hook can print
+	// "already exists" - even as a fatal line of its own git call - which must not
+	// pass for a collision (that would skip the rollback of the checkout the add made).
+	pathExists := "fatal: '" + wtPath + "' already exists"
+	branchExists := "fatal: a branch named '" + branch + "' already exists"
+	checkedOut := "fatal: '" + branch + "' is already checked out at"
+	usedBy := "fatal: '" + branch + "' is already used by worktree"
 	for _, line := range strings.Split(msg, "\n") {
-		if l := strings.TrimSpace(line); strings.HasPrefix(l, "fatal: ") {
-			fatal = append(fatal, l)
+		l := strings.TrimSpace(line)
+		switch {
+		// Path collision (`.worktrees/foo` already exists, or the `worktree-foo` branch
+		// already exists when creating in new-branch mode).
+		case strings.HasPrefix(l, pathExists), branch != "" && strings.HasPrefix(l, branchExists):
+			return "worktree_path_exists", ExitWorktreeExists, stale
+		case branch != "" && (strings.HasPrefix(l, checkedOut) || strings.HasPrefix(l, usedBy)):
+			return "branch_in_use_other_worktree", ExitBranchConflict, "the target branch is checked out in another worktree; lets worktree list to find it, then remove or pick a different name"
 		}
-	}
-	git := strings.Join(fatal, "\n")
-	switch {
-	// Path collision (e.g. `.worktrees/foo` already exists or `worktree-foo` branch
-	// already exists when creating in new-branch mode).
-	case strings.Contains(git, "already exists"):
-		return "worktree_path_exists", ExitWorktreeExists, stale
-	case strings.Contains(git, "is already used by worktree"), strings.Contains(git, "is already checked out at"):
-		return "branch_in_use_other_worktree", ExitBranchConflict, "the target branch is checked out in another worktree; lets worktree list to find it, then remove or pick a different name"
 	}
 	return "git_worktree_add_failed", ExitGitFailed, stale
 }

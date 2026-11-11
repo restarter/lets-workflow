@@ -639,6 +639,8 @@ func TestRemove_TrackedDSStoreChangeIsDirty(t *testing.T) {
 func TestRemove_FinishNeverDeletesALateWrite(t *testing.T) {
 	repo, wt := removeFixture(t)
 	halfRemove(t, filepath.Join("sub", ".DS_Store"))
+	// The seam runs after finishLitter's walk: the walk never saw notes.md, so it is
+	// the rmdir of sub that must refuse (lets-5whww Codex round 2, fix 2a).
 	restore := worktreecmd.SetBeforeLitterFinishForTesting(func(aside string) {
 		mustWrite(t, filepath.Join(aside, "sub", "notes.md"), "late", 0o644)
 	})
@@ -668,5 +670,27 @@ func TestRemove_GitRunsInTheCLocale(t *testing.T) {
 	}
 	if want := []string{"git", "-C", "/r", "worktree", "remove", "--force", "/r/.worktrees/x"}; strings.Join(cmd.Args, " ") != strings.Join(want, " ") {
 		t.Errorf("args = %q", cmd.Args)
+	}
+}
+
+// A directory the walk saw, swapped for a user file of the same name before the
+// delete, is never unlinked (fix 2b).
+func TestRemove_FinishNeverUnlinksASwappedDirectory(t *testing.T) {
+	repo, wt := removeFixture(t)
+	halfRemove(t, filepath.Join("sub", ".DS_Store")) // also leaves the empty dir "empty"
+	restore := worktreecmd.SetBeforeLitterFinishForTesting(func(aside string) {
+		if err := os.Remove(filepath.Join(aside, "empty")); err != nil {
+			t.Fatal(err)
+		}
+		mustWrite(t, filepath.Join(aside, "empty"), "user", 0o644)
+	})
+	defer restore()
+	_, err := worktreecmd.Remove(context.Background(), repo, worktreecmd.RemoveOptions{Name: "foo"})
+	e := wantRemoveFailed(t, err)
+	if !strings.Contains(e.Message, "empty") || !strings.Contains(e.Message, "moved back to "+wt) {
+		t.Errorf("the error must name the file and where it is: %q", e.Message)
+	}
+	if data, err := os.ReadFile(filepath.Join(wt, "empty")); err != nil || string(data) != "user" {
+		t.Errorf("the user file must survive at %s: %q %v", wt, data, err)
 	}
 }
