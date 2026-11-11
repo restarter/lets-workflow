@@ -70,6 +70,10 @@ func gitWorktreeRemoveCmd(ctx context.Context, root, path string) *exec.Cmd {
 // test seam (a process that kept a reference into the moved tree writes there).
 var beforeLitterFinish = func(dir string) {}
 
+// afterLitterLstat runs inside finishLitter between a path's Lstat and its delete -
+// a test seam for a swap in that window.
+var afterLitterLstat = func(p string) {}
+
 // finishLitter deletes a tree that held only Finder litter, non-recursively and
 // deepest first: a regular .DS_Store file (Lstat right before, never following a
 // symlink) or an empty directory (rmdir, which fails if anything appeared in it).
@@ -94,6 +98,7 @@ func finishLitter(dir string) (stuck string, err error) {
 		if err != nil {
 			return p, err
 		}
+		afterLitterLstat(p)
 		// syscall, not os.Remove: os.Remove tries unlink before rmdir, so a directory
 		// swapped for a user file after the Lstat would lose that file. Rmdir fails
 		// on anything but an empty directory (ENOTEMPTY, ENOTDIR); Unlink fails on a

@@ -88,6 +88,13 @@ func SetBeforeLitterFinishForTesting(f func(aside string)) (restore func()) {
 	return func() { beforeLitterFinish = old }
 }
 
+// SetAfterLitterLstatForTesting runs f between finishLitter's Lstat of a path and its delete; restore undoes it.
+func SetAfterLitterLstatForTesting(f func(p string)) (restore func()) {
+	old := afterLitterLstat
+	afterLitterLstat = f
+	return func() { afterLitterLstat = old }
+}
+
 // GitWorktreeRemoveCmdForTesting drives gitWorktreeRemoveCmd.
 var GitWorktreeRemoveCmdForTesting = gitWorktreeRemoveCmd
 

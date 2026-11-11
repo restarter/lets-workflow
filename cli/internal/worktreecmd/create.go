@@ -417,12 +417,15 @@ func classifyWorktreeAddErr(msg, name, wtPath, branch string) (kind string, code
 	branchExists := "fatal: a branch named '" + branch + "' already exists"
 	checkedOut := "fatal: '" + branch + "' is already checked out at"
 	usedBy := "fatal: '" + branch + "' is already used by worktree"
+	// "fatal: '<path>' is a missing but already registered worktree" / "... but locked
+	// worktree": the path collides with another registration.
+	missingButRegistered := "fatal: '" + wtPath + "' is a missing but"
 	for _, line := range strings.Split(msg, "\n") {
 		l := strings.TrimSpace(line)
 		switch {
 		// Path collision (`.worktrees/foo` already exists, or the `worktree-foo` branch
 		// already exists when creating in new-branch mode).
-		case strings.HasPrefix(l, pathExists), branch != "" && strings.HasPrefix(l, branchExists):
+		case strings.HasPrefix(l, pathExists), strings.HasPrefix(l, missingButRegistered), branch != "" && strings.HasPrefix(l, branchExists):
 			return "worktree_path_exists", ExitWorktreeExists, stale
 		case branch != "" && (strings.HasPrefix(l, checkedOut) || strings.HasPrefix(l, usedBy)):
 			return "branch_in_use_other_worktree", ExitBranchConflict, "the target branch is checked out in another worktree; lets worktree list to find it, then remove or pick a different name"

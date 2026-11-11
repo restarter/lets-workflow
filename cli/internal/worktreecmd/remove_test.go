@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/restarter/lets-workflow/cli/internal/worktreecmd"
@@ -673,20 +674,32 @@ func TestRemove_GitRunsInTheCLocale(t *testing.T) {
 	}
 }
 
-// A directory the walk saw, swapped for a user file of the same name before the
-// delete, is never unlinked (fix 2b).
+// A directory Lstat saw, swapped for a user file of the same name between that
+// Lstat and the delete, is never unlinked: rmdir fails with ENOTDIR, where
+// os.Remove would have unlinked the file (fix 2b, f4 fix 1).
 func TestRemove_FinishNeverUnlinksASwappedDirectory(t *testing.T) {
 	repo, wt := removeFixture(t)
 	halfRemove(t, filepath.Join("sub", ".DS_Store")) // also leaves the empty dir "empty"
-	restore := worktreecmd.SetBeforeLitterFinishForTesting(func(aside string) {
-		if err := os.Remove(filepath.Join(aside, "empty")); err != nil {
+	swapped := false
+	restore := worktreecmd.SetAfterLitterLstatForTesting(func(p string) {
+		if filepath.Base(p) != "empty" || swapped {
+			return
+		}
+		swapped = true
+		if err := os.Remove(p); err != nil {
 			t.Fatal(err)
 		}
-		mustWrite(t, filepath.Join(aside, "empty"), "user", 0o644)
+		mustWrite(t, p, "user", 0o644)
 	})
 	defer restore()
 	_, err := worktreecmd.Remove(context.Background(), repo, worktreecmd.RemoveOptions{Name: "foo"})
 	e := wantRemoveFailed(t, err)
+	if !swapped {
+		t.Fatal("the seam never saw the empty directory")
+	}
+	if !strings.Contains(e.Message, syscall.ENOTDIR.Error()) {
+		t.Errorf("the finish must stop with ENOTDIR (%q): %q", syscall.ENOTDIR.Error(), e.Message)
+	}
 	if !strings.Contains(e.Message, "empty") || !strings.Contains(e.Message, "moved back to "+wt) {
 		t.Errorf("the error must name the file and where it is: %q", e.Message)
 	}
