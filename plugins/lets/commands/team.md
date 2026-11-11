@@ -1,6 +1,6 @@
 ---
 description: Team management - run several tasks at once, one visible LETS session per task on any launcher
-argument-hint: "[run|spawn|dismiss|roster|status|stop|create|disband] [--tasks A,B,C] [--backend orca|sessions] [--launch-mode default|auto|all-in] [--auto] [--all-in] [<callsign>] [--area <a>]"
+argument-hint: "[run|spawn|dismiss|roster|status|stop|create|disband] [--tasks A,B,C] [--backend orca|sessions] [--launch-mode default|auto|all-in] [--auto] [--all-in] [<callsign>] [--area <a>] [--lead-name <n>]"
 ---
 
 # Team
@@ -20,7 +20,7 @@ Run several independent tasks at once: each task gets its own worktree and its o
 - `roster` -> go to Roster
 - `status` -> go to Status
 - `stop` -> go to Stop
-- `create [<callsign>] --area <a>` -> go to Create (carry `--orca` / `--cmux` / `--tmux` and `--launch-mode <m>` / `--auto` / `--all-in` with it)
+- `create [<callsign>] --area <a>` -> go to Create (carry `--orca` / `--cmux` / `--tmux`, `--launch-mode <m>` / `--auto` / `--all-in` and `--lead-name <n>` with it)
 - `disband <callsign>` -> go to Disband
 - `members [roles=<r,...>]` -> go to Step M6 (internal: `/lets:start` and member-run `op=route` call it; not offered in the picker below)
 
@@ -633,7 +633,7 @@ Worktrees and branches stay in place.
 
 A standing team is created from the main checkout (an orchestrator or the owner). This command only routes - it duplicates none of the steps:
 
-`Skill(skill: "lets:worktree", args: "create --team [<callsign>] --area <a>")` - the `/lets:worktree create --team` flow checks the callsign (writing nothing), lets Go create `team_<c>`, writes the team file, runs the gated setup hook and launches only the lead. Pass any `--orca` / `--cmux` / `--tmux` override and any `--launch-mode <m>` / `--auto` / `--all-in` through (the lead's **Launch mode**, rendered into the team file at creation) - never drop a typed launch-mode flag.
+`Skill(skill: "lets:worktree", args: "create --team [<callsign>] --area <a>")` - the `/lets:worktree create --team` flow checks the callsign (writing nothing), lets Go create `team_<c>`, writes the team file, runs the gated setup hook and launches only the lead. Pass any `--orca` / `--cmux` / `--tmux` override and any `--launch-mode <m>` / `--auto` / `--all-in` through (the lead's **Launch mode**, rendered into the team file at creation), and any `--lead-name <n>` (the lead's session name; default `<callsign>-lead`) - never drop a typed flag.
 
 ---
 
