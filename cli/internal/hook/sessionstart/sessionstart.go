@@ -191,11 +191,15 @@ func gatesNotice(raw string) string {
 // adapter gets its own line.
 func rulesNotice(pluginRulesPath, projectRoot, homeDir string, env map[string]string) []string {
 	o := rulesdrift.Options{
-		PluginRoot:   filepath.Dir(filepath.Dir(pluginRulesPath)),
 		CheckoutRoot: projectRoot,
 		Scope:        env["LETS_RULES_SCOPE"],
-		Tracker:      env["LETS_TRACKER"],
-		HomeDir:      homeDir,
+		// The project layer only, as /lets:update reads it: a user-level
+		// LETS_TRACKER names no adapter this project installs.
+		Tracker: letsconfig.MergedEnv(projectRoot, "")["LETS_TRACKER"],
+		HomeDir: homeDir,
+	}
+	if pluginRulesPath != "" { // an empty --rules must not read ./rules from the cwd
+		o.PluginRoot = filepath.Dir(filepath.Dir(pluginRulesPath))
 	}
 	if main, ok := gitutil.LinkedWorktreeMain(projectRoot); ok {
 		o.MainRoot = main

@@ -71,6 +71,16 @@ func SetGitWorktreeRemoveForTesting(f func(ctx context.Context, root, path strin
 	return func() { gitWorktreeRemove = old }
 }
 
+// SetCheckIgnoredForTesting swaps the .worktreeinclude ignore check; restore undoes it.
+func SetCheckIgnoredForTesting(f func(context.Context, string, []string) (map[string]bool, error)) (restore func()) {
+	old := checkIgnored
+	checkIgnored = f
+	return func() { checkIgnored = old }
+}
+
+// GitCEnvForTesting drives gitCEnv.
+var GitCEnvForTesting = gitCEnv
+
 // SetSettingsStage replaces the EnsureLetsAdditionalDir test seam; restore undoes it.
 func SetSettingsStage(f func(string)) (restore func()) {
 	old := settingsStage

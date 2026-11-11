@@ -147,9 +147,23 @@ func Open(ctx context.Context, o OpenOptions) (*OpenResult, error) {
 				return stop(&Error{Code: ExitCreateAmbiguous, Kind: "create_ambiguous", Message: fmt.Sprintf("Orca reported %s, but git shows a worktree at %s; nothing is retried, no Go worktree is created", f.Error(), p), Remediation: "inspect " + p + " (`orca worktree ps`, `git worktree list`) and remove it by hand if it is not wanted"})
 			}
 		}
+		// Orca's side too: it may list the worktree before git registers it.
+		rows, pf := c.Ps(ctx)
+		if pf != nil {
+			return stop(&Error{Code: ExitCreateAmbiguous, Kind: "create_ambiguous", Message: fmt.Sprintf("Orca reported %s and its worktree list failed (%s); nothing is retried, no Go worktree is created", f.Error(), pf.Error()), Remediation: "check `orca worktree ps` and `git worktree list`; nothing is retried, no Go worktree is created"})
+		}
+		if row, listed := psRow(rows, o.Name); listed {
+			launch.Path, launch.OrcaWorktreeID = row.Path, row.WorktreeID
+			return stop(&Error{Code: ExitCreateAmbiguous, Kind: "create_ambiguous", Message: fmt.Sprintf("Orca reported %s, but Orca lists a worktree %s at %s; nothing is retried, no Go worktree is created", f.Error(), o.Name, row.Path), Remediation: "inspect it in Orca (`orca worktree ps`) and archive it there if it is not wanted"})
+		}
 		return degrade(f)
 	}
-	out, f := c.Run(ctx, "worktree create", append(args, "--json")...)
+	cctx, cancel := ctx, context.CancelFunc(func() {})
+	if o.NoAgent {
+		cctx, cancel = context.WithTimeout(ctx, 60*time.Second) // as TeamCreate bounds it
+	}
+	out, f := c.Run(cctx, "worktree create", append(args, "--json")...)
+	cancel()
 	if f != nil {
 		return reconcile(f)
 	}

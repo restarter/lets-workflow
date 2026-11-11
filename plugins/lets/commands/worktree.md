@@ -60,7 +60,7 @@ Optional `--flow plan|plan-workflow`: which `/lets:*` command the spawned sessio
 
 **Orchestrator binding.** When this session is an orchestrator, every worker it spawns is bound to it and named so it can be addressed. Before building a launch command (C0's terminal `--command`, C3.5's cmux / tmux `--command`, C4's printed terminal command), run `lets peers orchestrator --session "$CLAUDE_CODE_SESSION_ID" --json` and `lets peers who --json`. When the orchestrator envelope carries a non-null `self_record` (this session's own recorded name - not `source`, which answers whom this session's messages go to):
 - **Binding.** Append ` --orc="<self_record.name>"` to the slash command of the first line - `/lets:start <id> --orc="<name>"`, and the `--flow` forms `/lets:plan <id> --orc="<name>"` / `/lets:plan-workflow <id> --orc="<name>"` (the spawned command strips it before its task-id test). The name comes from the registry through Go, so it already passed the name grammar; inside the single-quoted launch string it stays double-quoted.
-- **Worker name.** The launched `claude` also gets `--name '<repo_slug>-<task-id>'` (`repo_slug` from the `who` envelope), the address the orchestrator sends to - e.g. `claude --name 'lets-workflow-lets-abc' --permission-mode auto '/lets:plan-workflow lets-abc --orc="MAIN PWA"'`. It goes into the C3.5 cmux / tmux `--command` and the C4 printed command. C0 cannot carry it: Orca launches its own agent command and accepts no agent arguments - say so in one line. A name that fails the peer-name grammar (words of letters, digits, `.`, `_`, `-`, single spaces, at most 64) -> no `--name`, one line naming it.
+- **Worker name.** The launched `claude` also gets `--name '<repo_slug>-<task-id>'` (`repo_slug` from the `who` envelope), the address the orchestrator sends to - e.g. `claude --name 'lets-workflow-lets-abc' --permission-mode auto '/lets:plan-workflow lets-abc --orc="MAIN PWA"'`. It goes into the C0 Call 3 terminal command, the C3.5 cmux / tmux `--command` and the C4 printed command. A name that fails the peer-name grammar (words of letters, digits, `.`, `_`, `-`, single spaces, at most 64) -> no `--name`, one line naming it.
 
 A null `self_record`, a taskless worktree, or no binary -> the launch command is unchanged.
 
@@ -121,7 +121,7 @@ lets orca open --repo "$LETS_PROJECT_ROOT" --name '<task-id>-<slug>' --no-agent 
 lets worktree adopt --dir "{launch.path}" --plugin-root "${CLAUDE_PLUGIN_ROOT}" --task '<task-id>' --json
 ```
 
-Taskless: no `--task`. Print each `warn` step's `message` as one line (store links, `.worktreeinclude`, adapter advice). `ok=false` -> print `error.kind` and `error.remediation` and stop - the Orca worktree stays; never fall back to a second worktree.
+Taskless: no `--task`. Print each `warn` step's `message` as one line (store links, `.worktreeinclude`, adapter advice). `ok=false` -> print `error.kind` and `error.remediation` and stop - the Orca worktree stays; never fall back to a second worktree. Call 1 passed `--setup skip`, so a project-owned setup script did not run either: when `$LETS_PROJECT_ROOT/orca.yaml` exists and its first line is not the LETS marker (`# lets:managed orca.yaml ...`), print one line - its setup script did not run for this worktree; run it there by hand.
 
 **Call 3 - Claude in an Orca terminal there**, the command crossing through a quoted heredoc as the team lead launch does:
 
@@ -133,7 +133,7 @@ EOF
 lets orca terminal --worktree "{launch.path}" --title '<task-id>' --command "$CMD" --json
 ```
 
-The launch mode applies through `{launch_cmd}` (an `all-in` launch prints the announce line first). Taskless: `--title '<name>'`. `terminal.launched=true` -> Step C4 "orca" block. Done - no C2, C3 or C3.5. `launched=false` -> print its `fallback_command` for the user, prefixed with one line naming `reason` - never a second worktree.
+The launch mode applies through `{launch_cmd}` (an `all-in` launch prints the announce line first). An orchestrator's spawn adds the worker name and the binding (Orchestrator binding above) - e.g. `{launch_cmd} --name '<repo_slug>-<task-id>' '/lets:start <task-id> --orc="<name>"'`. Taskless: `--title '<name>'`. `terminal.launched=true` -> Step C4 "orca" block. Done - no C2, C3 or C3.5. `launched=false` -> print its `fallback_command` for the user, prefixed with one line naming `reason` - never a second worktree.
 
 `--no-orca` (the `fallback_command` Call 1 returns) skips this step and uses the same cmux-else-terminal chain.
 

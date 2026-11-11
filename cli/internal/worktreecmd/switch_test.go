@@ -976,3 +976,26 @@ func TestSwitch_RulesDrift(t *testing.T) {
 		}
 	})
 }
+
+// LETS_TRACKER comes from the project layer only (lets-5whww review fix 2).
+func TestSwitch_RulesDriftUserLevelTracker(t *testing.T) {
+	f := newTeamFixture(t)
+	f.commitRules(t, "0.11.2", "0.11.1")
+	if err := os.WriteFile(filepath.Join(f.letsDir, ".env"), []byte("LETS_MERGE_BRANCH=main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	home := os.Getenv("HOME") // isolateEnv points it at a temp dir
+	if err := os.MkdirAll(filepath.Join(home, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".lets", ".env"), []byte("LETS_TRACKER=beads\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := f.sw(SwitchOptions{Task: "lets-a1", PluginRoot: rulesPlugin(t)})
+	if err != nil || !res.OK {
+		t.Fatalf("switch: err=%v res=%+v", err, res)
+	}
+	if n := switchSteps(res, StepWarn, "tracker-beads.md"); n != 0 {
+		t.Errorf("a user-level LETS_TRACKER must not drive the adapter check: %+v", res.Steps)
+	}
+}

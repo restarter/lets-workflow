@@ -327,3 +327,56 @@ func TestWorktreeInclude_ExcludeRepair(t *testing.T) {
 		t.Errorf("the re-adopt must write the owed exclude:\n%s", p)
 	}
 }
+
+// infoExclude returns the shared info/exclude content of repo.
+func infoExclude(t *testing.T, repo string) string {
+	t.Helper()
+	out, err := exec.Command("git", "-C", repo, "rev-parse", "--git-path", "info/exclude").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := strings.TrimSpace(string(out))
+	if !filepath.IsAbs(p) {
+		p = filepath.Join(repo, p)
+	}
+	data, _ := os.ReadFile(p)
+	return string(data)
+}
+
+// An escaped trailing-space entry is written once, not on every run (fix 3).
+func TestWorktreeInclude_TrailingSpaceExcludeWrittenOnce(t *testing.T) {
+	repo, wt := adoptRepo(t, "ext-7")
+	mustWrite(t, filepath.Join(repo, ".gitignore"), "local.md\\ \n", 0o644)
+	mustWrite(t, filepath.Join(repo, ".worktreeinclude"), "local.md\\ \n", 0o644)
+	mustWrite(t, filepath.Join(repo, "local.md "), "space", 0o644)
+	for i := 0; i < 2; i++ {
+		if res, err := worktreecmd.Adopt(context.Background(), wt, worktreecmd.AdoptOptions{LinksOnly: true}); err != nil || !res.OK {
+			t.Fatalf("adopt %d: %v", i, err)
+		}
+	}
+	if n := strings.Count(infoExclude(t, repo), "/local.md\\ \n"); n != 1 {
+		t.Errorf("want one exclude line, got %d:\n%s", n, infoExclude(t, repo))
+	}
+}
+
+// A failing ignore check warns and copies nothing (fix 4).
+func TestWorktreeInclude_IgnoreCheckFailureWarns(t *testing.T) {
+	repo, wt := adoptRepo(t, "ext-8")
+	mustWrite(t, filepath.Join(repo, ".gitignore"), "local.md\n", 0o644)
+	mustWrite(t, filepath.Join(repo, ".worktreeinclude"), "local.md\n", 0o644)
+	mustWrite(t, filepath.Join(repo, "local.md"), "l", 0o644)
+	restore := worktreecmd.SetCheckIgnoredForTesting(func(context.Context, string, []string) (map[string]bool, error) {
+		return nil, errors.New("exit status 128")
+	})
+	defer restore()
+	res, err := worktreecmd.Adopt(context.Background(), wt, worktreecmd.AdoptOptions{LinksOnly: true})
+	if err != nil || !res.OK {
+		t.Fatalf("adopt: %v", err)
+	}
+	if !includeStep(res.Steps, worktreecmd.StepWarn, "worktreeinclude: could not check ignore rules: exit status 128") {
+		t.Errorf("want the ignore-check warn: %+v", res.Steps)
+	}
+	if exists(filepath.Join(wt, "local.md")) {
+		t.Error("nothing is copied when the ignore check fails")
+	}
+}

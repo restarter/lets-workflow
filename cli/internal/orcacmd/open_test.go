@@ -483,3 +483,58 @@ func TestOpen_NoAgentRefusesARunningAgent(t *testing.T) {
 		t.Errorf("a plain shell must pass: err=%v launch=%+v", err, res.Launch)
 	}
 }
+
+// psAfterCreate fakes Orca whose create fails and whose `worktree ps` answers an
+// empty list before the create and psAfter (failing when psFails) after it.
+func psAfterCreate(t *testing.T, psAfter string, psFails bool) {
+	t.Helper()
+	created := false
+	useFakeOrca(t, func(args []string) (string, string, bool) {
+		switch {
+		case joined(args) == "status --json":
+			return statusRunning, "", false
+		case joined(args) == "worktree ps --json":
+			if !created {
+				return `{"ok":true,"result":{"worktrees":[]}}`, "", false
+			}
+			if psFails {
+				return "", "boom", true
+			}
+			return psAfter, "", false
+		case len(args) > 1 && args[0] == "worktree" && args[1] == "create":
+			created = true
+			return `{"ok":false,"error":{"code":"internal","message":"boom"}}`, "", true
+		}
+		return "{}", "", false
+	})
+}
+
+// Orca's own list is reconciled too (lets-5whww review fix 7).
+func TestOpen_NoAgentCreateFailureReconcilesOrca(t *testing.T) {
+	t.Run("orca lists the worktree", func(t *testing.T) {
+		repo := commitRepo(t)
+		psAfterCreate(t, `{"ok":true,"result":{"worktrees":[{"worktreeId":"r::/o/lets-abc-x","path":"/o/lets-abc-x","branch":"refs/heads/lets-abc-x","displayName":"lets-abc-x"}]}}`, false)
+		res, err := Open(context.Background(), OpenOptions{Repo: repo, Name: "lets-abc-x", NoAgent: true})
+		wantExit(t, err, ExitCreateAmbiguous, "create_ambiguous")
+		if res.Launch.Path != "/o/lets-abc-x" || res.Launch.FallbackCommand != "" {
+			t.Errorf("launch=%+v", res.Launch)
+		}
+	})
+	t.Run("orca list fails", func(t *testing.T) {
+		repo := commitRepo(t)
+		psAfterCreate(t, "", true)
+		res, err := Open(context.Background(), OpenOptions{Repo: repo, Name: "lets-abc-x", NoAgent: true})
+		wantExit(t, err, ExitCreateAmbiguous, "create_ambiguous")
+		if res.Launch.FallbackCommand != "" {
+			t.Errorf("no fallback: %+v", res.Launch)
+		}
+	})
+	t.Run("nothing anywhere degrades", func(t *testing.T) {
+		repo := commitRepo(t)
+		psAfterCreate(t, `{"ok":true,"result":{"worktrees":[]}}`, false)
+		res, err := Open(context.Background(), OpenOptions{Repo: repo, Name: "lets-abc-x", NoAgent: true})
+		if err != nil || !res.OK || res.Launch.Launched || !strings.Contains(res.Launch.FallbackCommand, "--no-orca") {
+			t.Errorf("want the usual fallback: err=%v launch=%+v", err, res.Launch)
+		}
+	})
+}

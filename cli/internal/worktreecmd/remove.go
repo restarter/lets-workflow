@@ -44,8 +44,8 @@ func hasUserChanges(porcelain string, links []trackeradapter.Link) bool {
 		if path == ".lets" || strings.HasPrefix(path, ".lets/") || strings.HasPrefix(path, ".lets.pre-adopt") || isDeclaredLink(path, links) {
 			continue
 		}
-		if filepath.Base(path) == ".DS_Store" {
-			continue // macOS Finder litter, never user work (lets-yeyhz)
+		if strings.HasPrefix(l, "??") && filepath.Base(path) == ".DS_Store" {
+			continue // untracked macOS Finder litter, never user work (lets-yeyhz); a tracked one that changed stays dirty
 		}
 		return true
 	}
@@ -273,13 +273,27 @@ func Remove(ctx context.Context, projectRoot string, opts RemoveOptions) (*Remov
 		if !strings.Contains(msg, "Directory not empty") {
 			return fail(&Error{Code: ExitGitFailed, Kind: "git_worktree_remove_failed", Message: msg, Cause: err})
 		}
-		if other := nonLitter(wtPath, 3); len(other) > 0 {
-			return fail(&Error{Code: ExitGitFailed, Kind: "git_worktree_remove_failed",
-				Message:     msg + "; left in place - not only .DS_Store remains: " + strings.Join(other, ", "),
+		// Move the tree aside first, so nothing written to wtPath after the check can
+		// be deleted with it: the check and the RemoveAll see the same, renamed tree.
+		aside := wtPath + ".removing-" + strconv.Itoa(os.Getpid())
+		if rnErr := os.Rename(wtPath, aside); rnErr != nil {
+			return fail(&Error{Code: ExitGitFailed, Kind: "git_worktree_remove_failed", Message: msg + "; could not move the rest aside to finish: " + rnErr.Error(), Cause: err})
+		}
+		putBack := func(why string) (*RemoveResult, error) {
+			if backErr := os.Rename(aside, wtPath); backErr != nil {
+				why += "; it could not be moved back and is at " + aside + " (" + backErr.Error() + ")"
+			}
+			return fail(&Error{Code: ExitGitFailed, Kind: "git_worktree_remove_failed", Message: msg + "; " + why,
 				Remediation: "check those files, then remove the directory by hand and run `git worktree prune`", Cause: err})
 		}
-		if rmErr := os.RemoveAll(wtPath); rmErr != nil {
-			return fail(&Error{Code: ExitGitFailed, Kind: "git_worktree_remove_failed", Message: msg + "; finishing with a filesystem remove failed: " + rmErr.Error(), Cause: err})
+		if !pathDescendantOfWorktrees(projectRoot, aside) {
+			return putBack(fmt.Sprintf("left in place - %q is outside %s/.worktrees/", aside, projectRoot))
+		}
+		if other := nonLitter(aside, 3); len(other) > 0 {
+			return putBack("left in place - not only .DS_Store remains: " + strings.Join(other, ", "))
+		}
+		if rmErr := os.RemoveAll(aside); rmErr != nil {
+			return fail(&Error{Code: ExitGitFailed, Kind: "git_worktree_remove_failed", Message: msg + "; finishing with a filesystem remove of " + aside + " failed: " + rmErr.Error(), Cause: err})
 		}
 		addStep(StepWarn, "git worktree remove stopped at a non-empty directory - finished with a filesystem remove")
 	}

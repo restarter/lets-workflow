@@ -38,10 +38,19 @@ func rollback(ctx context.Context, result *CreateResult, projectRoot, wtPath str
 	var residual []string
 
 	// 0) Restore main repo's branch if auto-switch happened (do this FIRST so
-	//    user's working state is restored even if other steps fail).
-	if !restoreMainBranch(ctx, projectRoot, prevMainBranch, &result.Envelope, "rollback: ") {
-		rb.Succeeded = false
-		residual = append(residual, fmt.Sprintf("main_repo_on_branch:%s (expected %s)", currentBranchOr(ctx, projectRoot), prevMainBranch))
+	//    user's working state is restored even if other steps fail) - unless main
+	//    goes back to the very branch the worktree holds (--switch-main-if-needed +
+	//    attach): git refuses that switch while the checkout exists, so it runs
+	//    after the remove and prune below.
+	restoreMain := func() {
+		if !restoreMainBranch(ctx, projectRoot, prevMainBranch, &result.Envelope, "rollback: ") {
+			rb.Succeeded = false
+			residual = append(residual, fmt.Sprintf("main_repo_on_branch:%s (expected %s)", currentBranchOr(ctx, projectRoot), prevMainBranch))
+		}
+	}
+	restoreLast := prevMainBranch != "" && prevMainBranch == plan.Branch
+	if !restoreLast {
+		restoreMain()
 	}
 
 	// 1) git worktree remove --force.
@@ -79,6 +88,11 @@ func rollback(ctx context.Context, result *CreateResult, projectRoot, wtPath str
 
 	// 4) Prune worktree metadata.
 	_ = exec.CommandContext(ctx, "git", "-C", projectRoot, "worktree", "prune").Run()
+
+	// 5) The deferred main restore (step 0).
+	if restoreLast {
+		restoreMain()
+	}
 
 	rb.Residual = residual
 	result.Rollback = rb

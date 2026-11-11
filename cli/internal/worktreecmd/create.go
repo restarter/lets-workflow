@@ -34,7 +34,22 @@ type CreateOptions struct {
 
 // gitWorktreeAdd runs `git <args>` for Step 7 - a test seam (the ownership race).
 var gitWorktreeAdd = func(ctx context.Context, args []string) ([]byte, error) {
-	return exec.CommandContext(ctx, "git", args...).CombinedOutput()
+	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd.Env = gitCEnv()
+	return cmd.CombinedOutput()
+}
+
+// gitCEnv is the environment with LC_ALL=C (any existing LC_ALL dropped), so git
+// prints the English messages classifyWorktreeAddErr matches: a translated
+// collision must never pass the rollback guard as a generic failure.
+func gitCEnv() []string {
+	env := make([]string, 0, len(os.Environ())+1)
+	for _, kv := range os.Environ() {
+		if !strings.HasPrefix(kv, "LC_ALL=") {
+			env = append(env, kv)
+		}
+	}
+	return append(env, "LC_ALL=C")
 }
 
 // minGitVersion is required for `git worktree remove --force` (since 2.17).
@@ -518,6 +533,9 @@ func ensureWorktreeExcludes(ctx context.Context, projectRoot string, entries []s
 	}
 	existing := map[string]bool{}
 	for _, line := range strings.Split(string(data), "\n") {
+		// Exact (minus a CR): an escaped trailing space (`/local.md\ `) is part of the
+		// entry. The trimmed form keeps matching the entries older runs wrote.
+		existing[strings.TrimRight(line, "\r")] = true
 		existing[strings.TrimSpace(line)] = true
 	}
 	var toAppend []string

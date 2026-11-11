@@ -828,3 +828,64 @@ func TestCreate_AddRaceLeavesTheWinner(t *testing.T) {
 		})
 	}
 }
+
+// --switch-main-if-needed + attach + a failing post-checkout hook in the new
+// worktree: rollback removes the checkout first, then puts main back on the
+// branch it held (lets-5whww review fix 6).
+func TestCreate_SwitchMainAttachHookFailureRestoresMain(t *testing.T) {
+	repo := initRepo(t)
+	mustWrite(t, filepath.Join(repo, ".gitignore"), ".lets/\n.worktrees/\n", 0o644)
+	runIn(t, repo, "git", "add", ".gitignore")
+	runIn(t, repo, "git", "commit", "-m", "ignore .lets/.worktrees")
+	runIn(t, repo, "git", "branch", "develop")
+	mustWrite(t, filepath.Join(repo, ".lets", ".env"), "LETS_MERGE_BRANCH=develop\n", 0o600)
+	// Fail only inside a linked worktree: main's own switches must pass the hook.
+	hooks := filepath.Join(realTempDir(t), "hooks")
+	mustWrite(t, filepath.Join(hooks, "post-checkout"), "#!/bin/sh\ncase \"$(git rev-parse --git-dir)\" in *worktrees*) exit 1;; esac\nexit 0\n", 0o755)
+	runIn(t, repo, "git", "config", "core.hooksPath", hooks)
+
+	res, err := worktreecmd.Create(context.Background(), repo, worktreecmd.CreateOptions{
+		Name: "main", Mode: worktreecmd.BranchAttach, SwitchMainIfNeeded: true,
+	})
+	var e *worktreecmd.Error
+	if !errors.As(err, &e) || e.Kind != "git_worktree_add_failed" {
+		t.Fatalf("want git_worktree_add_failed, got %v", err)
+	}
+	if res.Rollback == nil || !res.Rollback.Attempted || !res.Rollback.Succeeded {
+		t.Errorf("Rollback: %+v steps=%+v", res.Rollback, res.Steps)
+	}
+	out, _ := exec.Command("git", "-C", repo, "branch", "--show-current").Output()
+	if got := strings.TrimSpace(string(out)); got != "main" {
+		t.Errorf("main was not restored: on %q", got)
+	}
+	if _, err := os.Lstat(filepath.Join(repo, ".worktrees", "main")); !os.IsNotExist(err) {
+		t.Errorf("the checkout survived: %v", err)
+	}
+}
+
+// git runs in the C locale, so collision messages stay English (fix 5).
+func TestGitCEnv(t *testing.T) {
+	t.Setenv("LC_ALL", "de_DE.UTF-8")
+	env := worktreecmd.GitCEnvForTesting()
+	var lcAll []string
+	for _, kv := range env {
+		if strings.HasPrefix(kv, "LC_ALL=") {
+			lcAll = append(lcAll, kv)
+		}
+	}
+	if len(lcAll) != 1 || lcAll[0] != "LC_ALL=C" {
+		t.Errorf("want exactly LC_ALL=C, got %q", lcAll)
+	}
+	if !slicesContainsPrefix(env, "PATH=") {
+		t.Error("the rest of the environment must be kept")
+	}
+}
+
+func slicesContainsPrefix(env []string, prefix string) bool {
+	for _, kv := range env {
+		if strings.HasPrefix(kv, prefix) {
+			return true
+		}
+	}
+	return false
+}

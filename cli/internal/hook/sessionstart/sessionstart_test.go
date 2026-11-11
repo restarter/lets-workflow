@@ -980,3 +980,41 @@ func TestRun_MainAdapterOutdated(t *testing.T) {
 		t.Errorf("main checkout must not get the worktree line:\n%s", out)
 	}
 }
+
+// An empty --rules reads no rules/ from the cwd (lets-5whww review fix 1).
+func TestRun_EmptyRulesPathReadsNoCwdRules(t *testing.T) {
+	cwd := t.TempDir()
+	for _, n := range []string{"lets-rules.md", "tracker-beads.md"} {
+		writeFile(t, filepath.Join(cwd, "rules", n), "---\nname: x\nversion: 0.11.2\n---\n")
+	}
+	project := t.TempDir()
+	writeCheckout(t, project, "0.11.2", "0.11.1")
+	t.Chdir(cwd)
+
+	var buf bytes.Buffer
+	if err := sessionstart.Run(&buf, "", project, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(buf.String(), "Tracker adapter") || strings.Contains(buf.String(), "lag the plugin") {
+		t.Errorf("an empty rules path must check nothing:\n%s", buf.String())
+	}
+}
+
+// LETS_TRACKER is read from the project layer only, as /lets:update reads it
+// (lets-5whww review fix 2).
+func TestRun_UserLevelTrackerChecksNoAdapter(t *testing.T) {
+	pluginRules := adapterPlugin(t)
+	project := t.TempDir()
+	writeCheckout(t, project, "0.11.2", "0.11.1")
+	writeFile(t, filepath.Join(project, ".lets", ".env"), "LETS_MERGE_BRANCH=main\n")
+	home := t.TempDir()
+	writeFile(t, filepath.Join(home, ".lets", ".env"), "LETS_TRACKER=beads\n")
+
+	var buf bytes.Buffer
+	if err := sessionstart.Run(&buf, pluginRules, project, home, nil); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(buf.String(), "Tracker adapter") {
+		t.Errorf("a user-level LETS_TRACKER must not drive the adapter check:\n%s", buf.String())
+	}
+}

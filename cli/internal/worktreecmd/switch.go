@@ -358,7 +358,9 @@ func Switch(ctx context.Context, dir string, o SwitchOptions) (*SwitchResult, er
 	} else {
 		home, _ := os.UserHomeDir()
 		env := letsconfig.ResolvedEnv(mainRoot, home, nil)
-		files := rulesdrift.Check(rulesdrift.Options{PluginRoot: pr, CheckoutRoot: root, MainRoot: mainRoot, Scope: env["LETS_RULES_SCOPE"], Tracker: env["LETS_TRACKER"], HomeDir: home})
+		// LETS_TRACKER from the project layer only, as /lets:update reads it.
+		tracker := letsconfig.MergedEnv(mainRoot, "")["LETS_TRACKER"]
+		files := rulesdrift.Check(rulesdrift.Options{PluginRoot: pr, CheckoutRoot: root, MainRoot: mainRoot, Scope: env["LETS_RULES_SCOPE"], Tracker: tracker, HomeDir: home})
 		if msg := rulesdrift.WorktreeMessage(files, merge); msg != "" {
 			step(StepWarn, msg)
 		}

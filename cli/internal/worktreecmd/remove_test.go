@@ -588,7 +588,10 @@ func TestRemove_HalfRemovedWithUserFileStays(t *testing.T) {
 		t.Errorf("the message must name notes.md: %q", e.Message)
 	}
 	if _, err := os.Stat(filepath.Join(wt, "notes.md")); err != nil {
-		t.Errorf("notes.md must stay: %v", err)
+		t.Errorf("notes.md must stay at the original path: %v", err)
+	}
+	if aside, _ := filepath.Glob(wt + ".removing-*"); len(aside) != 0 {
+		t.Errorf("the tree must be moved back, found %v", aside)
 	}
 }
 
@@ -612,5 +615,20 @@ func TestRemove_LockedWorktreeForceStaysIntact(t *testing.T) {
 	_ = wantRemoveFailed(t, err)
 	if _, err := os.Stat(filepath.Join(wt, ".git")); err != nil {
 		t.Errorf("a locked worktree must stay intact: %v", err)
+	}
+}
+
+// A tracked .DS_Store that changed is a user change (lets-5whww review fix 9).
+func TestRemove_TrackedDSStoreChangeIsDirty(t *testing.T) {
+	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+	repo, wt := removeFixture(t)
+	mustWrite(t, filepath.Join(wt, ".DS_Store"), "v1", 0o644)
+	runIn(t, wt, "git", "add", "-f", ".DS_Store")
+	runIn(t, wt, "git", "commit", "-q", "-m", "track it")
+	mustWrite(t, filepath.Join(wt, ".DS_Store"), "v2", 0o644)
+	_, err := worktreecmd.Remove(context.Background(), repo, worktreecmd.RemoveOptions{Name: "foo"})
+	var e *worktreecmd.Error
+	if !errors.As(err, &e) || e.Kind != "dirty_worktree" {
+		t.Fatalf("a modified tracked .DS_Store must be dirty, got %v", err)
 	}
 }

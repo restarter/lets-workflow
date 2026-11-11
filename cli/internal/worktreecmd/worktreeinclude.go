@@ -18,6 +18,9 @@ import (
 // writeExcludes is the exclude writer copyWorktreeInclude calls - a test seam.
 var writeExcludes = ensureWorktreeExcludes
 
+// checkIgnored is the ignore check copyWorktreeInclude calls - a test seam.
+var checkIgnored = gitIgnored
+
 // copyWorktreeInclude copies the main checkout's local files into a new worktree
 // (lets-41cpf), honouring Claude Code's native .worktreeinclude: a file is copied
 // when it matches a .worktreeinclude pattern (gitignore syntax) AND git ignores it
@@ -41,7 +44,10 @@ func copyWorktreeInclude(ctx context.Context, mainRoot, wtRoot string) []Step {
 	if len(candidates) == 0 {
 		return []Step{{Status: StepOK, Message: "worktreeinclude: no matching local files"}}
 	}
-	ignored := gitIgnored(ctx, mainRoot, candidates) // git check-ignore --stdin -z
+	ignored, err := checkIgnored(ctx, mainRoot, candidates) // git check-ignore --stdin -z
+	if err != nil {
+		return []Step{{Status: StepWarn, Message: "worktreeinclude: could not check ignore rules: " + err.Error()}}
+	}
 	// Every write goes through an os.Root on the worktree: path resolution that would
 	// leave it - a symlinked parent, even one swapped in after a check - fails
 	// atomically (Go's openat-based containment), so no lexical check is trusted.
@@ -109,19 +115,24 @@ func splitNUL(b []byte) []string {
 }
 
 // gitIgnored reports which paths git ignores in root (`git check-ignore --stdin -z`).
-// Exit 1 means none is ignored; any failure yields an empty map (nothing copied).
-func gitIgnored(ctx context.Context, root string, paths []string) map[string]bool {
+// Exit 1 means none is ignored (an empty map, nil); any other failure is an error,
+// so the caller warns instead of silently copying nothing.
+func gitIgnored(ctx context.Context, root string, paths []string) (map[string]bool, error) {
 	cmd := exec.CommandContext(ctx, "git", "-C", root, "check-ignore", "--stdin", "-z")
 	cmd.Stdin = strings.NewReader(strings.Join(paths, "\x00") + "\x00")
 	out, err := cmd.Output()
 	set := map[string]bool{}
-	if err != nil {
-		return set
+	var ee *exec.ExitError
+	switch {
+	case errors.As(err, &ee) && ee.ExitCode() == 1:
+		return set, nil
+	case err != nil:
+		return nil, err
 	}
 	for _, p := range splitNUL(out) {
 		set[p] = true
 	}
-	return set
+	return set, nil
 }
 
 // cleanRel accepts a relative, already-clean path that stays inside the worktree
