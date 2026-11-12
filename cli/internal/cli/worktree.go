@@ -634,6 +634,7 @@ func newWorktreeSwitchCmd() *cobra.Command {
 	f.BoolVar(&o.Park, "park", false, "Commit the old branch's changes as wip(<id>): park")
 	f.StringArrayVar(&o.Include, "include", nil, "A new path to park (repeatable; every untracked or staged-new path needs one)")
 	f.DurationVar(&o.FetchTimeout, "fetch-timeout", 0, "Bound for fetching <remote>/<merge> (default 20s)")
+	f.StringVar(&o.PluginRoot, "plugin-root", "", "Plugin root (default: CLAUDE_PLUGIN_ROOT) - reads the tracker adapter and checks rules drift")
 	f.BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
 	return cmd
 }

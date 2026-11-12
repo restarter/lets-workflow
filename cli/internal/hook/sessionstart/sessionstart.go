@@ -30,13 +30,14 @@ import (
 	"github.com/restarter/lets-workflow/cli/internal/gitutil"
 	"github.com/restarter/lets-workflow/cli/internal/letsconfig"
 	"github.com/restarter/lets-workflow/cli/internal/rulescache"
+	"github.com/restarter/lets-workflow/cli/internal/rulesdrift"
 )
 
 //go:embed local_config_explainer.md
 var localConfigExplainer string
 
 // Run writes the SessionStart hook output to w:
-//  1. Optional ## LETS Notice block (project rules drift, see driftCheck,
+//  1. Optional ## LETS Notice block (project rules drift, see rulesNotice,
 //     followed by every non-empty extraNotices entry - the cli layer's self-heal
 //     and global rules cache sync)
 //  2. Blank line
@@ -70,7 +71,7 @@ func Run(w io.Writer, rulesPath, projectRoot, homeDir string, extraNotices []str
 	// emitted first, the Config block second.
 	env := letsconfig.ResolvedEnv(projectRoot, homeDir, func(r string) string { return gitutil.DefaultBranch(r, time.Second) })
 
-	notices := []string{driftCheck(rulesPath, projectRoot, homeDir, env["LETS_RULES_SCOPE"]), gatesNotice(letsconfig.MergedEnv(projectRoot, homeDir)["LETS_GATES"])}
+	notices := append(rulesNotice(rulesPath, projectRoot, homeDir, env), gatesNotice(letsconfig.MergedEnv(projectRoot, homeDir)["LETS_GATES"]))
 	if err := writeNotice(w, append(notices, extraNotices...)); err != nil {
 		return err
 	}
@@ -181,6 +182,36 @@ func gatesNotice(raw string) string {
 		raw = raw[:gatesNoticeMaxQuoted]
 	}
 	return fmt.Sprintf("LETS_GATES=%q is not a level (strict | standard | minimal) - standard applies. Fix .lets/.env (or ~/.lets/.env) or run /lets:init.", raw)
+}
+
+// rulesNotice is the rules-drift part of the Notice (lets-5whww). In a linked
+// worktree ONE line covers lets-rules.md and the tracker adapter, naming the fix
+// that works there - /lets:update does not write a worktree's rules. In the main
+// checkout lets-rules.md keeps drift.Message (driftCheck) and a lagging shipped
+// adapter gets its own line.
+func rulesNotice(pluginRulesPath, projectRoot, homeDir string, env map[string]string) []string {
+	o := rulesdrift.Options{
+		CheckoutRoot: projectRoot,
+		Scope:        env["LETS_RULES_SCOPE"],
+		// The project layer only, as /lets:update reads it: a user-level
+		// LETS_TRACKER names no adapter this project installs.
+		Tracker: letsconfig.MergedEnv(projectRoot, "")["LETS_TRACKER"],
+		HomeDir: homeDir,
+	}
+	if pluginRulesPath != "" { // an empty --rules must not read ./rules from the cwd
+		o.PluginRoot = filepath.Dir(filepath.Dir(pluginRulesPath))
+	}
+	if main, ok := gitutil.LinkedWorktreeMain(projectRoot); ok {
+		o.MainRoot = main
+		return []string{rulesdrift.WorktreeMessage(rulesdrift.Check(o), env["LETS_MERGE_BRANCH"])}
+	}
+	out := []string{driftCheck(pluginRulesPath, projectRoot, homeDir, o.Scope)}
+	for _, f := range rulesdrift.Check(o) {
+		if f.IsAdapter() {
+			out = append(out, rulesdrift.AdapterMessage(f))
+		}
+	}
+	return out
 }
 
 // driftCheck returns the project rules drift message. The global

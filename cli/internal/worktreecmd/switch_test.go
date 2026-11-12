@@ -878,3 +878,124 @@ func TestSwitch_InvalidDeclarationRefuses(t *testing.T) {
 		t.Errorf("b: HEAD moved to %s", head)
 	}
 }
+
+// rulesPlugin is a plugin root initcmd.DetectPluginRoot accepts, shipping
+// lets-rules.md + tracker-beads.md at 0.11.2.
+func rulesPlugin(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	for name, body := range map[string]string{
+		filepath.Join(".claude-plugin", "plugin.json"): `{"name":"lets","version":"0.11.2"}`,
+		filepath.Join("rules", "lets-rules.md"):        "---\nname: x\nversion: 0.11.2\n---\n",
+		filepath.Join("rules", "tracker-beads.md"):     "---\nname: x\nversion: 0.11.2\n---\n# Tracker adapter: beads\n\n## Worktree\n\n" + permissiveConvention + "\n",
+	} {
+		p := filepath.Join(root, name)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return root
+}
+
+// commitRules commits lets-rules.md and the adapter at the given versions on the
+// base (main, pushed), so a new task branch checks them out.
+func (f teamFixture) commitRules(t *testing.T, letsVersion, adapterVersion string) {
+	t.Helper()
+	rules := filepath.Join(f.repo, ".claude", "rules")
+	for name, body := range map[string]string{
+		"lets-rules.md":    "---\nname: x\nversion: " + letsVersion + "\n---\n",
+		"tracker-beads.md": "---\nname: x\nversion: " + adapterVersion + "\n---\n# Tracker adapter: beads\n\n## Worktree\n\n" + permissiveConvention + "\n",
+	} {
+		if err := os.WriteFile(filepath.Join(rules, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(f.letsDir, ".env"), []byte("LETS_TRACKER=beads\nLETS_MERGE_BRANCH=main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitOut(t, f.repo, "add", ".claude")
+	gitOut(t, f.repo, "commit", "-q", "-m", "rules")
+	gitOut(t, f.repo, "push", "-q", "origin", "main")
+}
+
+func switchSteps(res *SwitchResult, status, substr string) int {
+	n := 0
+	for _, s := range res.Steps {
+		if s.Status == status && strings.Contains(s.Message, substr) {
+			n++
+		}
+	}
+	return n
+}
+
+func TestSwitch_RulesDrift(t *testing.T) {
+	t.Run("lagging adapter warns", func(t *testing.T) {
+		f := newTeamFixture(t)
+		f.commitRules(t, "0.11.2", "0.11.1")
+		res, err := f.sw(SwitchOptions{Task: "lets-a1", PluginRoot: rulesPlugin(t)})
+		if err != nil || !res.OK {
+			t.Fatalf("switch: err=%v res=%+v", err, res)
+		}
+		if n := switchSteps(res, StepWarn, "lag the plugin v0.11.2"); n != 1 {
+			t.Errorf("want one rules-drift warn, got %d: %+v", n, res.Steps)
+		}
+		if n := switchSteps(res, StepSkip, "rules drift not checked"); n != 0 {
+			t.Errorf("a plugin root was passed - no skip step: %+v", res.Steps)
+		}
+	})
+	t.Run("current rules stay silent", func(t *testing.T) {
+		f := newTeamFixture(t)
+		f.commitRules(t, "0.11.2", "0.11.2")
+		res, err := f.sw(SwitchOptions{Task: "lets-a1", PluginRoot: rulesPlugin(t)})
+		if err != nil || !res.OK {
+			t.Fatalf("switch: err=%v res=%+v", err, res)
+		}
+		if n := switchSteps(res, StepWarn, "lag the plugin"); n != 0 {
+			t.Errorf("current rules must not warn: %+v", res.Steps)
+		}
+		if n := switchSteps(res, StepSkip, "rules drift not checked"); n != 0 {
+			t.Errorf("a plugin root was passed - no skip step: %+v", res.Steps)
+		}
+	})
+	t.Run("no plugin root skips", func(t *testing.T) {
+		f := newTeamFixture(t)
+		f.commitRules(t, "0.11.2", "0.11.1")
+		t.Setenv("CLAUDE_PLUGIN_ROOT", "")
+		res, err := f.sw(SwitchOptions{Task: "lets-a1"})
+		if err != nil || !res.OK {
+			t.Fatalf("switch: err=%v res=%+v", err, res)
+		}
+		if n := switchSteps(res, StepSkip, "rules drift not checked"); n != 1 {
+			t.Errorf("want one rules-drift skip, got %d: %+v", n, res.Steps)
+		}
+		if n := switchSteps(res, StepWarn, "lag the plugin"); n != 0 {
+			t.Errorf("no plugin root - no drift warn: %+v", res.Steps)
+		}
+	})
+}
+
+// LETS_TRACKER comes from the project layer only (lets-5whww review fix 2).
+func TestSwitch_RulesDriftUserLevelTracker(t *testing.T) {
+	f := newTeamFixture(t)
+	f.commitRules(t, "0.11.2", "0.11.1")
+	if err := os.WriteFile(filepath.Join(f.letsDir, ".env"), []byte("LETS_MERGE_BRANCH=main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	home := os.Getenv("HOME") // isolateEnv points it at a temp dir
+	if err := os.MkdirAll(filepath.Join(home, ".lets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".lets", ".env"), []byte("LETS_TRACKER=beads\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := f.sw(SwitchOptions{Task: "lets-a1", PluginRoot: rulesPlugin(t)})
+	if err != nil || !res.OK {
+		t.Fatalf("switch: err=%v res=%+v", err, res)
+	}
+	if n := switchSteps(res, StepWarn, "tracker-beads.md"); n != 0 {
+		t.Errorf("a user-level LETS_TRACKER must not drive the adapter check: %+v", res.Steps)
+	}
+}

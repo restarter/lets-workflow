@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -1429,5 +1430,96 @@ func TestRun_WorktreeConsistencyIgnoresSkippedRules(t *testing.T) {
 	}
 	if !r.Consistent {
 		t.Error("Consistent = false because of a project file the worktree run skipped")
+	}
+}
+
+// --- commit nudge (lets-5whww) ---
+
+// gitRun runs git in dir with a fixed identity and fails the test on error.
+func gitRun(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"}, args...)...)
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+}
+
+const nudge = "uncommitted - commit it"
+
+func TestRun_TrackerRulesCommitNudge(t *testing.T) {
+	pr, plug := scaffoldWithTracker(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0", "beads", "0.5.0", "0.6.0")
+	gitRun(t, pr, "init", "-q")
+	gitRun(t, pr, "add", ".claude/rules/tracker-beads.md")
+	gitRun(t, pr, "commit", "-q", "-m", "old adapter")
+
+	r, err := Run(context.Background(), Options{LatestFn: stubLatest("0.6.0")}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := find(t, r, "tracker-rules")
+	if a.Status != StatusUpdated || !strings.Contains(a.Detail, nudge) {
+		t.Errorf("refreshed tracked adapter must carry the commit nudge: %+v", a)
+	}
+
+	gitRun(t, pr, "add", ".claude/rules/tracker-beads.md")
+	gitRun(t, pr, "commit", "-q", "-m", "refreshed adapter")
+	r, err = Run(context.Background(), Options{LatestFn: stubLatest("0.6.0")}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a = find(t, r, "tracker-rules")
+	if a.Status != StatusInSync || strings.Contains(a.Detail, nudge) {
+		t.Errorf("committed adapter must be in-sync without the nudge: %+v", a)
+	}
+}
+
+func TestRun_TrackerRulesCommitNudge_InSyncUncommitted(t *testing.T) {
+	// The live root cause: /lets:update refreshed the copy in an earlier run and it
+	// was never committed - the in-sync row still nudges.
+	pr, plug := scaffoldWithTracker(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0", "beads", "0.5.0", "0.6.0")
+	gitRun(t, pr, "init", "-q")
+	gitRun(t, pr, "add", ".claude/rules/tracker-beads.md")
+	gitRun(t, pr, "commit", "-q", "-m", "old adapter")
+	trackerFile(t, filepath.Join(pr, ".claude", "rules", "tracker-beads.md"), "beads", "0.6.0")
+
+	r, err := Run(context.Background(), Options{LatestFn: stubLatest("0.6.0")}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := find(t, r, "tracker-rules")
+	if a.Status != StatusInSync || !strings.Contains(a.Detail, nudge) {
+		t.Errorf("in-sync but uncommitted adapter must carry the nudge: %+v", a)
+	}
+}
+
+func TestRun_TrackerRulesCommitNudge_Untracked(t *testing.T) {
+	pr, plug := scaffoldWithTracker(t, "0.6.0", "0.6.0", "0.6.0", "0.6.0", "beads", "0.5.0", "0.6.0")
+	gitRun(t, pr, "init", "-q")
+	gitRun(t, pr, "commit", "-q", "--allow-empty", "-m", "empty")
+
+	r, err := Run(context.Background(), Options{LatestFn: stubLatest("0.6.0")}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := find(t, r, "tracker-rules")
+	if a.Status != StatusUpdated || strings.Contains(a.Detail, nudge) {
+		t.Errorf("untracked adapter must not be nudged: %+v", a)
+	}
+}
+
+func TestRun_RulesCommitNudge(t *testing.T) {
+	pr, plug := scaffold(t, "0.6.0", "0.5.0", "0.6.0", "0.6.0")
+	gitRun(t, pr, "init", "-q")
+	gitRun(t, pr, "add", ".claude/rules/lets-rules.md")
+	gitRun(t, pr, "commit", "-q", "-m", "old rules")
+
+	r, err := Run(context.Background(), Options{LatestFn: stubLatest("0.6.0")}, pr, plug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := find(t, r, "rules")
+	if a.Status != StatusUpdated || !strings.Contains(a.Detail, nudge) {
+		t.Errorf("refreshed tracked rules must carry the commit nudge: %+v", a)
 	}
 }
