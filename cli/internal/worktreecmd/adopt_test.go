@@ -93,6 +93,7 @@ func TestAdopt_RealLetsDataRefused(t *testing.T) {
 }
 
 func TestAdopt_AdapterStates(t *testing.T) {
+	t.Setenv("CLAUDE_PLUGIN_ROOT", "") // the no-plugin-root cases below need it unset
 	// none adapter links nothing
 	repo, wt := adoptRepo(t, "ext-3")
 	mustWrite(t, filepath.Join(repo, ".lets", ".env"), "LETS_TRACKER=none\n", 0o644)
@@ -111,6 +112,33 @@ func TestAdopt_AdapterStates(t *testing.T) {
 	res, err = worktreecmd.Adopt(context.Background(), wt2, worktreecmd.AdoptOptions{})
 	if err != nil || !res.OK || !stepsContain(res.Steps, "store_links_undeclared") {
 		t.Errorf("undeclared: err=%v steps=%+v", err, res.Steps)
+	}
+	// no plugin root: the /lets:update advice names --plugin-root, never the custom-adapter fix
+	if !stepsContain(res.Steps, "pass --plugin-root") || stepsContain(res.Steps, "tracker-TEMPLATE.md") {
+		t.Errorf("undeclared, no plugin root: steps=%+v", res.Steps)
+	}
+
+	// a user-authored adapter (the plugin ships no tracker-custom.md) without ## Worktree:
+	// the fix is in its own file - /lets:update leaves it as-is (lets-41cpf)
+	repo3, wt3, plugin3 := teamAdoptRepo(t, "fake", "ext-5", "ext-5")
+	mustWrite(t, filepath.Join(repo3, ".lets", ".env"), "LETS_TRACKER=custom\n", 0o644)
+	mustWrite(t, filepath.Join(repo3, ".claude", "rules", "tracker-custom.md"), "# custom adapter\n", 0o644)
+	res, err = worktreecmd.Adopt(context.Background(), wt3, worktreecmd.AdoptOptions{PluginRoot: plugin3})
+	if err != nil || !res.OK || !stepsContain(res.Steps, "store_links_undeclared") ||
+		!stepsContain(res.Steps, "tracker-TEMPLATE.md") || stepsContain(res.Steps, "/lets:update so") {
+		t.Errorf("custom adapter: err=%v steps=%+v", err, res.Steps)
+	}
+
+	// the plugin ships the adapter with ## Worktree, the installed copy lags: /lets:update
+	repo4, wt4 := adoptRepo(t, "ext-6")
+	mustWrite(t, filepath.Join(repo4, ".claude", "rules", "tracker-beads.md"), "# old adapter\n", 0o644)
+	plugin4 := realTempDir(t)
+	mustWrite(t, filepath.Join(plugin4, ".claude-plugin", "plugin.json"), "{}", 0o644)
+	mustWrite(t, filepath.Join(plugin4, "rules", "tracker-beads.md"), "# Tracker adapter: beads\n\n## Worktree\n\n"+beadsConvention+"\n", 0o644)
+	res, err = worktreecmd.Adopt(context.Background(), wt4, worktreecmd.AdoptOptions{PluginRoot: plugin4})
+	if err != nil || !res.OK || !stepsContain(res.Steps, "adapter_lags_plugin") ||
+		!stepsContain(res.Steps, "/lets:update") || stepsContain(res.Steps, "tracker-TEMPLATE.md") {
+		t.Errorf("lags plugin: err=%v steps=%+v", err, res.Steps)
 	}
 }
 

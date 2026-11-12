@@ -32,6 +32,26 @@ type CreateOptions struct {
 	FetchTimeout       time.Duration // bound for the implicit base's fetch (0 = 20 s); no CLI flag
 }
 
+// gitWorktreeAdd runs `git <args>` for Step 7 - a test seam (the ownership race).
+var gitWorktreeAdd = func(ctx context.Context, args []string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd.Env = gitCEnv()
+	return cmd.CombinedOutput()
+}
+
+// gitCEnv is the environment with LC_ALL=C (any existing LC_ALL dropped), so git
+// prints the English messages classifyWorktreeAddErr matches: a translated
+// collision must never pass the rollback guard as a generic failure.
+func gitCEnv() []string {
+	env := make([]string, 0, len(os.Environ())+1)
+	for _, kv := range os.Environ() {
+		if !strings.HasPrefix(kv, "LC_ALL=") {
+			env = append(env, kv)
+		}
+	}
+	return append(env, "LC_ALL=C")
+}
+
 // minGitVersion is required for `git worktree remove --force` (since 2.17).
 const minGitVersion = "2.17"
 
@@ -225,17 +245,28 @@ func Create(ctx context.Context, projectRoot string, opts CreateOptions) (*Creat
 	default: // explicit --base: exactly as before
 		gitArgs = []string{"-C", projectRoot, "worktree", "add", "-b", plan.Branch, wtPath, plan.Base}
 	}
-	if out, err := exec.CommandContext(ctx, "git", gitArgs...).CombinedOutput(); err != nil {
+	_, preErr := os.Lstat(wtPath)
+	absentBefore := os.IsNotExist(preErr) // a permission or I/O error is NOT proof of absence
+	if out, err := gitWorktreeAdd(ctx, gitArgs); err != nil {
 		msg := redactCreds(strings.TrimSpace(string(out)))
-		kind, code, remediation := classifyWorktreeAddErr(msg, opts.Name)
+		kind, code, remediation := classifyWorktreeAddErr(msg, opts.Name, wtPath, plan.Branch)
+		e := &Error{Code: code, Kind: kind, Message: msg, Remediation: remediation, Cause: err}
+		// git creates the checkout, then runs the repo's post-checkout hook, and returns
+		// the hook's status (lets-41cpf): a failing hook leaves a registered worktree
+		// with no .lets link. Roll back only what THIS add created: the path was absent
+		// before it, git did not report a collision (another create may own the path or
+		// the branch - worktree_path_exists / branch_in_use_other_worktree are left
+		// alone), and the checkout there is on the branch this add asked for.
+		_, statErr := os.Lstat(filepath.Join(wtPath, ".git"))
+		ours := absentBefore && statErr == nil && kind == "git_worktree_add_failed" &&
+			currentBranchOf(ctx, wtPath) == plan.Branch
+		if ours {
+			e.Remediation = "git worktree add created the checkout but exited non-zero - often the repository's post-checkout hook; fix it and re-run create"
+			result.Worktree = &WorktreeInfo{Name: opts.Name, Path: wtPath, Branch: plan.Branch, BranchMode: plan.Mode, BaseRef: baseRef, BaseResolution: baseRes}
+			return rollback(ctx, result, projectRoot, wtPath, plan, prevMainBranch, "git worktree add failed", e)
+		}
 		restoreMainIfSwitched(prevMainBranch)
-		return fail(&Error{
-			Code:        code,
-			Kind:        kind,
-			Message:     msg,
-			Remediation: remediation,
-			Cause:       err,
-		})
+		return fail(e)
 	}
 	addStep(StepOK, "git worktree add")
 
@@ -314,6 +345,11 @@ func Create(ctx context.Context, projectRoot string, opts CreateOptions) (*Creat
 	}
 	addStep(StepOK, "verify: branch, symlinks, paths")
 
+	// Step 10.4: copy the main checkout's .worktreeinclude files (lets-5whww). After
+	// verify, so a rollback never has to undo it; before Step 10.5, whose settings
+	// merge would otherwise pre-create a listed settings.local.json. Never fatal.
+	result.Steps = append(result.Steps, copyWorktreeInclude(ctx, projectRoot, wtPath)...)
+
 	// Step 10.5: declare the main .lets/ as an additional directory (lets-urmfa), so a
 	// session in this worktree writes the team file, snapshots and caches without an
 	// approval prompt. After verify, so a rollback never has to undo it; never fatal.
@@ -371,15 +407,29 @@ func checkGitVersion(ctx context.Context) error {
 // branch-in-use text differs by git version - ">= 2.42: is already used by
 // worktree at", "2.39: is already checked out at" (lets-fh3yq). Step 5b's porcelain
 // pre-check is the primary detector; this is the race fallback.
-func classifyWorktreeAddErr(msg, name string) (kind string, code int, remediation string) {
+func classifyWorktreeAddErr(msg, name, wtPath, branch string) (kind string, code int, remediation string) {
 	stale := "if path is stale: lets worktree remove " + name + " (use --force if dirty)"
-	switch {
-	// Path collision (e.g. `.worktrees/foo` already exists or `worktree-foo` branch
-	// already exists when creating in new-branch mode).
-	case strings.Contains(msg, "already exists"):
-		return "worktree_path_exists", ExitWorktreeExists, stale
-	case strings.Contains(msg, "is already used by worktree"), strings.Contains(msg, "is already checked out at"):
-		return "branch_in_use_other_worktree", ExitBranchConflict, "the target branch is checked out in another worktree; lets worktree list to find it, then remove or pick a different name"
+	// Only a git `fatal: ` line naming THIS add's own path or branch is a collision:
+	// the output also carries the repository's hook output, and a hook can print
+	// "already exists" - even as a fatal line of its own git call - which must not
+	// pass for a collision (that would skip the rollback of the checkout the add made).
+	pathExists := "fatal: '" + wtPath + "' already exists"
+	branchExists := "fatal: a branch named '" + branch + "' already exists"
+	checkedOut := "fatal: '" + branch + "' is already checked out at"
+	usedBy := "fatal: '" + branch + "' is already used by worktree"
+	// "fatal: '<path>' is a missing but already registered worktree" / "... but locked
+	// worktree": the path collides with another registration.
+	missingButRegistered := "fatal: '" + wtPath + "' is a missing but"
+	for _, line := range strings.Split(msg, "\n") {
+		l := strings.TrimSpace(line)
+		switch {
+		// Path collision (`.worktrees/foo` already exists, or the `worktree-foo` branch
+		// already exists when creating in new-branch mode).
+		case strings.HasPrefix(l, pathExists), strings.HasPrefix(l, missingButRegistered), branch != "" && strings.HasPrefix(l, branchExists):
+			return "worktree_path_exists", ExitWorktreeExists, stale
+		case branch != "" && (strings.HasPrefix(l, checkedOut) || strings.HasPrefix(l, usedBy)):
+			return "branch_in_use_other_worktree", ExitBranchConflict, "the target branch is checked out in another worktree; lets worktree list to find it, then remove or pick a different name"
+		}
 	}
 	return "git_worktree_add_failed", ExitGitFailed, stale
 }
@@ -437,7 +487,7 @@ func loadStoreLinks(projectRoot, pluginFlag string, addStep func(status, msg str
 	}
 	wt, reason := trackeradapter.Load(projectRoot, tracker, pluginRoot)
 	if reason != "" {
-		addStep(StepWarn, fmt.Sprintf("tracker adapter %q: %s - run /lets:update so the installed adapter declares its ## Worktree links", tracker, reason))
+		addStep(StepWarn, fmt.Sprintf("tracker adapter %q: %s - %s", tracker, reason, adapterAdvice(reason, tracker, pluginRoot)))
 	}
 	return wt.Links
 }
@@ -497,6 +547,9 @@ func ensureWorktreeExcludes(ctx context.Context, projectRoot string, entries []s
 	}
 	existing := map[string]bool{}
 	for _, line := range strings.Split(string(data), "\n") {
+		// Exact (minus a CR): an escaped trailing space (`/local.md\ `) is part of the
+		// entry. The trimmed form keeps matching the entries older runs wrote.
+		existing[strings.TrimRight(line, "\r")] = true
 		existing[strings.TrimSpace(line)] = true
 	}
 	var toAppend []string

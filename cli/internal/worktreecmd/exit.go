@@ -36,7 +36,7 @@ const (
 	ExitNoRemoteBase         = 31 // create (implicit base) / switch / base: a remote is configured but <remote>/<merge> is missing (no_remote_base), or which remote is ambiguous (remote_ambiguous); never the local <merge> while a remote is configured
 	// 32 retired (members_live, lets-gbfpd) - never reused
 	ExitTargetIsMergeBranch = 33 // switch: the target branch is the merge-branch
-	ExitCallsignLive        = 34 // team-init: a live session carries the callsign's lead name
+	ExitCallsignLive        = 34 // team-init: no free lead name for the callsign, or the explicit --lead-name is held by a live session or recorded by another team file
 	ExitSessionHeld         = 35 // task-state set / switch: a live foreign session holds the session: line; nothing was written
 )
 

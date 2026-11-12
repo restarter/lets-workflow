@@ -24,7 +24,7 @@ A worktree may live anywhere: `lets worktree create` puts it in `.worktrees/`, O
 
 | step | rule |
 |---|---|
-| adopt | a worktree LETS did not create (Orca, a teammate, `git worktree add`) becomes a LETS worktree through `lets worktree adopt`. Runs from Orca's `orca.yaml` setup hook, and from the SessionStart hook for an unlinked worktree of an initialized project before LETS Config is built (never without `<main>/.lets/.env`, never under `.claude/worktrees/`). `/lets:start` Step 0.5 is only the fallback |
+| adopt | a worktree LETS did not create (Orca, a teammate, `git worktree add`) becomes a LETS worktree through `lets worktree adopt` (links, then the main checkout's `.worktreeinclude` files - copied, never overwritten). Runs from `/lets:worktree create` on the orca launcher right after Orca creates the worktree, from Orca's `orca.yaml` setup hook for a worktree Orca made on its own, and from the SessionStart hook for an unlinked worktree of an initialized project before LETS Config is built (never without `<main>/.lets/.env`, never under `.claude/worktrees/`). `/lets:start` Step 0.5 is only the fallback |
 | never deletes | a pre-existing cache-only `.lets` moves to `.lets.pre-adopt[-N]` (safe to delete by hand); anything else stops with exit 22 |
 | release | `lets worktree release` (Orca's archive hook) removes the task-state file and leaves a `released-<task-id>` marker for `/lets:start --main` Reopen |
 
@@ -47,7 +47,7 @@ A worktree may live anywhere: `lets worktree create` puts it in `.worktrees/`, O
 
 ## Standing-team worktree
 
-`team_<callsign>` (dir and branch), created by `/lets:team create`, claimed by `.lets/teams/<callsign>.md`; its lead session is named by the team file's `lead_name` (`<repo>-<callsign>-lead` for a new team); `lets worktree info` reports `team_lead`. It outlives its tasks: `/lets:start <id>` moves it to the task's branch through `lets worktree switch` (a new branch is cut from the base Go resolves - `<remote>/<merge>`, or the local `<merge>` only when no remote is configured); uncommitted work is committed or parked as `wip(<id>): park` - never stashed - and unparked when the task comes back. Removed only by `/lets:team disband`.
+`team_<callsign>` (dir and branch), created by `/lets:team create`, claimed by `.lets/teams/<callsign>.md`; its lead session is named by the team file's `lead_name` (for a new team `<callsign>-lead`, or `<repo>-<callsign>-lead` when a live session or another team file of this repo already holds that name; `--lead-name` overrides); `lets worktree info` reports `team_lead`. It outlives its tasks: `/lets:start <id>` moves it to the task's branch through `lets worktree switch` (a new branch is cut from the base Go resolves - `<remote>/<merge>`, or the local `<merge>` only when no remote is configured); uncommitted work is committed or parked as `wip(<id>): park` - never stashed - and unparked when the task comes back. Removed only by `/lets:team disband`.
 
 ## Remove safety nets
 
@@ -63,7 +63,7 @@ A worktree may live anywhere: `lets worktree create` puts it in `.worktrees/`, O
 | launcher | lifecycle |
 |---|---|
 | terminal | `/lets:worktree create <name>` (main repo) -> new terminal `cd .worktrees/<name>/ && claude` -> `/lets:start` -> work -> `/lets:done` -> `/lets:worktree remove <name>` (main repo) |
-| Orca (`LETS_LAUNCHER=orca`) | `/lets:worktree create` -> Orca creates the worktree and runs `lets worktree adopt` (the SessionStart hook adopts if it did not) -> `/lets:start <id>` -> work -> `/lets:done` -> archive in Orca (`lets worktree release`; `/lets:worktree remove` refuses it with `worktree_external`) -> `/lets:start --main` offers Reopen for archived tasks still `in_progress` |
+| Orca (`LETS_LAUNCHER=orca`) | `/lets:worktree create` -> Orca creates the worktree with no agent (`lets orca open --no-agent`) -> `lets worktree adopt` -> an Orca terminal runs `/lets:start <id>` -> work -> `/lets:done` -> archive in Orca (`lets worktree release`; `/lets:worktree remove` refuses it with `worktree_external`) -> `/lets:start --main` offers Reopen for archived tasks still `in_progress` |
 
 ## A worktree can vanish outside Orca
 

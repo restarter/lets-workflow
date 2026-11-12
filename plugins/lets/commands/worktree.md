@@ -1,6 +1,6 @@
 ---
 description: Worktree lifecycle management - create, list, remove, info on interactive worktrees
-argument-hint: "[create <name|task-id> [--branch <ref>] [--attach|--new-branch] [--flow plan|plan-workflow] [--launch-mode default|auto|all-in] [--auto] [--all-in] [--orca|--cmux|--tmux]|create --team [<callsign>] --area <a> [--launch-mode default|auto|all-in] [--auto] [--all-in] [--orca|--cmux|--tmux]|list|info|remove <name>]"
+argument-hint: "[create <name|task-id> [--branch <ref>] [--attach|--new-branch] [--flow plan|plan-workflow] [--launch-mode default|auto|all-in] [--auto] [--all-in] [--orca|--cmux|--tmux]|create --team [<callsign>] --area <a> [--lead-name <n>] [--launch-mode default|auto|all-in] [--auto] [--all-in] [--orca|--cmux|--tmux]|list|info|remove <name>]"
 ---
 
 # Worktree Management
@@ -14,7 +14,7 @@ Thin dispatcher for interactive parallel worktrees. All filesystem/git work live
 ## Step 1: Determine Subcommand
 
 **If argument provided** (e.g., `/lets:worktree create auth-feature`), parse it:
-- `create --team [<callsign>] --area <a>` -> go to **Create a team** (a standing team's worktree and its lead). Strip `--team`, the optional `<callsign>`, `--area <a>`, the launcher overrides (`--orca` / `--no-orca` / `--cmux` / `--no-cmux` / `--tmux` / `--no-tmux`) and the launch-mode flags (`--launch-mode <m>` / `--auto` / `--all-in` - the lead's **Launch mode** below). **Refused** with one line, then stop: together with `--flow` (a team's lead starts interactively, on no flow), and from inside a worktree.
+- `create --team [<callsign>] --area <a>` -> go to **Create a team** (a standing team's worktree and its lead). Strip `--team`, the optional `<callsign>`, `--area <a>`, `--lead-name <n>` (the lead's session name, carried to T1 and T3), the launcher overrides (`--orca` / `--no-orca` / `--cmux` / `--no-cmux` / `--tmux` / `--no-tmux`) and the launch-mode flags (`--launch-mode <m>` / `--auto` / `--all-in` - the lead's **Launch mode** below). **Refused** with one line, then stop: together with `--flow` (a team's lead starts interactively, on no flow), and from inside a worktree.
 - `create <name>` -> go to Create. **First strip any `--orca` / `--no-orca` / `--cmux` / `--no-cmux` / `--tmux` / `--no-tmux` / `--launch-mode <m>` / `--auto` / `--all-in` / `--flow <value>` / `--branch <ref>` / `--title-file <path>` token** out of the argument and carry them as overrides (`--orca`/`--no-orca` = the Orca launcher, Step C0; `--cmux`/`--no-cmux`/`--tmux`/`--no-tmux` = launcher; `--launch-mode` / `--auto` / `--all-in` = the **Launch mode** below; `--flow plan|plan-workflow` = which command the launch lands in — all for Steps C0 / C3.5; `--branch <ref>` decouples the attached/created branch from the dir name — Step C2; `--title-file <path>` = a file holding the task title, passed by `take-task` so the branch name is derived in Go — Step C1). Bind the remainder as `<name>` (so `create auth --flow plan-workflow --auto` => name `auth`, not the flags; `create pwa-46696 --branch feature/pwa-46696` => name `pwa-46696`, branch `feature/pwa-46696`). A `<name>` that is a bare task id (it passes the detect-task id gate and `take-task` sent it) means **From task** in Step C1 with that id.
 - `list` -> go to List
 - `remove <name>` -> go to Remove
@@ -58,9 +58,9 @@ Resolve it once: a flag the user typed in this turn - `--launch-mode <m>`, `--au
 
 Optional `--flow plan|plan-workflow`: which `/lets:*` command the spawned session lands in. `--flow` ONLY swaps the launch `--command` string — all other steering stays in the tracker task (the launch stays uniform/reproducible). Default (no `--flow`) → `/lets:start <id>` (today's behavior). `--flow plan` → `/lets:plan <id>` (interactive planning in the worktree; the human drives). `--flow plan-workflow` → `/lets:plan-workflow <id>` (autonomous planning). Because only the command string changes, `--flow` is **launcher-agnostic** — the cmux (C3.5) and terminal (C4) paths both inherit it (so does the future tmux launcher). Composes orthogonally with `--auto`. Requires a known task id; on a **taskless** worktree, ignore `--flow` with a one-line note (and `taskless + --flow + --auto` collapses to the existing taskless `--auto` path, `claude --permission-mode auto`). **plan-workflow is PREVIEW** (needs Claude Code ≥ 2.1.154 / paid / Dynamic Workflows) — the launch string can't probe that, so the launched `/lets:plan-workflow` is responsible: if the Workflow tool is unavailable it prints the standard PREVIEW-unavailable message and the operator re-runs `--flow plan`.
 
-**Orchestrator binding.** When this session is an orchestrator, every worker it spawns is bound to it and named so it can be addressed. Before building a launch command (C0's `--prompt`, C3.5's cmux / tmux `--command`, C4's printed terminal command), run `lets peers orchestrator --session "$CLAUDE_CODE_SESSION_ID" --json` and `lets peers who --json`. When the orchestrator envelope carries a non-null `self_record` (this session's own recorded name - not `source`, which answers whom this session's messages go to):
+**Orchestrator binding.** When this session is an orchestrator, every worker it spawns is bound to it and named so it can be addressed. Before building a launch command (C0's terminal `--command`, C3.5's cmux / tmux `--command`, C4's printed terminal command), run `lets peers orchestrator --session "$CLAUDE_CODE_SESSION_ID" --json` and `lets peers who --json`. When the orchestrator envelope carries a non-null `self_record` (this session's own recorded name - not `source`, which answers whom this session's messages go to):
 - **Binding.** Append ` --orc="<self_record.name>"` to the slash command of the first line - `/lets:start <id> --orc="<name>"`, and the `--flow` forms `/lets:plan <id> --orc="<name>"` / `/lets:plan-workflow <id> --orc="<name>"` (the spawned command strips it before its task-id test). The name comes from the registry through Go, so it already passed the name grammar; inside the single-quoted launch string it stays double-quoted.
-- **Worker name.** The launched `claude` also gets `--name '<repo_slug>-<task-id>'` (`repo_slug` from the `who` envelope), the address the orchestrator sends to - e.g. `claude --name 'lets-workflow-lets-abc' --permission-mode auto '/lets:plan-workflow lets-abc --orc="MAIN PWA"'`. It goes into the C3.5 cmux / tmux `--command` and the C4 printed command. C0 cannot carry it: Orca launches its own agent command and accepts no agent arguments - say so in one line. A name that fails the peer-name grammar (words of letters, digits, `.`, `_`, `-`, single spaces, at most 64) -> no `--name`, one line naming it.
+- **Worker name.** The launched `claude` also gets `--name '<repo_slug>-<task-id>'` (`repo_slug` from the `who` envelope), the address the orchestrator sends to - e.g. `claude --name 'lets-workflow-lets-abc' --permission-mode auto '/lets:plan-workflow lets-abc --orc="MAIN PWA"'`. It goes into the C0 Call 3 terminal command, the C3.5 cmux / tmux `--command` and the C4 printed command. A name that fails the peer-name grammar (words of letters, digits, `.`, `_`, `-`, single spaces, at most 64) -> no `--name`, one line naming it.
 
 A null `self_record`, a taskless worktree, or no binary -> the launch command is unchanged.
 
@@ -98,25 +98,46 @@ Take `branch` (the adapter's `worktree-branch:` shape, default `worktree-<task-i
 
 Resolve the launcher: an explicit `--orca` / `--no-orca` override, else `$LETS_LAUNCHER`. Anything but orca -> go to C2 unchanged.
 
-**orca** (`$LETS_LAUNCHER=orca` or `--orca`): Orca creates the worktree itself and opens Claude in its own pane, so this session never moves into it - do NOT ask Step C3; "Switch to worktree" would behave exactly like "Stay on current branch".
+**orca** (`$LETS_LAUNCHER=orca` or `--orca`): Orca creates the worktree, LETS adopts it, then Orca opens Claude in a terminal there - so this session never moves into it - do NOT ask Step C3; "Switch to worktree" would behave exactly like "Stay on current branch". Three calls, in order; no agent runs before the worktree is linked.
 
-- **Name.** Orca turns `/` into `-` in `--name` and has no branch option (spike 1.0), so pass the `/`-free `<task-id>-<slug>` (same `lets worktree branch-name` call as C1, without `--worktree`; use its `slug`, print its `warn` steps as in C1). Say in one line: "Orca names the branch after the worktree: `<task-id>-<slug>`; `lets worktree adopt` recognizes that shape". Taskless: the custom `<name>`.
-- **Prompt.** `/lets:start <task-id>`; `--flow plan` -> `/lets:plan <task-id>`, `--flow plan-workflow` -> `/lets:plan-workflow <task-id>`. Taskless: no `--prompt`.
-- **Launch mode.** Orca launches Claude with the user's configured Orca agent command and accepts no agent arguments (spike 1.0 item 5), so a `--permission-mode` cannot reach it: a launch mode other than `default` -> print one line `orca_launch_mode_unsupported - Orca cannot pass --permission-mode; opening without Orca` and go to C2 (the cmux / terminal paths honor the launch mode).
+- **Name.** Orca turns `/` into `-` in `--name` and has no branch option (spike 1.0), so pass the `/`-free `<task-id>-<slug>` (same `lets worktree branch-name` call as C1, without `--worktree`; use its `slug`, print its `warn` steps as in C1). Say in one line: "Orca names the branch after the worktree: `<task-id>-<slug>`; `lets worktree adopt` recognizes that shape". Adopt runs here, so Orca's setup hook is not needed (`--setup skip`); the `orca.yaml` archive hook (`lets worktree release`) and the Orca card phase updates keep working - the worktree is Orca's. Taskless: the custom `<name>`.
+- **Slash command.** `/lets:start <task-id>`; `--flow plan` -> `/lets:plan <task-id>`, `--flow plan-workflow` -> `/lets:plan-workflow <task-id>`; an orchestrator's binding appends ` --orc="<name>"` (Orchestrator binding above). Taskless: `/lets:start`.
+
+**Call 1 - Orca creates the worktree, no agent:**
 
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
-lets orca open --repo "$LETS_PROJECT_ROOT" --name '<task-id>-<slug>' --prompt '/lets:start <task-id>' --json
+lets orca open --repo "$LETS_PROJECT_ROOT" --name '<task-id>-<slug>' --no-agent --json
 ```
 
-Parse the `launch` block:
-- `launched=true` -> Step C4 "orca" block. Done - no C2, C3 or C3.5.
+- `ok=false` with `error.kind` `create_ambiguous` or `agent_terminal_present` -> print `error.message` and stop: no fallback, no adopt, no terminal (the worktree, if any, stays at `{launch.path}` for the user to inspect - a fallback would make a second checkout or a second agent).
+- `launched=true` -> Call 2.
 - `reason=already_open` -> an Orca worktree with this name is already open at `{launch.path}`: tell the user to switch to its card in Orca (or re-run with `--force` on `lets orca open`) and stop.
 - any other `reason` (`orca_not_found`, `orca_app_not_running`, `orca_capability_missing`, `orca_error`, ...) -> one line naming it, then continue at C2 with the non-orca chain: C3.5 uses **cmux** when `uname -s` is `Darwin` and `command -v cmux` succeeds, else **terminal**.
 
-`--no-orca` (the `fallback_command` Orca returns) skips this step and uses the same cmux-else-terminal chain.
+**Call 2 - LETS links it:**
 
-> **Keep in sync:** the launched/fallback contract mirrors `orcacmd.Open` (`cli/internal/orcacmd/open.go`). The Go layer never hard-fails - always render whatever `launch` reports.
+```bash
+lets worktree adopt --dir "{launch.path}" --plugin-root "${CLAUDE_PLUGIN_ROOT}" --task '<task-id>' --json
+```
+
+Taskless: no `--task`. Print each `warn` step's `message` as one line (store links, `.worktreeinclude`, adapter advice). `ok=false` -> print `error.kind` and `error.remediation` and stop - the Orca worktree stays; never fall back to a second worktree. Call 1 passed `--setup skip`, so a project-owned setup script did not run either: when `$LETS_PROJECT_ROOT/orca.yaml` exists and its first line is not the LETS marker (`# lets:managed orca.yaml ...`), print one line - its setup script did not run for this worktree; run it there by hand.
+
+**Call 3 - Claude in an Orca terminal there**, the command crossing through a quoted heredoc as the team lead launch does:
+
+```bash
+CMD=$(cat <<'EOF'
+{launch_cmd} '<slash command>'
+EOF
+)
+lets orca terminal --worktree "{launch.path}" --title '<task-id>' --command "$CMD" --json
+```
+
+The launch mode applies through `{launch_cmd}` (an `all-in` launch prints the announce line first). An orchestrator's spawn adds the worker name and the binding (Orchestrator binding above) - e.g. `{launch_cmd} --name '<repo_slug>-<task-id>' '/lets:start <task-id> --orc="<name>"'`. Taskless: `--title '<name>'`. `terminal.launched=true` -> Step C4 "orca" block. Done - no C2, C3 or C3.5. `launched=false` -> print its `fallback_command` for the user, prefixed with one line naming `reason` - never a second worktree.
+
+`--no-orca` (the `fallback_command` Call 1 returns) skips this step and uses the same cmux-else-terminal chain.
+
+> **Keep in sync:** the three calls mirror `orcacmd.Open` (`cli/internal/orcacmd/open.go`, `--no-agent`), `worktreecmd.Adopt` and `orcacmd.OpenTerminal`. Render whatever each envelope reports; only `create_ambiguous` / `agent_terminal_present` and a failed adopt stop without a fallback.
 
 ### Step C2: Create
 
@@ -170,9 +191,9 @@ lets cmux open "{worktree.path}" --name "{slug}" --description "{task-id} · {ta
 
 **Launch mode:** the launched `claude` is `{launch_cmd}` — e.g. `auto` -> `--command "claude --permission-mode auto '/lets:start {task-id}'"`, `all-in` -> `--command "claude --permission-mode bypassPermissions '/lets:start {task-id}'"`, after the all-in announce line. `default` leaves the command as shown.
 
-**`--flow`:** when a `--flow` override was passed, the `/lets:start {task-id}` inside the `--command` is replaced by the flow's command — `--flow plan` → `'/lets:plan {task-id}'`, `--flow plan-workflow` → `'/lets:plan-workflow {task-id}'` — composing with the launch mode (e.g. `--command "claude --permission-mode auto '/lets:plan-workflow {task-id}'"`). Only the command string changes; the `lets cmux open` flags are otherwise identical. Requires a task id (a taskless worktree has no `{task-id}` to plan — ignore `--flow` and keep `--command "claude"`).
+**`--flow`:** when a `--flow` override was passed, the `/lets:start {task-id}` inside the `--command` is replaced by the flow's command — `--flow plan` → `'/lets:plan {task-id}'`, `--flow plan-workflow` → `'/lets:plan-workflow {task-id}'` — composing with the launch mode (e.g. `--command "claude --permission-mode auto '/lets:plan-workflow {task-id}'"`). Only the command string changes; the `lets cmux open` flags are otherwise identical. Requires a task id (a taskless worktree has no `{task-id}` to plan — ignore `--flow` and keep the taskless `--command "{launch_cmd} '/lets:start'"`).
 
-**Taskless worktree** (custom name, no tracker task): drop the `/lets:start {task-id}` argument — use `--command "claude"` and derive `{slug}` from the worktree name; **also drop `--description`** (no task id to stamp — the `--name` slug is identity enough). Only emit `/lets:start {task-id}` and `--description` when a task id is actually known. (The launch mode still applies: `--command "{launch_cmd}"`.)
+**Taskless worktree** (custom name, no tracker task): the launch lands in a bare `/lets:start` — use `--command "{launch_cmd} '/lets:start'"` and derive `{slug}` from the worktree name; **also drop `--description`** (no task id to stamp — the `--name` slug is identity enough). Only emit `/lets:start {task-id}` and `--description` when a task id is actually known.
 
 Parse the `launch` block:
 - `launched=true` → "Opened cmux workspace **{workspace_name}**" (Step C4 "cmux" block).
@@ -191,7 +212,7 @@ The launch mode and `--flow` compose exactly as in the cmux branch — they only
 
 **`--description` is stored, not displayed** (unlike cmux, where it shows in `workspace list --json`). tmux has no tooltip and its window name IS the status line, so the description is stamped into the `@lets_task` window option; the window name stays the short slug. Don't promise the user a visible label for it.
 
-**Taskless worktree:** drop `/lets:start {task-id}` → `--command "claude"`, slug from the worktree name, and drop `--description`.
+**Taskless worktree:** `--command "{launch_cmd} '/lets:start'"`, slug from the worktree name, and drop `--description`.
 
 Parse the `launch` block:
 - `launched=true`, `in_existing_session=true` (called from inside tmux) → "Opened tmux window **{target}**" — no attach needed.
@@ -226,7 +247,7 @@ cd {worktree.path} && claude
 └─────────────────────────────────┘
 ```
 
-(The printed command is `cd {worktree.path} && {launch_cmd}` - `claude` in the `default` mode; an `all-in` one is preceded by the announce line. When `--flow` was passed, the launched command carries the flow's slash command — e.g. `cd {worktree.path} && claude --permission-mode auto '/lets:plan-workflow {task-id}'` — same string the cmux path uses, since `--flow` only swaps the command. An orchestrator's spawn adds the worker name and the binding (the Orchestrator binding above) - e.g. `cd {worktree.path} && {launch_cmd} --name '<repo_slug>-{task-id}' '/lets:start {task-id} --orc="<name>"'`.)
+(The printed command is `cd {worktree.path} && {launch_cmd}` - `claude` in the `default` mode; an `all-in` one is preceded by the announce line. When `--flow` was passed, the launched command carries the flow's slash command — e.g. `cd {worktree.path} && claude --permission-mode auto '/lets:plan-workflow {task-id}'` — same string the cmux path uses, since `--flow` only swaps the command. An orchestrator's spawn adds the worker name and the binding (the Orchestrator binding above) - e.g. `cd {worktree.path} && {launch_cmd} --name '<repo_slug>-{task-id}' '/lets:start {task-id} --orc="<name>"'`. Taskless: `cd {worktree.path} && {launch_cmd} '/lets:start'`.)
 
 **If staying on current branch (cmux launcher, `launched=true`):**
 
@@ -269,13 +290,13 @@ WT=$(lets worktree create my-feature --print-cd) || exit 1
 cd "$WT" && claude
 ```
 
-**Orca launcher (Step C0, `launched=true`):**
+**Orca launcher (Step C0, all three calls succeeded):**
 
 ```
 Orca worktree created: {launch.path}
 Branch: {launch.branch}
 
-Orca opened Claude there with `{prompt}`. `orca.yaml` runs `lets worktree adopt` to link `.lets` and the tracker store; if that hook did not run, `/lets:start` in the new pane self-heals.
+LETS linked `.lets` and the tracker store (`lets worktree adopt`), then Orca opened Claude there in terminal {terminal.handle} with `{slash command}`.
 
 ┌─ LETS ──────────────────────────┐
 │  List?  /lets:worktree list     │
@@ -299,7 +320,7 @@ Symlinks: lets={worktree.lets_symlinked} store={worktree.store_linked} ({store_l
 
 ## Create a team
 
-A standing team's worktree `team_<c>` on branch `team_<c>` (`<c>` = the callsign), its team file `.lets/teams/<c>.md`, and ONE session: the lead, named `<lead_name>` (`<repo>-<c>-lead` for a new team), which the team file records as its `lead_name`. On the orca launcher with Orca running, Orca creates the worktree (so Orca registers it) and opens the lead's terminal (Step T2-orca); every other launcher, and orca when Orca is not running, gets the worktree from Go (Step T2) and a launcher only opens the lead. Members are spawned later by the lead (`/lets:team spawn`).
+A standing team's worktree `team_<c>` on branch `team_<c>` (`<c>` = the callsign), its team file `.lets/teams/<c>.md`, and ONE session: the lead, named `<lead_name>` - `<c>-lead` for a new team, `<repo>-<c>-lead` when a live session or another team file of this repo already holds that name, or the owner's `--lead-name` - which the team file records as its `lead_name`. On the orca launcher with Orca running, Orca creates the worktree (so Orca registers it) and opens the lead's terminal (Step T2-orca); every other launcher, and orca when Orca is not running, gets the worktree from Go (Step T2) and a launcher only opens the lead. Members are spawned later by the lead (`/lets:team spawn`).
 
 ### Step T1: Callsign
 
@@ -314,10 +335,10 @@ Offer its `callsign` and its `lead_name`; the owner accepts it or types another 
 Before anything is created, check the callsign - a given one and a suggested one alike; it writes nothing:
 
 ```bash
-lets worktree team-init --check --callsign '<c>' --json
+lets worktree team-init --check --callsign '<c>' --lead-name '<n>' --json
 ```
 
-`team_exists` (27) -> the callsign has a team file: its worktree is on disk -> "Reopen a team" below; otherwise (a disbanded team keeps its file as history) pick another callsign. `callsign_live` (34) or a usage error (2) -> pick another callsign. Only an `ok=true` goes on to T2; read its `lead_name` (and print its `warn` step when the long form did not fit) - `<lead_name>` below.
+`--lead-name '<n>'` only when the owner gave `--lead-name` - leave it out otherwise (single-quoted, a `'` inside written `'\''`). `team_exists` (27) -> the callsign has a team file: its worktree is on disk -> "Reopen a team" below; otherwise (a disbanded team keeps its file as history) pick another callsign. `callsign_live` (34) or a usage error (2) -> pick another callsign. `lead_name_live` / `lead_name_taken` (34) -> the given lead name is held by a live session / recorded by another team file: pick another lead name or drop `--lead-name`. `lead_name_invalid` (2) -> show the message and ask for another lead name. Only an `ok=true` goes on to T2; read its `lead_name` (and print its `warn` step - it names the fallback to the repo-prefixed name) - `<lead_name>` below.
 
 ### Step T2-orca: Create the worktree through Orca
 
@@ -358,10 +379,10 @@ lets worktree create "team_<c>" --branch "team_<c>" --new-branch --plugin-root "
 ### Step T3: Team file
 
 ```bash
-lets worktree team-init --callsign '<c>' --area '<a>' --worktree "<path>" --launch-mode '<mode>' --plugin-root "${CLAUDE_PLUGIN_ROOT}" --json
+lets worktree team-init --callsign '<c>' --area '<a>' --worktree "<path>" --launch-mode '<mode>' --lead-name '<n>' --plugin-root "${CLAUDE_PLUGIN_ROOT}" --json
 ```
 
-`team_exists` (27) or `callsign_live` (34) here means another writer took the callsign after the T1 check (a race): say so and stop, and name the cleanup of the worktree T2 created - `/lets:worktree remove team_<c>`. `<mode>` is the resolved **Launch mode** (above): team-init renders it into `agent_command` and `orca_agent` (`default` -> `claude`, `auto` / `all-in` -> `claude --permission-mode auto` / `bypassPermissions`); an owner who later edits `agent_command` by hand keeps that value. Read `agent_command` and `orca_agent` from the written file's frontmatter; `<lead_name>` is the envelope's `lead_name` (the file records the same). Go classifies what it wrote: `launch_class` / `launch_warnings` for `agent_command`, `orca_launch_class` / `orca_launch_warnings` for `orca_agent` - T5 announces from them.
+`--lead-name '<n>'` exactly as in T1. `team_exists` (27), `callsign_live` or `lead_name_live` / `lead_name_taken` (34) here means another writer took the callsign or the lead name after the T1 check (a race): say so and stop, and name the cleanup of the worktree T2 created - `/lets:worktree remove team_<c>`. `<mode>` is the resolved **Launch mode** (above): team-init renders it into `agent_command` and `orca_agent` (`default` -> `claude`, `auto` / `all-in` -> `claude --permission-mode auto` / `bypassPermissions`); an owner who later edits `agent_command` by hand keeps that value. Read `agent_command` and `orca_agent` from the written file's frontmatter; `<lead_name>` is the envelope's `lead_name` (the file records the same). Go classifies what it wrote: `launch_class` / `launch_warnings` for `agent_command`, `orca_launch_class` / `orca_launch_warnings` for `orca_agent` - T5 announces from them.
 
 ### Step T4: Setup hook
 
@@ -438,7 +459,7 @@ AskUserQuestion(
 
 A last T4 run that failed makes "Run the setup hook first" the recommended option; that pick goes through T4's display and gate, so the hook still runs only on its own yes.
 
-> **Keep in sync:** `--name '<lead_name>'` is the session name `lets worktree info` (`team_lead`) and `/lets:team` read as the team's lead; `team-init` derives it; `lets orca terminal` mirrors `orcacmd.OpenTerminal` (`cli/internal/orcacmd/terminal.go`) and never creates a worktree; `lets orca team-create` mirrors `orcacmd.TeamCreate` (`teamcreate.go`) and is the only Orca create in the team flow. No lead or worker launch carries `--agent`: the lead is a plain session with `--name '<lead_name>'`, and `/lets:team run` launches workers with the bare `agent_command`.
+> **Keep in sync:** `--name '<lead_name>'` is the session name `lets worktree info` (`team_lead`) and `/lets:team` read as the team's lead; `team-init` derives it, or takes `--lead-name`; `lets orca terminal` mirrors `orcacmd.OpenTerminal` (`cli/internal/orcacmd/terminal.go`) and never creates a worktree; `lets orca team-create` mirrors `orcacmd.TeamCreate` (`teamcreate.go`) and is the only Orca create in the team flow. No lead or worker launch carries `--agent`: the lead is a plain session with `--name '<lead_name>'`, and `/lets:team run` launches workers with the bare `agent_command`.
 
 ---
 

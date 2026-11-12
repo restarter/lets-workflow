@@ -805,40 +805,216 @@ func TestRun_LanguageLine(t *testing.T) {
 // outside it. Over the cap Claude Code moves the output to a file behind a
 // 2,000-character preview, and the closing language line is lost (lets-v59n8).
 func TestRun_StressUnderHookCap(t *testing.T) {
-	tmp := t.TempDir()
-	pluginRules := filepath.Join(tmp, "plugin-rules.md")
-	writeFile(t, pluginRules, "---\nversion: 0.11.0-rc.1234567890\n---\n")
-	projectRoot := filepath.Join(tmp, "project")
-	writeFile(t, filepath.Join(projectRoot, ".claude", "rules", "lets-rules.md"), "---\nversion: 99.99.99-rc.1234567890\n---\n") // ahead -> the longest drift Notice
 	long := strings.Repeat("x", envfile.MaxValueLen)
 	name := strings.Repeat("a", 40)
 	pad := strings.Repeat(" ", (envfile.MaxValueLen-len(name))/2)
-	var env strings.Builder
-	for _, k := range letsconfig.Names() {
-		v := long // LETS_GATES: not a level -> gates Notice
-		switch k {
-		case "LETS_LANGUAGE":
-			v = pad + name + pad // 200 bytes that trim to the longest name that still gets the line
-		case "LETS_LAUNCH_MODE":
-			v = "default" // the longest valid value (7 bytes); an invalid one is dropped
+	stressEnv := func() string {
+		var env strings.Builder
+		for _, k := range letsconfig.Names() {
+			v := long // LETS_GATES: not a level -> gates Notice; LETS_MERGE_BRANCH: 200 B
+			switch k {
+			case "LETS_LANGUAGE":
+				v = pad + name + pad // 200 bytes that trim to the longest name that still gets the line
+			case "LETS_LAUNCH_MODE":
+				v = "default" // the longest valid value (7 bytes); an invalid one is dropped
+			}
+			env.WriteString(k + "=" + v + "\n")
 		}
-		env.WriteString(k + "=" + v + "\n")
+		return env.String()
 	}
-	writeFile(t, filepath.Join(projectRoot, ".lets", ".env"), env.String())
 	extra := []string{strings.Repeat("n", 600), strings.Repeat("n", 600), strings.Repeat("n", 600)}
+	check := func(t *testing.T, out string, size int, wantDrift string) {
+		t.Helper()
+		if size >= 9000 {
+			t.Errorf("stress-case SessionStart body is %d bytes - keep it under 9,000 (Claude Code moves hook output over 10,000 characters to a file). Trim emission.", size)
+		}
+		if !strings.Contains(out, wantDrift) || !strings.Contains(out, "is not a level") || !strings.Contains(out, "LETS_LAUNCH_MODE=default") {
+			t.Errorf("stress case must include the drift Notice %q, the gates Notice and the launch mode:\n%s", wantDrift, out)
+		}
+		if !strings.HasPrefix(lastLine(out), "Respond in "+name+" (LETS_LANGUAGE)") {
+			t.Errorf("stress case must still end with the language line, got %q", lastLine(out))
+		}
+	}
+
+	t.Run("main checkout", func(t *testing.T) {
+		tmp := t.TempDir()
+		pluginRules := filepath.Join(tmp, "plugin-rules.md")
+		writeFile(t, pluginRules, "---\nversion: 0.11.0-rc.1234567890\n---\n")
+		projectRoot := filepath.Join(tmp, "project")
+		writeFile(t, filepath.Join(projectRoot, ".claude", "rules", "lets-rules.md"), "---\nversion: 99.99.99-rc.1234567890\n---\n") // ahead -> the longest drift Notice
+		writeFile(t, filepath.Join(projectRoot, ".lets", ".env"), stressEnv())
+
+		var buf bytes.Buffer
+		if err := sessionstart.Run(&buf, pluginRules, projectRoot, "", extra); err != nil {
+			t.Fatal(err)
+		}
+		check(t, buf.String(), buf.Len(), "AHEAD of plugin")
+	})
+
+	t.Run("linked worktree", func(t *testing.T) {
+		// Both files lag, the adapter name is the longest valid LETS_TRACKER and the
+		// main checkout is current - the longest worktree remediation.
+		plugin := t.TempDir()
+		adapter := "tracker-" + long + ".md"
+		pluginRules := filepath.Join(plugin, "rules", "lets-rules.md")
+		writeFile(t, pluginRules, "---\nversion: 0.11.0-rc.1234567890\n---\n")
+		writeFile(t, filepath.Join(plugin, "rules", adapter), "---\nversion: 0.11.0-rc.1234567890\n---\n")
+		main, wt := linkedWorktree(t)
+		for _, root := range []string{main, wt} {
+			v := "0.11.0-rc.1234567890"
+			if root == wt {
+				v = "0.10.0-rc.1234567890"
+			}
+			writeFile(t, filepath.Join(root, ".claude", "rules", "lets-rules.md"), "---\nversion: "+v+"\n---\n")
+			writeFile(t, filepath.Join(root, ".claude", "rules", adapter), "---\nversion: "+v+"\n---\n")
+			writeFile(t, filepath.Join(root, ".lets", ".env"), stressEnv())
+		}
+
+		var buf bytes.Buffer
+		if err := sessionstart.Run(&buf, pluginRules, wt, "", extra); err != nil {
+			t.Fatal(err)
+		}
+		out := buf.String()
+		check(t, out, buf.Len(), "LETS rules in this worktree lag the plugin v0.11.0-rc.1234567890")
+		if !strings.Contains(out, "The main checkout already has") || !strings.Contains(out, adapter) {
+			t.Errorf("worktree stress case must name the adapter and the main-current remediation:\n%s", out)
+		}
+	})
+}
+
+// linkedWorktree creates a git repo <tmp>/main with one commit and a linked
+// worktree <tmp>/wt on branch wt.
+func linkedWorktree(t *testing.T) (main, wt string) {
+	t.Helper()
+	tmp := t.TempDir()
+	main = filepath.Join(tmp, "main")
+	wt = filepath.Join(tmp, "wt")
+	if err := os.MkdirAll(main, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"init", "-q", "-b", "main"},
+		{"-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-q", "-m", "x"},
+		{"worktree", "add", "-q", wt, "-b", "wt"},
+	} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = main
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	return main, wt
+}
+
+// adapterPlugin writes a plugin with lets-rules.md + tracker-beads.md v0.11.2 and
+// returns the plugin's rules/lets-rules.md path.
+func adapterPlugin(t *testing.T) string {
+	t.Helper()
+	plugin := t.TempDir()
+	for _, n := range []string{"lets-rules.md", "tracker-beads.md"} {
+		writeFile(t, filepath.Join(plugin, "rules", n), "---\nname: x\nversion: 0.11.2\n---\n")
+	}
+	return filepath.Join(plugin, "rules", "lets-rules.md")
+}
+
+// writeCheckout writes a checkout's .lets/.env and both rules copies.
+func writeCheckout(t *testing.T, root, letsVersion, adapterVersion string) {
+	t.Helper()
+	writeFile(t, filepath.Join(root, ".lets", ".env"), "LETS_TRACKER=beads\nLETS_MERGE_BRANCH=main\nLETS_RULES_SCOPE=user\n")
+	writeFile(t, filepath.Join(root, ".claude", "rules", "lets-rules.md"), "---\nname: x\nversion: "+letsVersion+"\n---\n")
+	writeFile(t, filepath.Join(root, ".claude", "rules", "tracker-beads.md"), "---\nname: x\nversion: "+adapterVersion+"\n---\n")
+}
+
+func TestRun_WorktreeAdapterLags(t *testing.T) {
+	pluginRules := adapterPlugin(t)
+	main, wt := linkedWorktree(t)
+	writeCheckout(t, main, "0.11.2", "0.11.2")
+	writeCheckout(t, wt, "0.11.2", "0.11.1")
 
 	var buf bytes.Buffer
-	if err := sessionstart.Run(&buf, pluginRules, projectRoot, "", extra); err != nil {
+	if err := sessionstart.Run(&buf, pluginRules, wt, "", nil); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
-	if buf.Len() >= 9000 {
-		t.Errorf("stress-case SessionStart body is %d bytes - keep it under 9,000 (Claude Code moves hook output over 10,000 characters to a file). Trim emission.", buf.Len())
+	if !strings.Contains(out, "## LETS Notice") {
+		t.Errorf("worktree with a lagging adapter must get a Notice:\n%s", out)
 	}
-	if !strings.Contains(out, "AHEAD of plugin") || !strings.Contains(out, "is not a level") || !strings.Contains(out, "LETS_LAUNCH_MODE=default") {
-		t.Errorf("stress case must include the ahead drift Notice, the gates Notice and the launch mode:\n%s", out)
+	if n := strings.Count(out, "LETS rules in this worktree lag the plugin v0.11.2"); n != 1 {
+		t.Errorf("worktree line appears %d times, want 1:\n%s", n, out)
 	}
-	if !strings.HasPrefix(lastLine(out), "Respond in "+name+" (LETS_LANGUAGE)") {
-		t.Errorf("stress case must still end with the language line, got %q", lastLine(out))
+	if strings.Contains(out, "Run `/lets:update` to update") {
+		t.Errorf("worktree Notice must not give the main-checkout /lets:update advice:\n%s", out)
+	}
+}
+
+func TestRun_WorktreeAllCurrent_Silent(t *testing.T) {
+	pluginRules := adapterPlugin(t)
+	main, wt := linkedWorktree(t)
+	writeCheckout(t, main, "0.11.2", "0.11.2")
+	writeCheckout(t, wt, "0.11.2", "0.11.2")
+
+	var buf bytes.Buffer
+	if err := sessionstart.Run(&buf, pluginRules, wt, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(buf.String(), "## LETS Notice") {
+		t.Errorf("current worktree must stay silent:\n%s", buf.String())
+	}
+}
+
+func TestRun_MainAdapterOutdated(t *testing.T) {
+	pluginRules := adapterPlugin(t)
+	main, _ := linkedWorktree(t)
+	writeCheckout(t, main, "0.11.2", "0.11.1")
+
+	var buf bytes.Buffer
+	if err := sessionstart.Run(&buf, pluginRules, main, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	want := "Tracker adapter `.claude/rules/tracker-beads.md` outdated (installed v0.11.1 < plugin v0.11.2)"
+	if !strings.Contains(out, want) {
+		t.Errorf("main checkout must name the lagging adapter %q:\n%s", want, out)
+	}
+	if strings.Contains(out, "in this worktree") {
+		t.Errorf("main checkout must not get the worktree line:\n%s", out)
+	}
+}
+
+// An empty --rules reads no rules/ from the cwd (lets-5whww review fix 1).
+func TestRun_EmptyRulesPathReadsNoCwdRules(t *testing.T) {
+	cwd := t.TempDir()
+	for _, n := range []string{"lets-rules.md", "tracker-beads.md"} {
+		writeFile(t, filepath.Join(cwd, "rules", n), "---\nname: x\nversion: 0.11.2\n---\n")
+	}
+	project := t.TempDir()
+	writeCheckout(t, project, "0.11.2", "0.11.1")
+	t.Chdir(cwd)
+
+	var buf bytes.Buffer
+	if err := sessionstart.Run(&buf, "", project, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(buf.String(), "Tracker adapter") || strings.Contains(buf.String(), "lag the plugin") {
+		t.Errorf("an empty rules path must check nothing:\n%s", buf.String())
+	}
+}
+
+// LETS_TRACKER is read from the project layer only, as /lets:update reads it
+// (lets-5whww review fix 2).
+func TestRun_UserLevelTrackerChecksNoAdapter(t *testing.T) {
+	pluginRules := adapterPlugin(t)
+	project := t.TempDir()
+	writeCheckout(t, project, "0.11.2", "0.11.1")
+	writeFile(t, filepath.Join(project, ".lets", ".env"), "LETS_MERGE_BRANCH=main\n")
+	home := t.TempDir()
+	writeFile(t, filepath.Join(home, ".lets", ".env"), "LETS_TRACKER=beads\n")
+
+	var buf bytes.Buffer
+	if err := sessionstart.Run(&buf, pluginRules, project, home, nil); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(buf.String(), "Tracker adapter") {
+		t.Errorf("a user-level LETS_TRACKER must not drive the adapter check:\n%s", buf.String())
 	}
 }

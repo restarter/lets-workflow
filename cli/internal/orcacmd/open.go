@@ -6,6 +6,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -21,6 +23,27 @@ type OpenOptions struct {
 	Force        bool          // open even when a worktree with this name or branch is already open
 	Merge        string        // LETS_MERGE_BRANCH; a new branch gets the resolved base (lets-qjt3h)
 	FetchTimeout time.Duration // 0 = 20 s
+	NoAgent      bool          // Orca creates the worktree only: --setup skip, no agent, no prompt - the caller adopts, then opens a terminal (the team-create pattern, lets-41cpf)
+}
+
+// worktreeListProbe lists git's worktree paths; a test seam.
+var worktreeListProbe = gitWorktreeList
+
+// gitWorktreeList returns the `worktree ` paths of `git worktree list --porcelain`
+// and reports its own failure - unlike gitWorktreePaths, an error never reads as
+// "nothing created".
+func gitWorktreeList(ctx context.Context, repo string) ([]string, error) {
+	out, err := exec.CommandContext(ctx, "git", "-C", repo, "worktree", "list", "--porcelain").Output()
+	if err != nil {
+		return nil, err
+	}
+	var paths []string
+	for _, line := range strings.Split(string(out), "\n") {
+		if p, ok := strings.CutPrefix(line, "worktree "); ok {
+			paths = append(paths, p)
+		}
+	}
+	return paths, nil
 }
 
 // Open creates an Orca worktree running Claude. Orca unavailable or refusing is not
@@ -35,6 +58,9 @@ func Open(ctx context.Context, o OpenOptions) (*OpenResult, error) {
 	}
 	if o.Name == "" {
 		return fail(&Error{Code: ExitUsage, Kind: "name_missing", Message: "--name is required"})
+	}
+	if o.NoAgent && o.Prompt != "" {
+		return fail(&Error{Code: ExitUsage, Kind: "usage", Message: "--prompt needs an agent; drop --no-agent or --prompt"})
 	}
 	if fi, err := os.Stat(o.Repo); o.Repo == "" || err != nil || !fi.IsDir() {
 		return fail(&Error{Code: ExitRepoInvalid, Kind: "repo_invalid", Message: fmt.Sprintf("--repo %q is not a directory", o.Repo)})
@@ -73,7 +99,12 @@ func Open(ctx context.Context, o OpenOptions) (*OpenResult, error) {
 			}
 		}
 	}
-	args := []string{"worktree", "create", "--repo", "path:" + o.Repo, "--name", o.Name, "--no-parent", "--agent", "claude"}
+	args := []string{"worktree", "create", "--repo", "path:" + o.Repo, "--name", o.Name, "--no-parent"}
+	if o.NoAgent {
+		args = append(args, "--setup", "skip")
+	} else {
+		args = append(args, "--agent", "claude")
+	}
 	// lets-qjt3h (MAIN-LETS Q5): a NEW branch gets the one base policy - Orca's own
 	// default may be the stale local merge-branch. An existing branch is left to
 	// Orca as before. A refusal degrades with the kind as the reason: the fallback
@@ -91,12 +122,50 @@ func Open(ctx context.Context, o OpenOptions) (*OpenResult, error) {
 		args = append(args, "--base-branch", br.Ref)
 		launch.BaseRef, launch.BaseResolution = br.Ref, br
 	}
-	if o.Prompt != "" {
+	if o.Prompt != "" && !o.NoAgent {
 		args = append(args, "--prompt", o.Prompt)
 	}
-	out, f := c.Run(ctx, "worktree create", append(args, "--json")...)
-	if f != nil {
+	// stop is a --no-agent refusal: no fallback, which would make a second checkout or
+	// start a second agent; the worktree, if any, stays for the owner.
+	stop := func(e *Error) (*OpenResult, error) {
+		launch.Launched, launch.FallbackCommand = false, ""
+		return fail(e)
+	}
+	// reconcile looks at git before degrading a failed --no-agent create: a fallback
+	// is safe only when nothing was created.
+	reconcile := func(f *Failure) (*OpenResult, error) {
+		if !o.NoAgent {
+			return degrade(f)
+		}
+		paths, err := worktreeListProbe(ctx, o.Repo)
+		if err != nil {
+			return stop(&Error{Code: ExitCreateAmbiguous, Kind: "create_ambiguous", Message: fmt.Sprintf("Orca reported %s and git could not be asked: %v", f.Error(), err), Remediation: "check `orca worktree ps` and `git worktree list`; nothing is retried, no Go worktree is created"})
+		}
+		for _, p := range paths {
+			if filepath.Base(p) == o.Name {
+				launch.Path = p
+				return stop(&Error{Code: ExitCreateAmbiguous, Kind: "create_ambiguous", Message: fmt.Sprintf("Orca reported %s, but git shows a worktree at %s; nothing is retried, no Go worktree is created", f.Error(), p), Remediation: "inspect " + p + " (`orca worktree ps`, `git worktree list`) and remove it by hand if it is not wanted"})
+			}
+		}
+		// Orca's side too: it may list the worktree before git registers it.
+		rows, pf := c.Ps(ctx)
+		if pf != nil {
+			return stop(&Error{Code: ExitCreateAmbiguous, Kind: "create_ambiguous", Message: fmt.Sprintf("Orca reported %s and its worktree list failed (%s); nothing is retried, no Go worktree is created", f.Error(), pf.Error()), Remediation: "check `orca worktree ps` and `git worktree list`; nothing is retried, no Go worktree is created"})
+		}
+		if row, listed := psRow(rows, o.Name); listed {
+			launch.Path, launch.OrcaWorktreeID = row.Path, row.WorktreeID
+			return stop(&Error{Code: ExitCreateAmbiguous, Kind: "create_ambiguous", Message: fmt.Sprintf("Orca reported %s, but Orca lists a worktree %s at %s; nothing is retried, no Go worktree is created", f.Error(), o.Name, row.Path), Remediation: "inspect it in Orca (`orca worktree ps`) and archive it there if it is not wanted"})
+		}
 		return degrade(f)
+	}
+	cctx, cancel := ctx, context.CancelFunc(func() {})
+	if o.NoAgent {
+		cctx, cancel = context.WithTimeout(ctx, 60*time.Second) // as TeamCreate bounds it
+	}
+	out, f := c.Run(cctx, "worktree create", append(args, "--json")...)
+	cancel()
+	if f != nil {
+		return reconcile(f)
 	}
 	var env struct {
 		Result *struct {
@@ -108,7 +177,7 @@ func Open(ctx context.Context, o OpenOptions) (*OpenResult, error) {
 		} `json:"result"`
 	}
 	if f := DecodeJSON("worktree create", out, &env); f != nil || env.Result == nil || env.Result.Worktree == nil {
-		return degrade(&Failure{Reason: ReasonOutputUnrecognized, Verb: "worktree create"})
+		return reconcile(&Failure{Reason: ReasonOutputUnrecognized, Verb: "worktree create"})
 	}
 	w := env.Result.Worktree
 	launch.Launched, launch.Created = true, true
@@ -136,6 +205,22 @@ func Open(ctx context.Context, o OpenOptions) (*OpenResult, error) {
 		reconcileBase(launch.BaseResolution, head, o.Name, add)
 	}
 	launch.FallbackCommand = ""
+	if o.NoAgent {
+		// An agent running before LETS linked the worktree would act unlinked.
+		terms, tf := c.Terminals(ctx)
+		if tf != nil {
+			add(StepWarn, "terminal list failed ("+tf.Error()+"): the worktree's open terminals are unverified")
+		}
+		var agents []string
+		for _, t := range terms {
+			if fsutil.SameDir(t.Path, launch.Path) && (t.AgentType != "" || t.State != "") {
+				agents = append(agents, fmt.Sprintf("%s (%s %s)", t.Title, t.AgentType, t.State))
+			}
+		}
+		if len(agents) > 0 {
+			return stop(&Error{Code: ExitAgentTerminalPresent, Kind: "agent_terminal_present", Message: fmt.Sprintf("Orca started an agent in %s before LETS linked it: %s; the worktree stays", o.Name, strings.Join(agents, ", "))})
+		}
+	}
 	add(StepOK, fmt.Sprintf("orca worktree %s created at %s (branch %s)", o.Name, w.Path, launch.Branch))
 	return res, nil
 }

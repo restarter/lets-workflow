@@ -599,8 +599,9 @@ func newWorktreeTeamInitCmd() *cobra.Command {
 	f.StringVar(&o.AgentCommand, "agent-command", "", "How the team's sessions start - the lead launches as a plain session with --name, /lets:team run workers use it as is (default claude)")
 	f.StringVar(&o.OrcaAgent, "orca-agent", "", "Shell command an Orca team terminal starts with - the lead's runs it as a plain session with --name (default claude)")
 	f.StringVar(&o.LaunchMode, "launch-mode", "", "Lead launch mode rendered into agent_command / orca_agent when not given: default | auto | all-in (default default)")
+	f.StringVar(&o.LeadName, "lead-name", "", "The lead session's name (default <callsign>-lead, or <repo>-<callsign>-lead when a live session or another team file of this repo holds it); refused when either holds the given name")
 	f.BoolVar(&o.Suggest, "suggest-callsign", false, "Only propose a free callsign; write nothing")
-	f.BoolVar(&o.Check, "check", false, "Only check that --callsign is free (no team file, no live lead); write nothing")
+	f.BoolVar(&o.Check, "check", false, "Only check that --callsign is free (no team file, a usable lead name); write nothing")
 	f.BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
 	return cmd
 }
@@ -634,6 +635,7 @@ func newWorktreeSwitchCmd() *cobra.Command {
 	f.BoolVar(&o.Park, "park", false, "Commit the old branch's changes as wip(<id>): park")
 	f.StringArrayVar(&o.Include, "include", nil, "A new path to park (repeatable; every untracked or staged-new path needs one)")
 	f.DurationVar(&o.FetchTimeout, "fetch-timeout", 0, "Bound for fetching <remote>/<merge> (default 20s)")
+	f.StringVar(&o.PluginRoot, "plugin-root", "", "Plugin root (default: CLAUDE_PLUGIN_ROOT) - reads the tracker adapter and checks rules drift")
 	f.BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
 	return cmd
 }

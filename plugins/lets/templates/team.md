@@ -17,7 +17,7 @@ The public source of truth for this standing team. Every member reads it at spaw
 
 **Continuity = files only.** The harness restores no teammate after a lead restart - a member's context dies with it. Every member finding that must survive lands in a file the lead writes (this file, or a path listed under Resume artefacts); a finding that lives only in a reply is lost.
 
-The frontmatter is written once by `lets worktree team-init`. Go reads only `worktree` and `git_dir` (which worktree this team owns, and that the path was not reused), `lead_name` (the lead session's name) and `agent_command` / `orca_agent` (read by `teamfile.LaunchCommands`, classified for `lets worktree info` `team_launch`); the model reads the rest. Never edit `team`, `worktree` or `git_dir` by hand.
+The frontmatter is written once by `lets worktree team-init`. Go reads only `worktree` and `git_dir` (which worktree this team owns, and that the path was not reused), `lead_name` (the lead session's name) and `agent_command` / `orca_agent` (read by `teamfile.LaunchCommands`, classified for `lets worktree info` `team_launch`); the model reads the rest. Never edit `team`, `worktree` or `git_dir` by hand. `lead_name` is yours to edit: after a change, run `/rename <new name>` in the lead's session so `lets worktree info` (`team_lead`) still finds it. It is also the remedy when a dormant team of another repository with the same callsign records the same short `<callsign>-lead` (team-init checks only live sessions and this repo's team files) and `lets peers who` marks both leads `duplicate_name`.
 
 ## 1. Charter
 
