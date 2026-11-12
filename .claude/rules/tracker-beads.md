@@ -1,6 +1,6 @@
 ---
 name: tracker-beads
-version: 0.11.1
+version: 0.11.2
 ---
 
 <!-- DO NOT EDIT installed copies in .claude/rules/ - managed by `lets init` / `lets update`. Edit the source in plugins/lets/rules/. -->

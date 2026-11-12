@@ -4,6 +4,7 @@ package worktreecmd
 
 import (
 	"context"
+	"os"
 
 	"github.com/restarter/lets-workflow/cli/internal/trackeradapter"
 )
@@ -40,6 +41,62 @@ func SetBeforeTaskStateRemove(f func()) (restore func()) {
 	beforeTaskStateRemove = f
 	return func() { beforeTaskStateRemove = old }
 }
+
+// CopyRegularForTesting drives copyRegular.
+func CopyRegularForTesting(root *os.Root, src, rel string, perm os.FileMode) error {
+	return copyRegular(root, src, rel, perm)
+}
+
+// LiteralExcludeForTesting drives literalExclude.
+var LiteralExcludeForTesting = literalExclude
+
+// SetWriteExcludesForTesting swaps the .worktreeinclude exclude writer; restore undoes it.
+func SetWriteExcludesForTesting(f func(context.Context, string, []string) error) (restore func()) {
+	old := writeExcludes
+	writeExcludes = f
+	return func() { writeExcludes = old }
+}
+
+// SetGitWorktreeAddForTesting swaps create's `git worktree add` runner; restore undoes it.
+func SetGitWorktreeAddForTesting(f func(context.Context, []string) ([]byte, error)) (restore func()) {
+	old := gitWorktreeAdd
+	gitWorktreeAdd = f
+	return func() { gitWorktreeAdd = old }
+}
+
+// SetGitWorktreeRemoveForTesting swaps remove's `git worktree remove --force` runner; restore undoes it.
+func SetGitWorktreeRemoveForTesting(f func(ctx context.Context, root, path string) ([]byte, error)) (restore func()) {
+	old := gitWorktreeRemove
+	gitWorktreeRemove = f
+	return func() { gitWorktreeRemove = old }
+}
+
+// SetCheckIgnoredForTesting swaps the .worktreeinclude ignore check; restore undoes it.
+func SetCheckIgnoredForTesting(f func(context.Context, string, []string) (map[string]bool, error)) (restore func()) {
+	old := checkIgnored
+	checkIgnored = f
+	return func() { checkIgnored = old }
+}
+
+// GitCEnvForTesting drives gitCEnv.
+var GitCEnvForTesting = gitCEnv
+
+// SetBeforeLitterFinishForTesting runs f between remove's litter check and its finish; restore undoes it.
+func SetBeforeLitterFinishForTesting(f func(aside string)) (restore func()) {
+	old := beforeLitterFinish
+	beforeLitterFinish = f
+	return func() { beforeLitterFinish = old }
+}
+
+// SetAfterLitterLstatForTesting runs f between finishLitter's Lstat of a path and its delete; restore undoes it.
+func SetAfterLitterLstatForTesting(f func(p string)) (restore func()) {
+	old := afterLitterLstat
+	afterLitterLstat = f
+	return func() { afterLitterLstat = old }
+}
+
+// GitWorktreeRemoveCmdForTesting drives gitWorktreeRemoveCmd.
+var GitWorktreeRemoveCmdForTesting = gitWorktreeRemoveCmd
 
 // SetSettingsStage replaces the EnsureLetsAdditionalDir test seam; restore undoes it.
 func SetSettingsStage(f func(string)) (restore func()) {

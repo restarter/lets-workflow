@@ -50,7 +50,7 @@ func Release(ctx context.Context, dir string, _ ReleaseOptions) (*ReleaseResult,
 	info := &ReleasedInfo{Branch: stripControl(branch)}
 	res.Released = info
 
-	statusOut, _ := exec.CommandContext(ctx, "git", "-C", wtRoot, "status", "--porcelain").Output()
+	statusOut, _ := exec.CommandContext(ctx, "git", "-C", wtRoot, "status", "--porcelain", "--untracked-files=all").Output()
 	info.Dirty = hasUserChanges(string(statusOut), loadStoreLinks(mainRoot, "", func(string, string) {}))
 	out, err := exec.CommandContext(ctx, "git", "-C", wtRoot, "log", "@{u}..", "--oneline").CombinedOutput()
 	info.Unpushed = err != nil || len(strings.TrimSpace(string(out))) > 0 // no upstream counts as unpushed

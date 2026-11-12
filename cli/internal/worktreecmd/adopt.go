@@ -101,7 +101,7 @@ func Adopt(ctx context.Context, dir string, o AdoptOptions) (*AdoptResult, error
 	}
 	adapter, reason := trackeradapter.Load(mainRoot, tracker, pluginRoot)
 	if reason != "" {
-		add(StepWarn, fmt.Sprintf("%s: tracker adapter %q - run /lets:update so it declares its ## Worktree links", reason, tracker))
+		add(StepWarn, fmt.Sprintf("%s: tracker adapter %q - %s", reason, tracker, adapterAdvice(reason, tracker, pluginRoot)))
 	}
 
 	out, err := linkShared(ctx, mainRoot, wtRoot, adapter.Links, modeAdopt)
@@ -126,6 +126,9 @@ func Adopt(ctx context.Context, dir string, o AdoptOptions) (*AdoptResult, error
 	if err := ensureWorktreeExcludes(ctx, mainRoot, excludes); err != nil {
 		add(StepWarn, fmt.Sprintf("could not update info/exclude (%s): %v", strings.Join(excludes, ", "), err))
 	}
+	// .worktreeinclude files (lets-5whww) before the settings merge below, which
+	// would otherwise pre-create a listed settings.local.json; on --links-only too.
+	res.Steps = append(res.Steps, copyWorktreeInclude(ctx, mainRoot, wtRoot)...)
 	// The main .lets/ as an additional directory (lets-urmfa): an Orca or teammate
 	// worktree's sessions then write .lets/ without an approval prompt. Also on a
 	// re-adopt of a linked worktree - idempotent, a present entry writes nothing.
@@ -190,6 +193,23 @@ func lockAdopt(mainLets string, deadline time.Duration) (func(), error) {
 		return nil, err
 	}
 	return func() { _ = fsutil.UnlockFile(f); _ = f.Close() }, nil
+}
+
+// adapterAdvice is the fix for an adapter load reason. store_links_undeclared also
+// comes back when the plugin copy could not be used (no plugin root, unreadable or
+// unparseable), so the custom-adapter advice needs proof: a plugin root was found
+// and it ships no tracker-<name>.md. A user-authored adapter lacking ## Worktree is
+// fixed in its own file - /lets:update leaves it as-is (lets-41cpf).
+func adapterAdvice(reason, tracker, pluginRoot string) string {
+	if reason == trackeradapter.ReasonStoreLinksUndeclared && pluginRoot != "" {
+		if _, err := os.Stat(filepath.Join(pluginRoot, "rules", "tracker-"+tracker+".md")); os.IsNotExist(err) {
+			return "add a `## Worktree` section with `links:` to .claude/rules/tracker-" + tracker + ".md (see the plugin's rules/tracker-TEMPLATE.md) - /lets:update leaves a user-authored adapter as-is"
+		}
+	}
+	if pluginRoot == "" {
+		return "run /lets:update so the installed adapter declares its ## Worktree links (no plugin root was found - pass --plugin-root)"
+	}
+	return "run /lets:update so the installed adapter declares its ## Worktree links"
 }
 
 func currentBranchOf(ctx context.Context, dir string) string {
