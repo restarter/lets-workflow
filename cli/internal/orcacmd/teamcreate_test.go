@@ -339,6 +339,29 @@ func TestTeamCreate_ResolvesBaseWhenOmitted(t *testing.T) {
 	}
 }
 
+// lets-2hr6r: with no --base-branch in a repo whose merge branch is not main,
+// team-create resolves <remote>/<merge> - the Go default the /lets:worktree
+// T2-orca call (no --base-branch) relies on.
+func TestTeamCreate_ResolvesNonMainMergeBranch(t *testing.T) {
+	r := newTeamRepo(t)
+	gitT(t, r.repo, "branch", "dev")
+	gitT(t, r.repo, "push", "-q", "origin", "dev")
+	var f *fakeTeamOrca
+	f = r.fake(t, &fakeTeamOrca{create: func([]string) (string, bool) {
+		r.orcaAdd(t, f, "team_snake", "team_snake", "origin/dev", true)
+		return `{"ok":true}`, false
+	}})
+	res, err := TeamCreate(context.Background(), TeamCreateOptions{Repo: r.repo, Name: "team_snake", Merge: "dev"})
+	if err != nil || res.Team.State != TeamCreated || res.Team.BaseRef != "origin/dev" || res.Team.BaseResolution == nil || res.Team.BaseResolution.Source != gitutil.BaseFromRemote {
+		t.Fatalf("resolved: %+v, %v", res.Team, err)
+	}
+	for _, c := range *f.calls {
+		if len(c.args) > 1 && c.args[1] == "create" && !slices.Contains(c.args, "origin/dev") {
+			t.Errorf("argv %q does not pass origin/dev", c.args)
+		}
+	}
+}
+
 func TestTeamCreate_NoRemotePassesLocalBase(t *testing.T) {
 	r := newTeamRepo(t)
 	gitT(t, r.repo, "remote", "remove", "origin")

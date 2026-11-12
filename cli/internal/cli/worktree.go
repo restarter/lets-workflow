@@ -599,8 +599,9 @@ func newWorktreeTeamInitCmd() *cobra.Command {
 	f.StringVar(&o.AgentCommand, "agent-command", "", "How the team's sessions start - the lead launches as a plain session with --name, /lets:team run workers use it as is (default claude)")
 	f.StringVar(&o.OrcaAgent, "orca-agent", "", "Shell command an Orca team terminal starts with - the lead's runs it as a plain session with --name (default claude)")
 	f.StringVar(&o.LaunchMode, "launch-mode", "", "Lead launch mode rendered into agent_command / orca_agent when not given: default | auto | all-in (default default)")
+	f.StringVar(&o.LeadName, "lead-name", "", "The lead session's name (default <callsign>-lead, or <repo>-<callsign>-lead when a live session or another team file of this repo holds it); refused when either holds the given name")
 	f.BoolVar(&o.Suggest, "suggest-callsign", false, "Only propose a free callsign; write nothing")
-	f.BoolVar(&o.Check, "check", false, "Only check that --callsign is free (no team file, no live lead); write nothing")
+	f.BoolVar(&o.Check, "check", false, "Only check that --callsign is free (no team file, a usable lead name); write nothing")
 	f.BoolVar(&jsonOut, "json", false, "Emit JSON envelope")
 	return cmd
 }

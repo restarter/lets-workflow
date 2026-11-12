@@ -18,6 +18,7 @@ import (
 	"github.com/restarter/lets-workflow/cli/internal/ccregistry"
 	"github.com/restarter/lets-workflow/cli/internal/gitutil"
 	"github.com/restarter/lets-workflow/cli/internal/letsconfig"
+	"github.com/restarter/lets-workflow/cli/internal/peername"
 	"github.com/restarter/lets-workflow/cli/internal/teamfile"
 )
 
@@ -27,12 +28,14 @@ import (
 // (default `claude`). LaunchMode (default | auto | all-in, lets-d3wu3) renders both
 // through LaunchCommand when they were not given explicitly - an explicit command
 // wins. Suggest only proposes a free callsign and writes nothing;
-// Check only verifies Callsign is free (valid, no team file, no live lead) and
+// Check only verifies Callsign is free (valid, no team file, a usable lead name) and
 // writes nothing - run before a team worktree is created.
 type TeamInitOptions struct {
 	Callsign, Area, Worktree, PluginRoot, AgentCommand, OrcaAgent string
 	LaunchMode                                                    string
-	Suggest, Check                                                bool
+	// LeadName is the explicit --lead-name; empty = derive (lets-rpufs).
+	LeadName       string
+	Suggest, Check bool
 }
 
 // TeamInitResult is `lets worktree team-init`.
@@ -41,8 +44,9 @@ type TeamInitResult struct {
 	Callsign  string `json:"callsign,omitempty"`
 	TeamFile  string `json:"team_file,omitempty"`
 	Suggested bool   `json:"suggested,omitempty"`
-	// LeadName is the lead session name the team gets (<repo>-<callsign>-lead, or
-	// <callsign>-lead when that name would not fit the session-name grammar).
+	// LeadName is the lead session name the team gets: --lead-name, else
+	// <callsign>-lead, else <repo>-<callsign>-lead when a live session or another
+	// team file of this repo holds the short one.
 	LeadName string `json:"lead_name,omitempty"`
 	// LaunchClass is ClassifyLaunch of the agent_command written to the team file
 	// (default | auto | bypass) and LaunchWarnings its warnings - what the lead's
@@ -75,21 +79,66 @@ func TeamInit(ctx context.Context, dir string, o TeamInitOptions) (*TeamInitResu
 	}
 	res.ProjectRoot = mainRoot
 	teamsDir := filepath.Join(mainRoot, ".lets", "teams")
-	leadLive := liveLeads(res, mainRoot)
-	setLead := func(c string) {
-		name, why := leadName(mainRoot, c)
+	live := liveSessionNames(res)
+	recorded, rwarns := recordedLeads(teamsDir)
+	for _, w := range rwarns {
+		res.Steps = append(res.Steps, Step{Status: StepWarn, Message: w})
+	}
+	// holderFor(c) names who holds a lead name for callsign c: a live session, or
+	// another team file of this repo (c's own file is team_exists, reported first).
+	holderFor := func(c string) func(string) string {
+		return func(n string) string {
+			switch {
+			case live[n]:
+				return "is held by a live session"
+			case recorded[n] != "" && recorded[n] != c:
+				return "is recorded by team " + recorded[n]
+			}
+			return ""
+		}
+	}
+	leadFree := func(c string) bool { _, _, ok := leadName(mainRoot, c, holderFor(c)); return ok }
+	// resolveLead sets res.LeadName for callsign c and returns the refusal the
+	// check and the write report after team_exists (34), or nil.
+	resolveLead := func(c string) *Error {
+		if o.LeadName != "" {
+			res.LeadName = o.LeadName
+			switch {
+			case live[o.LeadName]:
+				return ErrLeadNameLive(o.LeadName)
+			case recorded[o.LeadName] != "" && recorded[o.LeadName] != c:
+				return ErrLeadNameTaken(o.LeadName, recorded[o.LeadName])
+			}
+			return nil
+		}
+		name, why, ok := leadName(mainRoot, c, holderFor(c))
 		res.LeadName = name
+		if !ok {
+			return ErrCallsignLive(c, name, why)
+		}
 		if why != "" {
 			res.Steps = append(res.Steps, Step{Status: StepWarn, Message: why})
+		}
+		return nil
+	}
+	if o.LeadName != "" {
+		switch {
+		case o.Suggest:
+			return fail(&Error{Code: ExitUsage, Kind: "usage", Message: "--lead-name goes with --check or the write, not --suggest-callsign"})
+		case !peername.Valid(o.LeadName):
+			return fail(&Error{Code: ExitUsage, Kind: "lead_name_invalid", Message: fmt.Sprintf("--lead-name %q is not a session name (letters, digits, . _ -, words separated by single spaces, at most %d runes)", o.LeadName, peername.MaxRunes)})
+		}
+		if _, isOrc := peername.ParseOrchestrator(peername.RepoSlug(mainRoot), o.LeadName); isOrc {
+			return fail(&Error{Code: ExitUsage, Kind: "lead_name_invalid", Message: fmt.Sprintf("--lead-name %q reads as an orchestrator name of this repository (<repo>-orc[-<scope>])", o.LeadName)})
 		}
 	}
 
 	if o.Suggest {
-		c, ok := teamfile.FreeCallsign(teamsDir, leadLive)
+		c, ok := teamfile.FreeCallsign(teamsDir, func(c string) bool { return !leadFree(c) })
 		if !ok {
-			return fail(&Error{Code: ExitGeneric, Kind: "no_free_callsign", Message: "every callsign has a team file or a live lead"})
+			return fail(&Error{Code: ExitGeneric, Kind: "no_free_callsign", Message: "every callsign has a team file or no usable lead name"})
 		}
-		setLead(c)
+		_ = resolveLead(c)
 		res.Callsign, res.Suggested, res.OK = c, true, true
 		res.Steps = append(res.Steps, Step{Status: StepOK, Message: "proposed callsign " + c + " (nothing written)"})
 		return res, nil
@@ -99,13 +148,13 @@ func TeamInit(ctx context.Context, dir string, o TeamInitOptions) (*TeamInitResu
 		return fail(&Error{Code: ExitUsage, Kind: "callsign_invalid", Message: fmt.Sprintf("--callsign %q is not a team name ([a-z0-9-]{1,40}, not run-*)", o.Callsign)})
 	}
 	res.Callsign = o.Callsign
-	setLead(o.Callsign)
+	leadErr := resolveLead(o.Callsign)
 	if o.Check {
 		if _, err := os.Lstat(filepath.Join(teamsDir, o.Callsign+".md")); err == nil {
 			return fail(ErrTeamExists(filepath.Join(teamsDir, o.Callsign+".md")))
 		}
-		if leadLive(o.Callsign) {
-			return fail(ErrCallsignLive(o.Callsign, res.LeadName))
+		if leadErr != nil {
+			return fail(leadErr)
 		}
 		res.OK = true
 		res.Steps = append(res.Steps, Step{Status: StepOK, Message: "callsign " + o.Callsign + " is free (nothing written)"})
@@ -157,8 +206,8 @@ func TeamInit(ctx context.Context, dir string, o TeamInitOptions) (*TeamInitResu
 	if _, err := os.Lstat(target); err == nil {
 		return fail(ErrTeamExists(target))
 	}
-	if leadLive(o.Callsign) {
-		return fail(ErrCallsignLive(o.Callsign, res.LeadName))
+	if leadErr != nil {
+		return fail(leadErr)
 	}
 
 	git := func(args ...string) (string, error) {

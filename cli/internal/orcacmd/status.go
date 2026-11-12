@@ -16,6 +16,11 @@ func Status(ctx context.Context) (*StatusResult, error) {
 	if f != nil {
 		info.Reason = f.Reason
 	}
+	// lets-52jph: running=false always names its reason - a consumer (/lets:hub)
+	// must never see a false negative with nothing to report.
+	if !info.Running && info.Reason == "" {
+		info.Reason = ReasonError
+	}
 	res.Status = &info
 	return res, nil
 }
