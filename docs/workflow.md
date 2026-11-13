@@ -65,7 +65,7 @@ A team per area that outlives its tasks - one worktree, one lead session, expert
 ```
 /lets:team create --area "<what it owns>"   (main checkout) -> the lead (lead_name, <callsign>-lead; a plain Claude session) opens in team_<callsign>
 /lets:start <id>                            (lead) -> claims nothing (hints /rename), switches to the task's branch; commit or park the last one, never stash
-/lets:team spawn --roster                   (lead) -> the members come back from the team file (/lets:start asks which, when none is live)
+/lets:team spawn --roster                   (lead) -> the members come back from the team file (/lets:start brings them back by itself; a new team is asked which)
 work -> /lets:done -> /lets:start <next-id> -> ...
 /lets:team disband <callsign>               -> retired; the team file stays as history
 ```
