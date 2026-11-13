@@ -76,7 +76,7 @@ None yet. On every task switch the lead rewrites the task-specific content of th
 - `Member: <name> = gone (lead <session6>)` - a send to that member did not resolve.
 - `Dismissed: <name> (lead <session6>)` - never messaged again by that lead session.
 - `Reports: <dir> (lead <session6>)` - that lead session's report directory.
-- `Members asked: (lead <session6>)` - the Members question was asked in that lead session.
+- `Members asked: (lead <session6>)` - the Members question was asked in that lead session, or the lead started lean (`/lets:start --solo`).
 
 Resume artefacts:
 

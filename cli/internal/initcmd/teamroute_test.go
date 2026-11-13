@@ -96,6 +96,12 @@ func teamRouteProblems(f map[string]string) []string {
 	if !strings.Contains(sectionSpan(team, "### Step M2: The Whole Roster (`spawn --roster`)"), "No candidate -> spawn nothing and ask nothing") {
 		add("team.md M2 must spawn and ask nothing when no roster member is a candidate")
 	}
+	if !strings.Contains(lineStarting(team, "- `members [roles=<r,...>]`"), "`members restore [lean]`") {
+		add("team.md Step 1 must route members restore [lean] to Step M6")
+	}
+	if !strings.Contains(sectionSpan(team, "### Step M3: Table"), "the table only, no LETS box") {
+		add("team.md M3 must render the table without a box when called by another command")
+	}
 
 	// The line forms: defined once in the template, spelled the same by member-run and team.md.
 	tmpl7 := sectionSpan(f["tmpl"], "\n## 7. Current task\n")

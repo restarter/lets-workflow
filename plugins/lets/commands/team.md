@@ -503,7 +503,7 @@ Every `GAP` line goes into the team file's `## 8. Decisions` as `{name}: no repo
 
 Called by member-run `op=route` as `members roles=<r,...>` (a roster role a dispatch needs is not reachable) and by `/lets:start` as `members restore [lean]` (a lead session starting, lets-6ll9s). It never calls `op=route`.
 
-**`restore`** - before items 1-3, the first that applies; every branch ends with Step M3's table (no box) and returns one `MEMBERS` line:
+**`restore`** (only when called as `members restore [lean]`; `members` and `members roles=` go straight to items 1-3) - after Step M0, before items 1-3, the first that applies; every branch ends with Step M3's table (no box) and returns one `MEMBERS` line:
 - Unattended turn (item 2's test) -> spawn nothing, no marker, one line `no member of {team} respawned - unattended turn; an interactive /lets:start restores the roster`; `MEMBERS skipped unattended`.
 - `lean` given (the owner started lean: `/lets:start --solo` or said so) -> spawn nothing; write item 3's marker unless `## 7` already holds it, so member-run's route does not ask this lead session; `MEMBERS lean`.
 - The roster holds a row besides `lead` -> Step M2 for the whole roster, with no Members question and no marker (M2's own rule still asks at `strict` or for a re-usable pane); `MEMBERS restored <names>` or `MEMBERS restored none`.
