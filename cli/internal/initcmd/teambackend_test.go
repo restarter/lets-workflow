@@ -496,7 +496,7 @@ func TestTeamBackend_TeamTaskFlow(t *testing.T) {
 		t.Error("start.md Step 4T sits before task selection (Step 5) and take-task (Step 6)")
 	}
 	step0 := sectionSpan(start, "### Step 0a: Parse")
-	if !strings.Contains(step0, "- Step 4T (team worktree only), then jump to Step 6 (branch) with this task") || !strings.Contains(step0, "then Step 4T (team worktree only), then jump to Step 6 (take-task)") || !strings.Contains(step0, "`--solo`") {
+	if !strings.Contains(step0, "- Step 4T (team worktree only), then Step 5.5, then Step 6 (branch) with this task") || !strings.Contains(step0, "then Step 4T (team worktree only), Step 5.5, then Step 6 (take-task)") || !strings.Contains(step0, "`--solo`") {
 		t.Error("start.md Step 0a runs Step 4T on the task-id and --continue paths and parses --solo (lets-6ll9s)")
 	}
 	if strings.Contains(start, "**Respawn roster**") || strings.Contains(start, "Respawn the roster?") {

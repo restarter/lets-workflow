@@ -41,15 +41,15 @@ So a `team_<c>` lead is a bound row of its orchestrator's `lets peers who --orc`
 - Skip Steps 1, 3, 5 (session history, orient, task selection)
 - Run Step 2 (git state) briefly
 - the tracker's `show` + `comment-list` for `<task-id>` — read the FULL description and ALL comments, never truncate
-- Step 4T (team worktree only), then jump to Step 6 (branch) with this task
+- Step 4T (team worktree only), then Step 5.5, then Step 6 (branch) with this task
 
 **If `--continue`:**
 - Step 0.5, then:
 - Run Step 1 (session history) - important for context recovery
 - Run Step 2 (git state) briefly
 - the tracker's `list-by-status` (in_progress) - find task(s)
-- If exactly 1 in_progress -> use it. **Skip Step 3 (orient) and Step 5** - the task is already known, so the Next up / Project snapshot is noise (and it would re-run `list-by-status` a second time inside orient). Present only the `## Recent Sessions` recovery line (Step 4), then Step 4T (team worktree only), then jump to Step 6 (take-task) - its Step 6 context recovery reads the task comments + latest snapshot
-- If multiple -> run Step 3 (orient), Step 4T (team worktree only), and show selection with context from recent sessions
+- If exactly 1 in_progress -> use it. **Skip Step 3 (orient) and Step 5** - the task is already known, so the Next up / Project snapshot is noise (and it would re-run `list-by-status` a second time inside orient). Present only the `## Recent Sessions` recovery line (Step 4), then Step 4T (team worktree only), Step 5.5, then Step 6 (take-task) - its Step 6 context recovery reads the task comments + latest snapshot
+- If multiple -> run Step 3 (orient), Step 4T (team worktree only), and show selection with context from recent sessions; then Step 5.5 with the pick
 - If none -> fall through to full flow
 
 **If `--main` or `--assistant` provided** (project-assistant / PM mode):
@@ -183,14 +183,55 @@ The counts and the date come from the file just read: an entry is a `- ` line of
 
 > - **Resume** the active task if In flight shows one you want to continue.
 > - **Pick** one from Next up (the top 5 ready - for the full list, `/lets:backlog`).
-> - **Create** a new task (the `create-task` skill - tracker `create` verb), or claim an existing one (tracker `set-status=in_progress`).
+> - **Create** a new task (the `create-task` skill - tracker `create` verb), or name an existing one - take-task claims it once Step 5.5 keeps it here.
 
 **If user doesn't want to pick a task** but describes work (e.g., "just want to fix proxy config"):
 - Auto-create via the `create-task` skill (e.g. "Fix proxy config", a P3 task)
 - Inform user: "Created task XX, working in feature branch"
 - This keeps traceability without friction
 
-**Wait for user to select, create, or describe work.**
+**Wait for user to select, create, or describe work.** Then Step 5.5 with the picked task - nothing is claimed before it.
+
+## Step 5.5: Where to run (main checkout with standing teams)
+
+Runs once a task is known and BEFORE take-task - Step 5's pick, the `<task-id>` and `--continue` paths, main mode's **Pivot to code** - so a hand-off cuts no branch and claims nothing here. Any task size. Skip it, silently, straight to Step 6, when any holds:
+- this is a linked worktree (`git rev-parse --path-format=absolute --git-dir` differs from `git rev-parse --path-format=absolute --git-common-dir`): a team or task worktree already is where its task runs;
+- AUTO MODE, or an unattended turn - judged from the current turn only (a `/loop` iteration, a scheduled agent), as team.md Step M6 item 2 judges it: a permission mode or a `.lets/cache/pipeline-state-*` marker is not unattended;
+- this checkout already holds a claim on the task - `.lets/sessions/` and local branches are shared by every worktree, so ownership is NOT "a task-state file names it": the claim is this checkout's only when this checkout's current branch is the task's branch (its task-state `task:` names the task, or the branch is the task's branch by the tracker convention), or the task-state file naming the task carries this session's id on its `session:` line. Such a task's branch or `session:` line belongs here: a lead's `lets worktree switch` would refuse (`session_held`, or git's checked-out branch) and no Go verb releases another branch's `session:` line - finish it here or `/lets:done`. A task-state naming the task with neither - another worktree's or a stale one - is held elsewhere (item 1 below), not a skip;
+- no standing team: no `.lets/teams/*.md` whose frontmatter `worktree` exists on disk and whose `## 8. Decisions` holds no `Retired` entry.
+
+**Teams.** For each standing team take `team`, `area` and `lead_name` from its frontmatter, and run ONE `lets peers who --json`: the row whose `name` is `lead_name` gives `state` (`busy` / `idle`); no row -> the lead is not running. A team whose lead is not running cannot receive a hand-off: name it in the question (`{team}: lead not running`), never as an option. Order the live teams idle before busy, a team whose `area` matches the task's labels or title first; at most two become options, a third is named in the question (the user types its callsign in Other). `(Recommended)` goes on the first team only when it is idle and its area matches - that team's option then comes FIRST and **Here** follows without the tag (the core AskUserQuestion rule: recommended first); otherwise **Here** is first and carries it.
+
+```
+AskUserQuestion(
+  questions=[{
+    question: "Where should **{task title}** ({task-id}) run?{ Also: {team}: lead not running | {team}: {area}, lead {state}}",
+    header: "Where",
+    options: [
+      { label: "Here (Recommended)", description: "Claim it in this session and continue as usual" },
+      { label: "Hand to team {c}", description: "{area}; lead {idle|busy}; a lead holding no task claims it" },
+      { label: "Hand to team {c2}", description: "{area}; lead {idle|busy}; only when a second live team exists" },
+      { label: "Run as worker", description: "A new worktree session takes it (/lets:worktree create)" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+- **Here** -> Step 6 (main mode: take-task, as its Pivot says).
+- **Hand to team {c}** ->
+  1. Status. This checkout holds no claim (the skip list), so nothing is released here. The tracker's `show`: `in_progress` -> held elsewhere (another worktree, another session, or a stale task-state), its status is kept and the message says so; any other status stays as it is - the lead's `/lets:start` claims it.
+  2. Send - the pick is the touchpoint, so at `standard` / `minimal` no Send? question: `Skill(skill: "lets:orc", args: "verb=tell target=\"<lead_name>\" footer=none text=<this session's name>: hand-off for team <c> - <task-id> - **<title>**.<held elsewhere only:  It is in_progress elsewhere - check before claiming.>")`. The shape `hand-off for team <c> - <task-id> - **<title>**.` is fixed - the id before the free-text title: the receiving lead's orc Step 7 recognises it by that shape and reads only `<c>` and `<task-id>` from it.
+  3. orc printed `sent to <lead_name>` -> one line `Handed to team {c} - a lead holding no task claims it itself and reports back; otherwise it waits in the lead's pane for its owner's /lets:start <task-id>; this session keeps no claim`. The lead's answer (claimed, or why not - orc Step 7's team claim) arrives as its own message and is relayed whole. Anything else (NOT SENT, refused) -> say so; nothing changed.
+  4. Then: main mode stays in main mode; any other path goes back to Step 5 (pick another task, or `/lets:end`).
+- **Run as worker** -> as take-task Step 4's **Worktree**: write the title to `.lets/cache/title-<session6>.txt` with the Write tool, then `Skill(skill: "lets:worktree", args: "create <task-id> --title-file .lets/cache/title-<session6>.txt")`; worktree.md asks its own questions as usual (C3, when reached, is the user's pick - **Stay** keeps this session where it is); relay how the new session opens (its output names it); the new session's `/lets:start <task-id>` claims the task. Then as item 4.
+- **Other** (a callsign) -> that team, as **Hand to team**, when its lead is live; otherwise say it cannot receive and ask again.
+
+**Tracker protocol:** `Skill(skill: "lets:protocol-tracker")` before item 1's `show`, unless its text is in your current context.
+
+```lets-tracker
+show task=<task-id>   # returns {id,title,status}; in_progress -> held elsewhere (this checkout holds no claim here)
+```
 
 ## Step 6: Take Task
 
@@ -423,10 +464,11 @@ When the user signals concrete implementation ("let's build / fix / edit X"):
 
 - **STOP** - main mode does not edit code. Per the merge-branch boundary, a task + branch are required first.
 - Offer via `AskUserQuestion` (header `Start work`):
-  - **Claim a task** -> ask which, then `Skill(skill: "lets:take-task", args: "<id>")`.
-  - **Create a task** -> `create-task` skill, then `take-task`.
+  - **Claim a task** -> ask which, then Step 5.5 (Where to run); **Here** -> `Skill(skill: "lets:take-task", args: "<id>")`.
+  - **Create a task** -> `create-task` skill, then Step 5.5; **Here** -> `take-task`.
   - **Stay in main mode** -> not ready to code yet; continue triage.
 - On claim, `take-task` creates / switches the branch and the session leaves main mode (normal task flow resumes).
+- A hand-off or a worker leaves this session in main mode with no claim.
 
 ### Main Mode Output
 
