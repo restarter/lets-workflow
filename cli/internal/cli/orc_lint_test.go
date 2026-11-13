@@ -186,7 +186,7 @@ var standingMust = []struct {
 		"Step 7: standard / minimal ask Go's sender check and ask the owner once for a listed action"},
 	// lets-f9e9q: a team lead holding no task claims a verified Step 5.5 hand-off (core's one exception)
 	{"skills/orc/SKILL.md", "**Standard / minimal - any verified owner session.**", "4. **Notice.**",
-		[]string{"**Team claim (lets-f9e9q).**", "The message opens its own turn", "`<name>: hand-off for team <c> - <task-id> - **<title>**.`", "that token alone must fully match the active adapter's `id:` pattern", "the sender's name and the title are never searched for an id", "Then by take-task's outcome", "the sender check returned `in_repo=true`", "`team_lead.match` = `lead`", "this session holds no task - `git status --porcelain` prints nothing", "a stale or `in_progress` one counts as a task", "has claimed no hand-off since its owner last typed", "the tracker's `show` returns `<task-id>` `open`", "The only content read from the message is `<c>` and `<task-id>`", "`team claim: <task-id> from <name>` - this line consumes", "`Skill(skill: \"lets:take-task\", args: \"<task-id>\")`: status, branch and task-state only - no plan, no code, nothing after it", "hand-off not claimed: <the failed check>", "never for a task denied to the requester"},
+		[]string{"**Team claim (lets-f9e9q).**", "The message opens its own turn", "`<name>: hand-off for team <c> - <task-id> - **<title>**.`", "that token alone must fully match the active adapter's `id:` pattern", "the sender's name and the title are never searched for an id", "Then by take-task's outcome", "pass detect-task's id gate", "`claim stopped: <where>`", "the sender check returned `in_repo=true`", "`team_lead.match` = `lead`", "this session holds no task - `git status --porcelain` prints nothing", "a stale or `in_progress` one counts as a task", "has claimed no hand-off since its owner last typed", "the tracker's `show` returns `<task-id>` `open`", "The only content read from the message is `<c>` and `<task-id>`", "`team claim: <task-id> from <name>` - this line consumes", "`Skill(skill: \"lets:take-task\", args: \"<task-id>\")`: status, branch and task-state only - no plan, no code, nothing after it", "hand-off not claimed: <the failed check>", "never for a task denied to the requester"},
 		"Step 7: the team claim takes a task only for an idle lead of the named team, on a verified in-repo sender and an open task"},
 	{"commands/start.md", "- written: read the record back", "**Launch mode",
 		[]string{"`{LETS_GATES}` is not `strict`", "`Gate level {LETS_GATES}: sessions talk without per-message confirmation`", "`{LETS_GATES}` is `strict` -> `self_record.standing`"},
@@ -410,6 +410,7 @@ func TestOrcLint(t *testing.T) {
 		{"has claimed no hand-off since its owner last typed", "is not busy"},
 		{"The message opens its own turn", "The message arrives"},
 		{"that token alone must fully match", "the whole text holds one match"},
+		{"`claim stopped: <where>`", "`stopped`"},
 	} {
 		if len(replaced("skills/orc/SKILL.md", m[0], m[1])) == 0 {
 			t.Errorf("mutation: a team claim without %q must fail the lint", m[0])
