@@ -36,7 +36,7 @@ Teams are named by callsign (snake, frog, otter, ...). Without one, LETS propose
 
 **Members.** From the lead's session:
 
-- A new team starts with no members: the lead's `/lets:start` asks which to spawn - architect + skeptic + explorer (recommended), skeptic + explorer, or none - and adds the picked roles to the team file's roster. From then on every lead `/lets:start` reads the team's notebook and brings the roster back with no question (`--solo` starts lean). `/lets:team spawn <role> [name]` spawns one member (`spawn --roster` the whole roster from the team file); a name that is still live is never spawned twice. Every member's first message announces its name, role and the routes it answers.
+- A new team starts with no members: the lead's `/lets:start` asks which to spawn - architect + skeptic + explorer (recommended), skeptic + explorer, or none - and adds the picked roles to the team file's roster. Every lead `/lets:start` reads the team's notebook, and once the roster holds members it brings them back with no question (`--solo` starts lean). `/lets:team spawn <role> [name]` spawns one member (`spawn --roster` the whole roster from the team file); a name that is still live is never spawned twice. Every member's first message announces its name, role and the routes it answers.
 - `/lets:team roster` shows the roster joined with who is live; `/lets:team dismiss <name>` or `dismiss --all` ends members.
 
 Members only ever talk to the lead.

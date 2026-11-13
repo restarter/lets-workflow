@@ -209,7 +209,7 @@ AskUserQuestion(
     header: "Where",
     options: [
       { label: "Here (Recommended)", description: "Claim it in this session and continue as usual" },
-      { label: "Hand to team {c}", description: "{area}; lead {idle|busy}; a lead holding no task claims it" },
+      { label: "Hand to team {c}", description: "{area}; lead {idle|busy}; at standard a lead holding no task claims it" },
       { label: "Hand to team {c2}", description: "{area}; lead {idle|busy}; only when a second live team exists" },
       { label: "Run as worker", description: "A new worktree session takes it (/lets:worktree create)" }
     ],
@@ -220,9 +220,9 @@ AskUserQuestion(
 
 - **Here** -> Step 6 (main mode: take-task, as its Pivot says).
 - **Hand to team {c}** ->
-  1. Status. This checkout holds no claim (the skip list), so nothing is released here. The tracker's `show` (the `lets-tracker` block at the end of this step): `in_progress` -> held elsewhere (another worktree, another session, or a stale task-state), its status is kept and the message says so; any other status stays as it is - the lead's `/lets:start` claims it.
+  1. Status. This checkout holds no claim (the skip list), so nothing is released here. The tracker's `show` (the `lets-tracker` block at the end of this step): `in_progress` -> held elsewhere (another worktree, another session, or a stale task-state), its status is kept and the message says so; any other status stays as it is - an `open` task can be claimed by an idle lead (orc Step 7's team claim, at `standard` / `minimal`), anything else waits for its owner's `/lets:start`.
   2. Send - the pick is the touchpoint, so at `standard` / `minimal` no Send? question: `Skill(skill: "lets:orc", args: "verb=tell target=\"<lead_name>\" footer=none text=<this session's name>: hand-off for team <c> - <task-id> - **<title>**.<held elsewhere only:  It is in_progress elsewhere - check before claiming.>")`. The shape `hand-off for team <c> - <task-id> - **<title>**.` is fixed - the id before the free-text title: the receiving lead's orc Step 7 recognises it by that shape and reads only `<c>` and `<task-id>` from it.
-  3. orc printed `sent to <lead_name>` -> one line `Handed to team {c} - a lead holding no task claims it itself and reports back; otherwise it waits in the lead's pane for its owner's /lets:start <task-id>; this session keeps no claim`. The lead's answer (claimed, or why not - orc Step 7's team claim) arrives as its own message and is relayed whole. Anything else (NOT SENT, refused) -> say so; nothing changed.
+  3. orc printed `sent to <lead_name>` -> one line `Handed to team {c} - a lead holding no task claims it itself and reports back (at standard / minimal); otherwise it waits in the lead's pane for its owner's /lets:start <task-id>; this session keeps no claim`. The lead's answer (claimed, or why not - orc Step 7's team claim) arrives as its own message and is relayed whole. Anything else (NOT SENT, refused) -> say so; nothing changed.
   4. Then: main mode stays in main mode; any other path goes back to Step 5 (run Step 3 first when this path skipped it; pick another task, or `/lets:end`).
 - **Run as worker** -> as take-task Step 4's **Worktree**: write the title to `.lets/cache/title-<session6>.txt` with the Write tool, then `Skill(skill: "lets:worktree", args: "create <task-id> --title-file .lets/cache/title-<session6>.txt")`; worktree.md asks its own questions as usual (C3, when reached, is the user's pick - **Stay** keeps this session where it is); relay how the new session opens (its output names it); the new session's `/lets:start <task-id>` claims the task. Then as item 4. **Switch** at C3 -> stop here: this session's next move is `/lets:start <task-id>` in the worktree (take-task claims it there); item 4 applies only after **Stay** or a launcher / Orca open.
 - **Other** (a callsign) -> that team, as **Hand to team**, when its lead is live; otherwise say it cannot receive and ask again.
