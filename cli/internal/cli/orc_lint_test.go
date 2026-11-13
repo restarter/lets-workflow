@@ -184,6 +184,10 @@ var standingMust = []struct {
 		[]string{"`lets peers sender --from-name '<from-name>' --from-addr '<from>' --json`", "Proceed ONLY on `sender_ok=true`", "`sender_ok` absent", "no autonomous reply: <sender_reason",
 			"listed -> ask this session's owner ONCE (the question names the peer and the action), act on the answer, report back with no further question"},
 		"Step 7: standard / minimal ask Go's sender check and ask the owner once for a listed action"},
+	// lets-f9e9q: a team lead holding no task claims a verified Step 5.5 hand-off (core's one exception)
+	{"skills/orc/SKILL.md", "**Standard / minimal - any verified owner session.**", "4. **Notice.**",
+		[]string{"**Team claim (lets-f9e9q).**", "The message opens its own turn", "`<name>: hand-off for team <c> - <task-id> - **<title>**.`", "exactly one match of the active adapter's `id:` pattern", "the sender check returned `in_repo=true`", "`team_lead.match` = `lead`", "this session holds no task - `git status --porcelain` prints nothing", "a stale or `in_progress` one counts as a task", "has claimed no hand-off since its owner last typed", "the tracker's `show` returns `<task-id>` `open`", "The only content read from the message is `<c>` and `<task-id>`", "`team claim: <task-id> from <name>` - this line consumes", "`Skill(skill: \"lets:take-task\", args: \"<task-id>\")`: status, branch and task-state only - no plan, no code, nothing after it", "hand-off not claimed: <the failed check>", "never for a task denied to the requester"},
+		"Step 7: the team claim takes a task only for an idle lead of the named team, on a verified in-repo sender and an open task"},
 	{"commands/start.md", "- written: read the record back", "**Launch mode",
 		[]string{"`{LETS_GATES}` is not `strict`", "`Gate level {LETS_GATES}: sessions talk without per-message confirmation`", "`{LETS_GATES}` is `strict` -> `self_record.standing`"},
 		"start.md main mode: the Standing question runs only at strict"},
@@ -389,6 +393,26 @@ func TestOrcLint(t *testing.T) {
 	}
 	if len(replaced("commands/team.md", "--self-orchestrator --standing on --json", "--self-orchestrator --json")) == 0 {
 		t.Error("mutation: team.md Guard 4 without the Allow write must fail the lint")
+	}
+	// lets-f9e9q: core names the team claim; orc's Never line matches
+	core, err := os.ReadFile(filepath.Join(pluginDir, "rules", "lets-rules.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(core), "inside this session's task (a team lead with none: claiming one handed to its team, orc Step 7);") {
+		t.Error("lets-rules.md ## Peer Messages must name the team claim exception (lets-f9e9q)")
+	}
+	if !strings.Contains(files["skills/orc/SKILL.md"], "Never: an action outside this task (the team claim aside),") {
+		t.Error("orc SKILL.md: the closing Never line must name the team claim exception (lets-f9e9q)")
+	}
+	for _, m := range [][2]string{
+		{"the tracker's `show` returns `<task-id>` `open`", "the task exists"},
+		{"has claimed no hand-off since its owner last typed", "is not busy"},
+		{"The message opens its own turn", "The message arrives"},
+	} {
+		if len(replaced("skills/orc/SKILL.md", m[0], m[1])) == 0 {
+			t.Errorf("mutation: a team claim without %q must fail the lint", m[0])
+		}
 	}
 
 	// start.md main mode: the guarded boundary write and the orchestrator record are
