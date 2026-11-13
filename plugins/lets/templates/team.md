@@ -45,7 +45,7 @@ A definition, not a record of live sessions: the lead respawns the roster from t
 |---|---|---|---|---|
 | lead | team lead | (the lead session) | (inherited) | |
 
-The roster starts with the lead alone. When no member is reachable, the lead's `/lets:start` asks which members to spawn - architect + skeptic + explorer (recommended), skeptic + explorer, or none - and adds the picked roles here as rows; from then on it offers this roster first. Delete a row to drop that member; add a row for another. An empty model inherits the session model (an agent's own pin, e.g. the explorer's, still applies).
+The roster starts with the lead alone. While it does, the lead's `/lets:start` asks which members to spawn - architect + skeptic + explorer (recommended), skeptic + explorer, or none - and adds the picked roles here as rows. Once it holds members beyond the lead, every lead `/lets:start` respawns them with no question (`/lets:start --solo` starts lean; an unattended turn respawns nothing). Delete a row to drop that member; add a row for another. An empty model inherits the session model (an agent's own pin, e.g. the explorer's, still applies).
 
 Available roles: `architect` (`lets:architect`), `skeptic` (`lets:skeptic`), `explorer` (`lets:explorer`), `implementer` (`lets:implementer`). What each one does, and where a decision goes, is the LETS routes table every member gets at spawn.
 

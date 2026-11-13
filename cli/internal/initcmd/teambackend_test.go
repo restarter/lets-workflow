@@ -268,19 +268,20 @@ func TestTeamBackend_Members(t *testing.T) {
 		t.Fatal(err)
 	}
 	step6 := sectionSpan(string(s), "\n## Step 6: Take Task\n")
-	ask := strings.Index(step6, "ask Step 5's **Members** question")
-	take := strings.Index(step6, `Skill(skill: "lets:take-task"`)
-	if ask < 0 || take < 0 || ask > take || strings.Contains(step6, "lets members") || strings.Contains(step6, "lead_held") {
-		t.Errorf("start.md Step 6 claims no lead - the Members question stays, then take-task (ask=%d take=%d)", ask, take)
+	if strings.Contains(step6, "Members") || strings.Contains(step6, "lets members") || strings.Contains(step6, "lead_held") || !strings.Contains(step6, `Skill(skill: "lets:take-task"`) {
+		t.Error("start.md Step 6 claims no lead and asks no Members question - Step 4T restores the team before it (lets-6ll9s)")
 	}
 	if step7 := sectionSpan(string(s), "\n## Step 7: Suggest Session Rename\n"); !strings.Contains(step7, "never suggest `/rename {slug}`") || !strings.Contains(step7, "Suggest `/rename {team_lead.name}` only when `team_lead.match` is not `lead`; otherwise suggest nothing.") {
 		t.Error("start.md Step 7 must not rename a team's lead away from lead_name")
 	}
-	step5 := sectionSpan(string(s), "\n## Step 5: ")
-	for _, want := range []string{"`team_lead`", "/rename {team_lead.name}", "never blocking", "**Members (team worktree only).**"} {
-		if !strings.Contains(step5, want) {
-			t.Errorf("start.md Step 5's team paragraph must state %q", want)
+	step4t := sectionSpan(string(s), "\n## Step 4T: Team (team worktree only)\n")
+	for _, want := range []string{"`team_lead`", "/rename {team_lead.name}", "never blocking", "every start, no question, unattended turns too", "`## 8. Decisions`", "`## 9. Standing knowledge`", "`## 10. Close-out`"} {
+		if !strings.Contains(step4t, want) {
+			t.Errorf("start.md Step 4T must state %q (lets-6ll9s)", want)
 		}
+	}
+	if strings.Contains(sectionSpan(string(s), "\n## Step 5: "), "**Team worktree**") {
+		t.Error("start.md Step 5 no longer carries the team paragraph - Step 4T does (lets-6ll9s)")
 	}
 }
 
@@ -483,15 +484,20 @@ func TestTeamBackend_TeamTaskFlow(t *testing.T) {
 	if len(orcNoTaskProblems(strings.Replace(start, "command -v lets >/dev/null 2>&1 && lets worktree task-state set --create --orc '<name>' --json", "", 1))) == 0 {
 		t.Error("mutation: start.md without the no-task-id --orc write must fail the check")
 	}
-	step5 := sectionSpan(start, "## Step 5: What do we do? (task selection - MANDATORY)")
-	team := strings.Index(step5, "**Team worktree**")
-	block := between(step5, "**Members (team worktree only).**", "**Wait for user to select")
-	if team < 0 || block == "" || strings.Index(step5, "**Members (team worktree only).**") < team {
-		t.Error("start.md Step 5 asks the Members question only in a team worktree, after the lead line (lets-7k6ae)")
+	step4t := sectionSpan(start, "## Step 4T: Team (team worktree only)")
+	restore := strings.Index(step4t, `Skill(skill: "lets:team", args: "members restore")`)
+	lean := strings.Index(step4t, `Skill(skill: "lets:team", args: "members restore lean")`)
+	table := strings.Index(step4t, `Skill(skill: "lets:team", args: "roster")`)
+	if restore < 0 || lean < 0 || table < 0 || !strings.Contains(step4t, "`match` `unknown`, or `--main` (it wins over `--solo`)") || !strings.Contains(step4t, "`match` `lead`, not `--main`, with `--solo`") {
+		t.Error("start.md Step 4T restores the roster through team.md Step M6 (lead), starts lean on --solo, and shows the table only for unknown / --main (lets-6ll9s)")
 	}
-	// lets-mpjhc: start.md calls team.md Step M6, which asks at most once per lead session.
-	if !strings.Contains(block, `Skill(skill: "lets:team", args: "members")`) {
-		t.Error("start.md's Members block calls `Skill(skill: \"lets:team\", args: \"members\")` - the question lives in team.md Step M6 (lets-mpjhc)")
+	s4t, s5, s6 := strings.Index(start, "\n## Step 4T: "), strings.Index(start, "\n## Step 5: "), strings.Index(start, "\n## Step 6: ")
+	if s4t < 0 || s4t > s5 || s5 > s6 {
+		t.Error("start.md Step 4T sits before task selection (Step 5) and take-task (Step 6)")
+	}
+	step0 := sectionSpan(start, "### Step 0a: Parse")
+	if !strings.Contains(step0, "- Step 4T (team worktree only), then jump to Step 6 (branch) with this task") || !strings.Contains(step0, "then Step 4T (team worktree only), then jump to Step 6 (take-task)") || !strings.Contains(step0, "`--solo`") {
+		t.Error("start.md Step 0a runs Step 4T on the task-id and --continue paths and parses --solo (lets-6ll9s)")
 	}
 	if strings.Contains(start, "**Respawn roster**") || strings.Contains(start, "Respawn the roster?") {
 		t.Error("the Members question replaces start.md's Respawn roster move and hint (lets-7k6ae)")
