@@ -164,7 +164,7 @@ An execution brief is the plan, cleaned, followed by the contract the agent work
 Implement the plan above, task by task, in order. Skip a task whose heading ends in [DONE] - it is done. After each task run its Verify and compare the output with its Expected. Commit at the plan's commit points and nowhere else.
 
 ## Commit convention
-Subject `<type>(<task-id>): <subject>` - type one of feat, fix, refactor, docs, chore, test; imperative; under 50 characters. Optional body: why, not what. Last line `Task: <task-id>`. With no task from Step 4, drop BOTH the `(<task-id>)` scope and the `Task:` line - never a literal placeholder (the same rule as the commit skill). Stage the files the commit point names - never `git add -A` or `git add .`.
+Subject: <the commit convention this project's instructions declare (CLAUDE.md, .claude/rules/*.md, or a doc they point to), copied whole by the session that builds this brief; when none is declared: `<type>(<task-id>): <subject>` - type one of feat, fix, refactor, docs, chore, test; imperative; under 50 characters>. Optional body: why, not what. Last line `Task: <task-id>` - always, whatever the subject convention. With no task from Step 4, drop BOTH the task scope and the `Task:` line - never a literal placeholder (the same rule as the commit skill). Stage the files the commit point names - never `git add -A` or `git add .`.
 
 ## Scope
 Create, change or delete only these files, as the plan says: <the Step 3 scope>. Everything else is out of scope, .lets/ included.
