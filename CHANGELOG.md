@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.11.3] - 2026-11-14
+
 ### Added
 - **A worktree whose committed LETS rules lag the plugin says so, and how to fix it (lets-5whww).** `/lets:update` never writes a worktree's rules - a worktree checks out its branch's committed copies - so the SessionStart hook in a linked worktree now checks `lets-rules.md` and the active tracker adapter and, when one is outdated, unversioned or missing, prints one Notice line: land `.claude/rules/` on the merge branch in the main checkout (commit + push, or a PR) and rebase, or keep a file out of git through `.worktreeinclude`. In the main checkout a lagging tracker adapter gets its own line beside the unchanged `lets-rules.md` message. `lets worktree switch` runs the same check after it moves a team worktree (a `warn` step; `--plugin-root`, which take-task now passes, and without a plugin root a `skip` step). Warning only - nothing refreshes a worktree's copy.
 - **`/lets:update` asks you to commit a rules copy it left uncommitted (lets-5whww).** When git tracks `.claude/rules/lets-rules.md` or the tracker adapter and the working copy differs from `HEAD`, the `rules` / `tracker-rules` row says "uncommitted - commit it: worktrees and clones check out the committed copy", on `updated` and `in-sync` alike.
@@ -21,8 +23,6 @@
 - **`/lets:execute` records the plan that actually ran (lets-ejts9).** The completion comment names the plan the run loaded - the explicit path when one was passed, a delegated run's recorded plan - instead of the newest plan a glob finds, and counts commits from the task start, else the delegated run's first chunk base, else the legacy session ref, naming the boundary it used. With none it says `unknown - no task boundary` and gives no count.
 - **`lets orca status` never reports `running=false` without a reason (lets-52jph).** A false negative with an empty reason now reports `orca_error`.
 - **Team-create's default base on a non-main merge branch is pinned by a test (lets-2hr6r).** `lets orca team-create` with no `--base-branch` resolves `<remote>/<merge>` for a merge branch other than `main`; the fix itself shipped in v0.11.2.
-
-### Fixed
 - **`lets worktree create` rolls back a checkout a failed `git worktree add` left behind (lets-41cpf).** git creates the checkout, then runs the repository's post-checkout hook and returns its status; a failing hook used to leave a registered worktree with no `.lets` link. Create now rolls back what its own add made - the path was absent before, git reported no collision, and the checkout is on the branch it asked for - with exit 16 `git_worktree_add_failed` and a remediation naming the hook. Another creator's checkout is never touched.
 - **A user-authored tracker adapter without `## Worktree` gets advice that works (lets-41cpf).** `lets worktree create` / `adopt` used to say "run /lets:update", which leaves a user-authored adapter as-is; when the plugin ships no copy of it, they now say to add a `## Worktree` section with `links:` to the adapter (see `tracker-TEMPLATE.md`), and without a plugin root they say to pass `--plugin-root`.
 - **`lets worktree remove` no longer calls a worktree dirty for a macOS `.DS_Store` (lets-yeyhz).** A `.DS_Store` at any level (C-quoted paths included) is Finder litter, not user work; `remove` and `release` list untracked files individually to see it. When `git worktree remove --force` stops at "Directory not empty" and only `.DS_Store` files and empty directories remain, remove finishes with a filesystem remove and a warning; anything else left is named and kept, and a locked worktree stays an error.
@@ -733,7 +733,8 @@ Initial release with expert agents team.
 - SessionStart hook injecting workflow rules
 - Plugin structure: commands, agents, hooks
 
-[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.11.2...HEAD
+[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.11.3...HEAD
+[0.11.3]: https://github.com/restarter/lets-workflow/compare/v0.11.2...v0.11.3
 [0.11.2]: https://github.com/restarter/lets-workflow/compare/v0.11.1...v0.11.2
 [0.11.1]: https://github.com/restarter/lets-workflow/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/restarter/lets-workflow/compare/v0.10.0...v0.11.0
