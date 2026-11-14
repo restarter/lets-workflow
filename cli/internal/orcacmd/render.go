@@ -25,6 +25,13 @@ func RenderOpen(w io.Writer, res *OpenResult) {
 	default:
 		fmt.Fprintf(w, "Orca unavailable (%s) - fall back with:\n\n    %s\n", l.Reason, l.FallbackCommand)
 	}
+	// Warnings carry what the summary cannot (an explicit --base-branch the fallback
+	// drops, or one not used for an existing branch): without --json they are the only signal.
+	for _, s := range res.Steps {
+		if s.Status == StepWarn {
+			fmt.Fprintf(w, "[warn] %s\n", s.Message)
+		}
+	}
 }
 
 // RenderNotify writes a human-readable summary of a NotifyResult.
