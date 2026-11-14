@@ -22,7 +22,7 @@ Run several independent tasks at once: each task gets its own worktree and its o
 - `stop` -> go to Stop
 - `create [<callsign>] --area <a>` -> go to Create (carry `--orca` / `--cmux` / `--tmux`, `--launch-mode <m>` / `--auto` / `--all-in` and `--lead-name <n>` with it)
 - `disband <callsign>` -> go to Disband
-- `members [roles=<r,...>]` -> go to Step M6 (internal: `/lets:start` and member-run `op=route` call it; not offered in the picker below)
+- `members [roles=<r,...>]` / `members restore [lean]` -> go to Step M6 (internal: member-run `op=route` calls `members roles=`, `/lets:start` calls `members restore`; not offered in the picker below)
 
 **If no argument**, use **AskUserQuestion**:
 
@@ -426,7 +426,7 @@ Skill(skill: "lets:member-run", args: "op=spawn scope=<c> name=<name> role=lets:
 
 ### Step M2: The Whole Roster (`spawn --roster`)
 
-1. Every roster row except `lead` that is not reachable (Step M0) and has no `Dismissed: <name>` line by this lead session is a candidate - a surviving peer pane (`lets peers who`) stays a candidate, for item 2's re-use check.
+1. Every roster row except `lead` that is not reachable (Step M0) and has no `Dismissed: <name>` line by this lead session is a candidate - a surviving peer pane (`lets peers who`) stays a candidate, for item 2's re-use check. No candidate -> spawn nothing and ask nothing: called directly, one line `Nothing to respawn - every roster member of {c} is reachable or dismissed`; called from Step M6 `restore`, no line (its caller shows the roster).
 2. A **surviving pane**: a candidate whose `<c>-<name>` session still runs (Step M0's `lets peers who` test). It may be re-used only when exactly one live session carries that name.
 3. One confirm, naming the count and each `name (model)`. `{LETS_GATES}` is not `strict` (missing reads as `standard`) and Step 2 found no re-usable pane -> no question: print `Respawning {N} members of {c}: {name (model), ...}` and do **Respawn all**. Otherwise (`strict`, or a re-usable pane - a real choice) -> ask:
 
@@ -455,6 +455,8 @@ AskUserQuestion(
 ### Step M3: Table
 
 After Step M0: the roster rows joined by name with this lead session's latest `Member:` lines and its `Dismissed:` lines in `## 7. Current task`, and `ListAgents` for the busy state; the lead row from `team_lead`. Status is `busy` (its id listed `running`), `idle` (reachable, not running), `gone` (its latest line is `= gone`), `dismissed`, or `not spawned`.
+
+Called by another command (`/lets:start`, Step M6 `restore`) -> the table only, no LETS box: that command's own output carries the footer.
 
 ```
 ## Team {c}
@@ -499,7 +501,13 @@ Every `GAP` line goes into the team file's `## 8. Decisions` as `{name}: no repo
 
 ### Step M6: Members question (`members`)
 
-Called by `/lets:start` (no member of this lead session reachable) and by member-run `op=route` (a roster role a dispatch needs is not reachable). It never calls `op=route`.
+Called by member-run `op=route` as `members roles=<r,...>` (a roster role a dispatch needs is not reachable) and by `/lets:start` as `members restore [lean]` (a lead session starting, lets-6ll9s). It never calls `op=route`.
+
+**`restore`** (only when called as `members restore [lean]`; `members` and `members roles=` go straight to items 1-3) - after Step M0, before items 1-3, the first that applies; every branch ends with Step M3's table (no box) and returns one `MEMBERS` line:
+- Unattended turn (item 2's test) -> spawn nothing, no marker, one line `no member of {team} respawned - unattended turn; an interactive /lets:start restores the roster`; `MEMBERS skipped unattended`.
+- `lean` given (the owner started lean: `/lets:start --solo` or said so) -> spawn nothing; write item 3's marker unless `## 7` already holds it, so member-run's route does not ask this lead session; `MEMBERS lean`.
+- The roster holds a row besides `lead` -> Step M2 for the whole roster, with no Members question and no marker (M2's own rule still asks at `strict` or for a re-usable pane); `MEMBERS restored <names>` or `MEMBERS restored none`.
+- A lead-only roster -> items 1-3 below (the Members question - a new team's role picker).
 
 After Step M0 (its lead line only when called directly, not from `/lets:start` or `op=route`). In this order, returning exactly one `MEMBERS` line:
 

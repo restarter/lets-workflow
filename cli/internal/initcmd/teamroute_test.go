@@ -86,6 +86,23 @@ func teamRouteProblems(f map[string]string) []string {
 		add("team.md M6: the unattended rule names the current turn, and None is asked again in a new lead session, not at the next start")
 	}
 
+	// lets-6ll9s: restore runs before the question; unattended spawns nothing; lean writes item 3's marker by reference.
+	restore := between(m6, "**`restore`**", "1. `## 7` holds")
+	for _, want := range []string{"Unattended turn (item 2's test) -> spawn nothing, no marker", "`MEMBERS skipped unattended`", "write item 3's marker unless", "`MEMBERS lean`", "Step M2 for the whole roster, with no Members question and no marker", "`MEMBERS restored <names>`", "A lead-only roster -> items 1-3 below"} {
+		if !strings.Contains(restore, want) {
+			add("team.md M6 restore must state " + want)
+		}
+	}
+	if !strings.Contains(sectionSpan(team, "### Step M2: The Whole Roster (`spawn --roster`)"), "No candidate -> spawn nothing and ask nothing") {
+		add("team.md M2 must spawn and ask nothing when no roster member is a candidate")
+	}
+	if !strings.Contains(lineStarting(team, "- `members [roles=<r,...>]`"), "`members restore [lean]`") {
+		add("team.md Step 1 must route members restore [lean] to Step M6")
+	}
+	if !strings.Contains(sectionSpan(team, "### Step M3: Table"), "the table only, no LETS box") {
+		add("team.md M3 must render the table without a box when called by another command")
+	}
+
 	// The line forms: defined once in the template, spelled the same by member-run and team.md.
 	tmpl7 := sectionSpan(f["tmpl"], "\n## 7. Current task\n")
 	for _, form := range append(append([]string{}, teamLineForms...), "`Reports: <dir> (lead <session6>)`") {
