@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.11.3] - 2026-11-14
+
 ### Added
 - **A worktree whose committed LETS rules lag the plugin says so, and how to fix it (lets-5whww).** `/lets:update` never writes a worktree's rules - a worktree checks out its branch's committed copies - so the SessionStart hook in a linked worktree now checks `lets-rules.md` and the active tracker adapter and, when one is outdated, unversioned or missing, prints one Notice line: land `.claude/rules/` on the merge branch in the main checkout (commit + push, or a PR) and rebase, or keep a file out of git through `.worktreeinclude`. In the main checkout a lagging tracker adapter gets its own line beside the unchanged `lets-rules.md` message. `lets worktree switch` runs the same check after it moves a team worktree (a `warn` step; `--plugin-root`, which take-task now passes, and without a plugin root a `skip` step). Warning only - nothing refreshes a worktree's copy.
 - **`/lets:update` asks you to commit a rules copy it left uncommitted (lets-5whww).** When git tracks `.claude/rules/lets-rules.md` or the tracker adapter and the working copy differs from `HEAD`, the `rules` / `tracker-rules` row says "uncommitted - commit it: worktrees and clones check out the committed copy", on `updated` and `in-sync` alike.
@@ -731,7 +733,8 @@ Initial release with expert agents team.
 - SessionStart hook injecting workflow rules
 - Plugin structure: commands, agents, hooks
 
-[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.11.2...HEAD
+[Unreleased]: https://github.com/restarter/lets-workflow/compare/v0.11.3...HEAD
+[0.11.3]: https://github.com/restarter/lets-workflow/compare/v0.11.2...v0.11.3
 [0.11.2]: https://github.com/restarter/lets-workflow/compare/v0.11.1...v0.11.2
 [0.11.1]: https://github.com/restarter/lets-workflow/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/restarter/lets-workflow/compare/v0.10.0...v0.11.0
