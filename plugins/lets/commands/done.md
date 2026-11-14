@@ -389,7 +389,7 @@ comment-add task=<task-id> body-file=.lets/cache/comment-<task-id>.md
 
 ### Team worktree: promote to Standing knowledge
 
-Only when `lets worktree info --json` reports a `team`; otherwise skip this subsection. Before the close in Step 8, list the candidate facts - from the team file's `## 8. Decisions` and this task's notes and comments - that a future task of this team should know. A candidate `## 9. Standing knowledge` already holds - one `/lets:note --team` wrote mid-task - is skipped, not promoted again. `{LETS_GATES}` is `standard` or `minimal` (or missing) -> no question: the lead appends the strongest (at most 3) to `## 9. Standing knowledge` and names them in one line; no candidate -> nothing. `{LETS_GATES}` is `strict` -> one separate question - at most 3 candidates (more -> the 3 strongest, the rest named in the question text) and a last "None" option:
+Only when `lets worktree info --json` reports a `team`; otherwise skip this subsection. Before the close in Step 8, list the candidate facts - from the team file's `## 8. Decisions` and this task's notes and comments - that a future task of this team should know. A candidate `## 9. Standing knowledge` already holds - one `/lets:note --team` wrote mid-task - is skipped, not promoted again. `{LETS_GATES}` is `standard` or `minimal` (or missing) -> no question: the lead appends the strongest (at most 3) to `## 9. Standing knowledge` as `- {YYYY-MM-DD} ({task-id}) - {fact} - {why}` and names them in one line; no candidate -> nothing. `{LETS_GATES}` is `strict` -> one separate question - at most 3 candidates (more -> the 3 strongest, the rest named in the question text) and a last "None" option:
 
 ```
 AskUserQuestion(
@@ -406,7 +406,7 @@ AskUserQuestion(
 )
 ```
 
-The lead appends each picked fact to the team file's `## 9. Standing knowledge` (`.lets/teams/<team>.md`; the lead is its only writer). "None" (or nothing picked) -> nothing written. It never blocks the close.
+The lead appends each picked fact to the team file's `## 9. Standing knowledge` as `- {YYYY-MM-DD} ({task-id}) - {fact} - {why}` (`.lets/teams/<team>.md`; the lead is its only writer). "None" (or nothing picked) -> nothing written. It never blocks the close.
 
 ### Remember
 
