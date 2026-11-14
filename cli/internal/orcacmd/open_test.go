@@ -451,6 +451,48 @@ func TestOpen_ExplicitBaseBranch(t *testing.T) {
 	}
 }
 
+// An explicit base never reaches an existing branch: it is named in a warning
+// and left out of the argv.
+func TestOpen_BaseBranchIgnoredForExistingBranch(t *testing.T) {
+	repo := openRepoWithOrigin(t)
+	gitT(t, repo, "branch", "lets-abc-x")
+	calls := useFakeOrca(t, func(args []string) (string, string, bool) {
+		switch joined(args) {
+		case "status --json":
+			return statusRunning, "", false
+		case "worktree ps --json":
+			return `{"result":{"worktrees":[]}}`, "", false
+		}
+		return `{"ok":true,"result":{"worktree":{"id":"r::/o/lets-abc-x","path":"/o/lets-abc-x","branch":"refs/heads/lets-abc-x"}}}`, "", false
+	})
+	res, err := Open(context.Background(), OpenOptions{Repo: repo, Name: "lets-abc-x", Merge: "main", BaseBranch: "origin/dev"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if last := (*calls)[len(*calls)-1].args; slices.Contains(last, "--base-branch") {
+		t.Errorf("argv %q passes --base-branch for an existing branch", last)
+	}
+	found := false
+	for _, s := range res.Steps {
+		if s.Status == StepWarn && strings.Contains(s.Message, "not used: branch lets-abc-x already exists") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("no existing-branch warning in %+v", res.Steps)
+	}
+}
+
+func TestOpen_BadAgentIDIsUsage(t *testing.T) {
+	repo := mainCheckout(t)
+	calls := useFakeOrca(t, func([]string) (string, string, bool) { return "{}", "", false })
+	_, err := Open(context.Background(), OpenOptions{Repo: repo, Name: "n", Agent: "--setup"})
+	wantExit(t, err, ExitUsage, "usage")
+	if len(*calls) != 0 {
+		t.Errorf("no Orca call on a bad agent id, got %d", len(*calls))
+	}
+}
+
 func TestOpen_BadBaseBranchIsUsage(t *testing.T) {
 	repo := openRepoWithOrigin(t)
 	calls := useFakeOrca(t, func([]string) (string, string, bool) { return "{}", "", false })
