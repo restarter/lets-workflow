@@ -24,6 +24,8 @@ type OpenOptions struct {
 	Merge        string        // LETS_MERGE_BRANCH; a new branch gets the resolved base (lets-qjt3h)
 	FetchTimeout time.Duration // 0 = 20 s
 	NoAgent      bool          // Orca creates the worktree only: --setup skip, no agent, no prompt - the caller adopts, then opens a terminal (the team-create pattern, lets-41cpf)
+	Agent        string        // Orca agent id to launch; "" = claude. Refused with NoAgent
+	BaseBranch   string        // explicit base for a NEW branch (<remote>/<branch>, or a local branch with no remote); "" = the resolved one
 }
 
 // worktreeListProbe lists git's worktree paths; a test seam.
@@ -62,16 +64,30 @@ func Open(ctx context.Context, o OpenOptions) (*OpenResult, error) {
 	if o.NoAgent && o.Prompt != "" {
 		return fail(&Error{Code: ExitUsage, Kind: "usage", Message: "--prompt needs an agent; drop --no-agent or --prompt"})
 	}
+	if o.NoAgent && o.Agent != "" {
+		return fail(&Error{Code: ExitUsage, Kind: "usage", Message: "--agent names the agent to launch; drop --no-agent or --agent"})
+	}
+	if strings.HasPrefix(o.Agent, "-") || strings.ContainsAny(o.Agent, " \t\n") {
+		return fail(&Error{Code: ExitUsage, Kind: "usage", Message: fmt.Sprintf("--agent %q is not an agent id", o.Agent)})
+	}
 	if fi, err := os.Stat(o.Repo); o.Repo == "" || err != nil || !fi.IsDir() {
 		return fail(&Error{Code: ExitRepoInvalid, Kind: "repo_invalid", Message: fmt.Sprintf("--repo %q is not a directory", o.Repo)})
 	}
 	if inWt, main := gitutil.DetectInsideWorktreeAt(o.Repo); inWt || main == "" || !fsutil.SameDir(main, o.Repo) {
 		return fail(&Error{Code: ExitRepoInvalid, Kind: "repo_invalid", Message: fmt.Sprintf("--repo %q is not a main checkout", o.Repo)})
 	}
+	if o.BaseBranch != "" {
+		if msg := checkOrcaBase(ctx, o.Repo, o.BaseBranch); msg != "" {
+			return fail(&Error{Code: ExitUsage, Kind: "base_invalid", Message: msg})
+		}
+	}
 	launch := &LaunchInfo{WorkspaceName: o.Name, FallbackCommand: fmt.Sprintf("/lets:worktree create %s --no-orca", o.Name)}
 	res.Launch = launch
 	res.OK = true
 	degrade := func(f *Failure) (*OpenResult, error) {
+		if o.BaseBranch != "" {
+			add(StepWarn, "--base-branch "+o.BaseBranch+" is not carried by the fallback - cut the branch from it by hand (lets worktree create "+o.Name+" --base "+o.BaseBranch+")")
+		}
 		launch.Reason = f.Reason
 		add(StepWarn, fmt.Sprintf("orca unavailable (%s) - falling back", f.Error()))
 		return res, nil
@@ -103,13 +119,24 @@ func Open(ctx context.Context, o OpenOptions) (*OpenResult, error) {
 	if o.NoAgent {
 		args = append(args, "--setup", "skip")
 	} else {
-		args = append(args, "--agent", "claude")
+		agent := o.Agent
+		if agent == "" {
+			agent = "claude"
+		}
+		args = append(args, "--agent", agent)
 	}
-	// lets-qjt3h (MAIN-LETS Q5): a NEW branch gets the one base policy - Orca's own
-	// default may be the stale local merge-branch. An existing branch is left to
-	// Orca as before. A refusal degrades with the kind as the reason: the fallback
-	// Go create reports it (31) with its fix.
-	if o.Merge != "" && gitIn(ctx, o.Repo, "rev-parse", "--verify", "--quiet", "refs/heads/"+o.Name) == "" {
+	newBranch := gitIn(ctx, o.Repo, "rev-parse", "--verify", "--quiet", "refs/heads/"+o.Name) == ""
+	switch {
+	case o.BaseBranch != "" && newBranch:
+		args = append(args, "--base-branch", o.BaseBranch)
+		launch.BaseRef = o.BaseBranch
+	case o.BaseBranch != "":
+		add(StepWarn, fmt.Sprintf("--base-branch %s not used: branch %s already exists", o.BaseBranch, o.Name))
+	case o.Merge != "" && newBranch:
+		// lets-qjt3h (MAIN-LETS Q5): a NEW branch gets the one base policy - Orca's own
+		// default may be the stale local merge-branch. An existing branch is left to
+		// Orca as before. A refusal degrades with the kind as the reason: the fallback
+		// Go create reports it (31) with its fix.
 		br, refusal := gitutil.ResolveBase(ctx, o.Repo, o.Merge, gitutil.BaseOptions{FetchTimeout: o.FetchTimeout})
 		if refusal != nil {
 			launch.Reason = refusal.Kind

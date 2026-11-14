@@ -400,6 +400,89 @@ func TestOpen_NoAgentWithPromptIsUsage(t *testing.T) {
 	}
 }
 
+func TestOpen_AgentPassThrough(t *testing.T) {
+	repo := mainCheckout(t)
+	calls := useFakeOrca(t, func(args []string) (string, string, bool) {
+		switch joined(args) {
+		case "status --json":
+			return statusRunning, "", false
+		case "worktree ps --json":
+			return `{"result":{"worktrees":[]}}`, "", false
+		}
+		return `{"ok":true,"result":{"worktree":{"id":"r::/o/x","path":"/o/x","branch":"refs/heads/x"}}}`, "", false
+	})
+	if _, err := Open(context.Background(), OpenOptions{Repo: repo, Name: "x", Agent: "codex"}); err != nil {
+		t.Fatal(err)
+	}
+	last := (*calls)[len(*calls)-1].args
+	if i := slices.Index(last, "--agent"); i < 0 || last[i+1] != "codex" {
+		t.Errorf("argv %q does not pass --agent codex", last)
+	}
+}
+
+func TestOpen_AgentWithNoAgentIsUsage(t *testing.T) {
+	repo := mainCheckout(t)
+	calls := noAgentOrca(t, "", func([]string) (string, bool) { return "{}", false })
+	_, err := Open(context.Background(), OpenOptions{Repo: repo, Name: "n", NoAgent: true, Agent: "claude"})
+	wantExit(t, err, ExitUsage, "usage")
+	if len(*calls) != 0 {
+		t.Errorf("no Orca call on a usage error, got %d", len(*calls))
+	}
+}
+
+func TestOpen_ExplicitBaseBranch(t *testing.T) {
+	repo := openRepoWithOrigin(t)
+	calls := useFakeOrca(t, func(args []string) (string, string, bool) {
+		switch joined(args) {
+		case "status --json":
+			return statusRunning, "", false
+		case "worktree ps --json":
+			return `{"result":{"worktrees":[]}}`, "", false
+		}
+		return `{"ok":true,"result":{"worktree":{"id":"r::/o/lets-abc-x","path":"/o/lets-abc-x","branch":"refs/heads/lets-abc-x"}}}`, "", false
+	})
+	res, err := Open(context.Background(), OpenOptions{Repo: repo, Name: "lets-abc-x", Merge: "main", BaseBranch: "origin/dev"})
+	if err != nil || res.Launch.BaseRef != "origin/dev" || res.Launch.BaseResolution != nil {
+		t.Fatalf("err=%v launch=%+v", err, res.Launch)
+	}
+	last := (*calls)[len(*calls)-1].args
+	if i := slices.Index(last, "--base-branch"); i < 0 || last[i+1] != "origin/dev" {
+		t.Errorf("argv %q does not pass --base-branch origin/dev", last)
+	}
+}
+
+func TestOpen_BadBaseBranchIsUsage(t *testing.T) {
+	repo := openRepoWithOrigin(t)
+	calls := useFakeOrca(t, func([]string) (string, string, bool) { return "{}", "", false })
+	_, err := Open(context.Background(), OpenOptions{Repo: repo, Name: "n", BaseBranch: "dev"})
+	wantExit(t, err, ExitUsage, "base_invalid")
+	if len(*calls) != 0 {
+		t.Errorf("no Orca call on a bad base, got %d", len(*calls))
+	}
+}
+
+// The no-Orca fallback carries no base: an explicit one is named in a warning,
+// never dropped silently.
+func TestOpen_FallbackWarnsAboutBaseBranch(t *testing.T) {
+	repo := openRepoWithOrigin(t)
+	useFakeOrca(t, func([]string) (string, string, bool) {
+		return `{"ok":true,"result":{"app":{"running":false}}}`, "", false
+	})
+	res, err := Open(context.Background(), OpenOptions{Repo: repo, Name: "n", BaseBranch: "origin/dev"})
+	if err != nil || res.Launch.Launched {
+		t.Fatalf("err=%v launch=%+v", err, res.Launch)
+	}
+	found := false
+	for _, s := range res.Steps {
+		if s.Status == StepWarn && strings.Contains(s.Message, "--base-branch origin/dev is not carried by the fallback") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("no fallback warning about --base-branch in %+v", res.Steps)
+	}
+}
+
 // commitRepo is a main checkout with one commit, so git worktree add works.
 func commitRepo(t *testing.T) string {
 	t.Helper()
