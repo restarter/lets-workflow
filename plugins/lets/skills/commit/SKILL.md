@@ -1,11 +1,11 @@
 ---
 name: commit
-description: This skill should be used when committing code changes - "commit", "git commit", "закоміть", "зроби коміт", "/lets:commit". Enforces conventional commit format, tracker task linking, and the gate level (`LETS_GATES`). In a LETS project, ALWAYS prefer this over generic commit skills (e.g. commit-commands:commit) — /lets:commit is authoritative. Triggers on any commit in any context.
+description: This skill should be used when committing code changes - "commit", "git commit", "закоміть", "зроби коміт", "/lets:commit". Enforces the project's commit convention (default conventional commits), tracker task linking, and the gate level (`LETS_GATES`). In a LETS project, ALWAYS prefer this over generic commit skills (e.g. commit-commands:commit) — /lets:commit is authoritative. Triggers on any commit in any context.
 ---
 
 # Commit
 
-Standardized commit flow that enforces conventional format, tracker task linking, and the gate level (`LETS_GATES`): at `strict` a commit asks first; at `standard` / `minimal` it runs and is reported (a commit that adds a new file nobody named still asks).
+Standardized commit flow that enforces the project's commit convention (default conventional format), tracker task linking, and the gate level (`LETS_GATES`): at `strict` a commit asks first; at `standard` / `minimal` it runs and is reported (a commit that adds a new file nobody named still asks).
 
 > **IMPORTANT:** If the spec below invokes any deferred tool (e.g. `AskUserQuestion`), you MUST load and call it as specified. Never skip the call, never substitute a default answer of your own — the tool invocation is part of the contract. This is critical.
 
@@ -102,19 +102,21 @@ Then commit:
 
 ```bash
 git status  # Verify the staged set is exactly what you intend
-git commit -m "<type>($TASK_ID): <description>
+git commit -m "<subject - the project's convention, else <type>($TASK_ID): <description>>
 
 Task: $TASK_ID"
 git status  # Verify clean
 ```
 
-If no active task detected: drop BOTH the `($TASK_ID)` scope AND the `Task:` footer:
+If no active task detected: drop BOTH the task scope (whatever shape the convention gives it) AND the `Task:` footer:
 
 ```bash
-git commit -m "<type>: <description>"
+git commit -m "<subject - the project's convention without a task scope, else <type>: <description>>"
 ```
 
 ### Commit Message Format
+
+**The project's convention wins for the subject line.** Before composing, take the commit-message convention this project's own instructions declare - CLAUDE.md and `.claude/rules/*.md` (already in context), or a doc they explicitly point to (Read it). It decides the subject's shape: the scope (e.g. `PWA-<id>`), the type list, the length. Never search `docs/` for one: a convention in a doc nothing points to is not used - the project adds one pointer line to its rules. Nothing declared -> the default below. In EVERY case the last line stays `Task: <task-id>` (`/lets:execute` checks it on every commit), and with no active task both the scope and the footer are dropped.
 
 ```
 <type>(<task-id>): <short description>
@@ -124,8 +126,9 @@ git commit -m "<type>: <description>"
 Task: <task-id>
 ```
 
-(No active task -> `<type>: <subject>`, no scope, no footer.)
+(No active task -> the project's convention without a task scope, else `<type>: <subject>`; no footer.)
 
+(the default convention's types)
 **Types:**
 - `feat` - new feature
 - `fix` - bug fix
@@ -187,10 +190,10 @@ Remaining: {what's left from task description, or "nothing - task scope complete
 
 - At `strict`, never commit without Step 4's approval (or `approved=review-accept`); at `standard` / `minimal` the commit runs and is reported - unless it adds a new file nobody named, which asks (Step 4). Never a push.
 - **ALWAYS** run `git status` before and after commit
-- Keep subject line under 50 chars
+- Keep subject line under 50 chars (unless the project's convention sets its own limit)
 - Use imperative mood ("Add" not "Added")
 - Body explains WHY, diff shows WHAT
-- Task ID scope `(task-id)` in the subject AND the `Task:` footer are both automatic when an active task is detected — don't ask the user about either
+- The task scope in the subject (in the project's convention, else `(task-id)`) AND the `Task:` footer are both automatic when an active task is detected — don't ask the user about either
 - Respond in user's language
 
 ## Output

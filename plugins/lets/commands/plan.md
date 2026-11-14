@@ -750,6 +750,9 @@ Write a detailed implementation plan for the chosen architecture.
 
 **Risk:** {high|low}
 
+{only when this task depends on plan prose outside Key Decisions / Non-Goals:}
+READ FIRST: {plan section name} - a delegated brief carries only Key Decisions, Non-Goals and this task's own section
+
 **Files:**
 - Create: `exact/path/to/file.ext` - {purpose}
 - Modify: `exact/path/to/existing.ext` - {what changes}
@@ -763,7 +766,7 @@ Write a detailed implementation plan for the chosen architecture.
 ...
 
 **Verify:**
-Run: `{verification command}`
+Run: `{verification command}` - one check per command; never `cmd && check; test $? -eq 1`, which passes when `cmd` itself fails
 Expected: {what output looks like}
 
 **Commit:**
@@ -788,6 +791,12 @@ When all tasks complete:
 - [ ] {measurable outcome 1}
 - [ ] {measurable outcome 2}
 
+{only when the plan proposes more than one PR:}
+## Delivery
+- PRs: {list} - default is ONE PR with per-task commits
+- Calendar cost: {N} sequential review rounds
+- Each later PR: blocked by the previous MERGE | only needs a rebase
+
 ---
 
 > **REMINDER: do not start writing code from this plan. The user runs `/lets:execute` when ready - nothing happens before that.**
@@ -805,6 +814,9 @@ Before saving, verify the plan passes these gates:
 - Every task that carries a commit point states `**Risk:** high|low` under its heading - `high` when it holds a gate, fail-closed logic, security logic or git-destructive logic, `low` otherwise; a missing Risk line is read as `high` (`/lets:execute` reviews by it). Keep in sync: the same rule is in `plan.workflow.js` (`planPrompt`, `planReviewPrompt`)
 - File paths are exact and verified against explorer findings
 - The STOP banner (`THIS PLAN IS NOT A GO`) is the first thing after the title block and the REMINDER footer is the last line - a plan without them is not finished
+- No Verify masks a failure: each check is its own command with its own Expected - `cmd && git grep -q X; test $? -eq 1` passes when `cmd` fails
+- A task that depends on any prose section other than Key Decisions and Non-Goals opens with `READ FIRST: <section>` - `/lets:execute`'s delegated brief carries only those two sections and the task itself
+- More than one PR -> a `## Delivery` section shows the calendar cost of sequential reviews, whether each later part is blocked by the previous MERGE or only needs a rebase, and keeps one PR with per-task commits as the default unless a merge dependency is real
 
 ## Step 10: Save & Output
 
