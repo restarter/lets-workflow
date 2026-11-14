@@ -114,8 +114,10 @@ if [ -z "$PLAN" ] && [ -z "$IDEA_REFUSED" ]; then
   fi
 fi
 
-[ -n "$PLAN" ] && cat "$PLAN"
+[ -n "$PLAN" ] && { echo "PLAN=$PLAN"; cat "$PLAN"; }
 ```
+
+Keep the echoed `PLAN=` path: it is the plan this run executes, and Step 6 records it as `{PLAN_USED}`.
 
 If the explicit path was an idea document (`IDEA_REFUSED`), stop after that one line.
 
@@ -844,7 +846,7 @@ Nothing here pushes - that is `/lets:done`'s job.
 
 ### 5-D.9 Completion
 
-Every chunk `accepted`, every caller task `done`, and - under `at-end` / `high-only` - the 5-D.8 run review accepted -> autosquash (pipelined only), clean up, then delete `.lets/cache/delegated-run-{TASK_ID}.json` and go to Step 6. The order is Run review -> autosquash -> Completion.
+Every chunk `accepted`, every caller task `done`, and - under `at-end` / `high-only` - the 5-D.8 run review accepted -> autosquash (pipelined only), clean up, read the record's `plan` and the first chunk's `base` (5-D.4 records it at dispatch in every shape) - they are Step 6's `{PLAN_USED}` and `{RUN_BASE}` - then delete `.lets/cache/delegated-run-{TASK_ID}.json` and go to Step 6. The order is Run review -> autosquash -> Completion.
 
 **Autosquash (`commit_policy: pipelined`, any chunk with `fixups[]`).** `{branch}` = `git branch --show-current`; `{start}` = the first chunk's `base`; `{oldest}` = the oldest commit of `{start}..HEAD` (`git rev-list --reverse {start}..HEAD`, its first line).
 
@@ -871,31 +873,44 @@ After implementation is complete (all plan tasks done). **Under `--auto`:** writ
 ```bash
 LETS_PROJECT_ROOT=$(git rev-parse --show-toplevel)
 BRANCH=$(git branch --show-current)
-SLUG=${BRANCH#feature/}; [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ] && SLUG="${TASK_ID}"
-PLAN=""  # task-id first (artifact-path naming, lets-05c4s); branch slug = legacy fallback
-[ -n "${TASK_ID}" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${TASK_ID}"*.md 2>/dev/null | grep -v -E -- '-idea(-v[0-9]+)?\.md$' | head -1)
-[ -z "$PLAN" ] && [ -n "$SLUG" ] && PLAN=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | grep -v -E -- '-idea(-v[0-9]+)?\.md$' | head -1)
 BRANCH_SLUG=$(echo "$BRANCH" | tr '/' '-')
-# Plan execution is TASK-scoped (a plan can run across sessions), so anchor on the task boundary
-# start:, NOT session: - session: would under-report every prior session's commits.
-START_REF=$(sed -n 's/^start: //p' "$LETS_PROJECT_ROOT/.lets/sessions/.task-${BRANCH_SLUG}" 2>/dev/null | head -1)
-[ -z "$START_REF" ] && START_REF=$(cat "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}" 2>/dev/null)  # back-compat: legacy session ref
-# Degrade loud - never silently record "Commits: 0" into a durable tracker comment on a missing/bad boundary.
-if printf '%s' "$START_REF" | grep -Eq '^[0-9a-f]{7,40}$' && git rev-parse --verify --quiet "${START_REF}^{commit}" >/dev/null; then
-  COUNT=$(git log --oneline "${START_REF}..HEAD" | wc -l | tr -d ' '); LOG=$(git log --oneline "${START_REF}..HEAD")
+# {PLAN_USED} = the plan this run executed: Step 2's echoed PLAN= path (a delegated run: the
+# record's `plan`, read in 5-D.9). Empty only when that value is no longer known (a compaction) -
+# then the newest plan for the task is NAMED as unconfirmed, never recorded as the one that ran.
+PLAN_LINE='{PLAN_USED}'   # single-quoted, '\'' for a quote inside: a path is data, never expanded
+if [ -z "$PLAN_LINE" ]; then
+  SLUG=${BRANCH#feature/}; [ "$BRANCH" = "{LETS_MERGE_BRANCH}" ] && SLUG="${TASK_ID}"
+  G=""
+  [ -n "${TASK_ID}" ] && G=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${TASK_ID}"*.md 2>/dev/null | grep -v -E -- '-idea(-v[0-9]+)?\.md$' | head -1)
+  [ -z "$G" ] && [ -n "$SLUG" ] && G=$(ls -t "$LETS_PROJECT_ROOT/.lets/plans/"*"${SLUG}"*.md 2>/dev/null | grep -v -E -- '-idea(-v[0-9]+)?\.md$' | head -1)
+  PLAN_LINE="${G:+$G (newest plan for the task, not confirmed as the one that ran)}"
+fi
+# The range is TASK-scoped (a plan can run across sessions): the task boundary start: first, then the
+# delegated run's first chunk base ({RUN_BASE}, empty on the inline path), then the legacy session ref.
+# The comment names the boundary it counted from - task start and run start differ across runs.
+# valid() reads its argument through `for r` - a dollar sign followed by a digit is replaced by Claude Code before the model reads this file.
+valid() { for r; do printf '%s' "$r" | grep -Eq '^[0-9a-f]{7,40}$' && git rev-parse --verify --quiet "$r^{commit}" >/dev/null; return; done; return 1; }
+START_REF=$(sed -n 's/^start: //p' "$LETS_PROJECT_ROOT/.lets/sessions/.task-${BRANCH_SLUG}" 2>/dev/null | head -1); FROM="task start"
+valid "$START_REF" || { START_REF='{RUN_BASE}'; FROM="run start (first chunk's base)"; }
+valid "$START_REF" || { START_REF=$(cat "$LETS_PROJECT_ROOT/.lets/sessions/.session-start-ref-${BRANCH_SLUG}" 2>/dev/null); FROM="legacy session start"; }
+# Degrade loud - never a number from no boundary, and never "0" for "unknown".
+if valid "$START_REF"; then
+  COUNT="$(git log --oneline "${START_REF}..HEAD" | wc -l | tr -d ' ') (since the ${FROM}, $(git rev-parse --short "$START_REF"))"; LOG=$(git log --oneline "${START_REF}..HEAD")
 else
-  COUNT="unknown (task boundary not found)"; LOG="(commit range unavailable - no valid start: boundary in .task-${BRANCH_SLUG})"
+  COUNT="unknown - no task boundary"; LOG="(commit range unavailable - no valid start: in .task-${BRANCH_SLUG} and no run base)"
 fi
 mkdir -p "$LETS_PROJECT_ROOT/.lets/cache"
 cat > "$LETS_PROJECT_ROOT/.lets/cache/exec-complete-<task-id>.md" <<EOF
 ## Plan execution complete $(date +%Y-%m-%d)
 
-Plan: ${PLAN:-(none found)}
+Plan: ${PLAN_LINE:-unknown}
 Commits: ${COUNT}
 
 ${LOG}
 EOF
 ```
+
+`{PLAN_USED}` and `{RUN_BASE}` are substituted by the orchestrator inside the single quotes (`'\''` for a quote inside a path - a `$` or a backtick in a path stays literal): the inline path passes Step 2's `PLAN=` and an empty `{RUN_BASE}`; a delegated run passes the two values 5-D.9 read. A value no longer in context is substituted empty - never re-derived by hand.
 
 ```lets-tracker
 comment-add task=<task-id> body-file=.lets/cache/exec-complete-<task-id>.md
